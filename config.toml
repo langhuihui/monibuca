@@ -1,0 +1,18 @@
+[Plugins.HDL]
+ListenAddr = ":2020"
+[Plugins.Jessica]
+ListenAddr = ":8080"
+[Plugins.RTMP]
+ListenAddr = ":1985"
+[Plugins.GateWay]
+ListenAddr = ":80"
+#[Plugins.Cluster]
+#Master = "localhost:2019"
+#ListenAddr = ":2019"
+#
+#[Plugins.Auth]
+#Key="www.monibuca.com"
+#[Plugins.RecordFlv]
+#Path="./resouce"
+[Plugins.QoS]
+Suffix = ["high","medium","low"]
