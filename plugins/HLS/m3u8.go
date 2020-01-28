@@ -57,7 +57,7 @@ func (p *HLS) run(info *M3u8Info) {
 	lastTs := make(map[string]bool)
 	resp, err := client.Do(info.Req)
 	defer func() {
-		log.Printf("hls %s exit:%v", p.StreamName, err)
+		log.Printf("hls %s exit:%v", p.StreamPath, err)
 		p.Cancel()
 	}()
 	for ; err == nil && p.Err() == nil; resp, err = client.Do(info.Req) {
@@ -117,17 +117,17 @@ func (p *HLS) run(info *M3u8Info) {
 						tsCost.BufferLength = len(p.TsPesPktChan)
 						p.PesCount = tsCost.BufferLength - beginLen
 					} else if err != nil {
-						log.Printf("%s readTs:%v", p.StreamName, err)
+						log.Printf("%s readTs:%v", p.StreamPath, err)
 					}
 				} else if err != nil {
-					log.Printf("%s reqTs:%v", p.StreamName, err)
+					log.Printf("%s reqTs:%v", p.StreamPath, err)
 				}
 				info.M3u8Info[i] = tsCost
 			}
 
 			time.Sleep(time.Second * time.Duration(playlist.Target) * 2)
 		} else {
-			log.Printf("%s readM3u8:%v", p.StreamName, err)
+			log.Printf("%s readM3u8:%v", p.StreamPath, err)
 			return
 		}
 	}

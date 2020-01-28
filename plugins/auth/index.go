@@ -31,7 +31,7 @@ func init() {
 func onPublish(r *Room) {
 	for _, v := range r.Subscribers {
 		if err := CheckSign(v.Sign); err != nil {
-			log.Printf("%s in room %s:%v", v.ID, r.StreamName, err)
+			log.Printf("%s in room %s:%v", v.ID, r.StreamPath, err)
 			v.Cancel()
 		}
 	}

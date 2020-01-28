@@ -139,7 +139,7 @@ func (ts *TS) run() {
 							time.Sleep(duration)
 						} else {
 							time.Sleep(time.Millisecond * 20)
-							log.Printf("stream:%s,duration:%d,dts:%d,lastDts:%d\n", ts.StreamName, duration/time.Millisecond, tsPesPkt.PesPkt.Header.Dts, lastDts)
+							log.Printf("stream:%s,duration:%d,dts:%d,lastDts:%d\n", ts.StreamPath, duration/time.Millisecond, tsPesPkt.PesPkt.Header.Dts, lastDts)
 						}
 					}
 				}
@@ -148,8 +148,8 @@ func (ts *TS) run() {
 	}
 }
 
-func (ts *TS) Publish(streamName string, publisher Publisher) (result bool) {
-	if result = ts.InputStream.Publish(streamName, publisher); result {
+func (ts *TS) Publish(streamPath string, publisher Publisher) (result bool) {
+	if result = ts.InputStream.Publish(streamPath, publisher); result {
 		ts.TSInfo.RoomInfo = &ts.Room.RoomInfo
 		ts.MpegTsStream = mpegts.NewMpegTsStream(2048)
 		go ts.run()

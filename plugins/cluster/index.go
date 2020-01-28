@@ -38,6 +38,6 @@ func run() {
 
 func onSubscribe(s *OutputStream) {
 	if s.Publisher == nil {
-		go PullUpStream(s.StreamName)
+		go PullUpStream(s.StreamPath)
 	}
 }

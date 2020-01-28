@@ -27,7 +27,7 @@ func (c *Collection) Get(name string) (result *Room) {
 	})
 	result = item.(*Room)
 	if !loaded {
-		result.StreamName = name
+		result.StreamPath = name
 		result.Context, result.Cancel = context.WithCancel(roomCtxBg)
 		go result.Run()
 	}
@@ -50,7 +50,7 @@ type Room struct {
 }
 
 type RoomInfo struct {
-	StreamName     string
+	StreamPath     string
 	StartTime      time.Time
 	SubscriberInfo []*SubscriberInfo
 	Type           string
@@ -79,8 +79,8 @@ type ChangeRoomCmd struct {
 }
 
 func (r *Room) onClosed() {
-	log.Printf("room destoryed :%s", r.StreamName)
-	AllRoom.Delete(r.StreamName)
+	log.Printf("room destoryed :%s", r.StreamPath)
+	AllRoom.Delete(r.StreamPath)
 	if r.Publisher != nil {
 		r.OnClosed()
 	}
@@ -89,7 +89,7 @@ func (r *Room) Subscribe(s *OutputStream) {
 	s.Room = r
 	if r.Err() == nil {
 		s.SubscribeTime = time.Now()
-		log.Printf("subscribe :%s %s,to room %s", s.Type, s.ID, r.StreamName)
+		log.Printf("subscribe :%s %s,to room %s", s.Type, s.ID, r.StreamPath)
 		s.packetQueue = make(chan *pool.SendPacket, 1024)
 		s.Context, s.Cancel = context.WithCancel(r)
 		s.Control <- &SubscribeCmd{s}
@@ -102,7 +102,7 @@ func (r *Room) UnSubscribe(s *OutputStream) {
 	}
 }
 func (r *Room) Run() {
-	log.Printf("room create :%s", r.StreamName)
+	log.Printf("room create :%s", r.StreamPath)
 	defer r.onClosed()
 	update := time.NewTicker(time.Second)
 	defer update.Stop()
@@ -121,14 +121,14 @@ func (r *Room) Run() {
 			switch v := s.(type) {
 			case *UnSubscribeCmd:
 				delete(r.Subscribers, v.ID)
-				log.Printf("%s subscriber %s removed remains:%d", r.StreamName, v.ID, len(r.Subscribers))
+				log.Printf("%s subscriber %s removed remains:%d", r.StreamPath, v.ID, len(r.Subscribers))
 				if len(r.Subscribers) == 0 && r.Publisher == nil {
 					r.Cancel()
 				}
 			case *SubscribeCmd:
 				if _, ok := r.Subscribers[v.ID]; !ok {
 					r.Subscribers[v.ID] = v.OutputStream
-					log.Printf("%s subscriber %s added remains:%d", r.StreamName, v.ID, len(r.Subscribers))
+					log.Printf("%s subscriber %s added remains:%d", r.StreamPath, v.ID, len(r.Subscribers))
 					OnSubscribeHooks.Trigger(v.OutputStream)
 				}
 			case *ChangeRoomCmd:

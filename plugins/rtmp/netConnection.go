@@ -200,7 +200,7 @@ func (conn *NetConnection) SendMessage(message string, args interface{}) error {
 		m.CommandName = "play"
 		m.TransactionId = 1
 		for i, v := range data {
-			if i == "StreamName" {
+			if i == "StreamPath" {
 				m.StreamName = v.(string)
 			} else if i == "Start" {
 				m.Start = v.(uint64)
