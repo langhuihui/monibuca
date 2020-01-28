@@ -57,7 +57,7 @@ type RoomInfo struct {
 	VideoInfo      struct {
 		PacketCount int
 		CodecID     byte
-		avformat.SPSInfo
+		SPSInfo     avformat.SPSInfo
 	}
 	AudioInfo struct {
 		PacketCount int

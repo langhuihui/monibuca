@@ -5,8 +5,8 @@ import (
 	"github.com/langhuihui/monibuca/monica/avformat"
 	"github.com/langhuihui/monibuca/monica/pool"
 	"github.com/langhuihui/monibuca/monica/util"
+	"io"
 	"os"
-	"syscall"
 )
 
 func SaveFlv(streamPath string, append bool) error {
@@ -28,11 +28,11 @@ func SaveFlv(streamPath string, append bool) error {
 	p.ID = filePath
 	p.Type = "FlvRecord"
 	if append {
-		_, err = file.Seek(4, syscall.FILE_END)
+		_, err = file.Seek(4, io.SeekEnd)
 		if err == nil {
 			var tagSize uint32
 			if tagSize, err = util.ReadByteToUint32(file, true); err == nil {
-				_, err = file.Seek(int64(tagSize+4), syscall.FILE_END)
+				_, err = file.Seek(int64(tagSize+4), io.SeekEnd)
 				if err == nil {
 					var tag *pool.AVPacket
 					tag, err = avformat.ReadFLVTag(file)

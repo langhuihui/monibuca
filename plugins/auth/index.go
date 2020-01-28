@@ -26,8 +26,6 @@ func init() {
 		Config: &config,
 		Run:    ClearSignCache,
 	})
-	AuthHooks.AddHook(CheckSign)
-	OnPublishHooks.AddHook(onPublish)
 }
 
 func onPublish(r *Room) {
@@ -61,6 +59,8 @@ func CheckSign(sign string) error {
 
 // ClearSignCache 删除过期数据
 func ClearSignCache() {
+	AuthHooks.AddHook(CheckSign)
+	OnPublishHooks.AddHook(onPublish)
 	for {
 		select {
 		case now := <-time.After(time.Minute):

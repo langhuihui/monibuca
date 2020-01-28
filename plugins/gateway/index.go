@@ -8,16 +8,21 @@ import (
 	"github.com/shirou/gopsutil/disk"
 	"github.com/shirou/gopsutil/mem"
 	"github.com/shirou/gopsutil/net"
+	"io/ioutil"
 	"log"
+	"mime"
 	"net/http"
 	"os/exec"
+	"path"
+	"runtime"
 	"time"
 )
 
 var (
-	config   = new(ListenerConfig)
-	sseBegin = []byte("data: ")
-	sseEnd   = []byte("\n\n")
+	config        = new(ListenerConfig)
+	sseBegin      = []byte("data: ")
+	sseEnd        = []byte("\n\n")
+	dashboardPath string
 )
 
 type SSE struct {
@@ -68,6 +73,8 @@ func (sse *SSE) WriteExec(cmd *exec.Cmd) error {
 }
 
 func init() {
+	_, currentFilePath, _, _ := runtime.Caller(0)
+	dashboardPath = path.Join(path.Dir(currentFilePath), "../../dashboard/dist")
 	InstallPlugin(&PluginConfig{
 		Name:   "GateWay",
 		Type:   PLUGIN_HOOK,
@@ -77,11 +84,48 @@ func init() {
 }
 func run() {
 	http.HandleFunc("/api/summary", summary)
-	log.Printf("server api start at %s", config.ListenAddr)
+	http.HandleFunc("/", website)
+	log.Printf("server gateway start at %s", config.ListenAddr)
 	log.Fatal(http.ListenAndServe(config.ListenAddr, nil))
 }
+func website(w http.ResponseWriter, r *http.Request) {
+	filePath := r.URL.Path
+	if filePath == "/" {
+		filePath = "/index.html"
+	} else if filePath == "/docs" {
+		filePath = "/docs/index.html"
+	}
+	if mime := mime.TypeByExtension(path.Ext(filePath)); mime != "" {
+		w.Header().Set("Content-Type", mime)
+	}
+	if f, err := ioutil.ReadFile(dashboardPath + filePath); err == nil {
+		if _, err = w.Write(f); err != nil {
+			w.WriteHeader(505)
+		}
+	} else {
+		w.Header().Set("Location", "/")
+		w.WriteHeader(302)
+	}
+}
 func summary(w http.ResponseWriter, r *http.Request) {
-
+	sse := NewSSE(w, r.Context())
+	s := collect()
+	sse.WriteJSON(&s)
+	for range time.NewTicker(time.Second).C {
+		old := s
+		s = collect()
+		for i, v := range s.NetWork {
+			s.NetWork[i].ReceiveSpeed = v.Receive - old.NetWork[i].Receive
+			s.NetWork[i].SentSpeed = v.Sent - old.NetWork[i].Sent
+		}
+		AllRoom.Range(func(key interface{}, v interface{}) bool {
+			s.Rooms = append(s.Rooms, &v.(*Room).RoomInfo)
+			return true
+		})
+		if sse.WriteJSON(&s) != nil {
+			break
+		}
+	}
 }
 
 type Summary struct {
@@ -99,6 +143,7 @@ type Summary struct {
 		Usage float64
 	}
 	NetWork []NetWorkInfo
+	Rooms   []*RoomInfo
 }
 type NetWorkInfo struct {
 	Name         string

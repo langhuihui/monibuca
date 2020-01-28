@@ -4,8 +4,8 @@ import (
 	"errors"
 	. "github.com/langhuihui/monibuca/monica"
 	"github.com/langhuihui/monibuca/monica/avformat"
+	"io"
 	"os"
-	"syscall"
 )
 
 type FlvFile struct {
@@ -17,7 +17,7 @@ func PublishFlvFile(streamPath string) error {
 		stream := FlvFile{}
 		stream.UseTimestamp = true
 		if stream.Publish(streamPath, &stream) {
-			file.Seek(int64(len(avformat.FLVHeader)), syscall.FILE_BEGIN)
+			file.Seek(int64(len(avformat.FLVHeader)), io.SeekStart)
 			for {
 				if tag, err := avformat.ReadFLVTag(file); err == nil {
 					switch tag.Type {

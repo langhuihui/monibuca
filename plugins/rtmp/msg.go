@@ -117,7 +117,7 @@ type HaveStreamID interface {
 func GetRtmpMessage(chunk *Chunk) {
 	switch chunk.MessageTypeID {
 	case RTMP_MSG_CHUNK_SIZE, RTMP_MSG_ABORT, RTMP_MSG_ACK, RTMP_MSG_ACK_SIZE:
-		chunk.MsgData = util.BigEndian.Uint32(chunk.Body)
+		chunk.MsgData = Uint32Message(util.BigEndian.Uint32(chunk.Body))
 	case RTMP_MSG_USER_CONTROL: // RTMP消息类型ID=4, 用户控制消息.客户端或服务端发送本消息通知对方用户的控制事件.
 		{
 			base := UserControlMessage{
