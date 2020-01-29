@@ -48,6 +48,7 @@
       "parser": "babel-eslint"
     },
     "rules": {
+      "no-console": "off",
       "vue/no-parsing-error": [
         2,
         {

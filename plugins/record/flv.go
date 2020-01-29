@@ -7,6 +7,7 @@ import (
 	"github.com/langhuihui/monibuca/monica/util"
 	"io"
 	"os"
+	"path"
 )
 
 func SaveFlv(streamPath string, append bool) error {
@@ -17,11 +18,11 @@ func SaveFlv(streamPath string, append bool) error {
 		flag = flag | os.O_TRUNC | os.O_WRONLY
 	}
 	filePath := config.Path + streamPath + ".flv"
+	os.MkdirAll(path.Dir(filePath), 0666)
 	file, err := os.OpenFile(filePath, flag, 0666)
 	if err != nil {
 		return err
 	}
-	defer file.Close()
 	p := OutputStream{SendHandler: func(packet *pool.SendPacket) error {
 		return avformat.WriteFLVTag(file, packet)
 	}}
@@ -47,7 +48,12 @@ func SaveFlv(streamPath string, append bool) error {
 	}
 	if err == nil {
 		recordings.Store(filePath, &p)
-		go p.Play(streamPath)
+		go func() {
+			p.Play(streamPath)
+			file.Close()
+		}()
+	} else {
+		file.Close()
 	}
 	return err
 }

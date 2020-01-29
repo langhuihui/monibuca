@@ -87,6 +87,9 @@ func processRtmp(conn net.Conn) {
 			}
 			switch msg.MessageTypeID {
 			case RTMP_MSG_AMF0_COMMAND:
+				if msg.MsgData == nil {
+					break
+				}
 				cmd := msg.MsgData.(Commander).GetCommand()
 				switch cmd.CommandName {
 				case "createStream":

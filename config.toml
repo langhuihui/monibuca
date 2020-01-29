@@ -12,7 +12,7 @@ ListenAddr = ":81"
 #
 #[Plugins.Auth]
 #Key="www.monibuca.com"
-#[Plugins.RecordFlv]
-#Path="./resouce"
+[Plugins.RecordFlv]
+Path="./resouce"
 [Plugins.QoS]
 Suffix = ["high","medium","low"]

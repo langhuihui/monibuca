@@ -3,6 +3,7 @@ package record
 import (
 	. "github.com/langhuihui/monibuca/monica"
 	"net/http"
+	"strings"
 	"sync"
 )
 
@@ -20,6 +21,9 @@ func init() {
 	})
 }
 func run() {
+	if !strings.HasSuffix(config.Path, "/") {
+		config.Path = config.Path + "/"
+	}
 	http.HandleFunc("/api/record/flv", func(writer http.ResponseWriter, r *http.Request) {
 		if streamPath := r.URL.Query().Get("streamPath"); streamPath != "" {
 			if err := SaveFlv(streamPath, r.URL.Query().Get("append") != ""); err != nil {

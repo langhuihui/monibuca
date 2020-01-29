@@ -18,22 +18,17 @@
                 {{CodecID(item.VideoInfo.CodecID)}} {{item.VideoInfo.PacketCount}}
                 {{item.VideoInfo.SPSInfo.Width}}x{{item.VideoInfo.SPSInfo.Height}}
             </p>
-            <Button @click="onShowDetail(item)">
-                <Icon type="ios-people"/>
-                {{item.SubscriberInfo?item.SubscriberInfo.length:0}}
-            </Button>
-            <Button v-if="item.Type" @click="preview(item)">
-                <Icon type="md-eye"/>
-                Preview
-            </Button>
-            <Button @click="stopRecord(item)" v-if="isRecording(item)">
-                <Icon type="ios-radio-button-on" class="recording"/>
-                Stop Rec
-            </Button>
-            <Button @click="record(item)" v-else>
-                <Icon type="ios-radio-button-on"/>
-                Rec
-            </Button>
+            <ButtonGroup size="small">
+                <Button @click="onShowDetail(item)" icon="ios-people">
+                    {{item.SubscriberInfo?item.SubscriberInfo.length:0}}
+                </Button>
+                <Button v-if="item.Type" @click="preview(item)" icon="md-eye">
+                </Button>
+                <Button @click="stopRecord(item)" class="recording" v-if="isRecording(item)" icon="ios-radio-button-on">
+                </Button>
+                <Button @click="record(item)" v-else icon="ios-radio-button-on">
+                </Button>
+            </ButtonGroup>
         </Card>
         <div v-if="Rooms.length==0" class="empty">
             <Icon type="md-wine" size="50"/>
@@ -164,10 +159,22 @@
                 return rate > 1000 ? (rate / 1000) + "kHz" : rate + "Hz"
             },
             record(item) {
-                window.ajax.get("//" + location.host + "/api/record/flv",{streamPath:item.StreamPath})
+                window.ajax.get("//" + location.host + "/api/record/flv", {streamPath: item.StreamPath}, x => {
+                    if (x == "success") {
+                        this.$Message.success('开始录制');
+                    } else {
+                        this.$Message.error(x);
+                    }
+                })
             },
-            stopRecord(item){
-                window.ajax.get("//" + location.host + "/api/record/flv/stop",{streamPath:item.StreamPath})
+            stopRecord(item) {
+                window.ajax.get("//" + location.host + "/api/record/flv/stop", {streamPath: item.StreamPath}, x => {
+                    if (x == "success") {
+                        this.$Message.success('停止录制');
+                    } else {
+                        this.$Message.error(x);
+                    }
+                })
             },
             isRecording(item) {
                 return item.SubscriberInfo && item.SubscriberInfo.find(x => x.Type == "FlvRecord")
@@ -201,7 +208,8 @@
 
     .layout {
         padding-bottom: 30px;
-        position: relative;
+        display: flex;
+        flex-wrap: wrap;
     }
 
     .room {
