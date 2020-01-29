@@ -75,6 +75,7 @@ func (sse *SSE) WriteExec(cmd *exec.Cmd) error {
 func init() {
 	_, currentFilePath, _, _ := runtime.Caller(0)
 	dashboardPath = path.Join(path.Dir(currentFilePath), "../../dashboard/dist")
+	log.Println(dashboardPath)
 	InstallPlugin(&PluginConfig{
 		Name:   "GateWay",
 		Type:   PLUGIN_HOOK,

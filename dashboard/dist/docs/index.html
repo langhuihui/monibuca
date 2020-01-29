@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en-US">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Monibuca快速起步 | Monibuca</title>
+    <meta name="description" content="">
+    
+    
+    <link rel="preload" href="/docs/assets/css/styles.ad3166d6.css" as="style"><link rel="preload" href="/docs/assets/js/app.ad3166d6.js" as="script"><link rel="preload" href="/docs/assets/js/1.83ce04b6.js" as="script"><link rel="prefetch" href="/docs/assets/js/2.142d04d2.js"><link rel="prefetch" href="/docs/assets/js/3.2b6c987b.js"><link rel="prefetch" href="/docs/assets/js/4.ad90d74a.js"><link rel="prefetch" href="/docs/assets/js/5.36121818.js">
+    <link rel="stylesheet" href="/docs/assets/css/styles.ad3166d6.css">
+  </head>
+  <body>
+    <div id="app" data-server-rendered="true"><div class="theme-container"><header class="navbar"><div class="sidebar-button"><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" role="img" viewBox="0 0 448 512" class="icon"><path fill="currentColor" d="M436 124H12c-6.627 0-12-5.373-12-12V80c0-6.627 5.373-12 12-12h424c6.627 0 12 5.373 12 12v32c0 6.627-5.373 12-12 12zm0 160H12c-6.627 0-12-5.373-12-12v-32c0-6.627 5.373-12 12-12h424c6.627 0 12 5.373 12 12v32c0 6.627-5.373 12-12 12zm0 160H12c-6.627 0-12-5.373-12-12v-32c0-6.627 5.373-12 12-12h424c6.627 0 12 5.373 12 12v32c0 6.627-5.373 12-12 12z"></path></svg></div><a href="/docs/" class="home-link router-link-exact-active router-link-active"><!----><span class="site-name">
+      Monibuca
+    </span></a><div class="links"><div class="search-box"><input aria-label="Search" autocomplete="off" spellcheck="false" value=""><!----></div><!----></div></header><div class="sidebar-mask"></div><div class="sidebar"><!----><ul class="sidebar-links"><li><a href="/docs/" class="active sidebar-link">起步</a><ul class="sidebar-sub-headers"><li class="sidebar-sub-header"><a href="/docs/#介绍" class="sidebar-link">介绍</a></li><li class="sidebar-sub-header"><a href="/docs/#启动" class="sidebar-link">启动</a></li><li class="sidebar-sub-header"><a href="/docs/#配置" class="sidebar-link">配置</a></li></ul></li><li><a href="/docs/develop.html" class="sidebar-link">插件开发</a></li><li><a href="/docs/history.html" class="sidebar-link">更新日志</a></li><li><div class="sidebar-group collapsable"><p class="sidebar-heading"><span>内置插件</span><span class="arrow right"></span></p><!----></div></li></ul></div><div class="page"><div class="content"><h1 id="monibuca快速起步"><a href="#monibuca快速起步" aria-hidden="true" class="header-anchor">#</a> Monibuca快速起步</h1><h2 id="介绍"><a href="#介绍" aria-hidden="true" class="header-anchor">#</a> 介绍</h2><p>Monibuca 是一个开源的流媒体服务器开发框架，适用于快速定制化开发流媒体服务器，可以对接CDN厂商，作为回源服务器，也可以自己搭建集群部署环境。
+丰富的内置插件提供了流媒体服务器的常见功能，例如rtmp server、http-flv、视频录制、QoS等。除此以外还内置了后台web界面，方便观察服务器运行的状态。
+也可以自己开发后台管理界面，通过api方式获取服务器的运行信息。
+Monibuca 提供了可供定制化开发的插件机制，可以任意扩展其功能。</p><h2 id="启动"><a href="#启动" aria-hidden="true" class="header-anchor">#</a> 启动</h2><p>启用所有内置插件</p><div class="language-go extra-class"><pre class="language-go"><code><span class="token keyword">package</span> main
+
+<span class="token keyword">import</span> <span class="token punctuation">(</span>
+	<span class="token punctuation">.</span> <span class="token string">&quot;github.com/langhuihui/monibuca/monica&quot;</span>
+	<span class="token boolean">_</span> <span class="token string">&quot;github.com/langhuihui/monibuca/plugins&quot;</span>
+<span class="token punctuation">)</span>
+
+<span class="token keyword">func</span> <span class="token function">main</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+	<span class="token function">Run</span><span class="token punctuation">(</span><span class="token string">&quot;config.toml&quot;</span><span class="token punctuation">)</span>
+	<span class="token keyword">select</span> <span class="token punctuation">{</span><span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre></div><h2 id="配置"><a href="#配置" aria-hidden="true" class="header-anchor">#</a> 配置</h2><p>要使用<code>Monibuca</code>,需要编写一个<code>toml</code>格式的配置文件，通常可以放在程序的同级目录下例如：<code>config.toml</code>(名称不是必须为<code>config</code>)</p><p>该配置文件主要是为了定制各个插件的配置，例如监听端口号等，具体还是要看各个插件的设计。</p><blockquote><p>如果你编写了自己的插件，就必须在该配置文件中写入对自己插件的配置信息</p></blockquote><p>如果注释掉部分插件的配置，那么该插件就不会启用，典型的配置如下：</p><div class="language-toml extra-class"><pre class="language-toml"><code><span class="token punctuation">[</span><span class="token table class-name">Plugins.HDL</span><span class="token punctuation">]</span>
+<span class="token key property">ListenAddr</span> <span class="token punctuation">=</span> <span class="token string">&quot;:2020&quot;</span>
+<span class="token punctuation">[</span><span class="token table class-name">Plugins.Jessica</span><span class="token punctuation">]</span>
+<span class="token key property">ListenAddr</span> <span class="token punctuation">=</span> <span class="token string">&quot;:8080&quot;</span>
+<span class="token punctuation">[</span><span class="token table class-name">Plugins.RTMP</span><span class="token punctuation">]</span>
+<span class="token key property">ListenAddr</span> <span class="token punctuation">=</span> <span class="token string">&quot;:1935&quot;</span>
+<span class="token punctuation">[</span><span class="token table class-name">Plugins.GateWay</span><span class="token punctuation">]</span>
+<span class="token key property">ListenAddr</span> <span class="token punctuation">=</span> <span class="token string">&quot;:81&quot;</span>
+<span class="token comment">#[Plugins.Cluster]</span>
+<span class="token comment">#Master = &quot;localhost:2019&quot;</span>
+<span class="token comment">#ListenAddr = &quot;:2019&quot;</span>
+<span class="token comment">#</span>
+<span class="token comment">#[Plugins.Auth]</span>
+<span class="token comment">#Key=&quot;www.monibuca.com&quot;</span>
+<span class="token comment">#[Plugins.RecordFlv]</span>
+<span class="token comment">#Path=&quot;./resouce&quot;</span>
+<span class="token punctuation">[</span><span class="token table class-name">Plugins.QoS</span><span class="token punctuation">]</span>
+<span class="token key property">Suffix</span> <span class="token punctuation">=</span> <span class="token punctuation">[</span><span class="token string">&quot;high&quot;</span><span class="token punctuation">,</span><span class="token string">&quot;medium&quot;</span><span class="token punctuation">,</span><span class="token string">&quot;low&quot;</span><span class="token punctuation">]</span>
+</code></pre></div><p>具体配置的含义，可以参考每个插件的说明</p></div><div class="page-edit"><!----><!----></div><div class="page-nav"><p class="inner"><!----><span class="next"><a href="/docs/develop.html">
+          插件开发
+        </a> →
+      </span></p></div></div></div></div>
+    <script src="/docs/assets/js/app.ad3166d6.js" defer></script><script src="/docs/assets/js/1.83ce04b6.js" defer></script>
+  </body>
+</html>

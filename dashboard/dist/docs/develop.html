@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en-US">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>插件开发 | Monibuca</title>
+    <meta name="description" content="">
+    
+    
+    <link rel="preload" href="/docs/assets/css/styles.ad3166d6.css" as="style"><link rel="preload" href="/docs/assets/js/app.ad3166d6.js" as="script"><link rel="preload" href="/docs/assets/js/2.142d04d2.js" as="script"><link rel="prefetch" href="/docs/assets/js/1.83ce04b6.js"><link rel="prefetch" href="/docs/assets/js/3.2b6c987b.js"><link rel="prefetch" href="/docs/assets/js/4.ad90d74a.js"><link rel="prefetch" href="/docs/assets/js/5.36121818.js">
+    <link rel="stylesheet" href="/docs/assets/css/styles.ad3166d6.css">
+  </head>
+  <body>
+    <div id="app" data-server-rendered="true"><div class="theme-container"><header class="navbar"><div class="sidebar-button"><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" role="img" viewBox="0 0 448 512" class="icon"><path fill="currentColor" d="M436 124H12c-6.627 0-12-5.373-12-12V80c0-6.627 5.373-12 12-12h424c6.627 0 12 5.373 12 12v32c0 6.627-5.373 12-12 12zm0 160H12c-6.627 0-12-5.373-12-12v-32c0-6.627 5.373-12 12-12h424c6.627 0 12 5.373 12 12v32c0 6.627-5.373 12-12 12zm0 160H12c-6.627 0-12-5.373-12-12v-32c0-6.627 5.373-12 12-12h424c6.627 0 12 5.373 12 12v32c0 6.627-5.373 12-12 12z"></path></svg></div><a href="/docs/" class="home-link router-link-active"><!----><span class="site-name">
+      Monibuca
+    </span></a><div class="links"><div class="search-box"><input aria-label="Search" autocomplete="off" spellcheck="false" value=""><!----></div><!----></div></header><div class="sidebar-mask"></div><div class="sidebar"><!----><ul class="sidebar-links"><li><a href="/docs/" class="sidebar-link">起步</a></li><li><a href="/docs/develop.html" class="active sidebar-link">插件开发</a><ul class="sidebar-sub-headers"><li class="sidebar-sub-header"><a href="/docs/develop.html#插件的定义" class="sidebar-link">插件的定义</a></li><li class="sidebar-sub-header"><a href="/docs/develop.html#插件的安装" class="sidebar-link">插件的安装</a></li><li class="sidebar-sub-header"><a href="/docs/develop.html#开发订阅者插件" class="sidebar-link">开发订阅者插件</a></li><li class="sidebar-sub-header"><a href="/docs/develop.html#开发发布者插件" class="sidebar-link">开发发布者插件</a></li><li class="sidebar-sub-header"><a href="/docs/develop.html#开发钩子插件" class="sidebar-link">开发钩子插件</a></li></ul></li><li><a href="/docs/history.html" class="sidebar-link">更新日志</a></li><li><div class="sidebar-group collapsable"><p class="sidebar-heading"><span>内置插件</span><span class="arrow right"></span></p><!----></div></li></ul></div><div class="page"><div class="content"><h1 id="插件开发"><a href="#插件开发" aria-hidden="true" class="header-anchor">#</a> 插件开发</h1><h2 id="插件的定义"><a href="#插件的定义" aria-hidden="true" class="header-anchor">#</a> 插件的定义</h2><p>所谓的插件，没有什么固定的规则，只需要完成<code>安装</code>操作即可。插件可以实现任意的功能扩展，最常见的是实现某种传输协议用来推流或者拉流</p><h2 id="插件的安装"><a href="#插件的安装" aria-hidden="true" class="header-anchor">#</a> 插件的安装</h2><p>下面是内置插件jessica的源码，代表了典型的插件安装</p><div class="language-go extra-class"><pre class="language-go"><code><span class="token keyword">package</span> jessica
+
+<span class="token keyword">import</span> <span class="token punctuation">(</span>
+	<span class="token punctuation">.</span> <span class="token string">&quot;github.com/langhuihui/monibuca/monica&quot;</span>
+	<span class="token string">&quot;log&quot;</span>
+	<span class="token string">&quot;net/http&quot;</span>
+<span class="token punctuation">)</span>
+
+<span class="token keyword">var</span> config <span class="token operator">=</span> <span class="token function">new</span><span class="token punctuation">(</span>ListenerConfig<span class="token punctuation">)</span>
+
+<span class="token keyword">func</span> <span class="token function">init</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+	<span class="token function">InstallPlugin</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>PluginConfig<span class="token punctuation">{</span>
+		Name<span class="token punctuation">:</span>   <span class="token string">&quot;Jessica&quot;</span><span class="token punctuation">,</span>
+		Type<span class="token punctuation">:</span>   PLUGIN_SUBSCRIBER<span class="token punctuation">,</span>
+		Config<span class="token punctuation">:</span> config<span class="token punctuation">,</span>
+		Run<span class="token punctuation">:</span>    run<span class="token punctuation">,</span>
+	<span class="token punctuation">}</span><span class="token punctuation">)</span>
+<span class="token punctuation">}</span>
+<span class="token keyword">func</span> <span class="token function">run</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+	log<span class="token punctuation">.</span><span class="token function">Printf</span><span class="token punctuation">(</span><span class="token string">&quot;server Jessica start at %s&quot;</span><span class="token punctuation">,</span> config<span class="token punctuation">.</span>ListenAddr<span class="token punctuation">)</span>
+	log<span class="token punctuation">.</span><span class="token function">Fatal</span><span class="token punctuation">(</span>http<span class="token punctuation">.</span><span class="token function">ListenAndServe</span><span class="token punctuation">(</span>config<span class="token punctuation">.</span>ListenAddr<span class="token punctuation">,</span> http<span class="token punctuation">.</span><span class="token function">HandlerFunc</span><span class="token punctuation">(</span>WsHandler<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span>
+<span class="token punctuation">}</span>
+</code></pre></div><p>当主程序读取配置文件完成解析后，会调用各个插件的Run函数，上面代码中执行了一个http的端口监听</p><h2 id="开发订阅者插件"><a href="#开发订阅者插件" aria-hidden="true" class="header-anchor">#</a> 开发订阅者插件</h2><p>所谓订阅者就是用来从流媒体服务器接收音视频流的程序，例如RTMP协议执行play命令后、http-flv请求响应程序、websocket响应程序。内置插件中录制flv程序也是一个特殊的订阅者。
+下面是http-flv插件的源码，供参考</p><div class="language-go extra-class"><pre class="language-go"><code><span class="token keyword">package</span> HDL
+
+<span class="token keyword">import</span> <span class="token punctuation">(</span>
+	<span class="token punctuation">.</span> <span class="token string">&quot;github.com/langhuihui/monibuca/monica&quot;</span>
+	<span class="token string">&quot;github.com/langhuihui/monibuca/monica/avformat&quot;</span>
+	<span class="token string">&quot;github.com/langhuihui/monibuca/monica/pool&quot;</span>
+	<span class="token string">&quot;log&quot;</span>
+	<span class="token string">&quot;net/http&quot;</span>
+	<span class="token string">&quot;strings&quot;</span>
+<span class="token punctuation">)</span>
+
+<span class="token keyword">var</span> config <span class="token operator">=</span> <span class="token function">new</span><span class="token punctuation">(</span>ListenerConfig<span class="token punctuation">)</span>
+
+<span class="token keyword">func</span> <span class="token function">init</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+	<span class="token function">InstallPlugin</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>PluginConfig<span class="token punctuation">{</span>
+		Name<span class="token punctuation">:</span>   <span class="token string">&quot;HDL&quot;</span><span class="token punctuation">,</span>
+		Type<span class="token punctuation">:</span>   PLUGIN_SUBSCRIBER<span class="token punctuation">,</span>
+		Config<span class="token punctuation">:</span> config<span class="token punctuation">,</span>
+		Run<span class="token punctuation">:</span>    run<span class="token punctuation">,</span>
+	<span class="token punctuation">}</span><span class="token punctuation">)</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">func</span> <span class="token function">run</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+	log<span class="token punctuation">.</span><span class="token function">Printf</span><span class="token punctuation">(</span><span class="token string">&quot;HDL start at %s&quot;</span><span class="token punctuation">,</span> config<span class="token punctuation">.</span>ListenAddr<span class="token punctuation">)</span>
+	log<span class="token punctuation">.</span><span class="token function">Fatal</span><span class="token punctuation">(</span>http<span class="token punctuation">.</span><span class="token function">ListenAndServe</span><span class="token punctuation">(</span>config<span class="token punctuation">.</span>ListenAddr<span class="token punctuation">,</span> http<span class="token punctuation">.</span><span class="token function">HandlerFunc</span><span class="token punctuation">(</span>HDLHandler<span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span>
+<span class="token punctuation">}</span>
+
+<span class="token keyword">func</span> <span class="token function">HDLHandler</span><span class="token punctuation">(</span>w http<span class="token punctuation">.</span>ResponseWriter<span class="token punctuation">,</span> r <span class="token operator">*</span>http<span class="token punctuation">.</span>Request<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+	sign <span class="token operator">:=</span> r<span class="token punctuation">.</span>URL<span class="token punctuation">.</span><span class="token function">Query</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">Get</span><span class="token punctuation">(</span><span class="token string">&quot;sign&quot;</span><span class="token punctuation">)</span>
+	<span class="token keyword">if</span> err <span class="token operator">:=</span> AuthHooks<span class="token punctuation">.</span><span class="token function">Trigger</span><span class="token punctuation">(</span>sign<span class="token punctuation">)</span><span class="token punctuation">;</span> err <span class="token operator">!=</span> <span class="token boolean">nil</span> <span class="token punctuation">{</span>
+		w<span class="token punctuation">.</span><span class="token function">WriteHeader</span><span class="token punctuation">(</span><span class="token number">403</span><span class="token punctuation">)</span>
+		<span class="token keyword">return</span>
+	<span class="token punctuation">}</span>
+	stringPath <span class="token operator">:=</span> strings<span class="token punctuation">.</span><span class="token function">TrimLeft</span><span class="token punctuation">(</span>r<span class="token punctuation">.</span>RequestURI<span class="token punctuation">,</span> <span class="token string">&quot;/&quot;</span><span class="token punctuation">)</span>
+	<span class="token keyword">if</span> strings<span class="token punctuation">.</span><span class="token function">HasSuffix</span><span class="token punctuation">(</span>stringPath<span class="token punctuation">,</span> <span class="token string">&quot;.flv&quot;</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+		stringPath <span class="token operator">=</span> strings<span class="token punctuation">.</span><span class="token function">TrimRight</span><span class="token punctuation">(</span>stringPath<span class="token punctuation">,</span> <span class="token string">&quot;.flv&quot;</span><span class="token punctuation">)</span>
+	<span class="token punctuation">}</span>
+	<span class="token keyword">if</span> <span class="token boolean">_</span><span class="token punctuation">,</span> ok <span class="token operator">:=</span> AllRoom<span class="token punctuation">.</span><span class="token function">Load</span><span class="token punctuation">(</span>stringPath<span class="token punctuation">)</span><span class="token punctuation">;</span> ok <span class="token punctuation">{</span>
+		<span class="token comment">//atomic.AddInt32(&amp;hdlId, 1)</span>
+		w<span class="token punctuation">.</span><span class="token function">Header</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">Set</span><span class="token punctuation">(</span><span class="token string">&quot;Transfer-Encoding&quot;</span><span class="token punctuation">,</span> <span class="token string">&quot;chunked&quot;</span><span class="token punctuation">)</span>
+		w<span class="token punctuation">.</span><span class="token function">Header</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">.</span><span class="token function">Set</span><span class="token punctuation">(</span><span class="token string">&quot;Content-Type&quot;</span><span class="token punctuation">,</span> <span class="token string">&quot;video/x-flv&quot;</span><span class="token punctuation">)</span>
+		w<span class="token punctuation">.</span><span class="token function">Write</span><span class="token punctuation">(</span>avformat<span class="token punctuation">.</span>FLVHeader<span class="token punctuation">)</span>
+		p <span class="token operator">:=</span> OutputStream<span class="token punctuation">{</span>
+			Sign<span class="token punctuation">:</span> sign<span class="token punctuation">,</span>
+			SendHandler<span class="token punctuation">:</span> <span class="token keyword">func</span><span class="token punctuation">(</span>packet <span class="token operator">*</span>pool<span class="token punctuation">.</span>SendPacket<span class="token punctuation">)</span> <span class="token builtin">error</span> <span class="token punctuation">{</span>
+				<span class="token keyword">return</span> avformat<span class="token punctuation">.</span><span class="token function">WriteFLVTag</span><span class="token punctuation">(</span>w<span class="token punctuation">,</span> packet<span class="token punctuation">)</span>
+			<span class="token punctuation">}</span><span class="token punctuation">,</span>
+			SubscriberInfo<span class="token punctuation">:</span> SubscriberInfo<span class="token punctuation">{</span>
+				ID<span class="token punctuation">:</span> r<span class="token punctuation">.</span>RemoteAddr<span class="token punctuation">,</span> Type<span class="token punctuation">:</span> <span class="token string">&quot;FLV&quot;</span><span class="token punctuation">,</span>
+			<span class="token punctuation">}</span><span class="token punctuation">,</span>
+		<span class="token punctuation">}</span>
+		p<span class="token punctuation">.</span><span class="token function">Play</span><span class="token punctuation">(</span>stringPath<span class="token punctuation">)</span>
+	<span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span>
+		w<span class="token punctuation">.</span><span class="token function">WriteHeader</span><span class="token punctuation">(</span><span class="token number">404</span><span class="token punctuation">)</span>
+	<span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre></div><p>其中，核心逻辑就是创建OutputStream对象，每一个订阅者需要提供SendHandler函数，用来接收来自发布者广播出来的音视频数据。
+最后调用该对象的Play函数进行播放。请注意：Play函数会阻塞当前goroutine。</p><h2 id="开发发布者插件"><a href="#开发发布者插件" aria-hidden="true" class="header-anchor">#</a> 开发发布者插件</h2><p>所谓发布者，就是提供音视频数据的程序，例如接收来自OBS、ffmpeg的推流的程序。内置插件中，集群功能里面有一个特殊的发布者，它接收来自源服务器的音视频数据，然后在本服务器中广播音视频。
+以此为例，我们需要提供一个结构体定义来表示特定的发布者：</p><div class="language-go extra-class"><pre class="language-go"><code><span class="token keyword">type</span> Receiver <span class="token keyword">struct</span> <span class="token punctuation">{</span>
+	InputStream
+	io<span class="token punctuation">.</span>Reader
+	<span class="token operator">*</span>bufio<span class="token punctuation">.</span>Writer
+<span class="token punctuation">}</span>
+</code></pre></div><p>其中InputStream 是固定的，必须包含，且必须以组合继承的方式定义。其余的成员则是任意的。
+发布者的发布动作需要特定条件的触发，例如在集群插件中，当本服务器有订阅者订阅了某个流，而该流并没有发布者的时候就会触发向源服务器拉流的函数：</p><div class="language-go extra-class"><pre class="language-go"><code><span class="token keyword">func</span> <span class="token function">PullUpStream</span><span class="token punctuation">(</span>streamPath <span class="token builtin">string</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+	addr<span class="token punctuation">,</span> err <span class="token operator">:=</span> net<span class="token punctuation">.</span><span class="token function">ResolveTCPAddr</span><span class="token punctuation">(</span><span class="token string">&quot;tcp&quot;</span><span class="token punctuation">,</span> config<span class="token punctuation">.</span>Master<span class="token punctuation">)</span>
+	<span class="token keyword">if</span> <span class="token function">MayBeError</span><span class="token punctuation">(</span>err<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+		<span class="token keyword">return</span>
+	<span class="token punctuation">}</span>
+	conn<span class="token punctuation">,</span> err <span class="token operator">:=</span> net<span class="token punctuation">.</span><span class="token function">DialTCP</span><span class="token punctuation">(</span><span class="token string">&quot;tcp&quot;</span><span class="token punctuation">,</span> <span class="token boolean">nil</span><span class="token punctuation">,</span> addr<span class="token punctuation">)</span>
+	<span class="token keyword">if</span> <span class="token function">MayBeError</span><span class="token punctuation">(</span>err<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+		<span class="token keyword">return</span>
+	<span class="token punctuation">}</span>
+	brw <span class="token operator">:=</span> bufio<span class="token punctuation">.</span><span class="token function">NewReadWriter</span><span class="token punctuation">(</span>bufio<span class="token punctuation">.</span><span class="token function">NewReader</span><span class="token punctuation">(</span>conn<span class="token punctuation">)</span><span class="token punctuation">,</span> bufio<span class="token punctuation">.</span><span class="token function">NewWriter</span><span class="token punctuation">(</span>conn<span class="token punctuation">)</span><span class="token punctuation">)</span>
+	p <span class="token operator">:=</span> <span class="token operator">&amp;</span>Receiver<span class="token punctuation">{</span>
+		Reader<span class="token punctuation">:</span> conn<span class="token punctuation">,</span>
+		Writer<span class="token punctuation">:</span> brw<span class="token punctuation">.</span>Writer<span class="token punctuation">,</span>
+	<span class="token punctuation">}</span>
+	<span class="token keyword">if</span> p<span class="token punctuation">.</span><span class="token function">Publish</span><span class="token punctuation">(</span>streamPath<span class="token punctuation">,</span> p<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+		p<span class="token punctuation">.</span><span class="token function">WriteByte</span><span class="token punctuation">(</span>MSG_SUBSCRIBE<span class="token punctuation">)</span>
+		p<span class="token punctuation">.</span><span class="token function">WriteString</span><span class="token punctuation">(</span>streamPath<span class="token punctuation">)</span>
+		p<span class="token punctuation">.</span><span class="token function">WriteByte</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span>
+		p<span class="token punctuation">.</span><span class="token function">Flush</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+		<span class="token keyword">for</span> <span class="token boolean">_</span><span class="token punctuation">,</span> v <span class="token operator">:=</span> <span class="token keyword">range</span> p<span class="token punctuation">.</span>Subscribers <span class="token punctuation">{</span>
+			p<span class="token punctuation">.</span><span class="token function">Auth</span><span class="token punctuation">(</span>v<span class="token punctuation">)</span>
+		<span class="token punctuation">}</span>
+	<span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span>
+		<span class="token keyword">return</span>
+	<span class="token punctuation">}</span>
+	<span class="token keyword">defer</span> p<span class="token punctuation">.</span><span class="token function">Cancel</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+	<span class="token keyword">for</span> <span class="token punctuation">{</span>
+		cmd<span class="token punctuation">,</span> err <span class="token operator">:=</span> brw<span class="token punctuation">.</span><span class="token function">ReadByte</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+		<span class="token keyword">if</span> <span class="token function">MayBeError</span><span class="token punctuation">(</span>err<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+			<span class="token keyword">return</span>
+		<span class="token punctuation">}</span>
+		<span class="token keyword">switch</span> cmd <span class="token punctuation">{</span>
+		<span class="token keyword">case</span> MSG_AUDIO<span class="token punctuation">:</span>
+			<span class="token keyword">if</span> audio<span class="token punctuation">,</span> err <span class="token operator">:=</span> p<span class="token punctuation">.</span><span class="token function">readAVPacket</span><span class="token punctuation">(</span>avformat<span class="token punctuation">.</span>FLV_TAG_TYPE_AUDIO<span class="token punctuation">)</span><span class="token punctuation">;</span> err <span class="token operator">==</span> <span class="token boolean">nil</span> <span class="token punctuation">{</span>
+				p<span class="token punctuation">.</span><span class="token function">PushAudio</span><span class="token punctuation">(</span>audio<span class="token punctuation">)</span>
+			<span class="token punctuation">}</span>
+		<span class="token keyword">case</span> MSG_VIDEO<span class="token punctuation">:</span>
+			<span class="token keyword">if</span> video<span class="token punctuation">,</span> err <span class="token operator">:=</span> p<span class="token punctuation">.</span><span class="token function">readAVPacket</span><span class="token punctuation">(</span>avformat<span class="token punctuation">.</span>FLV_TAG_TYPE_VIDEO<span class="token punctuation">)</span><span class="token punctuation">;</span> err <span class="token operator">==</span> <span class="token boolean">nil</span> <span class="token operator">&amp;&amp;</span> <span class="token function">len</span><span class="token punctuation">(</span>video<span class="token punctuation">.</span>Payload<span class="token punctuation">)</span> <span class="token operator">&gt;</span> <span class="token number">2</span> <span class="token punctuation">{</span>
+				tmp <span class="token operator">:=</span> video<span class="token punctuation">.</span>Payload<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span>         <span class="token comment">// 第一个字节保存着视频的相关信息.</span>
+				video<span class="token punctuation">.</span>VideoFrameType <span class="token operator">=</span> tmp <span class="token operator">&gt;&gt;</span> <span class="token number">4</span> <span class="token comment">// 帧类型 4Bit, H264一般为1或者2</span>
+				p<span class="token punctuation">.</span><span class="token function">PushVideo</span><span class="token punctuation">(</span>video<span class="token punctuation">)</span>
+			<span class="token punctuation">}</span>
+		<span class="token keyword">case</span> MSG_AUTH<span class="token punctuation">:</span>
+			cmd<span class="token punctuation">,</span> err <span class="token operator">=</span> brw<span class="token punctuation">.</span><span class="token function">ReadByte</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+			<span class="token keyword">if</span> <span class="token function">MayBeError</span><span class="token punctuation">(</span>err<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+				<span class="token keyword">return</span>
+			<span class="token punctuation">}</span>
+			bytes<span class="token punctuation">,</span> err <span class="token operator">:=</span> brw<span class="token punctuation">.</span><span class="token function">ReadBytes</span><span class="token punctuation">(</span><span class="token number">0</span><span class="token punctuation">)</span>
+			<span class="token keyword">if</span> <span class="token function">MayBeError</span><span class="token punctuation">(</span>err<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+				<span class="token keyword">return</span>
+			<span class="token punctuation">}</span>
+			subId <span class="token operator">:=</span> strings<span class="token punctuation">.</span><span class="token function">Split</span><span class="token punctuation">(</span><span class="token function">string</span><span class="token punctuation">(</span>bytes<span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">:</span><span class="token function">len</span><span class="token punctuation">(</span>bytes<span class="token punctuation">)</span><span class="token operator">-</span><span class="token number">1</span><span class="token punctuation">]</span><span class="token punctuation">)</span><span class="token punctuation">,</span> <span class="token string">&quot;,&quot;</span><span class="token punctuation">)</span><span class="token punctuation">[</span><span class="token number">0</span><span class="token punctuation">]</span>
+			<span class="token keyword">if</span> v<span class="token punctuation">,</span> ok <span class="token operator">:=</span> p<span class="token punctuation">.</span>Subscribers<span class="token punctuation">[</span>subId<span class="token punctuation">]</span><span class="token punctuation">;</span> ok <span class="token punctuation">{</span>
+				<span class="token keyword">if</span> cmd <span class="token operator">!=</span> <span class="token number">1</span> <span class="token punctuation">{</span>
+					v<span class="token punctuation">.</span><span class="token function">Cancel</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+				<span class="token punctuation">}</span>
+			<span class="token punctuation">}</span>
+		<span class="token punctuation">}</span>
+	<span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+</code></pre></div><p>正在该函数中会向源服务器建立tcp连接，然后发送特定命令表示需要拉流，当我们接收到源服务器的数据的时候，就调用PushVideo和PushAudio函数来广播音视频。</p><p>核心逻辑是调用InputStream的Publish以及PushVideo、PushAudio函数</p><h2 id="开发钩子插件"><a href="#开发钩子插件" aria-hidden="true" class="header-anchor">#</a> 开发钩子插件</h2></div><div class="page-edit"><!----><!----></div><div class="page-nav"><p class="inner"><span class="prev">
+        ← <a href="/docs/" class="prev router-link-active">
+          起步
+        </a></span><span class="next"><a href="/docs/history.html">
+          更新日志
+        </a> →
+      </span></p></div></div></div></div>
+    <script src="/docs/assets/js/app.ad3166d6.js" defer></script><script src="/docs/assets/js/2.142d04d2.js" defer></script>
+  </body>
+</html>

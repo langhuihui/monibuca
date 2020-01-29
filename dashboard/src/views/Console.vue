@@ -164,10 +164,10 @@
                 return rate > 1000 ? (rate / 1000) + "kHz" : rate + "Hz"
             },
             record(item) {
-                ajax.get("//" + location.host + "/api/record/flv",{streamPath:item.StreamPath})
+                window.ajax.get("//" + location.host + "/api/record/flv",{streamPath:item.StreamPath})
             },
             stopRecord(item){
-                ajax.get("//" + location.host + "/api/record/flv/stop",{streamPath:item.StreamPath})
+                window.ajax.get("//" + location.host + "/api/record/flv/stop",{streamPath:item.StreamPath})
             },
             isRecording(item) {
                 return item.SubscriberInfo && item.SubscriberInfo.find(x => x.Type == "FlvRecord")
