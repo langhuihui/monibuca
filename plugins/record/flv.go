@@ -10,6 +10,23 @@ import (
 	"path"
 )
 
+func getDuration(file *os.File) uint32 {
+	_, err := file.Seek(-4, io.SeekEnd)
+	if err == nil {
+		var tagSize uint32
+		if tagSize, err = util.ReadByteToUint32(file, true); err == nil {
+			_, err = file.Seek(-int64(tagSize)-4, io.SeekEnd)
+			if err == nil {
+				var tag *pool.AVPacket
+				tag, err = avformat.ReadFLVTag(file)
+				if err == nil {
+					return tag.Timestamp
+				}
+			}
+		}
+	}
+	return 0
+}
 func SaveFlv(streamPath string, append bool) error {
 	flag := os.O_CREATE
 	if append {
@@ -29,20 +46,8 @@ func SaveFlv(streamPath string, append bool) error {
 	p.ID = filePath
 	p.Type = "FlvRecord"
 	if append {
-		_, err = file.Seek(4, io.SeekEnd)
-		if err == nil {
-			var tagSize uint32
-			if tagSize, err = util.ReadByteToUint32(file, true); err == nil {
-				_, err = file.Seek(int64(tagSize+4), io.SeekEnd)
-				if err == nil {
-					var tag *pool.AVPacket
-					tag, err = avformat.ReadFLVTag(file)
-					if err == nil {
-						p.OffsetTime = tag.Timestamp
-					}
-				}
-			}
-		}
+		p.OffsetTime = getDuration(file)
+		file.Seek(0, io.SeekEnd)
 	} else {
 		_, err = file.Write(avformat.FLVHeader)
 	}

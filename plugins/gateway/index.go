@@ -84,6 +84,19 @@ func init() {
 	})
 }
 func run() {
+	http.HandleFunc("/api/stop", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		if streamPath := r.URL.Query().Get("stream"); streamPath != "" {
+			if b, ok := AllRoom.Load(streamPath); ok {
+				b.(*Room).Cancel()
+				w.Write([]byte("success"))
+			} else {
+				w.Write([]byte("no query stream"))
+			}
+		} else {
+			w.Write([]byte("no such stream"))
+		}
+	})
 	http.HandleFunc("/api/summary", summary)
 	http.HandleFunc("/", website)
 	log.Printf("server gateway start at %s", config.ListenAddr)

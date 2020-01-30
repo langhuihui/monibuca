@@ -154,7 +154,7 @@ func (r *Room) Run() {
 func (r *Room) PushAudio(audio *pool.AVPacket) {
 	if audio.Payload[0] == 0xFF && (audio.Payload[1]&0xF0) == 0xF0 {
 		audio.IsADTS = true
-
+		r.AudioTag = audio
 	} else if r.AudioTag == nil {
 		audio.IsAACSequence = true
 		r.AudioTag = audio
