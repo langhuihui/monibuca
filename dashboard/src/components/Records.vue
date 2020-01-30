@@ -10,7 +10,7 @@
             <a href="javascript:void(0)" @click="play(item)">Play</a>
           </li>
           <li>
-            <a href="javascript:void(0)">Delete</a>
+            <a href="javascript:void(0)" @click="deleteFlv(item)">Delete</a>
           </li>
         </template>
       </ListItem>
@@ -45,6 +45,26 @@ export default {
           }
         }
       );
+    },
+    deleteFlv(item) {
+      this.$Modal.confirm({
+        title: "提示",
+        content: "<p>是否删除Flv文件</p>",
+        onOk: () => {
+          window.ajax.get(
+            "//" + location.host + "/api/record/flv/delete",
+            { streamPath: item.Path.replace(".flv", "") },
+            x => {
+              if (x == "success") {
+                this.$Message.success("开始发布");
+              } else {
+                this.$Message.error(x);
+              }
+            }
+          );
+        },
+        onCancel: () => {}
+      });
     },
     toSizeStr(value, unit = "") {
       if (value > 1024 && uintInc[unit]) {

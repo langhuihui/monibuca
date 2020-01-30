@@ -14,22 +14,22 @@
                     内置插件
                 </template>
                 <MenuGroup title="发布者/订阅者">
-                    <MenuItem name="cluster">集群</MenuItem>
-                    <MenuItem name="rtmp">RTMP</MenuItem>
+                    <MenuItem name="cluster" to="/docs/plugins.html#cluster插件">集群</MenuItem>
+                    <MenuItem name="rtmp" to="/docs/plugins.html#rtmp插件">RTMP</MenuItem>
                 </MenuGroup>
                 <MenuGroup title="订阅者">
-                    <MenuItem name="jessica">Jessica</MenuItem>
-                    <MenuItem name="HDL">Http-Flv</MenuItem>
-                    <MenuItem name="record">录制Flv</MenuItem>
+                    <MenuItem name="jessica" to="/docs/plugins.html#jessica插件">Jessica</MenuItem>
+                    <MenuItem name="HDL" to="/docs/plugins.html#http-flv插件">Http-Flv</MenuItem>
+                    <MenuItem name="record" to="/docs/plugins.html#recordflv插件">录制Flv</MenuItem>
                 </MenuGroup>
                 <MenuGroup title="发布者">
-                    <MenuItem name="HLS">HLS</MenuItem>
-                    <MenuItem name="TS">TS</MenuItem>
+                    <MenuItem name="HLS" to="/docs/plugins.html#hls插件">HLS</MenuItem>
+                    <MenuItem name="TS" to="/docs/plugins.html#hls插件">TS</MenuItem>
                 </MenuGroup>
                 <MenuGroup title="钩子">
-                    <MenuItem name="Auth">验证</MenuItem>
+                    <MenuItem name="Auth" to="/docs/plugins.html#校验插件">验证</MenuItem>
                     <MenuItem name="QoS">QoS</MenuItem>
-                    <MenuItem name="gateway">网关</MenuItem>
+                    <MenuItem name="gateway" to="/docs/plugins.html#网关插件">网关</MenuItem>
                 </MenuGroup>
             </Submenu>
             <MenuItem name="4" to="about">

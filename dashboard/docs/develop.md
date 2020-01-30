@@ -176,3 +176,29 @@ func PullUpStream(streamPath string) {
 
 ## 开发钩子插件
 
+钩子插件就是在服务器的关键逻辑处插入的函数调用，方便扩展服务器的功能，比如对连接进行验证，或者触发一些特殊的发布者。
+目前提供的钩子包括
+- 当发布者开始发布时 `OnPublishHooks.AddHook(onPublish)`
+例如：
+```go
+func onPublish(r *Room) {
+	for _, v := range r.Subscribers {
+		if err := CheckSign(v.Sign); err != nil {
+			v.Cancel()
+		}
+	}
+}
+```
+此时可以访问房间里面的订阅者，对其进行验证。
+- 当有订阅者订阅了某个流时，`OnSubscribeHooks.AddHook(onSubscribe)`
+例如：
+```go
+func onSubscribe(s *OutputStream) {
+	if s.Publisher == nil {
+		go PullUpStream(s.StreamPath)
+	}
+}
+
+```
+拉取源服务器的流
+

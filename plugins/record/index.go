@@ -74,15 +74,31 @@ func run() {
 			w.Write([]byte("no such stream"))
 		}
 	})
-	http.HandleFunc("/api/record/flv/play", func(writer http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/api/record/flv/play", func(w http.ResponseWriter, r *http.Request) {
 		if streamPath := r.URL.Query().Get("streamPath"); streamPath != "" {
 			if err := PublishFlvFile(streamPath); err != nil {
-				writer.Write([]byte(err.Error()))
+				w.Write([]byte(err.Error()))
 			} else {
-				writer.Write([]byte("success"))
+				w.Write([]byte("success"))
 			}
 		} else {
-			writer.Write([]byte("no streamPath"))
+			w.Write([]byte("no streamPath"))
+		}
+	})
+	http.HandleFunc("/api/record/flv/delete", func(w http.ResponseWriter, r *http.Request) {
+		if streamPath := r.URL.Query().Get("streamPath"); streamPath != "" {
+			filePath := config.Path + streamPath + ".flv"
+			if PathExists(filePath) {
+				if err := os.Remove(filePath); err != nil {
+					w.Write([]byte(err.Error()))
+				} else {
+					w.Write([]byte("success"))
+				}
+			} else {
+				w.Write([]byte("no such file"))
+			}
+		} else {
+			w.Write([]byte("no streamPath"))
 		}
 	})
 }

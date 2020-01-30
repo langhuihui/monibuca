@@ -7,13 +7,13 @@
     <meta name="description" content="">
     
     
-    <link rel="preload" href="/docs/assets/css/styles.ad3166d6.css" as="style"><link rel="preload" href="/docs/assets/js/app.ad3166d6.js" as="script"><link rel="preload" href="/docs/assets/js/2.142d04d2.js" as="script"><link rel="prefetch" href="/docs/assets/js/1.83ce04b6.js"><link rel="prefetch" href="/docs/assets/js/3.2b6c987b.js"><link rel="prefetch" href="/docs/assets/js/4.ad90d74a.js"><link rel="prefetch" href="/docs/assets/js/5.36121818.js">
-    <link rel="stylesheet" href="/docs/assets/css/styles.ad3166d6.css">
+    <link rel="preload" href="/docs/assets/css/styles.d51c815b.css" as="style"><link rel="preload" href="/docs/assets/js/app.d51c815b.js" as="script"><link rel="preload" href="/docs/assets/js/2.190ec46a.js" as="script"><link rel="prefetch" href="/docs/assets/js/1.6babbc1d.js"><link rel="prefetch" href="/docs/assets/js/3.7646e76c.js"><link rel="prefetch" href="/docs/assets/js/4.08fbc0d9.js">
+    <link rel="stylesheet" href="/docs/assets/css/styles.d51c815b.css">
   </head>
   <body>
     <div id="app" data-server-rendered="true"><div class="theme-container"><header class="navbar"><div class="sidebar-button"><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" role="img" viewBox="0 0 448 512" class="icon"><path fill="currentColor" d="M436 124H12c-6.627 0-12-5.373-12-12V80c0-6.627 5.373-12 12-12h424c6.627 0 12 5.373 12 12v32c0 6.627-5.373 12-12 12zm0 160H12c-6.627 0-12-5.373-12-12v-32c0-6.627 5.373-12 12-12h424c6.627 0 12 5.373 12 12v32c0 6.627-5.373 12-12 12zm0 160H12c-6.627 0-12-5.373-12-12v-32c0-6.627 5.373-12 12-12h424c6.627 0 12 5.373 12 12v32c0 6.627-5.373 12-12 12z"></path></svg></div><a href="/docs/" class="home-link router-link-active"><!----><span class="site-name">
       Monibuca
-    </span></a><div class="links"><div class="search-box"><input aria-label="Search" autocomplete="off" spellcheck="false" value=""><!----></div><!----></div></header><div class="sidebar-mask"></div><div class="sidebar"><!----><ul class="sidebar-links"><li><a href="/docs/" class="sidebar-link">起步</a></li><li><a href="/docs/develop.html" class="active sidebar-link">插件开发</a><ul class="sidebar-sub-headers"><li class="sidebar-sub-header"><a href="/docs/develop.html#插件的定义" class="sidebar-link">插件的定义</a></li><li class="sidebar-sub-header"><a href="/docs/develop.html#插件的安装" class="sidebar-link">插件的安装</a></li><li class="sidebar-sub-header"><a href="/docs/develop.html#开发订阅者插件" class="sidebar-link">开发订阅者插件</a></li><li class="sidebar-sub-header"><a href="/docs/develop.html#开发发布者插件" class="sidebar-link">开发发布者插件</a></li><li class="sidebar-sub-header"><a href="/docs/develop.html#开发钩子插件" class="sidebar-link">开发钩子插件</a></li></ul></li><li><a href="/docs/history.html" class="sidebar-link">更新日志</a></li><li><div class="sidebar-group collapsable"><p class="sidebar-heading"><span>内置插件</span><span class="arrow right"></span></p><!----></div></li></ul></div><div class="page"><div class="content"><h1 id="插件开发"><a href="#插件开发" aria-hidden="true" class="header-anchor">#</a> 插件开发</h1><h2 id="插件的定义"><a href="#插件的定义" aria-hidden="true" class="header-anchor">#</a> 插件的定义</h2><p>所谓的插件，没有什么固定的规则，只需要完成<code>安装</code>操作即可。插件可以实现任意的功能扩展，最常见的是实现某种传输协议用来推流或者拉流</p><h2 id="插件的安装"><a href="#插件的安装" aria-hidden="true" class="header-anchor">#</a> 插件的安装</h2><p>下面是内置插件jessica的源码，代表了典型的插件安装</p><div class="language-go extra-class"><pre class="language-go"><code><span class="token keyword">package</span> jessica
+    </span></a><div class="links"><div class="search-box"><input aria-label="Search" autocomplete="off" spellcheck="false" value=""><!----></div><!----></div></header><div class="sidebar-mask"></div><div class="sidebar"><!----><ul class="sidebar-links"><li><a href="/docs/" class="sidebar-link">起步</a></li><li><a href="/docs/develop.html" class="active sidebar-link">插件开发</a><ul class="sidebar-sub-headers"><li class="sidebar-sub-header"><a href="/docs/develop.html#插件的定义" class="sidebar-link">插件的定义</a></li><li class="sidebar-sub-header"><a href="/docs/develop.html#插件的安装" class="sidebar-link">插件的安装</a></li><li class="sidebar-sub-header"><a href="/docs/develop.html#开发订阅者插件" class="sidebar-link">开发订阅者插件</a></li><li class="sidebar-sub-header"><a href="/docs/develop.html#开发发布者插件" class="sidebar-link">开发发布者插件</a></li><li class="sidebar-sub-header"><a href="/docs/develop.html#开发钩子插件" class="sidebar-link">开发钩子插件</a></li></ul></li><li><a href="/docs/history.html" class="sidebar-link">更新日志</a></li><li><a href="/docs/plugins.html" class="sidebar-link">内置插件</a></li></ul></div><div class="page"><div class="content"><h1 id="插件开发"><a href="#插件开发" aria-hidden="true" class="header-anchor">#</a> 插件开发</h1><h2 id="插件的定义"><a href="#插件的定义" aria-hidden="true" class="header-anchor">#</a> 插件的定义</h2><p>所谓的插件，没有什么固定的规则，只需要完成<code>安装</code>操作即可。插件可以实现任意的功能扩展，最常见的是实现某种传输协议用来推流或者拉流</p><h2 id="插件的安装"><a href="#插件的安装" aria-hidden="true" class="header-anchor">#</a> 插件的安装</h2><p>下面是内置插件jessica的源码，代表了典型的插件安装</p><div class="language-go extra-class"><pre class="language-go"><code><span class="token keyword">package</span> jessica
 
 <span class="token keyword">import</span> <span class="token punctuation">(</span>
 	<span class="token punctuation">.</span> <span class="token string">&quot;github.com/langhuihui/monibuca/monica&quot;</span>
@@ -161,13 +161,29 @@
 	<span class="token punctuation">}</span>
 <span class="token punctuation">}</span>
 
-</code></pre></div><p>正在该函数中会向源服务器建立tcp连接，然后发送特定命令表示需要拉流，当我们接收到源服务器的数据的时候，就调用PushVideo和PushAudio函数来广播音视频。</p><p>核心逻辑是调用InputStream的Publish以及PushVideo、PushAudio函数</p><h2 id="开发钩子插件"><a href="#开发钩子插件" aria-hidden="true" class="header-anchor">#</a> 开发钩子插件</h2></div><div class="page-edit"><!----><!----></div><div class="page-nav"><p class="inner"><span class="prev">
+</code></pre></div><p>正在该函数中会向源服务器建立tcp连接，然后发送特定命令表示需要拉流，当我们接收到源服务器的数据的时候，就调用PushVideo和PushAudio函数来广播音视频。</p><p>核心逻辑是调用InputStream的Publish以及PushVideo、PushAudio函数</p><h2 id="开发钩子插件"><a href="#开发钩子插件" aria-hidden="true" class="header-anchor">#</a> 开发钩子插件</h2><p>钩子插件就是在服务器的关键逻辑处插入的函数调用，方便扩展服务器的功能，比如对连接进行验证，或者触发一些特殊的发布者。
+目前提供的钩子包括</p><ul><li>当发布者开始发布时 <code>OnPublishHooks.AddHook(onPublish)</code>
+例如：</li></ul><div class="language-go extra-class"><pre class="language-go"><code><span class="token keyword">func</span> <span class="token function">onPublish</span><span class="token punctuation">(</span>r <span class="token operator">*</span>Room<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+	<span class="token keyword">for</span> <span class="token boolean">_</span><span class="token punctuation">,</span> v <span class="token operator">:=</span> <span class="token keyword">range</span> r<span class="token punctuation">.</span>Subscribers <span class="token punctuation">{</span>
+		<span class="token keyword">if</span> err <span class="token operator">:=</span> <span class="token function">CheckSign</span><span class="token punctuation">(</span>v<span class="token punctuation">.</span>Sign<span class="token punctuation">)</span><span class="token punctuation">;</span> err <span class="token operator">!=</span> <span class="token boolean">nil</span> <span class="token punctuation">{</span>
+			v<span class="token punctuation">.</span><span class="token function">Cancel</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+		<span class="token punctuation">}</span>
+	<span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre></div><p>此时可以访问房间里面的订阅者，对其进行验证。</p><ul><li>当有订阅者订阅了某个流时，<code>OnSubscribeHooks.AddHook(onSubscribe)</code>
+例如：</li></ul><div class="language-go extra-class"><pre class="language-go"><code><span class="token keyword">func</span> <span class="token function">onSubscribe</span><span class="token punctuation">(</span>s <span class="token operator">*</span>OutputStream<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+	<span class="token keyword">if</span> s<span class="token punctuation">.</span>Publisher <span class="token operator">==</span> <span class="token boolean">nil</span> <span class="token punctuation">{</span>
+		<span class="token keyword">go</span> <span class="token function">PullUpStream</span><span class="token punctuation">(</span>s<span class="token punctuation">.</span>StreamPath<span class="token punctuation">)</span>
+	<span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+
+</code></pre></div><p>拉取源服务器的流</p></div><div class="page-edit"><!----><!----></div><div class="page-nav"><p class="inner"><span class="prev">
         ← <a href="/docs/" class="prev router-link-active">
           起步
         </a></span><span class="next"><a href="/docs/history.html">
           更新日志
         </a> →
       </span></p></div></div></div></div>
-    <script src="/docs/assets/js/app.ad3166d6.js" defer></script><script src="/docs/assets/js/2.142d04d2.js" defer></script>
+    <script src="/docs/assets/js/app.d51c815b.js" defer></script><script src="/docs/assets/js/2.190ec46a.js" defer></script>
   </body>
 </html>
