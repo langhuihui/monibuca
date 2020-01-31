@@ -3,11 +3,17 @@ package monica
 import (
 	"encoding/json"
 	"github.com/BurntSushi/toml"
+	"io/ioutil"
 	"log"
 )
 
+var ConfigRaw []byte
+
 func Run(configFile string) (err error) {
-	if _, err = toml.DecodeFile(configFile, cg); err == nil {
+	if ConfigRaw, err = ioutil.ReadFile(configFile); err != nil {
+		return
+	}
+	if _, err = toml.Decode(string(ConfigRaw), cg); err == nil {
 		for name, config := range plugins {
 			if cfg, ok := cg.Plugins[name]; ok {
 				b, _ := json.Marshal(cfg)

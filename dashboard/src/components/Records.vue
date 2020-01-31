@@ -1,5 +1,5 @@
 <template>
-  <Modal v-bind="$attrs" draggable v-on="$listeners" title="录制的视频">
+  <Modal v-bind="$attrs" draggable v-on="$listeners" title="录制的视频"  @on-visible-change="onVisible" :z-index="900">
     <List>
       <ListItem v-for="item in data" :key="item">
         <ListItemMeta :title="item.Path">
@@ -39,7 +39,8 @@ export default {
         { streamPath: item.Path.replace(".flv", "") },
         x => {
           if (x == "success") {
-            this.$Message.success("开始发布");
+            this.onVisible(true)
+            this.$Message.success("删除成功");
           } else {
             this.$Message.error(x);
           }
@@ -90,16 +91,18 @@ export default {
       } else {
         return value + "ms";
       }
-    }
-  },
-  mounted() {
-    window.ajax.getJSON(
-      "//" + location.host + "/api/record/flv/list",
-      {},
-      x => {
-        this.data = x;
+    },
+    onVisible(visible){
+      if(visible){
+        window.ajax.getJSON(
+                "//" + location.host + "/api/record/flv/list",
+                {},
+                x => {
+                  this.data = x;
+                }
+        );
       }
-    );
+    }
   }
 };
 </script>

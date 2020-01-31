@@ -84,23 +84,33 @@ func init() {
 	})
 }
 func run() {
-	http.HandleFunc("/api/stop", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		if streamPath := r.URL.Query().Get("stream"); streamPath != "" {
-			if b, ok := AllRoom.Load(streamPath); ok {
-				b.(*Room).Cancel()
-				w.Write([]byte("success"))
-			} else {
-				w.Write([]byte("no query stream"))
-			}
-		} else {
-			w.Write([]byte("no such stream"))
-		}
-	})
+	http.HandleFunc("/api/stop", stopPublish)
 	http.HandleFunc("/api/summary", summary)
+	http.HandleFunc("/api/logs", watchLogs)
+	http.HandleFunc("/api/config", getConfig)
 	http.HandleFunc("/", website)
 	log.Printf("server gateway start at %s", config.ListenAddr)
 	log.Fatal(http.ListenAndServe(config.ListenAddr, nil))
+}
+func getConfig(w http.ResponseWriter, r *http.Request) {
+	w.Write(ConfigRaw)
+}
+func watchLogs(w http.ResponseWriter, r *http.Request) {
+	AddWriter(NewSSE(w, r.Context()))
+	<-r.Context().Done()
+}
+func stopPublish(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	if streamPath := r.URL.Query().Get("stream"); streamPath != "" {
+		if b, ok := AllRoom.Load(streamPath); ok {
+			b.(*Room).Cancel()
+			w.Write([]byte("success"))
+		} else {
+			w.Write([]byte("no query stream"))
+		}
+	} else {
+		w.Write([]byte("no such stream"))
+	}
 }
 func website(w http.ResponseWriter, r *http.Request) {
 	filePath := r.URL.Path

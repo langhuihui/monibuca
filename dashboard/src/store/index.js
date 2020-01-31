@@ -3,40 +3,55 @@ import Vuex from 'vuex'
 
 Vue.use(Vuex)
 let summaryES = null
-
+let logsES = null
 export default new Vuex.Store({
   state: {
-    summary:{
-      NetWork:[],
-      Rooms:[],
-      Memory:{
+    summary: {
+      NetWork: [],
+      Rooms: [],
+      Memory: {
         Used: 0,
         Usage: 0
       },
-      CPUUsage:0,
-      HardDisk:{
+      CPUUsage: 0,
+      HardDisk: {
         Used: 0,
         Usage: 0
       }
-    }
+    }, logs: []
   },
   mutations: {
-    update(state,payload){
-      Object.assign(state,payload)
+    update(state, payload) {
+      Object.assign(state, payload)
+    },
+    addLog(state, payload) {
+      state.logs.push(payload)
     }
   },
   actions: {
-    fetchSummary({commit}){
+    fetchSummary({ commit }) {
       summaryES = new EventSource(
-          "//" + location.host + "/api/summary"
+        "//" + location.host + "/api/summary"
       );
-      summaryES.onmessage = evt=>{
+      summaryES.onmessage = evt => {
         if (!evt.data) return
         let summary = JSON.parse(evt.data)
-        commit("update",{summary})
+        commit("update", { summary })
       }
     },
-    stopFetchSummary(){
+    fetchLogs({ commit }) {
+      logsES = new EventSource(
+        "//" + location.host + "/api/logs"
+      )
+      logsES.onmessage = evt => {
+        if (!evt.data) return
+        commit("addLog", evt.data)
+      }
+    },
+    stopFetchLogs() {
+      logsES.close()
+    },
+    stopFetchSummary() {
       summaryES.close()
     }
   },
