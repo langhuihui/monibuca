@@ -1,9 +1,7 @@
 <template>
-  <Modal v-bind="$attrs" draggable v-on="$listeners" @on-visible-change="onVisible" title="配置">
-    <div>
-      <pre>{{config}}</pre>
-    </div>
-  </Modal>
+  <div style="padding:0 15px">
+    <pre>{{config}}</pre>
+  </div>
 </template>
 
 <script>

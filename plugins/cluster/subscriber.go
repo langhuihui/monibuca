@@ -3,13 +3,15 @@ package cluster
 import (
 	"bufio"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
-	. "github.com/langhuihui/monibuca/monica"
-	"github.com/langhuihui/monibuca/monica/pool"
 	"net"
 	"strconv"
 	"strings"
 	"time"
+
+	. "github.com/langhuihui/monibuca/monica"
+	"github.com/langhuihui/monibuca/monica/pool"
 )
 
 func ListenBare(addr string) error {
@@ -49,6 +51,7 @@ func ListenBare(addr string) error {
 func process(conn net.Conn) {
 	defer conn.Close()
 	reader := bufio.NewReader(conn)
+	connAddr := conn.RemoteAddr().String()
 	stream := OutputStream{
 		SendHandler: func(p *pool.SendPacket) error {
 			head := pool.GetSlice(9)
@@ -64,12 +67,16 @@ func process(conn net.Conn) {
 			}
 			return nil
 		}, SubscriberInfo: SubscriberInfo{
-			ID:   conn.RemoteAddr().String(),
+			ID:   connAddr,
 			Type: "Bare",
 		},
 	}
 	for {
 		cmd, err := reader.ReadByte()
+		if err != nil {
+			return
+		}
+		bytes, err := reader.ReadBytes(0)
 		if err != nil {
 			return
 		}
@@ -79,25 +86,26 @@ func process(conn net.Conn) {
 				fmt.Printf("bare stream already exist from %s", conn.RemoteAddr())
 				return
 			}
-			bytes, err := reader.ReadBytes(0)
-			if MayBeError(err) {
-				return
-			}
 			streamName := string(bytes[0 : len(bytes)-1])
-			stream.Play(streamName)
+			go stream.Play(streamName)
 		case MSG_AUTH:
-			bytes, err := reader.ReadBytes(0)
-			if err != nil {
-				print(err)
-				return
-			}
 			sign := strings.Split(string(bytes[0:len(bytes)-1]), ",")
-			head := []byte{MSG_AUTH, 0}
+			head := []byte{MSG_AUTH, 2}
 			if len(sign) > 1 && AuthHooks.Trigger(sign[1]) == nil {
 				head[1] = 1
 			}
 			conn.Write(head)
 			conn.Write(bytes)
+		case MSG_SUMMARY: //收到从服务器发来报告，加入摘要中
+			var summary *ServerSummary
+			if err = json.Unmarshal(bytes, summary); err == nil {
+				summary.Address = connAddr
+				Summary.Report(summary)
+				if _, ok := slaves.Load(connAddr); !ok {
+					slaves.Store(connAddr, conn)
+					defer slaves.Delete(connAddr)
+				}
+			}
 		default:
 			fmt.Printf("bare receive unknown cmd:%d from %s", cmd, conn.RemoteAddr())
 			return

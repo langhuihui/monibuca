@@ -45,6 +45,7 @@ func (p *Receiver) readAVPacket(avType byte) (av *pool.AVPacket, err error) {
 	pool.RecycleSlice(buf)
 	return
 }
+
 func PullUpStream(streamPath string) {
 	addr, err := net.ResolveTCPAddr("tcp", config.Master)
 	if MayBeError(err) {

@@ -111,11 +111,13 @@ func (r *Room) Run() {
 		case <-r.Done():
 			return
 		case <-update.C:
-			r.SubscriberInfo = make([]*SubscriberInfo, len(r.Subscribers))
-			i := 0
-			for _, v := range r.Subscribers {
-				r.SubscriberInfo[i] = &v.SubscriberInfo
-				i++
+			if Summary.Running() {
+				r.SubscriberInfo = make([]*SubscriberInfo, len(r.Subscribers))
+				i := 0
+				for _, v := range r.Subscribers {
+					r.SubscriberInfo[i] = &v.SubscriberInfo
+					i++
+				}
 			}
 		case s := <-r.Control:
 			switch v := s.(type) {

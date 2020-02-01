@@ -13,6 +13,7 @@ func Run(configFile string) (err error) {
 	if ConfigRaw, err = ioutil.ReadFile(configFile); err != nil {
 		return
 	}
+	go Summary.StartSummary()
 	if _, err = toml.Decode(string(ConfigRaw), cg); err == nil {
 		for name, config := range plugins {
 			if cfg, ok := cg.Plugins[name]; ok {

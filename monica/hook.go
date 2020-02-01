@@ -54,3 +54,16 @@ func (h OnDropHook) Trigger(s *OutputStream) {
 		h(s)
 	}
 }
+
+var OnSummaryHooks = make(OnSummaryHook, 0)
+
+type OnSummaryHook []func(bool)
+
+func (h OnSummaryHook) AddHook(hook func(bool)) {
+	OnSummaryHooks = append(h, hook)
+}
+func (h OnSummaryHook) Trigger(v bool) {
+	for _, h := range h {
+		h(v)
+	}
+}

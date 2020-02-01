@@ -7,6 +7,7 @@ let logsES = null
 export default new Vuex.Store({
   state: {
     summary: {
+      Address: location.hostname,
       NetWork: [],
       Rooms: [],
       Memory: {
@@ -17,7 +18,8 @@ export default new Vuex.Store({
       HardDisk: {
         Used: 0,
         Usage: 0
-      }
+      },
+      Children: {}
     }, logs: []
   },
   mutations: {

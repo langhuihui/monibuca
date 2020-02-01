@@ -1,21 +1,14 @@
 <template>
-  <Modal v-bind="$attrs" draggable v-on="$listeners" title="录制的视频"  @on-visible-change="onVisible" :z-index="900">
-    <List>
-      <ListItem v-for="item in data" :key="item">
-        <ListItemMeta :title="item.Path">
-          <template slot="description">{{toSizeStr(item.Size)}} {{toDurationStr(item.Duration)}}</template>
-        </ListItemMeta>
-        <template slot="action">
-          <li>
-            <a href="javascript:void(0)" @click="play(item)">Play</a>
-          </li>
-          <li>
-            <a href="javascript:void(0)" @click="deleteFlv(item)">Delete</a>
-          </li>
-        </template>
-      </ListItem>
-    </List>
-  </Modal>
+  <div class="records">
+    <Card v-for="item in data" :key="item">
+      <p slot="title">{{item.Path}}</p>
+      <div slot="extra">
+        <Button @click="play(item)" icon="md-play" size="small"></Button>
+        <Button @click="deleteFlv(item)" icon="ios-trash" size="small"></Button>
+      </div>
+      {{toSizeStr(item.Size)}} {{toDurationStr(item.Duration)}}
+    </Card>
+  </div>
 </template>
 
 <script>
@@ -39,7 +32,7 @@ export default {
         { streamPath: item.Path.replace(".flv", "") },
         x => {
           if (x == "success") {
-            this.onVisible(true)
+            this.onVisible(true);
             this.$Message.success("删除成功");
           } else {
             this.$Message.error(x);
@@ -92,14 +85,14 @@ export default {
         return value + "ms";
       }
     },
-    onVisible(visible){
-      if(visible){
+    onVisible(visible) {
+      if (visible) {
         window.ajax.getJSON(
-                "//" + location.host + "/api/record/flv/list",
-                {},
-                x => {
-                  this.data = x;
-                }
+          "//" + location.host + "/api/record/flv/list",
+          {},
+          x => {
+            this.data = x;
+          }
         );
       }
     }
@@ -107,5 +100,13 @@ export default {
 };
 </script>
 
-<style>
+<style scoped>
+.records {
+  display: flex;
+  flex-wrap: wrap;
+  padding: 0 15px;
+}
+.records > * {
+  width: 200px;
+}
 </style>
