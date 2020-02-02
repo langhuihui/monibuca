@@ -4,14 +4,15 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
-	. "github.com/langhuihui/monibuca/monica"
-	"github.com/quangngotan95/go-m3u8/m3u8"
 	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"path/filepath"
 	"time"
+
+	. "github.com/langhuihui/monibuca/monica"
+	"github.com/quangngotan95/go-m3u8/m3u8"
 )
 
 type HLS struct {
@@ -94,8 +95,8 @@ func (p *HLS) run(info *M3u8Info) {
 			if len(tsItems) > 3 {
 				tsItems = tsItems[len(tsItems)-3:]
 			}
-			info.M3u8Info = make([]TSCost, len(tsItems))
-			for i, v := range tsItems {
+			info.M3u8Info = nil
+			for _, v := range tsItems {
 				tsCost := TSCost{}
 				tsUrl, _ := info.Req.URL.Parse(v.Segment)
 				tsReq, _ := http.NewRequest("GET", tsUrl.String(), nil)
@@ -122,7 +123,7 @@ func (p *HLS) run(info *M3u8Info) {
 				} else if err != nil {
 					log.Printf("%s reqTs:%v", p.StreamPath, err)
 				}
-				info.M3u8Info[i] = tsCost
+				info.M3u8Info = append(info.M3u8Info, tsCost)
 			}
 
 			time.Sleep(time.Second * time.Duration(playlist.Target) * 2)

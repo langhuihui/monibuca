@@ -15,10 +15,7 @@
               {{item.VideoInfo.SPSInfo.Width}}x{{item.VideoInfo.SPSInfo.Height}}
             </p>
             <ButtonGroup size="small">
-              <Button
-                @click="onShowDetail(item)"
-                icon="ios-people"
-              >{{item.SubscriberInfo?item.SubscriberInfo.length:0}}</Button>
+              <Button @click="onShowDetail(item)" icon="ios-people">{{getSubscriberCount(item)}}</Button>
               <Button v-if="item.Type" @click="preview(item)" icon="md-eye"></Button>
               <Button
                 @click="stopRecord(item)"
@@ -34,7 +31,9 @@
           </div>
         </div>
       </TabPane>
-      <TabPane label="集群总览" icon="ios-cloud"></TabPane>
+      <TabPane label="集群总览" icon="ios-cloud">
+        <Cluster />
+      </TabPane>
       <TabPane label="录制的视频" icon="ios-folder" name="recordsPanel">
         <Records ref="recordsPanel" />
       </TabPane>
@@ -56,6 +55,7 @@
       >磁盘使用：{{networkFormat(HardDisk.Used,"M")}} 占比：{{HardDisk.Usage.toFixed(2)}}%</Alert>
     </div>
     <Jessibuca ref="jessibuca" v-model="showPreview"></Jessibuca>
+    <Subscribers :data="currentStream && currentStream.SubscriberInfo" v-model="showSubscribers" />
   </div>
 </template>
 
@@ -66,7 +66,8 @@ import StartTime from "../components/StartTime";
 import Records from "../components/Records";
 import Logs from "../components/Logs";
 import Config from "../components/Config";
-
+import Subscribers from "../components/Subscribers";
+import Cluster from "../components/Cluster";
 const uintInc = {
   "": "K",
   K: "M",
@@ -106,12 +107,16 @@ export default {
     StartTime,
     Records,
     Logs,
-    Config
+    Subscribers,
+    Config,
+    Cluster
   },
   data() {
     return {
       showPreview: false,
+      showSubscribers: false,
       currentTab: "",
+      currentStream: [],
       typeMap: {
         FlvFile: "🎥",
         TS: "🎬",
@@ -143,14 +148,21 @@ export default {
       totalInNetSpeed(state) {
         return (
           this.networkFormat(
-            state.summary.NetWork.reduce((aac, c) => aac + c.ReceiveSpeed, 0)
+            state.summary.NetWork
+              ? state.summary.NetWork.reduce(
+                  (aac, c) => aac + c.ReceiveSpeed,
+                  0
+                )
+              : 0
           ) + "/S"
         );
       },
       totalOutNetSpeed(state) {
         return (
           this.networkFormat(
-            state.summary.NetWork.reduce((aac, c) => aac + c.SentSpeed, 0)
+            state.summary.NetWork
+              ? state.summary.NetWork.reduce((aac, c) => aac + c.SentSpeed, 0)
+              : 0
           ) + "/S"
         );
       }
@@ -158,15 +170,24 @@ export default {
   },
   methods: {
     ...mapActions(["fetchSummary", "stopFetchSummary"]),
+    getSubscriberCount(item) {
+      if (
+        this.currentStream &&
+        this.currentStream.StreamPath == item.StreamPath
+      ) {
+        this.currentStream = item;
+      }
+      return item.SubscriberInfo ? item.SubscriberInfo.length : 0;
+    },
     preview(item) {
       this.$refs.jessibuca.play(
         "ws://" + location.hostname + ":8080/" + item.StreamPath
       );
       this.showPreview = true;
     },
-    onShowDetail() {
-      // this.showDetail = true
-      // this.currentSub = item
+    onShowDetail(item) {
+      this.showSubscribers = true;
+      this.currentStream = item;
     },
     networkFormat(value, unit = "") {
       if (value > 1024 && uintInc[unit]) {

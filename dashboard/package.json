@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@antv/g2plot": "^0.11.22",
+    "@antv/g6": "^3.2.9",
     "core-js": "^3.4.4",
     "view-design": "^4.0.0",
     "vue": "^2.6.10",

@@ -38,6 +38,7 @@ export default new Vuex.Store({
       summaryES.onmessage = evt => {
         if (!evt.data) return
         let summary = JSON.parse(evt.data)
+        summary.Address = location.hostname
         commit("update", { summary })
       }
     },

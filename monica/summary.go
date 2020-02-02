@@ -118,7 +118,7 @@ func (s *ServerSummary) collect() {
 		s.NetWork[i].Name = n.Name
 		s.NetWork[i].Receive = n.BytesRecv
 		s.NetWork[i].Sent = n.BytesSent
-		if s.lastNetWork != nil {
+		if s.lastNetWork != nil && len(s.lastNetWork) > i {
 			s.NetWork[i].ReceiveSpeed = n.BytesRecv - s.lastNetWork[i].Receive
 			s.NetWork[i].SentSpeed = n.BytesSent - s.lastNetWork[i].Sent
 		}
