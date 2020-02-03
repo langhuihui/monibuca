@@ -5,9 +5,9 @@ ListenAddr = ":8080"
 [Plugins.RTMP]
 ListenAddr = ":1935"
 [Plugins.GateWay]
-ListenAddr = ":81"
-#[Plugins.Cluster]
-#Master = "localhost:2019"
+ListenAddr = ":8081"
+[Plugins.Cluster]
+Master = "203.60.1.23:2019"
 #ListenAddr = ":2019"
 #
 #[Plugins.Auth]

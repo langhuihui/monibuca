@@ -62,7 +62,9 @@ func readMaster() {
 	var err error
 	defer func() {
 		for {
-			time.Sleep(time.Second*5 + time.Duration(rand.Int63n(5))*time.Second)
+			t := 5 + rand.Int63n(5)
+			log.Printf("reconnect to master %s after %d seconds", config.Master, t)
+			time.Sleep(time.Duration(t) * time.Second)
 			addr, _ := net.ResolveTCPAddr("tcp", config.Master)
 			if masterConn, err = net.DialTCP("tcp", nil, addr); err == nil {
 				go readMaster()
@@ -71,6 +73,7 @@ func readMaster() {
 		}
 	}()
 	brw := bufio.NewReadWriter(bufio.NewReader(masterConn), bufio.NewWriter(masterConn))
+	log.Printf("connect to master %s reporting", config.Master)
 	//首次报告
 	if b, err := json.Marshal(Summary); err == nil {
 		_, err = masterConn.Write(b)
@@ -82,6 +85,7 @@ func readMaster() {
 		}
 		switch cmd {
 		case MSG_SUMMARY: //收到主服务器指令，进行采集和上报
+			log.Println("receive summary request from master")
 			if cmd, err = brw.ReadByte(); err != nil {
 				return
 			}

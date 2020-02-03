@@ -1,6 +1,7 @@
 package monica
 
 import (
+	"log"
 	"time"
 
 	"github.com/shirou/gopsutil/cpu"
@@ -57,11 +58,13 @@ func (s *ServerSummary) StartSummary() {
 		case v := <-s.control:
 			if v {
 				if s.ref++; s.ref == 1 {
+					log.Println("start report summary")
 					OnSummaryHooks.Trigger(true)
 				}
 			} else {
 				if s.ref--; s.ref == 0 {
 					s.lastNetWork = nil
+					log.Println("stop report summary")
 					OnSummaryHooks.Trigger(false)
 				}
 			}
