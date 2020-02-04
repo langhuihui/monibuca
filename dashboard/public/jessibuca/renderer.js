@@ -9,7 +9,7 @@ function Jessibuca(opt) {
         this.initBuffers();
         this.initTextures();
     };
-    this.decoderWorker = new Worker(opt.decoder || '264_mp3.js')
+    this.decoderWorker = new Worker(opt.decoder || 'ff.js')
     var _this = this
     function draw(output) {
         _this.drawNextOutputPicture(_this.width, _this.height, null, output)

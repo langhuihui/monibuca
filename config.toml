@@ -7,8 +7,8 @@ ListenAddr = ":1935"
 [Plugins.GateWay]
 ListenAddr = ":8081"
 [Plugins.Cluster]
-Master = "203.60.1.23:2019"
-#ListenAddr = ":2019"
+#Master = "localhost:2019"
+ListenAddr = ":2019"
 #
 #[Plugins.Auth]
 #Key="www.monibuca.com"

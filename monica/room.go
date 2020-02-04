@@ -2,11 +2,12 @@ package monica
 
 import (
 	"context"
-	"github.com/langhuihui/monibuca/monica/avformat"
-	"github.com/langhuihui/monibuca/monica/pool"
 	"log"
 	"sync"
 	"time"
+
+	"github.com/langhuihui/monibuca/monica/avformat"
+	"github.com/langhuihui/monibuca/monica/pool"
 )
 
 var (
@@ -154,11 +155,17 @@ func (r *Room) Run() {
 	}
 }
 func (r *Room) PushAudio(audio *pool.AVPacket) {
+	if len(audio.Payload) < 3 {
+		return
+	}
 	if audio.Payload[0] == 0xFF && (audio.Payload[1]&0xF0) == 0xF0 {
 		audio.IsADTS = true
 		r.AudioTag = audio
 	} else if r.AudioTag == nil {
 		audio.IsAACSequence = true
+		if len(audio.Payload) < 5 {
+			return
+		}
 		r.AudioTag = audio
 		tmp := audio.Payload[0]                                                // 第一个字节保存着音频的相关信息
 		if r.AudioInfo.SoundFormat = tmp >> 4; r.AudioInfo.SoundFormat == 10 { //真的是AAC的话，后面有一个字节的详细信息
@@ -200,6 +207,9 @@ func (r *Room) setH264Info(video *pool.AVPacket) {
 	}
 }
 func (r *Room) PushVideo(video *pool.AVPacket) {
+	if len(video.Payload) < 3 {
+		return
+	}
 	video.VideoFrameType = video.Payload[0] >> 4  // 帧类型 4Bit, H264一般为1或者2
 	r.VideoInfo.CodecID = video.Payload[0] & 0x0f // 编码类型ID 4Bit, JPEG, H263, AVC...
 	video.IsAVCSequence = video.VideoFrameType == 1 && video.Payload[1] == 0

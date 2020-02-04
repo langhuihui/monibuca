@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"strconv"
 	"strings"
@@ -80,29 +81,32 @@ func process(conn net.Conn) {
 		if err != nil {
 			return
 		}
+		bytes = bytes[0 : len(bytes)-1]
 		switch cmd {
 		case MSG_SUBSCRIBE:
 			if stream.Room != nil {
 				fmt.Printf("bare stream already exist from %s", conn.RemoteAddr())
 				return
 			}
-			streamName := string(bytes[0 : len(bytes)-1])
-			go stream.Play(streamName)
+			go stream.Play(string(bytes))
 		case MSG_AUTH:
-			sign := strings.Split(string(bytes[0:len(bytes)-1]), ",")
+			sign := strings.Split(string(bytes), ",")
 			head := []byte{MSG_AUTH, 2}
 			if len(sign) > 1 && AuthHooks.Trigger(sign[1]) == nil {
 				head[1] = 1
 			}
 			conn.Write(head)
-			conn.Write(bytes)
+			conn.Write(bytes[0 : len(bytes)+1])
 		case MSG_SUMMARY: //收到从服务器发来报告，加入摘要中
-			var summary *ServerSummary
+			summary := &ServerSummary{}
 			if err = json.Unmarshal(bytes, summary); err == nil {
 				summary.Address = connAddr
 				Summary.Report(summary)
 				if _, ok := slaves.Load(connAddr); !ok {
 					slaves.Store(connAddr, conn)
+					if Summary.Running() {
+						orderReport(io.Writer(conn), true)
+					}
 					defer slaves.Delete(connAddr)
 				}
 			}
