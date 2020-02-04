@@ -8,8 +8,8 @@ func (h AuthHook) AddHook(hook func(string) error) {
 	AuthHooks = append(h, hook)
 }
 func (h AuthHook) Trigger(sign string) error {
-	for _, h := range h {
-		if err := h(sign); err != nil {
+	for _, f := range h {
+		if err := f(sign); err != nil {
 			return err
 		}
 	}
@@ -24,8 +24,8 @@ func (h OnPublishHook) AddHook(hook func(r *Room)) {
 	OnPublishHooks = append(h, hook)
 }
 func (h OnPublishHook) Trigger(r *Room) {
-	for _, h := range h {
-		h(r)
+	for _, f := range h {
+		f(r)
 	}
 }
 
@@ -37,8 +37,8 @@ func (h OnSubscribeHook) AddHook(hook func(s *OutputStream)) {
 	OnSubscribeHooks = append(h, hook)
 }
 func (h OnSubscribeHook) Trigger(s *OutputStream) {
-	for _, h := range h {
-		h(s)
+	for _, f := range h {
+		f(s)
 	}
 }
 
@@ -50,8 +50,8 @@ func (h OnDropHook) AddHook(hook func(s *OutputStream)) {
 	OnDropHooks = append(h, hook)
 }
 func (h OnDropHook) Trigger(s *OutputStream) {
-	for _, h := range h {
-		h(s)
+	for _, f := range h {
+		f(s)
 	}
 }
 
@@ -63,7 +63,7 @@ func (h OnSummaryHook) AddHook(hook func(bool)) {
 	OnSummaryHooks = append(h, hook)
 }
 func (h OnSummaryHook) Trigger(v bool) {
-	for _, h := range h {
-		h(v)
+	for _, f := range h {
+		f(v)
 	}
 }

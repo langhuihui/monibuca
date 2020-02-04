@@ -9,7 +9,7 @@ function Jessibuca(opt) {
         this.initBuffers();
         this.initTextures();
     };
-    this.decoderWorker = new Worker(opt.decoder || '264_mp3.js')
+    this.decoderWorker = new Worker(opt.decoder || 'ff.js')
     var _this = this
     function draw(output) {
         _this.drawNextOutputPicture(_this.width, _this.height, null, output)
@@ -118,12 +118,15 @@ Jessibuca.prototype.playAudio = function (data) {
         }
         // setTimeout(playNextBuffer, buffer.duration * 1000)
     }
-    var tryPlay = function (buffer) {
+    var decodeAudio = function () {
         if (decodeQueue.length) {
-            context.decodeAudioData(decodeQueue.shift(), tryPlay, console.error);
+            context.decodeAudioData(decodeQueue.shift(), tryPlay, decodeAudio);
         } else {
             isDecoding = false
         }
+    }
+    var tryPlay = function (buffer) {
+        decodeAudio()
         if (isPlaying) {
             audioBuffers.push(buffer);
         } else {
@@ -134,7 +137,7 @@ Jessibuca.prototype.playAudio = function (data) {
         decodeQueue.push(...data)
         if (!isDecoding) {
             isDecoding = true
-            context.decodeAudioData(decodeQueue.shift(), tryPlay, console.error);
+            decodeAudio()
         }
     }
     this.playAudio = playAudio
@@ -452,7 +455,7 @@ Jessibuca.prototype.close = function () {
     this.decoderWorker.postMessage({ cmd: "close" })
     this.contextGL.clear(this.contextGL.COLOR_BUFFER_BIT);
 }
-Jessibuca.prototype.destroy = function(){
+Jessibuca.prototype.destroy = function () {
     this.decoderWorker.terminate()
 }
 Jessibuca.prototype.play = function (url) {

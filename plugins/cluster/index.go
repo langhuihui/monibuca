@@ -3,6 +3,7 @@ package cluster
 import (
 	"bufio"
 	"encoding/json"
+	"io"
 	"log"
 	"math/rand"
 	"net"
@@ -46,56 +47,52 @@ func run() {
 		if MayBeError(err) {
 			return
 		}
-		masterConn, err = net.DialTCP("tcp", nil, addr)
-		if MayBeError(err) {
-			return
-		}
-		go readMaster()
+		go readMaster(addr)
 	}
 	if config.ListenAddr != "" {
+		Summary.Children = make(map[string]*ServerSummary)
 		OnSummaryHooks.AddHook(onSummary)
 		log.Printf("server bare start at %s", config.ListenAddr)
 		log.Fatal(ListenBare(config.ListenAddr))
 	}
 }
-func readMaster() {
+
+func readMaster(addr *net.TCPAddr) {
 	var err error
-	defer func() {
-		for {
-			t := 5 + rand.Int63n(5)
-			log.Printf("reconnect to master %s after %d seconds", config.Master, t)
-			time.Sleep(time.Duration(t) * time.Second)
-			addr, _ := net.ResolveTCPAddr("tcp", config.Master)
-			if masterConn, err = net.DialTCP("tcp", nil, addr); err == nil {
-				go readMaster()
-				return
-			}
-		}
-	}()
-	brw := bufio.NewReadWriter(bufio.NewReader(masterConn), bufio.NewWriter(masterConn))
-	log.Printf("connect to master %s reporting", config.Master)
-	//首次报告
-	if b, err := json.Marshal(Summary); err == nil {
-		_, err = masterConn.Write(b)
-	}
+	var cmd byte
 	for {
-		cmd, err := brw.ReadByte()
-		if err != nil {
-			return
-		}
-		switch cmd {
-		case MSG_SUMMARY: //收到主服务器指令，进行采集和上报
-			log.Println("receive summary request from master")
-			if cmd, err = brw.ReadByte(); err != nil {
-				return
+		if masterConn, err = net.DialTCP("tcp", nil, addr); !MayBeError(err) {
+			reader := bufio.NewReader(masterConn)
+			log.Printf("connect to master %s reporting", config.Master)
+			for report(); err == nil; {
+				if cmd, err = reader.ReadByte(); !MayBeError(err) {
+					switch cmd {
+					case MSG_SUMMARY: //收到主服务器指令，进行采集和上报
+						log.Println("receive summary request from master")
+						if cmd, err = reader.ReadByte(); !MayBeError(err) {
+							if cmd == 1 {
+								Summary.Add()
+								go onReport()
+							} else {
+								Summary.Done()
+							}
+						}
+					}
+				}
 			}
-			if cmd == 1 {
-				Summary.Add()
-				go onReport()
-			} else {
-				Summary.Done()
-			}
 		}
+		t := 5 + rand.Int63n(5)
+		log.Printf("reconnect to master %s after %d seconds", config.Master, t)
+		time.Sleep(time.Duration(t) * time.Second)
+	}
+}
+func report() {
+	if b, err := json.Marshal(Summary); err == nil {
+		data := make([]byte, len(b)+2)
+		data[0] = MSG_SUMMARY
+		copy(data[1:], b)
+		data[len(data)-1] = 0
+		_, err = masterConn.Write(data)
 	}
 }
 
@@ -103,28 +100,24 @@ func readMaster() {
 func onReport() {
 	for range time.NewTicker(time.Second).C {
 		if Summary.Running() {
-			if b, err := json.Marshal(Summary); err == nil {
-				data := make([]byte, len(b)+2)
-				data[0] = MSG_SUMMARY
-				copy(data[1:], b)
-				data[len(data)-1] = 0
-				_, err = masterConn.Write(data)
-			}
+			report()
 		} else {
 			return
 		}
 	}
 }
+func orderReport(conn io.Writer, start bool) {
+	b := []byte{MSG_SUMMARY, 0}
+	if start {
+		b[1] = 1
+	}
+	conn.Write(b)
+}
 
 //通知从服务器需要上报或者关闭上报
 func onSummary(start bool) {
 	slaves.Range(func(k, v interface{}) bool {
-		conn := v.(*net.TCPConn)
-		b := []byte{MSG_SUMMARY, 0}
-		if start {
-			b[1] = 1
-		}
-		conn.Write(b)
+		orderReport(v.(*net.TCPConn), start)
 		return true
 	})
 }

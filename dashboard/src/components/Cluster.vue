@@ -58,16 +58,15 @@ export default {
           }
         }
       }
-      if (node.Children && node.Children.length > 0) {
-        for (let i = 0; i < node.Children.length; i++) {
-          let child = this.addServer(node.Children[i], nodes, edges);
+      if (node.Children) {
+        for (let childId in node.Children) {
+          this.addServer(node.Children[childId], nodes, edges);
           edges.push({
             source: result.id,
-            target: child.id
+            target: childId
           });
         }
       }
-      return result;
     }
   },
   watch: {
