@@ -33,7 +33,7 @@ export default {
         x => {
           if (x == "success") {
             this.onVisible(true);
-            this.$Message.success("删除成功");
+            this.$Message.success("开始发布");
           } else {
             this.$Message.error(x);
           }
@@ -50,7 +50,7 @@ export default {
             { streamPath: item.Path.replace(".flv", "") },
             x => {
               if (x == "success") {
-                this.$Message.success("开始发布");
+                this.$Message.success("删除成功");
               } else {
                 this.$Message.error(x);
               }

@@ -118,6 +118,7 @@ export default {
       currentTab: "",
       currentStream: [],
       typeMap: {
+        Receiver: "📡",
         FlvFile: "🎥",
         TS: "🎬",
         HLS: "🍎",

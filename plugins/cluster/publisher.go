@@ -3,12 +3,14 @@ package cluster
 import (
 	"bufio"
 	"encoding/binary"
+	"io"
+	"log"
+	"net"
+	"strings"
+
 	. "github.com/langhuihui/monibuca/monica"
 	"github.com/langhuihui/monibuca/monica/avformat"
 	"github.com/langhuihui/monibuca/monica/pool"
-	"io"
-	"net"
-	"strings"
 )
 
 type Receiver struct {
@@ -26,6 +28,7 @@ func (p *Receiver) Auth(authSub *OutputStream) {
 
 func (p *Receiver) readAVPacket(avType byte) (av *pool.AVPacket, err error) {
 	buf := pool.GetSlice(4)
+	defer pool.RecycleSlice(buf)
 	_, err = io.ReadFull(p, buf)
 	if err != nil {
 		println(err.Error())
@@ -39,10 +42,7 @@ func (p *Receiver) readAVPacket(avType byte) (av *pool.AVPacket, err error) {
 	}
 	av.Payload = pool.GetSlice(int(binary.BigEndian.Uint32(buf)))
 	_, err = io.ReadFull(p, av.Payload)
-	if MayBeError(err) {
-		return
-	}
-	pool.RecycleSlice(buf)
+	MayBeError(err)
 	return
 }
 
@@ -57,7 +57,7 @@ func PullUpStream(streamPath string) {
 	}
 	brw := bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn))
 	p := &Receiver{
-		Reader: conn,
+		Reader: brw.Reader,
 		Writer: brw.Writer,
 	}
 	if p.Publish(streamPath, p) {
@@ -72,11 +72,7 @@ func PullUpStream(streamPath string) {
 		return
 	}
 	defer p.Cancel()
-	for {
-		cmd, err := brw.ReadByte()
-		if MayBeError(err) {
-			return
-		}
+	for cmd, err := brw.ReadByte(); !MayBeError(err); cmd, err = brw.ReadByte() {
 		switch cmd {
 		case MSG_AUDIO:
 			if audio, err := p.readAVPacket(avformat.FLV_TAG_TYPE_AUDIO); err == nil {
@@ -103,6 +99,8 @@ func PullUpStream(streamPath string) {
 					v.Cancel()
 				}
 			}
+		default:
+			log.Printf("unknown cmd:%v", cmd)
 		}
 	}
 }
