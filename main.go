@@ -6,9 +6,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/BurntSushi/toml"
-	. "github.com/langhuihui/monibuca/monica"
-	"github.com/langhuihui/monibuca/monica/util"
 	"io/ioutil"
 	"log"
 	"mime"
@@ -19,6 +16,10 @@ import (
 	"path"
 	"runtime"
 	"strings"
+
+	"github.com/BurntSushi/toml"
+	. "github.com/langhuihui/monibuca/monica"
+	"github.com/langhuihui/monibuca/monica/util"
 )
 
 type InstanceDesc struct {
@@ -110,6 +111,7 @@ func initInstance(w http.ResponseWriter, r *http.Request) {
 	instanceDesc := new(InstanceDesc)
 	sse := util.NewSSE(w, r.Context())
 	err := json.Unmarshal([]byte(r.URL.Query().Get("info")), instanceDesc)
+	clearDir := r.URL.Query().Get("clear") != ""
 	defer func() {
 		if err != nil {
 			sse.WriteEvent("exception", []byte(err.Error()))
@@ -121,7 +123,7 @@ func initInstance(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	sse.WriteEvent("step", []byte("1:参数解析成功！"))
-	err = instanceDesc.createDir(sse)
+	err = instanceDesc.createDir(sse, clearDir)
 	if err != nil {
 		return
 	}
@@ -164,7 +166,10 @@ func (p *InstanceDesc) writeExecSSE(sse *util.SSE, cmd *exec.Cmd) error {
 	cmd.Dir = p.Path
 	return sse.WriteExec(cmd)
 }
-func (p *InstanceDesc) createDir(sse *util.SSE) (err error) {
+func (p *InstanceDesc) createDir(sse *util.SSE, clearDir bool) (err error) {
+	if clearDir {
+		os.RemoveAll(p.Path)
+	}
 	err = os.MkdirAll(p.Path, 0666)
 	if err != nil {
 		return
@@ -206,8 +211,10 @@ func main(){
 	}
 	sse.WriteEvent("step", []byte("5:go build 成功！"))
 	build.Reset()
-	build.WriteString("kill -9 `cat pid`\nnohup .")
-	build.WriteString(path.Dir(path.Join(p.Path, "main.go")))
+	build.WriteString("kill -9 `cat pid`\nnohup ./")
+	binFile := strings.TrimSuffix(p.Path, "/")
+	_, binFile = path.Split(binFile)
+	build.WriteString(binFile)
 	build.WriteString(" > log.txt & echo $! > pid\n")
 	err = ioutil.WriteFile(path.Join(p.Path, "restart.sh"), build.Bytes(), 0777)
 	if err != nil {

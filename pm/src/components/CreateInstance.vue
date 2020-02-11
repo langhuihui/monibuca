@@ -12,46 +12,54 @@
         <div>
             <pre>{{log}}</pre>
         </div>
+        <div slot="footer">
+            <Checkbox v-model="clearDir">安装前清空目录</Checkbox>
+            <Button type="primary" @click="start">开始</Button>
+            <Button type="success" @click="close" v-if="status=='finish'">完成</Button>
+        </div>
     </Modal>
 </template>
 
 <script>
-    let eventSource = null
-    export default {
-        name: "CreateInstance",
-        props: {
-            info: Object,
-        },
-        watch: {
-            info(v) {
-                if (v) {
-                    eventSource = new EventSource("/create?info="+JSON.stringify(v))
-                    eventSource.onmessage = evt => {
-                        this.log += evt.data + "\n"
-                        if (evt.data == "success") {
-                            this.status = "finish"
-                            eventSource.close()
-                        }
+let eventSource = null;
+export default {
+    name: "CreateInstance",
+    props: {
+        info: Object
+    },
+    methods:{
+        start(){
+             eventSource = new EventSource(
+                    "/create?info=" + JSON.stringify(this.info)+(this.clearDir?"&clear=true":"")
+                );
+                eventSource.onopen = () => (this.log = "");
+                eventSource.onmessage = evt => {
+                    this.log += evt.data + "\n";
+                    if (evt.data == "success") {
+                        this.status = "finish";
+                        eventSource.close();
                     }
-                    eventSource.addEventListener("exception", evt => {
-                        this.log += evt.data + "\n"
-                        this.status = "error"
-                        eventSource.close()
-                    })
-                    eventSource.addEventListener("step", evt => {
-                        let [step,msg] = evt.data.split(":")
-                        this.currentStep = step|0
-                        this.log+=msg+"\n"
-                    })
-                }
-            }
-        },
-        data() {
-            return {currentStep: 0, log: "", status: "process"}
+                };
+                eventSource.addEventListener("exception", evt => {
+                    this.log += evt.data + "\n";
+                    this.status = "error";
+                    eventSource.close();
+                });
+                eventSource.addEventListener("step", evt => {
+                    let [step, msg] = evt.data.split(":");
+                    this.currentStep = step | 0;
+                    this.log += msg + "\n";
+                });
+        },close(){
+            this.$Modal.remove()
         }
+    },
+    
+    data() {
+        return { clearDir: true, currentStep: 0, log: "", status: "process" };
     }
+};
 </script>
 
 <style scoped>
-
 </style>

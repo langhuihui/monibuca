@@ -9,10 +9,12 @@ import (
 )
 
 var ConfigRaw []byte
-var Version = "0.1.2"
+var Version = "0.2.1"
 
 func Run(configFile string) (err error) {
+	log.Printf("start monibuca version:%s", Version)
 	if ConfigRaw, err = ioutil.ReadFile(configFile); err != nil {
+		log.Printf("read config file error: %v", err)
 		return
 	}
 	go Summary.StartSummary()
@@ -31,6 +33,8 @@ func Run(configFile string) (err error) {
 				go config.Run()
 			}
 		}
+	} else {
+		log.Printf("decode config file error: %v", err)
 	}
 	return
 }

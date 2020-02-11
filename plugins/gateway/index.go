@@ -1,8 +1,7 @@
 package gateway
 
 import (
-	. "github.com/langhuihui/monibuca/monica"
-	. "github.com/langhuihui/monibuca/monica/util"
+	"encoding/json"
 	"io/ioutil"
 	"log"
 	"mime"
@@ -10,6 +9,9 @@ import (
 	"path"
 	"runtime"
 	"time"
+
+	. "github.com/langhuihui/monibuca/monica"
+	. "github.com/langhuihui/monibuca/monica/util"
 )
 
 var (
@@ -30,6 +32,7 @@ func init() {
 	})
 }
 func run() {
+	http.HandleFunc("/api/sysInfo", sysInfo)
 	http.HandleFunc("/api/stop", stopPublish)
 	http.HandleFunc("/api/summary", summary)
 	http.HandleFunc("/api/logs", watchLogs)
@@ -93,5 +96,11 @@ func summary(w http.ResponseWriter, r *http.Request) {
 		case <-r.Context().Done():
 			return
 		}
+	}
+}
+func sysInfo(w http.ResponseWriter, r *http.Request) {
+	bytes, err := json.Marshal(&struct{ Version string }{Version: Version})
+	if err == nil {
+		_, err = w.Write(bytes)
 	}
 }
