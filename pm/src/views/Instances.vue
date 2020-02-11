@@ -7,6 +7,14 @@
                     <List border>
                         <ListItem v-for="item in instances" :key="item.Name">
                             <ListItemMeta :title="item.Name" :description="item.Path"></ListItemMeta>
+                            <template slot="action">
+                                    <li @click="restart(item)">
+                                        <Icon type="ios-refresh" />重启
+                                    </li>
+                                    <li @click="upgrade(item)">
+                                        <Icon type="ios-sync" />升级引擎
+                                    </li>
+                                </template>
                         </ListItem>
                     </List>
                 </TabPane>
@@ -217,6 +225,54 @@ ${x.Config || ""}`
             this.formPlugin.Path = item;
             this.formPlugin.Config = this.defaultConfig[name];
             this.showBuiltinPlugin = false;
+        },
+        restart(item){
+             const msg = this.$Message.loading({
+                    content: 'restart '+item.Name+'...',
+                    duration: 0
+                });
+            var es = new EventSource("/restart/instance?instance="+item.Name)
+            es.onmessage = evt => {
+                if(evt.data=="success"){
+                    this.$Message.success("重启成功！")
+                    msg()
+                }else{
+                   this.$Message.info(evt.data)
+                }
+            }
+            es.addEventListener("failed",evt=>{
+                 this.$Message.error(evt.data)
+                 msg()
+            })
+            es.onerror = e => {
+                this.$Message.error(e);
+                msg()
+                es.close()
+            }
+        },
+        upgrade(item){
+             const msg = this.$Message.loading({
+                    content: 'upgrade '+item.Name+'...',
+                    duration: 0
+                });
+            var es = new EventSource("/upgrade/engine?instance="+item.Name)
+            es.onmessage = evt => {
+                if(evt.data=="success"){
+                    this.$Message.success("更新完毕")
+                    msg()
+                }else{
+                   this.$Message.info(evt.data)
+                }
+            }
+            es.addEventListener("failed",evt=>{
+                 this.$Message.error(evt.data)
+                 msg()
+            })
+            es.onerror = e => {
+                this.$Message.error(e);
+                msg()
+                es.close()
+            }
         }
     }
 };

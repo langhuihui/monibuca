@@ -9,7 +9,7 @@ import (
 )
 
 var ConfigRaw []byte
-var Version = "0.2.1"
+var Version = "0.2.2"
 
 func Run(configFile string) (err error) {
 	log.Printf("start monibuca version:%s", Version)

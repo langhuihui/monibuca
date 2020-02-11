@@ -14,8 +14,7 @@
         </div>
         <div slot="footer">
             <Checkbox v-model="clearDir">安装前清空目录</Checkbox>
-            <Button type="primary" @click="start">开始</Button>
-            <Button type="success" @click="close" v-if="status=='finish'">完成</Button>
+            <Button type="primary" @click="start" :loading="status=='process'">开始</Button>
         </div>
     </Modal>
 </template>
@@ -27,36 +26,37 @@ export default {
     props: {
         info: Object
     },
-    methods:{
-        start(){
-             eventSource = new EventSource(
-                    "/create?info=" + JSON.stringify(this.info)+(this.clearDir?"&clear=true":"")
-                );
-                eventSource.onopen = () => (this.log = "");
-                eventSource.onmessage = evt => {
-                    this.log += evt.data + "\n";
-                    if (evt.data == "success") {
-                        this.status = "finish";
-                        eventSource.close();
-                    }
-                };
-                eventSource.addEventListener("exception", evt => {
-                    this.log += evt.data + "\n";
-                    this.status = "error";
+    methods: {
+        start() {
+            this.status = "process";
+            eventSource = new EventSource(
+                "/create?info=" +
+                    JSON.stringify(this.info) +
+                    (this.clearDir ? "&clear=true" : "")
+            );
+            eventSource.onopen = () => (this.log = "");
+            eventSource.onmessage = evt => {
+                this.log += evt.data + "\n";
+                if (evt.data == "success") {
+                    this.status = "finish";
                     eventSource.close();
-                });
-                eventSource.addEventListener("step", evt => {
-                    let [step, msg] = evt.data.split(":");
-                    this.currentStep = step | 0;
-                    this.log += msg + "\n";
-                });
-        },close(){
-            this.$Modal.remove()
-        }
+                }
+            };
+            eventSource.addEventListener("exception", evt => {
+                this.log += evt.data + "\n";
+                this.status = "error";
+                eventSource.close();
+            });
+            eventSource.addEventListener("step", evt => {
+                let [step, msg] = evt.data.split(":");
+                this.currentStep = step | 0;
+                this.log += msg + "\n";
+            });
+        },
     },
-    
+
     data() {
-        return { clearDir: true, currentStep: 0, log: "", status: "process" };
+        return { clearDir: true, currentStep: 0, log: "", status: "wait" };
     }
 };
 </script>

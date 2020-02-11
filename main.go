@@ -29,7 +29,7 @@ type InstanceDesc struct {
 	Config  string
 }
 
-var instances map[string]*InstanceDesc
+var instances = make(map[string]*InstanceDesc)
 var instancesDir string
 
 func main() {
@@ -142,24 +142,28 @@ func initInstance(w http.ResponseWriter, r *http.Request) {
 }
 func upgradeEngine(w http.ResponseWriter, r *http.Request) {
 	sse := util.NewSSE(w, r.Context())
-	cmd := exec.Command("go", "get", "-u", "github.com/langhuihui/monibuca/monica")
 	instanceName := r.URL.Query().Get("instance")
-	cmd.Dir = instances[instanceName].Path
-	err := sse.WriteExec(cmd)
-	if err != nil {
-		sse.Write([]byte(err.Error()))
+	if instance, ok := instances[instanceName]; ok {
+		if err := instance.writeExecSSE(sse, exec.Command("go", "get", "-u", "github.com/langhuihui/monibuca/monica")); err != nil {
+			sse.WriteEvent("failed", []byte(err.Error()))
+		} else {
+			sse.Write([]byte("success"))
+		}
+	} else {
+		sse.WriteEvent("failed", []byte("no such instance"))
 	}
 }
 func restartInstance(w http.ResponseWriter, r *http.Request) {
 	sse := util.NewSSE(w, r.Context())
 	instanceName := r.URL.Query().Get("instance")
-	cmd := exec.Command("sh", "restart.sh")
-	cmd.Dir = path.Join(instancesDir, instanceName)
-	cmd.Stderr = sse
-	cmd.Stdout = sse
-	err := cmd.Start()
-	if err != nil {
-		sse.Write([]byte(err.Error()))
+	if instance, ok := instances[instanceName]; ok {
+		if err := instance.writeExecSSE(sse, exec.Command("sh", "restart.sh")); err != nil {
+			sse.WriteEvent("failed", []byte(err.Error()))
+		} else {
+			sse.Write([]byte("success"))
+		}
+	} else {
+		sse.WriteEvent("failed", []byte("no such instance"))
 	}
 }
 func (p *InstanceDesc) writeExecSSE(sse *util.SSE, cmd *exec.Cmd) error {
@@ -220,12 +224,7 @@ func main(){
 	if err != nil {
 		return
 	}
-	cmd := exec.Command("sh", "restart.sh")
-	cmd.Dir = p.Path
-	cmd.Stderr = sse
-	cmd.Stdout = sse
-	err = cmd.Start()
-	return
+	return p.writeExecSSE(sse, exec.Command("sh", "restart.sh"))
 }
 func Home() (string, error) {
 	user, err := user.Current()
