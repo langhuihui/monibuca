@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/langhuihui/monibuca/monica/avformat"
-	"github.com/langhuihui/monibuca/monica/pool"
 )
 
 var (
@@ -23,8 +22,8 @@ func (c *Collection) Get(name string) (result *Room) {
 	item, loaded := AllRoom.LoadOrStore(name, &Room{
 		Subscribers: make(map[string]*OutputStream),
 		Control:     make(chan interface{}),
-		VideoChan:   make(chan *pool.AVPacket, 1),
-		AudioChan:   make(chan *pool.AVPacket, 1),
+		VideoChan:   make(chan *avformat.AVPacket, 1),
+		AudioChan:   make(chan *avformat.AVPacket, 1),
 	})
 	result = item.(*Room)
 	if !loaded {
@@ -42,11 +41,11 @@ type Room struct {
 	Control      chan interface{}
 	Cancel       context.CancelFunc
 	Subscribers  map[string]*OutputStream // 订阅者
-	VideoTag     *pool.AVPacket           // 每个视频包都是这样的结构,区别在于Payload的大小.FMS在发送AVC sequence header,需要加上 VideoTags,这个tag 1个字节(8bits)的数据
-	AudioTag     *pool.AVPacket           // 每个音频包都是这样的结构,区别在于Payload的大小.FMS在发送AAC sequence header,需要加上 AudioTags,这个tag 1个字节(8bits)的数据
-	FirstScreen  []*pool.AVPacket
-	AudioChan    chan *pool.AVPacket
-	VideoChan    chan *pool.AVPacket
+	VideoTag     *avformat.AVPacket       // 每个视频包都是这样的结构,区别在于Payload的大小.FMS在发送AVC sequence header,需要加上 VideoTags,这个tag 1个字节(8bits)的数据
+	AudioTag     *avformat.AVPacket       // 每个音频包都是这样的结构,区别在于Payload的大小.FMS在发送AAC sequence header,需要加上 AudioTags,这个tag 1个字节(8bits)的数据
+	FirstScreen  []*avformat.AVPacket
+	AudioChan    chan *avformat.AVPacket
+	VideoChan    chan *avformat.AVPacket
 	UseTimestamp bool //是否采用数据包中的时间戳
 }
 
@@ -91,7 +90,7 @@ func (r *Room) Subscribe(s *OutputStream) {
 	if r.Err() == nil {
 		s.SubscribeTime = time.Now()
 		log.Printf("subscribe :%s %s,to room %s", s.Type, s.ID, r.StreamPath)
-		s.packetQueue = make(chan *pool.SendPacket, 1024)
+		s.packetQueue = make(chan *avformat.SendPacket, 1024)
 		s.Context, s.Cancel = context.WithCancel(r)
 		s.Control <- &SubscribeCmd{s}
 	}
@@ -154,13 +153,16 @@ func (r *Room) Run() {
 		}
 	}
 }
-func (r *Room) PushAudio(audio *pool.AVPacket) {
-	if len(audio.Payload) < 3 {
+func (r *Room) PushAudio(audio *avformat.AVPacket) {
+	if len(audio.Payload) < 4 {
 		return
 	}
 	if audio.Payload[0] == 0xFF && (audio.Payload[1]&0xF0) == 0xF0 {
-		audio.IsADTS = true
-		r.AudioTag = audio
+		//audio.IsADTS = true
+		r.AudioInfo.SoundFormat = 10
+		r.AudioInfo.SoundRate = avformat.SamplingFrequencies[(audio.Payload[2]&0x3c)>>2]
+		r.AudioInfo.SoundType = ((audio.Payload[2] & 0x1) << 2) | ((audio.Payload[3] & 0xc0) >> 6)
+		r.AudioTag = audio.ADTS2ASC()
 	} else if r.AudioTag == nil {
 		audio.IsAACSequence = true
 		if len(audio.Payload) < 5 {
@@ -198,7 +200,7 @@ func (r *Room) PushAudio(audio *pool.AVPacket) {
 	r.AudioInfo.PacketCount++
 	r.AudioChan <- audio
 }
-func (r *Room) setH264Info(video *pool.AVPacket) {
+func (r *Room) setH264Info(video *avformat.AVPacket) {
 	r.VideoTag = video
 	info := avformat.AVCDecoderConfigurationRecord{}
 	//0:codec,1:IsAVCSequence,2~4:compositionTime
@@ -206,7 +208,7 @@ func (r *Room) setH264Info(video *pool.AVPacket) {
 		r.VideoInfo.SPSInfo, err = avformat.ParseSPS(info.SequenceParameterSetNALUnit)
 	}
 }
-func (r *Room) PushVideo(video *pool.AVPacket) {
+func (r *Room) PushVideo(video *avformat.AVPacket) {
 	if len(video.Payload) < 3 {
 		return
 	}

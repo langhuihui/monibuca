@@ -26,7 +26,7 @@ func (p *Receiver) Auth(authSub *OutputStream) {
 	p.Flush()
 }
 
-func (p *Receiver) readAVPacket(avType byte) (av *pool.AVPacket, err error) {
+func (p *Receiver) readAVPacket(avType byte) (av *avformat.AVPacket, err error) {
 	buf := pool.GetSlice(4)
 	defer pool.RecycleSlice(buf)
 	_, err = io.ReadFull(p, buf)
@@ -34,7 +34,7 @@ func (p *Receiver) readAVPacket(avType byte) (av *pool.AVPacket, err error) {
 		println(err.Error())
 		return
 	}
-	av = pool.NewAVPacket(avType)
+	av = avformat.NewAVPacket(avType)
 	av.Timestamp = binary.BigEndian.Uint32(buf)
 	_, err = io.ReadFull(p, buf)
 	if MayBeError(err) {

@@ -2,12 +2,14 @@ package monica
 
 import (
 	"encoding/json"
-	"github.com/BurntSushi/toml"
 	"io/ioutil"
 	"log"
+
+	"github.com/BurntSushi/toml"
 )
 
 var ConfigRaw []byte
+var Version = "0.1.2"
 
 func Run(configFile string) (err error) {
 	if ConfigRaw, err = ioutil.ReadFile(configFile); err != nil {

@@ -32,7 +32,7 @@ func WsHandler(w http.ResponseWriter, r *http.Request) {
 	defer conn.Close()
 	if isFlv {
 		baseStream.Type = "JessicaFlv"
-		baseStream.SendHandler = func(packet *pool.SendPacket) error {
+		baseStream.SendHandler = func(packet *avformat.SendPacket) error {
 			return avformat.WriteFLVTag(conn, packet)
 		}
 		if err := ws.WriteHeader(conn, ws.Header{
@@ -47,7 +47,7 @@ func WsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		baseStream.Type = "Jessica"
-		baseStream.SendHandler = func(packet *pool.SendPacket) error {
+		baseStream.SendHandler = func(packet *avformat.SendPacket) error {
 			err := ws.WriteHeader(conn, ws.Header{
 				Fin:    true,
 				OpCode: ws.OpBinary,

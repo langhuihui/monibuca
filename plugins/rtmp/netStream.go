@@ -5,7 +5,6 @@ import (
 	"fmt"
 	. "github.com/langhuihui/monibuca/monica"
 	"github.com/langhuihui/monibuca/monica/avformat"
-	"github.com/langhuihui/monibuca/monica/pool"
 	"log"
 	"net"
 	"strings"
@@ -103,7 +102,7 @@ func processRtmp(conn net.Conn) {
 					streamPath := nc.appName + "/" + strings.Split(pm.PublishingName, "?")[0]
 					pub := new(RTMP)
 					if pub.Publish(streamPath, pub) {
-						pub.FirstScreen = make([]*pool.AVPacket, 0)
+						pub.FirstScreen = make([]*avformat.AVPacket, 0)
 						room = pub.Room
 						err = nc.SendMessage(SEND_STREAM_BEGIN_MESSAGE, nil)
 						err = nc.SendMessage(SEND_PUBLISH_START_MESSAGE, newPublishResponseMessageData(nc.streamID, NetStream_Publish_Start, Level_Status))
@@ -114,15 +113,15 @@ func processRtmp(conn net.Conn) {
 					pm := msg.MsgData.(*PlayMessage)
 					streamPath := nc.appName + "/" + strings.Split(pm.StreamName, "?")[0]
 					nc.writeChunkSize = 512
-					stream := &OutputStream{SendHandler: func(packet *pool.SendPacket) (err error) {
+					stream := &OutputStream{SendHandler: func(packet *avformat.SendPacket) (err error) {
 						switch true {
 						case packet.Packet.IsADTS:
-							tagPacket := pool.NewAVPacket(RTMP_MSG_AUDIO)
+							tagPacket := avformat.NewAVPacket(RTMP_MSG_AUDIO)
 							tagPacket.Payload = avformat.ADTSToAudioSpecificConfig(packet.Packet.Payload)
 							err = nc.SendMessage(SEND_FULL_AUDIO_MESSAGE, tagPacket)
 							ADTSLength := 7 + (int(packet.Packet.Payload[1]&1) << 1)
 							if len(packet.Packet.Payload) > ADTSLength {
-								contentPacket := pool.NewAVPacket(RTMP_MSG_AUDIO)
+								contentPacket := avformat.NewAVPacket(RTMP_MSG_AUDIO)
 								contentPacket.Timestamp = packet.Timestamp
 								contentPacket.Payload = make([]byte, len(packet.Packet.Payload)-ADTSLength+2)
 								contentPacket.Payload[0] = 0xAF
@@ -162,7 +161,7 @@ func processRtmp(conn net.Conn) {
 					}
 				}
 			case RTMP_MSG_AUDIO:
-				pkt := pool.NewAVPacket(RTMP_MSG_AUDIO)
+				pkt := avformat.NewAVPacket(RTMP_MSG_AUDIO)
 				if msg.Timestamp == 0xffffff {
 					totalDuration += msg.ExtendTimestamp
 				} else {
@@ -172,7 +171,7 @@ func processRtmp(conn net.Conn) {
 				pkt.Payload = msg.Body
 				room.PushAudio(pkt)
 			case RTMP_MSG_VIDEO:
-				pkt := pool.NewAVPacket(RTMP_MSG_VIDEO)
+				pkt := avformat.NewAVPacket(RTMP_MSG_VIDEO)
 				if msg.Timestamp == 0xffffff {
 					totalDuration += msg.ExtendTimestamp
 				} else {

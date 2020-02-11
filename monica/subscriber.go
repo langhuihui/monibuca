@@ -3,12 +3,12 @@ package monica
 import (
 	"context"
 	"fmt"
-	"github.com/langhuihui/monibuca/monica/pool"
+	"github.com/langhuihui/monibuca/monica/avformat"
 	"time"
 )
 
 type Subscriber interface {
-	Send(*pool.SendPacket) error
+	Send(*avformat.SendPacket) error
 }
 
 type SubscriberInfo struct {
@@ -23,14 +23,14 @@ type OutputStream struct {
 	context.Context
 	*Room
 	SubscriberInfo
-	SendHandler      func(*pool.SendPacket) error
+	SendHandler      func(*avformat.SendPacket) error
 	Cancel           context.CancelFunc
 	Sign             string
 	VTSent           bool
 	ATSent           bool
 	VSentTime        uint32
 	ASentTime        uint32
-	packetQueue      chan *pool.SendPacket
+	packetQueue      chan *avformat.SendPacket
 	dropCount        int
 	OffsetTime       uint32
 	firstScreenIndex int
@@ -61,7 +61,7 @@ func (s *OutputStream) Play(streamPath string) (err error) {
 		}
 	}
 }
-func (s *OutputStream) sendPacket(packet *pool.AVPacket, timestamp uint32) {
+func (s *OutputStream) sendPacket(packet *avformat.AVPacket, timestamp uint32) {
 	if !packet.IsAVCSequence && timestamp == 0 {
 		timestamp = 1 //防止为0
 	}
@@ -82,11 +82,11 @@ func (s *OutputStream) sendPacket(packet *pool.AVPacket, timestamp uint32) {
 		s.TotalDrop++
 		packet.Recycle()
 	} else if !s.IsClosed() {
-		s.packetQueue <- pool.NewSendPacket(packet, timestamp)
+		s.packetQueue <- avformat.NewSendPacket(packet, timestamp)
 	}
 }
 
-func (s *OutputStream) sendVideo(video *pool.AVPacket) error {
+func (s *OutputStream) sendVideo(video *avformat.AVPacket) error {
 	isKF := video.IsKeyFrame()
 	if s.VTSent {
 		if s.FirstScreen == nil || s.firstScreenIndex == -1 {
@@ -119,7 +119,7 @@ func (s *OutputStream) sendVideo(video *pool.AVPacket) error {
 	s.VSentTime = video.Timestamp
 	return s.sendVideo(video)
 }
-func (s *OutputStream) sendAudio(audio *pool.AVPacket) error {
+func (s *OutputStream) sendAudio(audio *avformat.AVPacket) error {
 	if s.ATSent {
 		if s.FirstScreen != nil && s.firstScreenIndex == -1 {
 			audio.Recycle()

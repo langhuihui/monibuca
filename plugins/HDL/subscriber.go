@@ -3,7 +3,6 @@ package HDL
 import (
 	. "github.com/langhuihui/monibuca/monica"
 	"github.com/langhuihui/monibuca/monica/avformat"
-	"github.com/langhuihui/monibuca/monica/pool"
 	"log"
 	"net/http"
 	"strings"
@@ -42,7 +41,7 @@ func HDLHandler(w http.ResponseWriter, r *http.Request) {
 		w.Write(avformat.FLVHeader)
 		p := OutputStream{
 			Sign: sign,
-			SendHandler: func(packet *pool.SendPacket) error {
+			SendHandler: func(packet *avformat.SendPacket) error {
 				return avformat.WriteFLVTag(w, packet)
 			},
 			SubscriberInfo: SubscriberInfo{

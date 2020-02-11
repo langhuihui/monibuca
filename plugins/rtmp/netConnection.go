@@ -3,6 +3,7 @@ package rtmp
 import (
 	"bufio"
 	"errors"
+	"github.com/langhuihui/monibuca/monica/avformat"
 	"github.com/langhuihui/monibuca/monica/pool"
 	"github.com/langhuihui/monibuca/monica/util"
 	"io"
@@ -312,21 +313,21 @@ func (conn *NetConnection) SendMessage(message string, args interface{}) error {
 		return conn.writeMessage(RTMP_MSG_AMF0_COMMAND, m)
 	case SEND_UNPUBLISH_RESPONSE_MESSAGE:
 	case SEND_FULL_AUDIO_MESSAGE:
-		audio, ok := args.(*pool.SendPacket)
+		audio, ok := args.(*avformat.SendPacket)
 		if !ok {
 			errors.New(message + ", The parameter is AVPacket")
 		}
 
 		return conn.sendAVMessage(audio, true, true)
 	case SEND_AUDIO_MESSAGE:
-		audio, ok := args.(*pool.SendPacket)
+		audio, ok := args.(*avformat.SendPacket)
 		if !ok {
 			errors.New(message + ", The parameter is AVPacket")
 		}
 
 		return conn.sendAVMessage(audio, true, false)
 	case SEND_FULL_VDIEO_MESSAGE:
-		video, ok := args.(*pool.SendPacket)
+		video, ok := args.(*avformat.SendPacket)
 		if !ok {
 			errors.New(message + ", The parameter is AVPacket")
 		}
@@ -334,7 +335,7 @@ func (conn *NetConnection) SendMessage(message string, args interface{}) error {
 		return conn.sendAVMessage(video, false, true)
 	case SEND_VIDEO_MESSAGE:
 		{
-			video, ok := args.(*pool.SendPacket)
+			video, ok := args.(*avformat.SendPacket)
 			if !ok {
 				errors.New(message + ", The parameter is AVPacket")
 			}
@@ -349,7 +350,7 @@ func (conn *NetConnection) SendMessage(message string, args interface{}) error {
 // 当发送音视频数据的时候,当块类型为12的时候,Chunk Message Header有一个字段TimeStamp,指明一个时间
 // 当块类型为4,8的时候,Chunk Message Header有一个字段TimeStamp Delta,记录与上一个Chunk的时间差值
 // 当块类型为0的时候,Chunk Message Header没有时间字段,与上一个Chunk时间值相同
-func (conn *NetConnection) sendAVMessage(av *pool.SendPacket, isAudio bool, isFirst bool) error {
+func (conn *NetConnection) sendAVMessage(av *avformat.SendPacket, isAudio bool, isFirst bool) error {
 	if conn.writeSeqNum > conn.bandwidth {
 		conn.totalWrite += conn.writeSeqNum
 		conn.writeSeqNum = 0

@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"github.com/langhuihui/monibuca/monica/avformat"
 	"io"
 	"net"
 	"strconv"
@@ -54,7 +55,7 @@ func process(conn net.Conn) {
 	reader := bufio.NewReader(conn)
 	connAddr := conn.RemoteAddr().String()
 	stream := OutputStream{
-		SendHandler: func(p *pool.SendPacket) error {
+		SendHandler: func(p *avformat.SendPacket) error {
 			head := pool.GetSlice(9)
 			head[0] = p.Packet.Type - 7
 			binary.BigEndian.PutUint32(head[1:5], p.Timestamp)

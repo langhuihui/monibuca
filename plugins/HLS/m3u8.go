@@ -61,9 +61,10 @@ func (p *HLS) run(info *M3u8Info) {
 		log.Printf("hls %s exit:%v", p.StreamPath, err)
 		p.Cancel()
 	}()
+	errcount := 0
 	for ; err == nil && p.Err() == nil; resp, err = client.Do(info.Req) {
 		if playlist, err := readM3U8(resp); err == nil {
-
+			errcount = 0
 			info.LastM3u8 = playlist.String()
 			//if !playlist.Live {
 			//	log.Println(p.LastM3u8)
@@ -129,7 +130,11 @@ func (p *HLS) run(info *M3u8Info) {
 			time.Sleep(time.Second * time.Duration(playlist.Target) * 2)
 		} else {
 			log.Printf("%s readM3u8:%v", p.StreamPath, err)
-			return
+			errcount++
+			if errcount > 10 {
+				return
+			}
+			//return
 		}
 	}
 }

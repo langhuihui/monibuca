@@ -3,7 +3,6 @@ package record
 import (
 	. "github.com/langhuihui/monibuca/monica"
 	"github.com/langhuihui/monibuca/monica/avformat"
-	"github.com/langhuihui/monibuca/monica/pool"
 	"github.com/langhuihui/monibuca/monica/util"
 	"io"
 	"os"
@@ -17,7 +16,7 @@ func getDuration(file *os.File) uint32 {
 		if tagSize, err = util.ReadByteToUint32(file, true); err == nil {
 			_, err = file.Seek(-int64(tagSize)-4, io.SeekEnd)
 			if err == nil {
-				var tag *pool.AVPacket
+				var tag *avformat.AVPacket
 				tag, err = avformat.ReadFLVTag(file)
 				if err == nil {
 					return tag.Timestamp
@@ -40,7 +39,7 @@ func SaveFlv(streamPath string, append bool) error {
 	if err != nil {
 		return err
 	}
-	p := OutputStream{SendHandler: func(packet *pool.SendPacket) error {
+	p := OutputStream{SendHandler: func(packet *avformat.SendPacket) error {
 		return avformat.WriteFLVTag(file, packet)
 	}}
 	p.ID = filePath

@@ -5,7 +5,6 @@ import (
 	. "github.com/langhuihui/monibuca/monica"
 	"github.com/langhuihui/monibuca/monica/avformat"
 	"github.com/langhuihui/monibuca/monica/avformat/mpegts"
-	"github.com/langhuihui/monibuca/monica/pool"
 	"github.com/langhuihui/monibuca/monica/util"
 	"log"
 	"time"
@@ -46,12 +45,12 @@ func (ts *TS) run() {
 				ts.TotalPesCount++
 				switch tsPesPkt.PesPkt.Header.StreamID & 0xF0 {
 				case mpegts.STREAM_ID_AUDIO:
-					av := pool.NewAVPacket(avformat.FLV_TAG_TYPE_AUDIO)
+					av := avformat.NewAVPacket(avformat.FLV_TAG_TYPE_AUDIO)
 					av.Payload = tsPesPkt.PesPkt.Payload
 					ts.PushAudio(av)
 				case mpegts.STREAM_ID_VIDEO:
 					var err error
-					av := pool.NewAVPacket(avformat.FLV_TAG_TYPE_VIDEO)
+					av := avformat.NewAVPacket(avformat.FLV_TAG_TYPE_VIDEO)
 					ts.PTS = tsPesPkt.PesPkt.Header.Pts
 					ts.DTS = tsPesPkt.PesPkt.Header.Dts
 					lastDts := ts.lastDts
@@ -95,7 +94,7 @@ func (ts *TS) run() {
 							av.VideoFrameType = 1
 							av.Payload = r.Bytes()
 							ts.PushVideo(av)
-							av = pool.NewAVPacket(avformat.FLV_TAG_TYPE_VIDEO)
+							av = avformat.NewAVPacket(avformat.FLV_TAG_TYPE_VIDEO)
 							av.Timestamp = uint32(dts / 90)
 							r = bytes.NewBuffer([]byte{})
 							continue

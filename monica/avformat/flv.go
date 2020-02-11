@@ -70,7 +70,7 @@ var (
 
 var FLVHeader = []byte{0x46, 0x4c, 0x56, 0x01, 0x05, 0, 0, 0, 9, 0, 0, 0, 0}
 
-func WriteFLVTag(w io.Writer, tag *pool.SendPacket) (err error) {
+func WriteFLVTag(w io.Writer, tag *SendPacket) (err error) {
 	head := pool.GetSlice(11)
 	defer pool.RecycleSlice(head)
 	tail := pool.GetSlice(4)
@@ -93,13 +93,13 @@ func WriteFLVTag(w io.Writer, tag *pool.SendPacket) (err error) {
 	}
 	return
 }
-func ReadFLVTag(r io.Reader) (tag *pool.AVPacket, err error) {
+func ReadFLVTag(r io.Reader) (tag *AVPacket, err error) {
 	head := pool.GetSlice(11)
 	defer pool.RecycleSlice(head)
 	if _, err = io.ReadFull(r, head); err != nil {
 		return
 	}
-	tag = pool.NewAVPacket(head[0])
+	tag = NewAVPacket(head[0])
 	dataSize := util.BigEndian.Uint24(head[1:])
 	tag.Timestamp = util.BigEndian.Uint24(head[4:])
 	body := pool.GetSlice(int(dataSize))

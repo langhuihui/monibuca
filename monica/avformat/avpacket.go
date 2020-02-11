@@ -1,6 +1,7 @@
-package pool
+package avformat
 
 import (
+	"github.com/langhuihui/monibuca/monica/pool"
 	"sync"
 )
 
@@ -33,13 +34,25 @@ type AVPacket struct {
 func (av *AVPacket) IsKeyFrame() bool {
 	return av.VideoFrameType == 1 || av.VideoFrameType == 4
 }
-
+func (av *AVPacket) ADTS2ASC() (tagPacket *AVPacket) {
+	tagPacket = NewAVPacket(FLV_TAG_TYPE_AUDIO)
+	tagPacket.Payload = ADTSToAudioSpecificConfig(av.Payload)
+	tagPacket.IsAACSequence = true
+	ADTSLength := 7 + (int(av.Payload[1]&1) << 1)
+	if len(av.Payload) > ADTSLength {
+		av.Payload[0] = 0xAF
+		av.Payload[1] = 0x01 //raw AAC
+		copy(av.Payload[2:], av.Payload[ADTSLength:])
+		av.Payload = av.Payload[:(len(av.Payload) - ADTSLength + 2)]
+	}
+	return
+}
 func (av *AVPacket) Recycle() {
 	if av.RefCount == 0 {
 		return
 	} else if av.RefCount == 1 {
 		av.RefCount = 0
-		RecycleSlice(av.Payload)
+		pool.RecycleSlice(av.Payload)
 		AVPacketPool.Put(av)
 	} else {
 		av.RefCount--
