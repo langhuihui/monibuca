@@ -30,7 +30,7 @@ export default {
         start() {
             this.status = "process";
             eventSource = new EventSource(
-                "/create?info=" +
+                "/instance/create?info=" +
                     JSON.stringify(this.info) +
                     (this.clearDir ? "&clear=true" : "")
             );

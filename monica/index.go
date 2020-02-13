@@ -4,12 +4,17 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"log"
+	"time"
 
 	"github.com/BurntSushi/toml"
 )
 
 var ConfigRaw []byte
-var Version = "0.2.2"
+var Version = "0.2.3"
+var EngineInfo = &struct {
+	Version   string
+	StartTime time.Time
+}{Version, time.Now()}
 
 func Run(configFile string) (err error) {
 	log.Printf("start monibuca version:%s", Version)

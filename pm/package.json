@@ -8,6 +8,7 @@
     "lint": "vue-cli-service lint"
   },
   "dependencies": {
+    "@iarna/toml": "^2.2.3",
     "core-js": "^3.4.4",
     "view-design": "^4.0.0",
     "vue": "^2.6.10",

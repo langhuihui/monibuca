@@ -4,19 +4,7 @@
         <Content class="content">
             <Tabs value="name1">
                 <TabPane label="实例" name="name1">
-                    <List border>
-                        <ListItem v-for="item in instances" :key="item.Name">
-                            <ListItemMeta :title="item.Name" :description="item.Path"></ListItemMeta>
-                            <template slot="action">
-                                    <li @click="restart(item)">
-                                        <Icon type="ios-refresh" />重启
-                                    </li>
-                                    <li @click="upgrade(item)">
-                                        <Icon type="ios-sync" />升级引擎
-                                    </li>
-                                </template>
-                        </ListItem>
-                    </List>
+                    <InstanceList></InstanceList>
                 </TabPane>
                 <TabPane label="创建" name="name2">
                     <Steps :current="createStep">
@@ -34,7 +22,8 @@
                                 {{item.Config}}
                                 <template slot="action">
                                     <li @click="removePlugin(name)">
-                                        <Icon type="ios-trash" />移除
+                                        <Icon type="ios-trash"/>
+                                        移除
                                     </li>
                                 </template>
                             </ListItem>
@@ -42,8 +31,8 @@
                         <div v-else>
                             <h3>实例名称：</h3>
                             <i-input
-                                v-model="instanceName"
-                                :placeholder="createPath.split('/').pop()"
+                                    v-model="instanceName"
+                                    :placeholder="createPath.split('/').pop()"
                             ></i-input>
                             <h4>安装路径：</h4>
                             <div>
@@ -60,27 +49,28 @@
                         </div>
                         <ButtonGroup style="display:table;margin:50px auto;">
                             <Button
-                                size="large"
-                                type="primary"
-                                @click="createStep--"
-                                v-if="createStep!=0"
+                                    size="large"
+                                    type="primary"
+                                    @click="createStep--"
+                                    v-if="createStep!=0"
                             >
-                                <Icon type="ios-arrow-back"></Icon>上一步
+                                <Icon type="ios-arrow-back"></Icon>
+                                上一步
                             </Button>
                             <Button
-                                size="large"
-                                type="success"
-                                @click="showAddPlugin=true"
-                                v-if="createStep==1"
+                                    size="large"
+                                    type="success"
+                                    @click="showAddPlugin=true"
+                                    v-if="createStep==1"
                             >
                                 +
                                 添加插件
                             </Button>
                             <Button
-                                size="large"
-                                type="primary"
-                                @click="createStep++"
-                                v-if="createStep!=2"
+                                    size="large"
+                                    type="primary"
+                                    @click="createStep++"
+                                    v-if="createStep!=2"
                             >
                                 下一步
                                 <Icon type="ios-arrow-forward"></Icon>
@@ -103,8 +93,8 @@
                     </i-input>
                 </FormItem>
                 <Alert
-                    type="show-icon"
-                    v-if="!Object.values(builtinPlugins).includes(formPlugin.Path)"
+                        type="show-icon"
+                        v-if="!Object.values(builtinPlugins).includes(formPlugin.Path)"
                 >
                     如果该插件是私有仓库，请到服务器上输入：echo "machine {{privateHost}} login 用户名 password 密码" >> ~/.netrc
                     并且添加环境变量GOPRIVATE={{privateHost}}
@@ -120,7 +110,8 @@
                     <ListItemMeta :title="name" :description="item"></ListItemMeta>
                     <template slot="action">
                         <li @click="addBuiltin(name,item)">
-                            <Icon type="ios-add" />添加
+                            <Icon type="ios-add"/>
+                            添加
                         </li>
                     </template>
                 </ListItem>
@@ -131,164 +122,114 @@
 </template>
 
 <script>
-import CreateInstance from "../components/CreateInstance";
+    import CreateInstance from "../components/CreateInstance";
+    import InstanceList from "../components/InstanceList";
 
-export default {
-    components: {
-        CreateInstance
-    },
-    data() {
-        return {
-            instanceName: "",
-            createStep: 0,
-            showCreate: false,
-            createInfo: null,
-            createPath: "/opt/monibuca",
-            instances: {},
-            plugins: {},
-            showAddPlugin: false,
-            formPlugin: {},
-            showBuiltinPlugin: false,
-            builtinPlugins: {
-                Auth: "github.com/langhuihui/monibuca/plugins/auth",
-                Cluster: "github.com/langhuihui/monibuca/plugins/cluster",
-                GateWay: "github.com/langhuihui/monibuca/plugins/gateway",
-                HDL: "github.com/langhuihui/monibuca/plugins/HDL",
-                Jessica: "github.com/langhuihui/monibuca/plugins/jessica",
-                QoS: "github.com/langhuihui/monibuca/plugins/QoS",
-                RecordFlv: "github.com/langhuihui/monibuca/plugins/record",
-                RTMP: "github.com/langhuihui/monibuca/plugins/rtmp"
-            },
-            defaultConfig: {
-                Auth: 'Key = "www.monibuca.com"',
-                RecordFlv: 'Path="./resource"',
-                QoS: 'Suffix = ["high","medium","low"]',
-                Cluster: 'Master = "localhost:2019"\nListenAddr = ":2019"',
-                GateWay: 'ListenAddr = ":8081"',
-                RTMP: 'ListenAddr = ":1935"',
-                Jessica: 'ListenAddr = ":8080"',
-                HDL: 'ListenAddr = ":2020"'
-            }
-        };
-    },
-    computed: {
-        pluginStr() {
-            return Object.values(this.plugins)
-                .map(x => x.Path)
-                .join("\n");
+
+    export default {
+        components: {
+            CreateInstance,InstanceList
         },
-        configStr() {
-            return Object.values(this.plugins)
-                .map(
-                    x => `[Plugins.${x.Name}]
-${x.Config || ""}`
-                )
-                .join("\n");
-        },
-        privateHost() {
-            return (
-                (this.formPlugin.Path && this.formPlugin.Path.split("/")[0]) ||
-                "仓库域名"
-            );
-        }
-    },
-    mounted() {
-        window.ajax.getJSON("/list").then(x => {
-            this.instances = x;
-        });
-    },
-    methods: {
-        goUp() {
-            let paths = this.createPath.split("/");
-            paths.pop();
-            this.createPath = paths.join("/");
-        },
-        createInstance() {
-            this.showCreate = true;
-            this.createInfo = {
-                Name: this.instanceName || this.createPath.split("/").pop(),
-                Path: this.createPath,
-                Plugins: Object.values(this.plugins).map(x => x.Path),
-                Config: this.configStr
+        data() {
+            return {
+                instanceName: "",
+                createStep: 0,
+                showCreate: false,
+                createInfo: null,
+                createPath: "/opt/monibuca",
+                plugins: {},
+                showAddPlugin: false,
+                formPlugin: {},
+                showBuiltinPlugin: false,
+                builtinPlugins: {
+                    Auth: "github.com/langhuihui/monibuca/plugins/auth",
+                    Cluster: "github.com/langhuihui/monibuca/plugins/cluster",
+                    GateWay: "github.com/langhuihui/monibuca/plugins/gateway",
+                    HDL: "github.com/langhuihui/monibuca/plugins/HDL",
+                    Jessica: "github.com/langhuihui/monibuca/plugins/jessica",
+                    QoS: "github.com/langhuihui/monibuca/plugins/QoS",
+                    RecordFlv: "github.com/langhuihui/monibuca/plugins/record",
+                    RTMP: "github.com/langhuihui/monibuca/plugins/rtmp"
+                },
+                defaultConfig: {
+                    Auth: 'Key = "www.monibuca.com"',
+                    RecordFlv: 'Path="./resource"',
+                    QoS: 'Suffix = ["high","medium","low"]',
+                    Cluster: 'Master = "localhost:2019"\nListenAddr = ":2019"',
+                    GateWay: 'ListenAddr = ":8081"',
+                    RTMP: 'ListenAddr = ":1935"',
+                    Jessica: 'ListenAddr = ":8080"',
+                    HDL: 'ListenAddr = ":2020"'
+                }
             };
         },
-        addPlugin() {
-            this.plugins[this.formPlugin.Name] = this.formPlugin;
-            this.formPlugin = {};
-        },
-        removePlugin(name) {
-            delete this.plugins[name];
-            this.$forceUpdate();
-        },
-        addBuiltin(name, item) {
-            this.formPlugin.Name = name;
-            this.formPlugin.Path = item;
-            this.formPlugin.Config = this.defaultConfig[name];
-            this.showBuiltinPlugin = false;
-        },
-        restart(item){
-             const msg = this.$Message.loading({
-                    content: 'restart '+item.Name+'...',
-                    duration: 0
-                });
-            var es = new EventSource("/restart/instance?instance="+item.Name)
-            es.onmessage = evt => {
-                if(evt.data=="success"){
-                    this.$Message.success("重启成功！")
-                    msg()
-                }else{
-                   this.$Message.info(evt.data)
-                }
-            }
-            es.addEventListener("failed",evt=>{
-                 this.$Message.error(evt.data)
-                 msg()
-            })
-            es.onerror = e => {
-                this.$Message.error(e);
-                msg()
-                es.close()
+        computed: {
+            pluginStr() {
+                return Object.values(this.plugins)
+                    .map(x => x.Path)
+                    .join("\n");
+            },
+            configStr() {
+                return Object.values(this.plugins)
+                    .map(
+                        x => `[Plugins.${x.Name}]
+${x.Config || ""}`
+                    )
+                    .join("\n");
+            },
+            privateHost() {
+                return (
+                    (this.formPlugin.Path && this.formPlugin.Path.split("/")[0]) ||
+                    "仓库域名"
+                );
             }
         },
-        upgrade(item){
-             const msg = this.$Message.loading({
-                    content: 'upgrade '+item.Name+'...',
-                    duration: 0
-                });
-            var es = new EventSource("/upgrade/engine?instance="+item.Name)
-            es.onmessage = evt => {
-                if(evt.data=="success"){
-                    this.$Message.success("更新完毕")
-                    msg()
-                }else{
-                   this.$Message.info(evt.data)
-                }
-            }
-            es.addEventListener("failed",evt=>{
-                 this.$Message.error(evt.data)
-                 msg()
-            })
-            es.onerror = e => {
-                this.$Message.error(e);
-                msg()
-                es.close()
-            }
+
+        methods: {
+
+            goUp() {
+                let paths = this.createPath.split("/");
+                paths.pop();
+                this.createPath = paths.join("/");
+            },
+            createInstance() {
+                this.showCreate = true;
+                this.createInfo = {
+                    Name: this.instanceName || this.createPath.split("/").pop(),
+                    Path: this.createPath,
+                    Plugins: Object.values(this.plugins).map(x => x.Path),
+                    Config: this.configStr
+                };
+            },
+            addPlugin() {
+                this.plugins[this.formPlugin.Name] = this.formPlugin;
+                this.formPlugin = {};
+            },
+            removePlugin(name) {
+                delete this.plugins[name];
+                this.$forceUpdate();
+            },
+            addBuiltin(name, item) {
+                this.formPlugin.Name = name;
+                this.formPlugin.Path = item;
+                this.formPlugin.Config = this.defaultConfig[name];
+                this.showBuiltinPlugin = false;
+            },
         }
-    }
-};
+    };
 </script>
 
 <style>
-.content {
-    background: white;
-}
+    .content {
+        background: white;
+    }
 
-pre {
-    white-space: pre-wrap;
-    word-wrap: break-word;
-}
+    pre {
+        white-space: pre-wrap;
+        word-wrap: break-word;
+    }
 
-.ivu-tabs .ivu-tabs-tabpane {
-    padding: 20px;
-}
+    .ivu-tabs .ivu-tabs-tabpane {
+        padding: 20px;
+    }
 </style>

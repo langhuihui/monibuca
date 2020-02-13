@@ -15,8 +15,8 @@ import (
 )
 
 var (
-	config = new(ListenerConfig)
-
+	config        = new(ListenerConfig)
+	startTime     = time.Now()
 	dashboardPath string
 )
 
@@ -99,7 +99,7 @@ func summary(w http.ResponseWriter, r *http.Request) {
 	}
 }
 func sysInfo(w http.ResponseWriter, r *http.Request) {
-	bytes, err := json.Marshal(&struct{ Version string }{Version: Version})
+	bytes, err := json.Marshal(EngineInfo)
 	if err == nil {
 		_, err = w.Write(bytes)
 	}

@@ -44,10 +44,11 @@ func main() {
 	}
 	addr := flag.String("port", "8000", "http server port")
 	flag.Parse()
-	http.HandleFunc("/list", listInstance)
-	http.HandleFunc("/create", initInstance)
-	http.HandleFunc("/upgrade/engine", upgradeEngine)
-	http.HandleFunc("/restart/instance", restartInstance)
+
+	http.HandleFunc("/instance/list", listInstance)
+	http.HandleFunc("/instance/create", initInstance)
+	http.HandleFunc("/instance/restart", restartInstance)
+	http.HandleFunc("/instance/shutdown", shutdownInstance)
 	http.HandleFunc("/", website)
 	fmt.Printf("start listen at %s", *addr)
 	if err := http.ListenAndServe(":"+*addr, nil); err != nil {
@@ -140,28 +141,41 @@ func initInstance(w http.ResponseWriter, r *http.Request) {
 	}
 	instances[instanceDesc.Name] = instanceDesc
 }
-func upgradeEngine(w http.ResponseWriter, r *http.Request) {
-	sse := util.NewSSE(w, r.Context())
+func shutdownInstance(w http.ResponseWriter, r *http.Request) {
 	instanceName := r.URL.Query().Get("instance")
 	if instance, ok := instances[instanceName]; ok {
-		if err := instance.writeExecSSE(sse, exec.Command("go", "get", "-u", "github.com/langhuihui/monibuca/monica")); err != nil {
-			sse.WriteEvent("failed", []byte(err.Error()))
+		if err := instance.command("kill", "-9", "`cat pid`").Run(); err == nil {
+			w.Write([]byte("success"))
 		} else {
-			sse.Write([]byte("success"))
+			w.Write([]byte(err.Error()))
 		}
 	} else {
-		sse.WriteEvent("failed", []byte("no such instance"))
+		w.Write([]byte("no such instance"))
 	}
 }
 func restartInstance(w http.ResponseWriter, r *http.Request) {
 	sse := util.NewSSE(w, r.Context())
 	instanceName := r.URL.Query().Get("instance")
+	needUpdate := r.URL.Query().Get("update") != ""
+	needBuild := r.URL.Query().Get("build") != ""
 	if instance, ok := instances[instanceName]; ok {
+		if needUpdate {
+			if err := instance.writeExecSSE(sse, exec.Command("go", "get", "-u")); err != nil {
+				sse.WriteEvent("failed", []byte(err.Error()))
+				return
+			}
+		}
+		if needBuild {
+			if err := instance.writeExecSSE(sse, exec.Command("go", "build")); err != nil {
+				sse.WriteEvent("failed", []byte(err.Error()))
+				return
+			}
+		}
 		if err := instance.writeExecSSE(sse, exec.Command("sh", "restart.sh")); err != nil {
 			sse.WriteEvent("failed", []byte(err.Error()))
-		} else {
-			sse.Write([]byte("success"))
+			return
 		}
+		sse.Write([]byte("success"))
 	} else {
 		sse.WriteEvent("failed", []byte("no such instance"))
 	}
@@ -169,6 +183,11 @@ func restartInstance(w http.ResponseWriter, r *http.Request) {
 func (p *InstanceDesc) writeExecSSE(sse *util.SSE, cmd *exec.Cmd) error {
 	cmd.Dir = p.Path
 	return sse.WriteExec(cmd)
+}
+func (p *InstanceDesc) command(name string, args ...string) (cmd *exec.Cmd) {
+	cmd = exec.Command(name, args...)
+	cmd.Dir = p.Path
+	return
 }
 func (p *InstanceDesc) createDir(sse *util.SSE, clearDir bool) (err error) {
 	if clearDir {

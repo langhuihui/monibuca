@@ -1,0 +1,108 @@
+<template>
+    <List border>
+        <ListItem v-for="item in instances" :key="item.Name">
+            <ListItemMeta :title="item.Name" :description="item.Path"></ListItemMeta>
+            <template v-if="hasGateway(item)">
+                {{item.Info}}
+            </template>
+            <template slot="action">
+                <li v-if="hasGateway(item)" @click="window.open(gateWayHref(item),'_blank')">
+                    <Icon type="md-browsers"/>
+                    管理界面
+                </li>
+                <li @click="restart(item)">
+                    <Icon type="ios-refresh"/>
+                    重启
+                </li>
+                <li @click="shutdown(item)">
+                    <Icon type="ios-power"/>
+                    关闭
+                </li>
+            </template>
+        </ListItem>
+        <Modal v-model="showRestart">
+            <Checkbox v-model="update">go get -u</Checkbox>
+            <Checkbox v-model="build">go build</Checkbox>
+        </Modal>
+    </List>
+</template>
+
+<script>
+    import toml from "@iarna/toml"
+
+    export default {
+        name: "InstanceList",
+        data() {
+            return {instances: {}, showRestart: false, update: false, build: false}
+        },
+        mounted() {
+            window.ajax.getJSON("/instance/list").then(x => {
+                for (let name in x) {
+                    let instance = x[name]
+                    instance.Config = toml.parse(instance.Config)
+                    if (this.hasGateway(instance)) {
+                        window.ajax.getJSON("//" + this.gateWayHref(instance) + "/api/sysInfo").then(x => {
+                            instance.Info = "引擎版本：" + x.Version + "启动时间：" + x.StartTime
+                        }).catch(() => {
+                            instance.Info = "无法访问实例"
+                        })
+                    } else {
+                        instance.Info = "实例未配置网关插件"
+                    }
+                }
+                this.instances = x;
+            });
+        }, methods: {
+            hasGateway(item) {
+                return item.Config.Plugins.hasOwnProperty("GateWay")
+            },
+            gateWayHref(item) {
+                return location.hostname + ":" + item.Config.Plugins.GateWay.split(":").pop()
+            },
+            restart(item) {
+                const msg = this.$Message.loading({
+                    content: 'restart ' + item.Name + '...',
+                    duration: 0
+                });
+                let arg = item.Name
+                if (this.update) {
+                    arg += "&update=true"
+                }
+                if (this.build) {
+                    arg += "&build=true"
+                }
+                const es = new EventSource("/instance/restart?instance=" + arg)
+                es.onmessage = evt => {
+                    if (evt.data == "success") {
+                        this.$Message.success("重启成功！")
+                        msg()
+                    } else {
+                        this.$Message.info(evt.data)
+                    }
+                }
+                es.addEventListener("failed", evt => {
+                    this.$Message.error(evt.data)
+                    msg()
+                })
+                es.onerror = e => {
+                    if (e) this.$Message.error(e);
+                    msg()
+                    es.close()
+                }
+            },
+            shutdown(item) {
+                window.ajax.get("/instance/shutdown?instance=" + item.Name).then(x => {
+                    if (x == "success") {
+                        this.$Message.success("已关闭实例")
+                    } else {
+                        this.$Message.error(x)
+                    }
+                })
+            },
+        }
+    }
+</script>
+
+<style scoped>
+
+</style>
