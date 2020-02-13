@@ -6,6 +6,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"mime"
@@ -14,6 +15,7 @@ import (
 	"os/exec"
 	"os/user"
 	"path"
+	"regexp"
 	"runtime"
 	"strings"
 
@@ -44,7 +46,8 @@ func main() {
 	}
 	addr := flag.String("port", "8000", "http server port")
 	flag.Parse()
-
+	http.HandleFunc("/instance/import", importInstance)
+	http.HandleFunc("/instance/updateConfig", updateConfig)
 	http.HandleFunc("/instance/list", listInstance)
 	http.HandleFunc("/instance/create", initInstance)
 	http.HandleFunc("/instance/restart", restartInstance)
@@ -53,6 +56,70 @@ func main() {
 	fmt.Printf("start listen at %s", *addr)
 	if err := http.ListenAndServe(":"+*addr, nil); err != nil {
 		log.Fatal(err)
+	}
+}
+
+func importInstance(w http.ResponseWriter, r *http.Request) {
+	var e error
+	defer func() {
+		result := "success"
+		if e != nil {
+			result = e.Error()
+		}
+		w.Write([]byte(result))
+	}()
+	name := r.URL.Query().Get("name")
+	if importPath := r.URL.Query().Get("path"); importPath != "" {
+		f, err := os.Open(importPath)
+		if e = err; err != nil {
+			return
+		}
+		children, err := f.Readdir(0)
+		if e = err; err == nil {
+			var hasMain, hasConfig, hasMod, hasRestart bool
+			for _, child := range children {
+				switch child.Name() {
+				case "main.go":
+					hasMain = true
+				case "config.toml":
+					hasConfig = true
+				case "go.mod":
+					hasMod = true
+				case "restart.sh":
+					hasRestart = true
+				}
+			}
+			if hasMain && hasConfig && hasMod && hasRestart {
+				if name == "" {
+					_, name = path.Split(importPath)
+				}
+				config, err := ioutil.ReadFile(path.Join(importPath, "config.toml"))
+				if e = err; err != nil {
+					return
+				}
+				mainGo, err := ioutil.ReadFile(path.Join(importPath, "main.go"))
+				if e = err; err != nil {
+					return
+				}
+				reg, err := regexp.Compile("_ \"(.+)\"")
+				if e = err; err != nil {
+					return
+				}
+				instances[name] = &InstanceDesc{
+					Name:    name,
+					Path:    importPath,
+					Plugins: nil,
+					Config:  string(config),
+				}
+				for _, m := range reg.FindAllStringSubmatch(string(mainGo), -1) {
+					instances[name].Plugins = append(instances[name].Plugins, m[1])
+				}
+			} else {
+				e = errors.New("路径中缺少文件")
+			}
+		}
+	} else {
+		w.Write([]byte("参数错误"))
 	}
 }
 
@@ -160,18 +227,18 @@ func restartInstance(w http.ResponseWriter, r *http.Request) {
 	needBuild := r.URL.Query().Get("build") != ""
 	if instance, ok := instances[instanceName]; ok {
 		if needUpdate {
-			if err := instance.writeExecSSE(sse, exec.Command("go", "get", "-u")); err != nil {
+			if err := sse.WriteExec(instance.command("go", "get", "-u")); err != nil {
 				sse.WriteEvent("failed", []byte(err.Error()))
 				return
 			}
 		}
 		if needBuild {
-			if err := instance.writeExecSSE(sse, exec.Command("go", "build")); err != nil {
+			if err := sse.WriteExec(instance.command("go", "build")); err != nil {
 				sse.WriteEvent("failed", []byte(err.Error()))
 				return
 			}
 		}
-		if err := instance.writeExecSSE(sse, exec.Command("sh", "restart.sh")); err != nil {
+		if err := sse.WriteExec(instance.command("sh", "restart.sh")); err != nil {
 			sse.WriteEvent("failed", []byte(err.Error()))
 			return
 		}
@@ -180,10 +247,7 @@ func restartInstance(w http.ResponseWriter, r *http.Request) {
 		sse.WriteEvent("failed", []byte("no such instance"))
 	}
 }
-func (p *InstanceDesc) writeExecSSE(sse *util.SSE, cmd *exec.Cmd) error {
-	cmd.Dir = p.Path
-	return sse.WriteExec(cmd)
-}
+
 func (p *InstanceDesc) command(name string, args ...string) (cmd *exec.Cmd) {
 	cmd = exec.Command(name, args...)
 	cmd.Dir = p.Path
@@ -223,12 +287,12 @@ func main(){
 		return
 	}
 	sse.WriteEvent("step", []byte("3:文件创建成功！"))
-	err = p.writeExecSSE(sse, exec.Command("go", "mod", "init", p.Name))
+	err = sse.WriteExec(p.command("go", "mod", "init", p.Name))
 	if err != nil {
 		return
 	}
 	sse.WriteEvent("step", []byte("4:go mod 初始化完成！"))
-	err = p.writeExecSSE(sse, exec.Command("go", "build"))
+	err = sse.WriteExec(p.command("go", "build"))
 	if err != nil {
 		return
 	}
@@ -243,7 +307,25 @@ func main(){
 	if err != nil {
 		return
 	}
-	return p.writeExecSSE(sse, exec.Command("sh", "restart.sh"))
+	return sse.WriteExec(p.command("sh", "restart.sh"))
+}
+func updateConfig(w http.ResponseWriter, r *http.Request) {
+	instanceName := r.URL.Query().Get("instance")
+	if instance, ok := instances[instanceName]; ok {
+		f, err := os.OpenFile(path.Join(instance.Path, "config.toml"), os.O_WRONLY|os.O_TRUNC, 0666)
+		if err != nil {
+			w.Write([]byte(err.Error()))
+			return
+		}
+		_, err = io.Copy(f, r.Body)
+		if err != nil {
+			w.Write([]byte(err.Error()))
+			return
+		}
+		w.Write([]byte("success"))
+	} else {
+		w.Write([]byte("no such instance"))
+	}
 }
 func Home() (string, error) {
 	user, err := user.Current()

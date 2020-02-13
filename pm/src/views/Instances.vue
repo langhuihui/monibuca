@@ -79,7 +79,9 @@
                         </ButtonGroup>
                     </div>
                 </TabPane>
-                <TabPane label="导入" name="name3"></TabPane>
+                <TabPane label="导入" name="name3">
+                    <ImportInstance></ImportInstance>
+                </TabPane>
             </Tabs>
         </Content>
         <Modal v-model="showAddPlugin" title="添加Plugin" @on-ok="addPlugin">
@@ -124,11 +126,11 @@
 <script>
     import CreateInstance from "../components/CreateInstance";
     import InstanceList from "../components/InstanceList";
-
+    import ImportInstance from "../components/ImportInstance";
 
     export default {
         components: {
-            CreateInstance,InstanceList
+            CreateInstance,InstanceList,ImportInstance
         },
         data() {
             return {

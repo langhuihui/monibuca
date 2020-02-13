@@ -1,30 +1,39 @@
 <template>
-    <List border>
-        <ListItem v-for="item in instances" :key="item.Name">
-            <ListItemMeta :title="item.Name" :description="item.Path"></ListItemMeta>
-            <template v-if="hasGateway(item)">
+    <div>
+        <List border>
+            <ListItem v-for="item in instances" :key="item.Name">
+                <ListItemMeta :title="item.Name" :description="item.Path"></ListItemMeta>
                 {{item.Info}}
-            </template>
-            <template slot="action">
-                <li v-if="hasGateway(item)" @click="window.open(gateWayHref(item),'_blank')">
-                    <Icon type="md-browsers"/>
-                    管理界面
-                </li>
-                <li @click="restart(item)">
-                    <Icon type="ios-refresh"/>
-                    重启
-                </li>
-                <li @click="shutdown(item)">
-                    <Icon type="ios-power"/>
-                    关闭
-                </li>
-            </template>
-        </ListItem>
-        <Modal v-model="showRestart">
+                <template slot="action">
+                    <li @click="changeConfig(item)">
+                        <Icon type="ios-settings"/>
+                        修改配置
+                    </li>
+                    <li v-if="hasGateway(item)" @click="window.open(gateWayHref(item),'_blank')">
+                        <Icon type="md-browsers"/>
+                        管理界面
+                    </li>
+                    <li @click="currentItem=item,showRestart=true">
+                        <Icon type="ios-refresh"/>
+                        重启
+                    </li>
+                    <li @click="shutdown(item)">
+                        <Icon type="ios-power"/>
+                        关闭
+                    </li>
+                </template>
+            </ListItem>
+        </List>
+        <Modal v-model="showRestart" title="重启选项" @on-ok="restart">
             <Checkbox v-model="update">go get -u</Checkbox>
             <Checkbox v-model="build">go build</Checkbox>
         </Modal>
-    </List>
+        <Modal v-model="showConfig" title="修改实例配置" @on-ok="submitConfigChange">
+            <i-input type="textarea" v-model="currentConfig" :rows="20">
+
+            </i-input>
+        </Modal>
+    </div>
 </template>
 
 <script>
@@ -33,7 +42,15 @@
     export default {
         name: "InstanceList",
         data() {
-            return {instances: {}, showRestart: false, update: false, build: false}
+            return {
+                instances: [],
+                showRestart: false,
+                update: false,
+                build: false,
+                showConfig: false,
+                currentItem: null,
+                currentConfig: ""
+            }
         },
         mounted() {
             window.ajax.getJSON("/instance/list").then(x => {
@@ -49,17 +66,41 @@
                     } else {
                         instance.Info = "实例未配置网关插件"
                     }
+                    this.instances.push(instance)
                 }
-                this.instances = x;
+                // this.instances = x;
             });
-        }, methods: {
+        },
+        methods: {
+            changeConfig(item) {
+                this.showConfig = true
+                this.currentItem = item
+                this.currentConfig = toml.stringify(item.Config)
+            },
+            submitConfigChange() {
+                try {
+                    this.currentItem.Config = toml.parse(this.currentConfig)
+                    window.ajax.post("/instance/updateConfig?instance=" + this.currentItem.Name, this.currentConfig).then(x => {
+                        if (x == "success") {
+                            this.$Message.success("更新成功！")
+                        } else {
+                            this.$Message.error(x)
+                        }
+                    }).catch(e => {
+                        this.$Message.error(e)
+                    })
+                } catch (e) {
+                    this.$Message.error(e)
+                }
+            },
             hasGateway(item) {
                 return item.Config.Plugins.hasOwnProperty("GateWay")
             },
             gateWayHref(item) {
-                return location.hostname + ":" + item.Config.Plugins.GateWay.split(":").pop()
+                return location.hostname + ":" + item.Config.Plugins.GateWay.ListenAddr.split(":").pop()
             },
-            restart(item) {
+            restart() {
+                let item = this.currentItem
                 const msg = this.$Message.loading({
                     content: 'restart ' + item.Name + '...',
                     duration: 0

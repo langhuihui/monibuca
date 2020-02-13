@@ -1,5 +1,5 @@
 <template>
-    <Modal v-bind="$attrs" v-on="$listeners" :title="info.Path">
+    <Modal v-bind="$attrs" v-on="$listeners" :title="info && info.Path">
         <Steps :current="currentStep" size="small" :status="status">
             <Step title="解析请求"></Step>
             <Step title="创建目录"></Step>
