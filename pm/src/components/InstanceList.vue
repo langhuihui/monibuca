@@ -9,7 +9,7 @@
                         <Icon type="ios-settings"/>
                         修改配置
                     </li>
-                    <li v-if="hasGateway(item)" @click="window.open(gateWayHref(item),'_blank')">
+                    <li v-if="hasGateway(item)" @click="openGateway(item)">
                         <Icon type="md-browsers"/>
                         管理界面
                     </li>
@@ -92,6 +92,9 @@
                 } catch (e) {
                     this.$Message.error(e)
                 }
+            },
+            openGateway(item){
+                window.open(this.gateWayHref(item),'_blank')
             },
             hasGateway(item) {
                 return item.Config.Plugins.hasOwnProperty("GateWay")

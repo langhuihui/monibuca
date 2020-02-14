@@ -99,6 +99,7 @@ func summary(w http.ResponseWriter, r *http.Request) {
 	}
 }
 func sysInfo(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
 	bytes, err := json.Marshal(EngineInfo)
 	if err == nil {
 		_, err = w.Write(bytes)
