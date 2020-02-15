@@ -94,9 +94,9 @@
                         <Button slot="append" @click="showBuiltinPlugin=true">内置插件</Button>
                     </i-input>
                 </FormItem>
-                <Alert
-                        type="show-icon"
-                        v-if="!Object.values(builtinPlugins).includes(formPlugin.Path)"
+                <Alert  show-icon
+                        type="warning"
+                        v-if="!isBuiltInPlugin(formPlugin.Path)"
                 >
                     如果该插件是私有仓库，请到服务器上输入：echo "machine {{privateHost}} login 用户名 password 密码" >> ~/.netrc
                     并且添加环境变量GOPRIVATE={{privateHost}}
@@ -108,8 +108,8 @@
         </Modal>
         <Modal v-model="showBuiltinPlugin">
             <List>
-                <ListItem v-for="(item,name) in builtinPlugins" :key="name">
-                    <ListItemMeta :title="name" :description="item"></ListItemMeta>
+                <ListItem v-for="(item,name) in $store.state.defaultPlugins" :key="name">
+                    <ListItemMeta :title="name" :description="item[2]"></ListItemMeta>
                     <template slot="action">
                         <li @click="addBuiltin(name,item)">
                             <Icon type="ios-add"/>
@@ -143,26 +143,6 @@
                 showAddPlugin: false,
                 formPlugin: {},
                 showBuiltinPlugin: false,
-                builtinPlugins: {
-                    Auth: "github.com/langhuihui/monibuca/plugins/auth",
-                    Cluster: "github.com/langhuihui/monibuca/plugins/cluster",
-                    GateWay: "github.com/langhuihui/monibuca/plugins/gateway",
-                    HDL: "github.com/langhuihui/monibuca/plugins/HDL",
-                    Jessica: "github.com/langhuihui/monibuca/plugins/jessica",
-                    QoS: "github.com/langhuihui/monibuca/plugins/QoS",
-                    RecordFlv: "github.com/langhuihui/monibuca/plugins/record",
-                    RTMP: "github.com/langhuihui/monibuca/plugins/rtmp"
-                },
-                defaultConfig: {
-                    Auth: 'Key = "www.monibuca.com"',
-                    RecordFlv: 'Path="./resource"',
-                    QoS: 'Suffix = ["high","medium","low"]',
-                    Cluster: 'Master = "localhost:2019"\nListenAddr = ":2019"',
-                    GateWay: 'ListenAddr = ":8081"',
-                    RTMP: 'ListenAddr = ":1935"',
-                    Jessica: 'ListenAddr = ":8080"',
-                    HDL: 'ListenAddr = ":2020"'
-                }
             };
         },
         computed: {
@@ -188,7 +168,9 @@ ${x.Config || ""}`
         },
 
         methods: {
-
+            isBuiltInPlugin(path){
+                return Object.values(this.$store.state.defaultPlugins).some(x=>"github.com/langhuihui/monibuca/plugins/"+x[0]==path)
+            },
             goUp() {
                 let paths = this.createPath.split("/");
                 paths.pop();
@@ -213,8 +195,8 @@ ${x.Config || ""}`
             },
             addBuiltin(name, item) {
                 this.formPlugin.Name = name;
-                this.formPlugin.Path = item;
-                this.formPlugin.Config = this.defaultConfig[name];
+                this.formPlugin.Path = "github.com/langhuihui/monibuca/plugins/"+item[0];
+                this.formPlugin.Config = item[1];
                 this.showBuiltinPlugin = false;
             },
         }

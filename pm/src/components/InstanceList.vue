@@ -3,7 +3,11 @@
         <List border>
             <ListItem v-for="item in instances" :key="item.Name">
                 <ListItemMeta :title="item.Name" :description="item.Path"></ListItemMeta>
-                {{item.Info}}
+                <template v-if="item.Info.StartTime">
+                    引擎版本：{{item.Info.Version}} <br>启动时间：
+                    <StartTime :value="item.Info.StartTime"></StartTime>
+                </template>
+                <template v-else>{{item.Info}}</template>
                 <template slot="action">
                     <li @click="changeConfig(item)">
                         <Icon type="ios-settings"/>
@@ -29,18 +33,18 @@
             <Checkbox v-model="build">go build</Checkbox>
         </Modal>
         <Modal v-model="showConfig" title="修改实例配置" @on-ok="submitConfigChange">
-            <i-input type="textarea" v-model="currentConfig" :rows="20">
-
-            </i-input>
+            <i-input type="textarea" v-model="currentConfig" :rows="20"></i-input>
         </Modal>
     </div>
 </template>
 
 <script>
     import toml from "@iarna/toml"
+    import StartTime from "./StartTime"
 
     export default {
         name: "InstanceList",
+        components: {StartTime},
         data() {
             return {
                 instances: [],
@@ -58,8 +62,8 @@
                     let instance = x[name]
                     instance.Config = toml.parse(instance.Config)
                     if (this.hasGateway(instance)) {
-                        window.ajax.getJSON("//" + this.gateWayHref(instance) + "/api/sysInfo").then(x => {
-                            instance.Info = "引擎版本：" + x.Version + "启动时间：" + x.StartTime
+                        window.ajax.getJSON(this.gateWayHref(instance) + "/api/sysInfo").then(x => {
+                            instance.Info = x
                         }).catch(() => {
                             instance.Info = "无法访问实例"
                         })
@@ -93,14 +97,14 @@
                     this.$Message.error(e)
                 }
             },
-            openGateway(item){
-                window.open(this.gateWayHref(item),'_blank')
+            openGateway(item) {
+                window.open(this.gateWayHref(item), '_blank')
             },
             hasGateway(item) {
                 return item.Config.Plugins.hasOwnProperty("GateWay")
             },
             gateWayHref(item) {
-                return location.hostname + ":" + item.Config.Plugins.GateWay.ListenAddr.split(":").pop()
+                return "http://" + location.hostname + ":" + item.Config.Plugins.GateWay.ListenAddr.split(":").pop()
             },
             restart() {
                 let item = this.currentItem
@@ -129,7 +133,7 @@
                     msg()
                 })
                 es.onerror = e => {
-                    if (e) this.$Message.error(e);
+                    if (e && e.toString()) this.$Message.error(e);
                     msg()
                     es.close()
                 }

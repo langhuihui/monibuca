@@ -302,7 +302,7 @@ func main(){
 	binFile := strings.TrimSuffix(p.Path, "/")
 	_, binFile = path.Split(binFile)
 	build.WriteString(binFile)
-	build.WriteString(" > log.txt & echo $! > pid\n")
+	build.WriteString(" & echo $! > pid\n")
 	err = ioutil.WriteFile(path.Join(p.Path, "restart.sh"), build.Bytes(), 0777)
 	if err != nil {
 		return

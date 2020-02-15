@@ -1,6 +1,8 @@
 <template>
     <div>
-        <i-input v-model="instanceName" :placeholder="defaultInstanceName"></i-input>
+        <i-input v-model="instanceName" :placeholder="defaultInstanceName">
+            <span slot="prepend">实例名称</span>
+        </i-input>
         <i-input prefix="ios-home" v-model="instancePath" placeholder="输入实例所在的路径" search enter-button="Import" @on-search="doImport">
         </i-input>
     </div>
