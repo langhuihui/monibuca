@@ -1,16 +1,19 @@
 <template>
     <div>
-        <i-input v-model="instanceName" :placeholder="defaultInstanceName">
+        <PathSelector v-model="instancePath" placeholder="输入实例所在的路径"></PathSelector>
+        <i-input style="width: 300px;margin:40px auto" v-model="instanceName" :placeholder="defaultInstanceName" search enter-button="Import" @on-search="doImport">
             <span slot="prepend">实例名称</span>
-        </i-input>
-        <i-input prefix="ios-home" v-model="instancePath" placeholder="输入实例所在的路径" search enter-button="Import" @on-search="doImport">
         </i-input>
     </div>
 </template>
 
 <script>
+    import PathSelector from "./PathSelector"
     export default {
         name: "ImportInstance",
+        components:{
+            PathSelector
+        },
         data(){
             return {
                 instancePath:"",
@@ -19,7 +22,10 @@
         },
         computed:{
             defaultInstanceName(){
-                return this.instancePath.replace(/\\/g,"/").split("/").pop()
+                let path = this.instancePath.replace(/\\/g,"/")
+                let s = path.split("/")
+                if(path.endsWith("/")) s.pop()
+                return s.pop()
             }
         },
         methods:{

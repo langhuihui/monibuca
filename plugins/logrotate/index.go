@@ -41,10 +41,10 @@ func run() {
 		config.splitFunc = config.splitByTime
 	}
 	config.createTime = time.Now()
-	file, err := os.OpenFile(path.Join(config.Path, fmt.Sprintf("%s.log", config.createTime.Format("2006-01-02T15:04:05"))), os.O_TRUNC|os.O_WRONLY|os.O_CREATE, 0666)
+	err := os.MkdirAll(config.Path, 0666)
+	config.file, err = os.OpenFile(path.Join(config.Path, fmt.Sprintf("%s.log", config.createTime.Format("2006-01-02T15:04:05"))), os.O_TRUNC|os.O_WRONLY|os.O_CREATE, 0666)
 	if err == nil {
-		config.file = file
-		stat, _ := file.Stat()
+		stat, _ := config.file.Stat()
 		config.currentSize = stat.Size()
 		AddWriter(config)
 	} else {
@@ -71,3 +71,8 @@ func (l *LogRotate) Write(data []byte) (n int, err error) {
 	}
 	return
 }
+
+//func (l *LogRotate) FindLog(grep string) string{
+//	cmd:=exec.Command("grep",fmt.Sprintf("\"%s\"",grep),l.Path)
+//	err:=cmd.Run()
+//}

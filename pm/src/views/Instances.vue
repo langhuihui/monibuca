@@ -13,21 +13,18 @@
                         <Step title="完成" content="完成实例创建"></Step>
                     </Steps>
                     <div style="margin:50px;width:auto">
-                        <i-input v-model="createPath" v-if="createStep==0">
-                            <Button slot="prepend" icon="md-arrow-round-up" @click="goUp"></Button>
-                        </i-input>
-                        <List v-else-if="createStep==1" border>
-                            <ListItem v-for="(item,name) in plugins" :key="name">
-                                <ListItemMeta :title="name" :description="item.Path"></ListItemMeta>
-                                {{item.Config}}
-                                <template slot="action">
-                                    <li @click="removePlugin(name)">
-                                        <Icon type="ios-trash"/>
-                                        移除
-                                    </li>
-                                </template>
-                            </ListItem>
-                        </List>
+                        <PathSelector v-model="createPath" v-if="createStep==0"></PathSelector>
+                        <div style="display: flex;flex-wrap: wrap" v-else-if="createStep==1">
+                            <Card v-for="(item,name) in plugins" :key="name" style="width:200px;margin:5px">
+                                <Poptip :content="item.Description" slot="extra" width="200" word-wrap>
+                                    <Icon size="18" type="ios-help-circle-outline" style="cursor:pointer"/>
+                                </Poptip>
+                                <Poptip :content="item.Path" trigger="hover" word-wrap slot="title">
+                                    <Checkbox v-model="item.enabled" style="color: #eb5e46">{{name}}</Checkbox>
+                                </Poptip>
+                                <i-input type="textarea" v-model="item.Config" placeholder="请输入toml格式"></i-input>
+                            </Card>
+                        </div>
                         <div v-else>
                             <h3>实例名称：</h3>
                             <i-input
@@ -90,14 +87,9 @@
                     <i-input v-model="formPlugin.Name" placeholder="插件名称必须和插件注册时的名称一致"></i-input>
                 </FormItem>
                 <FormItem label="插件包地址">
-                    <i-input v-model="formPlugin.Path">
-                        <Button slot="append" @click="showBuiltinPlugin=true">内置插件</Button>
-                    </i-input>
+                    <i-input v-model="formPlugin.Path"></i-input>
                 </FormItem>
-                <Alert  show-icon
-                        type="warning"
-                        v-if="!isBuiltInPlugin(formPlugin.Path)"
-                >
+                <Alert show-icon type="warning">
                     如果该插件是私有仓库，请到服务器上输入：echo "machine {{privateHost}} login 用户名 password 密码" >> ~/.netrc
                     并且添加环境变量GOPRIVATE={{privateHost}}
                 </Alert>
@@ -105,19 +97,6 @@
                     <i-input type="textarea" v-model="formPlugin.Config" placeholder="请输入toml格式"></i-input>
                 </FormItem>
             </Form>
-        </Modal>
-        <Modal v-model="showBuiltinPlugin">
-            <List>
-                <ListItem v-for="(item,name) in $store.state.defaultPlugins" :key="name">
-                    <ListItemMeta :title="name" :description="item[2]"></ListItemMeta>
-                    <template slot="action">
-                        <li @click="addBuiltin(name,item)">
-                            <Icon type="ios-add"/>
-                            添加
-                        </li>
-                    </template>
-                </ListItem>
-            </List>
         </Modal>
         <CreateInstance v-model="showCreate" :info="createInfo"></CreateInstance>
     </Layout>
@@ -127,32 +106,42 @@
     import CreateInstance from "../components/CreateInstance";
     import InstanceList from "../components/InstanceList";
     import ImportInstance from "../components/ImportInstance";
+    import PathSelector from "../components/PathSelector"
 
     export default {
         components: {
-            CreateInstance,InstanceList,ImportInstance
+            CreateInstance, InstanceList, ImportInstance, PathSelector
         },
         data() {
+            let plugins = {}
+            for (let name in this.$store.state.defaultPlugins) {
+                plugins[name] = {
+                    Name: name,
+                    enabled: ["GateWay", "LogRotate", "Jessica"].includes(name),
+                    Path: "github.com/langhuihui/monibuca/plugins/" + this.$store.state.defaultPlugins[name][0],
+                    Config: this.$store.state.defaultPlugins[name][1],
+                    Description: this.$store.state.defaultPlugins[name][2],
+                }
+            }
             return {
                 instanceName: "",
                 createStep: 0,
                 showCreate: false,
                 createInfo: null,
                 createPath: "/opt/monibuca",
-                plugins: {},
+                plugins,
                 showAddPlugin: false,
                 formPlugin: {},
-                showBuiltinPlugin: false,
             };
         },
         computed: {
             pluginStr() {
-                return Object.values(this.plugins)
+                return Object.values(this.plugins).filter(x => x.enabled)
                     .map(x => x.Path)
                     .join("\n");
             },
             configStr() {
-                return Object.values(this.plugins)
+                return Object.values(this.plugins).filter(x => x.enabled)
                     .map(
                         x => `[Plugins.${x.Name}]
 ${x.Config || ""}`
@@ -168,9 +157,6 @@ ${x.Config || ""}`
         },
 
         methods: {
-            isBuiltInPlugin(path){
-                return Object.values(this.$store.state.defaultPlugins).some(x=>"github.com/langhuihui/monibuca/plugins/"+x[0]==path)
-            },
             goUp() {
                 let paths = this.createPath.split("/");
                 paths.pop();
@@ -181,23 +167,13 @@ ${x.Config || ""}`
                 this.createInfo = {
                     Name: this.instanceName || this.createPath.split("/").pop(),
                     Path: this.createPath,
-                    Plugins: Object.values(this.plugins).map(x => x.Path),
+                    Plugins: Object.values(this.plugins).filter(x => x.enabled).map(x => x.Path),
                     Config: this.configStr
                 };
             },
             addPlugin() {
                 this.plugins[this.formPlugin.Name] = this.formPlugin;
                 this.formPlugin = {};
-            },
-            removePlugin(name) {
-                delete this.plugins[name];
-                this.$forceUpdate();
-            },
-            addBuiltin(name, item) {
-                this.formPlugin.Name = name;
-                this.formPlugin.Path = "github.com/langhuihui/monibuca/plugins/"+item[0];
-                this.formPlugin.Config = item[1];
-                this.showBuiltinPlugin = false;
             },
         }
     };

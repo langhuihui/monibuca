@@ -15,6 +15,7 @@ import (
 	"os/exec"
 	"os/user"
 	"path"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"strings"
@@ -46,6 +47,7 @@ func main() {
 	}
 	addr := flag.String("port", "8000", "http server port")
 	flag.Parse()
+	http.HandleFunc("/instance/listDir", listDir)
 	http.HandleFunc("/instance/import", importInstance)
 	http.HandleFunc("/instance/updateConfig", updateConfig)
 	http.HandleFunc("/instance/list", listInstance)
@@ -56,6 +58,24 @@ func main() {
 	fmt.Printf("start listen at %s", *addr)
 	if err := http.ListenAndServe(":"+*addr, nil); err != nil {
 		log.Fatal(err)
+	}
+}
+
+func listDir(w http.ResponseWriter, r *http.Request) {
+	if input := r.URL.Query().Get("input"); input != "" {
+		if dir, err := os.Open(filepath.Dir(input)); err == nil {
+			var dirs []string
+			if infos, err := dir.Readdir(0); err == nil {
+				for _, info := range infos {
+					if info.IsDir() {
+						dirs = append(dirs, info.Name())
+					}
+				}
+				if bytes, err := json.Marshal(dirs); err == nil {
+					w.Write(bytes)
+				}
+			}
+		}
 	}
 }
 
