@@ -90,6 +90,9 @@ func importInstance(w http.ResponseWriter, r *http.Request) {
 	}()
 	name := r.URL.Query().Get("name")
 	if importPath := r.URL.Query().Get("path"); importPath != "" {
+		if strings.HasSuffix(importPath, "/") {
+			importPath = importPath[:len(importPath)-1]
+		}
 		f, err := os.Open(importPath)
 		if e = err; err != nil {
 			return
@@ -134,6 +137,13 @@ func importInstance(w http.ResponseWriter, r *http.Request) {
 				for _, m := range reg.FindAllStringSubmatch(string(mainGo), -1) {
 					instances[name].Plugins = append(instances[name].Plugins, m[1])
 				}
+				var file *os.File
+				file, e = os.OpenFile(path.Join(instancesDir, name+".toml"), os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0666)
+				if err != nil {
+					return
+				}
+				tomlEncoder := toml.NewEncoder(file)
+				e = tomlEncoder.Encode(instances[name])
 			} else {
 				e = errors.New("路径中缺少文件")
 			}
@@ -318,7 +328,7 @@ func main(){
 	}
 	sse.WriteEvent("step", []byte("5:go build 成功！"))
 	build.Reset()
-	build.WriteString("kill -9 `cat pid`\nnohup ./")
+	build.WriteString("kill -9 `cat pid`\n ./")
 	binFile := strings.TrimSuffix(p.Path, "/")
 	_, binFile = path.Split(binFile)
 	build.WriteString(binFile)

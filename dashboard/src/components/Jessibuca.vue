@@ -9,8 +9,8 @@
   >
     <canvas id="canvas" width="488" height="275" style="background: black" />
     <div slot="footer">
-      音频缓冲：
-      <InputNumber v-model="audioBuffer" size="small"></InputNumber>
+<!--      音频缓冲：-->
+<!--      <InputNumber v-model="audioBuffer" size="small"></InputNumber>-->
       <Button v-if="audioEnabled" @click="turnOff" icon="md-volume-off" />
       <Button v-else @click="turnOn" icon="md-volume-up"></Button>
     </div>
@@ -24,7 +24,7 @@ export default {
   data() {
     return {
       audioEnabled: false,
-      audioBuffer: 12,
+      // audioBuffer: 12,
       url: ""
     };
   },
@@ -32,9 +32,9 @@ export default {
     audioEnabled(value) {
       h5lc.audioEnabled(value);
     },
-    audioBuffer(v) {
-      h5lc.audioBuffer = v;
-    }
+    // audioBuffer(v) {
+    //   h5lc.audioBuffer = v;
+    // }
   },
   mounted() {
     h5lc = new window.Jessibuca({

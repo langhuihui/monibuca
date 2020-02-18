@@ -1,4 +1,6 @@
+window.AudioContext = window.AudioContext || window.webkitAudioContext;
 function Jessibuca(opt) {
+    this.audioContext  = new window.AudioContext()
     this.canvasElement = opt.canvas;
     this.contextOptions = opt.contextOptions;
     this.videoBuffer = opt.videoBuffer || 1
@@ -65,9 +67,7 @@ function Jessibuca(opt) {
         }
     }
 };
-window.AudioContext = window.AudioContext || window.webkitAudioContext;
-function _unlock() {
-    var context = Jessibuca.prototype.audioContext = Jessibuca.prototype.audioContext || new window.AudioContext();
+function _unlock(context) {
     context.resume();
     var source = context.createBufferSource();
     source.buffer = context.createBuffer(1, 1, 22050);
@@ -81,7 +81,7 @@ function _unlock() {
 // document.addEventListener("touchend", _unlock, true);
 Jessibuca.prototype.audioEnabled = function (flag) {
     if (flag) {
-        _unlock()
+        _unlock(this.audioContext)
         this.audioEnabled = function (flag) {
             if (flag) {
                 this.audioContext.resume();
@@ -452,6 +452,7 @@ Jessibuca.prototype.close = function () {
     if (this.audioInterval) {
         clearInterval(this.audioInterval)
     }
+    delete this.playAudio
     this.decoderWorker.postMessage({ cmd: "close" })
     this.contextGL.clear(this.contextGL.COLOR_BUFFER_BIT);
 }

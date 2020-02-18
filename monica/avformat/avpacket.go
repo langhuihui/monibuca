@@ -38,7 +38,7 @@ func (av *AVPacket) ADTS2ASC() (tagPacket *AVPacket) {
 	tagPacket = NewAVPacket(FLV_TAG_TYPE_AUDIO)
 	tagPacket.Payload = ADTSToAudioSpecificConfig(av.Payload)
 	tagPacket.IsAACSequence = true
-	ADTSLength := 7 + (int(av.Payload[1]&1) << 1)
+	ADTSLength := 7 + ((1 - int(av.Payload[1]&1)) << 1)
 	if len(av.Payload) > ADTSLength {
 		av.Payload[0] = 0xAF
 		av.Payload[1] = 0x01 //raw AAC

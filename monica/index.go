@@ -10,7 +10,7 @@ import (
 )
 
 var ConfigRaw []byte
-var Version = "0.2.6"
+var Version = "0.2.8"
 var EngineInfo = &struct {
 	Version   string
 	StartTime time.Time
