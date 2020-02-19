@@ -35,6 +35,7 @@ func (ts *TS) run() {
 	spsHead := []byte{0xE1, 0, 0}
 	ppsHead := []byte{0x01, 0, 0}
 	nalLength := []byte{0, 0, 0, 0}
+
 	for {
 		select {
 		case <-ts.Done():
@@ -45,9 +46,18 @@ func (ts *TS) run() {
 				ts.TotalPesCount++
 				switch tsPesPkt.PesPkt.Header.StreamID & 0xF0 {
 				case mpegts.STREAM_ID_AUDIO:
-					av := avformat.NewAVPacket(avformat.FLV_TAG_TYPE_AUDIO)
-					av.Payload = tsPesPkt.PesPkt.Payload
-					ts.PushAudio(av)
+					data := tsPesPkt.PesPkt.Payload
+					for remainLen := len(data); remainLen > 0; {
+						// AACFrameLength(13)
+						// xx xxxxxxxx xxx
+						frameLen := (int(data[3]&3) << 11) | (int(data[4]) << 3) | (int(data[5]) >> 5)
+						av := avformat.NewAVPacket(avformat.FLV_TAG_TYPE_AUDIO)
+						av.Payload = data[:frameLen]
+						ts.PushAudio(av)
+						data = data[frameLen:remainLen]
+						remainLen = remainLen - frameLen
+					}
+
 				case mpegts.STREAM_ID_VIDEO:
 					var err error
 					av := avformat.NewAVPacket(avformat.FLV_TAG_TYPE_VIDEO)
