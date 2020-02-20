@@ -3,11 +3,11 @@
         <List border>
             <ListItem v-for="item in instances" :key="item.Name">
                 <ListItemMeta :title="item.Name" :description="item.Path"></ListItemMeta>
-                <template v-if="item.Info.StartTime">
+                <template v-if>{{typeof item.Info == "string"}}</template>
+                <template v-else-if="item.Info">
                     引擎版本：{{item.Info.Version}} <br>启动时间：
                     <StartTime :value="item.Info.StartTime"></StartTime>
                 </template>
-                <template v-else>{{item.Info}}</template>
                 <template slot="action">
                     <li @click="changeConfig(item)">
                         <Icon type="ios-settings"/>

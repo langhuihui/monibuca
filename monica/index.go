@@ -2,21 +2,29 @@ package monica
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"log"
+	"os"
+	"runtime"
 	"time"
 
 	"github.com/BurntSushi/toml"
 )
 
 var ConfigRaw []byte
-var Version = "0.2.8"
+var Version = "0.3.0"
 var EngineInfo = &struct {
 	Version   string
 	StartTime time.Time
 }{Version, time.Now()}
 
 func Run(configFile string) (err error) {
+	if runtime.GOOS == "windows" {
+		ioutil.WriteFile("shutdown.bat", []byte(fmt.Sprintf("taskkill /pid %d  -t  -f", os.Getpid())), 0777)
+	} else {
+		ioutil.WriteFile("shutdown.sh", []byte(fmt.Sprintf("kill -9 %d", os.Getpid())), 0777)
+	}
 	log.Printf("start monibuca version:%s", Version)
 	if ConfigRaw, err = ioutil.ReadFile(configFile); err != nil {
 		log.Printf("read config file error: %v", err)

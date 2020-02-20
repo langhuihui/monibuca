@@ -1,7 +1,42 @@
 # 内置插件介绍
 内置插件为Monibuca提供了许多基础功能，当然你完全可以不采用内置插件，而改用自己开发的插件，也丝毫不会影响您使用Monibuca。
+
+## 网关插件
+::: tip 源码位置
+该插件位于plugins/gateway下
+:::
+
+该插件是为web控制台界面提供api，用来采集服务器的信息。
+
+### 配置
+目前仅有的配置是监听的端口号
+
+```toml
+[Plugins.GateWay]
+ListenAddr = ":80"
+```
+如果80端口有其他用途，可以换成别的端口，比如有nginx反向代理。
+
+## 日志分割插件
+::: tip 源码位置
+该插件源码位于plugins/logrotate下
+:::
+
+### 配置
+```toml
+[Plugins.LogRotate]
+Path = "log"
+Size = 0
+Days = 1
+```
+其中Path代表生成日志的目录
+Size代表按大小分割，单位是字节，如果为0，则按时间分割
+Days代表按时间分割，单位是天，即24小时
+
 ## Jessica插件
-> 该插件源码位于plugins/jessica下
+::: tip 源码位置
+该插件源码位于plugins/jessica下
+:::
 
 该插件为基于WebSocket协议传输音视频的订阅者，音视频数据以裸数据的形式进行传输，我们需要Jessibuca播放器来进行播放
 Jessibua播放器已内置于源码中，该播放器通过js解码H264/H265并用canvas进行渲染，可以运行在几乎所有的终端浏览器上面。
@@ -76,19 +111,6 @@ ListenAddr = ":2019"
 该插件的作用是请求M3u8文件进行解码，最终将TS视频流转码成裸的视频流进行发布。
 注意：该插件目前并没有实现生成HLS的功能。
 
-## 网关插件
-> 该插件位于plugins/gateway下
-
-该插件是为web控制台界面提供api，用来采集服务器的信息。
-
-### 配置
-目前仅有的配置是监听的端口号
-
-```toml
-[Plugins.GateWay]
-ListenAddr = ":80"
-```
-如果80端口有其他用途，可以换成别的端口，比如有nginx反向代理。
 
 ## 校验插件
 > 该插件位于plugins/auth下

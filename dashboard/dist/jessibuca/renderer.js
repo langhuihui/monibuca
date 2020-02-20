@@ -89,6 +89,8 @@ Jessibuca.prototype.audioEnabled = function (flag) {
                 this.audioContext.suspend();
             }
         }
+    }else{
+        this.audioContext.suspend();
     }
 }
 Jessibuca.prototype.playAudio = function (data) {
@@ -150,6 +152,7 @@ Jessibuca.prototype.initAudioPlay = function (frameCount, samplerate, channels) 
     if (!context) return false;
     var resampled = samplerate < 22050;
     var audioBuffer = resampled ? context.createBuffer(channels, frameCount << 1, samplerate << 1) : context.createBuffer(channels, frameCount, samplerate);
+    var _this = this
     var playNextBuffer = function () {
         isPlaying = false;
         console.log("~", audioBuffers.length)
@@ -189,9 +192,12 @@ Jessibuca.prototype.initAudioPlay = function (frameCount, samplerate, channels) 
         var source = context.createBufferSource();
         source.buffer = audioBuffer;
         source.connect(context.destination);
-        source.onended = playNextBuffer;
-        //setTimeout(playNextBuffer, audioBufferTime-audioBuffers.length*200);
+        // source.onended = playNextBuffer;
+        // setTimeout(playNextBuffer, audioBufferTime-audioBuffers.length*200);
         source.start();
+        if (!_this.audioInterval) {
+            _this.audioInterval = setInterval(playNextBuffer, audioBuffer.duration * 1000 - 1);
+        }
     };
     this.playAudio = playAudio;
 }
