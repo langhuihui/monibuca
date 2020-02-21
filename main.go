@@ -209,8 +209,7 @@ func initInstance(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	sse.WriteEvent("step", []byte("1:参数解析成功！"))
-	err = instanceDesc.CreateDir(sse, clearDir)
-	if err != nil {
+	if err = instanceDesc.CreateDir(sse, clearDir); err != nil {
 		return
 	}
 	sse.WriteEvent("step", []byte("6:实例创建成功！"))

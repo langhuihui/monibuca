@@ -41,6 +41,10 @@ func (p *InstanceDesc) RestartCmd() *exec.Cmd {
 	return p.Command("sh", "restart.sh")
 }
 func (p *InstanceDesc) CreateRestartFile(binFile string) error {
-	return ioutil.WriteFile(path.Join(p.Path, "restart.sh"), []byte(fmt.Sprintf(`./shutdown.sh
-%s &`, binFile)), 0777)
+	restartCmd := `if [ -f "shutdown.sh" ];then
+./shutdown.sh
+fi
+nohup ./%s > /dev/null &
+`
+	return ioutil.WriteFile(path.Join(p.Path, "restart.sh"), []byte(fmt.Sprintf(restartCmd, binFile)), 0777)
 }

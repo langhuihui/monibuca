@@ -3,9 +3,9 @@
         <List border>
             <ListItem v-for="item in instances" :key="item.Name">
                 <ListItemMeta :title="item.Name" :description="item.Path"></ListItemMeta>
-                <template v-if>{{typeof item.Info == "string"}}</template>
-                <template v-else-if="item.Info">
-                    引擎版本：{{item.Info.Version}} <br>启动时间：
+                <template v-if="typeof item.Info == 'string'">{{item.Info}}</template>
+                <template v-else-if="item.Info!=null">
+                    引擎版本：{{item.Info.Version}} 启动时间：
                     <StartTime :value="item.Info.StartTime"></StartTime>
                 </template>
                 <template slot="action">
@@ -123,6 +123,8 @@
                 es.onmessage = evt => {
                     if (evt.data == "success") {
                         this.$Message.success("重启成功！")
+                        es.onerror = null
+                        es.close()
                         msg()
                     } else {
                         this.$Message.info(evt.data)
@@ -133,7 +135,7 @@
                     msg()
                 })
                 es.onerror = e => {
-                    if (e && e.toString()) this.$Message.error(e);
+                    this.$Message.error(e.toString());
                     msg()
                     es.close()
                 }

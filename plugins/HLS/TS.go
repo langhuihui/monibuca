@@ -51,6 +51,9 @@ func (ts *TS) run() {
 						// AACFrameLength(13)
 						// xx xxxxxxxx xxx
 						frameLen := (int(data[3]&3) << 11) | (int(data[4]) << 3) | (int(data[5]) >> 5)
+						if frameLen > remainLen {
+							break
+						}
 						av := avformat.NewAVPacket(avformat.FLV_TAG_TYPE_AUDIO)
 						av.Payload = data[:frameLen]
 						ts.PushAudio(av)

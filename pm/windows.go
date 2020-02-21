@@ -25,13 +25,13 @@ func HomeDir() (string, error) {
 	return home, nil
 }
 func (p *InstanceDesc) ShutDownCmd() *exec.Cmd {
-	return p.Command("cmd", "/c", "shutdown.bat")
+	return p.Command("cmd", "/C", "shutdown.bat")
 }
 
 func (p *InstanceDesc) RestartCmd() *exec.Cmd {
-	return p.Command("cmd", "/c", "restart.bat")
+	return p.Command("cmd", "/C", "restart.bat")
 }
 func (p *InstanceDesc) CreateRestartFile(binFile string) error {
-	return ioutil.WriteFile(path.Join(p.Path, "restart.bat"), []byte(fmt.Sprintf(`shutdown.bat
+	return ioutil.WriteFile(path.Join(p.Path, "restart.bat"), []byte(fmt.Sprintf(`call shutdown.bat
 start %s`, binFile)), 0777)
 }

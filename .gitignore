@@ -2,3 +2,5 @@
 .vscode
 .idea
 resource
+*.log
+/monibuca
