@@ -13,5 +13,5 @@ require (
 	github.com/gobwas/ws v1.0.2
 	github.com/quangngotan95/go-m3u8 v0.1.0
 	github.com/shirou/gopsutil v2.19.12+incompatible
-	golang.org/x/sys v0.0.0-20200122134326-e047566fdf82 // indirect
+	golang.org/x/sys v0.0.0-20200223170610-d5e6a3e2c0ae // indirect
 )
