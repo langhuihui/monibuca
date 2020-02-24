@@ -202,6 +202,9 @@ func (r *Room) PushAudio(audio *avformat.AVPacket) {
 }
 func (r *Room) setH264Info(video *avformat.AVPacket) {
 	r.VideoTag = video
+	if r.VideoInfo.CodecID != 7 {
+		return
+	}
 	info := avformat.AVCDecoderConfigurationRecord{}
 	//0:codec,1:IsAVCSequence,2~4:compositionTime
 	if _, err := info.Unmarshal(video.Payload[5:]); err == nil {

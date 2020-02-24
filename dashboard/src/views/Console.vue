@@ -54,8 +54,8 @@
         :type="hardDiskStatus"
       >磁盘使用：{{networkFormat(HardDisk.Used,"M")}} 占比：{{HardDisk.Usage.toFixed(2)}}%</Alert>
     </div>
-    <Jessibuca ref="jessibuca" v-model="showPreview"></Jessibuca>
-    <Subscribers :data="currentStream && currentStream.SubscriberInfo" v-model="showSubscribers" />
+    <Jessibuca ref="jessibuca" v-model="showPreview" :videoCodec="currentStream && CodecID(currentStream.VideoInfo.CodecID)" :audioCodec="currentStream && SoundFormat(currentStream.AudioInfo.SoundFormat)"></Jessibuca>
+    <Subscribers :data="currentStream && currentStream.SubscriberInfo || []" v-model="showSubscribers" />
   </div>
 </template>
 
@@ -116,7 +116,7 @@ export default {
       showPreview: false,
       showSubscribers: false,
       currentTab: "",
-      currentStream: [],
+      currentStream: null,
       typeMap: {
         Receiver: "📡",
         FlvFile: "🎥",
@@ -181,10 +181,7 @@ export default {
       return item.SubscriberInfo ? item.SubscriberInfo.length : 0;
     },
     preview(item) {
-      this.$refs.jessibuca.videoCodec = this.CodecID(item.VideoInfo.CodecID);
-      this.$refs.jessibuca.audioCodec = this.SoundFormat(
-        item.AudioInfo.SoundFormat
-      );
+      this.currentStream = item;
       this.$nextTick(() =>
         this.$refs.jessibuca.play(
           "ws://" + location.hostname + ":8080/" + item.StreamPath

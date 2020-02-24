@@ -5,6 +5,7 @@
 </template>
 
 <script>
+import StartTime from "./StartTime"
 export default {
   props: {
     data: Array
@@ -23,7 +24,7 @@ export default {
         {
           title: "订阅时间",
           render(h, { row }) {
-            return h("StartTime", {
+            return h(StartTime, {
               props: {
                 value: row.SubscribeTime
               }
