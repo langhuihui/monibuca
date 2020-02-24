@@ -9,8 +9,8 @@
   >
     <canvas id="canvas" width="488" height="275" style="background: black" />
     <div slot="footer">
-<!--      音频缓冲：-->
-<!--      <InputNumber v-model="audioBuffer" size="small"></InputNumber>-->
+      <!--      音频缓冲：-->
+      <!--      <InputNumber v-model="audioBuffer" size="small"></InputNumber>-->
       <Button v-if="audioEnabled" @click="turnOff" icon="md-volume-off" />
       <Button v-else @click="turnOn" icon="md-volume-up"></Button>
     </div>
@@ -21,26 +21,49 @@
 let h5lc = null;
 export default {
   name: "Jessibuca",
+  props: {
+    audioCodec: String,
+    videoCodec: String
+  },
   data() {
     return {
       audioEnabled: false,
-      // audioBuffer: 12,
-      url: ""
+      url: "",
+      decoderTable: {
+        AAC_AVC: "ff",
+        AAC_H265: "hevc_aac",
+        MP3_AVC: "ff_mp3",
+        MP3_H265: "hevc_mp3"
+      }
     };
   },
   watch: {
     audioEnabled(value) {
       h5lc.audioEnabled(value);
     },
-    // audioBuffer(v) {
-    //   h5lc.audioBuffer = v;
-    // }
+    decoder(value) {
+      if (h5lc) {
+        h5lc.destroy();
+      }
+      h5lc = new window.Jessibuca({
+        canvas: document.getElementById("canvas"),
+        decoder: value
+      });
+    }
+  },
+  computed: {
+    decoder() {
+      return (
+        "jessibuca/" +
+        this.decoderTable[this.audioCodec + "_" + this.videoCodec] +
+        ".js"
+      );
+    }
   },
   mounted() {
     h5lc = new window.Jessibuca({
       canvas: document.getElementById("canvas"),
-      decoder: "jessibuca/ff.js",
-      audioBuffer: this.audioBuffer
+      decoder: "jessibuca/ff.js"
     });
   },
   destroyed() {

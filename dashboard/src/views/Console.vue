@@ -181,8 +181,14 @@ export default {
       return item.SubscriberInfo ? item.SubscriberInfo.length : 0;
     },
     preview(item) {
-      this.$refs.jessibuca.play(
-        "ws://" + location.hostname + ":8080/" + item.StreamPath
+      this.$refs.jessibuca.videoCodec = this.CodecID(item.VideoInfo.CodecID);
+      this.$refs.jessibuca.audioCodec = this.SoundFormat(
+        item.AudioInfo.SoundFormat
+      );
+      this.$nextTick(() =>
+        this.$refs.jessibuca.play(
+          "ws://" + location.hostname + ":8080/" + item.StreamPath
+        )
       );
       this.showPreview = true;
     },
