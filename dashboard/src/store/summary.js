@@ -29,6 +29,7 @@ export default {
                 if (!evt.data) return
                 let summary = JSON.parse(evt.data)
                 summary.Address = location.hostname
+                if (!summary.Rooms) summary.Rooms = []
                 summary.Rooms.sort((a, b) => a.StreamPath > b.StreamPath ? 1 : -1)
                 commit("updateSummary", { summary })
             }

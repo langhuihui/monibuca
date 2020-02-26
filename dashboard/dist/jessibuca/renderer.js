@@ -155,7 +155,7 @@ Jessibuca.prototype.initAudioPlay = function (frameCount, samplerate, channels) 
     var _this = this
     var playNextBuffer = function () {
         isPlaying = false;
-        console.log("~", audioBuffers.length)
+        //console.log("~", audioBuffers.length)
         if (audioBuffers.length) {
             playAudio(audioBuffers.shift());
         }
@@ -184,7 +184,7 @@ Jessibuca.prototype.initAudioPlay = function (frameCount, samplerate, channels) 
     var playAudio = function (fromBuffer) {
         if (isPlaying) {
             audioBuffers.push(fromBuffer);
-            console.log(audioBuffers.length)
+            //console.log(audioBuffers.length)
             return;
         }
         isPlaying = true;

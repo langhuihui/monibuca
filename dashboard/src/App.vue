@@ -1,6 +1,6 @@
 <template>
     <div id="app">
-        <div>Monibuca</div>
+        <div>Monibuca v0.4.0</div>
         <Menu
             mode="horizontal"
             :active-name="selectedMenu"
