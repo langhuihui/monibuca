@@ -98,14 +98,26 @@
             </Tabs>
         </Content>
         <Modal v-model="showAddPlugin" title="添加Plugin" @on-ok="addPlugin">
-            <Tabs>
+            <Tabs v-model="addPluginTab">
                 <TabPane label="插件市场">
                     <i-input search placeholder="find plugins in market" @on-search="searchPlugin"></i-input>
-                    <List>
-                        <ListItem v-for="item in searchPluginResult" :key="item"></ListItem>
+                    <List border>
+                        <ListItem v-for="item in searchPluginResult" :key="item">
+                            <ListItemMeta :title="item.Name" :description="item.Desc"></ListItemMeta>
+                            <template slot="action">
+                                <li>
+                                    <a :href="'//'+item.Path" target="_blank">查看</a>
+                                </li>
+                                <li @click="choosePlugin(item)">选择</li>
+                            </template>
+                            {{item.Author}}
+                            <Tooltip content="官方" v-if="/O/.test(item.Flag)">⭐</Tooltip>
+                            <Tooltip content="推荐" v-if="/R/.test(item.Flag)">👍</Tooltip>
+                            <Tooltip content="热门" v-if="/H/.test(item.Flag)">🔥</Tooltip>
+                        </ListItem>
                     </List>
                 </TabPane>
-                <TabPane label="手动添加">
+                <TabPane label="手动配置">
                     <Form :model="formPlugin" label-position="top">
                         <FormItem label="插件名称">
                             <i-input v-model="formPlugin.Name" placeholder="插件名称必须和插件注册时的名称一致"></i-input>
@@ -167,6 +179,7 @@ export default {
             plugins,
             showAddPlugin: false,
             formPlugin: {},
+            addPluginTab: 0,
             searchPluginResult: []
         };
     },
@@ -214,11 +227,19 @@ ${x.Config || ""}`
         addPlugin() {
             this.plugins[this.formPlugin.Name] = this.formPlugin;
             this.formPlugin = {};
+            this.addPluginTab = 0;
+        },
+        choosePlugin(item) {
+            Object.assign(this.formPlugin, item);
+            this.addPluginTab = 1;
         },
         searchPlugin(value) {
             window.ajax
                 .getJSON("https://plugins.monibuca.com/search?query=" + value)
-                .then(x => {});
+                .then(x => (this.searchPluginResult = x))
+                .catch(() => {
+                    this.$Message.error("访问插件市场错误！");
+                });
         }
     }
 };

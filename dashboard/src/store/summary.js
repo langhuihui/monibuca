@@ -1,6 +1,6 @@
 let summaryES = null
 export default {
-    state:{
+    state: {
         Address: location.hostname,
         NetWork: [],
         Rooms: [],
@@ -20,7 +20,7 @@ export default {
             Object.assign(state, payload)
         },
     },
-    actions:{
+    actions: {
         fetchSummary({ commit }) {
             summaryES = new EventSource(
                 "//" + location.host + "/api/summary"
@@ -29,9 +29,10 @@ export default {
                 if (!evt.data) return
                 let summary = JSON.parse(evt.data)
                 summary.Address = location.hostname
+                summary.Rooms.sort((a, b) => a.StreamPath > b.StreamPath ? 1 : -1)
                 commit("updateSummary", { summary })
             }
-        },stopFetchSummary() {
+        }, stopFetchSummary() {
             summaryES.close()
         }
     }
