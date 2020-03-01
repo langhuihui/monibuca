@@ -1,3 +1,13 @@
+# 重要通知
+ <font size="30" color="red">Monibuca已完成项目拆分，请移步https://github.com/Monibuca</font>
+
+本项目分拆为
+1. 核心引擎 github.com/Monibuca/engine 保持最小化，最轻量化
+2. 文档 github.com/Monibuca/docs 
+3. 主页 github.com/Monibuca/website
+4. 实例管理器 github.com/Monibuca/monica
+5. 其他插件项目 都在github.com/Monibuca下带有plugin后缀的库
+
 # 简介
 [Monibuca](https://monibuca.com) 是一个开源的流媒体服务器开发框架，适用于快速定制化开发流媒体服务器，可以对接CDN厂商，作为回源服务器，也可以自己搭建集群部署环境。 丰富的内置插件提供了流媒体服务器的常见功能，例如rtmp server、http-flv、视频录制、QoS等。除此以外还内置了后台web界面，方便观察服务器运行的状态。 也可以自己开发后台管理界面，通过api方式获取服务器的运行信息。 Monibuca 提供了可供定制化开发的插件机制，可以任意扩展其功能。
 
