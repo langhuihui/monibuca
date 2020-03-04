@@ -25,7 +25,7 @@
 
 # 交流微信群
 
-![交流微信群](https://monibuca.com/wechat.png)
+![交流微信群](https://monibuca.com/wechat.png?t=3.4)
 
 # Q&A
 
