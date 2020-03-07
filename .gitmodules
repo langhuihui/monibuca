@@ -1,0 +1,9 @@
+[submodule "engine"]
+	path = engine
+	url = https://github.com/Monibuca/engine
+[submodule "instancemanager"]
+	path = instancemanager
+	url = https://github.com/Monibuca/monica
+[submodule "docs"]
+	path = docs
+	url = https://github.com/Monibuca/docs
