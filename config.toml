@@ -1,0 +1,17 @@
+[RTMP]
+ListenAddr = ":1935"
+[GateWay]
+ListenAddr = ":8081"
+[Jessica]
+ListenAddr = ":8080"
+[LogRotate]
+Path = "logs"
+[Cluster]
+ListenAddr = ":2019"
+[TS]
+Path  = "resource"
+[Record]
+Path = "resource"
+[RTSP]
+AutoPublish = true
+RtspURL = "rtsp://localhost/test"
