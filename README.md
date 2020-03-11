@@ -1,16 +1,25 @@
-# 重要通知
- <font size="30" color="red">Monibuca已完成项目拆分，请移步https://github.com/Monibuca</font>
+# 主页
 
-本项目分拆为
-1. 核心引擎 github.com/Monibuca/engine 保持最小化，最轻量化
-2. 文档 github.com/Monibuca/docs 
-3. 主页 github.com/Monibuca/website
-4. 实例管理器 github.com/Monibuca/monica
-5. 其他插件项目 都在github.com/Monibuca下带有plugin后缀的库
+[https://monibuca.com](https://monibuca.com)
 
-本项目已改为开箱即用的实例demo，直接运行go run main.go 即可启动一个流媒体服务器
+# 中文文档
 
-# 简介
+[http://docs.monibuca.com](http://docs.monibuca.com)
+
+# 核心代码库和插件代码库
+
+[https://github.com/Monibuca](https://github.com/Monibuca)
+
+
+# 本项目为开箱即用的实例demo
+
+1. go get 获取依赖
+2. go run main 启动实例
+3. 启动后，浏览器打开8081端口查看后台界面
+4. ffmpeg或者OBS推流到1935端口
+5. 后台界面上提供直播预览、录制flv、rtsp拉流转发、日志跟踪等功能
+
+# Monibuca简介
 [Monibuca](https://monibuca.com) 是一个开源的流媒体服务器开发框架，适用于快速定制化开发流媒体服务器，可以对接CDN厂商，作为回源服务器，也可以自己搭建集群部署环境。 丰富的内置插件提供了流媒体服务器的常见功能，例如rtmp server、http-flv、视频录制、QoS等。除此以外还内置了后台web界面，方便观察服务器运行的状态。 也可以自己开发后台管理界面，通过api方式获取服务器的运行信息。 Monibuca 提供了可供定制化开发的插件机制，可以任意扩展其功能。
 
 ⚡高性能
@@ -27,7 +36,7 @@
 
 # 交流微信群
 
-![交流微信群](https://monibuca.com/wechat.png?t=3.4)
+![交流微信群](https://monibuca.com/wechat.png?t=3.11)
 
 # Q&A
 
@@ -50,4 +59,4 @@ A：Monibuca是基于Golang开发，支持跨平台部署。Monibuca可以用Jes
 A: Jessibuca是一款使用Emscripten编译的纯H5播放器，支持H264、H265格式的直播流，尚为开源，有相关需求可以咨询本人。
 
 ## Q: Monibuca的名称有什么特殊含义吗？
-A: 这个单词来源于Monica（莫妮卡）是个人名，在项目里面也存在这个文件夹。没有特别含义，为了解决起名的难题，使用了三个名称分别是Monica、Jessica、Rebecca用来代表服务器、播放器、推流器。由于莫妮卡、杰西卡、瑞贝卡，都带卡字，对直播来说寓意不好，所以改为莫妮不卡（Monibuca）、杰西不卡（Jessibuca）、瑞贝不卡（Rebebuca）。其中推流器Rebebuca目前尚为公布，是改造了的OBS，可用于推流H265
+A: 这个单词来源于Monica（莫妮卡）是个人名，在项目里面也存在这个文件夹。没有特别含义，为了解决起名的难题，使用了三个名称分别是Monica、Jessica、Rebecca用来代表服务器、播放器、推流器。由于莫妮卡、杰西卡、瑞贝卡，都带卡字，对直播来说寓意不好，所以改为模拟不卡（Monibuca）、解析不卡（Jessibuca）、累呗不卡（Rebebuca）。其中推流器Rebebuca目前尚为公布，是改造了的OBS，可用于推流H265

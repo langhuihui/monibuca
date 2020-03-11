@@ -4,3 +4,4 @@
 resource
 *.log
 /monibuca
+node_modules

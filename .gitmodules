@@ -31,3 +31,9 @@
 [submodule "plugins/gateway"]
 	path = plugins/gateway
 	url = https://github.com/Monibuca/gatewayplugin
+[submodule "plugins/rtsp"]
+	path = plugins/rtsp
+	url = https://github.com/Monibuca/rtspplugin.git
+[submodule "plugins/ts"]
+	path = plugins/ts
+	url = https://github.com/Monibuca/tsplugin.git

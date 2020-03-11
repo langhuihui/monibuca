@@ -13,5 +13,9 @@ Path  = "resource"
 [Record]
 Path = "resource"
 [RTSP]
-AutoPublish = true
+AutoPublish = false
 RtspURL = "rtsp://localhost/test"
+[HLS]
+EnableWrite = false
+[HDL]
+ListenAddr = ":2020"
