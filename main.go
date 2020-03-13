@@ -1,6 +1,10 @@
 package main
 
 import (
+	"flag"
+	"path/filepath"
+	"runtime"
+
 	_ "github.com/Monibuca/clusterplugin"
 	. "github.com/Monibuca/engine"
 	_ "github.com/Monibuca/gatewayplugin"
@@ -15,6 +19,14 @@ import (
 )
 
 func main() {
-	Run("config.toml")
+	addr := flag.String("c", "", "config file")
+	flag.Parse()
+	if *addr == "" {
+		_, currentFile, _, _ := runtime.Caller(0)
+		configFIle := filepath.Join(filepath.Dir(currentFile), "config.toml")
+		Run(configFIle)
+	} else {
+		Run(*addr)
+	}
 	select {}
 }

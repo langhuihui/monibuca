@@ -13,8 +13,8 @@
 
 # 本项目为开箱即用的实例demo
 
-1. go get 获取依赖
-2. go run main 启动实例
+1. go get github.com/langhuihui/monibuca
+2. $GOPATH/bin/monibuca  (如果$GOPATH/bin已经添加到PATH环境变量中，则可以直接执行monibuca)
 3. 启动后，浏览器打开8081端口查看后台界面
 4. ffmpeg或者OBS推流到1935端口
 5. 后台界面上提供直播预览、录制flv、rtsp拉流转发、日志跟踪等功能
