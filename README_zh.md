@@ -13,8 +13,8 @@
 
 # 本项目为开箱即用的实例demo
 
-1. go get 获取依赖
-2. go run main 启动实例
+1. go get github.com/langhuihui/monibuca
+2. linux下执行：$GOPATH/bin/monibuca  windows下执行：%GOPATH%/bin/monibuca
 3. 启动后，浏览器打开8081端口查看后台界面
 4. ffmpeg或者OBS推流到1935端口
 5. 后台界面上提供直播预览、录制flv、rtsp拉流转发、日志跟踪等功能
@@ -49,14 +49,8 @@ A：因为Golang语言相比其他语言可读性更强，代码简单易懂，�
 ## Q：Monibuca是否使用Cgo或者其他语言依赖库？
 A：没有。Monibuca是纯Go语言开发，不依赖任何其他第三方库比如FFmpeg，方便二次开发。对部署更友好，仅仅需要Golang运行环境即可。
 
-## Q：如果我要使用Monibuca，正确的流程是什么？
-A: 首先安装Monibuca，具体可以查看文档。然后打开实例管理器界面，选择插件，创建实例。这个本质上就是建立了一个Go工程目录，这个工程引用了Monibuca核心库，以及插件库，插件库可以来自任何地方，如果没有满足当前需求的插件，那么可以自行开发一个插件作为业务逻辑插件。如何开发请查询文档。
-
 ## Q：Monibuca对环境有什么要求？直播流可以在微信里播放吗？
 A：Monibuca是基于Golang开发，支持跨平台部署。Monibuca可以用Jessibuca播放器在微信、手机浏览器里面播放视频。也可以通过其他SDK播放RTMP流、其他协议的流。只需要相应的插件支持即可。
-
-## Q: Jessibuca是什么？
-A: Jessibuca是一款使用Emscripten编译的纯H5播放器，支持H264、H265格式的直播流，尚为开源，有相关需求可以咨询本人。
 
 ## Q: Monibuca的名称有什么特殊含义吗？
 A: 这个单词来源于Monica（莫妮卡）是个人名，在项目里面也存在这个文件夹。没有特别含义，为了解决起名的难题，使用了三个名称分别是Monica、Jessica、Rebecca用来代表服务器、播放器、推流器。由于莫妮卡、杰西卡、瑞贝卡，都带卡字，对直播来说寓意不好，所以改为模拟不卡（Monibuca）、解析不卡（Jessibuca）、累呗不卡（Rebebuca）。其中推流器Rebebuca目前尚为公布，是改造了的OBS，可用于推流H265

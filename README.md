@@ -1,6 +1,9 @@
 # Introduction
 
 🧩 Monibuca is a Modularized, Extensible framework for building Streaming Server. 
+- Customize the server by combining function plug-ins. 
+- It's easy to develop plug-ins to implement business logic. 
+- Reduce enterprise development cost and improve development efficiency
 
 # Quick start
 
@@ -32,6 +35,7 @@ to submit your own plugin
 |[gatewayplugin]|a console and dashboard to display information and status of monibuca ,also can display UI of other plugins 
 |[recordplugin]|record multimedia stream to flv files
 |[clusterplugin]|cascade transmission of multimedia by cluster network
+|[jessicaplugin]|play multimedia stream through websocket protocol
 
 [rtmpplugin]: https://github.com/Monibuca/rtmpplugin
 [rtspplugin]: https://github.com/Monibuca/rtspplugin
@@ -41,10 +45,14 @@ to submit your own plugin
 [gatewayplugin]:https://github.com/Monibuca/gatewayplugin
 [recordplugin]:https://github.com/Monibuca/recordplugin
 [clusterplugin]:https://github.com/Monibuca/clusterplugin
+[jessicaplugin]:https://github.com/Monibuca/jessicaplugin
 
 # Documentation
 
-To check out live examples and docs, visit [https://monibuca.com](https://monibuca.com).
+[http://docs.monibuca.com/en](http://docs.monibuca.com/en).
+
+中文文档：
+[http://docs.monibuca.com](http://docs.monibuca.com).
 
 # Contact
 
@@ -60,4 +68,8 @@ A: Monibuca is different from other streaming servers,that it was created for fa
 
 ## Q: Why use golang?
 
-A: Golang is a greate programming language. It is very suited to build streaming server since streaming server is a kind of IO intensive system.
+A: Golang is a greate programming language. It is very suited to build streaming server since streaming server is a kind of IO intensive system. Goroutine is good at doing these jobs. Another important reason of using Golang is that people read the source code or doing secondary development easier.
+
+## Q: What does "Monibuca" mean?
+
+A: No special meaning. Just from monica —— a girl name. 
