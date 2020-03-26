@@ -13,6 +13,14 @@
 
 # 本项目为开箱即用的实例demo
 
+## 一键安装golang环境和monibuca的demo
+
+```
+bash <(curl -s -S -L https://monibuca.com/demo.sh) 
+```
+
+## 对于已经安装好golang环境的
+
 1. go get github.com/langhuihui/monibuca
 2. linux下执行：$GOPATH/bin/monibuca  windows下执行：%GOPATH%/bin/monibuca
 3. 启动后，浏览器打开8081端口查看后台界面

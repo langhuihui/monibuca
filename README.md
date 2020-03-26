@@ -11,6 +11,12 @@
 
 # Quick start
 
+## Go has not been installed
+```
+bash <(curl -s -S -L https://monibuca.com/demo.sh) 
+```
+## Go is already installed
+
 1. go get github.com/langhuihui/monibuca
 2. $GOPATH/bin/monibuca
 3. open your browser http://localhost:8081
