@@ -68,7 +68,7 @@ to submit your own plugin
 
 wechat group:
 
-![wechat](https://monibuca.com/wechat.png?t=4.22)
+![wechat](https://monibuca.com/wechat.png?t=4.30)
 
 # Q&A
 
