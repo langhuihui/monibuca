@@ -5,17 +5,17 @@ import (
 	"path/filepath"
 	"runtime"
 
-	_ "github.com/Monibuca/clusterplugin"
-	. "github.com/Monibuca/engine"
-	_ "github.com/Monibuca/gatewayplugin"
-	_ "github.com/Monibuca/hdlplugin"
-	_ "github.com/Monibuca/hlsplugin"
-	_ "github.com/Monibuca/jessicaplugin"
-	_ "github.com/Monibuca/logrotateplugin"
-	_ "github.com/Monibuca/recordplugin"
-	_ "github.com/Monibuca/rtmpplugin"
-	_ "github.com/Monibuca/rtspplugin"
-	_ "github.com/Monibuca/tsplugin"
+	. "github.com/Monibuca/engine/v2"
+	// _ "github.com/Monibuca/plugin-cluster"
+	_ "github.com/Monibuca/plugin-gateway"
+	_ "github.com/Monibuca/plugin-hdl"
+	_ "github.com/Monibuca/plugin-hls"
+	_ "github.com/Monibuca/plugin-jessica"
+	_ "github.com/Monibuca/plugin-logrotate"
+	_ "github.com/Monibuca/plugin-record"
+	_ "github.com/Monibuca/plugin-rtmp"
+	_ "github.com/Monibuca/plugin-rtsp"
+	_ "github.com/Monibuca/plugin-ts"
 )
 
 func main() {

@@ -37,25 +37,25 @@ to submit your own plugin
 
 | Project | Description  |
 |---------| -------------|
-|[rtmpplugin]|rtmp protocol support.push rtmp stream to monibuca.play stream from monibuca.
-|[rtspplugin]|rtsp protocol support.pull rtsp stream to monibuca
-|[hlsplugin]|pull hls stream to monibuca
-|[tsplugin]|used by hlsplugin. read ts file to publish
-|[hdlplugin]|http-flv protocol support. pull http-flv stream from monibuca
-|[gatewayplugin]|a console and dashboard to display information and status of monibuca ,also can display UI of other plugins 
-|[recordplugin]|record multimedia stream to flv files
-|[clusterplugin]|cascade transmission of multimedia by cluster network
-|[jessicaplugin]|play multimedia stream through websocket protocol
+|[plugin-rtmp]|rtmp protocol support.push rtmp stream to monibuca.play stream from monibuca.
+|[plugin-rtsp]|rtsp protocol support.pull rtsp stream to monibuca
+|[plugin-hls]|pull hls stream to monibuca
+|[plugin-ts]|used by plugin-hls. read ts file to publish
+|[plugin-hdl]|http-flv protocol support. pull http-flv stream from monibuca
+|[plugin-gateway]|a console and dashboard to display information and status of monibuca ,also can display UI of other plugins 
+|[plugin-record]|record multimedia stream to flv files
+|[plugin-cluster]|cascade transmission of multimedia by cluster network
+|[plugin-jesscia]|play multimedia stream through websocket protocol
 
-[rtmpplugin]: https://github.com/Monibuca/rtmpplugin
-[rtspplugin]: https://github.com/Monibuca/rtspplugin
-[hlsplugin]:https://github.com/Monibuca/hlspplugin
-[tsplugin]:https://github.com/Monibuca/tspplugin
-[hdlplugin]:https://github.com/Monibuca/hdlplugin
-[gatewayplugin]:https://github.com/Monibuca/gatewayplugin
-[recordplugin]:https://github.com/Monibuca/recordplugin
-[clusterplugin]:https://github.com/Monibuca/clusterplugin
-[jessicaplugin]:https://github.com/Monibuca/jessicaplugin
+[plugin-rtmp]: https://github.com/Monibuca/plugin-rtmp
+[plugin-rtsp]: https://github.com/Monibuca/plugin-rtsp
+[plugin-hls]:https://github.com/Monibuca/hlspplugin
+[plugin-ts]:https://github.com/Monibuca/tspplugin
+[plugin-hdl]:https://github.com/Monibuca/plugin-hdl
+[plugin-gateway]:https://github.com/Monibuca/plugin-gateway
+[plugin-record]:https://github.com/Monibuca/plugin-record
+[plugin-cluster]:https://github.com/Monibuca/plugin-cluster
+[plugin-jesscia]:https://github.com/Monibuca/plugin-jesscia
 
 # Documentation
 
