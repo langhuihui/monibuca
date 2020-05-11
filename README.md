@@ -38,7 +38,7 @@ to submit your own plugin
 | Project | Description  |
 |---------| -------------|
 |[plugin-rtmp]|rtmp protocol support.push rtmp stream to monibuca.play stream from monibuca.
-|[plugin-rtsp]|rtsp protocol support.pull rtsp stream to monibuca
+|[plugin-rtsp]|rtsp protocol support.pull/push rtsp stream to monibuca
 |[plugin-hls]|pull hls stream to monibuca
 |[plugin-ts]|used by plugin-hls. read ts file to publish
 |[plugin-hdl]|http-flv protocol support. pull http-flv stream from monibuca
@@ -68,7 +68,7 @@ to submit your own plugin
 
 wechat group:
 
-![wechat](https://monibuca.com/wechat.png?t=4.30)
+![wechat](https://monibuca.com/wechat.png?t=5.11)
 
 # Q&A
 

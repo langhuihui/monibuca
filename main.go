@@ -6,7 +6,7 @@ import (
 	"runtime"
 
 	. "github.com/Monibuca/engine/v2"
-	// _ "github.com/Monibuca/plugin-cluster"
+	_ "github.com/Monibuca/plugin-cluster"
 	_ "github.com/Monibuca/plugin-gateway"
 	_ "github.com/Monibuca/plugin-hdl"
 	_ "github.com/Monibuca/plugin-hls"
@@ -23,8 +23,8 @@ func main() {
 	flag.Parse()
 	if *addr == "" {
 		_, currentFile, _, _ := runtime.Caller(0)
-		configFIle := filepath.Join(filepath.Dir(currentFile), "config.toml")
-		Run(configFIle)
+		configFile := filepath.Join(filepath.Dir(currentFile), "config.toml")
+		Run(configFile)
 	} else {
 		Run(*addr)
 	}

@@ -44,7 +44,7 @@ bash <(curl -s -S -L https://monibuca.com/demo.sh)
 
 # 交流微信群
 
-![交流微信群](https://monibuca.com/wechat.png?t=4.30)
+![交流微信群](https://monibuca.com/wechat.png?t=5.11)
 
 # Q&A
 
