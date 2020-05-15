@@ -57,6 +57,16 @@ to submit your own plugin
 [plugin-cluster]:https://github.com/Monibuca/plugin-cluster
 [plugin-jesscia]:https://github.com/Monibuca/plugin-jesscia
 
+
+# Protocol Functions
+| Protocol | Pusher（push）-->Monibuca  |Source-->Monibuca（pull）|Monibuca-->Player（pull）|Monibuca（push）-->Other Server
+|---------| -------------|-------------| -------------|-------------|
+|rtmp|✔||✔|
+|rtsp|✔|✔||
+|http-flv|||✔|
+|hls||✔|✔|
+|ws-flv|||✔|
+
 # Documentation
 
 [http://docs.monibuca.com/en](http://docs.monibuca.com/en).
