@@ -46,6 +46,7 @@ to submit your own plugin
 |[plugin-record]|record multimedia stream to flv files
 |[plugin-cluster]|cascade transmission of multimedia by cluster network
 |[plugin-jesscia]|play multimedia stream through websocket protocol
+|[plugin-logrotate]|split log files by date or size
 
 [plugin-rtmp]: https://github.com/Monibuca/plugin-rtmp
 [plugin-rtsp]: https://github.com/Monibuca/plugin-rtsp
@@ -56,7 +57,7 @@ to submit your own plugin
 [plugin-record]:https://github.com/Monibuca/plugin-record
 [plugin-cluster]:https://github.com/Monibuca/plugin-cluster
 [plugin-jesscia]:https://github.com/Monibuca/plugin-jesscia
-
+[plugin-logrotate]:https://github.com/Monibuca/plugin-logrotate
 
 # Protocol Functions
 | Protocol | Pusher（push）-->Monibuca  |Source-->Monibuca（pull）|Monibuca-->Player（pull）|Monibuca（push）-->Other Server
