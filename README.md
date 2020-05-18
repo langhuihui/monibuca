@@ -79,7 +79,7 @@ to submit your own plugin
 
 wechat group:
 
-![wechat](https://monibuca.com/wechat.png?t=5.11)
+![wechat](https://monibuca.com/wechat.png?t=5.18)
 
 # Q&A
 
