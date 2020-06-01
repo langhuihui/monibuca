@@ -3,7 +3,7 @@ module github.com/langhuihui/monibuca
 go 1.13
 
 require (
-	github.com/Monibuca/engine/v2 v2.0.1
+	github.com/Monibuca/engine/v2 v2.1.0
 	github.com/Monibuca/plugin-cluster v1.0.0
 	github.com/Monibuca/plugin-gateway v1.2.4
 	github.com/Monibuca/plugin-hdl v1.2.1
@@ -14,6 +14,7 @@ require (
 	github.com/Monibuca/plugin-rtmp v1.2.2
 	github.com/Monibuca/plugin-rtsp v1.1.4
 	github.com/Monibuca/plugin-ts v1.2.1
+	github.com/Monibuca/plugin-webrtc v0.0.0-20200531020350-20fa49d8ed1e
 	github.com/shirou/gopsutil v2.20.4+incompatible // indirect
 	golang.org/x/sys v0.0.0-20200523222454-059865788121 // indirect
 )
