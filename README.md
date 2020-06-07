@@ -74,7 +74,6 @@ to submit your own plugin
 
 # Documentation
 
-[http://docs.monibuca.com/en](http://docs.monibuca.com/en).
 
 中文文档：
 [http://docs.monibuca.com](http://docs.monibuca.com).
@@ -83,7 +82,7 @@ to submit your own plugin
 
 wechat group:
 
-![wechat](https://monibuca.com/wechat.png?t=6.1)
+![wechat](https://monibuca.com/wechat.jpg?t=6.7)
 
 # Q&A
 
