@@ -1,7 +1,9 @@
 
 <h2 align="center">
 <img src="https://monibuca.com/img/logo.b5357057.png"></h2>
+## Stargazers over time
 
+[![Stargazers over time](https://starchart.cc/langhuihui/monibuca.svg)](https://starchart.cc/langhuihui/monibuca)
 # Introduction
 
 🧩 Monibuca is a Modularized, Extensible framework for building Streaming Server. 
@@ -82,7 +84,7 @@ to submit your own plugin
 
 wechat group:
 
-![wechat](https://monibuca.com/wechat.jpg?t=6.7)
+![wechat](https://monibuca.com/wechat.png?t=6.14)
 
 # Q&A
 
