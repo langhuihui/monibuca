@@ -38,6 +38,8 @@ github.com/Monibuca/plugin-jessica v1.2.5 h1:jsV+3LyWp85FTV6FO5mVhWoHBF5ycc0ugJM
 github.com/Monibuca/plugin-jessica v1.2.5/go.mod h1:EFZD98+ZDQYmROOgYgZ0tz31Y9UKiYXbsiPI2xUpVNQ=
 github.com/Monibuca/plugin-jessica v1.2.6 h1:tT4srbl9rGe9s+0yN5dPOwwzi7f+jUSpUgdGBil42QI=
 github.com/Monibuca/plugin-jessica v1.2.6/go.mod h1:EFZD98+ZDQYmROOgYgZ0tz31Y9UKiYXbsiPI2xUpVNQ=
+github.com/Monibuca/plugin-jessica v1.2.7 h1:dTH4kW/wasvOqeiLdrp/tNfp4S1dpkSNPdyIUaWD8B8=
+github.com/Monibuca/plugin-jessica v1.2.7/go.mod h1:EFZD98+ZDQYmROOgYgZ0tz31Y9UKiYXbsiPI2xUpVNQ=
 github.com/Monibuca/plugin-logrotate v1.2.3 h1:Q3V4VrN8fVUQnN+RIP+wn/+ZrZ/cu8xM5rTeIg74QVM=
 github.com/Monibuca/plugin-logrotate v1.2.3/go.mod h1:bo2zR3H2CuyN2+dbsnZ6IvM+NT87r9H2RptVyyxkvTY=
 github.com/Monibuca/plugin-record v1.0.2 h1:DUmWNYFfXc7OeGq5nEFy+TIwmluS2SLa4XJrjDdV4Tg=
@@ -291,6 +293,7 @@ github.com/stretchr/testify v1.5.1 h1:nOGnQDM7FYENwehXlg/kFVnos3rEvtKTjRvOWSzb6H
 github.com/stretchr/testify v1.5.1/go.mod h1:5W2xD1RspED5o8YsWQXVCued0rvSQ+mT+I5cxcmMvtA=
 github.com/stretchr/testify v1.6.0 h1:jlIyCplCJFULU/01vCkhKuTyc3OorI3bJFuw6obfgho=
 github.com/stretchr/testify v1.6.0/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
+github.com/stretchr/testify v1.6.1 h1:hDPOHmpOpP40lSULcqw7IrRb/u7w6RpDC9399XyoNd0=
 github.com/stretchr/testify v1.6.1/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
 github.com/tarm/serial v0.0.0-20180830185346-98f6abe2eb07/go.mod h1:kDXzergiv9cbyO7IOYJZWg1U88JhDg3PB6klq9Hg2pA=
 github.com/teris-io/shortid v0.0.0-20171029131806-771a37caa5cf h1:Z2X3Os7oRzpdJ75iPqWZc0HeJWFYNCvKsfpQwFpRNTA=

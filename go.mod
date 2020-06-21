@@ -8,7 +8,7 @@ require (
 	github.com/Monibuca/plugin-gateway v1.2.5
 	github.com/Monibuca/plugin-hdl v1.2.2
 	github.com/Monibuca/plugin-hls v1.1.0
-	github.com/Monibuca/plugin-jessica v1.2.6
+	github.com/Monibuca/plugin-jessica v1.2.7
 	github.com/Monibuca/plugin-logrotate v1.2.3
 	github.com/Monibuca/plugin-record v1.0.3
 	github.com/Monibuca/plugin-rtmp v1.2.2
