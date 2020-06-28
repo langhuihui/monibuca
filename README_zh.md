@@ -49,7 +49,7 @@ bash <(curl -s -S -L https://monibuca.com/demo.sh)
 
 # 交流微信群
 
-![交流微信群](https://monibuca.com/wechat.jpg?t=6.21)
+![交流微信群](https://monibuca.com/wechat.jpg?t=6.28)
 
 # Q&A
 

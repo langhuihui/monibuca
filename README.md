@@ -1,6 +1,6 @@
 
 <h2 align="center">
-<img src="https://monibuca.com/img/logo.b5357057.png"></h2>
+<img src="https://monibuca.com/img/logo.089ef700.png"></h2>
 ## Stargazers over time
 
 [![Stargazers over time](https://starchart.cc/langhuihui/monibuca.svg)](https://starchart.cc/langhuihui/monibuca)
@@ -84,7 +84,7 @@ to submit your own plugin
 
 wechat group:
 
-![wechat](https://monibuca.com/wechat.jpg?t=6.21)
+![wechat](https://monibuca.com/wechat.jpg?t=6.28)
 
 # Q&A
 
