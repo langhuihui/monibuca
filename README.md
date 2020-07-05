@@ -50,7 +50,7 @@ to submit your own plugin
 |[plugin-jesscia]|play multimedia stream through websocket protocol
 |[plugin-logrotate]|split log files by date or size
 |[plugin-rtp]|used by plugin-webrtc and plugin-rtsp
-|[plugin-webrtc]|webrtc protocol support. push webrtc stream to monibuca
+|[plugin-webrtc]|webrtc protocol support. push webrtc stream to monibuca or pull webrtc stream from monibuca
 
 [plugin-rtmp]: https://github.com/Monibuca/plugin-rtmp
 [plugin-rtsp]: https://github.com/Monibuca/plugin-rtsp
@@ -84,7 +84,7 @@ to submit your own plugin
 
 wechat group:
 
-![wechat](https://monibuca.com/wechat.jpg?t=6.28)
+![wechat](https://monibuca.com/wechat.jpg?t=7.5)
 
 # Q&A
 
