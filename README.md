@@ -73,7 +73,7 @@ to submit your own plugin
 |http-flv|||✔|
 |hls||✔|✔|
 |ws-flv|||✔|
-
+|webrtc|✔||✔
 # Documentation
 
 
@@ -84,7 +84,7 @@ to submit your own plugin
 
 wechat group:
 
-![wechat](https://monibuca.com/wechat.jpg?t=7.5)
+![wechat](https://monibuca.com/wechat.jpg?t=7.12)
 
 # Q&A
 

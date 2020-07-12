@@ -5,3 +5,4 @@ resource
 *.log
 /monibuca
 node_modules
+shutdown.bat
