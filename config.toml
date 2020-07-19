@@ -13,8 +13,9 @@ Path  = "resource"
 [Record]
 Path = "resource"
 [RTSP]
-AutoPublish = false
-RtspURL = "rtsp://localhost/test"
+AutoPull = false
+RemoteAddr = "rtsp://localhost/test"
+ListenAddr = ":554"
 [HLS]
 EnableWrite = false
 [HDL]
