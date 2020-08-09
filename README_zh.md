@@ -49,7 +49,7 @@ bash <(curl -s -S -L https://monibuca.com/demo.sh)
 
 # 交流微信群
 
-![交流微信群](https://monibuca.com/wechat.jpg?t=8.2)
+进入网站首页上进行扫码
 
 # Q&A
 
