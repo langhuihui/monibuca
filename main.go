@@ -9,16 +9,18 @@ import (
 	"runtime"
 	"syscall"
 
-	_ "github.com/Monibuca/clusterplugin"
-	_ "github.com/Monibuca/gatewayplugin"
-	_ "github.com/Monibuca/hdlplugin"
-	_ "github.com/Monibuca/hlsplugin"
-	_ "github.com/Monibuca/jessicaplugin"
-	_ "github.com/Monibuca/logrotateplugin"
-	_ "github.com/Monibuca/recordplugin"
-	_ "github.com/Monibuca/rtmpplugin"
-	_ "github.com/Monibuca/rtspplugin"
-	_ "github.com/Monibuca/tsplugin"
+	. "github.com/Monibuca/engine/v2"
+	_ "github.com/Monibuca/plugin-cluster"
+	_ "github.com/Monibuca/plugin-gateway"
+	_ "github.com/Monibuca/plugin-hdl"
+	_ "github.com/Monibuca/plugin-hls"
+	_ "github.com/Monibuca/plugin-jessica"
+	_ "github.com/Monibuca/plugin-logrotate"
+	_ "github.com/Monibuca/plugin-record"
+	_ "github.com/Monibuca/plugin-rtmp"
+	_ "github.com/Monibuca/plugin-rtsp"
+	_ "github.com/Monibuca/plugin-ts"
+	_ "github.com/Monibuca/plugin-webrtc"
 )
 
 func main() {
@@ -26,8 +28,8 @@ func main() {
 	flag.Parse()
 	if *addr == "" {
 		_, currentFile, _, _ := runtime.Caller(0)
-		configFIle := filepath.Join(filepath.Dir(currentFile), "config.toml")
-		Run(configFIle)
+		configFile := filepath.Join(filepath.Dir(currentFile), "config.toml")
+		Run(configFile)
 	} else {
 		Run(*addr)
 	}

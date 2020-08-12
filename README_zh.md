@@ -6,6 +6,11 @@
 
 [http://docs.monibuca.com](http://docs.monibuca.com)
 
+# 文章
+
+[重新定义流媒体服务器](https://www.infoq.cn/article/uiPl8dIuQmhipKb3q3Tz)
+[直播回顾](https://live.oschina.net/detail/l_5ec359168fca5_6CA0rArq/4?fromH5=true)
+
 # 核心代码库和插件代码库
 
 [https://github.com/Monibuca](https://github.com/Monibuca)
@@ -44,7 +49,7 @@ bash <(curl -s -S -L https://monibuca.com/demo.sh)
 
 # 交流微信群
 
-![交流微信群](https://monibuca.com/wechat.png?t=4.30)
+进入网站首页上进行扫码
 
 # Q&A
 
