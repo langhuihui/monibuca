@@ -1,9 +1,13 @@
 package main
 
 import (
+	"context"
 	"flag"
+	"os"
+	"os/signal"
 	"path/filepath"
 	"runtime"
+	"syscall"
 
 	. "github.com/Monibuca/engine/v2"
 	_ "github.com/Monibuca/plugin-cluster"
@@ -29,5 +33,13 @@ func main() {
 	} else {
 		Run(*addr)
 	}
-	select {}
+	waiter(context.Background())
+}
+
+func waiter(ctx context.Context) {
+	sigc := make(chan os.Signal, 1)
+	signal.Notify(sigc, syscall.SIGINT, syscall.SIGTERM)
+	defer signal.Stop(sigc)
+	<-sigc
+	ctx.Done()
 }
