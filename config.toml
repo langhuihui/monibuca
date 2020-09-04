@@ -21,3 +21,4 @@ EnableWrite = false
 [HDL]
 ListenAddr = ":2020"
 [WebRTC]
+PublicIP = "127.0.0.1"
