@@ -21,6 +21,7 @@ import (
 	_ "github.com/Monibuca/plugin-rtsp"
 	_ "github.com/Monibuca/plugin-ts"
 	_ "github.com/Monibuca/plugin-webrtc"
+	_ "github.com/Monibuca/plugin-gb28181"
 )
 
 func main() {

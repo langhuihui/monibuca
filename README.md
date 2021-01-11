@@ -50,6 +50,7 @@ to submit your own plugin
 |[plugin-logrotate]|split log files by date or size
 |[plugin-rtp]|used by plugin-webrtc and plugin-rtsp
 |[plugin-webrtc]|webrtc protocol support. push webrtc stream to monibuca or pull webrtc stream from monibuca
+|[plugin-gb28181]|gb28181 protocol support.
 
 [plugin-rtmp]: https://github.com/Monibuca/plugin-rtmp
 [plugin-rtsp]: https://github.com/Monibuca/plugin-rtsp
@@ -63,7 +64,7 @@ to submit your own plugin
 [plugin-logrotate]:https://github.com/Monibuca/plugin-logrotate
 [plugin-rtp]:https://github.com/Monibuca/plugin-rtp
 [plugin-webrtc]:https://github.com/Monibuca/plugin-webrtc
-
+[plugin-gb28181]:https://github.com/Monibuca/plugin-gb28181
 # Protocol Functions
 | Protocol | Pusher（push）-->Monibuca  |Source-->Monibuca（pull）|Monibuca-->Player（pull）|Monibuca（push）-->Other Server
 |---------| -------------|-------------| -------------|-------------|

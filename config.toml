@@ -1,24 +1,85 @@
+[Monibuca]
+# 是否等待流，如果为true则订阅一个尚未发布的流会进入等待发布的状态，否则返回订阅失败
+EnableWaitStream = true
+EnableAudio = true
+EnableVideo = true
+# 缓冲环大小默认是2的10次方
+RingSize = 10
+# 发布流默认过期时间 1分钟
+PublishTimeout = 60000000000
 [RTMP]
 ListenAddr = ":1935"
 [GateWay]
 ListenAddr = ":8081"
+#ListenAddrTLS = ":8082"
+#CertFile = "xxx.cert"
+#KeyFile = "xxx.key"
 [Jessica]
 ListenAddr = ":8080"
+#ListenAddrTLS = ":8083"
+#CertFile = "xxx.cert"
+#KeyFile = "xxx.key"
 [LogRotate]
+# 日志存储目录相对或绝对
 Path = "logs"
+# 日志是否按大小分割，0表示不按大小分割，非零代表按该大小字节进行分割
+Size = 0
+Days = 1
 [Cluster]
+# 监听端口代表该服务器为源服务器
 ListenAddr = ":2019"
+# 源服务器地址，用于向源服务器进行推或拉流
+OriginServer = ""
+# 推送模式，true表示如果此服务器有发布流，就会推送到源服务器，否则表示拉模式，即如果此服务器有订阅流则从源服务器拉流
+Push = true
+[HLS]
+# 是否开启写磁盘，开启后侦测到发布流就会开始写TS文件
+EnableWrite = false
+# 是否打开内存模式，在内存中保留TS数据，方便直接读取
+EnableMemory = false
+# 分片大小 单位秒
+Fragment = 10
+# 窗口数里，代表一个m3u8文件里面有几个ts
+Window = 2
+# ts文件存放目录，m3u8会存放在上一级
+Path = "resource"
+[HDL]
+ListenAddr = ":2020"
+#ListenAddrTLS = ":2021"
+#CertFile = "xxx.cert"
+#KeyFile = "xxx.key"
 [TS]
+# 是否自动发布，开启后一旦有订阅流就会读取ts文件进行发布，方便测试
+AutoPublish = false
+# ts存放目录
 Path  = "resource"
 [Record]
 Path = "resource"
+# 是否自动发布，开启后一旦有订阅流就会读取flv文件进行发布，方便测试
+AutoPublish = false
+# 自动录制功能
+AutoRecord  = false
 [RTSP]
-AutoPull = false
-RemoteAddr = "rtsp://localhost/test"
+# 端口接收推流
 ListenAddr = ":554"
-[HLS]
-EnableWrite = false
-[HDL]
-ListenAddr = ":2020"
+# 开启自动拉流后，一旦有订阅流，就会从RemoteAddr进行拉流
+AutoPull = false
+Reconnect = true
+# 远程地址配合AutoPull配置起作用
+RemoteAddr = "rtsp://admin:admin@192.168.1.212:554/cam/realmonitor?channel=1&subtype=1"
+# 发布流的名称配合AutoPull配置起作用 远程拉流后在本地起的流名称
+StreamPath = "live/rtsp"
+#[[RTSP.AutoPullList]]
+#URL = "rtsp://admin:admin@192.168.1.212:554/cam/realmonitor?channel=1&subtype=1"
+#StreamPath = "live/rtsp2"
 [WebRTC]
-PublicIP = "127.0.0.1"
+# 公网IP地址
+PublicIP = ["127.0.0.1"]
+# 端口范围不配置的话是自动分配
+# PortMin = 30000
+# PortMax = 40000
+[GB28181]
+Serial = "34020000002000000001"
+Realm = "3402000000"
+Expires = 3600
+ListenAddr = "192.168.1.120:5060"
