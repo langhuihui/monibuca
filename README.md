@@ -14,7 +14,7 @@
 
 ## Go has not been installed
 ```
-bash <(curl -s -S -L https://monibuca.com/demo.sh) 
+bash <(curl -s -S -L https://monibuca.com/go.sh)
 ```
 ## Go is already installed
 
@@ -25,9 +25,15 @@ bash <(curl -s -S -L https://monibuca.com/demo.sh)
 
 # Advanced
 
-1. go get github.com/Monibuca/monica
-2. $GOPATH/bin/monica
-3. open your browser http://localhost:8000
+## Nodejs has not been installed
+```
+bash <(curl -s -S -L https://monibuca.com/monica.sh)
+```
+
+## Nodejs is already installed
+1. npm i -g @langhuihui/monica
+2. monica
+3. open your browser http://localhost:3000
 4. follow the guide to create your project
 
 # Ecosystem
