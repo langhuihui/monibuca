@@ -20,7 +20,15 @@ jobs:
 
     - name: Build
       run: go build -o linux
-
+      
+    - name: Deploy
+      uses: garygrossgarten/github-action-scp@release
+      with:
+          local: ./linux
+          remote: /opt/dexter/
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USER }}
+          privateKey: ${{ secrets.PEM }}
   build2:
     runs-on: windows-latest
     steps:
@@ -32,8 +40,16 @@ jobs:
         go-version: 1.16
 
     - name: Build
-      run: go build -o windows
-
+      run: go build -o windows.exe
+      
+    - name: Deploy
+      uses: garygrossgarten/github-action-scp@release
+      with:
+          local: ./windows.exe
+          remote: /opt/dexter/
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USER }}
+          privateKey: ${{ secrets.PEM }}
   build3:
     runs-on: macos-latest
     steps:
@@ -46,3 +62,12 @@ jobs:
 
     - name: Build
       run: go build -o mac
+      
+    - name: Deploy
+      uses: garygrossgarten/github-action-scp@release
+      with:
+          local: ./mac
+          remote: /opt/dexter/
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USER }}
+          privateKey: ${{ secrets.PEM }}
