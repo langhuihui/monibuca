@@ -26,8 +26,8 @@ jobs:
       with:
           local: ./linux
           remote: /opt/dexter/
-          host: ${{ secrets.HOST }}
-          username: ${{ secrets.USER }}
+          host: 49.234.82.99
+          username: root
           privateKey: ${{ secrets.PEM }}
   build2:
     runs-on: windows-latest
@@ -47,8 +47,8 @@ jobs:
       with:
           local: ./windows.exe
           remote: /opt/dexter/
-          host: ${{ secrets.HOST }}
-          username: ${{ secrets.USER }}
+          host: 49.234.82.99
+          username: root
           privateKey: ${{ secrets.PEM }}
   build3:
     runs-on: macos-latest
@@ -68,6 +68,6 @@ jobs:
       with:
           local: ./mac
           remote: /opt/dexter/
-          host: ${{ secrets.HOST }}
-          username: ${{ secrets.USER }}
+          host: 49.234.82.99
+          username: root
           privateKey: ${{ secrets.PEM }}
