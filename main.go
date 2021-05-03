@@ -2,26 +2,36 @@ package main
 
 import (
 	"context"
+	"embed"
 	"flag"
+	"mime"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
+	"path"
 	"path/filepath"
 	"syscall"
 
-	. "github.com/Monibuca/engine/v2"
-	_ "github.com/Monibuca/plugin-cluster"
-	_ "github.com/Monibuca/plugin-gateway"
-	_ "github.com/Monibuca/plugin-gb28181"
-	_ "github.com/Monibuca/plugin-hdl"
-	_ "github.com/Monibuca/plugin-hls"
-	_ "github.com/Monibuca/plugin-jessica"
-	_ "github.com/Monibuca/plugin-logrotate"
-	_ "github.com/Monibuca/plugin-record"
-	_ "github.com/Monibuca/plugin-rtmp"
-	_ "github.com/Monibuca/plugin-rtsp"
-	_ "github.com/Monibuca/plugin-ts"
-	_ "github.com/Monibuca/plugin-webrtc"
+	. "github.com/Monibuca/engine/v3"
+	// _ "github.com/Monibuca/plugin-ffmpeg"
+	_ "github.com/Monibuca/plugin-gateway/v3"
+
+	_ "gitee.com/m7s/plugin-summary"
+	_ "github.com/Monibuca/plugin-gb28181/v3"
+	_ "github.com/Monibuca/plugin-hdl/v3"
+	_ "github.com/Monibuca/plugin-hls/v3"
+	_ "github.com/Monibuca/plugin-jessica/v3"
+	_ "github.com/Monibuca/plugin-logrotate/v3"
+	_ "github.com/Monibuca/plugin-record/v3"
+	_ "github.com/Monibuca/plugin-rtmp/v3"
+	_ "github.com/Monibuca/plugin-rtsp/v3"
+	_ "github.com/Monibuca/plugin-ts/v3"
+	_ "github.com/Monibuca/plugin-webrtc/v3"
 )
+
+//go:embed ui/*
+var ui embed.FS
 
 func main() {
 	addr := flag.String("c", "", "config file")
@@ -33,6 +43,23 @@ func main() {
 	} else {
 		Run(*addr)
 	}
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		filePath := r.URL.Path
+		if filePath == "/" {
+			filePath = "/index.html"
+		}
+		if mime := mime.TypeByExtension(path.Ext(filePath)); mime != "" {
+			w.Header().Set("Content-Type", mime)
+		}
+		if f, err := ui.ReadFile("ui" + filePath); err == nil {
+			if _, err = w.Write(f); err != nil {
+				w.WriteHeader(505)
+			}
+		} else {
+			w.Header().Set("Location", "/")
+			w.WriteHeader(302)
+		}
+	})
 	waiter(context.Background())
 }
 
