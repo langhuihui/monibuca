@@ -24,7 +24,7 @@ jobs:
     - name: Deploy
       uses: garygrossgarten/github-action-scp@release
       with:
-          local: linux
+          local: /home/runner/work/monibuca/monibuca/linux
           remote: /opt/dexter/
           host: 49.234.82.99
           username: root
@@ -45,7 +45,7 @@ jobs:
     - name: Deploy
       uses: garygrossgarten/github-action-scp@release
       with:
-          local: windows.exe
+          local: /home/runner/work/monibuca/monibuca/windows.exe
           remote: /opt/dexter/
           host: 49.234.82.99
           username: root
@@ -66,7 +66,7 @@ jobs:
     - name: Deploy
       uses: garygrossgarten/github-action-scp@release
       with:
-          local: mac
+          local: /home/runner/work/monibuca/monibuca/mac
           remote: /opt/dexter/
           host: 49.234.82.99
           username: root
