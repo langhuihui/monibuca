@@ -21,6 +21,9 @@ jobs:
     - name: Build
       run: go build -o linux
       
+    - name: Echo
+      run: ls
+      
     - name: Deploy
       uses: garygrossgarten/github-action-scp@release
       with:
