@@ -28,7 +28,7 @@ jobs:
       uses: garygrossgarten/github-action-scp@release
       with:
           local: /home/runner/work/monibuca/monibuca/linux
-          remote: /opt/dexter
+          remote: /opt/dexter/linux
           host: 49.234.82.99
           username: root
           privateKey: ${{ secrets.PEM }}
@@ -49,7 +49,7 @@ jobs:
       uses: garygrossgarten/github-action-scp@release
       with:
           local: /home/runner/work/monibuca/monibuca/windows.exe
-          remote: /opt/dexter
+          remote: /opt/dexter/windows.exe
           host: 49.234.82.99
           username: root
           privateKey: ${{ secrets.PEM }}
@@ -70,7 +70,7 @@ jobs:
       uses: garygrossgarten/github-action-scp@release
       with:
           local: /home/runner/work/monibuca/monibuca/mac
-          remote: /opt/dexter
+          remote: /opt/dexter/mac
           host: 49.234.82.99
           username: root
           privateKey: ${{ secrets.PEM }}
