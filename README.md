@@ -18,23 +18,10 @@ bash <(curl -s -S -L https://monibuca.com/go.sh)
 ```
 ## Go is already installed
 
-1. go get github.com/langhuihui/monibuca
-2. $GOPATH/bin/monibuca
-3. open your browser http://localhost:8081
+1. git clone https://github.com/langhuihui/monibuca
+2. go build && ./monibuca
+3. open your browser http://localhost:8080
 4. use ffmpeg or OBS to push video streaming to rtmp://localhost/live/user1
-
-# Advanced
-
-## Nodejs has not been installed
-```
-bash <(curl -s -S -L https://monibuca.com/monica.sh)
-```
-
-## Nodejs is already installed
-1. npm i -g @langhuihui/monica
-2. monica
-3. open your browser http://localhost:3000
-4. follow the guide to create your project
 
 # Ecosystem
 
