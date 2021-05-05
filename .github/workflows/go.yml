@@ -21,15 +21,15 @@ jobs:
     - name: Build
       run: go build -o linux
       
-    - name: Echo
-      run: ls /home/runner/work/monibuca/monibuca
+    - name: Tar
+      run: tar -zcvf linux.tgz linux config.toml
       
     - name: Deploy
       uses: garygrossgarten/github-action-scp@release
       with:
-          local: /home/runner/work/monibuca/monibuca/linux
-          remote: /opt/dexter/linux
-          host: 49.234.82.99
+          local: /home/runner/work/monibuca/monibuca/linux.tgz
+          remote: /opt/dexter/linux.tgz
+          host: monibuca.com
           username: root
           privateKey: ${{ secrets.PEM }}
   build2:
@@ -44,13 +44,16 @@ jobs:
 
     - name: Build
       run: go build -o windows.exe
+            
+    - name: Tar
+      run: tar -zcvf windows.tgz windows.exe config.toml
       
     - name: Deploy
       uses: garygrossgarten/github-action-scp@release
       with:
-          local: D:\\a\\monibuca\\monibuca\\windows.exe
-          remote: /opt/dexter/windows.exe
-          host: 49.234.82.99
+          local: D:\\a\\monibuca\\monibuca\\windows.tgz
+          remote: /opt/dexter/windows.tgz
+          host: monibuca.com
           username: root
           privateKey: ${{ secrets.PEM }}
   build3:
@@ -65,12 +68,15 @@ jobs:
 
     - name: Build
       run: go build -o mac
-      
+
+    - name: Tar
+      run: tar -zcvf mac.tgz mac config.toml
+
     - name: Deploy
       uses: garygrossgarten/github-action-scp@release
       with:
-          local: /Users/runner/work/monibuca/monibuca/mac
-          remote: /opt/dexter/mac
-          host: 49.234.82.99
+          local: /Users/runner/work/monibuca/monibuca/mac.tgz
+          remote: /opt/dexter/mac.tgz
+          host: monibuca.com
           username: root
           privateKey: ${{ secrets.PEM }}
