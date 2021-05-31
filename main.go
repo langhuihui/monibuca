@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/signal"
 	"path"
-	"path/filepath"
 	"syscall"
 
 	. "github.com/Monibuca/engine/v3"
@@ -34,15 +33,9 @@ import (
 var ui embed.FS
 
 func main() {
-	addr := flag.String("c", "", "config file")
+	addr := flag.String("c", "config.toml", "config file")
 	flag.Parse()
-	if *addr == "" {
-		// _, currentFile, _, _ := runtime.Caller(0)
-		// configFile := filepath.Join(filepath.Dir(currentFile), "config.toml")
-		Run(filepath.Join(filepath.Dir(os.Args[0]), "config.toml"))
-	} else {
-		Run(*addr)
-	}
+	Run(*addr)
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		filePath := r.URL.Path
 		if filePath == "/" {
