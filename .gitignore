@@ -6,3 +6,4 @@ resource
 /monibuca
 node_modules
 shutdown.bat
+shutdown.sh
