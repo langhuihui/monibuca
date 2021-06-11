@@ -5,7 +5,7 @@ go 1.16
 require (
 	github.com/Monibuca/engine/v3 v3.0.0-beta2
 	github.com/Monibuca/plugin-gateway/v3 v3.0.0-20210603100556-8d1f5cdb760d
-	github.com/Monibuca/plugin-gb28181/v3 v3.0.0-20210603001123-a527903825f6
+	github.com/Monibuca/plugin-gb28181/v3 v3.0.0-20210606124746-6b193a420840
 	github.com/Monibuca/plugin-hdl/v3 v3.0.0-20210306092517-1744441d54dc
 	github.com/Monibuca/plugin-hls/v3 v3.0.0-20210224011457-4809f7d8f430
 	github.com/Monibuca/plugin-jessica/v3 v3.0.0-20210306092459-09d5bc345d42
@@ -18,8 +18,8 @@ require (
 	github.com/Monibuca/plugin-webrtc/v3 v3.0.0-20210505010613-bee79ab76097
 	github.com/pion/webrtc/v3 v3.0.29 // indirect
 	golang.org/x/crypto v0.0.0-20210513164829-c07d793c2f9a // indirect
-	golang.org/x/net v0.0.0-20210525063256-abc453219eb5 // indirect
+	golang.org/x/net v0.0.0-20210610132358-84b48f89b13b // indirect
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c // indirect
-	golang.org/x/sys v0.0.0-20210603125802-9665404d3644 // indirect
+	golang.org/x/sys v0.0.0-20210608053332-aa57babbf139 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
 )

@@ -24,6 +24,8 @@ github.com/Monibuca/plugin-gb28181/v3 v3.0.0-20210601145033-bb0209fed9ae h1:QFff
 github.com/Monibuca/plugin-gb28181/v3 v3.0.0-20210601145033-bb0209fed9ae/go.mod h1:NkjwIBgq1oQy3wcqdIRTIVQ5Iw+LaQIYcrdTzm+n3oY=
 github.com/Monibuca/plugin-gb28181/v3 v3.0.0-20210603001123-a527903825f6 h1:JhktlQM8Zrp8vqkM3YQbgG60J2AsLz22C4uozcWhCDY=
 github.com/Monibuca/plugin-gb28181/v3 v3.0.0-20210603001123-a527903825f6/go.mod h1:NkjwIBgq1oQy3wcqdIRTIVQ5Iw+LaQIYcrdTzm+n3oY=
+github.com/Monibuca/plugin-gb28181/v3 v3.0.0-20210606124746-6b193a420840 h1:34tB66mTAMLeS2CrNsc4MbvkLJfspuOwYjoqRf83JLw=
+github.com/Monibuca/plugin-gb28181/v3 v3.0.0-20210606124746-6b193a420840/go.mod h1:NkjwIBgq1oQy3wcqdIRTIVQ5Iw+LaQIYcrdTzm+n3oY=
 github.com/Monibuca/plugin-hdl/v3 v3.0.0-20210306092517-1744441d54dc h1:j3bAayAknzvmMj97LlR5syOWbeXqZH1KQyrlYabowLc=
 github.com/Monibuca/plugin-hdl/v3 v3.0.0-20210306092517-1744441d54dc/go.mod h1:dBonBDQ4cN2ZQhLy6O/ibJQxawgUnvdZyRkos8OERuw=
 github.com/Monibuca/plugin-hls/v3 v3.0.0-20210224011457-4809f7d8f430 h1:uV2pLLxSZiTqQDKW5GxRIAFMnX3GgJaYNL8FvrgX3lA=
@@ -190,6 +192,8 @@ golang.org/x/net v0.0.0-20210420210106-798c2154c571/go.mod h1:72T/g9IO56b78aLF+1
 golang.org/x/net v0.0.0-20210508051633-16afe75a6701/go.mod h1:9nx3DQGgdP8bBQD5qxJ1jj9UTztislL4KSBs9R2vV5Y=
 golang.org/x/net v0.0.0-20210525063256-abc453219eb5 h1:wjuX4b5yYQnEQHzd+CBcrcC6OVR2J1CN6mUy0oSxIPo=
 golang.org/x/net v0.0.0-20210525063256-abc453219eb5/go.mod h1:9nx3DQGgdP8bBQD5qxJ1jj9UTztislL4KSBs9R2vV5Y=
+golang.org/x/net v0.0.0-20210610132358-84b48f89b13b h1:k+E048sYJHyVnsr1GDrRZWQ32D2C7lWs9JRc0bel53A=
+golang.org/x/net v0.0.0-20210610132358-84b48f89b13b/go.mod h1:9nx3DQGgdP8bBQD5qxJ1jj9UTztislL4KSBs9R2vV5Y=
 golang.org/x/sync v0.0.0-20180314180146-1d60e4601c6f/go.mod h1:RxMgew5VJxzue5/jJTE5uejpjVlOe/izrB70Jof72aM=
 golang.org/x/sync v0.0.0-20190423024810-112230192c58/go.mod h1:RxMgew5VJxzue5/jJTE5uejpjVlOe/izrB70Jof72aM=
 golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9/go.mod h1:RxMgew5VJxzue5/jJTE5uejpjVlOe/izrB70Jof72aM=
@@ -222,6 +226,8 @@ golang.org/x/sys v0.0.0-20210601080250-7ecdf8ef093b h1:qh4f65QIVFjq9eBURLEYWqaEX
 golang.org/x/sys v0.0.0-20210601080250-7ecdf8ef093b/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 golang.org/x/sys v0.0.0-20210603125802-9665404d3644 h1:CA1DEQ4NdKphKeL70tvsWNdT5oFh1lOjihRcEDROi0I=
 golang.org/x/sys v0.0.0-20210603125802-9665404d3644/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
+golang.org/x/sys v0.0.0-20210608053332-aa57babbf139 h1:C+AwYEtBp/VQwoLntUmQ/yx3MS9vmZaKNdw5eOpoQe8=
+golang.org/x/sys v0.0.0-20210608053332-aa57babbf139/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 golang.org/x/term v0.0.0-20201126162022-7de9c90e9dd1/go.mod h1:bj7SfCRtBDWHUb9snDiAeCFNEtKQo2Wmx5Cou7ajbmo=
 golang.org/x/text v0.3.0/go.mod h1:NqM8EUOU14njkJ3fqMW+pc6Ldnwhi/IjpwHt7yyuwOQ=
 golang.org/x/text v0.3.3/go.mod h1:5Zoc/QRtKVWzQhOtBMvqHzDpF6irO9z98xDceosuGiQ=
