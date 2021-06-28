@@ -3,15 +3,15 @@ module github.com/langhuihui/monibuca
 go 1.16
 
 require (
-	github.com/Monibuca/engine/v3 v3.0.2
+	github.com/Monibuca/engine/v3 v3.0.3
 	github.com/Monibuca/plugin-gateway/v3 v3.0.0-20210616163424-37db18ab9df2
-	github.com/Monibuca/plugin-gb28181/v3 v3.0.0-20210626145501-8c248fc0c003
+	github.com/Monibuca/plugin-gb28181/v3 v3.0.0-20210628080504-609b9d0f9ae0
 	github.com/Monibuca/plugin-hdl/v3 v3.0.0-20210615000534-c2fce27753fb
 	github.com/Monibuca/plugin-hls/v3 v3.0.0-20210615000624-9d962270da28
 	github.com/Monibuca/plugin-jessica/v3 v3.0.0-20210615000517-d850678d9886
 	github.com/Monibuca/plugin-logrotate/v3 v3.0.0-20210306092538-eb6c45576107
-	github.com/Monibuca/plugin-record/v3 v3.0.0-20210624074443-ead7f0ac39c8
-	github.com/Monibuca/plugin-rtmp/v3 v3.0.0-20210620133342-cb2ee86b6808
+	github.com/Monibuca/plugin-record/v3 v3.0.0-20210627073137-e55ed2f0aaba
+	github.com/Monibuca/plugin-rtmp/v3 v3.0.0-20210628134953-a60267f608ce
 	github.com/Monibuca/plugin-rtsp/v3 v3.0.0-20210624092920-ba9f39853fc3
 	github.com/Monibuca/plugin-summary v0.0.0-20210615000407-2786546820de
 	github.com/Monibuca/plugin-ts/v3 v3.0.0-20210615000458-7578bc0b3a6e
