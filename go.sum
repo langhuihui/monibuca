@@ -16,6 +16,8 @@ github.com/Monibuca/plugin-gb28181/v3 v3.0.0-20210626145501-8c248fc0c003 h1:xQWz
 github.com/Monibuca/plugin-gb28181/v3 v3.0.0-20210626145501-8c248fc0c003/go.mod h1:WbbHyzH+mNoL5I1hCsP9nijUqjW5X+4Xlxdu15+Ne18=
 github.com/Monibuca/plugin-gb28181/v3 v3.0.0-20210628080504-609b9d0f9ae0 h1:1dxdMEH+RhAF2Pv2k/lwGriJEpmU6+pK/zSh6nzDs4s=
 github.com/Monibuca/plugin-gb28181/v3 v3.0.0-20210628080504-609b9d0f9ae0/go.mod h1:WbbHyzH+mNoL5I1hCsP9nijUqjW5X+4Xlxdu15+Ne18=
+github.com/Monibuca/plugin-gb28181/v3 v3.0.0-20210629055419-5682750723f4 h1:MFRhtwrWcKo6mG0g0RHSVWbNcTeqhnctL0R0N7JdrW0=
+github.com/Monibuca/plugin-gb28181/v3 v3.0.0-20210629055419-5682750723f4/go.mod h1:WbbHyzH+mNoL5I1hCsP9nijUqjW5X+4Xlxdu15+Ne18=
 github.com/Monibuca/plugin-hdl/v3 v3.0.0-20210615000534-c2fce27753fb h1:yfG/CLkgKj3KBdHT0zU/ylHRqelgIN80uD8V+uScOcU=
 github.com/Monibuca/plugin-hdl/v3 v3.0.0-20210615000534-c2fce27753fb/go.mod h1:dhqePAjm3xy3mglP0onH448+1NwkX7FuClbf8cavhB8=
 github.com/Monibuca/plugin-hls/v3 v3.0.0-20210615000624-9d962270da28 h1:9B+yOco02kexooklv2f6j7iZZlTEna8LylHNL7+N+qM=

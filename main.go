@@ -4,6 +4,7 @@ import (
 	"context"
 	"embed"
 	"flag"
+	"log"
 	"mime"
 	"net/http"
 	_ "net/http/pprof"
@@ -11,6 +12,7 @@ import (
 	"os/signal"
 	"path"
 	"path/filepath"
+	"runtime/trace"
 	"syscall"
 
 	. "github.com/Monibuca/engine/v3"
@@ -35,6 +37,17 @@ var ui embed.FS
 
 func main() {
 	addr := flag.String("c", "config.toml", "config file")
+	traceProfile := flag.String("traceprofile", "", "write trace profile to file")
+	flag.Parse()
+	if *traceProfile != "" {
+		f, err := os.Create(*traceProfile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		trace.Start(f)
+		defer f.Close()
+		defer trace.Stop()
+	}
 	if _, err := os.Stat(*addr); err == nil {
 		Run(*addr)
 	} else {
