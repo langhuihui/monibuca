@@ -4,6 +4,8 @@ EnableVideo = true
 # 发布流默认过期时间 1分钟
 PublishTimeout = 60000000000
 [Summary]
+# 1秒中采样一次
+SampleRate = 1
 [RTMP]
 ListenAddr = ":1935"
 [GateWay]
@@ -22,6 +24,8 @@ Path = "logs"
 # 日志是否按大小分割，0表示不按大小分割，非零代表按该大小字节进行分割
 Size = 0
 Days = 1
+# 按照go layout格式化，默认按照小时
+Formatter = "2006-01-02T15"
 #[Cluster]
 # 监听端口代表该服务器为源服务器
 #ListenAddr = ":2019"
@@ -46,26 +50,17 @@ Path = "resource"
 #CertFile = "xxx.cert"
 #KeyFile = "xxx.key"
 [TS]
-# 是否自动发布，开启后一旦有订阅流就会读取ts文件进行发布，方便测试
-AutoPublish = false
 # ts存放目录
 Path  = "resource"
 [Record]
 Path = "resource"
-# 是否自动发布，开启后一旦有订阅流就会读取flv文件进行发布，方便测试
-AutoPublish = false
 # 自动录制功能
 AutoRecord  = false
 [RTSP]
 # 端口接收推流
 ListenAddr = ":554"
-# 开启自动拉流后，一旦有订阅流，就会从RemoteAddr进行拉流
-AutoPull = false
 Reconnect = true
-# 远程地址配合AutoPull配置起作用
-RemoteAddr = "rtsp://admin:admin@192.168.1.212:554/cam/realmonitor?channel=1&subtype=1"
-# 发布流的名称配合AutoPull配置起作用 远程拉流后在本地起的流名称
-StreamPath = "live/rtsp"
+#启动后自动拉流，可以配置多个
 #[[RTSP.AutoPullList]]
 #URL = "rtsp://admin:admin@192.168.1.212:554/cam/realmonitor?channel=1&subtype=1"
 #StreamPath = "live/rtsp2"
@@ -73,8 +68,14 @@ StreamPath = "live/rtsp"
 # 端口范围不配置的话是自动分配
 # PortMin = 30000
 # PortMax = 40000
+# 公网访问必须配置PublicIP，否则无法建立连接
+# PublicIP = ["192.168.1.120"]
 [GB28181]
 Serial = "34020000002000000001"
 Realm = "3402000000"
 Expires = 3600
 ListenAddr = "192.168.1.120:5060"
+# 自动停止发布，当订阅者数量将为0时，自动断开
+AutoUnPublish = true
+# 自动拉流，如果开启，则拿到设备注册信息后，就从设备拉流
+AutoInvite = false
