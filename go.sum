@@ -5,12 +5,18 @@ github.com/Monibuca/engine/v3 v3.0.0-beta5/go.mod h1:SMgnlwih4pBA/HkTLjKXZFYkv3u
 github.com/Monibuca/engine/v3 v3.1.0/go.mod h1:yz6cssED2VlYu+g/LrxseBB9pcvsLM/o2QXa4gVY650=
 github.com/Monibuca/engine/v3 v3.1.1 h1:UZXvAsFO/5Tae6rN42Wppa+UOMxfPcy3erCpPWV+TQY=
 github.com/Monibuca/engine/v3 v3.1.1/go.mod h1:yz6cssED2VlYu+g/LrxseBB9pcvsLM/o2QXa4gVY650=
+github.com/Monibuca/engine/v3 v3.1.2 h1:1F/8VlvscQSfLWFigR/x8RDf1jnwzTFSY96khb9tOQ4=
+github.com/Monibuca/engine/v3 v3.1.2/go.mod h1:yz6cssED2VlYu+g/LrxseBB9pcvsLM/o2QXa4gVY650=
 github.com/Monibuca/plugin-gateway/v3 v3.0.0-20210710101042-5f38cd82b217 h1:Zx1/5wHciMVtZXF40MjplBOwo6vo1vADMKykWNVCSFw=
 github.com/Monibuca/plugin-gateway/v3 v3.0.0-20210710101042-5f38cd82b217/go.mod h1:sAeY1sHWQmWGMopvUvY7hW+wwuXqdQVP1CIEfHqMD5I=
 github.com/Monibuca/plugin-gb28181/v3 v3.0.0-20210710101710-aee38b50532d h1:/BpvGgumJ58f7UpKbyfE3QUzlwSpZ+c8h58KcYMDocE=
 github.com/Monibuca/plugin-gb28181/v3 v3.0.0-20210710101710-aee38b50532d/go.mod h1:GxBOdFZrlN4PmgDAK4EcfRI0k7pa6B+B+5J09OMaAC0=
+github.com/Monibuca/plugin-gb28181/v3 v3.0.0-20210711133626-518b20e145a2 h1:ObD9mFzfufiz2aXHUkvrupqBY4WzAxpWRfMJv4/CAQo=
+github.com/Monibuca/plugin-gb28181/v3 v3.0.0-20210711133626-518b20e145a2/go.mod h1:GxBOdFZrlN4PmgDAK4EcfRI0k7pa6B+B+5J09OMaAC0=
 github.com/Monibuca/plugin-hdl/v3 v3.0.0-20210710102114-03ab06cfe944 h1:C28QiscgeSbZvTQr2Z605s9xILALcR39Dy0j9Jhszxw=
 github.com/Monibuca/plugin-hdl/v3 v3.0.0-20210710102114-03ab06cfe944/go.mod h1:dEjhkQasjcZEJSgykwxWiDcjJB7etsga45/8fzBYehs=
+github.com/Monibuca/plugin-hdl/v3 v3.0.0-20210711082412-4def90b147b0 h1:qCi+Co3iFHYllWcnZ8TuSjmJgcQlG1IsA12F3Du7JIo=
+github.com/Monibuca/plugin-hdl/v3 v3.0.0-20210711082412-4def90b147b0/go.mod h1:5MhDtsWUXZz4mtwwH8KlmJpFPMy5j7HN392BeEbcqqo=
 github.com/Monibuca/plugin-hls/v3 v3.0.0-20210615000624-9d962270da28 h1:9B+yOco02kexooklv2f6j7iZZlTEna8LylHNL7+N+qM=
 github.com/Monibuca/plugin-hls/v3 v3.0.0-20210615000624-9d962270da28/go.mod h1:djl5yonEy6QOMbM4y2FI0HP961Os54rDPSZGPXze0gk=
 github.com/Monibuca/plugin-hls/v3 v3.0.0-20210710132015-1eec135ef9ed h1:RhDVEIqVM1KWuriTDNvQuEUFwOp5BszFqZ8PPpciu0w=
@@ -27,6 +33,8 @@ github.com/Monibuca/plugin-rtmp/v3 v3.0.0-20210710102655-03e04527e8d7 h1:cMnfBrb
 github.com/Monibuca/plugin-rtmp/v3 v3.0.0-20210710102655-03e04527e8d7/go.mod h1:tQfoa/CZA+q1VqS5WgMcVGpUXY45AmmbT0U+ESa8b58=
 github.com/Monibuca/plugin-rtsp/v3 v3.0.0-20210710095250-f0a00f3db9ca h1:ozJPGwE3FIUr9ow6pfEMMaZ8zeanMRfPw12M4PEdt0Q=
 github.com/Monibuca/plugin-rtsp/v3 v3.0.0-20210710095250-f0a00f3db9ca/go.mod h1:3GwLpNc88dl++bkEakqQSfrVVfHgDMClc0RhZx7RX58=
+github.com/Monibuca/plugin-rtsp/v3 v3.0.0-20210711134315-5cdbc220de48 h1:CvjWx4EonScjooEnM7J0+wCyyE7tVg3LwATYhjQ+z7Y=
+github.com/Monibuca/plugin-rtsp/v3 v3.0.0-20210711134315-5cdbc220de48/go.mod h1:zsgdGoSSM1AUwI0b8BsWm9qGS1/iCusXGfbe/sB8jtQ=
 github.com/Monibuca/plugin-summary v0.0.0-20210615000407-2786546820de h1:VeqFL3CTL7tHx1TzHEdrX0R32z1HIZDpt/dwb0sMi8o=
 github.com/Monibuca/plugin-summary v0.0.0-20210615000407-2786546820de/go.mod h1:4T2P6gUMAphUSKrCwtpmBMmw+S4UljRbWXGUCnTABKE=
 github.com/Monibuca/plugin-summary v0.0.0-20210710132803-53cdcef14699 h1:XV+JSOS+iyJsnB+sTDWtxhIetOCa8fLOVFC2r3KcvoU=
@@ -184,6 +192,8 @@ golang.org/x/crypto v0.0.0-20201221181555-eec23a3978ad/go.mod h1:jdWPYTVW3xRLrWP
 golang.org/x/crypto v0.0.0-20210322153248-0c34fe9e7dc2/go.mod h1:T9bdIzuCu7OtxOm1hfPfRQxPLYneinmdGuTeoZ9dtd4=
 golang.org/x/crypto v0.0.0-20210616213533-5ff15b29337e h1:gsTQYXdTw2Gq7RBsWvlQ91b+aEQ6bXFUngBGuR8sPpI=
 golang.org/x/crypto v0.0.0-20210616213533-5ff15b29337e/go.mod h1:GvvjBRRGRdwPK5ydBHafDWAxML/pGHZbMvKqRZ5+Abc=
+golang.org/x/crypto v0.0.0-20210711020723-a769d52b0f97 h1:/UOmuWzQfxxo9UtlXMwuQU8CMgg1eZXqTRwkSQJWKOI=
+golang.org/x/crypto v0.0.0-20210711020723-a769d52b0f97/go.mod h1:GvvjBRRGRdwPK5ydBHafDWAxML/pGHZbMvKqRZ5+Abc=
 golang.org/x/mod v0.3.0/go.mod h1:s0Qsj1ACt9ePp/hMypM3fl4fZqREWJwdYDEqhRiZZUA=
 golang.org/x/net v0.0.0-20180906233101-161cd47e91fd/go.mod h1:mL1N/T3taQHkDXs73rZJwtUhF3w3ftmwwsq0BUmARs4=
 golang.org/x/net v0.0.0-20190404232315-eb5bcb51f2a3/go.mod h1:t9HGtf8HONx5eT2rtn7q6eTqICYqUVnKs3thJo3Qplg=
