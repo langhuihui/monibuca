@@ -15,6 +15,7 @@ import (
 
 	. "github.com/Monibuca/engine/v3"
 	// _ "github.com/Monibuca/plugin-ffmpeg"
+	// _ "github.com/Monibuca/plugin-cluster"
 	_ "github.com/Monibuca/plugin-gateway/v3"
 
 	_ "github.com/Monibuca/plugin-gb28181/v3"

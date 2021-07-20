@@ -2,7 +2,7 @@
 EnableAudio = true
 EnableVideo = true
 # 发布流默认过期时间 1分钟
-PublishTimeout = 60000000000
+PublishTimeout = 60
 [Summary]
 # 1秒中采样一次
 SampleRate = 1
@@ -26,13 +26,11 @@ Size = 0
 Days = 1
 # 按照go layout格式化，默认按照小时
 Formatter = "2006-01-02T15"
-#[Cluster]
+[Cluster]
 # 监听端口代表该服务器为源服务器
-#ListenAddr = ":2019"
+ListenAddr = ":2019"
 # 源服务器地址，用于向源服务器进行推或拉流
 #OriginServer = ""
-# 推送模式，true表示如果此服务器有发布流，就会推送到源服务器，否则表示拉模式，即如果此服务器有订阅流则从源服务器拉流
-Push = true
 [HLS]
 # 是否开启写磁盘，开启后侦测到发布流就会开始写TS文件
 EnableWrite = false
@@ -61,9 +59,8 @@ AutoRecord  = false
 ListenAddr = ":554"
 Reconnect = true
 #启动后自动拉流，可以配置多个
-#[[RTSP.AutoPullList]]
-#URL = "rtsp://admin:admin@192.168.1.212:554/cam/realmonitor?channel=1&subtype=1"
-#StreamPath = "live/rtsp2"
+#[RTSP.AutoPullList]
+#"live/rtsp2" = "rtsp://admin:admin@192.168.1.212:554/cam/realmonitor?channel=1&subtype=1"
 [WebRTC]
 # 端口范围不配置的话是自动分配
 # PortMin = 30000
@@ -76,6 +73,6 @@ Realm = "3402000000"
 Expires = 3600
 ListenAddr = "192.168.1.120:5060"
 # 自动停止发布，当订阅者数量将为0时，自动断开
-AutoUnPublish = true
+AutoUnPublish = false
 # 自动拉流，如果开启，则拿到设备注册信息后，就从设备拉流
-AutoInvite = false
+AutoInvite = true
