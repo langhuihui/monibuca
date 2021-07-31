@@ -9,12 +9,16 @@ github.com/Monibuca/engine/v3 v3.2.4 h1:LoawhmcSMvCe6EbaJ/P0ezNbRCTW6v3phe11mE71
 github.com/Monibuca/engine/v3 v3.2.4/go.mod h1:odyqD/VTQDN4qgzajsgn7kW7MWDIzTHt+j+BcI8i+4g=
 github.com/Monibuca/engine/v3 v3.2.5 h1:GJkrNu81RfzD4R9mkxR48d8bBoVEqFfB7Yyc97SJbu4=
 github.com/Monibuca/engine/v3 v3.2.5/go.mod h1:odyqD/VTQDN4qgzajsgn7kW7MWDIzTHt+j+BcI8i+4g=
+github.com/Monibuca/engine/v3 v3.2.6 h1:4TP4V3XMgsW9BwU4C6VkPkWNmFStwKZFbFLfYy9LJgM=
+github.com/Monibuca/engine/v3 v3.2.6/go.mod h1:odyqD/VTQDN4qgzajsgn7kW7MWDIzTHt+j+BcI8i+4g=
 github.com/Monibuca/plugin-gateway/v3 v3.0.0-20210710101042-5f38cd82b217 h1:Zx1/5wHciMVtZXF40MjplBOwo6vo1vADMKykWNVCSFw=
 github.com/Monibuca/plugin-gateway/v3 v3.0.0-20210710101042-5f38cd82b217/go.mod h1:sAeY1sHWQmWGMopvUvY7hW+wwuXqdQVP1CIEfHqMD5I=
 github.com/Monibuca/plugin-gateway/v3 v3.0.0-20210729064343-33bb4ad3c0ec h1:K0kaCZl3L7CbiXS6tXEphwtS2Bw7C7YofK2X/WEUeVw=
 github.com/Monibuca/plugin-gateway/v3 v3.0.0-20210729064343-33bb4ad3c0ec/go.mod h1:nxBRg8lZXQI4BC2xRXLN6/beq0McQhRQgipihyS2uII=
 github.com/Monibuca/plugin-gb28181/v3 v3.0.0-20210724142608-6b0b31230f54 h1:IgDrMZkJocrHBQXhrwuKJzE6GxGfHAB3PNRNfQyt5Ss=
 github.com/Monibuca/plugin-gb28181/v3 v3.0.0-20210724142608-6b0b31230f54/go.mod h1:HOTzT7/w2VgmrH6F0MMp0wQ+jMu2KQEBYcVnpI17yJg=
+github.com/Monibuca/plugin-gb28181/v3 v3.0.0-20210731053007-a5197ed196ff h1:yd1TrqPhPqfFT+GfHOaw5U1sWtQhKio0d7EByGxL1cY=
+github.com/Monibuca/plugin-gb28181/v3 v3.0.0-20210731053007-a5197ed196ff/go.mod h1:HOTzT7/w2VgmrH6F0MMp0wQ+jMu2KQEBYcVnpI17yJg=
 github.com/Monibuca/plugin-hdl/v3 v3.0.0-20210711082412-4def90b147b0 h1:qCi+Co3iFHYllWcnZ8TuSjmJgcQlG1IsA12F3Du7JIo=
 github.com/Monibuca/plugin-hdl/v3 v3.0.0-20210711082412-4def90b147b0/go.mod h1:5MhDtsWUXZz4mtwwH8KlmJpFPMy5j7HN392BeEbcqqo=
 github.com/Monibuca/plugin-hls/v3 v3.0.0-20210719131717-e740b7e1c127 h1:rbce817pCFZo3++fepNoHGfmNvAz3Lj0vHgOlza0Pio=

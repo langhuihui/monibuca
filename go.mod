@@ -3,9 +3,9 @@ module github.com/langhuihui/monibuca
 go 1.16
 
 require (
-	github.com/Monibuca/engine/v3 v3.2.5
+	github.com/Monibuca/engine/v3 v3.2.6
 	github.com/Monibuca/plugin-gateway/v3 v3.0.0-20210729064343-33bb4ad3c0ec
-	github.com/Monibuca/plugin-gb28181/v3 v3.0.0-20210724142608-6b0b31230f54
+	github.com/Monibuca/plugin-gb28181/v3 v3.0.0-20210731053007-a5197ed196ff
 	github.com/Monibuca/plugin-hdl/v3 v3.0.0-20210711082412-4def90b147b0
 	github.com/Monibuca/plugin-hls/v3 v3.0.0-20210719131717-e740b7e1c127
 	github.com/Monibuca/plugin-jessica/v3 v3.0.0-20210716031214-9ef41b2d8e88

@@ -51,6 +51,7 @@ func main() {
 			w.Header().Set("Content-Type", mime)
 		}
 		if f, err := ui.ReadFile("ui" + filePath); err == nil {
+			w.Header().Set("Cache-Control","max-age=3600")
 			if _, err = w.Write(f); err != nil {
 				w.WriteHeader(505)
 			}
