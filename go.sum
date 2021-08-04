@@ -6,7 +6,6 @@ github.com/Monibuca/engine/v3 v3.1.6/go.mod h1:yz6cssED2VlYu+g/LrxseBB9pcvsLM/o2
 github.com/Monibuca/engine/v3 v3.2.0/go.mod h1:yz6cssED2VlYu+g/LrxseBB9pcvsLM/o2QXa4gVY650=
 github.com/Monibuca/engine/v3 v3.2.3/go.mod h1:odyqD/VTQDN4qgzajsgn7kW7MWDIzTHt+j+BcI8i+4g=
 github.com/Monibuca/engine/v3 v3.2.5/go.mod h1:odyqD/VTQDN4qgzajsgn7kW7MWDIzTHt+j+BcI8i+4g=
-github.com/Monibuca/engine/v3 v3.2.8 h1:FbITEYfRanr30NW+7W1ue0No2kmnolND7bWZtb6+xvE=
 github.com/Monibuca/engine/v3 v3.2.8/go.mod h1:odyqD/VTQDN4qgzajsgn7kW7MWDIzTHt+j+BcI8i+4g=
 github.com/Monibuca/engine/v3 v3.2.9 h1:2fbjK/PrjoH8Yc677pwyBvLPxkS9KeeqyH2uRIHiyTM=
 github.com/Monibuca/engine/v3 v3.2.9/go.mod h1:odyqD/VTQDN4qgzajsgn7kW7MWDIzTHt+j+BcI8i+4g=
@@ -26,10 +25,8 @@ github.com/Monibuca/plugin-record/v3 v3.0.0-20210719131704-fe7f2dd925f2 h1:DMiQC
 github.com/Monibuca/plugin-record/v3 v3.0.0-20210719131704-fe7f2dd925f2/go.mod h1:SSxYcnV7E5EVO4wgLRAOpogAph+pw2zsLdDBruCEl6Y=
 github.com/Monibuca/plugin-rtmp/v3 v3.0.0-20210710102655-03e04527e8d7 h1:cMnfBrb3mmSSL4YdLkQzNghVmq3nAU8B8+0KMIesgKA=
 github.com/Monibuca/plugin-rtmp/v3 v3.0.0-20210710102655-03e04527e8d7/go.mod h1:tQfoa/CZA+q1VqS5WgMcVGpUXY45AmmbT0U+ESa8b58=
-github.com/Monibuca/plugin-rtsp/v3 v3.0.0-20210724033824-9aec4ec4be87 h1:6o4n++MtlO2vOWF3ZybdK2kDFEx5us6Xch3llrerpNc=
-github.com/Monibuca/plugin-rtsp/v3 v3.0.0-20210724033824-9aec4ec4be87/go.mod h1:gNKtfT8Zh4Mwpq57pwC7PAub8AiWFDssc2uz9a5nyfY=
-github.com/Monibuca/plugin-rtsp/v3 v3.0.0-20210803073355-1ecb45d904bf h1:DEa5XR1whElp8vM+MhruehmW2mVTPkJONHLs74wrlrE=
-github.com/Monibuca/plugin-rtsp/v3 v3.0.0-20210803073355-1ecb45d904bf/go.mod h1:gNKtfT8Zh4Mwpq57pwC7PAub8AiWFDssc2uz9a5nyfY=
+github.com/Monibuca/plugin-rtsp/v3 v3.0.0-20210804072755-8cf3e0c0fc59 h1:roNSonMzpzaFw7por5llRC9JPfj6c0uFYgU0Kk9Ac68=
+github.com/Monibuca/plugin-rtsp/v3 v3.0.0-20210804072755-8cf3e0c0fc59/go.mod h1:gNKtfT8Zh4Mwpq57pwC7PAub8AiWFDssc2uz9a5nyfY=
 github.com/Monibuca/plugin-summary v0.0.0-20210710132803-53cdcef14699 h1:XV+JSOS+iyJsnB+sTDWtxhIetOCa8fLOVFC2r3KcvoU=
 github.com/Monibuca/plugin-summary v0.0.0-20210710132803-53cdcef14699/go.mod h1:1kiDXMF82y299q2+KKEeaKRpQFvVkiGAIGg8OhYk9Qk=
 github.com/Monibuca/plugin-ts/v3 v3.0.0-20210710125303-3fb5757b7c5b h1:rGxDDb1Evkdzgmdqm1x5MCw6QtkGr7N6mgOBHqxZNnU=
