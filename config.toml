@@ -1,7 +1,7 @@
 [Engine]
 EnableAudio = true
 EnableVideo = true
-# 发布流默认过期时间 1分钟
+# 发布流默认过期时间单位秒
 PublishTimeout = 60
 [Summary]
 # 1秒中采样一次
@@ -67,6 +67,8 @@ Reconnect = true
 # PortMax = 40000
 # 公网访问必须配置PublicIP，否则无法建立连接
 # PublicIP = ["192.168.1.120"]
+# WebRTC 推流时控制GOP大小，单位毫秒
+# PLI = 2000
 [GB28181]
 Serial = "34020000002000000001"
 Realm = "3402000000"
