@@ -2,14 +2,10 @@ package main
 
 import (
 	"context"
-	"embed"
 	"flag"
-	"mime"
-	"net/http"
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
-	"path"
 	"path/filepath"
 	"syscall"
 
@@ -31,9 +27,6 @@ import (
 	_ "github.com/Monibuca/plugin-webrtc/v3"
 )
 
-//go:embed ui/*
-var ui embed.FS
-
 func main() {
 	addr := flag.String("c", "config.toml", "config file")
 	flag.Parse()
@@ -42,24 +35,6 @@ func main() {
 	} else {
 		Run(filepath.Join(filepath.Dir(os.Args[0]), *addr))
 	}
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		filePath := r.URL.Path
-		if filePath == "/" {
-			filePath = "/index.html"
-		}
-		if mime := mime.TypeByExtension(path.Ext(filePath)); mime != "" {
-			w.Header().Set("Content-Type", mime)
-		}
-		if f, err := ui.ReadFile("ui" + filePath); err == nil {
-			w.Header().Set("Cache-Control","max-age=3600")
-			if _, err = w.Write(f); err != nil {
-				w.WriteHeader(505)
-			}
-		} else {
-			w.Header().Set("Location", "/")
-			w.WriteHeader(302)
-		}
-	})
 	waiter(context.Background())
 }
 
