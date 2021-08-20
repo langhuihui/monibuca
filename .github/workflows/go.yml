@@ -5,7 +5,9 @@ on:
     branches: [ 3.0 ]
   pull_request:
     branches: [ 3.0 ]
-
+  create:
+    tags:
+      - v*
 jobs:
 
   build:
@@ -19,10 +21,10 @@ jobs:
         go-version: 1.16
 
     - name: Build
-      run: go build -o linux
+      run: go build -o m7s_linux_x86_64
       
     - name: Tar
-      run: tar -zcvf linux.tgz linux config.toml
+      run: tar -zcvf linux.tgz m7s_linux_x86_64 config.toml
       
     - name: Deploy
       uses: garygrossgarten/github-action-scp@release
@@ -32,6 +34,10 @@ jobs:
           host: monibuca.com
           username: root
           privateKey: ${{ secrets.PEM }}
+    - name: Release
+      uses: softprops/action-gh-release@v1
+      with:
+          files: "linux.tgz"
   build2:
     runs-on: windows-latest
     steps:
@@ -43,10 +49,10 @@ jobs:
         go-version: 1.16
 
     - name: Build
-      run: go build -o windows.exe
+      run: go build -o m7s_x86_64.exe
             
     - name: Tar
-      run: tar -zcvf windows.tgz windows.exe config.toml
+      run: tar -zcvf windows.tgz m7s_x86_64.exe config.toml
       
     - name: Deploy
       uses: garygrossgarten/github-action-scp@release
@@ -56,6 +62,10 @@ jobs:
           host: monibuca.com
           username: root
           privateKey: ${{ secrets.PEM }}
+    - name: Release
+      uses: softprops/action-gh-release@v1
+      with:
+          files: "windows.tgz"
   build3:
     runs-on: macos-latest
     steps:
@@ -67,10 +77,10 @@ jobs:
         go-version: 1.16
 
     - name: Build
-      run: go build -o mac
+      run: go build -o m7s_darwin_x86_64
 
     - name: Tar
-      run: tar -zcvf mac.tgz mac config.toml
+      run: tar -zcvf mac.tgz m7s_darwin_x86_64 config.toml
 
     - name: Deploy
       uses: garygrossgarten/github-action-scp@release
@@ -80,3 +90,7 @@ jobs:
           host: monibuca.com
           username: root
           privateKey: ${{ secrets.PEM }}
+    - name: Release
+      uses: softprops/action-gh-release@v1
+      with:
+          files: "mac.tgz"
