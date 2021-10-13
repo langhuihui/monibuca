@@ -30,18 +30,19 @@ import (
 func main() {
 	addr := flag.String("c", "config.toml", "config file")
 	flag.Parse()
+	ctx, cancel := context.WithCancel(context.Background())
 	if _, err := os.Stat(*addr); err == nil {
-		Run(*addr)
+		Run(ctx, *addr)
 	} else {
-		Run(filepath.Join(filepath.Dir(os.Args[0]), *addr))
+		Run(ctx, filepath.Join(filepath.Dir(os.Args[0]), *addr))
 	}
-	waiter(context.Background())
+	waiter(cancel)
 }
 
-func waiter(ctx context.Context) {
+func waiter(cancel context.CancelFunc) {
 	sigc := make(chan os.Signal, 1)
 	signal.Notify(sigc, syscall.SIGINT, syscall.SIGTERM)
 	defer signal.Stop(sigc)
 	<-sigc
-	ctx.Done()
+	cancel()
 }
