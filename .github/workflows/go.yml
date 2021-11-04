@@ -1,10 +1,6 @@
 name: Go
 
 on:
-  push:
-    branches: [ 3.0 ]
-  pull_request:
-    branches: [ 3.0 ]
   create:
     tags:
       - v*
