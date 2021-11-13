@@ -3,9 +3,9 @@ module github.com/langhuihui/monibuca
 go 1.16
 
 require (
-	github.com/Monibuca/engine/v3 v3.3.9
+	github.com/Monibuca/engine/v3 v3.3.10
 	github.com/Monibuca/plugin-gateway/v3 v3.0.0-20211019071855-0dcd7beaae5b
-	github.com/Monibuca/plugin-gb28181/v3 v3.0.0-20211031030004-75b1890e20d3
+	github.com/Monibuca/plugin-gb28181/v3 v3.0.0-20211113034441-35c9142d0ee1
 	github.com/Monibuca/plugin-hdl/v3 v3.0.0-20210807135828-9d98f5b8dd6c
 	github.com/Monibuca/plugin-hls/v3 v3.0.0-20211104021421-6f91f3d95b26
 	github.com/Monibuca/plugin-jessica/v3 v3.0.0-20210807235919-48ac5fbec646
@@ -18,9 +18,12 @@ require (
 	github.com/Monibuca/plugin-webrtc/v3 v3.0.0-20211102085549-53e36c75fded
 )
 
-// replace github.com/Monibuca/plugin-webrtc/v3 => ../plugin-webrtc
+// replace github.com/Monibuca/plugin-rtsp/v3 => ../plugin-rtsp
 
-//replace github.com/Monibuca/plugin-gateway/v3 => ../plugin-gateway
+// replace github.com/Monibuca/plugin-rtmp/v3 => ../plugin-rtmp
+
+// replace github.com/Monibuca/plugin-hls/v3 => ../plugin-hls
 
 // replace github.com/Monibuca/engine/v3 => ../engine
+
 // replace github.com/Monibuca/plugin-summary => ../plugin-summary
