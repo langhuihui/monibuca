@@ -3,6 +3,8 @@ EnableAudio = true
 EnableVideo = true
 # 发布流默认过期时间单位秒
 PublishTimeout = 60
+# 自动关闭触发后延迟的秒数(期间内如果有新的订阅则取消触发关闭)
+# AutoCloseDelay = 10
 [Summary]
 # 1秒中采样一次
 SampleRate = 1
@@ -73,8 +75,14 @@ Reconnect = true
 Serial = "34020000002000000001"
 Realm = "3402000000"
 Expires = 3600
+# 媒体端口
+# MediaPort = 58200
+# 开启TCP拉流，默认关闭
+# TCP = true
+# TCP端口数量，超过一个的话将会每个设备轮流使用，从MediaPort往下递增
+# TCPMediaPortNum = 1
 ListenAddr = "192.168.1.120:5060"
-# 自动停止发布，当订阅者数量将为0时，自动断开
-AutoUnPublish = false
+# 自动停止发布，当订阅者数量将为0时，延迟N秒自动断开,-1代表不断开
+AutoCloseAfter = -1
 # 自动拉流，如果开启，则拿到设备注册信息后，就从设备拉流
 AutoInvite = true
