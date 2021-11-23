@@ -61,7 +61,8 @@ AutoRecord  = false
 ListenAddr = ":554"
 Reconnect = true
 #启动后自动拉流，可以配置多个
-#[RTSP.AutoPullList]
+# [RTSP.AutoPullList]
+# "live/rtc" = "rtsp://wowzaec2demo.streamlock.net/vod/mp4:BigBuckBunny_115k.mp4"
 #"live/rtsp2" = "rtsp://admin:admin@192.168.1.212:554/cam/realmonitor?channel=1&subtype=1"
 [WebRTC]
 # 端口范围不配置的话是自动分配
