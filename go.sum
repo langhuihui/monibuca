@@ -9,6 +9,8 @@ github.com/Monibuca/engine/v3 v3.3.11 h1:4zuuW34UgBxNT66wg+SbYm0C/kp2wghnoqWjM06
 github.com/Monibuca/engine/v3 v3.3.11/go.mod h1:LowMZ/iw4t6tfTZkSYZHIA0Z1HE8b7xfTDLO4WhX3Hg=
 github.com/Monibuca/engine/v3 v3.3.12 h1:O16cPvyQYgzcIy4dM5gfD20aNiFWHT8LkVKRLES4gBc=
 github.com/Monibuca/engine/v3 v3.3.12/go.mod h1:LowMZ/iw4t6tfTZkSYZHIA0Z1HE8b7xfTDLO4WhX3Hg=
+github.com/Monibuca/engine/v3 v3.3.13 h1:3g1Y5yoEZRj2o3FztQZDLw4X6EsqKNSv3KK/x2usNV8=
+github.com/Monibuca/engine/v3 v3.3.13/go.mod h1:LowMZ/iw4t6tfTZkSYZHIA0Z1HE8b7xfTDLO4WhX3Hg=
 github.com/Monibuca/plugin-gateway/v3 v3.0.0-20211019071855-0dcd7beaae5b h1:E53fkYCIhHDORcJXR1FyymPLWJJDUh6K8q254etoTjY=
 github.com/Monibuca/plugin-gateway/v3 v3.0.0-20211019071855-0dcd7beaae5b/go.mod h1:bDI6d64yb50+3rMczouVQoTYWbGOZhVFgu3k/yKJdXU=
 github.com/Monibuca/plugin-gb28181/v3 v3.0.0-20211116122236-50da427ab781 h1:/6NbFrlnXf/zRTbLDjSEsiWm0zEK77CeJQUx8F1pazg=

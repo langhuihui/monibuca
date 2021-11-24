@@ -3,7 +3,7 @@ module github.com/langhuihui/monibuca
 go 1.16
 
 require (
-	github.com/Monibuca/engine/v3 v3.3.12
+	github.com/Monibuca/engine/v3 v3.3.13
 	github.com/Monibuca/plugin-gateway/v3 v3.0.0-20211019071855-0dcd7beaae5b
 	github.com/Monibuca/plugin-gb28181/v3 v3.0.0-20211122043224-c07309f14fa6
 	github.com/Monibuca/plugin-hdl/v3 v3.0.0-20210807135828-9d98f5b8dd6c
