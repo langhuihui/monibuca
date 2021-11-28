@@ -5,6 +5,8 @@ EnableVideo = true
 PublishTimeout = 60
 # 自动关闭触发后延迟的秒数(期间内如果有新的订阅则取消触发关闭)
 # AutoCloseDelay = 10
+# RTP包乱序重排
+# RTPReorder = false
 [Summary]
 # 1秒中采样一次
 SampleRate = 1
@@ -63,6 +65,7 @@ Reconnect = true
 #启动后自动拉流，可以配置多个
 # [RTSP.AutoPullList]
 # "live/rtc" = "rtsp://wowzaec2demo.streamlock.net/vod/mp4:BigBuckBunny_115k.mp4"
+# "live/test" = "rtsp://admin:qwer1234@42.193.7.166:9013/cam/realmonitor?channel=1&subtype=0"
 #"live/rtsp2" = "rtsp://admin:admin@192.168.1.212:554/cam/realmonitor?channel=1&subtype=1"
 [WebRTC]
 # 端口范围不配置的话是自动分配
