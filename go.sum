@@ -9,8 +9,8 @@ github.com/Monibuca/engine/v3 v3.3.11/go.mod h1:LowMZ/iw4t6tfTZkSYZHIA0Z1HE8b7xf
 github.com/Monibuca/engine/v3 v3.3.15/go.mod h1:LowMZ/iw4t6tfTZkSYZHIA0Z1HE8b7xfTDLO4WhX3Hg=
 github.com/Monibuca/engine/v3 v3.3.16 h1:3F5vBDU0wE6DgluWiTFAfPvOL9e2Hj87rrYqMgniPj4=
 github.com/Monibuca/engine/v3 v3.3.16/go.mod h1:rgAUey5ziRhlh6WugWyA5fYKyGOvcwhtTMDk4sukE7E=
-github.com/Monibuca/plugin-gateway/v3 v3.0.1 h1:/c5O6Ve6VGBBypjj2oKxQaXyPFX6WXO7BGQSwqyO/nI=
-github.com/Monibuca/plugin-gateway/v3 v3.0.1/go.mod h1:GPQDIll0o9+txwJ+ZwDcQTcR8rTE2SFZ/UbgmDKZTdg=
+github.com/Monibuca/plugin-gateway/v3 v3.0.4 h1:W5UaWba6bjvJBTmUrtx7hZZxf+6VRtcGFSTZHZZlPSw=
+github.com/Monibuca/plugin-gateway/v3 v3.0.4/go.mod h1:GPQDIll0o9+txwJ+ZwDcQTcR8rTE2SFZ/UbgmDKZTdg=
 github.com/Monibuca/plugin-gb28181/v3 v3.0.0 h1:o9a3Dnud7eoHwDF1cmwX6ipr4u4VW/1/9X0yzi1jQ9Q=
 github.com/Monibuca/plugin-gb28181/v3 v3.0.0/go.mod h1:foflXhJgzpYvMu3mlwQ/8JQ4ieo6RPSiubZ9t12FIbA=
 github.com/Monibuca/plugin-hdl/v3 v3.0.0-20210807135828-9d98f5b8dd6c h1:crcVwFF4qW8b3UoucGIK+wG0U03cx7numcI+bkRV9ng=

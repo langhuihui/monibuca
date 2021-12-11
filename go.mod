@@ -4,7 +4,7 @@ go 1.16
 
 require (
 	github.com/Monibuca/engine/v3 v3.3.16
-	github.com/Monibuca/plugin-gateway/v3 v3.0.1
+	github.com/Monibuca/plugin-gateway/v3 v3.0.4
 	github.com/Monibuca/plugin-gb28181/v3 v3.0.0
 	github.com/Monibuca/plugin-hdl/v3 v3.0.0-20210807135828-9d98f5b8dd6c
 	github.com/Monibuca/plugin-hls/v3 v3.0.0
@@ -17,6 +17,8 @@ require (
 	github.com/Monibuca/plugin-ts/v3 v3.0.0
 	github.com/Monibuca/plugin-webrtc/v3 v3.0.0-20211102085549-53e36c75fded
 )
+
+// replace github.com/Monibuca/plugin-gateway/v3 => ../plugin-gateway
 
 // replace github.com/Monibuca/plugin-rtsp/v3 => ../plugin-rtsp
 
