@@ -9,8 +9,8 @@ github.com/Monibuca/engine/v3 v3.3.11/go.mod h1:LowMZ/iw4t6tfTZkSYZHIA0Z1HE8b7xf
 github.com/Monibuca/engine/v3 v3.3.15/go.mod h1:LowMZ/iw4t6tfTZkSYZHIA0Z1HE8b7xfTDLO4WhX3Hg=
 github.com/Monibuca/engine/v3 v3.3.16 h1:3F5vBDU0wE6DgluWiTFAfPvOL9e2Hj87rrYqMgniPj4=
 github.com/Monibuca/engine/v3 v3.3.16/go.mod h1:rgAUey5ziRhlh6WugWyA5fYKyGOvcwhtTMDk4sukE7E=
-github.com/Monibuca/plugin-gateway/v3 v3.0.4 h1:W5UaWba6bjvJBTmUrtx7hZZxf+6VRtcGFSTZHZZlPSw=
-github.com/Monibuca/plugin-gateway/v3 v3.0.4/go.mod h1:GPQDIll0o9+txwJ+ZwDcQTcR8rTE2SFZ/UbgmDKZTdg=
+github.com/Monibuca/plugin-gateway/v3 v3.0.5 h1:k72mctSbs6fMMTVBMAA4K2t+nulmfRyrCIU7byuBog0=
+github.com/Monibuca/plugin-gateway/v3 v3.0.5/go.mod h1:GPQDIll0o9+txwJ+ZwDcQTcR8rTE2SFZ/UbgmDKZTdg=
 github.com/Monibuca/plugin-gb28181/v3 v3.0.0 h1:o9a3Dnud7eoHwDF1cmwX6ipr4u4VW/1/9X0yzi1jQ9Q=
 github.com/Monibuca/plugin-gb28181/v3 v3.0.0/go.mod h1:foflXhJgzpYvMu3mlwQ/8JQ4ieo6RPSiubZ9t12FIbA=
 github.com/Monibuca/plugin-hdl/v3 v3.0.0-20210807135828-9d98f5b8dd6c h1:crcVwFF4qW8b3UoucGIK+wG0U03cx7numcI+bkRV9ng=
@@ -25,8 +25,8 @@ github.com/Monibuca/plugin-record/v3 v3.0.0-20210813073316-79dce1e0dc70 h1:NO3NL
 github.com/Monibuca/plugin-record/v3 v3.0.0-20210813073316-79dce1e0dc70/go.mod h1:CusWmmgSjE1rRaGO9O06LOvXSpKilfiFgRsUlYHvFq0=
 github.com/Monibuca/plugin-rtmp/v3 v3.0.0-20210819063901-526f2917b16d h1:6NQ6KaQyvyS9e5ELmQzKF0gmGx0wzotsWpIqhe5X748=
 github.com/Monibuca/plugin-rtmp/v3 v3.0.0-20210819063901-526f2917b16d/go.mod h1:dYR+AnljA8fGh29tmojgP1r+/MA+Bfwgpt2UsBD4wnM=
-github.com/Monibuca/plugin-rtsp/v3 v3.0.0-20211128150813-9eb117811d15 h1:eJHeDZZok26uhBzsTw0XTCAgoTlMEHtJfOm9fUQlxD4=
-github.com/Monibuca/plugin-rtsp/v3 v3.0.0-20211128150813-9eb117811d15/go.mod h1:UJ0QZ+K6XkcL1vWOSCMGaKArPW4ygkKt2PNQNAwThao=
+github.com/Monibuca/plugin-rtsp/v3 v3.0.0 h1:ipfnfbJYFDuqUPcVyGUobpIJU1LnQRxhRh8Xb8YMP/4=
+github.com/Monibuca/plugin-rtsp/v3 v3.0.0/go.mod h1:UJ0QZ+K6XkcL1vWOSCMGaKArPW4ygkKt2PNQNAwThao=
 github.com/Monibuca/plugin-summary v0.0.0-20210821070131-2261e0efb7b9 h1:8JVquYo8PUQtc75vFa8ovPvsXSmU0N2twfD+8hOoZeM=
 github.com/Monibuca/plugin-summary v0.0.0-20210821070131-2261e0efb7b9/go.mod h1:1kiDXMF82y299q2+KKEeaKRpQFvVkiGAIGg8OhYk9Qk=
 github.com/Monibuca/plugin-ts/v3 v3.0.0 h1:W6A5onbEDKAxuewl46PJPippV5E3fu7UV6rK+Hq/q5s=
