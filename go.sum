@@ -7,8 +7,9 @@ github.com/Monibuca/engine/v3 v3.3.0/go.mod h1:odyqD/VTQDN4qgzajsgn7kW7MWDIzTHt+
 github.com/Monibuca/engine/v3 v3.3.9/go.mod h1:odyqD/VTQDN4qgzajsgn7kW7MWDIzTHt+j+BcI8i+4g=
 github.com/Monibuca/engine/v3 v3.3.11/go.mod h1:LowMZ/iw4t6tfTZkSYZHIA0Z1HE8b7xfTDLO4WhX3Hg=
 github.com/Monibuca/engine/v3 v3.3.15/go.mod h1:LowMZ/iw4t6tfTZkSYZHIA0Z1HE8b7xfTDLO4WhX3Hg=
-github.com/Monibuca/engine/v3 v3.3.16 h1:3F5vBDU0wE6DgluWiTFAfPvOL9e2Hj87rrYqMgniPj4=
 github.com/Monibuca/engine/v3 v3.3.16/go.mod h1:rgAUey5ziRhlh6WugWyA5fYKyGOvcwhtTMDk4sukE7E=
+github.com/Monibuca/engine/v3 v3.3.17 h1:cnIOkgKJJ8TNYDR3w/fyMCoM7t121d/32C+/J8nKbT4=
+github.com/Monibuca/engine/v3 v3.3.17/go.mod h1:rgAUey5ziRhlh6WugWyA5fYKyGOvcwhtTMDk4sukE7E=
 github.com/Monibuca/plugin-gateway/v3 v3.0.5 h1:k72mctSbs6fMMTVBMAA4K2t+nulmfRyrCIU7byuBog0=
 github.com/Monibuca/plugin-gateway/v3 v3.0.5/go.mod h1:GPQDIll0o9+txwJ+ZwDcQTcR8rTE2SFZ/UbgmDKZTdg=
 github.com/Monibuca/plugin-gb28181/v3 v3.0.0 h1:o9a3Dnud7eoHwDF1cmwX6ipr4u4VW/1/9X0yzi1jQ9Q=
@@ -23,10 +24,10 @@ github.com/Monibuca/plugin-logrotate/v3 v3.0.0-20210710104346-3db68431dcab h1:s/
 github.com/Monibuca/plugin-logrotate/v3 v3.0.0-20210710104346-3db68431dcab/go.mod h1:VK6gZDgLIIERvVTbshN+bd/966SBW/u1plVQATXH0q0=
 github.com/Monibuca/plugin-record/v3 v3.0.0-20210813073316-79dce1e0dc70 h1:NO3NLdkQfcQ754yaroFfGCeIFBEGp/IxTl/Nz7X+0wI=
 github.com/Monibuca/plugin-record/v3 v3.0.0-20210813073316-79dce1e0dc70/go.mod h1:CusWmmgSjE1rRaGO9O06LOvXSpKilfiFgRsUlYHvFq0=
-github.com/Monibuca/plugin-rtmp/v3 v3.0.0-20210819063901-526f2917b16d h1:6NQ6KaQyvyS9e5ELmQzKF0gmGx0wzotsWpIqhe5X748=
-github.com/Monibuca/plugin-rtmp/v3 v3.0.0-20210819063901-526f2917b16d/go.mod h1:dYR+AnljA8fGh29tmojgP1r+/MA+Bfwgpt2UsBD4wnM=
-github.com/Monibuca/plugin-rtsp/v3 v3.0.0 h1:ipfnfbJYFDuqUPcVyGUobpIJU1LnQRxhRh8Xb8YMP/4=
-github.com/Monibuca/plugin-rtsp/v3 v3.0.0/go.mod h1:UJ0QZ+K6XkcL1vWOSCMGaKArPW4ygkKt2PNQNAwThao=
+github.com/Monibuca/plugin-rtmp/v3 v3.0.0 h1:sXO6ZQDuQFz+8AMlTkltThmLI0OOA2DEIeyeIWFFT3E=
+github.com/Monibuca/plugin-rtmp/v3 v3.0.0/go.mod h1:sDXF75JHXvZY4NjEe2raBmEF6RDvvOre9s1GKZvojjI=
+github.com/Monibuca/plugin-rtsp/v3 v3.0.1 h1:h0RrM6+x5C74iOOttNrDB6du8nIyL4H/Y4SgJhTHsns=
+github.com/Monibuca/plugin-rtsp/v3 v3.0.1/go.mod h1:ZR2ady0WoOOpxb0r0DMy22A1W1jT6qCO0XZCQqo9KNg=
 github.com/Monibuca/plugin-summary v0.0.0-20210821070131-2261e0efb7b9 h1:8JVquYo8PUQtc75vFa8ovPvsXSmU0N2twfD+8hOoZeM=
 github.com/Monibuca/plugin-summary v0.0.0-20210821070131-2261e0efb7b9/go.mod h1:1kiDXMF82y299q2+KKEeaKRpQFvVkiGAIGg8OhYk9Qk=
 github.com/Monibuca/plugin-ts/v3 v3.0.0 h1:W6A5onbEDKAxuewl46PJPippV5E3fu7UV6rK+Hq/q5s=
@@ -36,6 +37,7 @@ github.com/Monibuca/plugin-webrtc/v3 v3.0.0-20211102085549-53e36c75fded/go.mod h
 github.com/Monibuca/utils/v3 v3.0.0/go.mod h1:RpNS95gapWs6gimwh8Xn2x72FN5tO7Powabj7dTFyvE=
 github.com/Monibuca/utils/v3 v3.0.1/go.mod h1:RpNS95gapWs6gimwh8Xn2x72FN5tO7Powabj7dTFyvE=
 github.com/Monibuca/utils/v3 v3.0.2/go.mod h1:RpNS95gapWs6gimwh8Xn2x72FN5tO7Powabj7dTFyvE=
+github.com/Monibuca/utils/v3 v3.0.3/go.mod h1:RpNS95gapWs6gimwh8Xn2x72FN5tO7Powabj7dTFyvE=
 github.com/Monibuca/utils/v3 v3.0.4/go.mod h1:RpNS95gapWs6gimwh8Xn2x72FN5tO7Powabj7dTFyvE=
 github.com/Monibuca/utils/v3 v3.0.5 h1:w14x0HkWTbF4MmHbINLlOwe4VJNoSOeaQChMk5E/4es=
 github.com/Monibuca/utils/v3 v3.0.5/go.mod h1:RpNS95gapWs6gimwh8Xn2x72FN5tO7Powabj7dTFyvE=
@@ -43,8 +45,8 @@ github.com/StackExchange/wmi v1.2.0 h1:noJEYkMQVlFCEAc+2ma5YyRhlfjcWfZqk5sBRYozd
 github.com/StackExchange/wmi v1.2.0/go.mod h1:3eOhrUMpNV+6aFIbp5/iudMxNCF27Vw2OZgy4xEx0Fg=
 github.com/agiledragon/gomonkey/v2 v2.2.0 h1:QJWqpdEhGV/JJy70sZ/LDnhbSlMrqHAWHcNOjz1kyuI=
 github.com/agiledragon/gomonkey/v2 v2.2.0/go.mod h1:ap1AmDzcVOAz1YpeJ3TCzIgstoaWLA6jbbgxfB4w2iY=
-github.com/aler9/gortsplib v0.0.0-20211118111704-d5bdc197beb5 h1:qcrLOrHxW0x9fIguacwD/2CIlswI6kVCUThtx/uuhSs=
-github.com/aler9/gortsplib v0.0.0-20211118111704-d5bdc197beb5/go.mod h1:fyQrQyHo8QvdR/h357tkv1g36VesZlzEPsdAu2VrHHc=
+github.com/aler9/gortsplib v0.0.0-20211212220644-6f374e396529 h1:j2tfs+eUubyZnuwmYWzK+IS681IixfUyD8bivz4sqAw=
+github.com/aler9/gortsplib v0.0.0-20211212220644-6f374e396529/go.mod h1:fyQrQyHo8QvdR/h357tkv1g36VesZlzEPsdAu2VrHHc=
 github.com/asticode/go-astikit v0.20.0/go.mod h1:h4ly7idim1tNhaVkdVBeXQZEE3L0xblP7fCWbgwipF0=
 github.com/asticode/go-astits v1.10.0/go.mod h1:DkOWmBNQpnr9mv24KfZjq4JawCFX1FCqjLVGvO0DygQ=
 github.com/cnotch/apirouter v0.0.0-20200731232942-89e243a791f3/go.mod h1:5deJPLON/x/s2dLOQfuKS0lenhOIT4xX0pvtN/OEIuY=
@@ -243,9 +245,8 @@ golang.org/x/sys v0.0.0-20210330210617-4fbd30eecc44/go.mod h1:h1NjWce9XRLGQEsW7w
 golang.org/x/sys v0.0.0-20210423082822-04245dca01da/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
 golang.org/x/sys v0.0.0-20210615035016-665e8c7367d1/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 golang.org/x/sys v0.0.0-20210806184541-e5e7981a1069/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
+golang.org/x/sys v0.0.0-20211025201205-69cdffdb9359 h1:2B5p2L5IfGiD7+b9BOoRMC6DgObAVZV+Fsp050NqXik=
 golang.org/x/sys v0.0.0-20211025201205-69cdffdb9359/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
-golang.org/x/sys v0.0.0-20211117180635-dee7805ff2e1 h1:kwrAHlwJ0DUBZwQ238v+Uod/3eZ8B2K5rYsUHBQvzmI=
-golang.org/x/sys v0.0.0-20211117180635-dee7805ff2e1/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 golang.org/x/term v0.0.0-20201117132131-f5c789dd3221/go.mod h1:Nr5EML6q2oocZ2LXRh80K7BxOlk5/8JxuGnuhpl+muw=
 golang.org/x/term v0.0.0-20201126162022-7de9c90e9dd1/go.mod h1:bj7SfCRtBDWHUb9snDiAeCFNEtKQo2Wmx5Cou7ajbmo=
 golang.org/x/text v0.3.0/go.mod h1:NqM8EUOU14njkJ3fqMW+pc6Ldnwhi/IjpwHt7yyuwOQ=
