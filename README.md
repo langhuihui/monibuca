@@ -62,8 +62,8 @@ to submit your own plugin
 | Protocol | Pusher（push）-->Monibuca  |Source-->Monibuca（pull）|Monibuca-->Player（pull）|Monibuca（push）-->Other Server
 |---------| -------------|-------------| -------------|-------------|
 |rtmp|✔||✔|
-|rtsp|✔|✔|✔|
-|http-flv|||✔|
+|rtsp|✔|✔|✔|✔
+|http-flv||✔|✔|
 |hls||✔|✔|
 |ws-flv|||✔|
 |webrtc|✔||✔

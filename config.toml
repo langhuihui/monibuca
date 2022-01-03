@@ -15,8 +15,8 @@ ListenAddr = ":1935"
 [GateWay]
 ListenAddr = ":8080"
 ListenAddrTLS = ":8082"
-CertFile = "server.crt"
-KeyFile = "server.pem"
+CertFile = "server.pem"
+KeyFile = "server.key"
 [Jessica]
 #ListenAddr = ":8081"
 #ListenAddrTLS = ":8083"
@@ -67,6 +67,8 @@ ListenAddr = ":554"
 Reconnect = true
 #启动后自动拉流，可以配置多个
 [RTSP.AutoPullList]
+# "live/rtsp" = "rtsp://114.116.215.52:38558/sub/3"
+# "live/rtsp" = "rtsp://admin:12345678ab@42.193.7.166:9514/11"
 # "live/rtc" = "rtsp://wowzaec2demo.streamlock.net/vod/mp4:BigBuckBunny_115k.mp4"
 # "live/rtsp" = "rtsp://admin:123456@42.193.7.166:9018/video1"
 [WebRTC]
