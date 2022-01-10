@@ -3,21 +3,22 @@ module github.com/langhuihui/monibuca
 go 1.16
 
 require (
-	github.com/Monibuca/engine/v3 v3.4.3
-	github.com/Monibuca/plugin-gateway/v3 v3.0.8
-	github.com/Monibuca/plugin-gb28181/v3 v3.0.1
+	github.com/Monibuca/engine/v3 v3.4.5
+	github.com/Monibuca/plugin-gateway/v3 v3.0.9
+	github.com/Monibuca/plugin-gb28181/v3 v3.0.2
 	github.com/Monibuca/plugin-hdl/v3 v3.0.5
-	github.com/Monibuca/plugin-hls/v3 v3.0.4
-	github.com/Monibuca/plugin-jessica/v3 v3.0.0-20210807235919-48ac5fbec646
-	github.com/Monibuca/plugin-logrotate/v3 v3.0.0-20210710104346-3db68431dcab
-	github.com/Monibuca/plugin-record/v3 v3.0.0-20210813073316-79dce1e0dc70
-	github.com/Monibuca/plugin-rtmp/v3 v3.0.0
+	github.com/Monibuca/plugin-hls/v3 v3.0.6
+	github.com/Monibuca/plugin-jessica/v3 v3.0.0
+	github.com/Monibuca/plugin-logrotate/v3 v3.0.0
+	github.com/Monibuca/plugin-record/v3 v3.0.0
+	github.com/Monibuca/plugin-rtmp/v3 v3.0.1
 	github.com/Monibuca/plugin-rtsp/v3 v3.0.6
-	github.com/Monibuca/plugin-summary v0.0.0-20210821070131-2261e0efb7b9
-	github.com/Monibuca/plugin-ts/v3 v3.0.0
-	github.com/Monibuca/plugin-webrtc/v3 v3.0.1
+	github.com/Monibuca/plugin-summary v1.0.0
+	github.com/Monibuca/plugin-ts/v3 v3.0.1
+	github.com/Monibuca/plugin-webrtc/v3 v3.0.2
 )
 
+// replace github.com/Monibuca/plugin-ffmpeg => ../plugin-ffmpeg
 // replace github.com/Monibuca/plugin-gateway/v3 => ../plugin-gateway
 
 // replace github.com/Monibuca/plugin-rtsp/v3 => ../plugin-rtsp
