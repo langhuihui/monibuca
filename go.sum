@@ -4,8 +4,8 @@ github.com/BurntSushi/toml v0.4.1/go.mod h1:CxXYINrC8qIiEnFrOxCa7Jy5BFHlXnUU2pbi
 github.com/Monibuca/engine/v3 v3.1.0/go.mod h1:yz6cssED2VlYu+g/LrxseBB9pcvsLM/o2QXa4gVY650=
 github.com/Monibuca/engine/v3 v3.4.1/go.mod h1:rgAUey5ziRhlh6WugWyA5fYKyGOvcwhtTMDk4sukE7E=
 github.com/Monibuca/engine/v3 v3.4.5/go.mod h1:Dik9pFxU9TFI5vj8Sv5QXZM+ooCs2fm9P7Uhe4yYNkQ=
-github.com/Monibuca/engine/v3 v3.4.6 h1:a/d8SwxXAlfuWbBU1qz7G7rYgYk8J/no38yzGtK5P3I=
-github.com/Monibuca/engine/v3 v3.4.6/go.mod h1:Dik9pFxU9TFI5vj8Sv5QXZM+ooCs2fm9P7Uhe4yYNkQ=
+github.com/Monibuca/engine/v3 v3.4.7 h1:Umhn6Pxt04bNZ98A6W88PsSKK5hdmMnw9/gT1p9Mk18=
+github.com/Monibuca/engine/v3 v3.4.7/go.mod h1:Dik9pFxU9TFI5vj8Sv5QXZM+ooCs2fm9P7Uhe4yYNkQ=
 github.com/Monibuca/plugin-gateway/v3 v3.0.10 h1:lG3RoF6D7n1eqChiug1YzSof92Jn5mIQngNt50Acnso=
 github.com/Monibuca/plugin-gateway/v3 v3.0.10/go.mod h1:Pw5seYubBswGoF4knryLbLp6qrkYPwg3a7ZupgOir/4=
 github.com/Monibuca/plugin-gb28181/v3 v3.0.2 h1:kATCWXuCLHZZfSkRbkIRxbzaH5HU/HJzrHZtKDKENeE=
