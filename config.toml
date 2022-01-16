@@ -13,7 +13,7 @@ SampleRate = 1
 [RTMP]
 ListenAddr = ":1935"
 [GateWay]
-ListenAddr = ":8080"
+ListenAddr = ":8081"
 ListenAddrTLS = ":8082"
 CertFile = "server.pem"
 KeyFile = "server.key"
@@ -30,11 +30,7 @@ Size = 0
 Days = 1
 # 按照go layout格式化，默认按照小时
 Formatter = "2006-01-02T15"
-[Cluster]
-# 监听端口代表该服务器为源服务器
-ListenAddr = ":2019"
-# 源服务器地址，用于向源服务器进行推或拉流
-#OriginServer = ""
+# [FFMPEG]
 [HLS]
 # 是否开启写磁盘，开启后侦测到发布流就会开始写TS文件
 EnableWrite = false

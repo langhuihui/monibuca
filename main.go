@@ -31,12 +31,12 @@ func main() {
 	addr := flag.String("c", "config.toml", "config file")
 	flag.Parse()
 	ctx, cancel := context.WithCancel(context.Background())
+	go waiter(cancel)
 	if _, err := os.Stat(*addr); err == nil {
 		Run(ctx, *addr)
 	} else {
 		Run(ctx, filepath.Join(filepath.Dir(os.Args[0]), *addr))
 	}
-	waiter(cancel)
 }
 
 func waiter(cancel context.CancelFunc) {
