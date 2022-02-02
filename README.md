@@ -67,8 +67,16 @@ to submit your own plugin
 |hls||✔|✔|
 |ws-flv|||✔|
 |webrtc|✔||✔
-# Documentation
 
+# Build & Test with docker
+
+> development and testing only: IP and udp ports need to be exposed carefully in production.
+```shell
+docker build . -f dockerfile -t m7s:3.0
+docker run --name m7s -p 1935:1935 -p 8081:8081 -p 8082:8082 -p 554:554 m7s:3.0
+```
+
+# Documentation
 
 中文文档：
 [http://docs.monibuca.com](http://docs.monibuca.com).

@@ -47,6 +47,14 @@ bash <(curl -s -S -L https://monibuca.com/demo.sh)
  
 功能强大的仪表盘可以直观的看到服务器运行的状态、消耗的资源、以及其他统计信息。用户可以利用控制台对服务器进行配置和控制。
 
+# 在 Docker 中编译和测试
+
+> 生产服务需要暴露IP和大量端口，建议容器仅用于开发和测试
+```shell
+docker build . -f dockerfile -t m7s:3.0
+docker run --name m7s -p 1935:1935 -p 8081:8081 -p 8082:8082 -p 554:554 m7s:3.0
+```
+
 # 交流微信群
 
 进入网站首页上进行扫码
