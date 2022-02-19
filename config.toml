@@ -64,7 +64,7 @@ Reconnect = true
 #启动后自动拉流，可以配置多个
 [RTSP.AutoPullList]
 # "live/rtsp" = "rtsp://114.116.215.52:38558/sub/3"
-# "live/rtsp" = "rtsp://admin:12345678ab@42.193.7.166:9514/11"
+"live/rtsp" = "rtsp://admin:MOMA2021@47.94.226.17/Streaming/Channels/201?transportmode=unicast"
 # "live/rtc" = "rtsp://wowzaec2demo.streamlock.net/vod/mp4:BigBuckBunny_115k.mp4"
 # "live/rtsp" = "rtsp://admin:123456@42.193.7.166:9018/video1"
 [WebRTC]

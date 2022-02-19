@@ -1,38 +1,18 @@
-module github.com/langhuihui/monibuca/v3
+module monibuca
 
-go 1.16
+go 1.18
 
 require (
-	github.com/Monibuca/engine/v3 v3.4.7
-	// github.com/Monibuca/plugin-ffmpeg v0.0.2
-	github.com/Monibuca/plugin-gateway/v3 v3.0.10
-	github.com/Monibuca/plugin-gb28181/v3 v3.0.2
-	github.com/Monibuca/plugin-hdl/v3 v3.0.5
-	github.com/Monibuca/plugin-hls/v3 v3.0.6
-	github.com/Monibuca/plugin-jessica/v3 v3.0.0
-	github.com/Monibuca/plugin-logrotate/v3 v3.0.0
-	github.com/Monibuca/plugin-record/v3 v3.0.0
-	github.com/Monibuca/plugin-rtmp/v3 v3.0.1
-	github.com/Monibuca/plugin-rtsp/v3 v3.0.7
-	github.com/Monibuca/plugin-summary v1.0.0
-	github.com/Monibuca/plugin-ts/v3 v3.0.1
-	github.com/Monibuca/plugin-webrtc/v3 v3.0.3
+	github.com/mkevac/debugcharts v0.0.0-20191222103121-ae1c48aa8615
+	github.com/sirupsen/logrus v1.8.1
 )
 
-// replace github.com/Monibuca/plugin-ffmpeg => ../plugin-ffmpeg
-// replace github.com/Monibuca/plugin-webrtc/v3 => ../plugin-webrtc
-// replace github.com/Monibuca/plugin-gateway/v3 => ../plugin-gateway
-
-// replace github.com/Monibuca/plugin-rtsp/v3 => ../plugin-rtsp
-
-// replace github.com/Monibuca/plugin-gb28181/v3 => ../plugin-gb28181
-
-// replace github.com/Monibuca/plugin-rtmp/v3 => ../plugin-rtmp
-
-// replace github.com/Monibuca/plugin-hls/v3 => ../plugin-hls
-
-// replace github.com/Monibuca/plugin-hdl/v3 => ../plugin-hdl
-
-// replace github.com/Monibuca/engine/v3 => ../engine
-
-// replace github.com/Monibuca/plugin-summary => ../plugin-summary
+require (
+	github.com/StackExchange/wmi v0.0.0-20190523213315-cbe66965904d // indirect
+	github.com/go-ole/go-ole v1.2.4 // indirect
+	github.com/gorilla/websocket v1.4.2 // indirect
+	github.com/shirou/gopsutil v2.19.11+incompatible // indirect
+	github.com/shirou/w32 v0.0.0-20160930032740-bb4de0191aa4 // indirect
+	github.com/stretchr/testify v1.7.0 // indirect
+	golang.org/x/sys v0.0.0-20211025201205-69cdffdb9359 // indirect
+)

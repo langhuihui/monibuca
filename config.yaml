@@ -1,0 +1,8 @@
+global:
+  http:
+    listenaddr: :8080
+hdl:
+  pull:
+    pullonstart: true
+    pulllist:
+      live/hdl: http://flv.bdplay.nodemedia.cn/live/bbb.flv
