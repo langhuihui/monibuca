@@ -3,14 +3,12 @@ package main
 import (
 	"context"
 	"flag"
-	_ "net/http/pprof"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"syscall"
 
 	. "github.com/Monibuca/engine/v4"
-	_ "github.com/mkevac/debugcharts"
+
 
 	//_ "github.com/Monibuca/plugin-ffmpeg"
 	// _ "github.com/Monibuca/plugin-cluster"
@@ -23,6 +21,7 @@ import (
 	// _ "github.com/Monibuca/plugin-jessica/v3"
 	// _ "github.com/Monibuca/plugin-logrotate/v3"
 	// _ "github.com/Monibuca/plugin-record/v3"
+	_ "github.com/Monibuca/plugin-debug/v4"
 	_ "github.com/Monibuca/plugin-rtmp/v4"
 	// _ "github.com/Monibuca/plugin-rtsp/v3"
 	// _ "github.com/Monibuca/plugin-summary"
@@ -35,11 +34,7 @@ func main() {
 	flag.Parse()
 	ctx, cancel := context.WithCancel(context.Background())
 	go waiter(cancel)
-	if _, err := os.Stat(*addr); err == nil {
-		Run(ctx, *addr)
-	} else {
-		Run(ctx, filepath.Join(filepath.Dir(os.Args[0]), *addr))
-	}
+	Run(ctx, *addr)
 }
 
 func waiter(cancel context.CancelFunc) {

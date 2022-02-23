@@ -1,6 +1,6 @@
 global:
   http:
-    listenaddr: :8080
+    listenaddr: :8082
 hdl:
   pull:
     pullonstart: true
