@@ -11,7 +11,9 @@ import (
 	_ "m7s.live/plugin/hdl/v4"
 	_ "m7s.live/plugin/hls/v4"
 	_ "m7s.live/plugin/jessica/v4"
+	_ "m7s.live/plugin/logrotate/v4"
 	_ "m7s.live/plugin/rtmp/v4"
+	_ "m7s.live/plugin/rtsp/v4"
 )
 
 func main() {
