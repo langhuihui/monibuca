@@ -1,0 +1,11 @@
+global:
+  http:
+    listenaddrtls: :8081
+    certfile: monibuca.com.pem
+    keyfile: monibuca.com.key
+record:
+  mp4:
+    autorecord: false
+webtransport:
+  certfile: monibuca.com.pem
+  keyfile: monibuca.com.key
