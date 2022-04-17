@@ -10,83 +10,55 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
+      with:
+          fetch-depth: 1
 
     - name: Set up Go
       uses: actions/setup-go@v2
       with:
         go-version: 1.16
 
-    - name: Build
-      run: go build -o m7s_linux_x86_64
-      
-    - name: Tar
-      run: tar -zcvf linux.tgz m7s_linux_x86_64 config.toml
-      
-    - name: Deploy
+    - name: Cache Go modules
+      uses: actions/cache@v1
+      with:
+        path: ~/go/pkg/mod
+        key: runner.os−go−{ { hashFiles('**/go.sum') } }
+        restore-keys: ${{ runner.os }}-go-        
+
+    - name: Run GoReleaser
+      uses: goreleaser/goreleaser-action@v2
+      if: success() && startsWith(github.ref, 'refs/tags/')
+      with:
+        version: latest
+        args: release --rm-dist
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              
+    - name: Deploy Windows
       uses: garygrossgarten/github-action-scp@release
       with:
-          local: /home/runner/work/monibuca/monibuca/linux.tgz
-          remote: /opt/dexter/linux.tgz
-          host: monibuca.com
-          username: root
-          privateKey: ${{ secrets.PEM }}
-    - name: Release
-      uses: softprops/action-gh-release@v1
-      with:
-          files: "linux.tgz"
-  build2:
-    runs-on: windows-latest
-    steps:
-    - uses: actions/checkout@v2
-    
-    - name: Set up Go
-      uses: actions/setup-go@v2
-      with:
-        go-version: 1.16
+        local: dist/m7s_${GITHUB_REF:11}_windows_amd64.tar.gz
+        remote: /opt/dexter/windows.tgz
+        host: monibuca.com
+        username: root
+        privateKey: ${{ secrets.PEM }}
 
-    - name: Build
-      run: go build -o m7s_x86_64.exe
-            
-    - name: Tar
-      run: tar -zcvf windows.tgz m7s_x86_64.exe config.toml
-      
-    - name: Deploy
+    - name: Deploy Mac
       uses: garygrossgarten/github-action-scp@release
       with:
-          local: D:\\a\\monibuca\\monibuca\\windows.tgz
-          remote: /opt/dexter/windows.tgz
-          host: monibuca.com
-          username: root
-          privateKey: ${{ secrets.PEM }}
-    - name: Release
-      uses: softprops/action-gh-release@v1
-      with:
-          files: "windows.tgz"
-  build3:
-    runs-on: macos-latest
-    steps:
-    - uses: actions/checkout@v2
-    
-    - name: Set up Go
-      uses: actions/setup-go@v2
-      with:
-        go-version: 1.16
+        local: dist/m7s_${GITHUB_REF:11}_darwin_amd64.tar.gz
+        remote: /opt/dexter/mac.tgz
+        host: monibuca.com
+        username: root
+        privateKey: ${{ secrets.PEM }}		  
 
-    - name: Build
-      run: go build -o m7s_darwin_x86_64
-
-    - name: Tar
-      run: tar -zcvf mac.tgz m7s_darwin_x86_64 config.toml
-
-    - name: Deploy
+    - name: Deploy Linux
       uses: garygrossgarten/github-action-scp@release
       with:
-          local: /Users/runner/work/monibuca/monibuca/mac.tgz
-          remote: /opt/dexter/mac.tgz
-          host: monibuca.com
-          username: root
-          privateKey: ${{ secrets.PEM }}
-    - name: Release
-      uses: softprops/action-gh-release@v1
-      with:
-          files: "mac.tgz"
+        local: dist/m7s_${GITHUB_REF:11}_linux_amd64.tar.gz
+        remote: /opt/dexter/linux.tgz
+        host: monibuca.com
+        username: root
+        privateKey: ${{ secrets.PEM }}
+        
+         
