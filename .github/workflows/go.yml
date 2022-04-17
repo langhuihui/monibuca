@@ -60,7 +60,7 @@ jobs:
       uses: garygrossgarten/github-action-scp@release
       with:
         local: dist/m7s_${{ env.version }}_darwin_arm64.tar.gz
-        remote: /opt/dexter/mac.tgz
+        remote: /opt/dexter/mac_arm64.tgz
         host: monibuca.com
         username: root
         privateKey: ${{ secrets.PEM }}		        
@@ -78,7 +78,7 @@ jobs:
       uses: garygrossgarten/github-action-scp@release
       with:
         local: dist/m7s_${{ env.version }}_linux_arm64.tar.gz
-        remote: /opt/dexter/linux.tgz
+        remote: /opt/dexter/linux_arm64.tgz
         host: monibuca.com
         username: root
         privateKey: ${{ secrets.PEM }}        
