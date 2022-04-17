@@ -56,6 +56,15 @@ jobs:
         username: root
         privateKey: ${{ secrets.PEM }}		  
 
+    - name: Deploy Mac arm64
+      uses: garygrossgarten/github-action-scp@release
+      with:
+        local: dist/m7s_${{ env.version }}_darwin_arm64.tar.gz
+        remote: /opt/dexter/mac.tgz
+        host: monibuca.com
+        username: root
+        privateKey: ${{ secrets.PEM }}		        
+
     - name: Deploy Linux
       uses: garygrossgarten/github-action-scp@release
       with:
@@ -64,5 +73,14 @@ jobs:
         host: monibuca.com
         username: root
         privateKey: ${{ secrets.PEM }}
+
+    - name: Deploy Linux arm64
+      uses: garygrossgarten/github-action-scp@release
+      with:
+        local: dist/m7s_${{ env.version }}_linux_arm64.tar.gz
+        remote: /opt/dexter/linux.tgz
+        host: monibuca.com
+        username: root
+        privateKey: ${{ secrets.PEM }}        
         
          
