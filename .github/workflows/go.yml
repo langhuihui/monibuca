@@ -9,9 +9,13 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+    
     - uses: actions/checkout@v2
       with:
           fetch-depth: 1
+
+    - name: Set up Env
+      run: echo "version=${GITHUB_REF:11}" >> $GITHUB_ENV
 
     - name: Set up Go
       uses: actions/setup-go@v2
@@ -37,7 +41,7 @@ jobs:
     - name: Deploy Windows
       uses: garygrossgarten/github-action-scp@release
       with:
-        local: dist/m7s_${GITHUB_REF:11}_windows_amd64.tar.gz
+        local: dist/m7s_${{ env.version }}_windows_amd64.tar.gz
         remote: /opt/dexter/windows.tgz
         host: monibuca.com
         username: root
@@ -46,19 +50,37 @@ jobs:
     - name: Deploy Mac
       uses: garygrossgarten/github-action-scp@release
       with:
-        local: dist/m7s_${GITHUB_REF:11}_darwin_amd64.tar.gz
+        local: dist/m7s_${{ env.version }}_darwin_amd64.tar.gz
         remote: /opt/dexter/mac.tgz
         host: monibuca.com
         username: root
         privateKey: ${{ secrets.PEM }}		  
 
+    - name: Deploy Mac arm64
+      uses: garygrossgarten/github-action-scp@release
+      with:
+        local: dist/m7s_${{ env.version }}_darwin_arm64.tar.gz
+        remote: /opt/dexter/mac_arm64.tgz
+        host: monibuca.com
+        username: root
+        privateKey: ${{ secrets.PEM }}		        
+
     - name: Deploy Linux
       uses: garygrossgarten/github-action-scp@release
       with:
-        local: dist/m7s_${GITHUB_REF:11}_linux_amd64.tar.gz
+        local: dist/m7s_${{ env.version }}_linux_amd64.tar.gz
         remote: /opt/dexter/linux.tgz
         host: monibuca.com
         username: root
         privateKey: ${{ secrets.PEM }}
+
+    - name: Deploy Linux arm64
+      uses: garygrossgarten/github-action-scp@release
+      with:
+        local: dist/m7s_${{ env.version }}_linux_arm64.tar.gz
+        remote: /opt/dexter/linux_arm64.tgz
+        host: monibuca.com
+        username: root
+        privateKey: ${{ secrets.PEM }}        
         
          
