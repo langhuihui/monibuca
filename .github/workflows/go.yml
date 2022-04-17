@@ -3,7 +3,7 @@ name: Go
 on:
   create:
     tags:
-      - v*
+      - v3*
 jobs:
 
   build:
