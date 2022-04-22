@@ -4,8 +4,8 @@ go 1.16
 
 require (
 	github.com/Monibuca/engine/v3 v3.5.1
-	github.com/Monibuca/plugin-gateway/v3 v3.0.13
-	github.com/Monibuca/plugin-gb28181/v3 v3.0.7
+	github.com/Monibuca/plugin-gateway/v3 v3.0.14
+	github.com/Monibuca/plugin-gb28181/v3 v3.0.8
 	github.com/Monibuca/plugin-hdl/v3 v3.0.7
 	github.com/Monibuca/plugin-hls/v3 v3.0.6
 	github.com/Monibuca/plugin-jessica/v3 v3.0.0
