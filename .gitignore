@@ -8,3 +8,5 @@ node_modules
 shutdown.bat
 shutdown.sh
 .m7s
+debug.go
+dist/
