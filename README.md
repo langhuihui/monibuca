@@ -23,6 +23,22 @@ bash <(curl -s -S -L https://monibuca.com/go.sh)
 3. open your browser http://localhost:8080
 4. use ffmpeg or OBS to push video streaming to rtmp://localhost/live/user1
 
+## Debugchart page
+If you want debugchart, in posix shell you can run
+```bash
+debug=1 go generate ./...
+go mod tidy
+go build .
+```
+or in windows cmd run
+```bat
+set debug=1
+go generate ./...
+go mod tidy
+go build .
+```
+**Attention, the debugchart only support all amd64 platform, or linux arm32 and arm64.**
+
 # Ecosystem
 
 go to 
