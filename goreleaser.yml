@@ -21,6 +21,7 @@ builds:
     hooks:
       pre:
         - bash -c "debug=1 go generate ./..."
+        - go mod tidy
 
   - id: "without-debug"
     env: [CGO_ENABLED=0]
@@ -32,3 +33,4 @@ builds:
     hooks:
       pre:
         - bash -c "debug=0 go generate ./..."
+        - go mod tidy
