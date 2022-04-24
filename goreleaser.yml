@@ -1,0 +1,34 @@
+project_name: m7s
+archives:
+  -
+    files:
+      - config.yaml
+builds:
+  - id: "with-debug"
+    env: [CGO_ENABLED=0]
+    ignore:
+      - goos: darwin
+        goarch: arm64
+      - goos: windows
+        goarch: arm64        
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    hooks:
+      pre:
+        - bash -c "debug=1 go generate ./..."
+
+  - id: "without-debug"
+    env: [CGO_ENABLED=0]
+    goos:
+      - windows
+      - darwin
+    goarch:
+      - arm64
+    hooks:
+      pre:
+        - bash -c "debug=0 go generate ./..."
