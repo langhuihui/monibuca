@@ -32,6 +32,24 @@ bash <(curl -s -S -L https://monibuca.com/demo.sh)
 4. ffmpeg或者OBS推流到1935端口
 5. 后台界面上提供直播预览、录制flv、rtsp拉流转发、日志跟踪等功能
 
+## 调试页面
+如果需要调试页面，posix系统请执行
+```bash
+debug=1 go generate ./...
+go mod tidy
+go build .
+```
+如果是windows，请执行
+```bat
+set debug=1
+go generate ./...
+go mod tidy
+go build .
+```
+然后打开
+**注意，调试页面仅支持64系统，或Linux arm32和arm64架构**
+
+
 # Monibuca简介
 [Monibuca](https://monibuca.com) 是一个开源的流媒体服务器开发框架，适用于快速定制化开发流媒体服务器，可以对接CDN厂商，作为回源服务器，也可以自己搭建集群部署环境。 丰富的内置插件提供了流媒体服务器的常见功能，例如rtmp server、http-flv、视频录制、QoS等。除此以外还内置了后台web界面，方便观察服务器运行的状态。 也可以自己开发后台管理界面，通过api方式获取服务器的运行信息。 Monibuca 提供了可供定制化开发的插件机制，可以任意扩展其功能。
 
