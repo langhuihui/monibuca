@@ -4,7 +4,7 @@ EnableVideo = true
 # 发布流默认过期时间单位秒
 PublishTimeout = 60
 # 自动关闭触发后延迟的秒数(期间内如果有新的订阅则取消触发关闭)
-AutoCloseDelay = 10
+AutoCloseAfter = 10
 # RTP包乱序重排
 RTPReorder = false
 [Summary]
