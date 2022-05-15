@@ -37,48 +37,29 @@ jobs:
         args: release --rm-dist
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-              
-    # - name: Deploy Windows
-    #   uses: garygrossgarten/github-action-scp@release
-    #   with:
-    #     local: dist/m7s_${{ env.version }}_windows_amd64.tar.gz
-    #     remote: /opt/dexter/windows.tgz
-    #     host: monibuca.com
-    #     username: root
-    #     privateKey: ${{ secrets.PEM }}
 
-    # - name: Deploy Mac
-    #   uses: garygrossgarten/github-action-scp@release
-    #   with:
-    #     local: dist/m7s_${{ env.version }}_darwin_amd64.tar.gz
-    #     remote: /opt/dexter/mac.tgz
-    #     host: monibuca.com
-    #     username: root
-    #     privateKey: ${{ secrets.PEM }}		  
+    - name: Checkout m7s-import
+      uses: actions/checkout@v3
+      with:
+        repository: langhuihui/m7s-import
+        path: m7s-import
+        fetch-depth: 1
 
-    # - name: Deploy Mac arm64
-    #   uses: garygrossgarten/github-action-scp@release
-    #   with:
-    #     local: dist/m7s_${{ env.version }}_darwin_arm64.tar.gz
-    #     remote: /opt/dexter/mac_arm64.tgz
-    #     host: monibuca.com
-    #     username: root
-    #     privateKey: ${{ secrets.PEM }}		        
+    - name: Add bin to m7s-import
+      if: success() && startsWith(github.ref, 'refs/tags/')
+      run:  |
+        cd m7s-import
+        ls .
+        mkdir -p apps/m7s-website/src/public/bin
+        cp ../dist/m7s_${{ env.version }}_windows_amd64.tar.gz apps/m7s-website/src/public/bin/m7s_windows_amd64.tar.gz
+        cp ../dist/m7s_${{ env.version }}_darwin_amd64.tar.gz  apps/m7s-website/src/public/bin/m7s_darwin_amd64.tar.gz 
+        cp ../dist/m7s_${{ env.version }}_darwin_arm64.tar.gz  apps/m7s-website/src/public/bin/m7s_darwin_arm64.tar.gz 
+        cp ../dist/m7s_${{ env.version }}_linux_amd64.tar.gz   apps/m7s-website/src/public/bin/m7s_linux_amd64.tar.gz 
+        cp ../dist/m7s_${{ env.version }}_linux_arm64.tar.gz   apps/m7s-website/src/public/bin/m7s_linux_arm64.tar.gz 
 
-    # - name: Deploy Linux
-    #   uses: garygrossgarten/github-action-scp@release
-    #   with:
-    #     local: dist/m7s_${{ env.version }}_linux_amd64.tar.gz
-    #     remote: /opt/dexter/linux.tgz
-    #     host: monibuca.com
-    #     username: root
-    #     privateKey: ${{ secrets.PEM }}
-
-    # - name: Deploy Linux arm64
-    #   uses: garygrossgarten/github-action-scp@release
-    #   with:
-    #     local: dist/m7s_${{ env.version }}_linux_arm64.tar.gz
-    #     remote: /opt/dexter/linux_arm64.tgz
-    #     host: monibuca.com
-    #     username: root
-    #     privateKey: ${{ secrets.PEM }}        
+        git config --global user.name 'langhuihui' 
+        git config --global user.email '178529795@qq.com'
+        git add -A
+        git commit -m '[automated commit] add bin & GitHub workflow'
+        git remote set-url --push origin https://langhuihui:${{ secrets.TOKEN }}@github.com/langhuihui/m7s-import
+        git push
