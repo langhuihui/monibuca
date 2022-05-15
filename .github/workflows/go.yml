@@ -61,5 +61,5 @@ jobs:
         git config --global user.email '178529795@qq.com'
         git add -A
         git commit -m '[automated commit] add bin & GitHub workflow'
-        git remote set-url --push origin https://langhuihui:${{ secrets.TOKEN }}@github.com/langhuihui/m7s-import
+        git remote set-url --push origin https://178529795@qq.com:${{ secrets.TOKEN }}@github.com/langhuihui/m7s-import
         git push
