@@ -14,11 +14,11 @@ import (
 	_ "m7s.live/plugin/hls/v4"
 	_ "m7s.live/plugin/jessica/v4"
 	_ "m7s.live/plugin/logrotate/v4"
-
-	// _ "m7s.live/plugin/record/v4"
+	_ "m7s.live/plugin/record/v4"
 	_ "m7s.live/plugin/rtmp/v4"
 	_ "m7s.live/plugin/rtsp/v4"
-	_ "m7s.live/plugin/webtransport/v4"
+	_ "m7s.live/plugin/room/v4"
+	_ "m7s.live/plugin/gb28181/v4"
 )
 
 func main() {

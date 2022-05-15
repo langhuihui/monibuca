@@ -3,65 +3,63 @@ module monibuca
 go 1.18
 
 require (
-	m7s.live/engine/v4 v4.0.0-beta3
-	m7s.live/plugin/debug/v4 v4.0.0-20220424024711-7fd506ac8902
-	m7s.live/plugin/hdl/v4 v4.0.0-20220416090503-99b5aac741a1
-	m7s.live/plugin/hls/v4 v4.0.0-20220416090527-c46955e75e47
-	m7s.live/plugin/jessica/v4 v4.0.0-20220322012259-b02270273ead
-	m7s.live/plugin/logrotate/v4 v4.0.0-20220317090133-53baaa5b5538
-	m7s.live/plugin/rtmp/v4 v4.0.0-20220405063605-64880867378c
-	m7s.live/plugin/rtsp/v4 v4.0.0-20220424015537-7d0451c204ea
-	m7s.live/plugin/webtransport/v4 v4.0.0-20220408080348-a2f8f82dcd1f
+	m7s.live/engine/v4 v4.0.0-beta9
+	m7s.live/plugin/debug/v4 v4.0.0-20220506113031-34f3a736ceb2
+	m7s.live/plugin/gb28181/v4 v4.0.0-20220509123544-2033bdf04f87
+	m7s.live/plugin/hdl/v4 v4.0.0-20220504142221-26a2611af6e6
+	m7s.live/plugin/hls/v4 v4.0.0-20220514154311-e5cf49e0e853
+	m7s.live/plugin/jessica/v4 v4.0.0-20220511035009-ac66c57b299d
+	m7s.live/plugin/logrotate/v4 v4.0.0-20220506113619-1a557d4707a5
+	m7s.live/plugin/record/v4 v4.0.0-20220506112927-c30961027727
+	m7s.live/plugin/room/v4 v4.0.0-20220512035851-f980d4a7f6a0
+	m7s.live/plugin/rtmp/v4 v4.0.0-20220509140411-2dbfcfe19fdf
+	m7s.live/plugin/rtsp/v4 v4.0.0-20220510135835-76956b16d1df
 )
 
 require (
-	github.com/adriancable/webtransport-go v0.1.0 // indirect
-	github.com/aler9/gortsplib v0.0.0-20220318155519-ba99421e74da // indirect
-	github.com/asticode/go-astikit v0.20.0 // indirect
-	github.com/asticode/go-astits v1.10.0 // indirect
-	github.com/cheekybits/genny v1.0.0 // indirect
+	github.com/aler9/gortsplib v0.0.0-20220513210403-3bd8ad810fa3 // indirect
 	github.com/cnotch/ipchub v1.1.0 // indirect
-	github.com/fsnotify/fsnotify v1.4.9 // indirect
+	github.com/discoviking/fsm v0.0.0-20150126104936-f4a273feecca // indirect
+	github.com/edgeware/mp4ff v0.28.0 // indirect
+	github.com/ghettovoice/gosip v0.0.0-20220420085539-cf932c28a8fe // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
-	github.com/go-task/slim-sprig v0.0.0-20210107165309-348f09dbbbc0 // indirect
 	github.com/gobwas/httphead v0.1.0 // indirect
 	github.com/gobwas/pool v0.2.1 // indirect
 	github.com/gobwas/ws v1.1.0 // indirect
 	github.com/google/uuid v1.3.0 // indirect
-	github.com/icza/bitio v1.0.0 // indirect
+	github.com/icza/bitio v1.1.0 // indirect
 	github.com/logrusorgru/aurora v2.0.3+incompatible // indirect
-	github.com/lucas-clemente/quic-go v0.25.0 // indirect
-	github.com/lufia/plan9stats v0.0.0-20211012122336-39d0f177ccd0 // indirect
-	github.com/marten-seemann/qpack v0.2.1 // indirect
-	github.com/marten-seemann/qtls-go1-16 v0.1.4 // indirect
-	github.com/marten-seemann/qtls-go1-17 v0.1.0 // indirect
-	github.com/marten-seemann/qtls-go1-18 v0.1.0-beta.1 // indirect
-	github.com/nxadm/tail v1.4.8 // indirect
+	github.com/lufia/plan9stats v0.0.0-20220326011226-f1430873d8db // indirect
+	github.com/mattn/go-colorable v0.1.12 // indirect
+	github.com/mattn/go-isatty v0.0.14 // indirect
+	github.com/mgutz/ansi v0.0.0-20200706080929-d51e80ef957d // indirect
 	github.com/onsi/ginkgo v1.16.4 // indirect
+	github.com/onsi/gomega v1.13.0 // indirect
 	github.com/pion/randutil v0.1.0 // indirect
 	github.com/pion/rtcp v1.2.9 // indirect
+	github.com/pion/rtp v1.7.13 // indirect
 	github.com/pion/rtp/v2 v2.0.0-20220302185659-b3d10fc096b0 // indirect
-	github.com/pion/sdp/v3 v3.0.4 // indirect
-	github.com/power-devops/perfstat v0.0.0-20210106213030-5aafc221ea8c // indirect
-	github.com/q191201771/naza v0.19.1 // indirect
+	github.com/pion/sdp/v3 v3.0.5 // indirect
+	github.com/power-devops/perfstat v0.0.0-20220216144756-c35f1ee13d7c // indirect
+	github.com/q191201771/naza v0.30.2 // indirect
 	github.com/quangngotan95/go-m3u8 v0.1.0 // indirect
-	github.com/shirou/gopsutil/v3 v3.22.1 // indirect
-	github.com/tklauser/go-sysconf v0.3.9 // indirect
-	github.com/tklauser/numcpus v0.3.0 // indirect
+	github.com/satori/go.uuid v1.2.1-0.20181028125025-b2ce2384e17b // indirect
+	github.com/shirou/gopsutil/v3 v3.22.4 // indirect
+	github.com/sirupsen/logrus v1.8.1 // indirect
+	github.com/tevino/abool v1.2.0 // indirect
+	github.com/tklauser/go-sysconf v0.3.10 // indirect
+	github.com/tklauser/numcpus v0.5.0 // indirect
+	github.com/x-cray/logrus-prefixed-formatter v0.5.2 // indirect
 	github.com/yusufpapurcu/wmi v1.2.2 // indirect
 	github.com/zhangpeihao/goamf v0.0.0-20140409082417-3ff2c19514a8 // indirect
-	go.uber.org/atomic v1.7.0 // indirect
-	go.uber.org/multierr v1.6.0 // indirect
+	go.uber.org/atomic v1.9.0 // indirect
+	go.uber.org/multierr v1.8.0 // indirect
 	go.uber.org/zap v1.21.0 // indirect
-	golang.org/x/crypto v0.0.0-20201221181555-eec23a3978ad // indirect
-	golang.org/x/mod v0.4.2 // indirect
-	golang.org/x/net v0.0.0-20220225172249-27dd8689420f // indirect
-	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c // indirect
-	golang.org/x/sys v0.0.0-20220111092808-5a964db01320 // indirect
+	golang.org/x/crypto v0.0.0-20220513210258-46612604a0f9 // indirect
+	golang.org/x/net v0.0.0-20220513224357-95641704303c // indirect
+	golang.org/x/sync v0.0.0-20220513210516-0976fa681c29 // indirect
+	golang.org/x/sys v0.0.0-20220513210249-45d2b4557a2a // indirect
+	golang.org/x/term v0.0.0-20220411215600-e5f449aeb171 // indirect
 	golang.org/x/text v0.3.7 // indirect
-	golang.org/x/tools v0.1.5 // indirect
-	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
-	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
-	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
-	m7s.live/plugin/ts/v4 v4.0.0-20220227134506-bb45532e1856 // indirect
+	gopkg.in/yaml.v3 v3.0.0-20220512140231-539c8e751b99 // indirect
 )
