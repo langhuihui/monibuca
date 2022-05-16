@@ -277,6 +277,8 @@ gopkg.in/yaml.v3 v3.0.0-20220512140231-539c8e751b99 h1:dbuHpmKjkDzSOMKAWl10QNlga
 gopkg.in/yaml.v3 v3.0.0-20220512140231-539c8e751b99/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=
 m7s.live/engine/v4 v4.0.0 h1:Uf4kQcmp1/dErdB7aRayWLWv+v5qqG6SSUWja17HRDQ=
 m7s.live/engine/v4 v4.0.0/go.mod h1:rliHP5yJnSyr40ha6q8OhUResRn8fo26TxmmBbR2X4M=
+m7s.live/engine/v4 v4.0.1 h1:AtX8GCS5oA5Oj812veTHzl4pbHPHHi6pzA2lGFxU9e0=
+m7s.live/engine/v4 v4.0.1/go.mod h1:rliHP5yJnSyr40ha6q8OhUResRn8fo26TxmmBbR2X4M=
 m7s.live/plugin/debug/v4 v4.0.0-20220506113031-34f3a736ceb2 h1:0QWJvozTHy7m+G/lOIGiejQ9okFIDjwzVsgXe6ZaJg8=
 m7s.live/plugin/debug/v4 v4.0.0-20220506113031-34f3a736ceb2/go.mod h1:A/C1ViacCOK7EPeeCfiwlUrC2TUtRdEqzrR0Yd9b1KQ=
 m7s.live/plugin/gb28181/v4 v4.0.0-20220515110546-d795e7c80a18 h1:M5je1OvOUDe5GYGNW2Iib9NJ9OzNcqwQHV5AqGg7SmI=
@@ -285,6 +287,8 @@ m7s.live/plugin/hdl/v4 v4.0.0-20220504142221-26a2611af6e6 h1:0md8QxcXPacqyni5eAH
 m7s.live/plugin/hdl/v4 v4.0.0-20220504142221-26a2611af6e6/go.mod h1:nJ/VCp/gS752/hEQ/YYY7Q7lsMHfKVhWKHSb6LGZeXE=
 m7s.live/plugin/hls/v4 v4.0.0-20220514154311-e5cf49e0e853 h1:Eh+G27BYH1JofTc81Cv/cuF1Vp16U4qKIeocGv5Eqwo=
 m7s.live/plugin/hls/v4 v4.0.0-20220514154311-e5cf49e0e853/go.mod h1:Qn4dDz5xlyBJwO+eZ3w8CUQ8Hl6KN1nmv0a3IsOjJvw=
+m7s.live/plugin/hls/v4 v4.0.0-20220516104638-2c6debbe8a87 h1:3GWBdtNEtXpbOuXcWsOpUJxm4kP/jDjNWxILy68c/d4=
+m7s.live/plugin/hls/v4 v4.0.0-20220516104638-2c6debbe8a87/go.mod h1:Qn4dDz5xlyBJwO+eZ3w8CUQ8Hl6KN1nmv0a3IsOjJvw=
 m7s.live/plugin/hook/v4 v4.0.0-20220510140048-d4f76fd1c415 h1:ByaKrp8iWIDhASzxxCsJRBx0Cyw1P466KLgvSiMSix4=
 m7s.live/plugin/hook/v4 v4.0.0-20220510140048-d4f76fd1c415/go.mod h1:ky3FOzCMKSDIiosPOw3wrKrQLM3YERSe5YrQZToJh/I=
 m7s.live/plugin/jessica/v4 v4.0.0-20220511035009-ac66c57b299d h1:QNIg4SAg+FnJ0rS7KlXAAH29wbTeuee9+jI7HINVNlo=
