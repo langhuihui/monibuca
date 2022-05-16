@@ -43,23 +43,28 @@ jobs:
       with:
         repository: langhuihui/m7s-import
         path: m7s-import
-        fetch-depth: 1
+        persist-credentials: false # otherwise, the token used is the GITHUB_TOKEN, instead of your personal access token.
+        fetch-depth: 0
 
     - name: Add bin to m7s-import
       if: success() && startsWith(github.ref, 'refs/tags/')
       run:  |
         cd m7s-import
-        ls .
         mkdir -p apps/m7s-website/src/public/bin
         cp ../dist/m7s_${{ env.version }}_windows_amd64.tar.gz apps/m7s-website/src/public/bin/m7s_windows_amd64.tar.gz
         cp ../dist/m7s_${{ env.version }}_darwin_amd64.tar.gz  apps/m7s-website/src/public/bin/m7s_darwin_amd64.tar.gz 
         cp ../dist/m7s_${{ env.version }}_darwin_arm64.tar.gz  apps/m7s-website/src/public/bin/m7s_darwin_arm64.tar.gz 
         cp ../dist/m7s_${{ env.version }}_linux_amd64.tar.gz   apps/m7s-website/src/public/bin/m7s_linux_amd64.tar.gz 
         cp ../dist/m7s_${{ env.version }}_linux_arm64.tar.gz   apps/m7s-website/src/public/bin/m7s_linux_arm64.tar.gz 
-
         git config --global user.name 'langhuihui' 
         git config --global user.email '178529795@qq.com'
         git add -A
         git commit -m '[automated commit] add bin & GitHub workflow'
-        git remote set-url --push origin https://178529795@qq.com:${{ secrets.TOKEN }}@github.com/langhuihui/m7s-import
-        git push
+
+    - name: push to m7s-import
+      uses: ad-m/github-push-action@master
+      if: success() && startsWith(github.ref, 'refs/tags/')
+      with:
+        github_token: ${{ secrets.TOKEN }}
+        directory: m7s-import
+        repository: langhuihui/m7s-import          
