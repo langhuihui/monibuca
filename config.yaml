@@ -1,13 +1,13 @@
 # global:
   # secret: "123456"
-  # consoleurl: "wss://console.monibuca.com/test"
   # http:
   #   listenaddrtls: :8081
   #   certfile: monibuca.com.pem
   #   keyfile: monibuca.com.key
 # record:
 #   mp4:
-#     autorecord: false
+#     autorecord: true
+#     fragment: 20
 # webtransport:
 #   enable: false
 #   certfile: monibuca.com.pem
@@ -16,12 +16,13 @@
 #   pull:
 #     pullonstart: true
 #     pulllist:
-#       live/test : rtsp://admin:aaa123456@airiot.link:18554/Streaming/Channels/101
+#       live/rtsp : rtsp://admin:aaa123456@airiot.link:18554/Streaming/Channels/101
 #   push:
 #     pushlist:
 #       live/test : rtsp://localhost:8554/live/test
 # hls:
+#   enable: false
 #   pull:
 #     pullonstart: true
 #     pulllist:
-#       live/test : http://111.40.196.27/PLTV/88888888/224/3221225548/index.m3u8
+#       live/hls: http://111.40.196.27/PLTV/88888888/224/3221225548/index.m3u8
