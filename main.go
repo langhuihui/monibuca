@@ -16,6 +16,7 @@ import (
 	_ "m7s.live/plugin/hook/v4"
 	_ "m7s.live/plugin/jessica/v4"
 	_ "m7s.live/plugin/logrotate/v4"
+	_ "m7s.live/plugin/preview/v4"
 	_ "m7s.live/plugin/record/v4"
 	_ "m7s.live/plugin/room/v4"
 	_ "m7s.live/plugin/rtmp/v4"
