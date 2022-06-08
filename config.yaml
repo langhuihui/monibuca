@@ -11,7 +11,7 @@
 # webtransport:
 #   enable: false
 #   certfile: monibuca.com.pem
-#   keyfile: monibunica.com.key
+#   keyfile: monibuca.com.key
 # rtsp:
 #   pull:
 #     pullonstart: true
