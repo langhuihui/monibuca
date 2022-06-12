@@ -3,7 +3,7 @@ module monibuca
 go 1.18
 
 require (
-	m7s.live/engine/v4 v4.1.4
+	m7s.live/engine/v4 v4.2.0
 	m7s.live/plugin/debug/v4 v4.0.0-20220506113031-34f3a736ceb2
 	m7s.live/plugin/gb28181/v4 v4.0.0-20220607131724-e110acfb56d3
 	m7s.live/plugin/hdl/v4 v4.0.0-20220520061858-640094798008
@@ -11,11 +11,12 @@ require (
 	m7s.live/plugin/hook/v4 v4.0.0-20220510140048-d4f76fd1c415
 	m7s.live/plugin/jessica/v4 v4.0.0-20220511035009-ac66c57b299d
 	m7s.live/plugin/logrotate/v4 v4.0.0-20220506113619-1a557d4707a5
-	m7s.live/plugin/preview/v4 v4.0.0-20220608021414-a4c9f8eab7f5
-	m7s.live/plugin/record/v4 v4.0.0-20220602063958-0e61984aec81
+	m7s.live/plugin/preview/v4 v4.0.0-20220612074126-ea770517a67e
+	m7s.live/plugin/record/v4 v4.0.0-20220612043738-8f9b23601007
 	m7s.live/plugin/room/v4 v4.0.0-20220512035851-f980d4a7f6a0
 	m7s.live/plugin/rtmp/v4 v4.0.0-20220526123604-cbe785dedaae
 	m7s.live/plugin/rtsp/v4 v4.0.0-20220605130937-f9bc450d0186
+	m7s.live/plugin/snap/v4 v4.0.0-20220612035905-720756e0d9ce
 	m7s.live/plugin/webrtc/v4 v4.0.0-20220606135438-05117be5d638
 	m7s.live/plugin/webtransport/v4 v4.0.0-20220606132852-13c8e2349a26
 )
@@ -37,7 +38,7 @@ require (
 	github.com/google/uuid v1.3.0 // indirect
 	github.com/icza/bitio v1.1.0 // indirect
 	github.com/logrusorgru/aurora v2.0.3+incompatible // indirect
-	github.com/lucas-clemente/quic-go v0.25.0 // indirect
+	github.com/lucas-clemente/quic-go v0.26.0 // indirect
 	github.com/lufia/plan9stats v0.0.0-20220517141722-cf486979b281 // indirect
 	github.com/marten-seemann/qpack v0.2.1 // indirect
 	github.com/marten-seemann/qtls-go1-16 v0.1.5 // indirect

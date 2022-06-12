@@ -23,6 +23,7 @@ import (
 	_ "m7s.live/plugin/rtsp/v4"
 	_ "m7s.live/plugin/webrtc/v4"
 	_ "m7s.live/plugin/webtransport/v4"
+	_ "m7s.live/plugin/snap/v4"
 )
 
 func main() {
