@@ -495,8 +495,8 @@ grpc.go4.org v0.0.0-20170609214715-11d0a25b4919/go.mod h1:77eQGdRu53HpSqPFJFmuJd
 honnef.co/go/tools v0.0.0-20180728063816-88497007e858/go.mod h1:rf3lG4BRIbNafJWhAfAdb/ePZxsR/4RtNHQocxwk9r4=
 honnef.co/go/tools v0.0.0-20190102054323-c2f93a96b099/go.mod h1:rf3lG4BRIbNafJWhAfAdb/ePZxsR/4RtNHQocxwk9r4=
 honnef.co/go/tools v0.0.0-20190106161140-3f1c8253044a/go.mod h1:rf3lG4BRIbNafJWhAfAdb/ePZxsR/4RtNHQocxwk9r4=
-m7s.live/engine/v4 v4.2.0 h1:8t19PmVHoiLxvfogs6pgh/MeEeYm4EBca8U1wmLFqR8=
-m7s.live/engine/v4 v4.2.0/go.mod h1:rliHP5yJnSyr40ha6q8OhUResRn8fo26TxmmBbR2X4M=
+m7s.live/engine/v4 v4.2.1 h1:V5rNov66oVKNZP6+Nl9zs3wE/TFDJa+pMfqcBdAcEj8=
+m7s.live/engine/v4 v4.2.1/go.mod h1:rliHP5yJnSyr40ha6q8OhUResRn8fo26TxmmBbR2X4M=
 m7s.live/plugin/debug/v4 v4.0.0-20220506113031-34f3a736ceb2 h1:0QWJvozTHy7m+G/lOIGiejQ9okFIDjwzVsgXe6ZaJg8=
 m7s.live/plugin/debug/v4 v4.0.0-20220506113031-34f3a736ceb2/go.mod h1:A/C1ViacCOK7EPeeCfiwlUrC2TUtRdEqzrR0Yd9b1KQ=
 m7s.live/plugin/gb28181/v4 v4.0.0-20220607131724-e110acfb56d3 h1:zhDjSjstW82eRaihAJdNwgat5hMhRD39GbyWf2Kg8+I=
@@ -511,16 +511,8 @@ m7s.live/plugin/jessica/v4 v4.0.0-20220511035009-ac66c57b299d h1:QNIg4SAg+FnJ0rS
 m7s.live/plugin/jessica/v4 v4.0.0-20220511035009-ac66c57b299d/go.mod h1:mJCONeOUeIPPA7Pfgge844l65KzHXa+QwE+AJ64Cf+4=
 m7s.live/plugin/logrotate/v4 v4.0.0-20220506113619-1a557d4707a5 h1:XkkHG9sYk45GXVxZXDbY7WgtwoiXfJ8Mf58CPT5Bzss=
 m7s.live/plugin/logrotate/v4 v4.0.0-20220506113619-1a557d4707a5/go.mod h1:a8hIV59GjpQDE+Ip790CU7yOHaG4+Iweci0sLvo43FU=
-m7s.live/plugin/preview/v4 v4.0.0-20220608021414-a4c9f8eab7f5 h1:JjCpIj+JaLUVdPGQn85M7aSAnyP1HcGp2yvnmoVLO1k=
-m7s.live/plugin/preview/v4 v4.0.0-20220608021414-a4c9f8eab7f5/go.mod h1:iYhWqFbTvTNDFplbTOrE5X9M6ED7gCKkKMuM5QmBocg=
-m7s.live/plugin/preview/v4 v4.0.0-20220609062649-c4f3571bbc80 h1:cZ47Qp6dzbEpPaKM+FBY2FxJ0xo59s1qibYprzOJA9g=
-m7s.live/plugin/preview/v4 v4.0.0-20220609062649-c4f3571bbc80/go.mod h1:iYhWqFbTvTNDFplbTOrE5X9M6ED7gCKkKMuM5QmBocg=
 m7s.live/plugin/preview/v4 v4.0.0-20220612074126-ea770517a67e h1:S8hrME0L3QWwmJ4i6iEvGSqXCGpgWHgg42N0M1Pq3N0=
 m7s.live/plugin/preview/v4 v4.0.0-20220612074126-ea770517a67e/go.mod h1:iYhWqFbTvTNDFplbTOrE5X9M6ED7gCKkKMuM5QmBocg=
-m7s.live/plugin/record/v4 v4.0.0-20220602063958-0e61984aec81 h1:t3lB7xeF85vqbqaIpLFpbK+BmTjhkqgZEK01ol7BHmY=
-m7s.live/plugin/record/v4 v4.0.0-20220602063958-0e61984aec81/go.mod h1:a2/CY+ddgmxzUMDpVTfAsTHrtWNDo/JOmzi6Xf05bQM=
-m7s.live/plugin/record/v4 v4.0.0-20220609103825-f838166f51d3 h1:onsa8Z6EtztuF1D3oAlhKhTNrOHc8A0JFT2H6dJyKak=
-m7s.live/plugin/record/v4 v4.0.0-20220609103825-f838166f51d3/go.mod h1:a2/CY+ddgmxzUMDpVTfAsTHrtWNDo/JOmzi6Xf05bQM=
 m7s.live/plugin/record/v4 v4.0.0-20220612043738-8f9b23601007 h1:sqg20vFQjVGXivFih+aMZMjDYdE0cJ0tuCjmu5rzvwM=
 m7s.live/plugin/record/v4 v4.0.0-20220612043738-8f9b23601007/go.mod h1:RH4YeWiKMIheDA7UpRUJWuvd4s+yCl7v/FXT4NASwUA=
 m7s.live/plugin/room/v4 v4.0.0-20220512035851-f980d4a7f6a0 h1:rv/GTbcVz1k3/7xWHTXnp4f9LU7Bzf+qC3Dqe9TIEZs=
