@@ -11,3 +11,4 @@ shutdown.sh
 debug.go
 dist/
 record/
+config2.yaml

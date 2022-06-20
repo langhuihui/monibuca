@@ -16,7 +16,7 @@ require (
 	m7s.live/plugin/room/v4 v4.0.0-20220512035851-f980d4a7f6a0
 	m7s.live/plugin/rtmp/v4 v4.0.0-20220619154232-ab31af1fb7d6
 	m7s.live/plugin/rtsp/v4 v4.0.0-20220619154428-2c1d908d7e68
-	m7s.live/plugin/snap/v4 v4.0.0-20220612035905-720756e0d9ce
+	m7s.live/plugin/snap/v4 v4.0.0-20220619154320-97a4991e775b
 	m7s.live/plugin/webrtc/v4 v4.0.0-20220619154404-6a5d740a21de
 	m7s.live/plugin/webtransport/v4 v4.0.0-20220619154419-bf138bc5958b
 )

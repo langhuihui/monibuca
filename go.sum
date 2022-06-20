@@ -524,6 +524,8 @@ m7s.live/plugin/rtsp/v4 v4.0.0-20220619154428-2c1d908d7e68 h1:sKnga6vlsh3iVLwbjp
 m7s.live/plugin/rtsp/v4 v4.0.0-20220619154428-2c1d908d7e68/go.mod h1:pGxUDv4pes+hA/PxDdUdJleyJpSbK0562hCC0TODMJ0=
 m7s.live/plugin/snap/v4 v4.0.0-20220612035905-720756e0d9ce h1:oYlcXS0qX/LtLMry6Lvaidz91dw6nEIs8q4XIaU6+dw=
 m7s.live/plugin/snap/v4 v4.0.0-20220612035905-720756e0d9ce/go.mod h1:XHggonZ0lIKEX/OP2rXjV2mPpG4urmvMT3foIaFRsus=
+m7s.live/plugin/snap/v4 v4.0.0-20220619154320-97a4991e775b h1:fyy2rnRkjJnOIDJ4lIYHpDlxaAMJPYvXmhd/PbNhgrQ=
+m7s.live/plugin/snap/v4 v4.0.0-20220619154320-97a4991e775b/go.mod h1:XHggonZ0lIKEX/OP2rXjV2mPpG4urmvMT3foIaFRsus=
 m7s.live/plugin/webrtc/v4 v4.0.0-20220619154404-6a5d740a21de h1:YQuiVrN7XMsxbxvYC8696i0gFPPe8TsfTIUDMxmKrFQ=
 m7s.live/plugin/webrtc/v4 v4.0.0-20220619154404-6a5d740a21de/go.mod h1:F78F1+ILZZbKYoHXr42YBXkHoi9D4W7jvjSazN38000=
 m7s.live/plugin/webtransport/v4 v4.0.0-20220619154419-bf138bc5958b h1:VIZh7EDfZ6kLv+f9sLMQzrRZObDiMVgFFaTalVAU+MI=
