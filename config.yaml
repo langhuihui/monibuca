@@ -1,3 +1,8 @@
+# 说明：插件默认启用默认配置，修改请参考配置文档，修改的部分会自动覆盖默认配置。
+# 全局配置参考 https://m7s.live/guide/config.html
+# 插件配置参考各个插件的文档
+# 插件都有一个enable配置，如果为false则不启用该插件，默认为true即不需要配置。
+
 # global:
   # secret: "123456"
   # http:
@@ -17,9 +22,6 @@
 #     pullonstart: true
 #     pulllist:
 #       live/rtsp : rtsp://admin:aaa123456@airiot.link:18554/Streaming/Channels/101
-#   push:
-#     pushlist:
-#       live/test : rtsp://localhost:8554/live/test
 # hls:
 #   enable: false
 #   pull:

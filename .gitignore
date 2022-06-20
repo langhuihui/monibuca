@@ -10,7 +10,4 @@ shutdown.sh
 .m7s
 debug.go
 dist/
-flv
-hls
-mp4
-raw
+record/
