@@ -3,7 +3,7 @@ module monibuca
 go 1.18
 
 require (
-	m7s.live/engine/v4 v4.3.0
+	m7s.live/engine/v4 v4.3.1
 	m7s.live/plugin/debug/v4 v4.0.0-20220506113031-34f3a736ceb2
 	m7s.live/plugin/gb28181/v4 v4.0.0-20220607131724-e110acfb56d3
 	m7s.live/plugin/hdl/v4 v4.0.0-20220619154106-b109dd48a6e4
@@ -11,13 +11,13 @@ require (
 	m7s.live/plugin/hook/v4 v4.0.0-20220510140048-d4f76fd1c415
 	m7s.live/plugin/jessica/v4 v4.0.0-20220619154153-bcd0a5960ac1
 	m7s.live/plugin/logrotate/v4 v4.0.0-20220506113619-1a557d4707a5
-	m7s.live/plugin/preview/v4 v4.0.0-20220612074126-ea770517a67e
-	m7s.live/plugin/record/v4 v4.0.0-20220620045616-933fb3cceda5
+	m7s.live/plugin/preview/v4 v4.0.0-20220622123746-8dd850d71d33
+	m7s.live/plugin/record/v4 v4.0.0-20220622154241-0029c816f11f
 	m7s.live/plugin/room/v4 v4.0.0-20220512035851-f980d4a7f6a0
 	m7s.live/plugin/rtmp/v4 v4.0.0-20220619154232-ab31af1fb7d6
 	m7s.live/plugin/rtsp/v4 v4.0.0-20220619154428-2c1d908d7e68
 	m7s.live/plugin/snap/v4 v4.0.0-20220619154320-97a4991e775b
-	m7s.live/plugin/webrtc/v4 v4.0.0-20220619154404-6a5d740a21de
+	m7s.live/plugin/webrtc/v4 v4.0.0-20220622032224-a8edcdbf9eaa
 	m7s.live/plugin/webtransport/v4 v4.0.0-20220619154419-bf138bc5958b
 )
 
