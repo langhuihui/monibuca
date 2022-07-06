@@ -56,6 +56,11 @@ jobs:
         cp ../dist/m7s_${{ env.version }}_darwin_arm64.tar.gz  apps/m7s-website/src/public/bin/m7s_darwin_arm64.tar.gz 
         cp ../dist/m7s_${{ env.version }}_linux_amd64.tar.gz   apps/m7s-website/src/public/bin/m7s_linux_amd64.tar.gz 
         cp ../dist/m7s_${{ env.version }}_linux_arm64.tar.gz   apps/m7s-website/src/public/bin/m7s_linux_arm64.tar.gz 
+        releaseinfo=`curl -H "Accept: application/vnd.github+json" -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" https://api.github.com/repos/${{ github.repository }}/releases/latest`
+        body=`echo $releaseinfo | jq   ".body" | sed -e 's/^"//' -e 's/"$//'`
+        name=`echo $releaseinfo | jq   ".name" | sed -e 's/^"//' -e 's/"$//'`
+        touch apps/m7s-website/src/release.txt
+        echo -e "# $name\n$body" | cat - apps/m7s-website/src/release.txt > temp && mv temp apps/m7s-website/src/release.txt
         git config --global user.name 'langhuihui' 
         git config --global user.email '178529795@qq.com'
         git add -A
