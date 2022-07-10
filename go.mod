@@ -3,15 +3,15 @@ module monibuca
 go 1.18
 
 require (
-	m7s.live/engine/v4 v4.4.4
+	m7s.live/engine/v4 v4.5.1
 	m7s.live/plugin/debug/v4 v4.0.0-20220506113031-34f3a736ceb2
-	m7s.live/plugin/gb28181/v4 v4.0.0-20220704023857-64861c37b1e6
+	m7s.live/plugin/gb28181/v4 v4.0.0-20220710074849-8f2a90e8ac40
 	m7s.live/plugin/hdl/v4 v4.0.0-20220619154106-b109dd48a6e4
 	m7s.live/plugin/hls/v4 v4.0.0-20220701023227-8b8d68de154f
 	m7s.live/plugin/hook/v4 v4.0.0-20220510140048-d4f76fd1c415
 	m7s.live/plugin/jessica/v4 v4.0.0-20220619154153-bcd0a5960ac1
 	m7s.live/plugin/logrotate/v4 v4.0.0-20220506113619-1a557d4707a5
-	m7s.live/plugin/preview/v4 v4.0.0-20220626084504-3a50bb4ce5f3
+	m7s.live/plugin/preview/v4 v4.0.0-20220710064653-1bfc340193c8
 	m7s.live/plugin/record/v4 v4.0.0-20220625032502-232d974a1c93
 	m7s.live/plugin/room/v4 v4.0.0-20220512035851-f980d4a7f6a0
 	m7s.live/plugin/rtmp/v4 v4.0.0-20220619154232-ab31af1fb7d6
@@ -49,7 +49,6 @@ require (
 	github.com/mgutz/ansi v0.0.0-20200706080929-d51e80ef957d // indirect
 	github.com/nxadm/tail v1.4.8 // indirect
 	github.com/onsi/ginkgo v1.16.5 // indirect
-	github.com/onsi/gomega v1.19.0 // indirect
 	github.com/pion/datachannel v1.5.2 // indirect
 	github.com/pion/dtls/v2 v2.1.5 // indirect
 	github.com/pion/ice/v2 v2.2.6 // indirect
