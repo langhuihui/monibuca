@@ -3,9 +3,9 @@ module monibuca
 go 1.18
 
 require (
-	m7s.live/engine/v4 v4.5.1
+	m7s.live/engine/v4 v4.5.4
 	m7s.live/plugin/debug/v4 v4.0.0-20220506113031-34f3a736ceb2
-	m7s.live/plugin/gb28181/v4 v4.0.0-20220710074849-8f2a90e8ac40
+	m7s.live/plugin/gb28181/v4 v4.0.0-20220717024155-cf761e09d74b
 	m7s.live/plugin/hdl/v4 v4.0.0-20220619154106-b109dd48a6e4
 	m7s.live/plugin/hls/v4 v4.0.0-20220701023227-8b8d68de154f
 	m7s.live/plugin/hook/v4 v4.0.0-20220510140048-d4f76fd1c415
@@ -36,6 +36,7 @@ require (
 	github.com/gobwas/pool v0.2.1 // indirect
 	github.com/gobwas/ws v1.1.0 // indirect
 	github.com/google/uuid v1.3.0 // indirect
+	github.com/husanpao/ip v0.0.0-20220711072141-f1e1174bc11b // indirect
 	github.com/icza/bitio v1.1.0 // indirect
 	github.com/logrusorgru/aurora v2.0.3+incompatible // indirect
 	github.com/lucas-clemente/quic-go v0.26.0 // indirect
