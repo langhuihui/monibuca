@@ -1,37 +1,36 @@
-# 说明：插件默认启用默认配置，修改请参考配置文档，修改的部分会自动覆盖默认配置。
+# 支持零配置启动，即无需填写配置默认启用所有的插件。
+# 只需要填写需要修改的配置项即可。不需要将所有的配置都填写进来！！。
 # 全局配置参考 https://m7s.live/guide/config.html
 # 插件配置参考各个插件的文档
 # 插件都有一个enable配置，如果为false则不启用该插件，默认为true即不需要配置。
 
-global:
-  console:
-    secret: "ab0f6913670062af4d2f15c621205178"
-  # publish:
-  #   pubaudio: false
-  http:
-    listenaddrtls: :8081
-    certfile: monibuca.com.pem
-    keyfile: monibuca.com.key
-record:
-  enable: false
-  hls:
-    autorecord: true
-    fragment: 20
-webtransport:
-  # enable: false
-  certfile: monibuca.com.pem
-  keyfile: monibuca.com.key
-gb28181:
-  # enable: false
-rtsp:
-  enable: false
-  pull:
-    pullonstart: true
-    pulllist:
-      live/rtsp : rtsp://admin:MOMA2021@47.94.226.17/Streaming/Channels/201?transportmode=unicast
-hls:
-  enable: false
-  pull:
-    pullonstart: true
-    pulllist:
-      live/hls: http://111.40.196.27/PLTV/88888888/224/3221225548/index.m3u8
+# global:
+#   console:
+#     secret: "ab0f6913670062af4d2f15c621205178"
+  # http:
+  #   listenaddrtls: :8081
+  #   certfile: monibuca.com.pem
+  #   keyfile: monibuca.com.key
+# record:
+#   enable: false
+#   hls:
+#     autorecord: true
+#     fragment: 20
+# webtransport:
+#   enable: false
+#   certfile: monibuca.com.pem
+#   keyfile: monibuca.com.key
+# gb28181:
+#   # enable: false
+# rtsp:
+#   # enable: false
+#   pull:
+#     pullonstart: true
+#     pulllist:
+#       live/rtsp: rtsp://admin:MOMA2021@47.94.226.17/Streaming/Channels/201?transportmode=unicast
+# hls:
+#   # enable: false
+#   pull:
+#     pullonstart: true
+#     pulllist:
+#       live/hls: http://111.40.196.27/PLTV/88888888/224/3221225548/index.m3u8
