@@ -502,8 +502,8 @@ grpc.go4.org v0.0.0-20170609214715-11d0a25b4919/go.mod h1:77eQGdRu53HpSqPFJFmuJd
 honnef.co/go/tools v0.0.0-20180728063816-88497007e858/go.mod h1:rf3lG4BRIbNafJWhAfAdb/ePZxsR/4RtNHQocxwk9r4=
 honnef.co/go/tools v0.0.0-20190102054323-c2f93a96b099/go.mod h1:rf3lG4BRIbNafJWhAfAdb/ePZxsR/4RtNHQocxwk9r4=
 honnef.co/go/tools v0.0.0-20190106161140-3f1c8253044a/go.mod h1:rf3lG4BRIbNafJWhAfAdb/ePZxsR/4RtNHQocxwk9r4=
-m7s.live/engine/v4 v4.5.7 h1:5CtF019O6y1dwVxhxR5OQEGV5gjkj6XdFfPArwh7Gyw=
-m7s.live/engine/v4 v4.5.7/go.mod h1:uzpGiVnIcuoXehpvqOj9iTVxnyf7RZQZ/Ikiwyjs01E=
+m7s.live/engine/v4 v4.5.8 h1:bsmso744C/OtA2bWAUEH2Xv503jfSHZBmE/4Nwsw6/8=
+m7s.live/engine/v4 v4.5.8/go.mod h1:uzpGiVnIcuoXehpvqOj9iTVxnyf7RZQZ/Ikiwyjs01E=
 m7s.live/plugin/debug/v4 v4.0.0-20220506113031-34f3a736ceb2 h1:0QWJvozTHy7m+G/lOIGiejQ9okFIDjwzVsgXe6ZaJg8=
 m7s.live/plugin/debug/v4 v4.0.0-20220506113031-34f3a736ceb2/go.mod h1:A/C1ViacCOK7EPeeCfiwlUrC2TUtRdEqzrR0Yd9b1KQ=
 m7s.live/plugin/gb28181/v4 v4.0.0-20220717024155-cf761e09d74b h1:Q65xt8j7h8erXOiiq9JfvM44ttI99v1eLiKfuHvU9vk=
@@ -524,8 +524,6 @@ m7s.live/plugin/record/v4 v4.0.0-20220625032502-232d974a1c93 h1:4voF7d0cDsSm0QV7
 m7s.live/plugin/record/v4 v4.0.0-20220625032502-232d974a1c93/go.mod h1:pOe8VNiXm/m1SiJSO16iFZhqrWJeb1xcV3s9qv5v6eo=
 m7s.live/plugin/room/v4 v4.0.0-20220512035851-f980d4a7f6a0 h1:rv/GTbcVz1k3/7xWHTXnp4f9LU7Bzf+qC3Dqe9TIEZs=
 m7s.live/plugin/room/v4 v4.0.0-20220512035851-f980d4a7f6a0/go.mod h1:s/e+9cyOkJVMAsOVRM08RDvlPikeaeh5R26qk8oekFA=
-m7s.live/plugin/rtmp/v4 v4.0.0-20220619154232-ab31af1fb7d6 h1:3YZmLR3waoaLLkyPCcKek6jrjX+EIK8tgILOYQqc0Is=
-m7s.live/plugin/rtmp/v4 v4.0.0-20220619154232-ab31af1fb7d6/go.mod h1:Y+1A1ds4GgcoDennFy5DJntiuzeptO7EEqgu32bjJ70=
 m7s.live/plugin/rtmp/v4 v4.0.0-20220730051812-23de2a93993a h1:dkTwholGSb65s17syGEtgP79a5reNbsv4I+MNi/5FyI=
 m7s.live/plugin/rtmp/v4 v4.0.0-20220730051812-23de2a93993a/go.mod h1:Y+1A1ds4GgcoDennFy5DJntiuzeptO7EEqgu32bjJ70=
 m7s.live/plugin/rtsp/v4 v4.0.0-20220723035926-9b058153d227 h1:+RGtDVBVRWMwozpreVvZvVsG4c79LolxqLYQfPoWgy8=
