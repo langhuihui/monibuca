@@ -3,14 +3,14 @@ package main
 //go:generate go run gen.go $debug
 
 /*
-                                              
-███╗   ███╗ ██████╗ ███╗   ██╗██╗██████╗ ██╗   ██╗ ██████╗ █████╗ 
+
+███╗   ███╗ ██████╗ ███╗   ██╗██╗██████╗ ██╗   ██╗ ██████╗ █████╗
 ████╗ ████║██╔═══██╗████╗  ██║██║██╔══██╗██║   ██║██╔════╝██╔══██╗
 ██╔████╔██║██║   ██║██╔██╗ ██║██║██████╔╝██║   ██║██║     ███████║
 ██║╚██╔╝██║██║   ██║██║╚██╗██║██║██╔══██╗██║   ██║██║     ██╔══██║
 ██║ ╚═╝ ██║╚██████╔╝██║ ╚████║██║██████╔╝╚██████╔╝╚██████╗██║  ██║
 ╚═╝     ╚═╝ ╚═════╝ ╚═╝  ╚═══╝╚═╝╚═════╝  ╚═════╝  ╚═════╝╚═╝  ╚═╝
-                                                                                                                            
+
 The live stream server for Go
 (c) dexter 2019-present
 */
@@ -18,6 +18,7 @@ The live stream server for Go
 import (
 	"context"
 	"flag"
+	"fmt"
 
 	"m7s.live/engine/v4"
 	"m7s.live/engine/v4/util"
@@ -34,15 +35,20 @@ import (
 	_ "m7s.live/plugin/room/v4"
 	_ "m7s.live/plugin/rtmp/v4"
 	_ "m7s.live/plugin/rtsp/v4"
+	_ "m7s.live/plugin/snap/v4"
 	_ "m7s.live/plugin/webrtc/v4"
 	_ "m7s.live/plugin/webtransport/v4"
-	_ "m7s.live/plugin/snap/v4"
+)
+
+var (
+	version = "dev"
 )
 
 func main() {
+	fmt.Println("start monibuca version:", version)
 	conf := flag.String("c", "config.yaml", "config file")
 	flag.Parse()
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.WithValue(context.Background(), "version", version))
 	go util.WaitTerm(cancel)
 	engine.Run(ctx, *conf)
 }
