@@ -48,7 +48,7 @@ func main() {
 	fmt.Println("start monibuca version:", version)
 	conf := flag.String("c", "config.yaml", "config file")
 	flag.Parse()
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.WithValue(context.Background(), "version", version))
 	go util.WaitTerm(cancel)
-	engine.Run(ctx, *conf, version)
+	engine.Run(ctx, *conf)
 }
