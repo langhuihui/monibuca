@@ -3,9 +3,13 @@ archives:
   -
     files:
       - config.yaml
+      - monibuca.com.key
+      - monibuca.com.pem
 builds:
   - id: "with-debug"
     env: [CGO_ENABLED=0]
+    ldflags:
+      - -s -w -X main.version={{.Tag}}
     ignore:
       - goos: darwin
         goarch: arm64
@@ -25,6 +29,8 @@ builds:
 
   - id: "without-debug"
     env: [CGO_ENABLED=0]
+    ldflags:
+      - -s -w -X main.version={{.Tag}}    
     goos:
       - windows
       - darwin
