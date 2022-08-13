@@ -3,16 +3,16 @@ module monibuca
 go 1.18
 
 require (
-	m7s.live/engine/v4 v4.5.8
+	m7s.live/engine/v4 v4.6.1
 	m7s.live/plugin/debug/v4 v4.0.0-20220506113031-34f3a736ceb2
-	m7s.live/plugin/gb28181/v4 v4.0.0-20220717024155-cf761e09d74b
+	m7s.live/plugin/gb28181/v4 v4.0.0-20220813041333-a09080641d33
 	m7s.live/plugin/hdl/v4 v4.0.0-20220619154106-b109dd48a6e4
 	m7s.live/plugin/hls/v4 v4.0.0-20220701023227-8b8d68de154f
 	m7s.live/plugin/hook/v4 v4.0.0-20220510140048-d4f76fd1c415
 	m7s.live/plugin/jessica/v4 v4.0.0-20220619154153-bcd0a5960ac1
 	m7s.live/plugin/logrotate/v4 v4.0.0-20220506113619-1a557d4707a5
 	m7s.live/plugin/preview/v4 v4.0.0-20220710064653-1bfc340193c8
-	m7s.live/plugin/record/v4 v4.0.0-20220625032502-232d974a1c93
+	m7s.live/plugin/record/v4 v4.0.0-20220804085726-e920edb4df2b
 	m7s.live/plugin/room/v4 v4.0.0-20220512035851-f980d4a7f6a0
 	m7s.live/plugin/rtmp/v4 v4.0.0-20220730051812-23de2a93993a
 	m7s.live/plugin/rtsp/v4 v4.0.0-20220723035926-9b058153d227
