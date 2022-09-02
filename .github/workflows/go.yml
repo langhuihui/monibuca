@@ -61,6 +61,7 @@ jobs:
         name=`echo $releaseinfo | jq   ".name" | sed -e 's/^"//' -e 's/"$//'`
         touch apps/m7s-website/src/release.txt
         echo -e "# $name\n$body" | cat - apps/m7s-website/src/release.txt > temp && mv temp apps/m7s-website/src/release.txt
+        sed "/## Changelog/d" -i apps/m7s-website/src/release.txt
         git config --global user.name 'langhuihui' 
         git config --global user.email '178529795@qq.com'
         git add -A
