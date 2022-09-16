@@ -5,7 +5,7 @@ go 1.18
 require (
 	m7s.live/engine/v4 v4.6.9
 	m7s.live/plugin/debug/v4 v4.0.0-20220506113031-34f3a736ceb2
-	m7s.live/plugin/gb28181/v4 v4.0.4
+	m7s.live/plugin/gb28181/v4 v4.0.5
 	m7s.live/plugin/hdl/v4 v4.0.0
 	m7s.live/plugin/hls/v4 v4.0.0
 	m7s.live/plugin/hook/v4 v4.0.0-20220510140048-d4f76fd1c415
