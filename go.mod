@@ -11,7 +11,7 @@ require (
 	m7s.live/plugin/hls/v4 v4.0.1
 	m7s.live/plugin/hook/v4 v4.0.0
 	m7s.live/plugin/jessica/v4 v4.0.0
-	m7s.live/plugin/logrotate/v4 v4.0.2
+	m7s.live/plugin/logrotate/v4 v4.0.3
 	m7s.live/plugin/preview/v4 v4.0.1
 	m7s.live/plugin/record/v4 v4.0.1
 	m7s.live/plugin/room/v4 v4.0.0-20220512035851-f980d4a7f6a0
