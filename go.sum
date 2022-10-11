@@ -522,8 +522,8 @@ m7s.live/plugin/logrotate/v4 v4.0.3 h1:f+teASc5Y5vDOrxXFc/ri3t7jdi6GIb6V9UMjhacb
 m7s.live/plugin/logrotate/v4 v4.0.3/go.mod h1:a8hIV59GjpQDE+Ip790CU7yOHaG4+Iweci0sLvo43FU=
 m7s.live/plugin/preview/v4 v4.0.1 h1:k8iA5/bMiEWSFcy4zaZ8wG93AtJcSwxtgcQG+Y0xX5E=
 m7s.live/plugin/preview/v4 v4.0.1/go.mod h1:iYhWqFbTvTNDFplbTOrE5X9M6ED7gCKkKMuM5QmBocg=
-m7s.live/plugin/record/v4 v4.0.2 h1:vm971ixluHjJC2e6tqQBY1aYYjn/jl8mJfwsjuTOAv8=
-m7s.live/plugin/record/v4 v4.0.2/go.mod h1:pOe8VNiXm/m1SiJSO16iFZhqrWJeb1xcV3s9qv5v6eo=
+m7s.live/plugin/record/v4 v4.0.3 h1:sUKLInDO/pi7bm54rKjyfq4KW2QweQK4DgkjtcFbKoY=
+m7s.live/plugin/record/v4 v4.0.3/go.mod h1:pOe8VNiXm/m1SiJSO16iFZhqrWJeb1xcV3s9qv5v6eo=
 m7s.live/plugin/room/v4 v4.0.0-20220512035851-f980d4a7f6a0 h1:rv/GTbcVz1k3/7xWHTXnp4f9LU7Bzf+qC3Dqe9TIEZs=
 m7s.live/plugin/room/v4 v4.0.0-20220512035851-f980d4a7f6a0/go.mod h1:s/e+9cyOkJVMAsOVRM08RDvlPikeaeh5R26qk8oekFA=
 m7s.live/plugin/rtmp/v4 v4.0.1 h1:jq0MT3Tm6jTxiCzRZCNEil+N+NoDCTvuhLJ3qVWOkF0=
