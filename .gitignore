@@ -12,3 +12,4 @@ debug.go
 dist/
 record/
 config2.yaml
+config1.yaml
