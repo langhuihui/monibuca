@@ -372,8 +372,8 @@ m7s.live/plugin/preview/v4 v4.0.1 h1:k8iA5/bMiEWSFcy4zaZ8wG93AtJcSwxtgcQG+Y0xX5E
 m7s.live/plugin/preview/v4 v4.0.1/go.mod h1:iYhWqFbTvTNDFplbTOrE5X9M6ED7gCKkKMuM5QmBocg=
 m7s.live/plugin/record/v4 v4.0.4 h1:7GiJHxNeftC1c7ILX06kLIhGuM2qTqY7EbIpJfGwHYQ=
 m7s.live/plugin/record/v4 v4.0.4/go.mod h1:pOe8VNiXm/m1SiJSO16iFZhqrWJeb1xcV3s9qv5v6eo=
-m7s.live/plugin/room/v4 v4.0.0 h1:K490skjkB+qfDgEME6B2gOh9wxpRIlbXHOmcjwQtMnM=
-m7s.live/plugin/room/v4 v4.0.0/go.mod h1:s/e+9cyOkJVMAsOVRM08RDvlPikeaeh5R26qk8oekFA=
+m7s.live/plugin/room/v4 v4.0.1 h1:MKcGWKSVc+vWVE4Ygdlz+aMy5KaZvhFx3x2xxT0Onsg=
+m7s.live/plugin/room/v4 v4.0.1/go.mod h1:s/e+9cyOkJVMAsOVRM08RDvlPikeaeh5R26qk8oekFA=
 m7s.live/plugin/rtmp/v4 v4.0.1 h1:jq0MT3Tm6jTxiCzRZCNEil+N+NoDCTvuhLJ3qVWOkF0=
 m7s.live/plugin/rtmp/v4 v4.0.1/go.mod h1:Y+1A1ds4GgcoDennFy5DJntiuzeptO7EEqgu32bjJ70=
 m7s.live/plugin/rtsp/v4 v4.0.3 h1:UTHpwnElsWI5b+CE9VkSJioQZ2KQgbO3IHWr4hVv2ek=
