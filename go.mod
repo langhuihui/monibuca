@@ -3,7 +3,7 @@ module monibuca
 go 1.18
 
 require (
-	m7s.live/engine/v4 v4.8.3
+	m7s.live/engine/v4 v4.8.4
 	m7s.live/plugin/debug/v4 v4.0.0-20220506113031-34f3a736ceb2
 	m7s.live/plugin/edge/v4 v4.0.1
 	m7s.live/plugin/gb28181/v4 v4.1.2
