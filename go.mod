@@ -3,54 +3,55 @@ module monibuca
 go 1.18
 
 require (
-	m7s.live/engine/v4 v4.8.5
+	m7s.live/engine/v4 v4.8.7
 	m7s.live/plugin/debug/v4 v4.0.0-20220506113031-34f3a736ceb2
 	m7s.live/plugin/edge/v4 v4.0.1
-	m7s.live/plugin/gb28181/v4 v4.1.3
-	m7s.live/plugin/hdl/v4 v4.0.2
-	m7s.live/plugin/hls/v4 v4.0.4
+	m7s.live/plugin/fmp4/v4 v4.0.0-20221126151227-22a117d1b75e
+	m7s.live/plugin/gb28181/v4 v4.1.4
+	m7s.live/plugin/hdl/v4 v4.0.3
+	m7s.live/plugin/hls/v4 v4.0.5
 	m7s.live/plugin/hook/v4 v4.0.0
 	m7s.live/plugin/jessica/v4 v4.0.0
 	m7s.live/plugin/logrotate/v4 v4.0.3
 	m7s.live/plugin/preview/v4 v4.0.1
-	m7s.live/plugin/record/v4 v4.0.6
+	m7s.live/plugin/record/v4 v4.0.7
 	m7s.live/plugin/room/v4 v4.0.1
 	m7s.live/plugin/rtmp/v4 v4.0.3
-	m7s.live/plugin/rtsp/v4 v4.0.4
+	m7s.live/plugin/rtsp/v4 v4.0.5
 	m7s.live/plugin/snap/v4 v4.0.0
-	m7s.live/plugin/webrtc/v4 v4.0.1
+	m7s.live/plugin/webrtc/v4 v4.0.3
 	m7s.live/plugin/webtransport/v4 v4.0.1
 )
 
 require (
-	github.com/aler9/gortsplib v0.0.0-20221115222755-87d5a512b129 // indirect
+	github.com/aler9/gortsplib v0.0.0-20221120213348-150f16ae6567 // indirect
 	github.com/cnotch/ipchub v1.1.0 // indirect
 	github.com/discoviking/fsm v0.0.0-20150126104936-f4a273feecca // indirect
-	github.com/edgeware/mp4ff v0.29.0 // indirect
-	github.com/fsnotify/fsnotify v1.5.4 // indirect
-	github.com/ghettovoice/gosip v0.0.0-20220630140945-2906a7b33d4d // indirect
+	github.com/edgeware/mp4ff v0.30.1 // indirect
+	github.com/fsnotify/fsnotify v1.6.0 // indirect
+	github.com/ghettovoice/gosip v0.0.0-20221121090201-9a2ed2233b6d // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/go-task/slim-sprig v0.0.0-20210107165309-348f09dbbbc0 // indirect
 	github.com/gobwas/httphead v0.1.0 // indirect
 	github.com/gobwas/pool v0.2.1 // indirect
 	github.com/gobwas/ws v1.1.0 // indirect
 	github.com/golang/mock v1.6.0 // indirect
+	github.com/google/pprof v0.0.0-20210407192527-94a9f03dee38 // indirect
 	github.com/google/uuid v1.3.0 // indirect
 	github.com/husanpao/ip v0.0.0-20220711082147-73160bb611a8 // indirect
 	github.com/logrusorgru/aurora v2.0.3+incompatible // indirect
-	github.com/lucas-clemente/quic-go v0.29.2 // indirect
+	github.com/lucas-clemente/quic-go v0.31.0 // indirect
 	github.com/lufia/plan9stats v0.0.0-20220913051719-115f729f3c8c // indirect
-	github.com/marten-seemann/qpack v0.2.1 // indirect
+	github.com/marten-seemann/qpack v0.3.0 // indirect
 	github.com/marten-seemann/qtls-go1-18 v0.1.3 // indirect
 	github.com/marten-seemann/qtls-go1-19 v0.1.1 // indirect
-	github.com/mattn/go-colorable v0.1.12 // indirect
-	github.com/mattn/go-isatty v0.0.14 // indirect
+	github.com/mattn/go-colorable v0.1.13 // indirect
+	github.com/mattn/go-isatty v0.0.16 // indirect
 	github.com/mgutz/ansi v0.0.0-20200706080929-d51e80ef957d // indirect
-	github.com/nxadm/tail v1.4.8 // indirect
-	github.com/onsi/ginkgo v1.16.5 // indirect
+	github.com/onsi/ginkgo/v2 v2.2.0 // indirect
 	github.com/pion/datachannel v1.5.2 // indirect
 	github.com/pion/dtls/v2 v2.1.5 // indirect
-	github.com/pion/ice/v2 v2.2.7 // indirect
+	github.com/pion/ice/v2 v2.2.12 // indirect
 	github.com/pion/interceptor v0.1.12 // indirect
 	github.com/pion/logging v0.2.2 // indirect
 	github.com/pion/mdns v0.0.5 // indirect
@@ -58,14 +59,14 @@ require (
 	github.com/pion/rtcp v1.2.10 // indirect
 	github.com/pion/rtp v1.7.13 // indirect
 	github.com/pion/rtp/v2 v2.0.0-20220302185659-b3d10fc096b0 // indirect
-	github.com/pion/sctp v1.8.2 // indirect
+	github.com/pion/sctp v1.8.3 // indirect
 	github.com/pion/sdp/v3 v3.0.6 // indirect
 	github.com/pion/srtp/v2 v2.0.10 // indirect
 	github.com/pion/stun v0.3.5 // indirect
 	github.com/pion/transport v0.13.1 // indirect
 	github.com/pion/turn/v2 v2.0.8 // indirect
 	github.com/pion/udp v0.1.1 // indirect
-	github.com/pion/webrtc/v3 v3.1.44 // indirect
+	github.com/pion/webrtc/v3 v3.1.49 // indirect
 	github.com/power-devops/perfstat v0.0.0-20220216144756-c35f1ee13d7c // indirect
 	github.com/q191201771/naza v0.30.8 // indirect
 	github.com/quangngotan95/go-m3u8 v0.1.0 // indirect
@@ -81,15 +82,14 @@ require (
 	go.uber.org/atomic v1.10.0 // indirect
 	go.uber.org/multierr v1.8.0 // indirect
 	go.uber.org/zap v1.23.0 // indirect
-	golang.org/x/crypto v0.0.0-20220722155217-630584e8d5aa // indirect
-	golang.org/x/exp v0.0.0-20220722155223-a9213eeb770e // indirect
-	golang.org/x/mod v0.6.0-dev.0.20220419223038-86c51ed26bb4 // indirect
+	golang.org/x/crypto v0.3.0 // indirect
+	golang.org/x/exp v0.0.0-20221126150942-6ab00d035af9 // indirect
+	golang.org/x/mod v0.7.0 // indirect
 	golang.org/x/net v0.2.0 // indirect
 	golang.org/x/sync v0.1.0 // indirect
 	golang.org/x/sys v0.2.0 // indirect
 	golang.org/x/term v0.2.0 // indirect
 	golang.org/x/text v0.4.0 // indirect
-	golang.org/x/tools v0.1.12 // indirect
-	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
+	golang.org/x/tools v0.3.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
