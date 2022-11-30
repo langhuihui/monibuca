@@ -3,11 +3,11 @@ module monibuca
 go 1.18
 
 require (
-	m7s.live/engine/v4 v4.8.7
+	m7s.live/engine/v4 v4.8.8
 	m7s.live/plugin/debug/v4 v4.0.0-20220506113031-34f3a736ceb2
 	m7s.live/plugin/edge/v4 v4.0.1
 	m7s.live/plugin/fmp4/v4 v4.0.0-20221126151227-22a117d1b75e
-	m7s.live/plugin/gb28181/v4 v4.1.4
+	m7s.live/plugin/gb28181/v4 v4.1.5
 	m7s.live/plugin/hdl/v4 v4.0.3
 	m7s.live/plugin/hls/v4 v4.0.5
 	m7s.live/plugin/hook/v4 v4.0.0
@@ -19,7 +19,7 @@ require (
 	m7s.live/plugin/rtmp/v4 v4.0.3
 	m7s.live/plugin/rtsp/v4 v4.0.5
 	m7s.live/plugin/snap/v4 v4.0.0
-	m7s.live/plugin/webrtc/v4 v4.0.3
+	m7s.live/plugin/webrtc/v4 v4.0.4
 	m7s.live/plugin/webtransport/v4 v4.0.1
 )
 
@@ -28,7 +28,6 @@ require (
 	github.com/cnotch/ipchub v1.1.0 // indirect
 	github.com/discoviking/fsm v0.0.0-20150126104936-f4a273feecca // indirect
 	github.com/edgeware/mp4ff v0.30.1 // indirect
-	github.com/fsnotify/fsnotify v1.6.0 // indirect
 	github.com/ghettovoice/gosip v0.0.0-20221121090201-9a2ed2233b6d // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/go-task/slim-sprig v0.0.0-20210107165309-348f09dbbbc0 // indirect
