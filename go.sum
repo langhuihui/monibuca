@@ -346,8 +346,8 @@ gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c/go.mod h1:K4uyk7z7BCEPqu6E+C
 gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=
 gopkg.in/yaml.v3 v3.0.1 h1:fxVm/GzAzEWqLHuvctI91KS9hhNmmWOoWu0XTYJS7CA=
 gopkg.in/yaml.v3 v3.0.1/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=
-m7s.live/engine/v4 v4.8.8 h1:0w70w8ucwK6B/2XsElu154jNKsncOPN5/bAUKCZSYlg=
-m7s.live/engine/v4 v4.8.8/go.mod h1:OgI9lOQ1bE64s9rApdGGop1MBAJIpc/V2MJ190d9ig4=
+m7s.live/engine/v4 v4.8.9 h1:qIJbn9/edoTQOa++ZZBVha2+j/VIs4tzeljuNto26Uk=
+m7s.live/engine/v4 v4.8.9/go.mod h1:OgI9lOQ1bE64s9rApdGGop1MBAJIpc/V2MJ190d9ig4=
 m7s.live/plugin/debug/v4 v4.0.0-20220506113031-34f3a736ceb2 h1:0QWJvozTHy7m+G/lOIGiejQ9okFIDjwzVsgXe6ZaJg8=
 m7s.live/plugin/debug/v4 v4.0.0-20220506113031-34f3a736ceb2/go.mod h1:A/C1ViacCOK7EPeeCfiwlUrC2TUtRdEqzrR0Yd9b1KQ=
 m7s.live/plugin/edge/v4 v4.0.1 h1:Ps70o8JuqYePCcAVSpIk7oXysdZk45bXbuFOzYMU7BY=
@@ -368,8 +368,8 @@ m7s.live/plugin/logrotate/v4 v4.0.3 h1:f+teASc5Y5vDOrxXFc/ri3t7jdi6GIb6V9UMjhacb
 m7s.live/plugin/logrotate/v4 v4.0.3/go.mod h1:a8hIV59GjpQDE+Ip790CU7yOHaG4+Iweci0sLvo43FU=
 m7s.live/plugin/preview/v4 v4.0.1 h1:k8iA5/bMiEWSFcy4zaZ8wG93AtJcSwxtgcQG+Y0xX5E=
 m7s.live/plugin/preview/v4 v4.0.1/go.mod h1:iYhWqFbTvTNDFplbTOrE5X9M6ED7gCKkKMuM5QmBocg=
-m7s.live/plugin/record/v4 v4.0.7 h1:BNbZYFqysKn9w7qsmpdB2o60/TYy12T5EeA/mTAkMkI=
-m7s.live/plugin/record/v4 v4.0.7/go.mod h1:8fXbmsS+QCQhp136FdqBVEQsbNccWFAYTQDRJW/muQU=
+m7s.live/plugin/record/v4 v4.0.8 h1:/f+1hjD7BebWmrd0fdY8QvczHir9eIHBVcCwDdYbcis=
+m7s.live/plugin/record/v4 v4.0.8/go.mod h1:8fXbmsS+QCQhp136FdqBVEQsbNccWFAYTQDRJW/muQU=
 m7s.live/plugin/room/v4 v4.0.1 h1:MKcGWKSVc+vWVE4Ygdlz+aMy5KaZvhFx3x2xxT0Onsg=
 m7s.live/plugin/room/v4 v4.0.1/go.mod h1:s/e+9cyOkJVMAsOVRM08RDvlPikeaeh5R26qk8oekFA=
 m7s.live/plugin/rtmp/v4 v4.0.3 h1:kH1B3UzD07Q2pWpDIEa8LSAfisoqxmV7tFzy0rK0A/Q=
