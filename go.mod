@@ -1,25 +1,25 @@
 module monibuca
 
-go 1.18
+go 1.19
 
 require (
-	m7s.live/engine/v4 v4.10.3
+	m7s.live/engine/v4 v4.11.0
 	m7s.live/plugin/debug/v4 v4.0.0-20220506113031-34f3a736ceb2
 	m7s.live/plugin/edge/v4 v4.0.4
-	m7s.live/plugin/fmp4/v4 v4.0.0-20221126151227-22a117d1b75e
-	m7s.live/plugin/gb28181/v4 v4.1.9
-	m7s.live/plugin/hdl/v4 v4.0.7
-	m7s.live/plugin/hls/v4 v4.1.0
+	m7s.live/plugin/fmp4/v4 v4.0.0
+	m7s.live/plugin/gb28181/v4 v4.2.0
+	m7s.live/plugin/hdl/v4 v4.1.0
+	m7s.live/plugin/hls/v4 v4.1.1
 	m7s.live/plugin/hook/v4 v4.0.1
-	m7s.live/plugin/jessica/v4 v4.0.2
+	m7s.live/plugin/jessica/v4 v4.1.0
 	m7s.live/plugin/logrotate/v4 v4.0.3
 	m7s.live/plugin/preview/v4 v4.0.1
-	m7s.live/plugin/record/v4 v4.1.2
+	m7s.live/plugin/record/v4 v4.2.0
 	m7s.live/plugin/room/v4 v4.0.2
-	m7s.live/plugin/rtmp/v4 v4.0.8
-	m7s.live/plugin/rtsp/v4 v4.0.9
-	m7s.live/plugin/snap/v4 v4.0.2
-	m7s.live/plugin/webrtc/v4 v4.0.4
+	m7s.live/plugin/rtmp/v4 v4.1.0
+	m7s.live/plugin/rtsp/v4 v4.0.10
+	m7s.live/plugin/snap/v4 v4.0.3
+	m7s.live/plugin/webrtc/v4 v4.0.5
 	m7s.live/plugin/webtransport/v4 v4.0.1
 )
 
@@ -46,6 +46,7 @@ require (
 	github.com/marten-seemann/qtls-go1-19 v0.1.1 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.16 // indirect
+	github.com/mcuadros/go-defaults v1.2.0 // indirect
 	github.com/mgutz/ansi v0.0.0-20200706080929-d51e80ef957d // indirect
 	github.com/onsi/ginkgo/v2 v2.2.0 // indirect
 	github.com/pion/datachannel v1.5.2 // indirect

@@ -15,7 +15,7 @@
 #   enable: false
 #   hls:
 #     autorecord: true
-#     fragment: 20
+#     fragment: 20s
 # webtransport:
 #   enable: false
 #   certfile: monibuca.com.pem
@@ -25,8 +25,7 @@
 # rtsp:
 #   # enable: false
 #   pull:
-#     pullonstart: true
-#     pulllist:
+#     pullonstart:
 #       live/rtsp: rtsp://admin:MOMA2021@47.94.226.17/Streaming/Channels/201?transportmode=unicast
 # hls:
 #   # enable: false
