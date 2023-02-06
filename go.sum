@@ -357,8 +357,8 @@ gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c/go.mod h1:K4uyk7z7BCEPqu6E+C
 gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=
 gopkg.in/yaml.v3 v3.0.1 h1:fxVm/GzAzEWqLHuvctI91KS9hhNmmWOoWu0XTYJS7CA=
 gopkg.in/yaml.v3 v3.0.1/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=
-m7s.live/engine/v4 v4.11.1 h1:Aub4smJH3B/fcxmduI4hMGKewuUFVFT7FnaUu9Rx6Hk=
-m7s.live/engine/v4 v4.11.1/go.mod h1:kDPDDKl48tJLXfr0gpQ88jgoJ5qgkN5eJeQLhXaW1fU=
+m7s.live/engine/v4 v4.11.2 h1:wKxQaCOeWR+mutyn4zexDblv31FLtvJ45WL6PyJzNx8=
+m7s.live/engine/v4 v4.11.2/go.mod h1:kDPDDKl48tJLXfr0gpQ88jgoJ5qgkN5eJeQLhXaW1fU=
 m7s.live/plugin/debug/v4 v4.0.0-20220506113031-34f3a736ceb2 h1:0QWJvozTHy7m+G/lOIGiejQ9okFIDjwzVsgXe6ZaJg8=
 m7s.live/plugin/debug/v4 v4.0.0-20220506113031-34f3a736ceb2/go.mod h1:A/C1ViacCOK7EPeeCfiwlUrC2TUtRdEqzrR0Yd9b1KQ=
 m7s.live/plugin/edge/v4 v4.0.4 h1:NvvYeAbpA1/Vg8dx5e4as/o+PbSCiSI2xoRkKOXBjhI=
