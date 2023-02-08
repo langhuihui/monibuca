@@ -3,7 +3,7 @@ module monibuca
 go 1.19
 
 require (
-	m7s.live/engine/v4 v4.11.2
+	m7s.live/engine/v4 v4.11.3
 	m7s.live/plugin/debug/v4 v4.0.0-20220506113031-34f3a736ceb2
 	m7s.live/plugin/edge/v4 v4.0.4
 	m7s.live/plugin/fmp4/v4 v4.0.0
@@ -14,13 +14,13 @@ require (
 	m7s.live/plugin/jessica/v4 v4.1.0
 	m7s.live/plugin/logrotate/v4 v4.0.3
 	m7s.live/plugin/preview/v4 v4.0.1
-	m7s.live/plugin/record/v4 v4.2.0
+	m7s.live/plugin/record/v4 v4.2.2
 	m7s.live/plugin/room/v4 v4.0.2
-	m7s.live/plugin/rtmp/v4 v4.1.1
-	m7s.live/plugin/rtsp/v4 v4.1.0
+	m7s.live/plugin/rtmp/v4 v4.1.2
+	m7s.live/plugin/rtsp/v4 v4.1.1
 	m7s.live/plugin/snap/v4 v4.0.3
 	m7s.live/plugin/webrtc/v4 v4.0.5
-	m7s.live/plugin/webtransport/v4 v4.0.1
+	m7s.live/plugin/webtransport/v4 v4.0.2
 )
 
 require (
@@ -39,11 +39,8 @@ require (
 	github.com/google/uuid v1.3.0 // indirect
 	github.com/husanpao/ip v0.0.0-20220711082147-73160bb611a8 // indirect
 	github.com/logrusorgru/aurora v2.0.3+incompatible // indirect
-	github.com/lucas-clemente/quic-go v0.31.0 // indirect
 	github.com/lufia/plan9stats v0.0.0-20220913051719-115f729f3c8c // indirect
 	github.com/marten-seemann/qpack v0.3.0 // indirect
-	github.com/marten-seemann/qtls-go1-18 v0.1.3 // indirect
-	github.com/marten-seemann/qtls-go1-19 v0.1.1 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.16 // indirect
 	github.com/mcuadros/go-defaults v1.2.0 // indirect
@@ -70,6 +67,7 @@ require (
 	github.com/power-devops/perfstat v0.0.0-20220216144756-c35f1ee13d7c // indirect
 	github.com/q191201771/naza v0.30.8 // indirect
 	github.com/quangngotan95/go-m3u8 v0.1.0 // indirect
+	github.com/quic-go/qpack v0.4.0 // indirect
 	github.com/quic-go/qtls-go1-18 v0.2.0 // indirect
 	github.com/quic-go/qtls-go1-19 v0.2.0 // indirect
 	github.com/quic-go/qtls-go1-20 v0.1.0 // indirect
