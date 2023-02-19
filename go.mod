@@ -3,21 +3,21 @@ module monibuca
 go 1.19
 
 require (
-	m7s.live/engine/v4 v4.11.5
+	m7s.live/engine/v4 v4.11.6
 	m7s.live/plugin/debug/v4 v4.0.0-20220506113031-34f3a736ceb2
 	m7s.live/plugin/edge/v4 v4.0.4
 	m7s.live/plugin/fmp4/v4 v4.0.0
-	m7s.live/plugin/gb28181/v4 v4.2.2
+	m7s.live/plugin/gb28181/v4 v4.2.4
 	m7s.live/plugin/hdl/v4 v4.1.1
 	m7s.live/plugin/hls/v4 v4.1.2
 	m7s.live/plugin/hook/v4 v4.0.1
 	m7s.live/plugin/jessica/v4 v4.1.1
 	m7s.live/plugin/logrotate/v4 v4.0.3
 	m7s.live/plugin/preview/v4 v4.0.1
-	m7s.live/plugin/record/v4 v4.2.3
+	m7s.live/plugin/record/v4 v4.2.4
 	m7s.live/plugin/room/v4 v4.0.3
-	m7s.live/plugin/rtmp/v4 v4.1.4
-	m7s.live/plugin/rtsp/v4 v4.1.1
+	m7s.live/plugin/rtmp/v4 v4.1.5
+	m7s.live/plugin/rtsp/v4 v4.1.2
 	m7s.live/plugin/snap/v4 v4.0.3
 	m7s.live/plugin/webrtc/v4 v4.0.5
 	m7s.live/plugin/webtransport/v4 v4.0.2
@@ -86,11 +86,11 @@ require (
 	golang.org/x/crypto v0.4.0 // indirect
 	golang.org/x/exp v0.0.0-20221205204356-47842c84f3db // indirect
 	golang.org/x/mod v0.7.0 // indirect
-	golang.org/x/net v0.4.0 // indirect
+	golang.org/x/net v0.7.0 // indirect
 	golang.org/x/sync v0.1.0 // indirect
-	golang.org/x/sys v0.3.0 // indirect
-	golang.org/x/term v0.3.0 // indirect
-	golang.org/x/text v0.5.0 // indirect
+	golang.org/x/sys v0.5.0 // indirect
+	golang.org/x/term v0.5.0 // indirect
+	golang.org/x/text v0.7.0 // indirect
 	golang.org/x/tools v0.3.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
