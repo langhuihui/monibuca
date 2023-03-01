@@ -7,7 +7,7 @@ require (
 	m7s.live/plugin/debug/v4 v4.0.0-20220506113031-34f3a736ceb2
 	m7s.live/plugin/edge/v4 v4.0.4
 	m7s.live/plugin/fmp4/v4 v4.0.0
-	m7s.live/plugin/gb28181/v4 v4.2.7
+	m7s.live/plugin/gb28181/v4 v4.2.8
 	m7s.live/plugin/hdl/v4 v4.1.1
 	m7s.live/plugin/hls/v4 v4.1.6
 	m7s.live/plugin/hook/v4 v4.0.1
