@@ -3,8 +3,8 @@ archives:
   -
     files:
       - config.yaml
-      - monibuca.com.key
-      - monibuca.com.pem
+      - local.monibuca.com.key
+      - local.monibuca.com_bundle.pem
 builds:
   - id: "with-debug"
     env: [CGO_ENABLED=0]

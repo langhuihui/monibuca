@@ -9,8 +9,8 @@
 #     secret: "ab0f6913670062af4d2f15c621205178"
   # http:
   #   listenaddrtls: :8081
-  #   certfile: monibuca.com.pem
-  #   keyfile: monibuca.com.key
+  #   certfile: local.monibuca.com_bundle.pem
+  #   keyfile: local.monibuca.com.key
 # record:
 #   enable: false
 #   hls:
@@ -18,8 +18,8 @@
 #     fragment: 20s
 # webtransport:
 #   enable: false
-#   certfile: monibuca.com.pem
-#   keyfile: monibuca.com.key
+#   certfile: local.monibuca.com_bundle.pem
+#   keyfile: local.monibuca.com.key
 # gb28181:
 #   # enable: false
 # rtsp:
