@@ -3,7 +3,7 @@ module monibuca
 go 1.19
 
 require (
-	m7s.live/engine/v4 v4.11.13
+	m7s.live/engine/v4 v4.11.14
 	m7s.live/plugin/debug/v4 v4.0.0-20220506113031-34f3a736ceb2
 	m7s.live/plugin/edge/v4 v4.0.4
 	m7s.live/plugin/fmp4/v4 v4.0.1
@@ -13,13 +13,13 @@ require (
 	m7s.live/plugin/hook/v4 v4.0.1
 	m7s.live/plugin/jessica/v4 v4.1.1
 	m7s.live/plugin/logrotate/v4 v4.0.3
-	m7s.live/plugin/preview/v4 v4.0.1
+	m7s.live/plugin/preview/v4 v4.0.2
 	m7s.live/plugin/record/v4 v4.2.6
 	m7s.live/plugin/room/v4 v4.0.4
 	m7s.live/plugin/rtmp/v4 v4.1.7
 	m7s.live/plugin/rtsp/v4 v4.1.4
 	m7s.live/plugin/snap/v4 v4.0.4
-	m7s.live/plugin/webrtc/v4 v4.0.9
+	m7s.live/plugin/webrtc/v4 v4.0.10
 	m7s.live/plugin/webtransport/v4 v4.0.2
 )
 
@@ -79,6 +79,7 @@ require (
 	github.com/tklauser/go-sysconf v0.3.11 // indirect
 	github.com/tklauser/numcpus v0.6.0 // indirect
 	github.com/x-cray/logrus-prefixed-formatter v0.5.2 // indirect
+	github.com/yapingcat/gomedia v0.0.0-20230222121919-c67df405bf33 // indirect
 	github.com/yusufpapurcu/wmi v1.2.2 // indirect
 	go.uber.org/atomic v1.10.0 // indirect
 	go.uber.org/multierr v1.8.0 // indirect
