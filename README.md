@@ -1,4 +1,4 @@
-# 主页
+# Official website
 
 [https://m7s.live](https://m7s.live)
 
@@ -6,81 +6,124 @@
 
 [https://m7s.live/guide/introduction.html](https://m7s.live/guide/introduction.html)
 
-# 文章
-
-[重新定义流媒体服务器](https://www.infoq.cn/article/uiPl8dIuQmhipKb3q3Tz)
-
-# 核心代码库和插件代码库
+# Core code base and plug-in code base
 
 [https://github.com/Monibuca](https://github.com/Monibuca)
 
-# 介绍
+# Introduction
 
-## 什么是Monibuca（m7s)？
+## What is Monibuca (m7s)?
 
-Monibuca(发音：模拟不卡，m7s是其缩写，类似k8s) 是一个开源的Go语言开发的流媒体服务器开发框架。
-它基于go1.18+，此外并无任何其他依赖构建，并提供了一套插件式的二次开发模型，帮助你高效地开发流媒体服务器，你既可以直接使用官方提供的插件，也可以自己开发插件扩展任意的功能，所以Monibuca是可以支持**任意**流媒体协议的框架！
+Monibuca (pronounced: analog not card, m7s is its abbreviation, similar to k8s) is an open source streaming server development framework developed in Go. It is based on go1.19+, in addition to no other dependencies built, and provides a set of plug-in secondary development model to help you efficiently develop streaming media servers, you can directly use the official plug-in, or develop your own plug-in to extend any function, so Monibuca is a framework that can support any streaming protocol!
 
+Monibuca consists of three parts: engine, plugins, and instance project.
 
-> 流媒体服务器是一种用于分发流媒体的服务器端软件，可用于直播、监控、会议等需要实时观看音视频的场景。流媒体服务器区别于传统Web服务器对于实时性要求极高，需要使用各种传输协议，而Web服务器则主要以http/https协议为主。
+The engine provides a common streaming data cache and forwarding mechanism, and does not care how the protocol is implemented
+The plugins offer all the other features and can be extended indefinitely
+An instance project is a project project that introduces the engine and plugins and starts the engine, and can be written entirely by yourself
 
-Monibuca由三部分组成：引擎、插件、实例工程。
-- 引擎提供一套通用的流媒体数据缓存以及转发的机制，本身不关心协议如何实现
-- 插件提供其他所有的功能，并可以无限扩展
-- 实例工程是引入引擎和插件并启动引擎的项目工程，可以完全自己编写
+## Plug-in framework
 
-## 插件式框架
+Monibuca aims to build a general streaming media development ecosystem, so since the v1 version, it has considered the decoupling of services and stream forwarding, so as to design a set of plug-in mechanisms that can be arbitrarily extended. Depending on your needs, you can flexibly introduce different types of plugins:
 
-Monibuca旨在构建一个通用的流媒体开发生态，所以从v1版本开始就考虑到业务和流转发的解耦，从而设计了一套可供任意扩展的插件机制。根据你的需求场景，可以灵活引入不同类型的插件：
-- 提供流媒体协议打包/解包，例如rtmp插件、rtsp插件等
-- 提供日志持久化的处理——logrotate插件
-- 提供录像功能——record插件
-- 提供丰富的调试功能——debug插件
-- 提供http回调能力——http插件
+- Provide streaming media protocol packaging/unpacking, such as RTMP plug-ins, RTSP plug-ins, etc
+- Provides log persistence processing - logrotate plugin
+- Provide recording function - record plugin
+- Provide rich debugging functions - debug plugin
+- Provide HTTP callback capability - hook plugin
+If you are an experienced developer, then the best way is to carry out secondary development on the basis of existing plugins, and provide reusable plugins to more people to enrich the ecosystem. If you're a beginner in streaming, the best way to do this is to use existing plugins to cobble together the features you need and ask experienced developers for help.
 
-如果你是有经验的开发者，那么最佳的方式是在现有的插件基础上进行二次开发，并可向更多的人提供可重用的插件丰富生态。
-如果你是流媒体的初学者，那么最佳的方式是利用现有的插件拼凑出你需要的功能，并向有经验的开发者寻求帮助。
+# Key features
+## Engine aspect
+- Provides a plug-in mechanism to manage plug-in startup, configuration resolution, event distribution, etc. in a unified manner
+- Provide forwarding in H264, H265, AAC, G711 format
+- Provide reusable AVCC format, RTP format, AnnexB format, ADTS format and other pre-encapsulation mechanisms
+- Provides a multi-track mechanism, supports large and small streams, and encrypts stream expansion
+- Provide DataTrack mechanism, which can be used to implement functions such as room text chat
+- Provide timestamp synchronization mechanism and speed limit mechanism
+- Provides an RTP packet reorder mechanism
+- Provide subscriber frame chasing and skipping mechanism (first screen second on)
+- Provides the infrastructure for publish-subscribe push and pull out
+- Provides underlying architecture support for authentication mechanisms
+- Provides a memory reuse mechanism
+- Provides a mechanism for publishers to disconnect and reconnect
+- Provides an on-demand flow pulling mechanism
+- Provides a common mechanism for HTTP service ports
+- Provides an automatic registration mechanism for HTTP API interfaces
+- Provides HTTP interface middleware mechanism
+- Provides structured logs
+- Provides flow information statistics and output
+- Provides an event bus mechanism that broadcasts events to all plug-ins
+- Provides a configuration hot update mechanism
 
+## Plug-in aspect
+- Provide RTMP protocol push-pull stream, external push-pull stream (RTMPS supported)
+- Provides RTSP push and pull streams and external push and pull streams
+- Provides HTTP-FLV protocol to pull streams, pull external streams, and read local FLV files
+- Provides streaming of the WebSocket protocol
+- Provides HLS protocol to pull streams and pull outflows
+- Provides push-pull streams for the WebRTC protocol
+- Provides GB28181 protocol push and dump playback analysis capabilities
+- Provide support for the Onif protocol
+- Provides streaming of WebTransport protocol
+- Provides FMP4 protocol for pulling streams
+- Provides edge server functionality to implement cascading streaming
+- Provide video recording function, support FLV, MP4, HLS, RAW formats
+- Provides log persistence by day, hour, minute, second, size, and number of files
+- Provide a screenshot function
+- Provides HTTP callback function
+- Preview features available (integrated with Jessibuca Pro)
+- Room function available (video conferencing possible)
+- Provide the function of docking with Prometheus
 
-## 名称的由来
-Monibuca这个单词来源于 `Monica` （莫妮卡），为了解决起名的难题，使用了三个名称分别是 `Monica` 、 `Jessica` 、`Rebecca` 用来代表服务器、播放器、推流器。由于莫妮卡、杰西卡、瑞贝卡，都带卡字，对直播来说寓意不好，所以改为莫妮不卡（`Monibuca`）、杰西不卡[Jessibuca](https://jessibuca.com)、瑞贝不卡[Rebebuca](https://rebebuca.com)。
+Third-party plugins and paid plugins provide additional functionality and are not listed here.
 
-## 安装
-- 官方提供已编译好的各个平台的二进制可执行文件（即绿色软件），所以无需安装任何其他软件即可运行。
-- 如果需要自己编译启动工程，则需要安装go1.18以上版本。
+## Remote console
 
-:::tip 配置go环境
-- go可以在https://golang.google.cn/dl 中下载到
-- 国内需要执行go env -w GOPROXY=https://goproxy.cn 来下载到被屏蔽的第三方库
-:::
+- Provides multi-instance management
+- Provide flow details display
+- Provides visual editing of configurations
+- Provides visual display of logs
+- Provide visual management of plugins
+- Provides GB device management
+- Provides an interface for dynamically adding remote push-pull flows
+- Provide WebRTC background wall function
+- Provide multiplayer video demonstrations
 
-官方提供了最新版本的下载链接：
+# Origin of the name
+The word Monibuca is derived from (Monica), and in order to solve the naming problem, three names are used to represent server, player, and streamer. Since Monica, Jessica, and Rebecca all have `卡` words, which is not good for the live broadcast (ca - `卡` means block in Chinese), it was changed to Monibuca, Jessibuca(https://jessibuca.com), and Rebebuca(https://rebebuca.com). (bu-`不` means not)
+
+# Install
+- The compiled binary executable files (i.e. green software) of each platform are officially provided, so it can run without installing any other software.
+- If you need to compile and start the project yourself, you need to install go1.19 or above.
+
+The official download link of the latest version is provided:
 - [Linux](https://m7s.live/bin/m7s_linux_x86)
 - [Linux-arm64](https://m7s.live/bin/m7s_linux_arm64)
 - [Mac](https://m7s.live/bin/m7s_darwin_x86)
 - [Mac-arm64](https://m7s.live/bin/m7s_darwin_arm64)
 - [Windows](https://m7s.live/bin/m7s_windows_x86)
 
-## 运行
+# Run
 
-### 可执行文件直接运行
+## Executable files run directly
 
-- Linux 例如下载到了/opt/m7s_linux_x86,则 `cd /opt` 然后 `./m7s_linux_x86`
-- Mac 和Linux类似，需要注意的时候可能需要修改文件的可执行权限，也可以双击运行
-- Windows，直接双击m7s_windows_x86.exe即可启动
+- Linux, for example, downloaded to `/opt/m7s_linux_x86`, then `$ cd /opt ' and then `$ ./m7s_linux_x86`
+- Similar to Linux and Mac, you may need to modify the executable permissions of the file or double-click to run
+- Windows, double-click m7s directly_windows_x86.exe can be started
 
 :::tip 运行多实例
 由于实例会监听http端口，所以如果需要运行多实例，就需要为每个实例指定不同的http端口，因此需要启动时指定配置文件，例如./m7s_linux_x86 -c config.yaml
 :::
 
-### 自行编译启动工程
+## Self-compiled startup project
 1. `git clone https://github.com/langhuihui/monibuca`
 2. `cd monibuca`
-3. `go run main.go`
+3. `go run .`
 
-### 自行创建启动工程
+## Self-created startup project
 
-可以观看视频教程：
+You can watch the video tutorial:
 
 - [从零启动 m7s V4](https://www.bilibili.com/video/BV1iq4y147N4/)
 
