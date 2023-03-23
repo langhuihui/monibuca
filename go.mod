@@ -3,13 +3,13 @@ module monibuca
 go 1.19
 
 require (
-	m7s.live/engine/v4 v4.11.16
+	m7s.live/engine/v4 v4.11.17
 	m7s.live/plugin/debug/v4 v4.0.0-20220506113031-34f3a736ceb2
 	m7s.live/plugin/edge/v4 v4.0.4
 	m7s.live/plugin/fmp4/v4 v4.0.1
 	m7s.live/plugin/gb28181/v4 v4.2.9
 	m7s.live/plugin/hdl/v4 v4.1.2
-	m7s.live/plugin/hls/v4 v4.1.7
+	m7s.live/plugin/hls/v4 v4.1.8
 	m7s.live/plugin/hook/v4 v4.0.1
 	m7s.live/plugin/jessica/v4 v4.1.1
 	m7s.live/plugin/logrotate/v4 v4.0.3
@@ -24,6 +24,7 @@ require (
 )
 
 require (
+	github.com/aler9/gortsplib v0.0.0-20221115222755-87d5a512b129 // indirect
 	github.com/aler9/gortsplib/v2 v2.1.4 // indirect
 	github.com/cnotch/ipchub v1.1.0 // indirect
 	github.com/discoviking/fsm v0.0.0-20150126104936-f4a273feecca // indirect
