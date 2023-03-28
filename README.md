@@ -78,6 +78,12 @@ If you are an experienced developer, then the best way is to carry out secondary
 
 Third-party plugins and paid plugins provide additional functionality and are not listed here.
 
+Inspired by:
+- [mp4ff](https://github.com/edgeware/mp4ff) mp4 file format library [@edgeware](https://github.com/edgeware)
+- [gosip](https://github.com/ghettovoice/gosip) go sip library [@ghettovoice](https://github.com/ghettovoice)
+- [webrtc](https://github.com/pion/webrtc) go library and whole [@pion](https://github.com/pion) team
+- [gortsplib](https://github.com/aler9/gortsplib) rtsp library [@aler9](https://github.com/aler9)
+
 ## Remote console
 
 - Provides multi-instance management
@@ -98,12 +104,13 @@ The word Monibuca is derived from (Monica), and in order to solve the naming pro
 - If you need to compile and start the project yourself, you need to install go1.19 or above.
 
 The official download link of the latest version is provided:
-- [Linux](https://m7s.live/bin/m7s_linux_x86)
-- [Linux-arm64](https://m7s.live/bin/m7s_linux_arm64)
-- [Mac](https://m7s.live/bin/m7s_darwin_x86)
-- [Mac-arm64](https://m7s.live/bin/m7s_darwin_arm64)
-- [Windows](https://m7s.live/bin/m7s_windows_x86)
+- [Linux](https://download.m7s.live/bin/m7s_linux_arm64.tar.gz)
+- [Linux-arm64](https://download.m7s.live/bin/m7s_linux_arm64.tar.gz)
+- [Mac](https://download.m7s.live/bin/m7s_darwin_arm64.tar.gz)
+- [Mac-arm64](https://download.m7s.live/bin/m7s_darwin_arm64.tar.gz)
+- [Windows](https://download.m7s.live/bin/m7s_windows_amd64.tar.gz)
 
+Don't forget to fix the rights chmod +x m7s_xxx_xxx on Linux and Mac.
 # Run
 
 ## Executable files run directly
