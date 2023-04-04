@@ -57,6 +57,7 @@ import (
 	_ "m7s.live/plugin/webtransport/v4"
 	_ "m7s.live/plugin/edge/v4"
 	_ "m7s.live/plugin/fmp4/v4"
+	_ "m7s.live/plugin/monitor/v4"
 )
 
 var (

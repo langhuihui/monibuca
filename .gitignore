@@ -13,10 +13,13 @@ dist/
 record/
 config2.yaml
 config1.yaml
-monibuca_linux
+monibuca_*
 ps
 ps2
 ps3
 devices.json
 dump
 .DS_Store
+main
+monitor
+.history
