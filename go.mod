@@ -3,23 +3,23 @@ module monibuca
 go 1.19
 
 require (
-	m7s.live/engine/v4 v4.12.5
+	m7s.live/engine/v4 v4.12.6
 	m7s.live/plugin/debug/v4 v4.0.0-20220506113031-34f3a736ceb2
 	m7s.live/plugin/edge/v4 v4.0.4
 	m7s.live/plugin/fmp4/v4 v4.0.2
 	m7s.live/plugin/gb28181/v4 v4.2.12
 	m7s.live/plugin/hdl/v4 v4.1.5
-	m7s.live/plugin/hls/v4 v4.2.3
+	m7s.live/plugin/hls/v4 v4.2.4
 	m7s.live/plugin/hook/v4 v4.0.2
 	m7s.live/plugin/jessica/v4 v4.1.1
 	m7s.live/plugin/logrotate/v4 v4.0.3
-	m7s.live/plugin/monitor/v4 v4.0.0
+	m7s.live/plugin/monitor/v4 v4.0.1
 	m7s.live/plugin/preview/v4 v4.0.4
-	m7s.live/plugin/record/v4 v4.3.0
+	m7s.live/plugin/record/v4 v4.3.1
 	m7s.live/plugin/room/v4 v4.0.7
-	m7s.live/plugin/rtmp/v4 v4.1.9
+	m7s.live/plugin/rtmp/v4 v4.1.10
 	m7s.live/plugin/rtsp/v4 v4.2.1
-	m7s.live/plugin/snap/v4 v4.0.4
+	m7s.live/plugin/snap/v4 v4.0.5
 	m7s.live/plugin/webrtc/v4 v4.1.3
 	m7s.live/plugin/webtransport/v4 v4.0.2
 )
@@ -82,7 +82,7 @@ require (
 	github.com/tklauser/go-sysconf v0.3.11 // indirect
 	github.com/tklauser/numcpus v0.6.0 // indirect
 	github.com/x-cray/logrus-prefixed-formatter v0.5.2 // indirect
-	github.com/yapingcat/gomedia v0.0.0-20230222121919-c67df405bf33 // indirect
+	github.com/yapingcat/gomedia v0.0.0-20230426092936-387031404274 // indirect
 	github.com/yusufpapurcu/wmi v1.2.2 // indirect
 	go.uber.org/atomic v1.10.0 // indirect
 	go.uber.org/multierr v1.8.0 // indirect
