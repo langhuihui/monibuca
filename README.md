@@ -1,11 +1,11 @@
-# Official website
-
-[https://m7s.live](https://m7s.live)
-
-# 中文文档
-
-[https://m7s.live/guide/introduction.html](https://m7s.live/guide/introduction.html)
-
+<p align="center">
+  <a href="https://m7s.live">
+    <img src="logo.png" height="96">
+  </a>
+</p>
+<p align="center">
+ <a href="https://docs.m7s.live">中文文档</a>
+</p>
 # Core code base and plug-in code base
 
 [https://github.com/Monibuca](https://github.com/Monibuca)
