@@ -3,31 +3,36 @@ module monibuca
 go 1.19
 
 require (
-	m7s.live/engine/v4 v4.13.0
+	m7s.live/engine/v4 v4.13.1
 	m7s.live/plugin/debug/v4 v4.0.0
 	m7s.live/plugin/edge/v4 v4.0.5
 	m7s.live/plugin/fmp4/v4 v4.0.3
 	m7s.live/plugin/gb28181/v4 v4.3.3
 	m7s.live/plugin/hdl/v4 v4.1.6
-	m7s.live/plugin/hls/v4 v4.2.8
+	m7s.live/plugin/hls/v4 v4.3.0
 	m7s.live/plugin/hook/v4 v4.0.2
 	m7s.live/plugin/jessica/v4 v4.1.4
 	m7s.live/plugin/logrotate/v4 v4.0.4
 	m7s.live/plugin/monitor/v4 v4.0.2
 	m7s.live/plugin/preview/v4 v4.0.4
-	m7s.live/plugin/record/v4 v4.3.4
+	m7s.live/plugin/record/v4 v4.3.5
 	m7s.live/plugin/room/v4 v4.0.9
-	m7s.live/plugin/rtmp/v4 v4.2.0
+	m7s.live/plugin/rtmp/v4 v4.2.1
 	m7s.live/plugin/rtsp/v4 v4.2.2
 	m7s.live/plugin/snap/v4 v4.0.6
-	m7s.live/plugin/webrtc/v4 v4.1.5
-	m7s.live/plugin/webtransport/v4 v4.0.4
+	m7s.live/plugin/webrtc/v4 v4.1.6
+	m7s.live/plugin/webtransport/v4 v4.0.5
 )
 
 require (
+	github.com/abema/go-mp4 v0.10.1 // indirect
 	github.com/aler9/gortsplib/v2 v2.2.2 // indirect
+	github.com/aler9/writerseeker v0.0.0-20220601075008-6f0e685b9c82 // indirect
+	github.com/asticode/go-astikit v0.30.0 // indirect
+	github.com/asticode/go-astits v1.11.0 // indirect
+	github.com/bluenviron/gohlslib v0.2.5 // indirect
 	github.com/bluenviron/gortsplib/v3 v3.2.1 // indirect
-	github.com/bluenviron/mediacommon v0.2.1 // indirect
+	github.com/bluenviron/mediacommon v0.5.0 // indirect
 	github.com/cnotch/ipchub v1.1.0 // indirect
 	github.com/denisbrodbeck/machineid v1.0.1 // indirect
 	github.com/discoviking/fsm v0.0.0-20150126104936-f4a273feecca // indirect
@@ -46,7 +51,7 @@ require (
 	github.com/lufia/plan9stats v0.0.0-20220913051719-115f729f3c8c // indirect
 	github.com/marten-seemann/qpack v0.3.0 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
-	github.com/mattn/go-isatty v0.0.16 // indirect
+	github.com/mattn/go-isatty v0.0.17 // indirect
 	github.com/mcuadros/go-defaults v1.2.0 // indirect
 	github.com/mgutz/ansi v0.0.0-20200706080929-d51e80ef957d // indirect
 	github.com/onsi/ginkgo/v2 v2.2.0 // indirect
@@ -97,5 +102,5 @@ require (
 	golang.org/x/text v0.9.0 // indirect
 	golang.org/x/tools v0.6.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	m7s.live/plugin/ps/v4 v4.0.3 // indirect
+	m7s.live/plugin/ps/v4 v4.0.4 // indirect
 )
