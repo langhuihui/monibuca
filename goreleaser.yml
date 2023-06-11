@@ -5,6 +5,9 @@ archives:
       - config.yaml
       - local.monibuca.com.key
       - local.monibuca.com_bundle.pem
+      - favicon.ico
+    folders:
+      - conf
 builds:
   - id: "with-debug"
     env: [CGO_ENABLED=0]
