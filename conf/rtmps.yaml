@@ -1,0 +1,4 @@
+# 开启接受rtmps
+rtmp:
+  tcp:
+    listenaddrtls: :443

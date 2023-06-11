@@ -1,0 +1,7 @@
+# 默认的http端口是8080
+# 这里指定8081为https端口
+# 本地访问https://local.monibuca.com:8081，请配置host文件，将127.0.0.1 local.monibuca.com加入到host文件中
+global:
+  listenaddrlts: :8081
+  certfile: local.monibuca.com_bundle.pem
+  keyfile: local.monibuca.com.key

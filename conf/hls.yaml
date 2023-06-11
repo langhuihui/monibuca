@@ -1,0 +1,9 @@
+# hls纯转发,即从HLS->HLS
+
+global:
+  disableall: true
+  enablertp: false
+  enableavcc: false
+hls:
+  enable: true
+  relaymode: 1

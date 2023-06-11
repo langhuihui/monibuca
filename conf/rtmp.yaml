@@ -1,0 +1,6 @@
+# 只包含rtmp，关闭其他所有插件,只能用于rtmp的转发
+global:
+  disableall: true
+  enablertp: false
+rtmp:
+  enable: true
