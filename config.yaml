@@ -4,11 +4,6 @@
 # 插件配置参考各个插件的文档
 # 插件都有一个enable配置，如果为false则不启用该插件，默认为true即不需要配置。
 
-global:
-  http:
-    listenaddrtls: :8081
-    certfile: local.monibuca.com_bundle.pem
-    keyfile: local.monibuca.com.key
 llhls:
   enable: false
 hls:

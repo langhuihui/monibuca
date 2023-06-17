@@ -119,9 +119,10 @@ Don't forget to fix the rights chmod +x m7s_xxx_xxx on Linux and Mac.
 - Similar to Linux and Mac, you may need to modify the executable permissions of the file or double-click to run
 - Windows, double-click m7s directly_windows_x86.exe can be started
 
-:::tip 运行多实例
-由于实例会监听http端口，所以如果需要运行多实例，就需要为每个实例指定不同的http端口，因此需要启动时指定配置文件，例如./m7s_linux_x86 -c config.yaml
-:::
+## Docker
+```bash
+docker run -id -p 1935:1935 -p 8080:8080 -p 8443:8443 -p 554:554 -p 58200:58200 -p 5060:5060/udp -p 8000:8000/udp -p 9000:9000 langhuihui/monibuca:latest
+```
 
 ## Self-compiled startup project
 1. `git clone https://github.com/langhuihui/monibuca`
@@ -135,3 +136,5 @@ You can watch the video tutorial:
 - [从零启动 m7s V4](https://www.bilibili.com/video/BV1iq4y147N4/)
 
 - [m7s v4 视频教程——插件引入](https://www.bilibili.com/video/BV1sP4y1g7BF/)
+
+![公众号](https://m7s.live/images/m7s/footer/wx-mp.jpg)
