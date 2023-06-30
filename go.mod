@@ -3,19 +3,20 @@ module monibuca
 go 1.19
 
 require (
-	m7s.live/engine/v4 v4.13.4
+	go.uber.org/zap v1.24.0
+	m7s.live/engine/v4 v4.13.5
 	m7s.live/plugin/debug/v4 v4.0.0
 	m7s.live/plugin/edge/v4 v4.0.5
 	m7s.live/plugin/fmp4/v4 v4.0.3
-	m7s.live/plugin/gb28181/v4 v4.3.5
+	m7s.live/plugin/gb28181/v4 v4.3.6
 	m7s.live/plugin/hdl/v4 v4.1.6
-	m7s.live/plugin/hls/v4 v4.3.0
+	m7s.live/plugin/hls/v4 v4.3.1
 	m7s.live/plugin/hook/v4 v4.0.2
 	m7s.live/plugin/jessica/v4 v4.2.0
 	m7s.live/plugin/logrotate/v4 v4.0.4
 	m7s.live/plugin/monitor/v4 v4.0.3
-	m7s.live/plugin/preview/v4 v4.1.1
-	m7s.live/plugin/record/v4 v4.3.6
+	m7s.live/plugin/preview/v4 v4.1.2
+	m7s.live/plugin/record/v4 v4.3.7
 	m7s.live/plugin/room/v4 v4.0.10
 	m7s.live/plugin/rtmp/v4 v4.2.2
 	m7s.live/plugin/rtsp/v4 v4.2.3
@@ -91,7 +92,6 @@ require (
 	github.com/yusufpapurcu/wmi v1.2.2 // indirect
 	go.uber.org/atomic v1.10.0 // indirect
 	go.uber.org/multierr v1.8.0 // indirect
-	go.uber.org/zap v1.24.0 // indirect
 	golang.org/x/crypto v0.6.0 // indirect
 	golang.org/x/exp v0.0.0-20221205204356-47842c84f3db // indirect
 	golang.org/x/mod v0.8.0 // indirect

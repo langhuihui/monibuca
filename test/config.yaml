@@ -1,0 +1,4 @@
+global:
+  # loglevel: trace
+  publish:
+    ringsize: 20
