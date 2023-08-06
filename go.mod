@@ -4,41 +4,40 @@ go 1.19
 
 require (
 	go.uber.org/zap v1.24.0
-	m7s.live/engine/v4 v4.13.7
+	m7s.live/engine/v4 v4.13.8
 	m7s.live/plugin/debug/v4 v4.0.0
 	m7s.live/plugin/edge/v4 v4.0.5
 	m7s.live/plugin/fmp4/v4 v4.0.3
-	m7s.live/plugin/gb28181/v4 v4.3.8
-	m7s.live/plugin/hdl/v4 v4.1.6
-	m7s.live/plugin/hls/v4 v4.3.1
+	m7s.live/plugin/gb28181/v4 v4.3.9
+	m7s.live/plugin/hdl/v4 v4.1.7
+	m7s.live/plugin/hls/v4 v4.3.2
 	m7s.live/plugin/hook/v4 v4.0.2
-	m7s.live/plugin/jessica/v4 v4.2.0
+	m7s.live/plugin/jessica/v4 v4.2.1
 	m7s.live/plugin/logrotate/v4 v4.0.4
 	m7s.live/plugin/monitor/v4 v4.0.3
 	m7s.live/plugin/preview/v4 v4.1.2
-	m7s.live/plugin/record/v4 v4.3.8
-	m7s.live/plugin/room/v4 v4.0.10
-	m7s.live/plugin/rtmp/v4 v4.2.3
-	m7s.live/plugin/rtsp/v4 v4.2.3
-	m7s.live/plugin/snap/v4 v4.0.6
-	m7s.live/plugin/webrtc/v4 v4.1.9
-	m7s.live/plugin/webtransport/v4 v4.0.6
+	m7s.live/plugin/record/v4 v4.4.0
+	m7s.live/plugin/room/v4 v4.0.11
+	m7s.live/plugin/rtmp/v4 v4.2.4
+	m7s.live/plugin/rtsp/v4 v4.2.5
+	m7s.live/plugin/snap/v4 v4.0.7
+	m7s.live/plugin/webrtc/v4 v4.2.0
+	m7s.live/plugin/webtransport/v4 v4.0.7
 )
 
 require (
-	github.com/abema/go-mp4 v0.10.1 // indirect
-	github.com/aler9/gortsplib/v2 v2.2.2 // indirect
+	github.com/abema/go-mp4 v0.11.0 // indirect
 	github.com/aler9/writerseeker v0.0.0-20220601075008-6f0e685b9c82 // indirect
 	github.com/asticode/go-astikit v0.30.0 // indirect
 	github.com/asticode/go-astits v1.11.0 // indirect
-	github.com/bluenviron/gohlslib v0.2.5 // indirect
-	github.com/bluenviron/gortsplib/v3 v3.2.1 // indirect
-	github.com/bluenviron/mediacommon v0.5.0 // indirect
+	github.com/bluenviron/gohlslib v0.3.0 // indirect
+	github.com/bluenviron/gortsplib/v3 v3.9.0 // indirect
+	github.com/bluenviron/mediacommon v0.7.0 // indirect
 	github.com/cnotch/ipchub v1.1.0 // indirect
 	github.com/denisbrodbeck/machineid v1.0.1 // indirect
 	github.com/discoviking/fsm v0.0.0-20150126104936-f4a273feecca // indirect
 	github.com/edgeware/mp4ff v0.30.1 // indirect
-	github.com/ghettovoice/gosip v0.0.0-20221121090201-9a2ed2233b6d // indirect
+	github.com/ghettovoice/gosip v0.0.0-20230802091127-d58873a3fe44 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/go-task/slim-sprig v0.0.0-20210107165309-348f09dbbbc0 // indirect
 	github.com/gobwas/httphead v0.1.0 // indirect
@@ -52,7 +51,7 @@ require (
 	github.com/lufia/plan9stats v0.0.0-20220913051719-115f729f3c8c // indirect
 	github.com/marten-seemann/qpack v0.3.0 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
-	github.com/mattn/go-isatty v0.0.17 // indirect
+	github.com/mattn/go-isatty v0.0.19 // indirect
 	github.com/mcuadros/go-defaults v1.2.0 // indirect
 	github.com/mgutz/ansi v0.0.0-20200706080929-d51e80ef957d // indirect
 	github.com/onsi/ginkgo/v2 v2.2.0 // indirect
@@ -64,7 +63,7 @@ require (
 	github.com/pion/mdns v0.0.7 // indirect
 	github.com/pion/randutil v0.1.0 // indirect
 	github.com/pion/rtcp v1.2.10 // indirect
-	github.com/pion/rtp v1.7.13 // indirect
+	github.com/pion/rtp v1.8.0 // indirect
 	github.com/pion/sctp v1.8.6 // indirect
 	github.com/pion/sdp/v3 v3.0.6 // indirect
 	github.com/pion/srtp/v2 v2.0.12 // indirect
@@ -82,25 +81,25 @@ require (
 	github.com/quic-go/qtls-go1-20 v0.1.0 // indirect
 	github.com/quic-go/quic-go v0.32.0 // indirect
 	github.com/satori/go.uuid v1.2.1-0.20181028125025-b2ce2384e17b // indirect
-	github.com/shirou/gopsutil/v3 v3.22.10 // indirect
+	github.com/shirou/gopsutil/v3 v3.22.11 // indirect
 	github.com/sirupsen/logrus v1.9.0 // indirect
 	github.com/tevino/abool v1.2.0 // indirect
 	github.com/tklauser/go-sysconf v0.3.11 // indirect
 	github.com/tklauser/numcpus v0.6.0 // indirect
 	github.com/x-cray/logrus-prefixed-formatter v0.5.2 // indirect
-	github.com/yapingcat/gomedia v0.0.0-20230426092936-387031404274 // indirect
+	github.com/yapingcat/gomedia v0.0.0-20230727105416-c491e66c9d2a // indirect
 	github.com/yusufpapurcu/wmi v1.2.2 // indirect
 	go.uber.org/atomic v1.10.0 // indirect
 	go.uber.org/multierr v1.8.0 // indirect
-	golang.org/x/crypto v0.6.0 // indirect
+	golang.org/x/crypto v0.11.0 // indirect
 	golang.org/x/exp v0.0.0-20221205204356-47842c84f3db // indirect
 	golang.org/x/mod v0.8.0 // indirect
-	golang.org/x/net v0.9.0 // indirect
+	golang.org/x/net v0.12.0 // indirect
 	golang.org/x/sync v0.1.0 // indirect
-	golang.org/x/sys v0.7.0 // indirect
-	golang.org/x/term v0.7.0 // indirect
-	golang.org/x/text v0.9.0 // indirect
+	golang.org/x/sys v0.10.0 // indirect
+	golang.org/x/term v0.10.0 // indirect
+	golang.org/x/text v0.11.0 // indirect
 	golang.org/x/tools v0.6.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	m7s.live/plugin/ps/v4 v4.0.8 // indirect
+	m7s.live/plugin/ps/v4 v4.0.9 // indirect
 )
