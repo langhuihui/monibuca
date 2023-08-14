@@ -10,7 +10,7 @@ require (
 	m7s.live/plugin/fmp4/v4 v4.0.4
 	m7s.live/plugin/gb28181/v4 v4.4.0
 	m7s.live/plugin/hdl/v4 v4.1.8
-	m7s.live/plugin/hls/v4 v4.3.2
+	m7s.live/plugin/hls/v4 v4.3.3
 	m7s.live/plugin/hook/v4 v4.0.2
 	m7s.live/plugin/jessica/v4 v4.2.1
 	m7s.live/plugin/logrotate/v4 v4.0.4

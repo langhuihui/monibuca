@@ -424,8 +424,8 @@ m7s.live/plugin/gb28181/v4 v4.4.0 h1:wpVn6yxWat2QullzkTGVcEv1aXwRT+x7iyVowARKB0c
 m7s.live/plugin/gb28181/v4 v4.4.0/go.mod h1:6lqP8AwhJOvaoOprdqhX9vbEB4Jg9eD/hT8kXpOJoJQ=
 m7s.live/plugin/hdl/v4 v4.1.8 h1:n7o3bu69UCHjzs8ZXHbB+qWo+AVyIY8T8cAocL9kqag=
 m7s.live/plugin/hdl/v4 v4.1.8/go.mod h1:Qyga5ZxL83+1uwT+1JBHhTpgepM4nj7XbWF/mMm2P/o=
-m7s.live/plugin/hls/v4 v4.3.2 h1:3f5zeFOOWmqQOiMb+qTYFMjhN2fa2ge6/vwr54nxXlA=
-m7s.live/plugin/hls/v4 v4.3.2/go.mod h1:Kv9V0xFv22sxeef1aIWpjykxNNqfZYkBo2S95pWrrpc=
+m7s.live/plugin/hls/v4 v4.3.3 h1:Zdgk9CEQb+8EXqWSz1Qq6WhjMcfa2PB+gkNvXtcDi9I=
+m7s.live/plugin/hls/v4 v4.3.3/go.mod h1:ALhv4u5AEBT/QNmf5bAebUm0Kxfa3T6AI04XcaJBm4c=
 m7s.live/plugin/hook/v4 v4.0.2 h1:fKwsx7gDAzfKfCz0C+knoY4wg/qnlQloM996l3jUWNc=
 m7s.live/plugin/hook/v4 v4.0.2/go.mod h1:zoyGSwIIdt4NGFdqrKHLFCwwMk4oAOF+dlvSV6cizGU=
 m7s.live/plugin/jessica/v4 v4.2.1 h1:GbQ8V2ElHT7Q/0y1cyXCzw/DvTnqkpP1kCOpVd+0d6Y=
