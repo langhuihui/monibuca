@@ -18,7 +18,7 @@ func TestPubAndSub(t *testing.T) {
 	t.Run("subscribe", func(t *testing.T) {
 		t.Parallel()
 		var sub UnitTestSubsciber
-		sub.TB = t
+		sub.tb = t
 		err := unitTestPlugin.Subscribe("test/001", &sub)
 		if err != nil {
 			t.Fatal(err)
@@ -39,7 +39,7 @@ func BenchmarkPubAndSub(b *testing.B) {
 		}(i)
 		go b.RunParallel(func(pb *testing.PB) {
 			var sub UnitTestSubsciber
-			sub.TB = b
+			sub.tb = b
 			err := unitTestPlugin.Subscribe(fmt.Sprintf("testb/%d", i), &sub)
 			if err != nil {
 				// b.Fatal(err)

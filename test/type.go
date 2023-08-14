@@ -65,12 +65,12 @@ func (t *UnitTestConfig) OnEvent(event any) {
 }
 
 type UnitTestPublisher struct {
-	testing.TB
+	tb testing.TB
 	Publisher
 }
 
 type UnitTestSubsciber struct {
-	testing.TB
+	tb testing.TB
 	Subscriber
 }
 
@@ -82,7 +82,7 @@ func (s *UnitTestSubsciber) OnEvent(event any) {
 		seq := (uint16(b[1]) << 8) | uint16(b[2])
 		// s.Trace("sequence", zap.Uint32("sequence", v.Sequence), zap.Uint16("seq", seq), zap.Int("len", len(b)))
 		if v.Sequence != uint32(seq) {
-			s.Fatal("sequence error", v.Sequence, seq)
+			s.tb.Fatal("sequence error", v.Sequence, seq)
 		}
 	default:
 		s.Subscriber.OnEvent(event)
