@@ -4,21 +4,21 @@ go 1.20
 
 require (
 	go.uber.org/zap v1.24.0
-	m7s.live/engine/v4 v4.13.9
+	m7s.live/engine/v4 v4.13.10-0.20230818101340-d6cee559d331
 	m7s.live/plugin/debug/v4 v4.0.0
 	m7s.live/plugin/edge/v4 v4.0.6
 	m7s.live/plugin/fmp4/v4 v4.0.4
 	m7s.live/plugin/gb28181/v4 v4.4.0
 	m7s.live/plugin/hdl/v4 v4.1.8
-	m7s.live/plugin/hls/v4 v4.3.3
+	m7s.live/plugin/hls/v4 v4.3.4-0.20230817113507-51b0e32d8468
 	m7s.live/plugin/hook/v4 v4.0.2
 	m7s.live/plugin/jessica/v4 v4.2.1
 	m7s.live/plugin/logrotate/v4 v4.0.4
 	m7s.live/plugin/monitor/v4 v4.0.3
 	m7s.live/plugin/preview/v4 v4.1.2
-	m7s.live/plugin/record/v4 v4.4.1
+	m7s.live/plugin/record/v4 v4.4.2-0.20230818060709-6c289bbcd27f
 	m7s.live/plugin/room/v4 v4.0.11
-	m7s.live/plugin/rtmp/v4 v4.2.5
+	m7s.live/plugin/rtmp/v4 v4.2.6-0.20230817113543-91af4e990e99
 	m7s.live/plugin/rtsp/v4 v4.2.6
 	m7s.live/plugin/snap/v4 v4.0.7
 	m7s.live/plugin/webrtc/v4 v4.2.1
@@ -80,7 +80,8 @@ require (
 	github.com/quic-go/qtls-go1-20 v0.3.1 // indirect
 	github.com/quic-go/quic-go v0.37.4 // indirect
 	github.com/satori/go.uuid v1.2.1-0.20181028125025-b2ce2384e17b // indirect
-	github.com/shirou/gopsutil/v3 v3.22.11 // indirect
+	github.com/shirou/gopsutil/v3 v3.23.7 // indirect
+	github.com/shoenig/go-m1cpu v0.1.6 // indirect
 	github.com/sirupsen/logrus v1.9.0 // indirect
 	github.com/stretchr/testify v1.8.4 // indirect
 	github.com/tevino/abool v1.2.0 // indirect
@@ -88,7 +89,7 @@ require (
 	github.com/tklauser/numcpus v0.6.0 // indirect
 	github.com/x-cray/logrus-prefixed-formatter v0.5.2 // indirect
 	github.com/yapingcat/gomedia v0.0.0-20230727105416-c491e66c9d2a // indirect
-	github.com/yusufpapurcu/wmi v1.2.2 // indirect
+	github.com/yusufpapurcu/wmi v1.2.3 // indirect
 	go.uber.org/atomic v1.10.0 // indirect
 	go.uber.org/multierr v1.8.0 // indirect
 	golang.org/x/crypto v0.11.0 // indirect
