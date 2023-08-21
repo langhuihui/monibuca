@@ -4,8 +4,8 @@ go 1.20
 
 require (
 	go.uber.org/zap v1.24.0
-	m7s.live/engine/v4 v4.13.10-0.20230818101340-d6cee559d331
-	m7s.live/plugin/debug/v4 v4.0.0
+	m7s.live/engine/v4 v4.13.10-0.20230821065056-3d14717f69e6
+	m7s.live/plugin/debug/v4 v4.0.1
 	m7s.live/plugin/edge/v4 v4.0.6
 	m7s.live/plugin/fmp4/v4 v4.0.4
 	m7s.live/plugin/gb28181/v4 v4.4.0
