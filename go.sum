@@ -424,6 +424,8 @@ gopkg.in/yaml.v3 v3.0.1 h1:fxVm/GzAzEWqLHuvctI91KS9hhNmmWOoWu0XTYJS7CA=
 gopkg.in/yaml.v3 v3.0.1/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=
 m7s.live/engine/v4 v4.13.10 h1:wcjbmEz7BXilC+NOfOPZJc/g3QFMnl7kSmMP/XMcdh8=
 m7s.live/engine/v4 v4.13.10/go.mod h1:Wfs3OMgtRxLIbw1nCjWFgo1kRkypg6L+38QLghMG6Vw=
+m7s.live/engine/v4 v4.13.11-0.20230829014128-f89b75ecb159 h1:YUBnyYg3H7Q8d9PZSeB5T8qVoJXTi6Fjlw6AwjFAlMI=
+m7s.live/engine/v4 v4.13.11-0.20230829014128-f89b75ecb159/go.mod h1:anE5B1xtiEz6WTtEgvasxsBwEX22ZSuVEfccldDplfI=
 m7s.live/plugin/debug/v4 v4.0.1 h1:sX0UADsiikwSol8qx+8aQzGeaFa8yJFa/cUKpBs5Lzw=
 m7s.live/plugin/debug/v4 v4.0.1/go.mod h1:A/C1ViacCOK7EPeeCfiwlUrC2TUtRdEqzrR0Yd9b1KQ=
 m7s.live/plugin/edge/v4 v4.0.6 h1:dAxS6cvmWV+pPXCgdu0phoAwH2abjhlKMGfysyxHBNw=
@@ -444,6 +446,8 @@ m7s.live/plugin/logrotate/v4 v4.0.4 h1:y3X+aJ/FSftWMa4yDWF+662xfV5lrEaOZofV8SGQL
 m7s.live/plugin/logrotate/v4 v4.0.4/go.mod h1:a8hIV59GjpQDE+Ip790CU7yOHaG4+Iweci0sLvo43FU=
 m7s.live/plugin/monitor/v4 v4.0.3 h1:hu0Sh3W8+gcpmZ5LW6Gt/h1Mvl04+k1px5KtddsPPVw=
 m7s.live/plugin/monitor/v4 v4.0.3/go.mod h1:wYcjvXM03RK00DGA/R7zfiENNT7jDFQhp0rEBvO1mTw=
+m7s.live/plugin/monitor/v4 v4.0.4-0.20230829014148-8645b2dbdba4 h1:mmMpYfEgPndWxytP1vciSOt7vBoHtbiHD8GV9zec5Qw=
+m7s.live/plugin/monitor/v4 v4.0.4-0.20230829014148-8645b2dbdba4/go.mod h1:wYcjvXM03RK00DGA/R7zfiENNT7jDFQhp0rEBvO1mTw=
 m7s.live/plugin/preview/v4 v4.1.2 h1:ENjeg36xWiPqI2FM0lJzs0t8gyeomEvUFtT5ygu+BrQ=
 m7s.live/plugin/preview/v4 v4.1.2/go.mod h1:iYhWqFbTvTNDFplbTOrE5X9M6ED7gCKkKMuM5QmBocg=
 m7s.live/plugin/ps/v4 v4.1.1 h1:Chp+HUx/Z1tT8lEFK+Vfib6LhNu14EIeAhbzmYm4wbQ=
