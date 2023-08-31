@@ -19,7 +19,7 @@ require (
 	m7s.live/plugin/record/v4 v4.4.2
 	m7s.live/plugin/room/v4 v4.0.11
 	m7s.live/plugin/rtmp/v4 v4.2.6
-	m7s.live/plugin/rtsp/v4 v4.2.8
+	m7s.live/plugin/rtsp/v4 v4.2.9-0.20230831004212-4a5ba9b834a3
 	m7s.live/plugin/snap/v4 v4.0.7
 	m7s.live/plugin/webrtc/v4 v4.2.1
 	m7s.live/plugin/webtransport/v4 v4.0.8
