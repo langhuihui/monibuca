@@ -4,11 +4,11 @@ go 1.20
 
 require (
 	go.uber.org/zap v1.24.0
-	m7s.live/engine/v4 v4.13.11-0.20230829014128-f89b75ecb159
+	m7s.live/engine/v4 v4.13.11-0.20230906053619-934d3cf9d4b9
 	m7s.live/plugin/debug/v4 v4.0.1
 	m7s.live/plugin/edge/v4 v4.0.6
 	m7s.live/plugin/fmp4/v4 v4.0.4
-	m7s.live/plugin/gb28181/v4 v4.4.0
+	m7s.live/plugin/gb28181/v4 v4.4.1-0.20230906054409-2b72f6c291bf
 	m7s.live/plugin/hdl/v4 v4.1.8
 	m7s.live/plugin/hls/v4 v4.3.5-0.20230831053024-dd556a01641b
 	m7s.live/plugin/hook/v4 v4.0.2
@@ -44,6 +44,7 @@ require (
 	github.com/gobwas/httphead v0.1.0 // indirect
 	github.com/gobwas/pool v0.2.1 // indirect
 	github.com/gobwas/ws v1.2.1 // indirect
+	github.com/goccy/go-json v0.10.2 // indirect
 	github.com/golang/mock v1.6.0 // indirect
 	github.com/google/pprof v0.0.0-20210407192527-94a9f03dee38 // indirect
 	github.com/google/uuid v1.3.0 // indirect
@@ -102,5 +103,5 @@ require (
 	golang.org/x/text v0.12.0 // indirect
 	golang.org/x/tools v0.9.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	m7s.live/plugin/ps/v4 v4.1.1 // indirect
+	m7s.live/plugin/ps/v4 v4.1.2-0.20230906053424-43be8038f01c // indirect
 )
