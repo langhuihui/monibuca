@@ -4,7 +4,7 @@ go 1.20
 
 require (
 	go.uber.org/zap v1.24.0
-	m7s.live/engine/v4 v4.13.11-0.20230906053619-934d3cf9d4b9
+	m7s.live/engine/v4 v4.13.11-0.20230907050649-03d22736d5d9
 	m7s.live/plugin/debug/v4 v4.0.1
 	m7s.live/plugin/edge/v4 v4.0.6
 	m7s.live/plugin/fmp4/v4 v4.0.4
@@ -103,5 +103,5 @@ require (
 	golang.org/x/text v0.12.0 // indirect
 	golang.org/x/tools v0.9.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	m7s.live/plugin/ps/v4 v4.1.2-0.20230906053424-43be8038f01c // indirect
+	m7s.live/plugin/ps/v4 v4.1.2-0.20230907050504-859e7f869639 // indirect
 )
