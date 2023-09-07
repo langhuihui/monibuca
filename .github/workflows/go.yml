@@ -38,39 +38,33 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Checkout m7s-import
-      uses: actions/checkout@v3
-      with:
-        repository: langhuihui/m7s-import
-        path: m7s-import
-        persist-credentials: false # otherwise, the token used is the GITHUB_TOKEN, instead of your personal access token.
-        fetch-depth: 0
+    # - name: Checkout m7s-import
+    #   uses: actions/checkout@v3
+    #   with:
+    #     repository: langhuihui/m7s-import
+    #     path: m7s-import
+    #     persist-credentials: false # otherwise, the token used is the GITHUB_TOKEN, instead of your personal access token.
+    #     fetch-depth: 0
 
-    - name: Add bin to m7s-import
-      if: success() && startsWith(github.ref, 'refs/tags/')
-      run:  |
-        cd m7s-import
-        mkdir -p apps/m7s-website/src/public/bin
-        cp ../dist/m7s_${{ env.version }}_windows_amd64.tar.gz apps/m7s-website/src/public/bin/m7s_windows_amd64.tar.gz
-        cp ../dist/m7s_${{ env.version }}_darwin_amd64.tar.gz  apps/m7s-website/src/public/bin/m7s_darwin_amd64.tar.gz 
-        cp ../dist/m7s_${{ env.version }}_darwin_arm64.tar.gz  apps/m7s-website/src/public/bin/m7s_darwin_arm64.tar.gz 
-        cp ../dist/m7s_${{ env.version }}_linux_amd64.tar.gz   apps/m7s-website/src/public/bin/m7s_linux_amd64.tar.gz 
-        cp ../dist/m7s_${{ env.version }}_linux_arm64.tar.gz   apps/m7s-website/src/public/bin/m7s_linux_arm64.tar.gz 
-        releaseinfo=`curl -H "Accept: application/vnd.github+json" -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" https://api.github.com/repos/${{ github.repository }}/releases/latest`
-        body=`echo $releaseinfo | jq   ".body" | sed -e 's/^"//' -e 's/"$//'`
-        name=`echo $releaseinfo | jq   ".name" | sed -e 's/^"//' -e 's/"$//'`
-        touch apps/m7s-website/src/release.txt
-        echo -e "# $name\n$body" | cat - apps/m7s-website/src/release.txt > temp && mv temp apps/m7s-website/src/release.txt
-        sed "/## Changelog/d" -i apps/m7s-website/src/release.txt
-        git config --global user.name 'langhuihui' 
-        git config --global user.email '178529795@qq.com'
-        git add -A
-        git commit -m '[automated commit] add bin & GitHub workflow'
+    # - name: Add bin to m7s-import
+    #   if: success() && startsWith(github.ref, 'refs/tags/')
+    #   run:  |
+    #     cd m7s-import
+    #     mkdir -p apps/m7s-website/src/public/bin
+    #     cp ../dist/m7s_${{ env.version }}_windows_amd64.tar.gz apps/m7s-website/src/public/bin/m7s_windows_amd64.tar.gz
+    #     cp ../dist/m7s_${{ env.version }}_darwin_amd64.tar.gz  apps/m7s-website/src/public/bin/m7s_darwin_amd64.tar.gz 
+    #     cp ../dist/m7s_${{ env.version }}_darwin_arm64.tar.gz  apps/m7s-website/src/public/bin/m7s_darwin_arm64.tar.gz 
+    #     cp ../dist/m7s_${{ env.version }}_linux_amd64.tar.gz   apps/m7s-website/src/public/bin/m7s_linux_amd64.tar.gz 
+    #     cp ../dist/m7s_${{ env.version }}_linux_arm64.tar.gz   apps/m7s-website/src/public/bin/m7s_linux_arm64.tar.gz 
+    #     ls apps/m7s-website/src/public/bin
 
-    - name: push to m7s-import
-      uses: ad-m/github-push-action@master
-      if: success() && startsWith(github.ref, 'refs/tags/')
-      with:
-        github_token: ${{ secrets.TOKEN }}
-        directory: m7s-import
-        repository: langhuihui/m7s-import          
+    - uses: jakejarvis/s3-sync-action@master
+        # with:
+        #   args: --acl public-read --follow-symlinks --delete
+      env:
+        AWS_S3_ENDPOINT: https://${{ secrets.R2_DOMAIN }}
+        AWS_ACCESS_KEY_ID: ${{ secrets.R2_KEY }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET }}
+        AWS_S3_BUCKET: monibuca
+        SOURCE_DIR: '../dist'
+        DEST_DIR: 'bin'
