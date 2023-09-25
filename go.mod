@@ -4,11 +4,11 @@ go 1.20
 
 require (
 	go.uber.org/zap v1.26.0
-	m7s.live/engine/v4 v4.13.12
+	m7s.live/engine/v4 v4.13.13-0.20230925063515-fca43417bf23
 	m7s.live/plugin/debug/v4 v4.0.1
 	m7s.live/plugin/edge/v4 v4.0.6
 	m7s.live/plugin/fmp4/v4 v4.0.5
-	m7s.live/plugin/gb28181/v4 v4.4.2
+	m7s.live/plugin/gb28181/v4 v4.4.3-0.20230925062259-90901dc1ada5
 	m7s.live/plugin/hdl/v4 v4.1.8
 	m7s.live/plugin/hls/v4 v4.3.5
 	m7s.live/plugin/hook/v4 v4.0.2
@@ -16,9 +16,9 @@ require (
 	m7s.live/plugin/logrotate/v4 v4.0.4
 	m7s.live/plugin/monitor/v4 v4.0.4
 	m7s.live/plugin/preview/v4 v4.1.2
-	m7s.live/plugin/record/v4 v4.4.3
+	m7s.live/plugin/record/v4 v4.4.4-0.20230921042847-1de72b595f7f
 	m7s.live/plugin/room/v4 v4.0.11
-	m7s.live/plugin/rtmp/v4 v4.2.6
+	m7s.live/plugin/rtmp/v4 v4.2.7-0.20230921102304-762bcea72633
 	m7s.live/plugin/rtsp/v4 v4.2.10
 	m7s.live/plugin/snap/v4 v4.0.7
 	m7s.live/plugin/webrtc/v4 v4.2.1
