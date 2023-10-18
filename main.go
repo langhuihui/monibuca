@@ -55,7 +55,6 @@ import (
 	_ "m7s.live/plugin/snap/v4"
 	_ "m7s.live/plugin/webrtc/v4"
 	_ "m7s.live/plugin/webtransport/v4"
-	_ "m7s.live/plugin/edge/v4"
 	_ "m7s.live/plugin/fmp4/v4"
 	_ "m7s.live/plugin/monitor/v4"
 )
