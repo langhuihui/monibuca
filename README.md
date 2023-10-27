@@ -82,7 +82,7 @@ Inspired by:
 - [mp4ff](https://github.com/edgeware/mp4ff) mp4 file format library [@edgeware](https://github.com/edgeware)
 - [gosip](https://github.com/ghettovoice/gosip) go sip library [@ghettovoice](https://github.com/ghettovoice)
 - [webrtc](https://github.com/pion/webrtc) go library and whole [@pion](https://github.com/pion) team
-- [gortsplib](https://github.com/aler9/gortsplib) rtsp library [@aler9](https://github.com/aler9)
+- [gortsplib](https://github.com/bluenviron/gortsplib) rtsp library [@aler9](https://github.com/aler9)
 
 ## Remote console
 
