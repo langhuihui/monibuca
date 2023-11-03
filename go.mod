@@ -4,7 +4,7 @@ go 1.20
 
 require (
 	go.uber.org/zap v1.26.0
-	m7s.live/engine/v4 v4.14.1-0.20231027032158-8ffe3d3d5557
+	m7s.live/engine/v4 v4.14.1
 	m7s.live/plugin/debug/v4 v4.0.1
 	m7s.live/plugin/fmp4/v4 v4.0.5
 	m7s.live/plugin/gb28181/v4 v4.4.3
@@ -18,7 +18,7 @@ require (
 	m7s.live/plugin/record/v4 v4.4.4
 	m7s.live/plugin/room/v4 v4.0.11
 	m7s.live/plugin/rtmp/v4 v4.2.7
-	m7s.live/plugin/rtsp/v4 v4.3.1-0.20231027015219-2a62472b1d50
+	m7s.live/plugin/rtsp/v4 v4.3.1
 	m7s.live/plugin/snap/v4 v4.0.7
 	m7s.live/plugin/webrtc/v4 v4.2.2
 	m7s.live/plugin/webtransport/v4 v4.0.9
@@ -31,7 +31,7 @@ require (
 	github.com/asticode/go-astikit v0.30.0 // indirect
 	github.com/asticode/go-astits v1.13.0 // indirect
 	github.com/bluenviron/gohlslib v1.0.0 // indirect
-	github.com/bluenviron/gortsplib/v4 v4.2.2-0.20231023175953-d4bb674a5091 // indirect
+	github.com/bluenviron/gortsplib/v4 v4.3.0 // indirect
 	github.com/bluenviron/mediacommon v1.5.0 // indirect
 	github.com/cnotch/ipchub v1.1.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
@@ -46,7 +46,7 @@ require (
 	github.com/goccy/go-json v0.10.2 // indirect
 	github.com/golang/mock v1.6.0 // indirect
 	github.com/google/pprof v0.0.0-20230912144702-c363fe2c2ed8 // indirect
-	github.com/google/uuid v1.3.1 // indirect
+	github.com/google/uuid v1.4.0 // indirect
 	github.com/husanpao/ip v0.0.0-20220711082147-73160bb611a8 // indirect
 	github.com/logrusorgru/aurora/v4 v4.0.0 // indirect
 	github.com/lufia/plan9stats v0.0.0-20230326075908-cb1d2100619a // indirect
