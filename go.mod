@@ -15,7 +15,7 @@ require (
 	m7s.live/plugin/logrotate/v4 v4.0.4
 	m7s.live/plugin/monitor/v4 v4.0.4
 	m7s.live/plugin/preview/v4 v4.1.2
-	m7s.live/plugin/record/v4 v4.4.4
+	m7s.live/plugin/record/v4 v4.4.5-0.20231107020615-7fff7454b246
 	m7s.live/plugin/room/v4 v4.0.11
 	m7s.live/plugin/rtmp/v4 v4.2.7
 	m7s.live/plugin/rtsp/v4 v4.3.2-0.20231103061205-855038c1322e
