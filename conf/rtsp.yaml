@@ -2,22 +2,15 @@
 global:
   disableall: true # 需要转换其他协议的话，需要将disableall设置为false
   enableavcc: false # 如果需要转换成rtmp和flv的话，需要改成true
-  delayclosetimeout: 2s # 无订阅者时，2s后关闭拉流
+  publish:
+    delayclosetimeout: 2s # 无订阅者时，2s后关闭拉流
+preview:
+  enable: true
 rtsp:
   enable: true # 如果disableall为false的话，这个可以不需要写
-  pullprotocol: tcp
   pull:
     pullonstart:
-      rtsp/obs: rtsp://localhost:8554/live
-      # live/test1: rtsp://localhost:8554/live/rtsp
-      # live/test2: rtsp://localhost:8554/live/rtsp
-      # live/test3: rtsp://localhost:8554/live/rtsp
-      # live/test4: rtsp://localhost:8554/live/rtsp
-      # live/test5: rtsp://localhost:8554/live/rtsp
-      # live/test6: rtsp://localhost:8554/live/rtsp
-      # live/test7: rtsp://localhost:8554/live/rtsp
-      # live/test8: rtsp://localhost:8554/live/rtsp
-      # live/test9: rtsp://localhost:8554/live/rtsp
+      rtsp/test: rtsp://localhost:8554/live
     pullonsub: # 按需拉流
       rtsp/100: rtsp://admin:admin@192.168.0.100/cam/realmonitor?channel=1&subtype=0
       rtsp/101: rtsp://admin:admin@192.168.0.101/cam/realmonitor?channel=1&subtype=0

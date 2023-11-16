@@ -4,21 +4,21 @@ go 1.20
 
 require (
 	go.uber.org/zap v1.26.0
-	m7s.live/engine/v4 v4.14.2-0.20231103061048-25e15d049267
+	m7s.live/engine/v4 v4.14.3-0.20231116015522-6c6a28855d35
 	m7s.live/plugin/debug/v4 v4.0.1
 	m7s.live/plugin/fmp4/v4 v4.0.5
 	m7s.live/plugin/gb28181/v4 v4.4.3
 	m7s.live/plugin/hdl/v4 v4.1.9
-	m7s.live/plugin/hls/v4 v4.3.7-0.20231103015059-5130b70672ff
+	m7s.live/plugin/hls/v4 v4.3.7
 	m7s.live/plugin/hook/v4 v4.0.2
 	m7s.live/plugin/jessica/v4 v4.2.1
 	m7s.live/plugin/logrotate/v4 v4.0.4
 	m7s.live/plugin/monitor/v4 v4.0.4
 	m7s.live/plugin/preview/v4 v4.1.2
-	m7s.live/plugin/record/v4 v4.4.5-0.20231107020615-7fff7454b246
+	m7s.live/plugin/record/v4 v4.4.5
 	m7s.live/plugin/room/v4 v4.0.11
-	m7s.live/plugin/rtmp/v4 v4.2.7
-	m7s.live/plugin/rtsp/v4 v4.3.2-0.20231103061205-855038c1322e
+	m7s.live/plugin/rtmp/v4 v4.2.9
+	m7s.live/plugin/rtsp/v4 v4.3.2
 	m7s.live/plugin/snap/v4 v4.0.7
 	m7s.live/plugin/webrtc/v4 v4.2.2
 	m7s.live/plugin/webtransport/v4 v4.0.9
@@ -72,6 +72,7 @@ require (
 	github.com/pion/transport/v2 v2.2.4 // indirect
 	github.com/pion/turn/v2 v2.1.3 // indirect
 	github.com/pion/webrtc/v3 v3.2.20 // indirect
+	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/power-devops/perfstat v0.0.0-20221212215047-62379fc7944b // indirect
 	github.com/q191201771/naza v0.30.48 // indirect
@@ -101,5 +102,5 @@ require (
 	golang.org/x/text v0.13.0 // indirect
 	golang.org/x/tools v0.13.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	m7s.live/plugin/ps/v4 v4.1.3 // indirect
+	m7s.live/plugin/ps/v4 v4.1.4 // indirect
 )
