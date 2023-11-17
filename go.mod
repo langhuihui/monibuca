@@ -4,11 +4,11 @@ go 1.20
 
 require (
 	go.uber.org/zap v1.26.0
-	m7s.live/engine/v4 v4.14.3-0.20231116015522-6c6a28855d35
+	m7s.live/engine/v4 v4.14.3
 	m7s.live/plugin/debug/v4 v4.0.1
 	m7s.live/plugin/fmp4/v4 v4.0.5
 	m7s.live/plugin/gb28181/v4 v4.4.3
-	m7s.live/plugin/hdl/v4 v4.1.9
+	m7s.live/plugin/hdl/v4 v4.1.10
 	m7s.live/plugin/hls/v4 v4.3.7
 	m7s.live/plugin/hook/v4 v4.0.2
 	m7s.live/plugin/jessica/v4 v4.2.1
@@ -18,9 +18,9 @@ require (
 	m7s.live/plugin/record/v4 v4.4.5
 	m7s.live/plugin/room/v4 v4.0.11
 	m7s.live/plugin/rtmp/v4 v4.2.9
-	m7s.live/plugin/rtsp/v4 v4.3.2
+	m7s.live/plugin/rtsp/v4 v4.3.3
 	m7s.live/plugin/snap/v4 v4.0.7
-	m7s.live/plugin/webrtc/v4 v4.2.2
+	m7s.live/plugin/webrtc/v4 v4.2.3
 	m7s.live/plugin/webtransport/v4 v4.0.9
 )
 
@@ -58,20 +58,22 @@ require (
 	github.com/onsi/ginkgo/v2 v2.12.1 // indirect
 	github.com/pion/datachannel v1.5.5 // indirect
 	github.com/pion/dtls/v2 v2.2.7 // indirect
-	github.com/pion/ice/v2 v2.3.11 // indirect
-	github.com/pion/interceptor v0.1.19 // indirect
+	github.com/pion/ice/v3 v3.0.2 // indirect
+	github.com/pion/interceptor v0.1.25 // indirect
 	github.com/pion/logging v0.2.2 // indirect
 	github.com/pion/mdns v0.0.9 // indirect
 	github.com/pion/randutil v0.1.0 // indirect
-	github.com/pion/rtcp v1.2.10 // indirect
-	github.com/pion/rtp v1.8.2 // indirect
+	github.com/pion/rtcp v1.2.12 // indirect
+	github.com/pion/rtp v1.8.3 // indirect
 	github.com/pion/sctp v1.8.9 // indirect
 	github.com/pion/sdp/v3 v3.0.6 // indirect
-	github.com/pion/srtp/v2 v2.0.17 // indirect
-	github.com/pion/stun v0.6.1 // indirect
+	github.com/pion/srtp/v3 v3.0.1 // indirect
+	github.com/pion/stun/v2 v2.0.0 // indirect
 	github.com/pion/transport/v2 v2.2.4 // indirect
-	github.com/pion/turn/v2 v2.1.3 // indirect
+	github.com/pion/transport/v3 v3.0.1 // indirect
+	github.com/pion/turn/v3 v3.0.1 // indirect
 	github.com/pion/webrtc/v3 v3.2.20 // indirect
+	github.com/pion/webrtc/v4 v4.0.0-beta.7 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/power-devops/perfstat v0.0.0-20221212215047-62379fc7944b // indirect
