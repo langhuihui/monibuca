@@ -4,7 +4,7 @@ archives:
     files:
       - config.yaml
       - favicon.ico
-      - conf/*
+      - conf-example/*
 builds:
   - id: "with-debug"
     env: [CGO_ENABLED=0]
