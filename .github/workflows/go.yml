@@ -4,6 +4,8 @@ on:
   create:
     tags:
       - v4*
+env:
+  dest: bin
 jobs:
 
   build:
@@ -16,7 +18,9 @@ jobs:
 
     - name: Set up Env
       run: echo "version=${GITHUB_REF:11}" >> $GITHUB_ENV
-
+    - name: Set beta
+      if: contains(env.version, 'beta')
+      run: echo "dest=beta" >> $GITHUB_ENV
     - name: Set up Go
       uses: actions/setup-go@v2
       with:
@@ -76,4 +80,4 @@ jobs:
         AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET }}
         AWS_S3_BUCKET: monibuca
         SOURCE_DIR: 'bin'
-        DEST_DIR: 'bin'
+        DEST_DIR: ${{ env.dest }}
