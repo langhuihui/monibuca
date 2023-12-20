@@ -4,8 +4,8 @@ go 1.20
 
 require (
 	go.uber.org/zap v1.26.0
-	m7s.live/engine/v4 v4.14.6-0.20231215101010-5e3008f00beb
-	m7s.live/plugin/debug/v4 v4.0.1
+	m7s.live/engine/v4 v4.14.6-0.20231220021402-453ea6a6f244
+	m7s.live/plugin/debug/v4 v4.0.2-0.20231220021419-8560e3adc2d2
 	m7s.live/plugin/fmp4/v4 v4.0.5
 	m7s.live/plugin/gb28181/v4 v4.4.4-0.20231212111848-bee261a67086
 	m7s.live/plugin/hdl/v4 v4.1.10
@@ -47,6 +47,7 @@ require (
 	github.com/golang/mock v1.6.0 // indirect
 	github.com/google/pprof v0.0.0-20230912144702-c363fe2c2ed8 // indirect
 	github.com/google/uuid v1.4.0 // indirect
+	github.com/gorilla/websocket v1.4.2 // indirect
 	github.com/husanpao/ip v0.0.0-20220711082147-73160bb611a8 // indirect
 	github.com/logrusorgru/aurora/v4 v4.0.0 // indirect
 	github.com/lufia/plan9stats v0.0.0-20230326075908-cb1d2100619a // indirect
