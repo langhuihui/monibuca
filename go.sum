@@ -493,6 +493,8 @@ m7s.live/plugin/preview/v4 v4.1.4-0.20231207023537-d0d43f80c4c9 h1:6Kyyu9X6+YN4c
 m7s.live/plugin/preview/v4 v4.1.4-0.20231207023537-d0d43f80c4c9/go.mod h1:iYhWqFbTvTNDFplbTOrE5X9M6ED7gCKkKMuM5QmBocg=
 m7s.live/plugin/preview/v4 v4.1.4-0.20231214052634-6e5ce878edd0 h1:DaYwxaa+/NG2Lm5sphAx9fNBbMCZ7NJTLO85/LZf2rc=
 m7s.live/plugin/preview/v4 v4.1.4-0.20231214052634-6e5ce878edd0/go.mod h1:iYhWqFbTvTNDFplbTOrE5X9M6ED7gCKkKMuM5QmBocg=
+m7s.live/plugin/preview/v4 v4.1.4-0.20231226030707-6bfd6b38610e h1:M6ZrFFf8Wmgqifi9mkiTpC3yA5LWef7eODRbF6zov6M=
+m7s.live/plugin/preview/v4 v4.1.4-0.20231226030707-6bfd6b38610e/go.mod h1:iYhWqFbTvTNDFplbTOrE5X9M6ED7gCKkKMuM5QmBocg=
 m7s.live/plugin/ps/v4 v4.1.4 h1:Hycrjyk6uJRxrGfytSoIdstAotGx69L5jumFVr9yTV4=
 m7s.live/plugin/ps/v4 v4.1.4/go.mod h1:RAb507iNmPG43I5kUA6ewF1fTRHDRsKbIVkIdLdKeeI=
 m7s.live/plugin/ps/v4 v4.1.5-0.20231213072312-25570d9571b3 h1:Ibo6vCb8VpqnpIQ2/3PFIr35BMku/2/j44f8cms77AM=

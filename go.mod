@@ -14,7 +14,7 @@ require (
 	m7s.live/plugin/jessica/v4 v4.2.1
 	m7s.live/plugin/logrotate/v4 v4.0.5-0.20231213072057-ea7b8d660ad0
 	m7s.live/plugin/monitor/v4 v4.0.5-0.20231213072129-bff5c426e8bc
-	m7s.live/plugin/preview/v4 v4.1.4-0.20231214052634-6e5ce878edd0
+	m7s.live/plugin/preview/v4 v4.1.4-0.20231226030707-6bfd6b38610e
 	m7s.live/plugin/record/v4 v4.4.6-0.20231215101053-3733b9f4e61f
 	m7s.live/plugin/room/v4 v4.0.12-0.20231213072347-4ec68e833905
 	m7s.live/plugin/rtmp/v4 v4.2.10-0.20231213072600-93973f247912
