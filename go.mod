@@ -4,28 +4,28 @@ go 1.20
 
 require (
 	go.uber.org/zap v1.26.0
-	m7s.live/engine/v4 v4.14.6-0.20231220021402-453ea6a6f244
-	m7s.live/plugin/debug/v4 v4.0.2-0.20231220021419-8560e3adc2d2
+	m7s.live/engine/v4 v4.14.6
+	m7s.live/plugin/debug/v4 v4.0.2
 	m7s.live/plugin/fmp4/v4 v4.0.5
-	m7s.live/plugin/gb28181/v4 v4.4.4-0.20231212111848-bee261a67086
+	m7s.live/plugin/gb28181/v4 v4.4.4
 	m7s.live/plugin/hdl/v4 v4.1.10
-	m7s.live/plugin/hls/v4 v4.3.8-0.20231213072004-7ec5ce26b101
-	m7s.live/plugin/hook/v4 v4.0.3-0.20231213072035-80b5f6e25286
+	m7s.live/plugin/hls/v4 v4.3.8
+	m7s.live/plugin/hook/v4 v4.0.3
 	m7s.live/plugin/jessica/v4 v4.2.1
-	m7s.live/plugin/logrotate/v4 v4.0.5-0.20231213072057-ea7b8d660ad0
-	m7s.live/plugin/monitor/v4 v4.0.5-0.20231213072129-bff5c426e8bc
-	m7s.live/plugin/preview/v4 v4.1.4-0.20231226030707-6bfd6b38610e
-	m7s.live/plugin/record/v4 v4.4.6-0.20231215101053-3733b9f4e61f
-	m7s.live/plugin/room/v4 v4.0.12-0.20231213072347-4ec68e833905
-	m7s.live/plugin/rtmp/v4 v4.2.10-0.20231213072600-93973f247912
-	m7s.live/plugin/rtsp/v4 v4.3.4-0.20231213072710-5e722bf84914
-	m7s.live/plugin/snap/v4 v4.0.8-0.20231213072736-501c97276e0c
-	m7s.live/plugin/webrtc/v4 v4.2.4-0.20231213072749-467b55cfecf6
-	m7s.live/plugin/webtransport/v4 v4.0.10-0.20231214053057-d0d850c713dc
+	m7s.live/plugin/logrotate/v4 v4.0.5
+	m7s.live/plugin/monitor/v4 v4.0.5
+	m7s.live/plugin/preview/v4 v4.1.4
+	m7s.live/plugin/record/v4 v4.4.6
+	m7s.live/plugin/room/v4 v4.0.12
+	m7s.live/plugin/rtmp/v4 v4.2.10
+	m7s.live/plugin/rtsp/v4 v4.3.4
+	m7s.live/plugin/snap/v4 v4.0.8
+	m7s.live/plugin/webrtc/v4 v4.2.4
+	m7s.live/plugin/webtransport/v4 v4.0.10
 )
 
 require (
-	github.com/Eyevinn/mp4ff v0.38.0 // indirect
+	github.com/Eyevinn/mp4ff v0.40.1 // indirect
 	github.com/abema/go-mp4 v1.1.1 // indirect
 	github.com/aler9/writerseeker v1.1.0 // indirect
 	github.com/asticode/go-astikit v0.30.0 // indirect
@@ -42,7 +42,7 @@ require (
 	github.com/go-task/slim-sprig v0.0.0-20230315185526-52ccab3ef572 // indirect
 	github.com/gobwas/httphead v0.1.0 // indirect
 	github.com/gobwas/pool v0.2.1 // indirect
-	github.com/gobwas/ws v1.3.0 // indirect
+	github.com/gobwas/ws v1.3.1 // indirect
 	github.com/goccy/go-json v0.10.2 // indirect
 	github.com/golang/mock v1.6.0 // indirect
 	github.com/google/pprof v0.0.0-20230912144702-c363fe2c2ed8 // indirect
