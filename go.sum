@@ -438,6 +438,8 @@ m7s.live/engine/v4 v4.14.7-0.20240122075901-e82bc7e5d06f h1:EHJfih7/yel77SBJvYlu
 m7s.live/engine/v4 v4.14.7-0.20240122075901-e82bc7e5d06f/go.mod h1:FRtMPBGzNE6kCLgY0wuS3H7d1btKocRiVe9fAkDtP1g=
 m7s.live/plugin/debug/v4 v4.0.2 h1:JWiECbI4V7s/5RIjAJR/TscS0Wae2Lv+sg/D8HVJZpU=
 m7s.live/plugin/debug/v4 v4.0.2/go.mod h1:muzikl1KrHfbT/+2aHzKg9qDGfpArViQAtpcfFrST88=
+m7s.live/plugin/debug/v4 v4.0.3-0.20240124064804-dfa1a464eecc h1:Mo1qVoc0qPZnTiVIpDlC67TY02u8YuAQeMTX2S1yIBA=
+m7s.live/plugin/debug/v4 v4.0.3-0.20240124064804-dfa1a464eecc/go.mod h1:muzikl1KrHfbT/+2aHzKg9qDGfpArViQAtpcfFrST88=
 m7s.live/plugin/fmp4/v4 v4.0.5 h1:0madI/TKvrLkYVAKuPK1HBvbVf0RJg0g2WruET3S+9c=
 m7s.live/plugin/fmp4/v4 v4.0.5/go.mod h1:4ShxA9Ud2LeYZ/xQaPTWEVfjpK844ijoXxLqhCA607A=
 m7s.live/plugin/gb28181/v4 v4.4.4 h1:2ZeHCYk1qyYoF9YwEJPFkqZzH/FmkadSxT2GC+tkKFk=
