@@ -81,3 +81,11 @@ jobs:
         AWS_S3_BUCKET: monibuca
         SOURCE_DIR: 'bin'
         DEST_DIR: ${{ env.dest }}
+    - name: docker build
+      if: success() && startsWith(github.ref, 'refs/tags/')
+      run:  |
+        tar -zxvf bin/m7s_linux_amd64.tar.gz
+        mv m7s monibuca_linux
+        docker login -u langhuihui -p ${{ secrets.DOCKER_PASSWORD }}
+        docker build -t langhuihui/monibuca:${{ env.version }} .
+        docker push langhuihui/monibuca:${{ env.version }}
