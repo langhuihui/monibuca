@@ -87,5 +87,10 @@ jobs:
         tar -zxvf bin/m7s_linux_amd64.tar.gz
         mv m7s monibuca_linux
         docker login -u langhuihui -p ${{ secrets.DOCKER_PASSWORD }}
-        docker build -t langhuihui/monibuca:${{ env.version }} .
+        docker build -t langhuihui/monibuca:latest .
+        docker push langhuihui/monibuca:latest
+    - name: docker push
+      if: success() && !contains(env.version, 'beta')
+      run:  |
+        docker tag langhuihui/monibuca:latest langhuihui/monibuca:${{ env.version }}
         docker push langhuihui/monibuca:${{ env.version }}
