@@ -4,20 +4,20 @@ go 1.20
 
 require (
 	go.uber.org/zap v1.26.0
-	m7s.live/engine/v4 v4.14.7-0.20240122075901-e82bc7e5d06f
+	m7s.live/engine/v4 v4.14.7-0.20240211022911-f320e61803b9
 	m7s.live/plugin/debug/v4 v4.0.3-0.20240124064804-dfa1a464eecc
-	m7s.live/plugin/fmp4/v4 v4.0.5
+	m7s.live/plugin/fmp4/v4 v4.0.6-0.20240207073644-4ea6db4e7f52
 	m7s.live/plugin/gb28181/v4 v4.4.4
 	m7s.live/plugin/hdl/v4 v4.1.10
 	m7s.live/plugin/hls/v4 v4.3.8
 	m7s.live/plugin/hook/v4 v4.0.3
 	m7s.live/plugin/jessica/v4 v4.2.1
-	m7s.live/plugin/logrotate/v4 v4.0.5
+	m7s.live/plugin/logrotate/v4 v4.0.6-0.20240212132214-47665b96f71a
 	m7s.live/plugin/monitor/v4 v4.0.5
 	m7s.live/plugin/preview/v4 v4.1.4
 	m7s.live/plugin/record/v4 v4.4.6
-	m7s.live/plugin/room/v4 v4.0.12
-	m7s.live/plugin/rtmp/v4 v4.2.11-0.20240119065647-2fc87b15dc71
+	m7s.live/plugin/room/v4 v4.0.13-0.20240201093613-7e397d53b72b
+	m7s.live/plugin/rtmp/v4 v4.2.11-0.20240211012426-5f36b127f2a5
 	m7s.live/plugin/rtsp/v4 v4.3.4
 	m7s.live/plugin/snap/v4 v4.0.8
 	m7s.live/plugin/webrtc/v4 v4.2.4
@@ -106,4 +106,5 @@ require (
 	golang.org/x/tools v0.13.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	m7s.live/plugin/ps/v4 v4.1.5-0.20231213072312-25570d9571b3 // indirect
+
 )
