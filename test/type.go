@@ -92,9 +92,9 @@ func (s *UnitTestSubsciber) OnEvent(event any) {
 func (pub *UnitTestPublisher) OnEvent(event any) {
 	switch event.(type) {
 	case IPublisher:
-		pub.VideoTrack = track.NewH264(pub.Stream)
+		pub.VideoTrack = track.NewH264(pub)
 		pub.VideoTrack.WriteAnnexB(0, 0, spspps)
-		pub.AudioTrack = track.NewAAC(pub.Stream)
+		pub.AudioTrack = track.NewAAC(pub)
 		go pub.WriteAudio()
 		go pub.WriteVideo()
 	}

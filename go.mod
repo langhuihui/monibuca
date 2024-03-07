@@ -4,7 +4,7 @@ go 1.20
 
 require (
 	go.uber.org/zap v1.26.0
-	m7s.live/engine/v4 v4.14.7
+	m7s.live/engine/v4 v4.15.2-0.20240307124820-0280cfa65521
 	m7s.live/plugin/debug/v4 v4.0.3
 	m7s.live/plugin/fmp4/v4 v4.0.6
 	m7s.live/plugin/gb28181/v4 v4.4.4
@@ -17,10 +17,10 @@ require (
 	m7s.live/plugin/preview/v4 v4.1.4
 	m7s.live/plugin/record/v4 v4.4.6
 	m7s.live/plugin/room/v4 v4.1.0
-	m7s.live/plugin/rtmp/v4 v4.3.0
-	m7s.live/plugin/rtsp/v4 v4.3.4
+	m7s.live/plugin/rtmp/v4 v4.3.1-0.20240307124858-efe5c2b0ee20
+	m7s.live/plugin/rtsp/v4 v4.3.5-0.20240228010654-14ef344d0848
 	m7s.live/plugin/snap/v4 v4.0.8
-	m7s.live/plugin/webrtc/v4 v4.2.5
+	m7s.live/plugin/webrtc/v4 v4.2.6-0.20240228010952-272f6e1bc8bd
 	m7s.live/plugin/webtransport/v4 v4.0.10
 )
 
@@ -99,12 +99,12 @@ require (
 	golang.org/x/exp v0.0.0-20230905200255-921286631fa9 // indirect
 	golang.org/x/mod v0.12.0 // indirect
 	golang.org/x/net v0.19.0 // indirect
-	golang.org/x/sync v0.3.0 // indirect
+	golang.org/x/sync v0.5.0 // indirect
 	golang.org/x/sys v0.15.0 // indirect
 	golang.org/x/term v0.15.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 	golang.org/x/tools v0.13.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	m7s.live/plugin/ps/v4 v4.1.5-0.20231213072312-25570d9571b3 // indirect
+	m7s.live/plugin/ps/v4 v4.1.5-0.20240228014109-36ba11968b92 // indirect
 
 )
