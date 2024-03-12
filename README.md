@@ -4,7 +4,7 @@
   </a>
 </p>
 <p align="center">
- <a href="https://docs.m7s.live">中文文档</a>
+ <a href="https://monibuca.com/doc">中文文档</a>
 </p>
 # Core code base and plug-in code base
 
