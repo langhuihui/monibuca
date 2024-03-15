@@ -1,6 +1,8 @@
 module monibuca
 
-go 1.20
+go 1.21
+
+toolchain go1.21.8
 
 require (
 	go.uber.org/zap v1.27.0
@@ -21,7 +23,7 @@ require (
 	m7s.live/plugin/rtsp/v4 v4.3.5-0.20240228010654-14ef344d0848
 	m7s.live/plugin/snap/v4 v4.0.8
 	m7s.live/plugin/webrtc/v4 v4.2.6-0.20240228010952-272f6e1bc8bd
-	m7s.live/plugin/webtransport/v4 v4.0.10
+	m7s.live/plugin/webtransport/v4 v4.0.11-0.20240315020839-41e8fdf847bc
 )
 
 require (

@@ -427,3 +427,5 @@ m7s.live/plugin/webrtc/v4 v4.2.6-0.20240228010952-272f6e1bc8bd h1:a7TVZ2Fuw9B29O
 m7s.live/plugin/webrtc/v4 v4.2.6-0.20240228010952-272f6e1bc8bd/go.mod h1:JbKoTZcUF1qPIFFKaQNM1CBi7IYIBtwJbu1ov8wur7Y=
 m7s.live/plugin/webtransport/v4 v4.0.10 h1:qacHR9Jsfrx98vngTLwtNtbdh3U2XcPe1BQqUdnDDA4=
 m7s.live/plugin/webtransport/v4 v4.0.10/go.mod h1:OBTNwQ4TLMaWV4C6Q2un1YKEJaMwk26qdgfI3hX1+qw=
+m7s.live/plugin/webtransport/v4 v4.0.11-0.20240315020839-41e8fdf847bc h1:WeCl7KPUZQj7A0WqPe35EHWZHiF7x+1OS/PS4QVzGUQ=
+m7s.live/plugin/webtransport/v4 v4.0.11-0.20240315020839-41e8fdf847bc/go.mod h1:OBTNwQ4TLMaWV4C6Q2un1YKEJaMwk26qdgfI3hX1+qw=
