@@ -1,6 +1,8 @@
 module monibuca
 
-go 1.20
+go 1.21
+
+toolchain go1.21.8
 
 require (
 	go.uber.org/zap v1.27.0
