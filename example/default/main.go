@@ -2,11 +2,13 @@ package main
 
 import (
 	"context"
+	"time"
 
-	m7s "m7s.live/monibuca/v5"
-	_ "m7s.live/monibuca/v5/example/plugin-demo"
+	"m7s.live/m7s/v5"
+	_ "m7s.live/m7s/v5/plugin/demo"
 )
 
 func main() {
-	m7s.Run(context.Background())
+	ctx, _ := context.WithDeadline(context.Background(), time.Now().Add(time.Second*10))
+	m7s.Run(ctx)
 }

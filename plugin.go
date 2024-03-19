@@ -8,14 +8,13 @@ import (
 	"runtime"
 	"strings"
 
-	"m7s.live/monibuca/v5/pkg/config"
+	"m7s.live/m7s/v5/pkg/config"
 )
 
 type PluginMeta struct {
-	Name     string
-	Version  string //插件版本
-	Disabled bool
-	Type     reflect.Type
+	Name    string
+	Version string //插件版本
+	Type    reflect.Type
 }
 
 type IPlugin interface {
@@ -46,10 +45,18 @@ func InstallPlugin[C IPlugin](options ...any) error {
 }
 
 type Plugin struct {
+	Disabled                bool
+	Meta                    *PluginMeta
 	context.Context         `json:"-" yaml:"-"`
 	context.CancelCauseFunc `json:"-" yaml:"-"`
 	Config                  struct {
 		config.Publish
+		config.Subscribe
+		config.HTTP
+		config.Quic
+		config.TCP
+		config.Pull
+		config.Push
 	}
 	Publishers []*Publisher
 	*slog.Logger
@@ -61,7 +68,7 @@ func (p *Plugin) PostMessage(message any) {
 	p.server.EventBus <- message
 }
 
-func (p *Plugin) Publish(streamPath string) *Publisher {
-	publisher := &Publisher{Plugin: p}
-	return publisher
+func (p *Plugin) Publish(streamPath string) (publisher *Publisher, err error) {
+	publisher = &Publisher{Plugin: p, Config: p.Config.Publish, Logger: p.With("streamPath", streamPath)}
+	return
 }

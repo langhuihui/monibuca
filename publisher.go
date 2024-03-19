@@ -1,9 +1,16 @@
 package m7s
 
-import . "m7s.live/monibuca/v5/pkg"
+import (
+	"log/slog"
+
+	. "m7s.live/m7s/v5/pkg"
+	"m7s.live/m7s/v5/pkg/config"
+)
 
 type Publisher struct {
+	Config config.Publish
 	Plugin *Plugin
+	Logger *slog.Logger
 }
 
 func (p *Publisher) WriteVideo(data IVideoData) {

@@ -1,8 +1,8 @@
 package demo
 
 import (
-	m7s "m7s.live/monibuca/v5"
-	. "m7s.live/monibuca/v5/pkg"
+	"m7s.live/m7s/v5"
+	. "m7s.live/m7s/v5/pkg"
 )
 
 type DemoPlugin struct {
@@ -10,7 +10,10 @@ type DemoPlugin struct {
 }
 
 func (p *DemoPlugin) OnInit() {
-	puber := p.Publish("live/demo")
+	puber, err := p.Publish("live/demo")
+	if err != nil {
+		panic(err)
+	}
 	puber.WriteVideo(&H264Nalu{})
 }
 

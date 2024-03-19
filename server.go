@@ -5,10 +5,9 @@ import (
 	"errors"
 	"log/slog"
 	"reflect"
-	"time"
 	"unsafe"
 
-	. "m7s.live/monibuca/v5/pkg"
+	. "m7s.live/m7s/v5/pkg"
 )
 
 type Server struct {
@@ -26,7 +25,6 @@ func NewServer() *Server {
 }
 
 func Run(ctx context.Context) {
-	ctx, _ = context.WithDeadline(ctx, time.Now().Add(time.Second*10))
 	DefaultServer.Run(ctx)
 }
 
@@ -41,6 +39,9 @@ func (s *Server) Run(ctx context.Context) {
 		s.Warn("Server is done", "reason", context.Cause(s))
 	case event := <-s.EventBus:
 		for _, plugin := range s.Plugins {
+			if plugin.Disabled {
+				continue
+			}
 			plugin.handler.OnEvent(event)
 		}
 	}
@@ -55,10 +56,9 @@ func (s *Server) initPlugins() {
 		instance := reflect.New(plugin.Type).Interface().(IPlugin)
 		p := reflect.ValueOf(instance).Elem().FieldByName("Plugin").Addr().Interface().(*Plugin)
 		p.handler = instance
-		if plugin.Disabled {
-			continue
-		}
+		p.Meta = &plugin
 		p.server = s
+		p.Logger = s.Logger.With("plugin", plugin.Name)
 		s.Plugins = append(s.Plugins, p)
 		instance.OnInit()
 	}
