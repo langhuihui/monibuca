@@ -13,7 +13,7 @@ import (
 	"m7s.live/m7s/v5/pkg/config"
 	"m7s.live/m7s/v5/pkg/util"
 )
-
+var Version = "v5.0.0"
 type Server struct {
 	StartTime time.Time
 	context.Context

@@ -129,3 +129,9 @@ func (buffers *Buffers) ReadBE(n int) (num int, err error) {
 	}
 	return
 }
+
+func (buffers *Buffers) ToBytes() []byte {
+	ret := make([]byte, buffers.Length)
+	buffers.Read(ret)
+	return ret
+}

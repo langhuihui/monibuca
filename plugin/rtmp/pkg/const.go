@@ -1,5 +1,9 @@
 package pkg
 
+import (
+	"m7s.live/m7s/v5/pkg/util"
+)
+
 const (
 	PacketTypeSequenceStart = iota
 	PacketTypeCodedFrames
@@ -8,3 +12,12 @@ const (
 	PacketTypeMetadata
 	PacketTypeMPEG2TSSequenceStart
 )
+
+var FourCC_H265 = [4]byte{'H', '2', '6', '5'}
+var FourCC_AV1 = [4]byte{'a', 'v', '0', '1'}
+
+type RTMPData struct {
+	Timestamp uint32
+	util.Buffers
+	util.RecyclebleMemory
+}

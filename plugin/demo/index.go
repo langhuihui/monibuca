@@ -1,10 +1,7 @@
 package demo
 
 import (
-	"net"
-
 	"m7s.live/m7s/v5"
-	rtmp "m7s.live/m7s/v5/plugin/rtmp/pkg"
 )
 
 type DemoPlugin struct {
@@ -12,14 +9,14 @@ type DemoPlugin struct {
 }
 
 func (p *DemoPlugin) OnInit() {
-	puber, err := p.Publish("live/demo")
-	if err != nil {
-		return
-	}
-	puber.WriteVideo(&rtmp.RTMPVideo{
-		Timestamp: 0,
-		Buffers:   net.Buffers{[]byte{0x17, 0x00, 0x67, 0x42, 0x00, 0x0a, 0x8f, 0x14, 0x01, 0x00, 0x00, 0x03, 0x00, 0x80, 0x00, 0x00, 0x00, 0x01, 0x68, 0xce, 0x3c, 0x80}},
-	})
+	// puber, err := p.Publish("live/demo")
+	// if err != nil {
+	// 	return
+	// }
+	// puber.WriteVideo(&rtmp.RTMPVideo{
+	// 	Timestamp: 0,
+	// 	Buffers:   net.Buffers{[]byte{0x17, 0x00, 0x67, 0x42, 0x00, 0x0a, 0x8f, 0x14, 0x01, 0x00, 0x00, 0x03, 0x00, 0x80, 0x00, 0x00, 0x00, 0x01, 0x68, 0xce, 0x3c, 0x80}},
+	// })
 }
 
 func (p *DemoPlugin) OnStopPublish(puber *m7s.Publisher, err error) {

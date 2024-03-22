@@ -1,7 +1,6 @@
 package pkg
 
 import (
-	"net"
 	"time"
 
 	. "m7s.live/m7s/v5/pkg"
@@ -10,13 +9,11 @@ import (
 )
 
 type RTMPVideo struct {
-	Timestamp uint32
-	net.Buffers
+	RTMPData
 }
 
 func (avcc *RTMPVideo) DecodeConfig(track *AVTrack) error {
-	var reader util.Buffers
-	reader.Buffers = avcc.Buffers
+	reader := avcc.Buffers
 	b0, err := reader.ReadByte()
 	if err != nil {
 		return err
@@ -120,9 +117,9 @@ func (avcc *RTMPVideo) parseAV1(track *AVTrack, reader *util.Buffers) (any, erro
 	return obus, nil
 }
 
+
 func (avcc *RTMPVideo) ToRaw(track *AVTrack) (any, error) {
-	var reader util.Buffers
-	reader.Buffers = avcc.Buffers
+	reader := avcc.Buffers
 	b0, err := reader.ReadByte()
 	if err != nil {
 		return nil, err

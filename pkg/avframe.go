@@ -13,17 +13,17 @@ import (
 
 type AVFrame struct {
 	DataFrame
+	Timestamp time.Duration // 绝对时间戳
+	Wrap      []IAVFrame    `json:"-" yaml:"-"` // 封装格式
 }
 type DataFrame struct {
-	DeltaTime   uint32        // 相对上一帧时间戳，毫秒
-	WriteTime   time.Time     // 写入时间,可用于比较两个帧的先后
-	Timestamp   time.Duration // 绝对时间戳
-	Sequence    uint32        // 在一个Track中的序号
-	BytesIn     int           // 输入字节数用于计算BPS
-	CanRead     bool          `json:"-" yaml:"-"` // 是否可读取
-	readerCount atomic.Int32  `json:"-" yaml:"-"` // 读取者数量
-	Raw         any           `json:"-" yaml:"-"` // 裸格式
-	Wrap        []IAVFrame    `json:"-" yaml:"-"` // 封装格式
+	DeltaTime   uint32       // 相对上一帧时间戳，毫秒
+	WriteTime   time.Time    // 写入时间,可用于比较两个帧的先后
+	Sequence    uint32       // 在一个Track中的序号
+	BytesIn     int          // 输入字节数用于计算BPS
+	CanRead     bool         `json:"-" yaml:"-"` // 是否可读取
+	readerCount atomic.Int32 `json:"-" yaml:"-"` // 读取者数量
+	Raw         any          `json:"-" yaml:"-"` // 裸格式
 	sync.Cond   `json:"-" yaml:"-"`
 }
 
@@ -113,6 +113,7 @@ type IAVFrame interface {
 	DecodeConfig(*AVTrack) error
 	ToRaw(*AVTrack) (any, error)
 	FromRaw(*AVTrack, any) error
+	Recycle()
 }
 
 type Nalu [][]byte
