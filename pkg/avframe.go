@@ -1,32 +1,175 @@
 package pkg
 
+import (
+	"net"
+	"sync"
+	"sync/atomic"
+	"time"
+
+	"github.com/bluenviron/mediacommon/pkg/codecs/av1"
+	"m7s.live/m7s/v5/pkg/codec"
+	"m7s.live/m7s/v5/pkg/util"
+)
+
+type AVFrame struct {
+	DataFrame
+}
+type DataFrame struct {
+	DeltaTime   uint32        // 相对上一帧时间戳，毫秒
+	WriteTime   time.Time     // 写入时间,可用于比较两个帧的先后
+	Timestamp   time.Duration // 绝对时间戳
+	Sequence    uint32        // 在一个Track中的序号
+	BytesIn     int           // 输入字节数用于计算BPS
+	CanRead     bool          `json:"-" yaml:"-"` // 是否可读取
+	readerCount atomic.Int32  `json:"-" yaml:"-"` // 读取者数量
+	Raw         any           `json:"-" yaml:"-"` // 裸格式
+	Wrap        []IAVFrame    `json:"-" yaml:"-"` // 封装格式
+	sync.Cond   `json:"-" yaml:"-"`
+}
+
+func NewDataFrame[T any]() *DataFrame {
+	return &DataFrame{}
+}
+func (df *DataFrame) IsWriting() bool {
+	return !df.CanRead
+}
+
+func (df *DataFrame) IsDiscarded() bool {
+	return df.L == nil
+}
+
+func (df *DataFrame) Discard() int32 {
+	df.L = nil //标记为废弃
+	return df.readerCount.Load()
+}
+
+func (df *DataFrame) SetSequence(sequence uint32) {
+	df.Sequence = sequence
+}
+
+func (df *DataFrame) GetSequence() uint32 {
+	return df.Sequence
+}
+
+func (df *DataFrame) ReaderEnter() int32 {
+	return df.readerCount.Add(1)
+}
+
+func (df *DataFrame) ReaderCount() int32 {
+	return df.readerCount.Load()
+}
+
+func (df *DataFrame) ReaderLeave() int32 {
+	return df.readerCount.Add(-1)
+}
+
+func (df *DataFrame) StartWrite() bool {
+	if df.readerCount.Load() > 0 {
+		df.Discard() //标记为废弃
+		return false
+	} else {
+		df.CanRead = false //标记为正在写入
+		return true
+	}
+}
+
+func (df *DataFrame) Ready() {
+	df.WriteTime = time.Now()
+	df.CanRead = true //标记为可读取
+	df.Broadcast()
+}
+
+func (df *DataFrame) Init() {
+	df.L = EmptyLocker
+}
+
+func (df *DataFrame) Reset() {
+	df.BytesIn = 0
+	df.DeltaTime = 0
+}
+
 type CodecCtx struct {
 }
-type IRaw interface {
-}
-type IVideoData interface {
-	ToRaw(*CodecCtx) IRaw
-	FromRaw(*CodecCtx, IRaw)
+
+func Update(ICodecCtx) {
 }
 
-type IAudioData interface {
-	ToRaw(*CodecCtx) IRaw
-	FromRaw(*CodecCtx, IRaw)
+type VideoCodecCtx struct {
+	CodecCtx
+	NalulenSize  int
+	SPSInfo      codec.SPSInfo
+	SequenceData net.Buffers
 }
 
-type IData interface {
+type AudioCodecCtx struct {
+	CodecCtx
 }
 
-type H264Nalu struct {
+type ICodecCtx interface {
+}
+type IDataFrame interface {
+}
+type IAVFrame interface {
+	DecodeConfig(*AVTrack) error
+	ToRaw(*AVTrack) (any, error)
+	FromRaw(*AVTrack, any) error
 }
 
-func (nalu *H264Nalu) ToRaw(ctx *CodecCtx) IRaw {
-	return nalu
+type Nalu [][]byte
+
+type Nalus struct {
+	PTS   time.Duration
+	DTS   time.Duration
+	Nalus []Nalu
 }
 
-func (nalu *H264Nalu) FromRaw(ctx *CodecCtx, raw IRaw) {
-	*nalu = *raw.(*H264Nalu)
+func (nalus *Nalus) Append(bytes ...[]byte) {
+	nalus.Nalus = append(nalus.Nalus, Nalu(bytes))
 }
 
-type H265Nalu struct {
+func (nalus *Nalus) ParseAVCC(reader *util.Buffers, naluSizeLen int) error {
+	for reader.Length > 0 {
+		l, err := reader.ReadBE(naluSizeLen)
+		if err != nil {
+			return err
+		}
+		nalu, err := reader.ReadBytes(int(l))
+		if err != nil {
+			return err
+		}
+		nalus.Append(nalu)
+	}
+	return nil
+}
+
+type OBUs struct {
+	PTS  time.Duration
+	OBUs []net.Buffers
+}
+
+func (obus *OBUs) Append(bytes ...[]byte) {
+	obus.OBUs = append(obus.OBUs, bytes)
+}
+
+func (obus *OBUs) ParseAVCC(reader *util.Buffers) error {
+	var obuHeader av1.OBUHeader
+	for reader.Length > 0 {
+		offset := reader.Offset
+		b, _ := reader.ReadByte()
+		obuHeader.Unmarshal([]byte{b})
+		// if log.Trace {
+		// 	vt.Trace("obu", zap.Any("type", obuHeader.Type), zap.Bool("iframe", vt.Value.IFrame))
+		// }
+		obuSize, _, _ := reader.LEB128Unmarshal()
+		end := reader.Offset
+		size := end - offset + int(obuSize)
+		reader = &util.Buffers{Buffers: reader.Buffers}
+		reader.Skip(offset)
+		obu, err := reader.ReadBytes(size)
+		if err != nil {
+			return err
+		}
+		obus.Append(obu)
+	}
+	return nil
 }

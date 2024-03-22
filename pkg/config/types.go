@@ -2,7 +2,6 @@ package config
 
 import (
 	"fmt"
-	"net/http"
 	"regexp"
 	"strings"
 	"sync"
@@ -177,7 +176,6 @@ type Engine struct {
 	Publish
 	Subscribe
 	HTTP
-	Console
 	EnableAVCC          bool          `default:"true" desc:"启用AVCC格式，rtmp、http-flv协议使用"`                 //启用AVCC格式，rtmp、http-flv协议使用
 	EnableRTP           bool          `default:"true" desc:"启用RTP格式，rtsp、webrtc等协议使用"`                   //启用RTP格式，rtsp、webrtc等协议使用
 	EnableSubEvent      bool          `default:"true" desc:"启用订阅事件,禁用可以提高性能"`                            //启用订阅事件,禁用可以提高性能
@@ -189,13 +187,4 @@ type Engine struct {
 	DisableAll          bool          `default:"false" desc:"禁用所有插件"`                                    //禁用所有插件
 	RTPReorderBufferLen int           `default:"50" desc:"RTP重排序缓冲区长度"`                                  //RTP重排序缓冲区长度
 	PoolSize            int           `desc:"内存池大小"`                                                     //内存池大小
-}
-
-var Global *Engine
-
-func (cfg *Engine) InitDefaultHttp() {
-	Global = cfg
-	cfg.HTTP.mux = http.NewServeMux()
-	cfg.HTTP.ListenAddrTLS = ":8443"
-	cfg.HTTP.ListenAddr = ":8080"
 }

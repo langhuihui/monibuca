@@ -5,6 +5,7 @@ go 1.22
 require github.com/quic-go/quic-go v0.42.0
 
 require (
+	github.com/bluenviron/mediacommon v1.9.2
 	github.com/go-task/slim-sprig v0.0.0-20230315185526-52ccab3ef572 // indirect
 	github.com/google/pprof v0.0.0-20210407192527-94a9f03dee38 // indirect
 	github.com/logrusorgru/aurora/v4 v4.0.0

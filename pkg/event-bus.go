@@ -2,9 +2,10 @@ package pkg
 
 // EventBus is a simple event bus
 type EventBus chan any
+
 // NewEventBus creates a new EventBus
-func NewEventBus() EventBus {
-	return make(chan any)
+func NewEventBus(size int) EventBus {
+	return make(chan any, size)
 }
 
 // // Publish publishes an event
