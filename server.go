@@ -2,56 +2,87 @@ package m7s
 
 import (
 	"context"
-	"errors"
 	"log/slog"
-	"reflect"
+	"os"
+	"path/filepath"
 	"slices"
+	"strings"
 	"time"
 	"unsafe"
 
+	"gopkg.in/yaml.v3"
 	. "m7s.live/m7s/v5/pkg"
 	"m7s.live/m7s/v5/pkg/config"
 	"m7s.live/m7s/v5/pkg/util"
 )
+
 var Version = "v5.0.0"
+var MergeConfigs = []string{"Publish", "Subscribe", "HTTP"}
+var (
+	ExecPath = os.Args[0]
+	ExecDir  = filepath.Dir(ExecPath)
+)
+
 type Server struct {
-	StartTime time.Time
-	context.Context
-	context.CancelCauseFunc
-	EventBus
-	*slog.Logger
-	Config     config.Engine
+	Plugin
+	config.Engine
+	StartTime  time.Time
 	Plugins    []*Plugin
 	Publishers map[string]*Publisher
 	Waiting    map[string]*Subscriber
 }
 
-var DefaultServer = &Server{}
+var DefaultServer = NewServer()
 
 func NewServer() *Server {
 	return &Server{}
 }
 
-func Run(ctx context.Context) {
-	DefaultServer.Run(ctx)
+func Run(ctx context.Context, conf any) error {
+	return DefaultServer.Run(ctx, conf)
 }
 
-func (s *Server) Run(ctx context.Context) {
+func (s *Server) Run(ctx context.Context, conf any) (err error) {
 	s.Logger = slog.With("server", uintptr(unsafe.Pointer(s)))
 	s.Context, s.CancelCauseFunc = context.WithCancelCause(ctx)
-	s.EventBus = NewEventBus(10)
-	s.Config.HTTP.ListenAddrTLS = ":8443"
-	s.Config.HTTP.ListenAddr = ":8080"
+	s.config.HTTP.ListenAddrTLS = ":8443"
+	s.config.HTTP.ListenAddr = ":8080"
+	s.eventChan = make(chan any, 10)
 	s.Info("start")
-	s.initPlugins()
-	pulse := time.NewTicker(s.Config.PulseInterval)
+
+	var cg map[string]map[string]any
+	var configYaml []byte
+	switch v := conf.(type) {
+	case string:
+		if _, err = os.Stat(v); err != nil {
+			v = filepath.Join(ExecDir, v)
+		}
+		if configYaml, err = os.ReadFile(v); err != nil {
+			s.Warn("read config file error:", err.Error())
+		}
+	case []byte:
+		configYaml = v
+	case map[string]map[string]any:
+		cg = v
+	}
+	if configYaml != nil {
+		if err = yaml.Unmarshal(configYaml, &cg); err != nil {
+			s.Error("parsing yml error:", err)
+		}
+	}
+	s.Config.Parse(&s.Engine, "GLOBAL")
+	if cg != nil {
+		s.Config.ParseUserFile(cg["global"])
+	}
+	s.initPlugins(cg)
+	pulse := time.NewTicker(s.PulseInterval)
 	select {
 	case <-s.Done():
 		s.Warn("Server is done", "reason", context.Cause(s))
 		pulse.Stop()
 		return
 	case <-pulse.C:
-	case event := <-s.EventBus:
+	case event := <-s.eventChan:
 		switch v := event.(type) {
 		case util.Promise[*Publisher]:
 			v.CancelCauseFunc(s.OnPublish(v.Value))
@@ -65,24 +96,12 @@ func (s *Server) Run(ctx context.Context) {
 			plugin.handler.OnEvent(event)
 		}
 	}
+	return
 }
 
-func (s *Server) Stop() {
-	s.CancelCauseFunc(errors.New("stop"))
-}
-
-func (s *Server) initPlugins() {
+func (s *Server) initPlugins(cg map[string]map[string]any) {
 	for _, plugin := range plugins {
-		instance := reflect.New(plugin.Type).Interface().(IPlugin)
-		p := reflect.ValueOf(instance).Elem().FieldByName("Plugin").Addr().Interface().(*Plugin)
-		p.handler = instance
-		p.Meta = &plugin
-		p.server = s
-		p.Logger = s.Logger.With("plugin", plugin.Name)
-		p.Context, p.CancelCauseFunc = context.WithCancelCause(s.Context)
-		s.Plugins = append(s.Plugins, p)
-		p.OnInit()
-		instance.OnInit()
+		plugin.Init(s, cg[strings.ToLower(plugin.Name)])
 	}
 }
 

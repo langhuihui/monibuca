@@ -5,10 +5,10 @@ import (
 	"time"
 
 	"m7s.live/m7s/v5"
-	_ "m7s.live/m7s/v5/plugin/demo"
+	_ "m7s.live/m7s/v5/plugin/rtmp"
 )
 
 func main() {
 	ctx, _ := context.WithDeadline(context.Background(), time.Now().Add(time.Second*10))
-	m7s.Run(ctx)
+	m7s.Run(ctx, "config.yaml")
 }
