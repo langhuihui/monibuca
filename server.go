@@ -10,6 +10,7 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/mcuadros/go-defaults"
 	"gopkg.in/yaml.v3"
 	. "m7s.live/m7s/v5/pkg"
 	"m7s.live/m7s/v5/pkg/config"
@@ -58,7 +59,7 @@ func (s *Server) Run(ctx context.Context, conf any) (err error) {
 			v = filepath.Join(ExecDir, v)
 		}
 		if configYaml, err = os.ReadFile(v); err != nil {
-			s.Warn("read config file error:", err.Error())
+			s.Warn("read config file faild", "error", err.Error())
 		}
 	case []byte:
 		configYaml = v
@@ -70,30 +71,34 @@ func (s *Server) Run(ctx context.Context, conf any) (err error) {
 			s.Error("parsing yml error:", err)
 		}
 	}
+	defaults.SetDefaults(&s.Engine)
+	s.Config.Parse(&s.config)
 	s.Config.Parse(&s.Engine, "GLOBAL")
 	if cg != nil {
 		s.Config.ParseUserFile(cg["global"])
 	}
 	s.initPlugins(cg)
 	pulse := time.NewTicker(s.PulseInterval)
-	select {
-	case <-s.Done():
-		s.Warn("Server is done", "reason", context.Cause(s))
-		pulse.Stop()
-		return
-	case <-pulse.C:
-	case event := <-s.eventChan:
-		switch v := event.(type) {
-		case util.Promise[*Publisher]:
-			v.CancelCauseFunc(s.OnPublish(v.Value))
-		case util.Promise[*Subscriber]:
-			v.CancelCauseFunc(s.OnSubscribe(v.Value))
-		}
-		for _, plugin := range s.Plugins {
-			if plugin.Disabled {
-				continue
+	for {
+		select {
+		case <-s.Done():
+			s.Warn("Server is done", "reason", context.Cause(s))
+			pulse.Stop()
+			return
+		case <-pulse.C:
+		case event := <-s.eventChan:
+			switch v := event.(type) {
+			case util.Promise[*Publisher]:
+				v.CancelCauseFunc(s.OnPublish(v.Value))
+			case util.Promise[*Subscriber]:
+				v.CancelCauseFunc(s.OnSubscribe(v.Value))
 			}
-			plugin.handler.OnEvent(event)
+			for _, plugin := range s.Plugins {
+				if plugin.Disabled {
+					continue
+				}
+				plugin.handler.OnEvent(event)
+			}
 		}
 	}
 	return

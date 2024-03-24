@@ -133,6 +133,9 @@ func (config *Config) Parse(s any, prefix ...string) {
 				continue
 			}
 			name := strings.ToLower(ft.Name)
+			if name == "plugin" {
+				continue
+			}
 			if tag := ft.Tag.Get("yaml"); tag != "" {
 				if tag == "-" {
 					continue

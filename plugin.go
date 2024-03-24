@@ -13,6 +13,7 @@ import (
 	"sync"
 
 	"github.com/logrusorgru/aurora/v4"
+	"github.com/mcuadros/go-defaults"
 	"gopkg.in/yaml.v3"
 	"m7s.live/m7s/v5/pkg/config"
 	"m7s.live/m7s/v5/pkg/util"
@@ -29,6 +30,7 @@ type PluginMeta struct {
 
 func (plugin *PluginMeta) Init(s *Server, userConfig map[string]any) {
 	instance := reflect.New(plugin.Type).Interface().(IPlugin)
+	defaults.SetDefaults(instance)
 	p := reflect.ValueOf(instance).Elem().FieldByName("Plugin").Addr().Interface().(*Plugin)
 	p.handler = instance
 	p.Meta = plugin
@@ -42,7 +44,7 @@ func (plugin *PluginMeta) Init(s *Server, userConfig map[string]any) {
 		p.Warn("disabled by env")
 		return
 	}
-
+	p.Config.Parse(p.GetCommonConf())
 	p.Config.Parse(instance, strings.ToUpper(plugin.Name))
 	for _, fname := range MergeConfigs {
 		if name := strings.ToLower(fname); p.Config.Has(name) {
@@ -50,10 +52,11 @@ func (plugin *PluginMeta) Init(s *Server, userConfig map[string]any) {
 		}
 	}
 	if plugin.defaultYaml != "" {
-		if err := yaml.Unmarshal([]byte(plugin.defaultYaml), &userConfig); err != nil {
-			p.Error("parsing default config error:", err)
+		var defaultConf map[string]any
+		if err := yaml.Unmarshal([]byte(plugin.defaultYaml), &defaultConf); err != nil {
+			p.Error("parsing default config", "error", err)
 		} else {
-			p.Config.ParseDefaultYaml(userConfig)
+			p.Config.ParseDefaultYaml(defaultConf)
 		}
 	}
 
@@ -131,10 +134,10 @@ type Plugin struct {
 	eventChan               chan any
 	config                  config.Common
 	config.Config
-	Publishers []*Publisher
-	*slog.Logger
-	handler IPlugin
-	server  *Server
+	Publishers   []*Publisher
+	*slog.Logger `json:"-" yaml:"-"`
+	handler      IPlugin
+	server       *Server
 	sync.RWMutex
 }
 

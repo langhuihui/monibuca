@@ -23,7 +23,7 @@ func (p *RTMPPlugin) OnStopPublish(puber *m7s.Publisher, err error) {
 }
 
 var _ = m7s.InstallPlugin[*RTMPPlugin](m7s.DefaultYaml(`tcp:
-	listenaddr: :1935`))
+  listenaddr: :1935`))
 
 func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
 	defer conn.Close()

@@ -186,6 +186,7 @@ type Engine struct {
 	RTPReorderBufferLen int           `default:"50" desc:"RTP重排序缓冲区长度"` //RTP重排序缓冲区长度
 	PoolSize            int           `desc:"内存池大小"`                    //内存池大小
 }
+
 type Common struct {
 	Publish
 	Subscribe
@@ -194,4 +195,8 @@ type Common struct {
 	TCP
 	Pull
 	Push
+}
+
+type ICommonConf interface {
+	GetCommonConf() *Common
 }
