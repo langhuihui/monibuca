@@ -57,16 +57,13 @@ func (buffers *Buffers) ReadByte() (byte, error) {
 	if buffers.Length == 0 {
 		return 0, io.EOF
 	}
-	level0 := buffers.Buffers[buffers.offset0]
-	b := level0[buffers.offset1]
-	buffers.offset1++
-	buffers.Length--
-	buffers.Offset++
-	if buffers.offset1 >= len(level0) {
-		buffers.offset0++
-		buffers.offset1 = 0
+	level1 := buffers.GetLevel1()
+	if len(level1) == 1 {
+		defer buffers.move0()
+	} else {
+		defer buffers.move1(1)
 	}
-	return b, nil
+	return level1[0], nil
 }
 
 func (buffers *Buffers) LEB128Unmarshal() (uint, int, error) {
@@ -89,34 +86,86 @@ func (buffers *Buffers) LEB128Unmarshal() (uint, int, error) {
 	return v, n, nil
 }
 
+func (buffers *Buffers) GetLevel0() []byte {
+	return buffers.Buffers[buffers.offset0]
+}
+
+func (buffers *Buffers) GetLevel1() []byte {
+	return buffers.GetLevel0()[buffers.offset1:]
+}
+
 func (buffers *Buffers) Skip(n int) error {
 	if n > buffers.Length {
 		return io.EOF
 	}
-	buffers.Length -= n
-	buffers.Offset += n
 	for n > 0 {
-		level0 := buffers.Buffers[buffers.offset0]
-		level1 := level0[buffers.offset1:]
-		if n < len(level1) {
-			buffers.offset1 += n
+		level1 := buffers.GetLevel1()
+		level1Len := len(level1)
+		if n < level1Len {
+			buffers.move1(n)
 			break
 		}
-		n -= len(level1)
-		buffers.offset0++
-		buffers.offset1 = 0
+		n -= level1Len
+		buffers.move0()
+		if buffers.Length == 0 && n > 0 {
+			return io.EOF
+		}
 	}
 	return nil
+}
+
+func (buffers *Buffers) move1(n int) {
+	buffers.offset1 += n
+	buffers.Length -= n
+	buffers.Offset += n
+}
+
+func (buffers *Buffers) move0() {
+	len0 := len(buffers.GetLevel0())
+	buffers.Offset += len0
+	buffers.Length -= len0
+	buffers.offset0++
+	buffers.offset1 = 0
 }
 
 func (buffers *Buffers) ReadBytes(n int) ([]byte, error) {
 	if n > buffers.Length {
 		return nil, io.EOF
 	}
+	l := n
 	b := make([]byte, n)
-	buffers.Read(b)
-	buffers.Length -= n
+	for n > 0 {
+		level1 := buffers.GetLevel1()
+		level1Len := len(level1)
+		if n < level1Len {
+			copy(b[l-n:], level1[:n])
+			buffers.move1(n)
+			break
+		}
+		copy(b[l-n:], level1)
+		n -= level1Len
+		buffers.move0()
+		if buffers.Length == 0 && n > 0 {
+			return nil, io.EOF
+		}
+	}
 	return b, nil
+}
+
+func (buffers *Buffers) WriteNTo(n int, result *net.Buffers) (actual int) {
+	for actual = n; buffers.Length > 0; buffers.move0() {
+		level0 := buffers.GetLevel0()
+		level1 := buffers.GetLevel1()
+		remain1 := len(level1)
+		if remain1 > n {
+			*result = append(*result, level0[buffers.offset1:buffers.offset1+n])
+			buffers.move1(n)
+			return actual
+		}
+		*result = append(*result, level1)
+		n -= remain1
+	}
+	return actual - n
 }
 
 func (buffers *Buffers) ReadBE(n int) (num int, err error) {

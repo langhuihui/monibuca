@@ -42,6 +42,7 @@ func (rb *RingWriter) Init(n int) *RingWriter {
 	rb.Ring = util.NewRing[AVFrame](n)
 	rb.Size = n
 	rb.LastValue = &rb.Value
+	rb.LastValue.Init()
 	return rb
 }
 
@@ -90,7 +91,6 @@ func (rb *RingWriter) Reduce(size int) {
 		rb.Recycle(r)
 	}
 	rb.Size -= size
-	return
 }
 
 func (rb *RingWriter) Step() (normal bool) {

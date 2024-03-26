@@ -1,6 +1,7 @@
 module m7s.live/m7s/v5
 
 go 1.22
+toolchain go1.22.1
 
 require github.com/quic-go/quic-go v0.42.0
 

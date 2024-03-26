@@ -15,6 +15,7 @@ import (
 	"github.com/logrusorgru/aurora/v4"
 	"github.com/mcuadros/go-defaults"
 	"gopkg.in/yaml.v3"
+	. "m7s.live/m7s/v5/pkg"
 	"m7s.live/m7s/v5/pkg/config"
 	"m7s.live/m7s/v5/pkg/util"
 )
@@ -74,6 +75,7 @@ func (plugin *PluginMeta) Init(s *Server, userConfig map[string]any) {
 	} else {
 		p.assign()
 	}
+	p.Info("init", "version", plugin.Version)
 	instance.OnInit()
 	go p.Start()
 }
@@ -119,11 +121,14 @@ func InstallPlugin[C IPlugin](options ...any) error {
 	return nil
 }
 
-func sendPromiseToServer[T any](server *Server, value T) error {
+func sendPromiseToServer[T any](server *Server, value T) (err error) {
 	promise := util.NewPromise(value)
 	server.eventChan <- promise
 	<-promise.Done()
-	return context.Cause(promise.Context)
+	if err = context.Cause(promise.Context); err == util.ErrResolve {
+		err = nil
+	}
+	return
 }
 
 type Plugin struct {
@@ -191,12 +196,12 @@ func (p *Plugin) Start() {
 	if p.config.TCP.ListenAddr != "" {
 		l, err := net.Listen("tcp", tcpConf.ListenAddr)
 		if err != nil {
-			p.Error("tcp listen error", "addr", tcpConf.ListenAddr, "error", err)
+			p.Error("listen tcp", "addr", tcpConf.ListenAddr, "error", err)
 			p.CancelCauseFunc(err)
 			return
 		}
 		defer l.Close()
-		p.Info("tcp listen at ", "addr", aurora.Blink(tcpConf.ListenAddr))
+		p.Info("listen tcp", "addr", tcpConf.ListenAddr)
 		for i := 0; i < count; i++ {
 			go tcpConf.Listen(l, tcphandler.OnTCPConnect)
 		}
@@ -215,12 +220,12 @@ func (p *Plugin) Start() {
 			Certificates: []tls.Certificate{keyPair},
 		})
 		if err != nil {
-			p.Error("tls tcp listen error", "addr", tcpConf.ListenAddrTLS, "error", err)
+			p.Error("listen tcp tls", "addr", tcpConf.ListenAddrTLS, "error", err)
 			p.CancelCauseFunc(err)
 			return
 		}
 		defer l.Close()
-		p.Info("tls tcp listen at ", "addr", aurora.Blink(tcpConf.ListenAddrTLS))
+		p.Info("listen tcp tls", "addr", tcpConf.ListenAddrTLS)
 		for i := 0; i < count; i++ {
 			go tcpConf.Listen(l, tcphandler.OnTCPConnect)
 		}
@@ -249,6 +254,7 @@ func (p *Plugin) Publish(streamPath string) (publisher *Publisher, err error) {
 	publisher = &Publisher{Publish: p.config.Publish}
 	publisher.Init(p, streamPath)
 	publisher.Subscribers = make(map[*Subscriber]struct{})
+	publisher.TransTrack = make(map[reflect.Type]*AVTrack)
 	err = sendPromiseToServer(p.server, publisher)
 	return
 }

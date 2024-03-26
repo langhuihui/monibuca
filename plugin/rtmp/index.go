@@ -5,12 +5,12 @@ import (
 	"net"
 
 	"m7s.live/m7s/v5"
-	"m7s.live/m7s/v5/plugin/rtmp/pkg"
+	. "m7s.live/m7s/v5/plugin/rtmp/pkg"
 )
 
 type RTMPPlugin struct {
 	m7s.Plugin
-	ChunkSize int
+	ChunkSize int `default:"1024"`
 	KeepAlive bool
 }
 
@@ -27,11 +27,11 @@ var _ = m7s.InstallPlugin[*RTMPPlugin](m7s.DefaultYaml(`tcp:
 
 func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
 	defer conn.Close()
-	// logger := RTMPPlugin.Logger.With(zap.String("remote", conn.RemoteAddr().String()))
-	// senders := make(map[uint32]*RTMPSubscriber)
-	receivers := make(map[uint32]*pkg.RTMPReceiver)
+	logger := p.Logger.With("remote", conn.RemoteAddr().String())
+	senders := make(map[uint32]*RTMPSender)
+	receivers := make(map[uint32]*RTMPReceiver)
 	var err error
-	// logger.Info("conn")
+	logger.Info("conn")
 	defer func() {
 		// ze := zap.Error(err)
 		// logger.Info("conn close", ze)
@@ -42,15 +42,15 @@ func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
 		// receiver.Stop(ze)
 		// }
 	}()
-	nc := pkg.NewNetConnection(conn)
+	nc := NewNetConnection(conn)
 	// ctx, cancel := context.WithCancel(p)
 	// defer cancel()
 	/* Handshake */
 	if err = nc.Handshake(); err != nil {
-		// logger.Error("handshake", zap.Error(err))
+		logger.Error("handshake", "error", err)
 		return
 	}
-	var msg *pkg.Chunk
+	var msg *Chunk
 	var gstreamid uint32
 	for {
 		if msg, err = nc.RecvMessage(); err == nil {
@@ -58,14 +58,14 @@ func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
 				continue
 			}
 			switch msg.MessageTypeID {
-			case pkg.RTMP_MSG_AMF0_COMMAND:
+			case RTMP_MSG_AMF0_COMMAND:
 				if msg.MsgData == nil {
 					break
 				}
-				// cmd := msg.MsgData.(pkg.Commander).GetCommand()
-				// logger.Debug("recv cmd", zap.String("commandName", cmd.CommandName), zap.Uint32("streamID", msg.MessageStreamID))
+				cmd := msg.MsgData.(Commander).GetCommand()
+				logger.Debug("recv cmd", "commandName", cmd.CommandName, "streamID", msg.MessageStreamID)
 				switch cmd := msg.MsgData.(type) {
-				case *pkg.CallMessage: //connect
+				case *CallMessage: //connect
 					app := cmd.Object["app"]                       // 客户端要连接到的服务应用名
 					objectEncoding := cmd.Object["objectEncoding"] // AMF编码方法
 					switch v := objectEncoding.(type) {
@@ -75,17 +75,33 @@ func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
 						nc.ObjectEncoding = 0
 					}
 					nc.AppName = app.(string)
-					// logger.Info("connect", zap.String("appName", nc.appName), zap.Float64("objectEncoding", nc.objectEncoding))
-					err = nc.SendMessage(pkg.RTMP_MSG_ACK_SIZE, pkg.Uint32Message(512<<10))
+					logger.Info("connect", "appName", nc.AppName, "objectEncoding", nc.ObjectEncoding)
+					err = nc.SendMessage(RTMP_MSG_ACK_SIZE, Uint32Message(512<<10))
+					if err != nil {
+						logger.Error("sendMessage ack size", "error", err)
+						return
+					}
 					nc.WriteChunkSize = p.ChunkSize
-					err = nc.SendMessage(pkg.RTMP_MSG_CHUNK_SIZE, pkg.Uint32Message(p.ChunkSize))
-					err = nc.SendMessage(pkg.RTMP_MSG_BANDWIDTH, &pkg.SetPeerBandwidthMessage{
+					err = nc.SendMessage(RTMP_MSG_CHUNK_SIZE, Uint32Message(p.ChunkSize))
+					if err != nil {
+						logger.Error("sendMessage chunk size", "error", err)
+						return
+					}
+					err = nc.SendMessage(RTMP_MSG_BANDWIDTH, &SetPeerBandwidthMessage{
 						AcknowledgementWindowsize: uint32(512 << 10),
 						LimitType:                 byte(2),
 					})
-					err = nc.SendStreamID(pkg.RTMP_USER_STREAM_BEGIN, 0)
-					m := new(pkg.ResponseConnectMessage)
-					m.CommandName = pkg.Response_Result
+					if err != nil {
+						logger.Error("sendMessage bandwidth", "error", err)
+						return
+					}
+					err = nc.SendStreamID(RTMP_USER_STREAM_BEGIN, 0)
+					if err != nil {
+						logger.Error("sendMessage stream begin", "error", err)
+						return
+					}
+					m := new(ResponseConnectMessage)
+					m.CommandName = Response_Result
 					m.TransactionId = 1
 					m.Properties = map[string]any{
 						"fmsVer":       "monibuca/" + m7s.Version,
@@ -94,21 +110,25 @@ func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
 						"Author":       "dexter",
 					}
 					m.Infomation = map[string]any{
-						"level":          pkg.Level_Status,
-						"code":           pkg.NetConnection_Connect_Success,
+						"level":          Level_Status,
+						"code":           NetConnection_Connect_Success,
 						"objectEncoding": nc.ObjectEncoding,
 					}
-					err = nc.SendMessage(pkg.RTMP_MSG_AMF0_COMMAND, m)
-				case *pkg.CommandMessage: // "createStream"
+					err = nc.SendMessage(RTMP_MSG_AMF0_COMMAND, m)
+					if err != nil {
+						logger.Error("sendMessage connect", "error", err)
+						return
+					}
+				case *CommandMessage: // "createStream"
 					gstreamid++
-					// logger.Info("createStream:", zap.Uint32("streamId", gstreamid))
+					logger.Info("createStream:", "streamId", gstreamid)
 					nc.ResponseCreateStream(cmd.TransactionId, gstreamid)
-				case *pkg.CURDStreamMessage:
+				case *CURDStreamMessage:
 					// if stream, ok := receivers[cmd.StreamId]; ok {
 					// 	stream.Stop()
 					// 	delete(senders, cmd.StreamId)
 					// }
-				case *pkg.ReleaseStreamMessage:
+				case *ReleaseStreamMessage:
 					// m := &CommandMessage{
 					// 	CommandName:   "releaseStream_error",
 					// 	TransactionId: cmd.TransactionId,
@@ -122,9 +142,9 @@ func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
 					// 	}
 					// }
 					// err = nc.SendMessage(RTMP_MSG_AMF0_COMMAND, m)
-				case *pkg.PublishMessage:
-					receiver := &pkg.RTMPReceiver{
-						NetStream: pkg.NetStream{
+				case *PublishMessage:
+					receiver := &RTMPReceiver{
+						NetStream: NetStream{
 							NetConnection: nc,
 							StreamID:      cmd.StreamId,
 						},
@@ -136,24 +156,33 @@ func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
 					receiver.Publisher, err = p.Publish(nc.AppName + "/" + cmd.PublishingName)
 					if err != nil {
 						delete(receivers, cmd.StreamId)
-						err = receiver.Response(cmd.TransactionId, pkg.NetStream_Publish_BadName, pkg.Level_Error)
+						err = receiver.Response(cmd.TransactionId, NetStream_Publish_BadName, Level_Error)
 					} else {
 						receivers[cmd.StreamId] = receiver
 						receiver.Begin()
-						err = receiver.Response(cmd.TransactionId, pkg.NetStream_Publish_Start, pkg.Level_Status)
+						err = receiver.Response(cmd.TransactionId, NetStream_Publish_Start, Level_Status)
 					}
-				case *pkg.PlayMessage:
-					// streamPath := nc.appName + "/" + cmd.StreamName
-					// sender := &RTMPSubscriber{}
-					// sender.NetStream = NetStream{
-					// 	nc,
-					// 	cmd.StreamId,
-					// }
+				case *PlayMessage:
+					streamPath := nc.AppName + "/" + cmd.StreamName
+					sender := &RTMPSender{}
+					sender.NetConnection = nc
+					sender.StreamID = cmd.StreamId
 					// sender.SetParentCtx(ctx)
-					// if !config.KeepAlive {
-					// 	sender.SetIO(conn)
-					// }
+					if !p.KeepAlive {
+						// sender.SetIO(conn)
+					}
 					// sender.ID = fmt.Sprintf("%s|%d", conn.RemoteAddr().String(), sender.StreamID)
+					sender.Subscriber, err = p.Subscribe(streamPath)
+					if err != nil {
+						err = sender.Response(cmd.TransactionId, NetStream_Play_Failed, Level_Error)
+					} else {
+						senders[sender.StreamID] = sender
+						sender.Begin()
+						err = sender.Response(cmd.TransactionId, NetStream_Play_Reset, Level_Status)
+						err = sender.Response(cmd.TransactionId, NetStream_Play_Start, Level_Status)
+						sender.Init()
+						go sender.Handle(sender.SendAudio, sender.SendVideo)
+					}
 					// if RTMPPlugin.Subscribe(streamPath, sender) != nil {
 					// 	sender.Response(cmd.TransactionId, NetStream_Play_Failed, Level_Error)
 					// } else {
@@ -164,24 +193,24 @@ func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
 					// 	go sender.PlayRaw()
 					// }
 				}
-			case pkg.RTMP_MSG_AUDIO:
+			case RTMP_MSG_AUDIO:
 				if r, ok := receivers[msg.MessageStreamID]; ok {
-					r.ReceiveAudio(msg)
+					r.WriteAudio(&RTMPAudio{msg.AVData})
 				} else {
-					// logger.Warn("ReceiveAudio", zap.Uint32("MessageStreamID", msg.MessageStreamID))
+					logger.Warn("ReceiveAudio", "MessageStreamID", msg.MessageStreamID)
 				}
-			case pkg.RTMP_MSG_VIDEO:
+			case RTMP_MSG_VIDEO:
 				if r, ok := receivers[msg.MessageStreamID]; ok {
-					r.ReceiveVideo(msg)
+					r.WriteVideo(&RTMPVideo{msg.AVData})
 				} else {
-					// logger.Warn("ReceiveVideo", zap.Uint32("MessageStreamID", msg.MessageStreamID))
+					logger.Warn("ReceiveVideo", "MessageStreamID", msg.MessageStreamID)
 				}
 			}
 		} else if err == io.EOF || err == io.ErrUnexpectedEOF {
-			// logger.Info("rtmp client closed")
+			logger.Info("rtmp client closed")
 			return
 		} else {
-			// logger.Warn("ReadMessage", zap.Error(err))
+			logger.Warn("ReadMessage", "error", err)
 			return
 		}
 	}

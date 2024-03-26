@@ -17,6 +17,10 @@ func (p *Pool[T]) Get() T {
 	return t
 }
 
+func (p *Pool[T]) Clear() {
+	p.pool = p.pool[:0]
+}
+
 func (p *Pool[T]) Put(t T) {
 	p.pool = append(p.pool, t)
 }
@@ -24,6 +28,7 @@ func (p *Pool[T]) Put(t T) {
 type IPool[T any] interface {
 	Get() T
 	Put(T)
+	Clear()
 }
 
 type RecyclebleMemory struct {

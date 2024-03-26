@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"io"
+	"log/slog"
 	"net"
 	"runtime"
 	"sync/atomic"
@@ -45,13 +46,12 @@ const (
 )
 
 type BytesPool struct {
-	*util.Pool[[]byte]
+	util.Pool[[]byte]
 	ItemSize int
 }
 
 func (bp *BytesPool) Get(size int) []byte {
 	if size != bp.ItemSize {
-		bp.Pool = nil
 		return make([]byte, size)
 	}
 	ret := bp.Pool.Get()
@@ -61,7 +61,16 @@ func (bp *BytesPool) Get(size int) []byte {
 	return ret
 }
 
+func (bp *BytesPool) Put(b []byte) {
+	if cap(b) != bp.ItemSize {
+		bp.ItemSize = cap(b)
+		bp.Clear()
+	}
+	bp.Pool.Put(b)
+}
+
 type NetConnection struct {
+	*slog.Logger    `json:"-" yaml:"-"`
 	*bufio.Reader   `json:"-" yaml:"-"`
 	net.Conn        `json:"-" yaml:"-"`
 	bandwidth       uint32
@@ -76,7 +85,8 @@ type NetConnection struct {
 	AppName         string
 	tmpBuf          util.Buffer //用来接收/发送小数据，复用内存
 	chunkHeader     util.Buffer
-	bytePool        BytesPool
+	byteChunkPool   BytesPool
+	byte16Pool      BytesPool
 	writing         atomic.Bool // false 可写，true 不可写
 }
 
@@ -90,7 +100,6 @@ func NewNetConnection(conn net.Conn) *NetConnection {
 		bandwidth:       RTMP_MAX_CHUNK_SIZE << 3,
 		tmpBuf:          make(util.Buffer, 4),
 		chunkHeader:     make(util.Buffer, 0, 16),
-		// bytePool:        make(util.BytesPool, 17),
 	}
 }
 func (conn *NetConnection) ReadFull(buf []byte) (n int, err error) {
@@ -164,9 +173,9 @@ func (conn *NetConnection) readChunk() (msg *Chunk, err error) {
 	if unRead := msgLen - chunk.AVData.Length; unRead < needRead {
 		needRead = unRead
 	}
-	mem := conn.bytePool.Get(needRead)
+	mem := conn.byteChunkPool.Get(needRead)
 	if n, err := conn.ReadFull(mem); err != nil {
-		conn.bytePool.Put(mem)
+		conn.byteChunkPool.Put(mem)
 		return nil, err
 	} else {
 		conn.readSeqNum += uint32(n)
@@ -326,8 +335,13 @@ func (conn *NetConnection) SendMessage(t byte, msg RtmpMessage) (err error) {
 		head.MessageStreamID = sid.GetStreamID()
 	}
 	head.WriteTo(RTMP_CHUNK_HEAD_12, &conn.chunkHeader)
-	for _, chunk := range conn.tmpBuf.Split(conn.WriteChunkSize) {
-		conn.sendChunk(chunk)
+	for b := conn.tmpBuf; b.Len() > 0; {
+		if b.CanReadN(conn.WriteChunkSize) {
+			conn.sendChunk(b.ReadN(conn.WriteChunkSize))
+		} else {
+			conn.sendChunk(b)
+			break
+		}
 	}
 	return nil
 }

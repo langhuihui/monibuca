@@ -1,0 +1,5 @@
+global:
+  loglevel: debug
+rtmp:
+  publish:
+    pubaudio: false

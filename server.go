@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"time"
-	"unsafe"
 
 	"github.com/mcuadros/go-defaults"
 	"gopkg.in/yaml.v3"
@@ -18,10 +18,11 @@ import (
 )
 
 var Version = "v5.0.0"
-var MergeConfigs = []string{"Publish", "Subscribe", "HTTP"}
 var (
-	ExecPath = os.Args[0]
-	ExecDir  = filepath.Dir(ExecPath)
+	MergeConfigs = []string{"Publish", "Subscribe", "HTTP"}
+	ExecPath     = os.Args[0]
+	ExecDir      = filepath.Dir(ExecPath)
+	serverIndexG atomic.Uint32
 )
 
 type Server struct {
@@ -36,7 +37,10 @@ type Server struct {
 var DefaultServer = NewServer()
 
 func NewServer() *Server {
-	return &Server{}
+	return &Server{
+		Publishers: make(map[string]*Publisher),
+		Waiting:    make(map[string]*Subscriber),
+	}
 }
 
 func Run(ctx context.Context, conf any) error {
@@ -44,7 +48,7 @@ func Run(ctx context.Context, conf any) error {
 }
 
 func (s *Server) Run(ctx context.Context, conf any) (err error) {
-	s.Logger = slog.With("server", uintptr(unsafe.Pointer(s)))
+	s.Logger = slog.With("server", serverIndexG.Add(1))
 	s.Context, s.CancelCauseFunc = context.WithCancelCause(ctx)
 	s.config.HTTP.ListenAddrTLS = ":8443"
 	s.config.HTTP.ListenAddr = ":8080"
@@ -72,11 +76,15 @@ func (s *Server) Run(ctx context.Context, conf any) (err error) {
 		}
 	}
 	defaults.SetDefaults(&s.Engine)
+	defaults.SetDefaults(&s.config)
 	s.Config.Parse(&s.config)
 	s.Config.Parse(&s.Engine, "GLOBAL")
 	if cg != nil {
 		s.Config.ParseUserFile(cg["global"])
 	}
+	var lv slog.LevelVar
+	lv.UnmarshalText([]byte(s.LogLevel))
+	slog.SetLogLoggerLevel(lv.Level())
 	s.initPlugins(cg)
 	pulse := time.NewTicker(s.PulseInterval)
 	for {
@@ -88,10 +96,10 @@ func (s *Server) Run(ctx context.Context, conf any) (err error) {
 		case <-pulse.C:
 		case event := <-s.eventChan:
 			switch v := event.(type) {
-			case util.Promise[*Publisher]:
-				v.CancelCauseFunc(s.OnPublish(v.Value))
-			case util.Promise[*Subscriber]:
-				v.CancelCauseFunc(s.OnSubscribe(v.Value))
+			case *util.Promise[*Publisher]:
+				v.Fulfill(s.OnPublish(v.Value))
+			case *util.Promise[*Subscriber]:
+				v.Fulfill(s.OnSubscribe(v.Value))
 			}
 			for _, plugin := range s.Plugins {
 				if plugin.Disabled {
@@ -101,7 +109,6 @@ func (s *Server) Run(ctx context.Context, conf any) (err error) {
 			}
 		}
 	}
-	return
 }
 
 func (s *Server) initPlugins(cg map[string]map[string]any) {

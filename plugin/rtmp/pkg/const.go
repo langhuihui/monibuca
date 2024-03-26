@@ -21,3 +21,7 @@ type RTMPData struct {
 	util.Buffers
 	util.RecyclebleMemory
 }
+
+func (avcc *RTMPData) IsIDR() bool {
+	return false
+}

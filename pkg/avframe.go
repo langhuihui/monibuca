@@ -7,14 +7,13 @@ import (
 	"time"
 
 	"github.com/bluenviron/mediacommon/pkg/codecs/av1"
-	"m7s.live/m7s/v5/pkg/codec"
 	"m7s.live/m7s/v5/pkg/util"
 )
 
 type AVFrame struct {
 	DataFrame
 	Timestamp time.Duration // 绝对时间戳
-	Wrap      []IAVFrame    `json:"-" yaml:"-"` // 封装格式
+	Wrap      IAVFrame      `json:"-" yaml:"-"` // 封装格式
 }
 type DataFrame struct {
 	DeltaTime   uint32       // 相对上一帧时间戳，毫秒
@@ -27,9 +26,6 @@ type DataFrame struct {
 	sync.Cond   `json:"-" yaml:"-"`
 }
 
-func NewDataFrame[T any]() *DataFrame {
-	return &DataFrame{}
-}
 func (df *DataFrame) IsWriting() bool {
 	return !df.CanRead
 }
@@ -68,6 +64,7 @@ func (df *DataFrame) StartWrite() bool {
 		df.Discard() //标记为废弃
 		return false
 	} else {
+		df.Init()
 		df.CanRead = false //标记为正在写入
 		return true
 	}
@@ -88,24 +85,8 @@ func (df *DataFrame) Reset() {
 	df.DeltaTime = 0
 }
 
-type CodecCtx struct {
-}
-
-func Update(ICodecCtx) {
-}
-
-type VideoCodecCtx struct {
-	CodecCtx
-	NalulenSize  int
-	SPSInfo      codec.SPSInfo
-	SequenceData net.Buffers
-}
-
-type AudioCodecCtx struct {
-	CodecCtx
-}
-
 type ICodecCtx interface {
+	GetSequenceFrame() IAVFrame
 }
 type IDataFrame interface {
 }
@@ -114,6 +95,7 @@ type IAVFrame interface {
 	ToRaw(*AVTrack) (any, error)
 	FromRaw(*AVTrack, any) error
 	Recycle()
+	IsIDR() bool
 }
 
 type Nalu [][]byte

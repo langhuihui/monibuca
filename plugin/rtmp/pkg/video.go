@@ -12,6 +12,10 @@ type RTMPVideo struct {
 	RTMPData
 }
 
+func (avcc *RTMPVideo) IsIDR() bool {
+	return avcc.Buffers.Buffers[0][0]&0b1111_0000>>4 == 1
+}
+
 func (avcc *RTMPVideo) DecodeConfig(track *AVTrack) error {
 	reader := avcc.Buffers
 	b0, err := reader.ReadByte()
@@ -32,6 +36,8 @@ func (avcc *RTMPVideo) DecodeConfig(track *AVTrack) error {
 				ctx.NalulenSize = int(info.LengthSizeMinusOne&3 + 1)
 				ctx.SPS = info.SequenceParameterSetNALUnit
 				ctx.PPS = info.PictureParameterSetNALUnit
+				avcc.IPool = nil
+				ctx.SequenceFrame = avcc
 				track.ICodecCtx = &ctx
 			}
 		case "h265":
@@ -72,7 +78,7 @@ func (avcc *RTMPVideo) DecodeConfig(track *AVTrack) error {
 		} else {
 			track.Codec = "h264"
 		}
-		reader.ReadBE(3) // cts == 0
+		_, err = reader.ReadBE(3) // cts == 0
 		if err != nil {
 			return err
 		}
@@ -116,7 +122,6 @@ func (avcc *RTMPVideo) parseAV1(track *AVTrack, reader *util.Buffers) (any, erro
 	}
 	return obus, nil
 }
-
 
 func (avcc *RTMPVideo) ToRaw(track *AVTrack) (any, error) {
 	reader := avcc.Buffers

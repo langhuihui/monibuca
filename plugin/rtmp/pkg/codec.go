@@ -5,11 +5,10 @@ import (
 	"encoding/binary"
 	"errors"
 
+	. "m7s.live/m7s/v5/pkg"
 	"m7s.live/m7s/v5/pkg/codec"
 	"m7s.live/m7s/v5/pkg/util"
 )
-
-
 
 type AVCDecoderConfigurationRecord struct {
 	ConfigurationVersion       byte // 8 bits Version
@@ -64,7 +63,6 @@ func (p *AVCDecoderConfigurationRecord) Unmarshal(b *util.Buffers) (err error) {
 	if err != nil {
 		return
 	}
-	b.Skip(6)
 	var sps, pps [][]byte
 	for range p.NumOfSequenceParameterSets {
 		spslen, err1 := b.ReadBE(2)
@@ -311,13 +309,26 @@ func ParseSPS(data []byte) (self codec.SPSInfo, err error) {
 // }
 
 type H264Ctx struct {
+	SequenceFrame *RTMPVideo
 	codec.SPSInfo
 	NalulenSize int
 	SPS         []byte
 	PPS         []byte
 }
 
+func (ctx *H264Ctx) GetSequenceFrame() IAVFrame {
+	return ctx.SequenceFrame
+}
+
 type H265Ctx struct {
 	H264Ctx
 	VPS []byte
+}
+
+type AACCtx struct {
+	SequenceFrame *RTMPAudio
+}
+
+func (ctx *AACCtx) GetSequenceFrame() IAVFrame {
+	return ctx.SequenceFrame
 }

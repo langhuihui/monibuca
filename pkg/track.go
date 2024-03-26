@@ -2,8 +2,8 @@ package pkg
 
 import (
 	"log/slog"
-	"reflect"
 	"slices"
+	"time"
 
 	"m7s.live/m7s/v5/pkg/util"
 )
@@ -37,9 +37,28 @@ type AVTrack struct {
 	Track
 	RingWriter
 	IDRingList `json:"-" yaml:"-"` //最近的关键帧位置，首屏渲染
+	BufferTime time.Duration       //发布者配置中的缓冲时间（时光回溯）
 	ICodecCtx
 	SSRC        uint32
 	SampleRate  uint32
-	DataTypes   []reflect.Type `json:"-" yaml:"-"`
 	PayloadType byte
+}
+
+func (av *AVTrack) Narrow(gop int) {
+	if l := av.Size - gop; l > 12 {
+		av.Debug("resize", "before", av.Size, "after", av.Size-5)
+		//缩小缓冲环节省内存
+		av.Reduce(5)
+	}
+}
+
+func (av *AVTrack) AddIDR(r *util.Ring[AVFrame]) {
+	if av.BufferTime > 0 {
+		av.IDRingList.AddIDR(r)
+		if av.HistoryRing == nil {
+			av.HistoryRing = av.IDRing
+		}
+	} else {
+		av.IDRing = r
+	}
 }
