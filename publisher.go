@@ -28,30 +28,10 @@ func (p *Publisher) AddSubscriber(subscriber *Subscriber) (err error) {
 	return
 }
 
-func (p *Publisher) writeAV(t *AVTrack, data IAVFrame) (err error) {
-	if t.ICodecCtx == nil {
-		return data.DecodeConfig(t)
-	}
-	t.Ring.Value.Wrap = data
-	// if n := len(t.DataTypes); n > 1 {
-	// 	t.Ring.Value.Raw, err = data.ToRaw(t)
-	// 	if err != nil {
-	// 		return
-	// 	}
-	// 	if t.Ring.Value.Raw == nil {
-	// 		return
-	// 	}
-	// 	for i := 1; i < n; i++ {
-	// 		if len(t.Ring.Value.Wrap) <= i {
-	// 			t.Ring.Value.Wrap = append(t.Ring.Value.Wrap, nil)
-	// 		}
-	// 		t.Ring.Value.Wrap[i] = reflect.New(t.DataTypes[i]).Interface().(IAVFrame)
-	// 		t.Ring.Value.Wrap[i].FromRaw(t, t.Ring.Value.Raw)
-	// 	}
-	// }
-
+func (p *Publisher) writeAV(t *AVTrack, data IAVFrame) {
+	t.Value.Wrap = data
+	t.Value.Timestamp = data.GetTimestamp()
 	t.Step()
-	return
 }
 
 func (p *Publisher) WriteVideo(data IAVFrame) (err error) {
@@ -68,17 +48,29 @@ func (p *Publisher) WriteVideo(data IAVFrame) (err error) {
 		p.TransTrack[reflect.TypeOf(data)] = t
 		p.Unlock()
 	}
-	// if t.IDRing != nil {
-	// 	p.GOP = int(t.Value.Sequence - t.IDRing.Value.Sequence)
-	// 	if t.HistoryRing == nil {
-	// 		t.Narrow(p.GOP)
-	// 	}
-	// }
-	cur := t.Ring
-	err = p.writeAV(t, data)
-	if err == nil && data.IsIDR() {
-		t.AddIDR(cur)
+	if t.ICodecCtx == nil {
+		return data.DecodeConfig(t)
 	}
+	if data.IsIDR() {
+		if t.IDRing != nil {
+			p.GOP = int(t.Value.Sequence - t.IDRing.Value.Sequence)
+			if t.HistoryRing == nil {
+				if l := t.Size - p.GOP; l > 12 {
+					t.Debug("resize", "before", t.Size, "after", t.Size-5)
+					t.Reduce(5) //缩小缓冲环节省内存
+				}
+			}
+		}
+		if p.BufferTime > 0 {
+			t.IDRingList.AddIDR(t.Ring)
+			if t.HistoryRing == nil {
+				t.HistoryRing = t.IDRing
+			}
+		} else {
+			t.IDRing = t.Ring
+		}
+	}
+	p.writeAV(t, data)
 	return
 }
 
@@ -96,7 +88,11 @@ func (p *Publisher) WriteAudio(data IAVFrame) (err error) {
 		p.TransTrack[reflect.TypeOf(data)] = t
 		p.Unlock()
 	}
-	return p.writeAV(t, data)
+	if t.ICodecCtx == nil {
+		return data.DecodeConfig(t)
+	}
+	p.writeAV(t, data)
+	return
 }
 
 func (p *Publisher) WriteData(data IDataFrame) (err error) {

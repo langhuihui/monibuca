@@ -33,14 +33,13 @@ func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
 	var err error
 	logger.Info("conn")
 	defer func() {
-		// ze := zap.Error(err)
-		// logger.Info("conn close", ze)
-		// for _, sender := range senders {
-		// sender.Stop(ze)
-		// }
-		// for _, receiver := range receivers {
-		// receiver.Stop(ze)
-		// }
+		p.Info("conn close")
+		for _, sender := range senders {
+			sender.Stop(err)
+		}
+		for _, receiver := range receivers {
+			receiver.Stop(err)
+		}
 	}()
 	nc := NewNetConnection(conn)
 	// ctx, cancel := context.WithCancel(p)

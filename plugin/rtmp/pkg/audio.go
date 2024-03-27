@@ -22,11 +22,29 @@ func (avcc *RTMPAudio) DecodeConfig(track *AVTrack) error {
 		switch b0 & 0b1111_0000 >> 4 {
 		case 7:
 			track.Codec = "pcmu"
+			var ctx G711Ctx
+			track.ICodecCtx = &ctx
 		case 8:
 			track.Codec = "pcma"
+			var ctx G711Ctx
+			track.ICodecCtx = &ctx
 		case 10:
 			track.Codec = "aac"
 			var ctx AACCtx
+			b0, err = reader.ReadByte()
+			if err != nil {
+				return err
+			}
+			b1, err = reader.ReadByte()
+			if err != nil {
+				return err
+			}
+			ctx.AudioObjectType = b0 >> 3
+			ctx.SamplingFrequencyIndex = (b0 & 0x07 << 1) | (b1 >> 7)
+			ctx.ChannelConfiguration = (b1 >> 3) & 0x0F
+			ctx.FrameLengthFlag = (b1 >> 2) & 0x01
+			ctx.DependsOnCoreCoder = (b1 >> 1) & 0x01
+			ctx.ExtensionFlag = b1 & 0x01
 			ctx.SequenceFrame = avcc
 			track.ICodecCtx = &ctx
 		}

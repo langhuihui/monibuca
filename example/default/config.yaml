@@ -2,4 +2,4 @@ global:
   loglevel: debug
 rtmp:
   publish:
-    pubaudio: false
+    # pubvideo: false

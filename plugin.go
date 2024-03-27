@@ -175,13 +175,13 @@ func (p *Plugin) Start() {
 	if httpConf.ListenAddrTLS != "" && (httpConf.ListenAddrTLS != p.server.config.HTTP.ListenAddrTLS) {
 		go func() {
 			p.Info("https listen at ", "addr", aurora.Blink(httpConf.ListenAddrTLS))
-			p.CancelCauseFunc(httpConf.ListenTLS())
+			p.Stop(httpConf.ListenTLS())
 		}()
 	}
 	if httpConf.ListenAddr != "" && (httpConf.ListenAddr != p.server.config.HTTP.ListenAddr) {
 		go func() {
 			p.Info("http listen at ", "addr", aurora.Blink(httpConf.ListenAddr))
-			p.CancelCauseFunc(httpConf.Listen())
+			p.Stop(httpConf.Listen())
 		}()
 	}
 	tcpConf := p.config.TCP
@@ -197,7 +197,7 @@ func (p *Plugin) Start() {
 		l, err := net.Listen("tcp", tcpConf.ListenAddr)
 		if err != nil {
 			p.Error("listen tcp", "addr", tcpConf.ListenAddr, "error", err)
-			p.CancelCauseFunc(err)
+			p.Stop(err)
 			return
 		}
 		defer l.Close()
@@ -213,7 +213,7 @@ func (p *Plugin) Start() {
 		}
 		if err != nil {
 			p.Error("LoadX509KeyPair", "error", err)
-			p.CancelCauseFunc(err)
+			p.Stop(err)
 			return
 		}
 		l, err := tls.Listen("tcp", tcpConf.ListenAddrTLS, &tls.Config{
@@ -221,7 +221,7 @@ func (p *Plugin) Start() {
 		})
 		if err != nil {
 			p.Error("listen tcp tls", "addr", tcpConf.ListenAddrTLS, "error", err)
-			p.CancelCauseFunc(err)
+			p.Stop(err)
 			return
 		}
 		defer l.Close()
@@ -250,18 +250,32 @@ func (p *Plugin) OnTCPConnect(conn *net.TCPConn) {
 	p.handler.OnEvent(conn)
 }
 
-func (p *Plugin) Publish(streamPath string) (publisher *Publisher, err error) {
+func (p *Plugin) Publish(streamPath string, options ...any) (publisher *Publisher, err error) {
 	publisher = &Publisher{Publish: p.config.Publish}
-	publisher.Init(p, streamPath)
+	ctx := p.Context
+	for _, option := range options {
+		switch v := option.(type) {
+		case context.Context:
+			ctx = v
+		}
+	}
+	publisher.Init(ctx, p, streamPath)
 	publisher.Subscribers = make(map[*Subscriber]struct{})
 	publisher.TransTrack = make(map[reflect.Type]*AVTrack)
 	err = sendPromiseToServer(p.server, publisher)
 	return
 }
 
-func (p *Plugin) Subscribe(streamPath string) (subscriber *Subscriber, err error) {
+func (p *Plugin) Subscribe(streamPath string, options ...any) (subscriber *Subscriber, err error) {
 	subscriber = &Subscriber{Subscribe: p.config.Subscribe}
-	subscriber.Init(p, streamPath)
+	ctx := p.Context
+	for _, option := range options {
+		switch v := option.(type) {
+		case context.Context:
+			ctx = v
+		}
+	}
+	subscriber.Init(ctx, p, streamPath)
 	err = sendPromiseToServer(p.server, subscriber)
 	return
 }

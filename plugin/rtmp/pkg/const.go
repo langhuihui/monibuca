@@ -1,6 +1,8 @@
 package pkg
 
 import (
+	"time"
+
 	"m7s.live/m7s/v5/pkg/util"
 )
 
@@ -22,6 +24,9 @@ type RTMPData struct {
 	util.RecyclebleMemory
 }
 
+func (avcc *RTMPData) GetTimestamp() time.Duration {
+	return time.Duration(avcc.Timestamp) * time.Millisecond
+}
 func (avcc *RTMPData) IsIDR() bool {
 	return false
 }

@@ -16,7 +16,6 @@ type AVFrame struct {
 	Wrap      IAVFrame      `json:"-" yaml:"-"` // 封装格式
 }
 type DataFrame struct {
-	DeltaTime   uint32       // 相对上一帧时间戳，毫秒
 	WriteTime   time.Time    // 写入时间,可用于比较两个帧的先后
 	Sequence    uint32       // 在一个Track中的序号
 	BytesIn     int          // 输入字节数用于计算BPS
@@ -82,7 +81,6 @@ func (df *DataFrame) Init() {
 
 func (df *DataFrame) Reset() {
 	df.BytesIn = 0
-	df.DeltaTime = 0
 }
 
 type ICodecCtx interface {
@@ -94,6 +92,7 @@ type IAVFrame interface {
 	DecodeConfig(*AVTrack) error
 	ToRaw(*AVTrack) (any, error)
 	FromRaw(*AVTrack, any) error
+	GetTimestamp() time.Duration
 	Recycle()
 	IsIDR() bool
 }

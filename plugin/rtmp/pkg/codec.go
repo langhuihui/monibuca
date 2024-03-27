@@ -324,11 +324,33 @@ type H265Ctx struct {
 	H264Ctx
 	VPS []byte
 }
+type G711Ctx struct {
+}
+
+func (ctx *G711Ctx) GetSequenceFrame() IAVFrame {
+	return nil
+}
 
 type AACCtx struct {
+	AudioSpecificConfig
 	SequenceFrame *RTMPAudio
 }
 
 func (ctx *AACCtx) GetSequenceFrame() IAVFrame {
 	return ctx.SequenceFrame
 }
+
+type GASpecificConfig struct {
+	FrameLengthFlag    byte // 1 bit
+	DependsOnCoreCoder byte // 1 bit
+	ExtensionFlag      byte // 1 bit
+}
+
+type AudioSpecificConfig struct {
+	AudioObjectType        byte // 5 bits
+	SamplingFrequencyIndex byte // 4 bits
+	ChannelConfiguration   byte // 4 bits
+	GASpecificConfig
+}
+
+var SamplingFrequencies = [...]int{96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350, 0, 0, 0}
