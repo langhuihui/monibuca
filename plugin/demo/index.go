@@ -19,8 +19,4 @@ func (p *DemoPlugin) OnInit() {
 	// })
 }
 
-func (p *DemoPlugin) OnStopPublish(puber *m7s.Publisher, err error) {
-
-}
-
 var _ = m7s.InstallPlugin[*DemoPlugin]()

@@ -2,7 +2,7 @@ package m7s
 
 import (
 	"context"
-	"log/slog"
+	"io"
 	"net/url"
 	"reflect"
 	"strconv"
@@ -14,29 +14,36 @@ import (
 )
 
 type PubSubBase struct {
-	ID                      string
-	*slog.Logger            `json:"-" yaml:"-"`
-	context.Context         `json:"-" yaml:"-"`
-	context.CancelCauseFunc `json:"-" yaml:"-"`
-	Plugin                  *Plugin
-	StartTime               time.Time
-	StreamPath              string
-	Args                    url.Values
+	Unit
+	ID           int
+	Plugin       *Plugin
+	StartTime    time.Time
+	StreamPath   string
+	Args         url.Values
+	TimeoutTimer *time.Timer
+	io.Closer
 }
 
-func (ps *PubSubBase) Stop(err error) {
-	ps.Error(err.Error())
-	ps.CancelCauseFunc(err)
-}
-
-func (ps *PubSubBase) Init(ctx context.Context, p *Plugin, streamPath string) {
+func (ps *PubSubBase) Init(p *Plugin, streamPath string, options ...any) {
 	ps.Plugin = p
-	ps.Context, ps.CancelCauseFunc = context.WithCancelCause(p.Context)
+	ctx := p.Context
+	for _, option := range options {
+		switch v := option.(type) {
+		case context.Context:
+			ctx = v
+		case io.Closer:
+			ps.Closer = v
+		}
+	}
+	ps.Context, ps.CancelCauseFunc = context.WithCancelCause(ctx)
 	if u, err := url.Parse(streamPath); err == nil {
 		ps.StreamPath, ps.Args = u.Path, u.Query()
 	}
-	ps.Logger = p.With("streamPath", ps.StreamPath)
 	ps.StartTime = time.Now()
+}
+
+type UnsubscribeEvent struct {
+	*Subscriber
 }
 
 type Subscriber struct {
@@ -50,32 +57,41 @@ type ISubscriberHandler[T IAVFrame] func(data T)
 func (s *Subscriber) Handle(audioHandler, videoHandler any) {
 	var ar, vr *AVRingReader
 	var ah, vh reflect.Value
-	if audioHandler != nil {
-		a1 := reflect.TypeOf(audioHandler).In(0)
-		at := s.Publisher.GetAudioTrack(a1)
-		if at != nil {
-			ar = NewAVRingReader(at)
-			ar.Logger = s.Logger.With("reader", a1.Name())
-			ah = reflect.ValueOf(audioHandler)
-		}
-	}
-	if videoHandler != nil {
-		v1 := reflect.TypeOf(videoHandler).In(0)
-		vt := s.Publisher.GetVideoTrack(v1)
-		if vt != nil {
-			vr = NewAVRingReader(vt)
-			vr.Logger = s.Logger.With("reader", v1.Name())
-			vh = reflect.ValueOf(videoHandler)
-		}
-	}
+	var a1, v1 reflect.Type
 	var initState = 0
-
 	var subMode = s.SubMode //订阅模式
 	if s.Args.Has(s.SubModeArgName) {
 		subMode, _ = strconv.Atoi(s.Args.Get(s.SubModeArgName))
 	}
 	var audioFrame, videoFrame, lastSentAF, lastSentVF *AVFrame
-
+	if audioHandler != nil {
+		a1 = reflect.TypeOf(audioHandler).In(0)
+	}
+	if videoHandler != nil {
+		v1 = reflect.TypeOf(videoHandler).In(0)
+	}
+	createAudioReader := func() {
+		if s.Publisher == nil || a1 == nil {
+			return
+		}
+		if at := s.Publisher.GetAudioTrack(a1); at != nil {
+			ar = NewAVRingReader(at)
+			ar.Logger = s.Logger.With("reader", a1.Name())
+			ah = reflect.ValueOf(audioHandler)
+		}
+	}
+	createVideoReader := func() {
+		if s.Publisher == nil || v1 == nil {
+			return
+		}
+		if vt := s.Publisher.GetVideoTrack(v1); vt != nil {
+			vr = NewAVRingReader(vt)
+			vr.Logger = s.Logger.With("reader", v1.Name())
+			vh = reflect.ValueOf(videoHandler)
+		}
+	}
+	createAudioReader()
+	createVideoReader()
 	defer func() {
 		if lastSentVF != nil {
 			lastSentVF.ReaderLeave()
@@ -83,7 +99,6 @@ func (s *Subscriber) Handle(audioHandler, videoHandler any) {
 		if lastSentAF != nil {
 			lastSentAF.ReaderLeave()
 		}
-		s.Info("subscriber stopped", "reason", context.Cause(s.Context))
 	}()
 	sendAudioFrame := func() {
 		lastSentAF = audioFrame
@@ -131,6 +146,8 @@ func (s *Subscriber) Handle(audioHandler, videoHandler any) {
 					sendVideoFrame()
 				}
 			}
+		} else {
+			createVideoReader()
 		}
 		// 正常模式下或者纯音频模式下，音频开始播放
 		if ar != nil {
@@ -176,6 +193,8 @@ func (s *Subscriber) Handle(audioHandler, videoHandler any) {
 					s.Debug("skip audio", "frame.AbsTime", audioFrame.Timestamp, "s.AudioReader.SkipTs", ar.SkipTs)
 				}
 			}
+		} else {
+			createAudioReader()
 		}
 	}
 }

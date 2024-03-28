@@ -50,7 +50,7 @@ type BytesPool struct {
 	ItemSize int
 }
 
-func (bp *BytesPool) Get(size int) []byte {
+func (bp *BytesPool) GetN(size int) []byte {
 	if size != bp.ItemSize {
 		return make([]byte, size)
 	}
@@ -162,6 +162,7 @@ func (conn *NetConnection) readChunk() (msg *Chunk, err error) {
 	if !ok {
 		chunk = &Chunk{}
 		conn.incommingChunks[ChunkStreamID] = chunk
+		chunk.AVData.IPool = &conn.byteChunkPool
 	}
 
 	if err = conn.readChunkType(&chunk.ChunkHeader, ChunkType); err != nil {
@@ -173,7 +174,7 @@ func (conn *NetConnection) readChunk() (msg *Chunk, err error) {
 	if unRead := msgLen - chunk.AVData.Length; unRead < needRead {
 		needRead = unRead
 	}
-	mem := conn.byteChunkPool.Get(needRead)
+	mem := conn.byteChunkPool.GetN(needRead)
 	if n, err := conn.ReadFull(mem); err != nil {
 		conn.byteChunkPool.Put(mem)
 		return nil, err

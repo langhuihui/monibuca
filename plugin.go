@@ -3,12 +3,12 @@ package m7s
 import (
 	"context"
 	"crypto/tls"
-	"log/slog"
 	"net"
 	"os"
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 
@@ -84,11 +84,6 @@ type IPlugin interface {
 	OnInit()
 	OnEvent(any)
 }
-
-type IPublishPlugin interface {
-	OnStopPublish(*Publisher, error)
-}
-
 type ITCPPlugin interface {
 	OnTCPConnect(*net.TCPConn)
 }
@@ -132,17 +127,15 @@ func sendPromiseToServer[T any](server *Server, value T) (err error) {
 }
 
 type Plugin struct {
-	Disabled                bool
-	Meta                    *PluginMeta
-	context.Context         `json:"-" yaml:"-"`
-	context.CancelCauseFunc `json:"-" yaml:"-"`
-	eventChan               chan any
-	config                  config.Common
+	Unit
+	Disabled  bool
+	Meta      *PluginMeta
+	eventChan chan any
+	config    config.Common
 	config.Config
-	Publishers   []*Publisher
-	*slog.Logger `json:"-" yaml:"-"`
-	handler      IPlugin
-	server       *Server
+	Publishers []*Publisher
+	handler    IPlugin
+	server     *Server
 	sync.RWMutex
 }
 
@@ -230,16 +223,42 @@ func (p *Plugin) Start() {
 			go tcpConf.Listen(l, tcphandler.OnTCPConnect)
 		}
 	}
-	select {
-	case event := <-p.eventChan:
-		p.handler.OnEvent(event)
-	case <-p.Done():
-		return
+	for {
+		select {
+		case event := <-p.eventChan:
+			// switch event.(type) {
+			// case *Subscriber:
+			// }
+			p.handler.OnEvent(event)
+		case <-p.Done():
+			return
+		default:
+			for i := 0; i < len(p.Publishers); i++ {
+				publisher := p.Publishers[i]
+				select {
+				case <-publisher.Done():
+					if publisher.Closer != nil {
+						publisher.Closer.Close()
+					}
+					p.Publishers = slices.Delete(p.Publishers, i, i+1)
+					i--
+					p.server.eventChan <- UnpublishEvent{Publisher: publisher}
+				case <-publisher.TimeoutTimer.C:
+					if err := publisher.timeout(); err != nil {
+						publisher.Stop(err)
+					}
+				default:
+					for subscriber := range publisher.Subscribers {
+						select {
+						case <-subscriber.Done():
+							subscriber.Publisher.RemoveSubscriber(subscriber)
+						default:
+						}
+					}
+				}
+			}
+		}
 	}
-}
-
-func (p *Plugin) Stop(reason error) {
-	p.CancelCauseFunc(reason)
 }
 
 func (p *Plugin) OnEvent(event any) {
@@ -252,30 +271,14 @@ func (p *Plugin) OnTCPConnect(conn *net.TCPConn) {
 
 func (p *Plugin) Publish(streamPath string, options ...any) (publisher *Publisher, err error) {
 	publisher = &Publisher{Publish: p.config.Publish}
-	ctx := p.Context
-	for _, option := range options {
-		switch v := option.(type) {
-		case context.Context:
-			ctx = v
-		}
-	}
-	publisher.Init(ctx, p, streamPath)
-	publisher.Subscribers = make(map[*Subscriber]struct{})
-	publisher.TransTrack = make(map[reflect.Type]*AVTrack)
+	publisher.Init(p, streamPath, options...)
 	err = sendPromiseToServer(p.server, publisher)
 	return
 }
 
 func (p *Plugin) Subscribe(streamPath string, options ...any) (subscriber *Subscriber, err error) {
 	subscriber = &Subscriber{Subscribe: p.config.Subscribe}
-	ctx := p.Context
-	for _, option := range options {
-		switch v := option.(type) {
-		case context.Context:
-			ctx = v
-		}
-	}
-	subscriber.Init(ctx, p, streamPath)
+	subscriber.Init(p, streamPath, options...)
 	err = sendPromiseToServer(p.server, subscriber)
 	return
 }

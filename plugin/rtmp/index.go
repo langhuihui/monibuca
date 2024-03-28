@@ -1,6 +1,7 @@
 package rtmp
 
 import (
+	"context"
 	"io"
 	"net"
 
@@ -18,10 +19,6 @@ func (p *RTMPPlugin) OnInit() {
 
 }
 
-func (p *RTMPPlugin) OnStopPublish(puber *m7s.Publisher, err error) {
-
-}
-
 var _ = m7s.InstallPlugin[*RTMPPlugin](m7s.DefaultYaml(`tcp:
   listenaddr: :1935`))
 
@@ -32,18 +29,13 @@ func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
 	receivers := make(map[uint32]*RTMPReceiver)
 	var err error
 	logger.Info("conn")
-	defer func() {
-		p.Info("conn close")
-		for _, sender := range senders {
-			sender.Stop(err)
-		}
-		for _, receiver := range receivers {
-			receiver.Stop(err)
-		}
-	}()
 	nc := NewNetConnection(conn)
-	// ctx, cancel := context.WithCancel(p)
-	// defer cancel()
+	nc.Logger = logger
+	ctx, cancel := context.WithCancelCause(p)
+	defer func() {
+		logger.Info("conn close")
+		cancel(err)
+	}()
 	/* Handshake */
 	if err = nc.Handshake(); err != nil {
 		logger.Error("handshake", "error", err)
@@ -148,11 +140,7 @@ func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
 							StreamID:      cmd.StreamId,
 						},
 					}
-					// receiver.SetParentCtx(ctx)
-					if !p.KeepAlive {
-						// receiver.SetIO(conn)
-					}
-					receiver.Publisher, err = p.Publish(nc.AppName + "/" + cmd.PublishingName)
+					receiver.Publisher, err = p.Publish(nc.AppName+"/"+cmd.PublishingName, ctx, conn)
 					if err != nil {
 						delete(receivers, cmd.StreamId)
 						err = receiver.Response(cmd.TransactionId, NetStream_Publish_BadName, Level_Error)
@@ -161,17 +149,17 @@ func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
 						receiver.Begin()
 						err = receiver.Response(cmd.TransactionId, NetStream_Publish_Start, Level_Status)
 					}
+					if err != nil {
+						logger.Error("sendMessage publish", "error", err)
+						return
+					}
 				case *PlayMessage:
 					streamPath := nc.AppName + "/" + cmd.StreamName
 					sender := &RTMPSender{}
 					sender.NetConnection = nc
 					sender.StreamID = cmd.StreamId
-					// sender.SetParentCtx(ctx)
-					if !p.KeepAlive {
-						// sender.SetIO(conn)
-					}
 					// sender.ID = fmt.Sprintf("%s|%d", conn.RemoteAddr().String(), sender.StreamID)
-					sender.Subscriber, err = p.Subscribe(streamPath)
+					sender.Subscriber, err = p.Subscribe(streamPath, ctx, conn)
 					if err != nil {
 						err = sender.Response(cmd.TransactionId, NetStream_Play_Failed, Level_Error)
 					} else {
@@ -182,15 +170,10 @@ func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
 						sender.Init()
 						go sender.Handle(sender.SendAudio, sender.SendVideo)
 					}
-					// if RTMPPlugin.Subscribe(streamPath, sender) != nil {
-					// 	sender.Response(cmd.TransactionId, NetStream_Play_Failed, Level_Error)
-					// } else {
-					// 	senders[sender.StreamID] = sender
-					// 	sender.Begin()
-					// 	sender.Response(cmd.TransactionId, NetStream_Play_Reset, Level_Status)
-					// 	sender.Response(cmd.TransactionId, NetStream_Play_Start, Level_Status)
-					// 	go sender.PlayRaw()
-					// }
+					if err != nil {
+						logger.Error("sendMessage play", "error", err)
+						return
+					}
 				}
 			case RTMP_MSG_AUDIO:
 				if r, ok := receivers[msg.MessageStreamID]; ok {

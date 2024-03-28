@@ -53,7 +53,7 @@ func (av *AVSender) sendFrame(frame *RTMPData) (err error) {
 	chunk := net.Buffers{av.chunkHeader}
 	av.writeSeqNum += uint32(av.chunkHeader.Len() + r.WriteNTo(av.WriteChunkSize, &chunk))
 	for r.Length > 0 {
-		item := util.Buffer(av.byte16Pool.Get(16))
+		item := util.Buffer(av.byte16Pool.GetN(16))
 		defer av.byte16Pool.Put(item)
 		av.WriteTo(RTMP_CHUNK_HEAD_1, &item)
 		// 如果在音视频数据太大,一次发送不完,那么这里进行分割(data + Chunk Basic Header(1))

@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"slices"
+	"reflect"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -31,7 +31,9 @@ type Server struct {
 	StartTime  time.Time
 	Plugins    []*Plugin
 	Publishers map[string]*Publisher
-	Waiting    map[string]*Subscriber
+	Waiting    map[string][]*Subscriber
+	pidG       int
+	sidG       int
 }
 
 var DefaultServer = NewServer()
@@ -39,7 +41,7 @@ var DefaultServer = NewServer()
 func NewServer() *Server {
 	return &Server{
 		Publishers: make(map[string]*Publisher),
-		Waiting:    make(map[string]*Subscriber),
+		Waiting:    make(map[string][]*Subscriber),
 	}
 }
 
@@ -48,7 +50,7 @@ func Run(ctx context.Context, conf any) error {
 }
 
 func (s *Server) Run(ctx context.Context, conf any) (err error) {
-	s.Logger = slog.With("server", serverIndexG.Add(1))
+	s.Logger = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{})).With("server", serverIndexG.Add(1))
 	s.Context, s.CancelCauseFunc = context.WithCancelCause(ctx)
 	s.config.HTTP.ListenAddrTLS = ":8443"
 	s.config.HTTP.ListenAddr = ":8080"
@@ -94,12 +96,33 @@ func (s *Server) Run(ctx context.Context, conf any) (err error) {
 			pulse.Stop()
 			return
 		case <-pulse.C:
+			for _, publisher := range s.Publishers {
+				publisher.checkTimeout()
+			}
+			for subscriber := range s.Waiting {
+				for _, sub := range s.Waiting[subscriber] {
+					select {
+					case <-sub.TimeoutTimer.C:
+						sub.Stop(ErrSubscribeTimeout)
+					default:
+					}
+				}
+			}
 		case event := <-s.eventChan:
 			switch v := event.(type) {
 			case *util.Promise[*Publisher]:
 				v.Fulfill(s.OnPublish(v.Value))
+				event = v.Value
 			case *util.Promise[*Subscriber]:
 				v.Fulfill(s.OnSubscribe(v.Value))
+				if !s.EnableSubEvent {
+					continue
+				}
+				event = v.Value
+			case UnpublishEvent:
+				s.onUnpublish(v.Publisher)
+			case UnsubscribeEvent:
+
 			}
 			for _, plugin := range s.Plugins {
 				if plugin.Disabled {
@@ -117,40 +140,59 @@ func (s *Server) initPlugins(cg map[string]map[string]any) {
 	}
 }
 
+func (s *Server) onUnpublish(publisher *Publisher) {
+	delete(s.Publishers, publisher.StreamPath)
+	for subscriber := range publisher.Subscribers {
+		s.Waiting[publisher.StreamPath] = append(s.Waiting[publisher.StreamPath], subscriber)
+		subscriber.TimeoutTimer.Reset(publisher.WaitCloseTimeout)
+	}
+}
+
 func (s *Server) OnPublish(publisher *Publisher) error {
 	if oldPublisher, ok := s.Publishers[publisher.StreamPath]; ok {
 		if publisher.KickExist {
-			oldPlugin := oldPublisher.Plugin
 			publisher.Warn("kick")
-			oldPlugin.handler.(IPublishPlugin).OnStopPublish(oldPublisher, ErrKick)
-			if index := slices.Index(oldPlugin.Publishers, oldPublisher); index != -1 {
-				oldPlugin.Publishers = slices.Delete(oldPlugin.Publishers, index, index+1)
-			}
+			oldPublisher.Stop(ErrKick)
 			publisher.VideoTrack = oldPublisher.VideoTrack
 			publisher.AudioTrack = oldPublisher.AudioTrack
 			publisher.DataTrack = oldPublisher.DataTrack
 			publisher.Subscribers = oldPublisher.Subscribers
+			publisher.TransTrack = oldPublisher.TransTrack
 			oldPublisher.Subscribers = nil
 		} else {
 			return ErrStreamExist
 		}
 	} else {
-		s.Publishers[publisher.StreamPath] = publisher
-		publisher.Plugin.Info("publish", "streamPath", publisher.StreamPath)
-		publisher.Plugin.Publishers = append(publisher.Plugin.Publishers, publisher)
+		publisher.Subscribers = make(map[*Subscriber]struct{})
+		publisher.TransTrack = make(map[reflect.Type]*AVTrack)
 	}
-	if subscriber, ok := s.Waiting[publisher.StreamPath]; ok {
+	s.Publishers[publisher.StreamPath] = publisher
+	s.pidG++
+	p := publisher.Plugin
+	publisher.ID = s.pidG
+	publisher.Logger = p.With("streamPath", publisher.StreamPath, "puber", publisher.ID)
+	publisher.TimeoutTimer = time.NewTimer(p.config.PublishTimeout)
+	p.Publishers = append(p.Publishers, publisher)
+	publisher.Info("publish")
+	if subscribers, ok := s.Waiting[publisher.StreamPath]; ok {
+		for _, subscriber := range subscribers {
+			publisher.AddSubscriber(subscriber)
+		}
 		delete(s.Waiting, publisher.StreamPath)
-		publisher.AddSubscriber(subscriber)
 	}
 	return nil
 }
 
 func (s *Server) OnSubscribe(subscriber *Subscriber) error {
+	s.sidG++
+	subscriber.ID = s.sidG
+	subscriber.Logger = subscriber.Plugin.With("streamPath", subscriber.StreamPath, "suber", subscriber.ID)
+	subscriber.TimeoutTimer = time.NewTimer(subscriber.Plugin.config.Subscribe.WaitTimeout)
+	subscriber.Info("subscribe")
 	if publisher, ok := s.Publishers[subscriber.StreamPath]; ok {
 		return publisher.AddSubscriber(subscriber)
 	} else {
-		s.Waiting[subscriber.StreamPath] = subscriber
+		s.Waiting[subscriber.StreamPath] = append(s.Waiting[subscriber.StreamPath], subscriber)
 	}
 	return nil
 }
