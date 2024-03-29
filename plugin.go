@@ -8,7 +8,6 @@ import (
 	"reflect"
 	"runtime"
 	"strings"
-	"sync"
 
 	"github.com/mcuadros/go-defaults"
 	"gopkg.in/yaml.v3"
@@ -76,18 +75,23 @@ func (plugin *PluginMeta) Init(s *Server, userConfig map[string]any) {
 	go p.Start()
 }
 
+type iPlugin interface {
+	nothing()
+}
+
 type IPlugin interface {
 	OnInit()
 	OnEvent(any)
 }
+
 type ITCPPlugin interface {
 	OnTCPConnect(*net.TCPConn)
 }
 
 var plugins []PluginMeta
 
-func InstallPlugin[C IPlugin](options ...any) error {
-	var c C
+func InstallPlugin[C iPlugin](options ...any) error {
+	var c *C
 	t := reflect.TypeOf(c).Elem()
 	meta := PluginMeta{
 		Name: strings.TrimSuffix(t.Name(), "Plugin"),
@@ -131,7 +135,10 @@ type Plugin struct {
 	Publishers []*Publisher
 	handler    IPlugin
 	server     *Server
-	sync.RWMutex
+}
+
+func (Plugin) nothing() {
+
 }
 
 func (p *Plugin) GetCommonConf() *config.Common {

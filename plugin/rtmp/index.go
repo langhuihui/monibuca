@@ -19,7 +19,7 @@ func (p *RTMPPlugin) OnInit() {
 
 }
 
-var _ = m7s.InstallPlugin[*RTMPPlugin](m7s.DefaultYaml(`tcp:
+var _ = m7s.InstallPlugin[RTMPPlugin](m7s.DefaultYaml(`tcp:
   listenaddr: :1935`))
 
 func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {

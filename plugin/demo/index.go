@@ -65,4 +65,4 @@ func (p *DemoPlugin) OnPublish(publisher *m7s.Publisher) {
 	}
 }
 
-var _ = m7s.InstallPlugin[*DemoPlugin]()
+var _ = m7s.InstallPlugin[DemoPlugin]()
