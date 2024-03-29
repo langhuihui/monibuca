@@ -21,7 +21,7 @@ var FourCC_AV1 = [4]byte{'a', 'v', '0', '1'}
 type RTMPData struct {
 	Timestamp uint32
 	util.Buffers
-	util.RecyclebleMemory
+	util.RecyclableMemory
 }
 
 func (avcc *RTMPData) GetTimestamp() time.Duration {

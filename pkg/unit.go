@@ -3,9 +3,11 @@ package pkg
 import (
 	"context"
 	"log/slog"
+	"time"
 )
 
 type Unit struct {
+	StartTime               time.Time
 	*slog.Logger            `json:"-" yaml:"-"`
 	context.Context         `json:"-" yaml:"-"`
 	context.CancelCauseFunc `json:"-" yaml:"-"`

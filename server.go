@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -28,20 +29,23 @@ var (
 type Server struct {
 	Plugin
 	config.Engine
-	StartTime  time.Time
-	Plugins    []*Plugin
-	Publishers map[string]*Publisher
-	Waiting    map[string][]*Subscriber
-	pidG       int
-	sidG       int
+	eventChan   chan any
+	Plugins     []*Plugin
+	Streams     map[string]*Publisher
+	Waiting     map[string][]*Subscriber
+	Publishers  []*Publisher
+	Subscribers []*Subscriber
+	pidG        int
+	sidG        int
 }
 
 var DefaultServer = NewServer()
 
 func NewServer() *Server {
 	return &Server{
-		Publishers: make(map[string]*Publisher),
-		Waiting:    make(map[string][]*Subscriber),
+		Streams:   make(map[string]*Publisher),
+		Waiting:   make(map[string][]*Subscriber),
+		eventChan: make(chan any, 10),
 	}
 }
 
@@ -54,7 +58,6 @@ func (s *Server) Run(ctx context.Context, conf any) (err error) {
 	s.Context, s.CancelCauseFunc = context.WithCancelCause(ctx)
 	s.config.HTTP.ListenAddrTLS = ":8443"
 	s.config.HTTP.ListenAddr = ":8080"
-	s.eventChan = make(chan any, 10)
 	s.Info("start")
 
 	var cg map[string]map[string]any
@@ -87,17 +90,37 @@ func (s *Server) Run(ctx context.Context, conf any) (err error) {
 	var lv slog.LevelVar
 	lv.UnmarshalText([]byte(s.LogLevel))
 	slog.SetLogLoggerLevel(lv.Level())
-	s.initPlugins(cg)
+	for _, plugin := range plugins {
+		plugin.Init(s, cg[strings.ToLower(plugin.Name)])
+	}
+	s.eventLoop()
+	s.Warn("Server is done", "reason", context.Cause(s))
+	for _, publisher := range s.Publishers {
+		publisher.Stop(nil)
+	}
+	for _, subscriber := range s.Subscribers {
+		subscriber.Stop(nil)
+	}
+	for _, p := range s.Plugins {
+		p.Stop(nil)
+	}
+	return
+}
+
+func (s *Server) eventLoop() {
 	pulse := time.NewTicker(s.PulseInterval)
+	defer pulse.Stop()
+	cases := []reflect.SelectCase{{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(s.Done())}, {Dir: reflect.SelectRecv, Chan: reflect.ValueOf(pulse.C)}, {Dir: reflect.SelectRecv, Chan: reflect.ValueOf(s.eventChan)}}
+	var pubCount, subCount int
 	for {
-		select {
-		case <-s.Done():
-			s.Warn("Server is done", "reason", context.Cause(s))
-			pulse.Stop()
+		switch chosen, rev, _ := reflect.Select(cases); chosen {
+		case 0:
 			return
-		case <-pulse.C:
-			for _, publisher := range s.Publishers {
-				publisher.checkTimeout()
+		case 1:
+			for _, publisher := range s.Streams {
+				if err := publisher.checkTimeout(); err != nil {
+					publisher.Stop(err)
+				}
 			}
 			for subscriber := range s.Waiting {
 				for _, sub := range s.Waiting[subscriber] {
@@ -108,40 +131,59 @@ func (s *Server) Run(ctx context.Context, conf any) (err error) {
 					}
 				}
 			}
-		case event := <-s.eventChan:
+		case 2:
+			event := rev.Interface()
 			switch v := event.(type) {
 			case *util.Promise[*Publisher]:
 				v.Fulfill(s.OnPublish(v.Value))
 				event = v.Value
+				if nl := len(s.Publishers); nl > pubCount {
+					pubCount = nl
+					if subCount == 0 {
+						cases = append(cases, reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(v.Value.Done())})
+					} else {
+						cases = slices.Insert(cases, 3+pubCount, reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(v.Value.Done())})
+					}
+				}
 			case *util.Promise[*Subscriber]:
 				v.Fulfill(s.OnSubscribe(v.Value))
+				if nl := len(s.Subscribers); nl > subCount {
+					subCount = nl
+					cases = append(cases, reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(v.Value.Done())})
+				}
 				if !s.EnableSubEvent {
 					continue
 				}
 				event = v.Value
-			case UnpublishEvent:
-				s.onUnpublish(v.Publisher)
-			case UnsubscribeEvent:
-
 			}
 			for _, plugin := range s.Plugins {
 				if plugin.Disabled {
 					continue
 				}
-				plugin.handler.OnEvent(event)
+				plugin.onEvent(event)
 			}
+		default:
+			if subStart := 3 + pubCount; chosen < subStart {
+				s.onUnpublish(s.Publishers[chosen-3])
+				pubCount--
+				s.Publishers = slices.Delete(s.Publishers, chosen-3, chosen-2)
+			} else {
+				i := chosen - subStart
+				s.onUnsubscribe(s.Subscribers[i])
+				subCount--
+				s.Subscribers = slices.Delete(s.Subscribers, i, i+1)
+			}
+			cases = slices.Delete(cases, chosen, chosen+1)
 		}
 	}
 }
 
-func (s *Server) initPlugins(cg map[string]map[string]any) {
-	for _, plugin := range plugins {
-		plugin.Init(s, cg[strings.ToLower(plugin.Name)])
-	}
+func (s *Server) onUnsubscribe(subscriber *Subscriber) {
+	subscriber.Publisher.RemoveSubscriber(subscriber)
 }
 
 func (s *Server) onUnpublish(publisher *Publisher) {
-	delete(s.Publishers, publisher.StreamPath)
+	delete(s.Streams, publisher.StreamPath)
 	for subscriber := range publisher.Subscribers {
 		s.Waiting[publisher.StreamPath] = append(s.Waiting[publisher.StreamPath], subscriber)
 		subscriber.TimeoutTimer.Reset(publisher.WaitCloseTimeout)
@@ -149,7 +191,7 @@ func (s *Server) onUnpublish(publisher *Publisher) {
 }
 
 func (s *Server) OnPublish(publisher *Publisher) error {
-	if oldPublisher, ok := s.Publishers[publisher.StreamPath]; ok {
+	if oldPublisher, ok := s.Streams[publisher.StreamPath]; ok {
 		if publisher.KickExist {
 			publisher.Warn("kick")
 			oldPublisher.Stop(ErrKick)
@@ -166,13 +208,13 @@ func (s *Server) OnPublish(publisher *Publisher) error {
 		publisher.Subscribers = make(map[*Subscriber]struct{})
 		publisher.TransTrack = make(map[reflect.Type]*AVTrack)
 	}
-	s.Publishers[publisher.StreamPath] = publisher
+	s.Streams[publisher.StreamPath] = publisher
+	s.Publishers = append(s.Publishers, publisher)
 	s.pidG++
 	p := publisher.Plugin
 	publisher.ID = s.pidG
 	publisher.Logger = p.With("streamPath", publisher.StreamPath, "puber", publisher.ID)
 	publisher.TimeoutTimer = time.NewTimer(p.config.PublishTimeout)
-	p.Publishers = append(p.Publishers, publisher)
 	publisher.Info("publish")
 	if subscribers, ok := s.Waiting[publisher.StreamPath]; ok {
 		for _, subscriber := range subscribers {
@@ -188,8 +230,9 @@ func (s *Server) OnSubscribe(subscriber *Subscriber) error {
 	subscriber.ID = s.sidG
 	subscriber.Logger = subscriber.Plugin.With("streamPath", subscriber.StreamPath, "suber", subscriber.ID)
 	subscriber.TimeoutTimer = time.NewTimer(subscriber.Plugin.config.Subscribe.WaitTimeout)
+	s.Subscribers = append(s.Subscribers, subscriber)
 	subscriber.Info("subscribe")
-	if publisher, ok := s.Publishers[subscriber.StreamPath]; ok {
+	if publisher, ok := s.Streams[subscriber.StreamPath]; ok {
 		return publisher.AddSubscriber(subscriber)
 	} else {
 		s.Waiting[subscriber.StreamPath] = append(s.Waiting[subscriber.StreamPath], subscriber)

@@ -31,12 +31,12 @@ type IPool[T any] interface {
 	Clear()
 }
 
-type RecyclebleMemory struct {
+type RecyclableMemory struct {
 	IPool[[]byte]
 	Data net.Buffers
 }
 
-func (r *RecyclebleMemory) Recycle() {
+func (r *RecyclableMemory) Recycle() {
 	if r.IPool != nil {
 		for _, b := range r.Data {
 			r.Put(b)

@@ -18,10 +18,6 @@ const (
 	PublisherStateWaitSubscriber
 )
 
-type UnpublishEvent struct {
-	*Publisher
-}
-
 type Publisher struct {
 	PubSubBase
 	sync.RWMutex
@@ -53,11 +49,16 @@ func (p *Publisher) timeout() (err error) {
 }
 
 func (p *Publisher) checkTimeout() (err error) {
-	if p.VideoTrack != nil && !p.VideoTrack.LastValue.WriteTime.IsZero() && time.Since(p.VideoTrack.LastValue.WriteTime) > p.PublishTimeout {
-		err = ErrPublishTimeout
-	}
-	if p.AudioTrack != nil && !p.AudioTrack.LastValue.WriteTime.IsZero() && time.Since(p.AudioTrack.LastValue.WriteTime) > p.PublishTimeout {
-		err = ErrPublishTimeout
+	select {
+	case <-p.TimeoutTimer.C:
+		err = p.timeout()
+	default:
+		if p.VideoTrack != nil && !p.VideoTrack.LastValue.WriteTime.IsZero() && time.Since(p.VideoTrack.LastValue.WriteTime) > p.PublishTimeout {
+			err = ErrPublishTimeout
+		}
+		if p.AudioTrack != nil && !p.AudioTrack.LastValue.WriteTime.IsZero() && time.Since(p.AudioTrack.LastValue.WriteTime) > p.PublishTimeout {
+			err = ErrPublishTimeout
+		}
 	}
 	return
 }
@@ -66,9 +67,6 @@ func (p *Publisher) RemoveSubscriber(subscriber *Subscriber) (err error) {
 	p.Lock()
 	defer p.Unlock()
 	delete(p.Subscribers, subscriber)
-	if subscriber.Closer != nil {
-		err = subscriber.Closer.Close()
-	}
 	if p.State == PublisherStateSubscribed && len(p.Subscribers) == 0 {
 		p.State = PublisherStateWaitSubscriber
 		if p.DelayCloseTimeout > 0 {
@@ -82,7 +80,6 @@ func (p *Publisher) AddSubscriber(subscriber *Subscriber) (err error) {
 	p.Lock()
 	defer p.Unlock()
 	p.Subscribers[subscriber] = struct{}{}
-	subscriber.Publisher = p
 	switch p.State {
 	case PublisherStateTrackAdded, PublisherStateWaitSubscriber:
 		p.State = PublisherStateSubscribed
@@ -154,6 +151,11 @@ func (p *Publisher) WriteAudio(data IAVFrame) (err error) {
 		p.Lock()
 		p.AudioTrack = t
 		p.TransTrack[reflect.TypeOf(data)] = t
+		if len(p.Subscribers) > 0 {
+			p.State = PublisherStateSubscribed
+		} else {
+			p.State = PublisherStateTrackAdded
+		}
 		p.Unlock()
 	}
 	if t.ICodecCtx == nil {

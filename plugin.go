@@ -2,17 +2,14 @@ package m7s
 
 import (
 	"context"
-	"crypto/tls"
 	"net"
 	"os"
 	"path/filepath"
 	"reflect"
 	"runtime"
-	"slices"
 	"strings"
 	"sync"
 
-	"github.com/logrusorgru/aurora/v4"
 	"github.com/mcuadros/go-defaults"
 	"gopkg.in/yaml.v3"
 	. "m7s.live/m7s/v5/pkg"
@@ -36,7 +33,6 @@ func (plugin *PluginMeta) Init(s *Server, userConfig map[string]any) {
 	p.handler = instance
 	p.Meta = plugin
 	p.server = s
-	p.eventChan = make(chan any, 10)
 	p.Logger = s.Logger.With("plugin", plugin.Name)
 	p.Context, p.CancelCauseFunc = context.WithCancelCause(s.Context)
 	s.Plugins = append(s.Plugins, p)
@@ -128,10 +124,9 @@ func sendPromiseToServer[T any](server *Server, value T) (err error) {
 
 type Plugin struct {
 	Unit
-	Disabled  bool
-	Meta      *PluginMeta
-	eventChan chan any
-	config    config.Common
+	Disabled bool
+	Meta     *PluginMeta
+	config   config.Common
 	config.Config
 	Publishers []*Publisher
 	handler    IPlugin
@@ -161,19 +156,23 @@ func (p *Plugin) assign() {
 	// p.registerHandler()
 }
 
+func (p *Plugin) Stop(err error) {
+	p.Unit.Stop(err)
+	p.config.HTTP.StopListen()
+	p.config.TCP.StopListen()
+}
+
 func (p *Plugin) Start() {
-	var err error
 	httpConf := p.config.HTTP
-	defer httpConf.StopListen()
 	if httpConf.ListenAddrTLS != "" && (httpConf.ListenAddrTLS != p.server.config.HTTP.ListenAddrTLS) {
 		go func() {
-			p.Info("https listen at ", "addr", aurora.Blink(httpConf.ListenAddrTLS))
+			p.Info("https listen at ", "addr", httpConf.ListenAddrTLS)
 			p.Stop(httpConf.ListenTLS())
 		}()
 	}
 	if httpConf.ListenAddr != "" && (httpConf.ListenAddr != p.server.config.HTTP.ListenAddr) {
 		go func() {
-			p.Info("http listen at ", "addr", aurora.Blink(httpConf.ListenAddr))
+			p.Info("http listen at ", "addr", httpConf.ListenAddr)
 			p.Stop(httpConf.Listen())
 		}()
 	}
@@ -182,83 +181,39 @@ func (p *Plugin) Start() {
 	if !ok {
 		tcphandler = p
 	}
-	count := p.config.TCP.ListenNum
-	if count == 0 {
-		count = runtime.NumCPU()
-	}
+
 	if p.config.TCP.ListenAddr != "" {
-		l, err := net.Listen("tcp", tcpConf.ListenAddr)
+		p.Info("listen tcp", "addr", tcpConf.ListenAddr)
+		err := tcpConf.Listen(tcphandler.OnTCPConnect)
 		if err != nil {
 			p.Error("listen tcp", "addr", tcpConf.ListenAddr, "error", err)
 			p.Stop(err)
 			return
 		}
-		defer l.Close()
-		p.Info("listen tcp", "addr", tcpConf.ListenAddr)
-		for i := 0; i < count; i++ {
-			go tcpConf.Listen(l, tcphandler.OnTCPConnect)
-		}
 	}
 	if tcpConf.ListenAddrTLS != "" {
-		keyPair, _ := tls.X509KeyPair(config.LocalCert, config.LocalKey)
-		if tcpConf.CertFile != "" || tcpConf.KeyFile != "" {
-			keyPair, err = tls.LoadX509KeyPair(tcpConf.CertFile, tcpConf.KeyFile)
-		}
-		if err != nil {
-			p.Error("LoadX509KeyPair", "error", err)
-			p.Stop(err)
-			return
-		}
-		l, err := tls.Listen("tcp", tcpConf.ListenAddrTLS, &tls.Config{
-			Certificates: []tls.Certificate{keyPair},
-		})
+		p.Info("listen tcp tls", "addr", tcpConf.ListenAddrTLS)
+		err := tcpConf.ListenTLS(tcphandler.OnTCPConnect)
 		if err != nil {
 			p.Error("listen tcp tls", "addr", tcpConf.ListenAddrTLS, "error", err)
 			p.Stop(err)
 			return
 		}
-		defer l.Close()
-		p.Info("listen tcp tls", "addr", tcpConf.ListenAddrTLS)
-		for i := 0; i < count; i++ {
-			go tcpConf.Listen(l, tcphandler.OnTCPConnect)
+	}
+}
+
+func (p *Plugin) OnInit() {
+
+}
+
+func (p *Plugin) onEvent(event any) {
+	switch v := event.(type) {
+	case *Publisher:
+		if h, ok := p.handler.(interface{ OnPublish(*Publisher) }); ok {
+			h.OnPublish(v)
 		}
 	}
-	for {
-		select {
-		case event := <-p.eventChan:
-			// switch event.(type) {
-			// case *Subscriber:
-			// }
-			p.handler.OnEvent(event)
-		case <-p.Done():
-			return
-		default:
-			for i := 0; i < len(p.Publishers); i++ {
-				publisher := p.Publishers[i]
-				select {
-				case <-publisher.Done():
-					if publisher.Closer != nil {
-						publisher.Closer.Close()
-					}
-					p.Publishers = slices.Delete(p.Publishers, i, i+1)
-					i--
-					p.server.eventChan <- UnpublishEvent{Publisher: publisher}
-				case <-publisher.TimeoutTimer.C:
-					if err := publisher.timeout(); err != nil {
-						publisher.Stop(err)
-					}
-				default:
-					for subscriber := range publisher.Subscribers {
-						select {
-						case <-subscriber.Done():
-							subscriber.Publisher.RemoveSubscriber(subscriber)
-						default:
-						}
-					}
-				}
-			}
-		}
-	}
+	p.handler.OnEvent(event)
 }
 
 func (p *Plugin) OnEvent(event any) {

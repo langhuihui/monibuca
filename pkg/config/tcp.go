@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	_ "embed"
 	"net"
+	"runtime"
 	"time"
 )
 
@@ -21,9 +22,56 @@ type TCP struct {
 	ListenNum     int    `desc:"同时并行监听数量，0为CPU核心数量"` //同时并行监听数量，0为CPU核心数量
 	NoDelay       bool   `desc:"是否禁用Nagle算法"`        //是否禁用Nagle算法
 	KeepAlive     bool   `desc:"是否启用KeepAlive"`      //是否启用KeepAlive
+	listener      net.Listener
+	listenerTls   net.Listener
 }
 
-func (tcp *TCP) Listen(l net.Listener, handler func(*net.TCPConn)) {
+func (tcp *TCP) StopListen() {
+	if tcp.listener != nil {
+		tcp.listener.Close()
+	}
+	if tcp.listenerTls != nil {
+		tcp.listenerTls.Close()
+	}
+}
+
+func (tcp *TCP) Listen(handler func(*net.TCPConn)) (err error) {
+	tcp.listener, err = net.Listen("tcp", tcp.ListenAddr)
+	if err == nil {
+		count := tcp.ListenNum
+		if count == 0 {
+			count = runtime.NumCPU()
+		}
+		for range count {
+			tcp.listen(tcp.listener, handler)
+		}
+	}
+	return
+}
+
+func (tcp *TCP) ListenTLS(handler func(*net.TCPConn)) (err error) {
+	keyPair, _ := tls.X509KeyPair(LocalCert, LocalKey)
+	if tcp.CertFile != "" || tcp.KeyFile != "" {
+		keyPair, err = tls.LoadX509KeyPair(tcp.CertFile, tcp.KeyFile)
+	}
+	if err == nil {
+		tcp.listenerTls, err = tls.Listen("tcp", tcp.ListenAddrTLS, &tls.Config{
+			Certificates: []tls.Certificate{keyPair},
+		})
+		if err == nil {
+			count := tcp.ListenNum
+			if count == 0 {
+				count = runtime.NumCPU()
+			}
+			for range count {
+				tcp.listen(tcp.listenerTls, handler)
+			}
+		}
+	}
+	return
+}
+
+func (tcp *TCP) listen(l net.Listener, handler func(*net.TCPConn)) {
 	var tempDelay time.Duration
 	for {
 		conn, err := l.Accept()
