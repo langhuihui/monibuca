@@ -1,5 +1,5 @@
 global:
-  loglevel: info
+  loglevel: debug
 rtmp:
   publish:
     # pubvideo: false

@@ -79,6 +79,7 @@ func (p *Publisher) RemoveSubscriber(subscriber *Subscriber) (err error) {
 func (p *Publisher) AddSubscriber(subscriber *Subscriber) (err error) {
 	p.Lock()
 	defer p.Unlock()
+	subscriber.Publisher = p
 	p.Subscribers[subscriber] = struct{}{}
 	switch p.State {
 	case PublisherStateTrackAdded, PublisherStateWaitSubscriber:

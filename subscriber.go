@@ -83,7 +83,8 @@ func (s *Subscriber) Handle(audioHandler, videoHandler any) {
 		}
 		if at := s.Publisher.GetAudioTrack(a1); at != nil {
 			ar = NewAVRingReader(at)
-			ar.Logger = s.Logger.With("reader", a1.Name())
+			ar.Logger = s.Logger.With("reader", a1.String())
+			ar.Info("start read")
 			ah = reflect.ValueOf(audioHandler)
 		}
 	}
@@ -93,7 +94,8 @@ func (s *Subscriber) Handle(audioHandler, videoHandler any) {
 		}
 		if vt := s.Publisher.GetVideoTrack(v1); vt != nil {
 			vr = NewAVRingReader(vt)
-			vr.Logger = s.Logger.With("reader", v1.Name())
+			vr.Logger = s.Logger.With("reader", v1.String())
+			vr.Info("start read")
 			vh = reflect.ValueOf(videoHandler)
 		}
 	}

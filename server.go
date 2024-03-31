@@ -54,7 +54,7 @@ func Run(ctx context.Context, conf any) error {
 }
 
 func (s *Server) Run(ctx context.Context, conf any) (err error) {
-	s.Logger = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{})).With("server", serverIndexG.Add(1))
+	s.Logger = slog.With("server", serverIndexG.Add(1))
 	s.Context, s.CancelCauseFunc = context.WithCancelCause(ctx)
 	s.config.HTTP.ListenAddrTLS = ":8443"
 	s.config.HTTP.ListenAddr = ":8080"
@@ -179,7 +179,9 @@ func (s *Server) eventLoop() {
 }
 
 func (s *Server) onUnsubscribe(subscriber *Subscriber) {
-	subscriber.Publisher.RemoveSubscriber(subscriber)
+	if subscriber.Publisher != nil {
+		subscriber.Publisher.RemoveSubscriber(subscriber)
+	}
 }
 
 func (s *Server) onUnpublish(publisher *Publisher) {

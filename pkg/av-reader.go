@@ -38,7 +38,7 @@ func (r *AVRingReader) DecConfChanged() bool {
 }
 
 func NewAVRingReader(t *AVTrack) *AVRingReader {
-	// t.Debug("reader +1", zap.Int32("count", t.ReaderCount.Add(1)))
+	t.Debug("reader +1", "count", t.ReaderCount.Add(1))
 	return &AVRingReader{
 		Track: t,
 	}
@@ -51,7 +51,7 @@ func (r *AVRingReader) readFrame() (err error) {
 	}
 	// 超过一半的缓冲区大小，说明Reader太慢，需要丢帧
 	if r.mode != SUBMODE_BUFFER && r.State == READSTATE_NORMAL && r.Track.LastValue.Sequence-r.Value.Sequence > uint32(r.Track.Size/2) && r.Track.IDRing != nil && r.Track.IDRing.Value.Sequence > r.Value.Sequence {
-		// r.Warn("reader too slow", zap.Uint32("lastSeq", r.Track.LastValue.Sequence), zap.Uint32("seq", r.Value.Sequence))
+		r.Warn("reader too slow", "lastSeq", r.Track.LastValue.Sequence, "seq", r.Value.Sequence)
 		return r.Read(r.Track.IDRing)
 	}
 	return
@@ -61,12 +61,12 @@ func (r *AVRingReader) ReadFrame(mode int) (err error) {
 	r.mode = mode
 	switch r.State {
 	case READSTATE_INIT:
-		// r.Info("start read", zap.Int("mode", mode))
+		r.Info("start read", "mode", mode)
 		startRing := r.Track.Ring
 		if r.Track.IDRing != nil {
 			startRing = r.Track.IDRing
 		} else {
-			// r.Warn("no IDRring")
+			r.Warn("no IDRring")
 		}
 		switch mode {
 		case SUBMODE_REAL:
@@ -92,14 +92,14 @@ func (r *AVRingReader) ReadFrame(mode int) (err error) {
 		}
 		r.SkipTs = r.FirstTs - r.StartTs
 		r.FirstSeq = r.Value.Sequence
-		// r.Info("first frame read", zap.Duration("firstTs", r.FirstTs), zap.Uint32("firstSeq", r.FirstSeq))
+		r.Info("first frame read", "firstTs", r.FirstTs, "firstSeq", r.FirstSeq)
 	case READSTATE_FIRST:
 		if r.Track.IDRing.Value.Sequence != r.FirstSeq {
 			if err = r.Read(r.Track.IDRing); err != nil {
 				return
 			}
 			r.SkipTs = r.Value.Timestamp - r.beforeJump - r.StartTs - 10*time.Millisecond
-			// r.Info("jump", zap.Uint32("skipSeq", r.Track.IDRing.Value.Sequence-r.FirstSeq), zap.Duration("skipTs", r.SkipTs))
+			r.Info("jump", "skipSeq", r.Track.IDRing.Value.Sequence-r.FirstSeq, "skipTs", r.SkipTs)
 			r.State = READSTATE_NORMAL
 		} else {
 			if err = r.readFrame(); err != nil {
