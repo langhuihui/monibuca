@@ -1,5 +1,6 @@
 global:
   loglevel: debug
 rtmp:
-  publish:
-    # pubvideo: false
+  subscribe:
+    # submode: 1
+    subaudio: false

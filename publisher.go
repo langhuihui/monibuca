@@ -93,6 +93,9 @@ func (p *Publisher) writeAV(t *AVTrack, data IAVFrame) {
 	t.Value.Wrap = data
 	t.Value.Timestamp = data.GetTimestamp()
 	t.Step()
+	if t.Value.Wrap != nil {
+		t.Value.Wrap.Recycle()
+	}
 }
 
 func (p *Publisher) WriteVideo(data IAVFrame) (err error) {
@@ -122,7 +125,7 @@ func (p *Publisher) WriteVideo(data IAVFrame) (err error) {
 			p.GOP = int(t.Value.Sequence - t.IDRing.Value.Sequence)
 			if t.HistoryRing == nil {
 				if l := t.Size - p.GOP; l > 12 {
-					t.Debug("resize", "before", t.Size, "after", t.Size-5)
+					t.Debug("resize", "gop", p.GOP, "before", t.Size, "after", t.Size-5)
 					t.Reduce(5) //缩小缓冲环节省内存
 				}
 			}

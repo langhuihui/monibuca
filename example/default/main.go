@@ -5,6 +5,7 @@ import (
 
 	"m7s.live/m7s/v5"
 	_ "m7s.live/m7s/v5/plugin/rtmp"
+	_ "m7s.live/m7s/v5/plugin/hdl"
 )
 
 func main() {

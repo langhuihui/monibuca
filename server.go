@@ -3,6 +3,7 @@ package m7s
 import (
 	"context"
 	"log/slog"
+	"net/http"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -58,6 +59,7 @@ func (s *Server) Run(ctx context.Context, conf any) (err error) {
 	s.Context, s.CancelCauseFunc = context.WithCancelCause(ctx)
 	s.config.HTTP.ListenAddrTLS = ":8443"
 	s.config.HTTP.ListenAddr = ":8080"
+	s.handler = s
 	s.Info("start")
 
 	var cg map[string]map[string]any
@@ -90,6 +92,19 @@ func (s *Server) Run(ctx context.Context, conf any) (err error) {
 	var lv slog.LevelVar
 	lv.UnmarshalText([]byte(s.LogLevel))
 	slog.SetLogLoggerLevel(lv.Level())
+	s.registerHandler()
+	if s.config.HTTP.ListenAddrTLS != "" {
+		s.Info("https listen at ", "addr", s.config.HTTP.ListenAddrTLS)
+		go func() {
+			s.Stop(s.config.HTTP.ListenTLS())
+		}()
+	}
+	if s.config.HTTP.ListenAddr != "" {
+		s.Info("http listen at ", "addr", s.config.HTTP.ListenAddr)
+		go func() {
+			s.Stop(s.config.HTTP.Listen())
+		}()
+	}
 	for _, plugin := range plugins {
 		plugin.Init(s, cg[strings.ToLower(plugin.Name)])
 	}
@@ -240,4 +255,7 @@ func (s *Server) OnSubscribe(subscriber *Subscriber) error {
 		s.Waiting[subscriber.StreamPath] = append(s.Waiting[subscriber.StreamPath], subscriber)
 	}
 	return nil
+}
+
+func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }

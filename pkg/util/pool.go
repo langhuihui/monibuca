@@ -1,6 +1,8 @@
 package util
 
-import "net"
+import (
+	"net"
+)
 
 type Pool[T any] struct {
 	pool []T
@@ -42,4 +44,28 @@ func (r *RecyclableMemory) Recycle() {
 			r.Put(b)
 		}
 	}
+}
+
+type BytesPool struct {
+	Pool[[]byte]
+	ItemSize int
+}
+
+func (bp *BytesPool) GetN(size int) []byte {
+	if size != bp.ItemSize {
+		return make([]byte, size)
+	}
+	ret := bp.Pool.Get()
+	if ret == nil {
+		return make([]byte, size)
+	}
+	return ret
+}
+
+func (bp *BytesPool) Put(b []byte) {
+	if cap(b) != bp.ItemSize {
+		bp.ItemSize = cap(b)
+		bp.Clear()
+	}
+	bp.Pool.Put(b)
 }

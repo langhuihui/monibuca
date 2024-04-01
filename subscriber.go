@@ -71,10 +71,10 @@ func (s *Subscriber) Handle(audioHandler, videoHandler any) {
 		subMode, _ = strconv.Atoi(s.Args.Get(s.SubModeArgName))
 	}
 	var audioFrame, videoFrame, lastSentAF, lastSentVF *AVFrame
-	if audioHandler != nil {
+	if audioHandler != nil && s.SubAudio {
 		a1 = reflect.TypeOf(audioHandler).In(0)
 	}
-	if videoHandler != nil {
+	if videoHandler != nil && s.SubVideo {
 		v1 = reflect.TypeOf(videoHandler).In(0)
 	}
 	createAudioReader := func() {
@@ -111,13 +111,19 @@ func (s *Subscriber) Handle(audioHandler, videoHandler any) {
 	}()
 	sendAudioFrame := func() {
 		lastSentAF = audioFrame
-		s.Debug("send audio frame", "frame", audioFrame.Sequence)
-		ah.Call([]reflect.Value{reflect.ValueOf(audioFrame.Wrap)})
+		s.Debug("send audio frame", "seq", audioFrame.Sequence)
+		res := ah.Call([]reflect.Value{reflect.ValueOf(audioFrame.Wrap)})
+		if len(res) > 0 && !res[0].IsNil() {
+			s.Stop(res[0].Interface().(error))
+		}
 	}
 	sendVideoFrame := func() {
 		lastSentVF = videoFrame
-		s.Debug("send video frame", "frame", videoFrame.Sequence)
-		vh.Call([]reflect.Value{reflect.ValueOf(videoFrame.Wrap)})
+		s.Debug("send video frame", "seq", videoFrame.Sequence, "data", videoFrame.Wrap.Print())
+		res := vh.Call([]reflect.Value{reflect.ValueOf(videoFrame.Wrap)})
+		if len(res) > 0 && !res[0].IsNil() {
+			s.Stop(res[0].Interface().(error))
+		}
 	}
 	for err := s.Err(); err == nil; err = s.Err() {
 		if vr != nil {
@@ -135,7 +141,7 @@ func (s *Subscriber) Handle(audioHandler, videoHandler any) {
 				// fmt.Println("video", s.VideoReader.Track.PreFrame().Sequence-frame.Sequence)
 				if videoFrame.Wrap.IsIDR() && vr.DecConfChanged() {
 					vr.LastCodecCtx = vr.Track.ICodecCtx
-					s.Debug("video codec changed")
+					s.Debug("video codec changed", "data", vr.Track.ICodecCtx.GetSequenceFrame().Print())
 					vh.Call([]reflect.Value{reflect.ValueOf(vr.Track.ICodecCtx.GetSequenceFrame())})
 				}
 				if ar != nil {

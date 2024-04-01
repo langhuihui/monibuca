@@ -1,4 +1,4 @@
-package pkg
+package rtmp
 
 import (
 	"bufio"
@@ -45,30 +45,6 @@ const (
 	SEND_FULL_VDIEO_MESSAGE = "Send Full Video Message"
 )
 
-type BytesPool struct {
-	util.Pool[[]byte]
-	ItemSize int
-}
-
-func (bp *BytesPool) GetN(size int) []byte {
-	if size != bp.ItemSize {
-		return make([]byte, size)
-	}
-	ret := bp.Pool.Get()
-	if ret == nil {
-		return make([]byte, size)
-	}
-	return ret
-}
-
-func (bp *BytesPool) Put(b []byte) {
-	if cap(b) != bp.ItemSize {
-		bp.ItemSize = cap(b)
-		bp.Clear()
-	}
-	bp.Pool.Put(b)
-}
-
 type NetConnection struct {
 	*slog.Logger    `json:"-" yaml:"-"`
 	*bufio.Reader   `json:"-" yaml:"-"`
@@ -85,8 +61,8 @@ type NetConnection struct {
 	AppName         string
 	tmpBuf          util.Buffer //用来接收/发送小数据，复用内存
 	chunkHeader     util.Buffer
-	byteChunkPool   BytesPool
-	byte16Pool      BytesPool
+	byteChunkPool   util.BytesPool
+	byte16Pool      util.BytesPool
 	writing         atomic.Bool // false 可写，true 不可写
 }
 
@@ -174,6 +150,7 @@ func (conn *NetConnection) readChunk() (msg *Chunk, err error) {
 	if unRead := msgLen - chunk.AVData.Length; unRead < needRead {
 		needRead = unRead
 	}
+	// mem := make([]byte, needRead)
 	mem := conn.byteChunkPool.GetN(needRead)
 	if n, err := conn.ReadFull(mem); err != nil {
 		conn.byteChunkPool.Put(mem)

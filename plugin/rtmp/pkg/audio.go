@@ -1,4 +1,4 @@
-package pkg
+package rtmp
 
 import (
 	. "m7s.live/m7s/v5/pkg"
@@ -45,7 +45,8 @@ func (avcc *RTMPAudio) DecodeConfig(track *AVTrack) error {
 			ctx.FrameLengthFlag = (b1 >> 2) & 0x01
 			ctx.DependsOnCoreCoder = (b1 >> 1) & 0x01
 			ctx.ExtensionFlag = b1 & 0x01
-			ctx.SequenceFrame = avcc
+			ctx.SequenceFrame = &RTMPAudio{}
+			ctx.SequenceFrame.ReadFromBytes(avcc.ToBytes())
 			track.ICodecCtx = &ctx
 		}
 	}

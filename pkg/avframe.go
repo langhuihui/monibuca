@@ -95,6 +95,7 @@ type IAVFrame interface {
 	GetTimestamp() time.Duration
 	Recycle()
 	IsIDR() bool
+	Print() string
 }
 
 type Nalu [][]byte

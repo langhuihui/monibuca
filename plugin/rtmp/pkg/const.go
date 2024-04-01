@@ -1,6 +1,7 @@
-package pkg
+package rtmp
 
 import (
+	"fmt"
 	"time"
 
 	"m7s.live/m7s/v5/pkg/util"
@@ -22,6 +23,10 @@ type RTMPData struct {
 	Timestamp uint32
 	util.Buffers
 	util.RecyclableMemory
+}
+
+func (avcc *RTMPData) Print() string {
+	return fmt.Sprintf("% 02X", avcc.Buffers.Buffers[0][:5])
 }
 
 func (avcc *RTMPData) GetTimestamp() time.Duration {

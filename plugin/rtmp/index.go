@@ -1,4 +1,4 @@
-package rtmp
+package plugin_rtmp
 
 import (
 	"context"
@@ -146,8 +146,7 @@ func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
 						err = receiver.Response(cmd.TransactionId, NetStream_Publish_BadName, Level_Error)
 					} else {
 						receivers[cmd.StreamId] = receiver
-						receiver.Begin()
-						err = receiver.Response(cmd.TransactionId, NetStream_Publish_Start, Level_Status)
+						err = receiver.BeginPublish(cmd.TransactionId)
 					}
 					if err != nil {
 						logger.Error("sendMessage publish", "error", err)
@@ -164,9 +163,7 @@ func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
 						err = sender.Response(cmd.TransactionId, NetStream_Play_Failed, Level_Error)
 					} else {
 						senders[sender.StreamID] = sender
-						sender.Begin()
-						err = sender.Response(cmd.TransactionId, NetStream_Play_Reset, Level_Status)
-						err = sender.Response(cmd.TransactionId, NetStream_Play_Start, Level_Status)
+						sender.BeginPlay(cmd.TransactionId)
 						sender.Init()
 						go sender.Handle(sender.SendAudio, sender.SendVideo)
 					}

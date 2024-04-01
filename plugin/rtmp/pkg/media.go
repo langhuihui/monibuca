@@ -1,4 +1,4 @@
-package pkg
+package rtmp
 
 import (
 	"errors"
@@ -55,6 +55,7 @@ func (av *AVSender) sendFrame(frame *RTMPData) (err error) {
 	for r.Length > 0 {
 		item := util.Buffer(av.byte16Pool.GetN(16))
 		defer av.byte16Pool.Put(item)
+		// item := util.Buffer(make([]byte, 16))
 		av.WriteTo(RTMP_CHUNK_HEAD_1, &item)
 		// 如果在音视频数据太大,一次发送不完,那么这里进行分割(data + Chunk Basic Header(1))
 		chunk = append(chunk, item)
@@ -114,33 +115,7 @@ func (r *RTMPSender) SendVideo(video *RTMPVideo) error {
 	return r.video.sendFrame(&video.RTMPData)
 }
 
-func (r *RTMPSender) Response(tid uint64, code, level string) error {
-	m := new(ResponsePlayMessage)
-	m.CommandName = Response_OnStatus
-	m.TransactionId = tid
-	m.Infomation = map[string]any{
-		"code":        code,
-		"level":       level,
-		"description": "",
-	}
-	m.StreamID = r.StreamID
-	return r.SendMessage(RTMP_MSG_AMF0_COMMAND, m)
-}
-
 type RTMPReceiver struct {
 	*m7s.Publisher
 	NetStream
-}
-
-func (r *RTMPReceiver) Response(tid uint64, code, level string) error {
-	m := new(ResponsePublishMessage)
-	m.CommandName = Response_OnStatus
-	m.TransactionId = tid
-	m.Infomation = map[string]any{
-		"code":        code,
-		"level":       level,
-		"description": "",
-	}
-	m.StreamID = r.StreamID
-	return r.SendMessage(RTMP_MSG_AMF0_COMMAND, m)
 }

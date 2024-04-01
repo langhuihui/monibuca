@@ -6,7 +6,7 @@ import (
 	"m7s.live/m7s/v5"
 	"m7s.live/m7s/v5/pkg"
 	"m7s.live/m7s/v5/pkg/util"
-	rtmp "m7s.live/m7s/v5/plugin/rtmp/pkg"
+	"m7s.live/m7s/v5/plugin/rtmp/pkg"
 )
 
 type AnnexB struct {
@@ -48,13 +48,13 @@ type DemoPlugin struct {
 	m7s.Plugin
 }
 
-func (p *DemoPlugin) OnInit() {
-	publisher, err := p.Publish("live/demo")
-	if err == nil {
-		var annexB AnnexB
-		publisher.WriteVideo(&annexB)
-	}
-}
+// func (p *DemoPlugin) OnInit() {
+// 	publisher, err := p.Publish("live/demo")
+// 	if err == nil {
+// 		var annexB AnnexB
+// 		publisher.WriteVideo(&annexB)
+// 	}
+// }
 
 func (p *DemoPlugin) OnPublish(publisher *m7s.Publisher) {
 	subscriber, err := p.Subscribe(publisher.StreamPath)

@@ -3,6 +3,7 @@ package m7s
 import (
 	"context"
 	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -72,7 +73,7 @@ func (plugin *PluginMeta) Init(s *Server, userConfig map[string]any) {
 	}
 	p.Info("init", "version", plugin.Version)
 	instance.OnInit()
-	go p.Start()
+	p.Start()
 }
 
 type iPlugin interface {
@@ -145,8 +146,8 @@ func (p *Plugin) GetCommonConf() *config.Common {
 	return &p.config
 }
 
-func (opt *Plugin) settingPath() string {
-	return filepath.Join(opt.server.SettingDir, strings.ToLower(opt.Meta.Name)+".yaml")
+func (p *Plugin) settingPath() string {
+	return filepath.Join(p.server.SettingDir, strings.ToLower(p.Meta.Name)+".yaml")
 }
 
 func (p *Plugin) assign() {
@@ -160,7 +161,7 @@ func (p *Plugin) assign() {
 		}
 		p.Config.ParseModifyFile(modifyConfig)
 	}
-	// p.registerHandler()
+	p.registerHandler()
 }
 
 func (p *Plugin) Stop(err error) {
@@ -172,14 +173,14 @@ func (p *Plugin) Stop(err error) {
 func (p *Plugin) Start() {
 	httpConf := p.config.HTTP
 	if httpConf.ListenAddrTLS != "" && (httpConf.ListenAddrTLS != p.server.config.HTTP.ListenAddrTLS) {
+		p.Info("https listen at ", "addr", httpConf.ListenAddrTLS)
 		go func() {
-			p.Info("https listen at ", "addr", httpConf.ListenAddrTLS)
 			p.Stop(httpConf.ListenTLS())
 		}()
 	}
 	if httpConf.ListenAddr != "" && (httpConf.ListenAddr != p.server.config.HTTP.ListenAddr) {
+		p.Info("http listen at ", "addr", httpConf.ListenAddr)
 		go func() {
-			p.Info("http listen at ", "addr", httpConf.ListenAddr)
 			p.Stop(httpConf.Listen())
 		}()
 	}
@@ -191,21 +192,23 @@ func (p *Plugin) Start() {
 
 	if p.config.TCP.ListenAddr != "" {
 		p.Info("listen tcp", "addr", tcpConf.ListenAddr)
-		err := tcpConf.Listen(tcphandler.OnTCPConnect)
-		if err != nil {
-			p.Error("listen tcp", "addr", tcpConf.ListenAddr, "error", err)
-			p.Stop(err)
-			return
-		}
+		go func() {
+			err := tcpConf.Listen(tcphandler.OnTCPConnect)
+			if err != nil {
+				p.Error("listen tcp", "addr", tcpConf.ListenAddr, "error", err)
+				p.Stop(err)
+			}
+		}()
 	}
 	if tcpConf.ListenAddrTLS != "" {
 		p.Info("listen tcp tls", "addr", tcpConf.ListenAddrTLS)
-		err := tcpConf.ListenTLS(tcphandler.OnTCPConnect)
-		if err != nil {
-			p.Error("listen tcp tls", "addr", tcpConf.ListenAddrTLS, "error", err)
-			p.Stop(err)
-			return
-		}
+		go func() {
+			err := tcpConf.ListenTLS(tcphandler.OnTCPConnect)
+			if err != nil {
+				p.Error("listen tcp tls", "addr", tcpConf.ListenAddrTLS, "error", err)
+				p.Stop(err)
+			}
+		}()
 	}
 }
 
@@ -243,4 +246,50 @@ func (p *Plugin) Subscribe(streamPath string, options ...any) (subscriber *Subsc
 	subscriber.Init(p, streamPath, options...)
 	err = sendPromiseToServer(p.server, subscriber)
 	return
+}
+
+func (p *Plugin) registerHandler() {
+	t := reflect.TypeOf(p.handler)
+	v := reflect.ValueOf(p.handler)
+	// 注册http响应
+	for i, j := 0, t.NumMethod(); i < j; i++ {
+		name := t.Method(i).Name
+		if name == "ServeHTTP" {
+			continue
+		}
+		switch handler := v.Method(i).Interface().(type) {
+		case func(http.ResponseWriter, *http.Request):
+			patten := strings.ToLower(strings.ReplaceAll(name, "_", "/"))
+			p.handle(patten, http.HandlerFunc(handler))
+		}
+	}
+	if rootHandler, ok := p.handler.(http.Handler); ok {
+		p.handle("/", rootHandler)
+	}
+}
+
+func (p *Plugin) logHandler(handler http.Handler) http.Handler {
+	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		p.Debug("visit", "path", r.URL.String(), "remote", r.RemoteAddr)
+		name := strings.ToLower(p.Meta.Name)
+		r.URL.Path = strings.TrimPrefix(r.URL.Path, "/"+name)
+		handler.ServeHTTP(rw, r)
+	})
+}
+
+func (p *Plugin) handle(pattern string, handler http.Handler) {
+	if p == nil {
+		return
+	}
+	if !strings.HasPrefix(pattern, "/") {
+		pattern = "/" + pattern
+	}
+	handler = p.logHandler(handler)
+	p.GetCommonConf().Handle(pattern, handler)
+	if p.server != nil {
+		pattern = "/" + strings.ToLower(p.Meta.Name) + pattern
+		p.Debug("http handle added to server", "pattern", pattern)
+		p.server.GetCommonConf().Handle(pattern, handler)
+	}
+	// apiList = append(apiList, pattern)
 }

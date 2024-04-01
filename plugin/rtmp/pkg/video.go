@@ -1,4 +1,4 @@
-package pkg
+package rtmp
 
 import (
 	"time"
@@ -36,8 +36,8 @@ func (avcc *RTMPVideo) DecodeConfig(track *AVTrack) error {
 				ctx.NalulenSize = int(info.LengthSizeMinusOne&3 + 1)
 				ctx.SPS = info.SequenceParameterSetNALUnit
 				ctx.PPS = info.PictureParameterSetNALUnit
-				avcc.IPool = nil
-				ctx.SequenceFrame = avcc
+				ctx.SequenceFrame = &RTMPVideo{}
+				ctx.SequenceFrame.ReadFromBytes(avcc.ToBytes())
 				track.ICodecCtx = &ctx
 			}
 		case "h265":

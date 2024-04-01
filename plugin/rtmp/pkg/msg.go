@@ -1,9 +1,10 @@
-package pkg
+package rtmp
 
 import (
 	"encoding/binary"
 	"errors"
 	"strings"
+
 	"m7s.live/m7s/v5/pkg/util"
 )
 
@@ -182,7 +183,7 @@ func GetRtmpMessage(chunk *Chunk, body util.Buffer) error {
 // object类型要复杂点.
 // 第一个byte是03表示object,其后跟的是N个(key+value).最后以00 00 09表示object结束
 func decodeCommandAMF0(chunk *Chunk, body []byte) {
-	amf := AMF{body}        // rtmp_amf.go, amf 是 bytes类型, 将rtmp body(payload)放到bytes.Buffer(amf)中去.
+	amf := AMF{body}             // rtmp_amf.go, amf 是 bytes类型, 将rtmp body(payload)放到bytes.Buffer(amf)中去.
 	cmd := amf.ReadShortString() // rtmp_amf.go, 将payload的bytes类型转换成string类型.
 	cmdMsg := CommandMessage{
 		cmd,
