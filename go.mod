@@ -6,7 +6,7 @@ toolchain go1.21.8
 
 require (
 	go.uber.org/zap v1.27.0
-	m7s.live/engine/v4 v4.15.2-0.20240402075636-a44ad2830b3a
+	m7s.live/engine/v4 v4.15.2-0.20240402112224-9f9b2392735a
 	m7s.live/plugin/debug/v4 v4.0.3
 	m7s.live/plugin/fmp4/v4 v4.0.6
 	m7s.live/plugin/gb28181/v4 v4.4.4
@@ -18,7 +18,7 @@ require (
 	m7s.live/plugin/monitor/v4 v4.0.5
 	m7s.live/plugin/preview/v4 v4.1.5-0.20240313053841-3228fb004004
 	m7s.live/plugin/record/v4 v4.4.7-0.20240326145629-cfa781bce27d
-	m7s.live/plugin/room/v4 v4.1.0
+	m7s.live/plugin/room/v4 v4.1.1-0.20240402112256-da53fe368413
 	m7s.live/plugin/rtmp/v4 v4.3.1-0.20240307124858-efe5c2b0ee20
 	m7s.live/plugin/rtsp/v4 v4.3.5-0.20240228010654-14ef344d0848
 	m7s.live/plugin/snap/v4 v4.0.8

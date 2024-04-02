@@ -395,6 +395,8 @@ m7s.live/engine/v4 v4.15.2-0.20240328092439-6e3c86d012da h1:R5SAusCQVvMaaQ11EzmD
 m7s.live/engine/v4 v4.15.2-0.20240328092439-6e3c86d012da/go.mod h1:FRtMPBGzNE6kCLgY0wuS3H7d1btKocRiVe9fAkDtP1g=
 m7s.live/engine/v4 v4.15.2-0.20240402075636-a44ad2830b3a h1:P6v5yMV6P8kf4LcgZ1CMGthcL3O3zq6qgCRr2b5JEK8=
 m7s.live/engine/v4 v4.15.2-0.20240402075636-a44ad2830b3a/go.mod h1:FRtMPBGzNE6kCLgY0wuS3H7d1btKocRiVe9fAkDtP1g=
+m7s.live/engine/v4 v4.15.2-0.20240402112224-9f9b2392735a h1:5/nM2MKhx28ADM8Ev62sGI7jKbG7GJpNcoBqAhERSPg=
+m7s.live/engine/v4 v4.15.2-0.20240402112224-9f9b2392735a/go.mod h1:FRtMPBGzNE6kCLgY0wuS3H7d1btKocRiVe9fAkDtP1g=
 m7s.live/plugin/debug/v4 v4.0.3 h1:lwqKkySXhu47kon/YeF+h5UXXac6c9seb2L6Y8X5ktM=
 m7s.live/plugin/debug/v4 v4.0.3/go.mod h1:muzikl1KrHfbT/+2aHzKg9qDGfpArViQAtpcfFrST88=
 m7s.live/plugin/fmp4/v4 v4.0.6 h1:X4FXfYuI1OCgaJzyJUNySDRPNPHzLJ5StgX/IxljQIA=
@@ -423,6 +425,10 @@ m7s.live/plugin/record/v4 v4.4.7-0.20240326145629-cfa781bce27d h1:F8nfxjDiJXmwRo
 m7s.live/plugin/record/v4 v4.4.7-0.20240326145629-cfa781bce27d/go.mod h1:4fSAA/AYCNsFA0Ii0UVuBqsbhoTXC1s3lC/en5qabjg=
 m7s.live/plugin/room/v4 v4.1.0 h1:7avMuCnYHX1z9jmoPaGl4tdw5DKFDWiAgFK0+RWVqzA=
 m7s.live/plugin/room/v4 v4.1.0/go.mod h1:4GBdAHUYtdp+nkHcGIClI8xkIUo/VTrD9Y0YMlTE7HU=
+m7s.live/plugin/room/v4 v4.1.1-0.20240402092359-8f5f31f2c93a h1:LcWqBbHMg+tffvjddVRf9MEdv4kIDLNKMXo7JHwqxyw=
+m7s.live/plugin/room/v4 v4.1.1-0.20240402092359-8f5f31f2c93a/go.mod h1:4GBdAHUYtdp+nkHcGIClI8xkIUo/VTrD9Y0YMlTE7HU=
+m7s.live/plugin/room/v4 v4.1.1-0.20240402112256-da53fe368413 h1:FT7i+1fVF4qO71IvVQnvyQfz+o6AyF5GfMFJKsfnAkQ=
+m7s.live/plugin/room/v4 v4.1.1-0.20240402112256-da53fe368413/go.mod h1:4GBdAHUYtdp+nkHcGIClI8xkIUo/VTrD9Y0YMlTE7HU=
 m7s.live/plugin/rtmp/v4 v4.3.1-0.20240307124858-efe5c2b0ee20 h1:ugC5795EjCm0sNFUYp7NzmfZGy46Rz1/PY240DFSpOQ=
 m7s.live/plugin/rtmp/v4 v4.3.1-0.20240307124858-efe5c2b0ee20/go.mod h1:6yihulC3KwZaT28qIHHgD68/aP7S6LpA2x3L8mMq6+w=
 m7s.live/plugin/rtsp/v4 v4.3.5-0.20240228010654-14ef344d0848 h1:vjI/Pc9kOcvXClq6i3i0U93GdZ73OLWCJ5PsJq9q2f0=
