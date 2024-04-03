@@ -1,9 +1,5 @@
 package util
 
-import (
-	"net"
-)
-
 type Pool[T any] struct {
 	pool []T
 }
@@ -27,23 +23,14 @@ func (p *Pool[T]) Put(t T) {
 	p.pool = append(p.pool, t)
 }
 
+func (p *Pool[T]) Puts(t []T) {
+	p.pool = append(p.pool, t...)
+}
+
 type IPool[T any] interface {
 	Get() T
 	Put(T)
 	Clear()
-}
-
-type RecyclableMemory struct {
-	IPool[[]byte]
-	Data net.Buffers
-}
-
-func (r *RecyclableMemory) Recycle() {
-	if r.IPool != nil {
-		for _, b := range r.Data {
-			r.Put(b)
-		}
-	}
 }
 
 type BytesPool struct {
@@ -59,7 +46,7 @@ func (bp *BytesPool) GetN(size int) []byte {
 	if ret == nil {
 		return make([]byte, size)
 	}
-	return ret
+	return ret[:size]
 }
 
 func (bp *BytesPool) Put(b []byte) {

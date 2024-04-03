@@ -241,6 +241,14 @@ func (p *Plugin) Publish(streamPath string, options ...any) (publisher *Publishe
 	return
 }
 
+func (p *Plugin) Pull(streamPath string, url string, options ...any) (puller *Puller, err error) {
+  puller = &Puller{Pull: p.config.Pull}
+	puller.RemoteURL = url
+	puller.StreamPath = streamPath
+	puller.Init(p, streamPath, options...)
+	return puller, sendPromiseToServer(p.server, puller)
+}
+
 func (p *Plugin) Subscribe(streamPath string, options ...any) (subscriber *Subscriber, err error) {
 	subscriber = &Subscriber{Subscribe: p.config.Subscribe}
 	subscriber.Init(p, streamPath, options...)
@@ -286,10 +294,10 @@ func (p *Plugin) handle(pattern string, handler http.Handler) {
 	}
 	handler = p.logHandler(handler)
 	p.GetCommonConf().Handle(pattern, handler)
-	if p.server != nil {
+	if p.server != p.handler {
 		pattern = "/" + strings.ToLower(p.Meta.Name) + pattern
 		p.Debug("http handle added to server", "pattern", pattern)
 		p.server.GetCommonConf().Handle(pattern, handler)
 	}
-	// apiList = append(apiList, pattern)
+	p.server.apiList = append(p.server.apiList, pattern)
 }

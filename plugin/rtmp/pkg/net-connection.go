@@ -61,8 +61,8 @@ type NetConnection struct {
 	AppName         string
 	tmpBuf          util.Buffer //用来接收/发送小数据，复用内存
 	chunkHeader     util.Buffer
-	byteChunkPool   util.BytesPool
-	byte16Pool      util.BytesPool
+	ByteChunkPool   *util.MemoryAllocator
+	chunk           net.Buffers
 	writing         atomic.Bool // false 可写，true 不可写
 }
 
@@ -76,6 +76,7 @@ func NewNetConnection(conn net.Conn) *NetConnection {
 		bandwidth:       RTMP_MAX_CHUNK_SIZE << 3,
 		tmpBuf:          make(util.Buffer, 4),
 		chunkHeader:     make(util.Buffer, 0, 16),
+		ByteChunkPool:   util.NewMemoryAllocator(2048),
 	}
 }
 func (conn *NetConnection) ReadFull(buf []byte) (n int, err error) {
@@ -138,7 +139,7 @@ func (conn *NetConnection) readChunk() (msg *Chunk, err error) {
 	if !ok {
 		chunk = &Chunk{}
 		conn.incommingChunks[ChunkStreamID] = chunk
-		chunk.AVData.IPool = &conn.byteChunkPool
+		chunk.AVData.MemoryAllocator = conn.ByteChunkPool
 	}
 
 	if err = conn.readChunkType(&chunk.ChunkHeader, ChunkType); err != nil {
@@ -146,19 +147,16 @@ func (conn *NetConnection) readChunk() (msg *Chunk, err error) {
 	}
 	msgLen := int(chunk.MessageLength)
 
-	needRead := conn.readChunkSize
-	if unRead := msgLen - chunk.AVData.Length; unRead < needRead {
-		needRead = unRead
+	mem := chunk.AVData.Malloc(conn.readChunkSize)
+	if unRead := msgLen - chunk.AVData.Length; unRead < conn.readChunkSize {
+		mem = mem[:unRead]
 	}
-	// mem := make([]byte, needRead)
-	mem := conn.byteChunkPool.GetN(needRead)
 	if n, err := conn.ReadFull(mem); err != nil {
-		conn.byteChunkPool.Put(mem)
+		chunk.AVData.Recycle()
 		return nil, err
 	} else {
 		conn.readSeqNum += uint32(n)
 	}
-	chunk.AVData.Data = append(chunk.AVData.Data, mem)
 	if chunk.AVData.ReadFromBytes(mem); chunk.AVData.Length == msgLen {
 		chunk.ChunkHeader.ExtendTimestamp += chunk.ChunkHeader.Timestamp
 		msg = chunk
@@ -168,9 +166,6 @@ func (conn *NetConnection) readChunk() (msg *Chunk, err error) {
 		default:
 			err = GetRtmpMessage(msg, msg.AVData.ToBytes())
 			msg.AVData.Recycle()
-		}
-		conn.incommingChunks[ChunkStreamID] = &Chunk{
-			ChunkHeader: chunk.ChunkHeader,
 		}
 	}
 	return

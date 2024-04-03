@@ -6,6 +6,7 @@ import (
 	"net"
 
 	"m7s.live/m7s/v5"
+	"m7s.live/m7s/v5/pkg/util"
 	. "m7s.live/m7s/v5/plugin/rtmp/pkg"
 )
 
@@ -145,6 +146,9 @@ func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
 						delete(receivers, cmd.StreamId)
 						err = receiver.Response(cmd.TransactionId, NetStream_Publish_BadName, Level_Error)
 					} else {
+						if nc.ByteChunkPool.Size != 1<<20 {
+							nc.ByteChunkPool = util.NewMemoryAllocator(1 << 20)
+						}
 						receivers[cmd.StreamId] = receiver
 						err = receiver.BeginPublish(cmd.TransactionId)
 					}
@@ -175,12 +179,16 @@ func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
 			case RTMP_MSG_AUDIO:
 				if r, ok := receivers[msg.MessageStreamID]; ok {
 					r.WriteAudio(&RTMPAudio{msg.AVData})
+					msg.AVData = RTMPData{}
+					msg.AVData.MemoryAllocator = nc.ByteChunkPool
 				} else {
 					logger.Warn("ReceiveAudio", "MessageStreamID", msg.MessageStreamID)
 				}
 			case RTMP_MSG_VIDEO:
 				if r, ok := receivers[msg.MessageStreamID]; ok {
 					r.WriteVideo(&RTMPVideo{msg.AVData})
+					msg.AVData = RTMPData{}
+					msg.AVData.MemoryAllocator = nc.ByteChunkPool
 				} else {
 					logger.Warn("ReceiveVideo", "MessageStreamID", msg.MessageStreamID)
 				}

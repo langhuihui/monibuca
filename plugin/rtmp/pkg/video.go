@@ -36,8 +36,7 @@ func (avcc *RTMPVideo) DecodeConfig(track *AVTrack) error {
 				ctx.NalulenSize = int(info.LengthSizeMinusOne&3 + 1)
 				ctx.SPS = info.SequenceParameterSetNALUnit
 				ctx.PPS = info.PictureParameterSetNALUnit
-				ctx.SequenceFrame = &RTMPVideo{}
-				ctx.SequenceFrame.ReadFromBytes(avcc.ToBytes())
+				ctx.SequenceFrame = avcc
 				track.ICodecCtx = &ctx
 			}
 		case "h265":

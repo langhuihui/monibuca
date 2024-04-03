@@ -4,8 +4,9 @@ import (
 	"context"
 
 	"m7s.live/m7s/v5"
-	_ "m7s.live/m7s/v5/plugin/rtmp"
+	_ "m7s.live/m7s/v5/plugin/debug"
 	_ "m7s.live/m7s/v5/plugin/hdl"
+	_ "m7s.live/m7s/v5/plugin/rtmp"
 )
 
 func main() {

@@ -41,7 +41,8 @@ func (a *AnnexB) IsIDR() bool {
 
 // ToRaw implements pkg.IAVFrame.
 func (a *AnnexB) ToRaw(*pkg.AVTrack) (any, error) {
-	return a.Data, nil
+	// return a.Data, nil
+	return nil, nil
 }
 
 type DemoPlugin struct {

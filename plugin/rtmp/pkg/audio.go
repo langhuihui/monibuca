@@ -45,8 +45,7 @@ func (avcc *RTMPAudio) DecodeConfig(track *AVTrack) error {
 			ctx.FrameLengthFlag = (b1 >> 2) & 0x01
 			ctx.DependsOnCoreCoder = (b1 >> 1) & 0x01
 			ctx.ExtensionFlag = b1 & 0x01
-			ctx.SequenceFrame = &RTMPAudio{}
-			ctx.SequenceFrame.ReadFromBytes(avcc.ToBytes())
+			ctx.SequenceFrame = avcc
 			track.ICodecCtx = &ctx
 		}
 	}

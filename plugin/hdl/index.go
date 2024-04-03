@@ -1,6 +1,7 @@
 package plugin_hdl
 
 import (
+	"encoding/binary"
 	"io"
 	"net"
 	"net/http"
@@ -8,7 +9,6 @@ import (
 	"time"
 
 	"m7s.live/m7s/v5"
-	"m7s.live/m7s/v5/pkg/util"
 	. "m7s.live/m7s/v5/plugin/hdl/pkg"
 	rtmp "m7s.live/m7s/v5/plugin/rtmp/pkg"
 )
@@ -52,7 +52,7 @@ func (p *HDLPlugin) WriteFlvHeader(sub *m7s.Subscriber, w io.Writer) {
 	// }
 	// amf.Marshal(metaData)
 	// 写入FLV头
-	w.Write([]byte{'F', 'L', 'V', 0x01, flags, 0, 0, 0, 9, 0, 0, 0, 0})
+	w.Write([]byte{'F', 'L', 'V', 0x01, flags, 0, 0, 0, 9})
 	// codec.WriteFLVTag(w, codec.FLV_TAG_TYPE_SCRIPT, 0, amf.Buffer)
 }
 
@@ -71,46 +71,42 @@ func (p *HDLPlugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Transfer-Encoding", "identity")
 	w.WriteHeader(http.StatusOK)
 	wto := p.GetCommonConf().WriteTimeout
-	var gotFlvTag func(tag *net.Buffers) error
+	var gotFlvTag func() error
+	var b [15]byte
+	var flv net.Buffers
 	if hijacker, ok := w.(http.Hijacker); ok && wto > 0 {
 		conn, _, _ := hijacker.Hijack()
 		conn.SetWriteDeadline(time.Now().Add(wto))
 		sub.Closer = conn
 		p.WriteFlvHeader(sub, conn)
-		gotFlvTag = func(tag *net.Buffers) (err error) {
+		gotFlvTag = func() (err error) {
 			conn.SetWriteDeadline(time.Now().Add(wto))
-			_, err = tag.WriteTo(conn)
+			_, err = flv.WriteTo(conn)
 			return
 		}
 	} else {
 		w.(http.Flusher).Flush()
 		p.WriteFlvHeader(sub, w)
-		gotFlvTag = func(tag *net.Buffers) (err error) {
-			_, err = tag.WriteTo(w)
+		gotFlvTag = func() (err error) {
+			_, err = flv.WriteTo(w)
 			return
 		}
 	}
-	b := util.Buffer(make([]byte, 0, 15))
-	var flv net.Buffers
+	rtmpData2FlvTag := func(data *rtmp.RTMPData) error {
+		dataSize := uint32(data.Length)
+		b[5], b[6], b[7] = byte(dataSize>>16), byte(dataSize>>8), byte(dataSize)
+		b[8], b[9], b[10], b[11] = byte(data.Timestamp>>16), byte(data.Timestamp>>8), byte(data.Timestamp), byte(data.Timestamp>>24)
+		flv = append(append(flv, b[:]), data.Buffers.Buffers...)
+		defer binary.BigEndian.PutUint32(b[:4], dataSize+11)
+		return gotFlvTag()
+	}
 	sub.Handle(func(audio *rtmp.RTMPAudio) error {
-		b.Reset()
-		b.WriteByte(FLV_TAG_TYPE_AUDIO)
-		dataSize := audio.Length
-		b.WriteUint24(uint32(dataSize))
-		b.WriteUint24(audio.Timestamp)
-		b.WriteByte(byte(audio.Timestamp >> 24))
-		b.WriteUint24(0)
-		flv = append(append(append(flv, b), audio.Buffers.Buffers...), util.PutBE(b.Malloc(4), dataSize+11))
-		return gotFlvTag(&flv)
+		b[4] = FLV_TAG_TYPE_AUDIO
+		return rtmpData2FlvTag(&audio.RTMPData)
 	}, func(video *rtmp.RTMPVideo) error {
-		b.Reset()
-		b.WriteByte(FLV_TAG_TYPE_VIDEO)
-		dataSize := video.Length
-		b.WriteUint24(uint32(dataSize))
-		b.WriteUint24(video.Timestamp)
-		b.WriteByte(byte(video.Timestamp >> 24))
-		b.WriteUint24(0)
-		flv = append(append(append(flv, b), video.Buffers.Buffers...), util.PutBE(b.Malloc(4), dataSize+11))
-		return gotFlvTag(&flv)
+		b[4] = FLV_TAG_TYPE_VIDEO
+		return rtmpData2FlvTag(&video.RTMPData)
 	})
+	flv = append(flv, b[:4])
+	gotFlvTag()
 }

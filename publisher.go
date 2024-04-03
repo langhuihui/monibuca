@@ -90,8 +90,9 @@ func (p *Publisher) AddSubscriber(subscriber *Subscriber) (err error) {
 }
 
 func (p *Publisher) writeAV(t *AVTrack, data IAVFrame) {
-	t.Value.Wrap = data
-	t.Value.Timestamp = data.GetTimestamp()
+	frame := &t.Value
+	frame.Wrap = data
+	frame.Timestamp = data.GetTimestamp()
 	t.Step()
 	if t.Value.Wrap != nil {
 		t.Value.Wrap.Recycle()

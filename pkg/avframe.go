@@ -93,6 +93,7 @@ type IAVFrame interface {
 	ToRaw(*AVTrack) (any, error)
 	FromRaw(*AVTrack, any) error
 	GetTimestamp() time.Duration
+	GetSize() int
 	Recycle()
 	IsIDR() bool
 	Print() string

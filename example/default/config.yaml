@@ -1,6 +1,7 @@
 global:
   loglevel: debug
 rtmp:
+  chunksize: 65535
   subscribe:
     # submode: 1
     subaudio: false

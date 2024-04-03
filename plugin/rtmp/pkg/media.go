@@ -2,7 +2,6 @@ package rtmp
 
 import (
 	"errors"
-	"net"
 	"runtime"
 
 	"m7s.live/m7s/v5"
@@ -37,7 +36,7 @@ func (av *AVSender) sendFrame(frame *RTMPData) (err error) {
 	// 第一次是发送关键帧,需要完整的消息头(Chunk Basic Header(1) + Chunk Message Header(11) + Extended Timestamp(4)(可能会要包括))
 	// 后面开始,就是直接发送音视频数据,那么直接发送,不需要完整的块(Chunk Basic Header(1) + Chunk Message Header(7))
 	// 当Chunk Type为0时(即Chunk12),
-	if av.lastAbs > 0 {
+	if av.lastAbs == 0 {
 		av.SetTimestamp(frame.Timestamp)
 		av.WriteTo(RTMP_CHUNK_HEAD_12, &av.chunkHeader)
 	} else {
@@ -50,18 +49,21 @@ func (av *AVSender) sendFrame(frame *RTMPData) (err error) {
 	// 	return errors.New("sequence is not equal")
 	// }
 	r := frame.Buffers
-	chunk := net.Buffers{av.chunkHeader}
-	av.writeSeqNum += uint32(av.chunkHeader.Len() + r.WriteNTo(av.WriteChunkSize, &chunk))
-	for r.Length > 0 {
-		item := util.Buffer(av.byte16Pool.GetN(16))
-		defer av.byte16Pool.Put(item)
-		// item := util.Buffer(make([]byte, 16))
-		av.WriteTo(RTMP_CHUNK_HEAD_1, &item)
-		// 如果在音视频数据太大,一次发送不完,那么这里进行分割(data + Chunk Basic Header(1))
-		chunk = append(chunk, item)
-		av.writeSeqNum += uint32(item.Len() + r.WriteNTo(av.WriteChunkSize, &chunk))
+	chunkHeader := av.chunkHeader
+	av.chunk = append(av.chunk, chunkHeader)
+	// var buffer util.Buffer = r.ToBytes()
+	av.writeSeqNum += uint32(chunkHeader.Len() + r.WriteNTo(av.WriteChunkSize, &av.chunk))
+	if r.Length > 0 {
+		defer av.mem.Recycle()
+		for r.Length > 0 {
+			chunkHeader = av.mem.Malloc(5)
+			av.WriteTo(RTMP_CHUNK_HEAD_1, &chunkHeader)
+			// 如果在音视频数据太大,一次发送不完,那么这里进行分割(data + Chunk Basic Header(1))
+			av.chunk = append(av.chunk, chunkHeader)
+			av.writeSeqNum += uint32(chunkHeader.Len() + r.WriteNTo(av.WriteChunkSize, &av.chunk))
+		}
 	}
-	_, err = chunk.WriteTo(av.Conn)
+	_, err = av.chunk.WriteTo(av.Conn)
 	return err
 }
 
@@ -69,6 +71,7 @@ type RTMPSender struct {
 	*m7s.Subscriber
 	NetStream
 	audio, video AVSender
+	mem          util.RecyclableMemory
 }
 
 func (r *RTMPSender) Init() {
@@ -80,6 +83,7 @@ func (r *RTMPSender) Init() {
 	r.video.MessageTypeID = RTMP_MSG_VIDEO
 	r.audio.MessageStreamID = r.StreamID
 	r.video.MessageStreamID = r.StreamID
+	r.mem.MemoryAllocator = r.ByteChunkPool
 }
 
 //	func (rtmp *RTMPSender) OnEvent(event any) {

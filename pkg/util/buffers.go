@@ -153,12 +153,11 @@ func (buffers *Buffers) ReadBytes(n int) ([]byte, error) {
 }
 
 func (buffers *Buffers) WriteNTo(n int, result *net.Buffers) (actual int) {
-	for actual = n; buffers.Length > 0; buffers.move0() {
-		level0 := buffers.GetLevel0()
+	for actual = n; buffers.Length > 0 && n > 0; buffers.move0() {
 		level1 := buffers.GetLevel1()
 		remain1 := len(level1)
 		if remain1 > n {
-			*result = append(*result, level0[buffers.offset1:buffers.offset1+n])
+			*result = append(*result, level1[:n])
 			buffers.move1(n)
 			return actual
 		}
@@ -182,5 +181,9 @@ func (buffers *Buffers) ReadBE(n int) (num int, err error) {
 func (buffers *Buffers) ToBytes() []byte {
 	ret := make([]byte, buffers.Length)
 	buffers.Read(ret)
+	buffers.offset0 = 0
+	buffers.offset1 = 0
+	buffers.Offset = 0
+	buffers.Length = 0
 	return ret
 }

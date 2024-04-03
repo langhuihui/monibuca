@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -70,13 +69,11 @@ func (c *Subscribe) GetSubscribeConfig() *Subscribe {
 }
 
 type Pull struct {
-	RePull            int               `desc:"断开后自动重试次数,0:不重试,-1:无限重试"` // 断开后自动重拉,0 表示不自动重拉，-1 表示无限重拉，高于0 的数代表最大重拉次数
-	EnableRegexp      bool              `desc:"是否启用正则表达式"`               // 是否启用正则表达式
-	PullOnStart       map[string]string `desc:"启动时拉流的列表"`                // 启动时拉流的列表
-	PullOnSub         map[string]string `desc:"订阅时自动拉流的列表"`              // 订阅时自动拉流的列表
-	Proxy             string            `desc:"代理地址"`                    // 代理地址
-	PullOnSubLocker   sync.RWMutex      `yaml:"-" json:"-"`
-	PullOnStartLocker sync.RWMutex      `yaml:"-" json:"-"`
+	RePull       int               `desc:"断开后自动重试次数,0:不重试,-1:无限重试"` // 断开后自动重拉,0 表示不自动重拉，-1 表示无限重拉，高于0 的数代表最大重拉次数
+	EnableRegexp bool              `desc:"是否启用正则表达式"`               // 是否启用正则表达式
+	PullOnStart  map[string]string `desc:"启动时拉流的列表"`                // 启动时拉流的列表
+	PullOnSub    map[string]string `desc:"订阅时自动拉流的列表"`              // 订阅时自动拉流的列表
+	Proxy        string            `desc:"代理地址"`                    // 代理地址
 }
 
 func (p *Pull) GetPullConfig() *Pull {
@@ -84,8 +81,8 @@ func (p *Pull) GetPullConfig() *Pull {
 }
 
 func (p *Pull) CheckPullOnStart(streamPath string) string {
-	p.PullOnStartLocker.RLock()
-	defer p.PullOnStartLocker.RUnlock()
+	// p.PullOnStartLocker.RLock()
+	// defer p.PullOnStartLocker.RUnlock()
 	if p.PullOnStart == nil {
 		return ""
 	}
@@ -107,8 +104,8 @@ func (p *Pull) CheckPullOnStart(streamPath string) string {
 }
 
 func (p *Pull) CheckPullOnSub(streamPath string) string {
-	p.PullOnSubLocker.RLock()
-	defer p.PullOnSubLocker.RUnlock()
+	// p.PullOnSubLocker.RLock()
+	// defer p.PullOnSubLocker.RUnlock()
 	if p.PullOnSub == nil {
 		return ""
 	}

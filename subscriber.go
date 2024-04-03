@@ -119,7 +119,7 @@ func (s *Subscriber) Handle(audioHandler, videoHandler any) {
 	}
 	sendVideoFrame := func() {
 		lastSentVF = videoFrame
-		s.Debug("send video frame", "seq", videoFrame.Sequence, "data", videoFrame.Wrap.Print())
+		s.Debug("send video frame", "seq", videoFrame.Sequence, "data", videoFrame.Wrap.Print(), "size", videoFrame.Wrap.GetSize())
 		res := vh.Call([]reflect.Value{reflect.ValueOf(videoFrame.Wrap)})
 		if len(res) > 0 && !res[0].IsNil() {
 			s.Stop(res[0].Interface().(error))

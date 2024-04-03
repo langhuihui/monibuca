@@ -25,6 +25,10 @@ type RTMPData struct {
 	util.RecyclableMemory
 }
 
+func (avcc *RTMPData) GetSize() int {
+	return avcc.Length
+}
+
 func (avcc *RTMPData) Print() string {
 	return fmt.Sprintf("% 02X", avcc.Buffers.Buffers[0][:5])
 }

@@ -66,14 +66,18 @@ var (
 
 // C2 S2 : 参考C1 S1
 
-func ReadBuf(r io.Reader, length int) (buf []byte) {
-	buf = make([]byte, length)
-	io.ReadFull(r, buf)
+func (nc *NetConnection) ReadBuf(length int) (buf []byte, err error) {
+	buf = nc.ByteChunkPool.Make(length)
+	_, err = io.ReadFull(nc.Reader, buf)
 	return
 }
 
 func (nc *NetConnection) Handshake() error {
-	C0C1 := ReadBuf(nc.Reader, C1S1_SIZE+1)
+	C0C1, err := nc.ReadBuf(C1S1_SIZE + 1)
+	defer nc.ByteChunkPool.Free(C0C1)
+	if err != nil {
+		return err
+	}
 	if C0C1[0] != RTMP_HANDSHAKE_VERSION {
 		return errors.New("C0 Error")
 	}
@@ -92,7 +96,8 @@ func (nc *NetConnection) Handshake() error {
 }
 
 func (client *NetConnection) ClientHandshake() (err error) {
-	C0C1 := make([]byte, C1S1_SIZE+1)
+	C0C1 := client.ByteChunkPool.Make(C1S1_SIZE + 1)
+	defer client.ByteChunkPool.Free(C0C1)
 	C0C1[0] = RTMP_HANDSHAKE_VERSION
 	if _, err = client.Write(C0C1); err == nil {
 		// read S0 S1
@@ -109,13 +114,19 @@ func (client *NetConnection) ClientHandshake() (err error) {
 }
 
 func (nc *NetConnection) simple_handshake(C1 []byte) error {
-	S0S1 := make([]byte, C1S1_SIZE+1)
+	S0S1 := nc.ByteChunkPool.Make(C1S1_SIZE + 1)
 	S0S1[0] = RTMP_HANDSHAKE_VERSION
 	util.PutBE(S0S1[1:5], time.Now().Unix()&0xFFFFFFFF)
 	copy(S0S1[5:], "Monibuca")
 	nc.Write(S0S1)
 	nc.Write(C1) // S2
-	if C2 := ReadBuf(nc.Reader, C1S1_SIZE); bytes.Compare(C2[8:], S0S1[9:]) != 0 {
+	nc.ByteChunkPool.Free(S0S1)
+	C2, err := nc.ReadBuf(C1S1_SIZE)
+	defer nc.ByteChunkPool.Free(C2)
+	if err != nil {
+		return err
+	}
+	if bytes.Compare(C2[8:], S0S1[9:]) != 0 {
 		return errors.New("C2 Error")
 	}
 	return nil
@@ -170,8 +181,8 @@ func (nc *NetConnection) complex_handshake(C1 []byte) error {
 
 	buffer := net.Buffers{[]byte{RTMP_HANDSHAKE_VERSION}, S1, S2_Random, S2_Digest}
 	buffer.WriteTo(nc)
-
-	ReadBuf(nc.Reader, 1536)
+	b, _ := nc.ReadBuf(1536)
+	nc.ByteChunkPool.Free(b)
 	return nil
 }
 

@@ -141,10 +141,14 @@ func (b *Buffer) Read(buf []byte) (n int, err error) {
 
 func (b *Buffer) ReadN(n int) Buffer {
 	l := b.Len()
+	if n > l {
+		n = l
+	}
 	r := (*b)[:n]
 	*b = (*b)[n:l]
 	return r
 }
+
 func (b *Buffer) ReadFloat64() float64 {
 	return math.Float64frombits(b.ReadUint64())
 }

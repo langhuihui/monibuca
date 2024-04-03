@@ -2,6 +2,7 @@ package m7s
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -19,12 +20,17 @@ import (
 	"m7s.live/m7s/v5/pkg/util"
 )
 
-var Version = "v5.0.0"
 var (
-	MergeConfigs = []string{"Publish", "Subscribe", "HTTP"}
-	ExecPath     = os.Args[0]
-	ExecDir      = filepath.Dir(ExecPath)
-	serverIndexG atomic.Uint32
+	Version       = "v5.0.0"
+	MergeConfigs  = []string{"Publish", "Subscribe", "HTTP"}
+	ExecPath      = os.Args[0]
+	ExecDir       = filepath.Dir(ExecPath)
+	serverIndexG  atomic.Uint32
+	DefaultServer = NewServer()
+	serverMeta    = PluginMeta{
+		Name:    "Global",
+		Version: Version,
+	}
 )
 
 type Server struct {
@@ -33,21 +39,26 @@ type Server struct {
 	eventChan   chan any
 	Plugins     []*Plugin
 	Streams     map[string]*Publisher
+	Pulls       map[string]*Puller
 	Waiting     map[string][]*Subscriber
 	Publishers  []*Publisher
 	Subscribers []*Subscriber
+	Pullers     []*Puller
 	pidG        int
 	sidG        int
+	apiList     []string
 }
 
-var DefaultServer = NewServer()
-
-func NewServer() *Server {
-	return &Server{
+func NewServer() (s *Server) {
+	s = &Server{
 		Streams:   make(map[string]*Publisher),
 		Waiting:   make(map[string][]*Subscriber),
 		eventChan: make(chan any, 10),
 	}
+	s.handler = s
+	s.server = s
+	s.Meta = &serverMeta
+	return
 }
 
 func Run(ctx context.Context, conf any) error {
@@ -59,7 +70,6 @@ func (s *Server) Run(ctx context.Context, conf any) (err error) {
 	s.Context, s.CancelCauseFunc = context.WithCancelCause(ctx)
 	s.config.HTTP.ListenAddrTLS = ":8443"
 	s.config.HTTP.ListenAddr = ":8080"
-	s.handler = s
 	s.Info("start")
 
 	var cg map[string]map[string]any
@@ -170,6 +180,20 @@ func (s *Server) eventLoop() {
 					continue
 				}
 				event = v.Value
+			case *util.Promise[*Puller]:
+				err := s.OnPublish(&v.Value.Publisher)
+				if err != nil {
+					v.Fulfill(err)
+				} else {
+					if _, ok := s.Pulls[v.Value.StreamPath]; ok {
+						v.Fulfill(ErrStreamExist)
+					} else {
+						s.Pulls[v.Value.StreamPath] = v.Value
+						s.Pullers = append(s.Pullers, v.Value)
+						v.Fulfill(nil)
+						event = v.Value
+					}
+				}
 			}
 			for _, plugin := range s.Plugins {
 				if plugin.Disabled {
@@ -258,4 +282,15 @@ func (s *Server) OnSubscribe(subscriber *Subscriber) error {
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == "/favicon.ico" {
+		http.ServeFile(w, r, "favicon.ico")
+		return
+	}
+	fmt.Fprintf(w, "Monibuca Engine %s StartTime:%s\n", Version, s.StartTime)
+	for _, plugin := range s.Plugins {
+		fmt.Fprintf(w, "Plugin %s Version:%s\n", plugin.Meta.Name, plugin.Meta.Version)
+	}
+	for _, api := range s.apiList {
+		fmt.Fprintf(w, "%s\n", api)
+	}
 }
