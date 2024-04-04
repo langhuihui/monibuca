@@ -6,6 +6,23 @@ import (
 
 type Block [2]int
 
+func (block Block) Len() int {
+	return block[1] - block[0]
+}
+
+func (block Block) Split() (int, int) {
+	return block[0], block[1]
+}
+
+func (block Block) Combine(s, e int) (ret bool) {
+	if ret = block[0] == e; ret {
+		block[0] = s
+	} else if ret = block[1] == s; ret {
+		block[1] = e
+	}
+	return
+}
+
 type MemoryAllocator struct {
 	start  int64
 	memory []byte
@@ -26,7 +43,7 @@ func NewMemoryAllocator(size int) (ret *MemoryAllocator) {
 
 func (ma *MemoryAllocator) Malloc2(size int) (memory []byte, start, end int) {
 	for be := ma.blocks.Front(); be != nil; be = be.Next() {
-		start, end = be.Value[0], be.Value[1]
+		start, end = be.Value.Split()
 		if e := start + size; end >= e {
 			memory = ma.memory[start:e]
 			if be.Value[0] = e; end == e {
@@ -58,12 +75,7 @@ func (ma *MemoryAllocator) Free2(start, end int) {
 	}
 	for e := ma.blocks.Front(); e != nil; e = e.Next() {
 		block := e.Value
-		if block[1] == start {
-			block[1] = end
-			return
-		}
-		if block[0] == end {
-			block[0] = start
+		if block.Combine(start, end) {
 			return
 		}
 		if end > block[0] {
@@ -77,8 +89,7 @@ func (ma *MemoryAllocator) Free2(start, end int) {
 func (ma *MemoryAllocator) Free(mem []byte) {
 	ptr := uintptr(unsafe.Pointer(&mem[:1][0]))
 	start := int(int64(ptr) - ma.start)
-	end := start + len(mem)
-	ma.Free2(start, end)
+	ma.Free2(start, start+len(mem))
 }
 
 type RecyclableMemory struct {
