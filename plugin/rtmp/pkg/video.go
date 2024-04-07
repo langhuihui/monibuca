@@ -85,7 +85,6 @@ func (avcc *RTMPVideo) DecodeConfig(track *AVTrack) error {
 			if err = parseSequence(); err != nil {
 				return err
 			}
-		} else {
 		}
 	}
 	return nil

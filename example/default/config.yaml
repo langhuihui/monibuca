@@ -1,7 +1,10 @@
 global:
   loglevel: debug
 rtmp:
-  chunksize: 65535
+  chunksize: 2048
   subscribe:
     # submode: 1
     subaudio: false
+  pull:
+    pullonsub:
+      live/pull: rtmp://localhost/live/test

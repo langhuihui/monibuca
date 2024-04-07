@@ -34,7 +34,9 @@ type Publisher struct {
 func (p *Publisher) timeout() (err error) {
 	switch p.State {
 	case PublisherStateInit:
-		err = ErrPublishTimeout
+		if p.PublishTimeout > 0 {
+			err = ErrPublishTimeout
+		}
 	case PublisherStateTrackAdded:
 		if p.Publish.IdleTimeout > 0 {
 			err = ErrPublishIdleTimeout
@@ -53,11 +55,13 @@ func (p *Publisher) checkTimeout() (err error) {
 	case <-p.TimeoutTimer.C:
 		err = p.timeout()
 	default:
-		if p.VideoTrack != nil && !p.VideoTrack.LastValue.WriteTime.IsZero() && time.Since(p.VideoTrack.LastValue.WriteTime) > p.PublishTimeout {
-			err = ErrPublishTimeout
-		}
-		if p.AudioTrack != nil && !p.AudioTrack.LastValue.WriteTime.IsZero() && time.Since(p.AudioTrack.LastValue.WriteTime) > p.PublishTimeout {
-			err = ErrPublishTimeout
+		if p.PublishTimeout > 0 {
+			if p.VideoTrack != nil && !p.VideoTrack.LastValue.WriteTime.IsZero() && time.Since(p.VideoTrack.LastValue.WriteTime) > p.PublishTimeout {
+				err = ErrPublishTimeout
+			}
+			if p.AudioTrack != nil && !p.AudioTrack.LastValue.WriteTime.IsZero() && time.Since(p.AudioTrack.LastValue.WriteTime) > p.PublishTimeout {
+				err = ErrPublishTimeout
+			}
 		}
 	}
 	return
@@ -67,6 +71,7 @@ func (p *Publisher) RemoveSubscriber(subscriber *Subscriber) (err error) {
 	p.Lock()
 	defer p.Unlock()
 	delete(p.Subscribers, subscriber)
+	p.Info("subscriber -1", "count", len(p.Subscribers))
 	if p.State == PublisherStateSubscribed && len(p.Subscribers) == 0 {
 		p.State = PublisherStateWaitSubscriber
 		if p.DelayCloseTimeout > 0 {
@@ -81,10 +86,13 @@ func (p *Publisher) AddSubscriber(subscriber *Subscriber) (err error) {
 	defer p.Unlock()
 	subscriber.Publisher = p
 	p.Subscribers[subscriber] = struct{}{}
+	p.Info("subscriber +1", "count", len(p.Subscribers))
 	switch p.State {
 	case PublisherStateTrackAdded, PublisherStateWaitSubscriber:
 		p.State = PublisherStateSubscribed
-		p.TimeoutTimer.Reset(p.PublishTimeout)
+		if p.PublishTimeout > 0 {
+			p.TimeoutTimer.Reset(p.PublishTimeout)
+		}
 	}
 	return
 }
@@ -93,10 +101,8 @@ func (p *Publisher) writeAV(t *AVTrack, data IAVFrame) {
 	frame := &t.Value
 	frame.Wrap = data
 	frame.Timestamp = data.GetTimestamp()
+	p.Debug("write", "seq", frame.Sequence)
 	t.Step()
-	if t.Value.Wrap != nil {
-		t.Value.Wrap.Recycle()
-	}
 }
 
 func (p *Publisher) WriteVideo(data IAVFrame) (err error) {
@@ -124,12 +130,12 @@ func (p *Publisher) WriteVideo(data IAVFrame) (err error) {
 	if data.IsIDR() {
 		if t.IDRing != nil {
 			p.GOP = int(t.Value.Sequence - t.IDRing.Value.Sequence)
-			if t.HistoryRing == nil {
-				if l := t.Size - p.GOP; l > 12 {
-					t.Debug("resize", "gop", p.GOP, "before", t.Size, "after", t.Size-5)
-					t.Reduce(5) //缩小缓冲环节省内存
-				}
-			}
+			// if t.HistoryRing == nil {
+			// 	if l := t.Size - p.GOP; l > 12 {
+			// 		t.Debug("resize", "gop", p.GOP, "before", t.Size, "after", t.Size-5)
+			// 		t.Reduce(5) //缩小缓冲环节省内存
+			// 	}
+			// }
 		}
 		if p.BufferTime > 0 {
 			t.IDRingList.AddIDR(t.Ring)

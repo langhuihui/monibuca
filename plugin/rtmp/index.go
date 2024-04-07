@@ -6,7 +6,6 @@ import (
 	"net"
 
 	"m7s.live/m7s/v5"
-	"m7s.live/m7s/v5/pkg/util"
 	. "m7s.live/m7s/v5/plugin/rtmp/pkg"
 )
 
@@ -16,12 +15,25 @@ type RTMPPlugin struct {
 	KeepAlive bool
 }
 
-func (p *RTMPPlugin) OnInit() {
-
-}
-
 var _ = m7s.InstallPlugin[RTMPPlugin](m7s.DefaultYaml(`tcp:
   listenaddr: :1935`))
+
+func (p *RTMPPlugin) pull(streamPath, url string) {
+	puller, err := p.Pull(streamPath, url)
+	if err != nil {
+		p.Error("pull", "streamPath", streamPath, "url", url, "error", err)
+		return
+	}
+	var rtmpPuller RTMPPuller
+	rtmpPuller.Puller = puller
+	puller.Start(&rtmpPuller)
+}
+
+func (p *RTMPPlugin) OnInit() {
+	for streamPath, url := range p.GetCommonConf().PullOnStart {
+		go p.pull(streamPath, url)
+	}
+}
 
 func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
 	defer conn.Close()
@@ -146,9 +158,6 @@ func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
 						delete(receivers, cmd.StreamId)
 						err = receiver.Response(cmd.TransactionId, NetStream_Publish_BadName, Level_Error)
 					} else {
-						if nc.ByteChunkPool.Size != 1<<20 {
-							nc.ByteChunkPool = util.NewMemoryAllocator(1 << 20)
-						}
 						receivers[cmd.StreamId] = receiver
 						err = receiver.BeginPublish(cmd.TransactionId)
 					}
@@ -180,7 +189,7 @@ func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
 				if r, ok := receivers[msg.MessageStreamID]; ok {
 					r.WriteAudio(&RTMPAudio{msg.AVData})
 					msg.AVData = RTMPData{}
-					msg.AVData.MemoryAllocator = nc.ByteChunkPool
+					msg.AVData.ScalableMemoryAllocator = nc.ByteChunkPool
 				} else {
 					logger.Warn("ReceiveAudio", "MessageStreamID", msg.MessageStreamID)
 				}
@@ -188,7 +197,7 @@ func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
 				if r, ok := receivers[msg.MessageStreamID]; ok {
 					r.WriteVideo(&RTMPVideo{msg.AVData})
 					msg.AVData = RTMPData{}
-					msg.AVData.MemoryAllocator = nc.ByteChunkPool
+					msg.AVData.ScalableMemoryAllocator = nc.ByteChunkPool
 				} else {
 					logger.Warn("ReceiveVideo", "MessageStreamID", msg.MessageStreamID)
 				}

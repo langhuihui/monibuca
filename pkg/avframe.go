@@ -15,6 +15,16 @@ type AVFrame struct {
 	Timestamp time.Duration // 绝对时间戳
 	Wrap      IAVFrame      `json:"-" yaml:"-"` // 封装格式
 }
+
+func (frame *AVFrame) Reset() {
+	frame.DataFrame.Reset()
+	frame.Timestamp = 0
+	if frame.Wrap != nil {
+		frame.Wrap.Recycle()
+		frame.Wrap = nil
+	}
+}
+
 type DataFrame struct {
 	WriteTime   time.Time    // 写入时间,可用于比较两个帧的先后
 	Sequence    uint32       // 在一个Track中的序号

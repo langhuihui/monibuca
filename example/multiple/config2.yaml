@@ -1,0 +1,15 @@
+global:
+  loglevel: debug
+  http:
+    listenaddr: :8081
+    listenaddrtls: :8555
+rtmp:
+  chunksize: 2048
+  tcp:
+    listenaddr: 
+  subscribe:
+    # submode: 1
+    subaudio: false
+  pull:
+    pullonstart:
+      live/pull: rtmp://localhost/live/test

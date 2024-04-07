@@ -133,9 +133,8 @@ type Plugin struct {
 	Meta     *PluginMeta
 	config   config.Common
 	config.Config
-	Publishers []*Publisher
-	handler    IPlugin
-	server     *Server
+	handler IPlugin
+	server  *Server
 }
 
 func (Plugin) nothing() {
@@ -237,12 +236,13 @@ func (p *Plugin) OnTCPConnect(conn *net.TCPConn) {
 func (p *Plugin) Publish(streamPath string, options ...any) (publisher *Publisher, err error) {
 	publisher = &Publisher{Publish: p.config.Publish}
 	publisher.Init(p, streamPath, options...)
-	err = sendPromiseToServer(p.server, publisher)
-	return
+	return publisher, sendPromiseToServer(p.server, publisher)
 }
 
 func (p *Plugin) Pull(streamPath string, url string, options ...any) (puller *Puller, err error) {
-  puller = &Puller{Pull: p.config.Pull}
+	puller = &Puller{Pull: p.config.Pull}
+	puller.Publish = p.config.Publish
+	puller.PublishTimeout = 0
 	puller.RemoteURL = url
 	puller.StreamPath = streamPath
 	puller.Init(p, streamPath, options...)
@@ -252,8 +252,7 @@ func (p *Plugin) Pull(streamPath string, url string, options ...any) (puller *Pu
 func (p *Plugin) Subscribe(streamPath string, options ...any) (subscriber *Subscriber, err error) {
 	subscriber = &Subscriber{Subscribe: p.config.Subscribe}
 	subscriber.Init(p, streamPath, options...)
-	err = sendPromiseToServer(p.server, subscriber)
-	return
+	return subscriber, sendPromiseToServer(p.server, subscriber)
 }
 
 func (p *Plugin) registerHandler() {

@@ -52,6 +52,7 @@ type Server struct {
 func NewServer() (s *Server) {
 	s = &Server{
 		Streams:   make(map[string]*Publisher),
+		Pulls:     make(map[string]*Puller),
 		Waiting:   make(map[string][]*Subscriber),
 		eventChan: make(chan any, 10),
 	}
@@ -202,10 +203,10 @@ func (s *Server) eventLoop() {
 				plugin.onEvent(event)
 			}
 		default:
-			if subStart := 3 + pubCount; chosen < subStart {
-				s.onUnpublish(s.Publishers[chosen-3])
+			if subStart, pubIndex := 3+pubCount, chosen-3; chosen < subStart {
+				s.onUnpublish(s.Publishers[pubIndex])
 				pubCount--
-				s.Publishers = slices.Delete(s.Publishers, chosen-3, chosen-2)
+				s.Publishers = slices.Delete(s.Publishers, pubIndex, pubIndex+1)
 			} else {
 				i := chosen - subStart
 				s.onUnsubscribe(s.Subscribers[i])
@@ -218,6 +219,7 @@ func (s *Server) eventLoop() {
 }
 
 func (s *Server) onUnsubscribe(subscriber *Subscriber) {
+	s.Info("unsubscribe", "streamPath", subscriber.StreamPath)
 	if subscriber.Publisher != nil {
 		subscriber.Publisher.RemoveSubscriber(subscriber)
 	}
@@ -225,9 +227,13 @@ func (s *Server) onUnsubscribe(subscriber *Subscriber) {
 
 func (s *Server) onUnpublish(publisher *Publisher) {
 	delete(s.Streams, publisher.StreamPath)
+	s.Info("unpublish", "streamPath", publisher.StreamPath, "count", len(s.Streams))
 	for subscriber := range publisher.Subscribers {
 		s.Waiting[publisher.StreamPath] = append(s.Waiting[publisher.StreamPath], subscriber)
 		subscriber.TimeoutTimer.Reset(publisher.WaitCloseTimeout)
+	}
+	if puller, ok := s.Pulls[publisher.StreamPath]; ok {
+		puller.Disconnect()
 	}
 }
 

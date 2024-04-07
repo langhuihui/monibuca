@@ -61,7 +61,7 @@ type NetConnection struct {
 	AppName         string
 	tmpBuf          util.Buffer //用来接收/发送小数据，复用内存
 	chunkHeader     util.Buffer
-	ByteChunkPool   *util.MemoryAllocator
+	ByteChunkPool   *util.ScalableMemoryAllocator
 	chunk           net.Buffers
 	writing         atomic.Bool // false 可写，true 不可写
 }
@@ -76,9 +76,10 @@ func NewNetConnection(conn net.Conn) *NetConnection {
 		bandwidth:       RTMP_MAX_CHUNK_SIZE << 3,
 		tmpBuf:          make(util.Buffer, 4),
 		chunkHeader:     make(util.Buffer, 0, 16),
-		ByteChunkPool:   util.NewMemoryAllocator(2048),
+		ByteChunkPool:   util.NewScalableMemoryAllocator(2048, 1),
 	}
 }
+
 func (conn *NetConnection) ReadFull(buf []byte) (n int, err error) {
 	n, err = io.ReadFull(conn.Reader, buf)
 	if err == nil {
@@ -139,7 +140,7 @@ func (conn *NetConnection) readChunk() (msg *Chunk, err error) {
 	if !ok {
 		chunk = &Chunk{}
 		conn.incommingChunks[ChunkStreamID] = chunk
-		chunk.AVData.MemoryAllocator = conn.ByteChunkPool
+		chunk.AVData.ScalableMemoryAllocator = conn.ByteChunkPool
 	}
 
 	if err = conn.readChunkType(&chunk.ChunkHeader, ChunkType); err != nil {
