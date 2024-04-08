@@ -10,29 +10,64 @@ import (
 	"m7s.live/m7s/v5/pkg/util"
 )
 
-type AVFrame struct {
-	DataFrame
-	Timestamp time.Duration // 绝对时间戳
-	Wrap      IAVFrame      `json:"-" yaml:"-"` // 封装格式
-}
+type (
+	ICodecCtx interface {
+		GetSequenceFrame() IAVFrame
+	}
+	IAudioCodecCtx interface {
+		ICodecCtx
+		GetSampleRate() int
+		GetChannels() int
+		GetSampleSize() int
+	}
+	IVideoCodecCtx interface {
+		ICodecCtx
+		GetWidth() int
+		GetHeight() int
+	}
+	IDataFrame interface {
+	}
+	IAVFrame interface {
+		DecodeConfig(*AVTrack) error
+		ToRaw(*AVTrack) (any, error)
+		FromRaw(*AVTrack, any) error
+		GetTimestamp() time.Duration
+		GetSize() int
+		Recycle()
+		IsIDR() bool
+		Print() string
+	}
+
+	Nalu = [][]byte
+
+	Nalus struct {
+		PTS   time.Duration
+		DTS   time.Duration
+		Nalus []Nalu
+	}
+	AVFrame struct {
+		DataFrame
+		Timestamp time.Duration // 绝对时间戳
+		Wrap      IAVFrame      `json:"-" yaml:"-"` // 封装格式
+	}
+	DataFrame struct {
+		sync.Cond   `json:"-" yaml:"-"`
+		readerCount atomic.Int32 // 读取者数量
+		Sequence    uint32       // 在一个Track中的序号
+		BytesIn     int          // 输入字节数用于计算BPS
+		WriteTime   time.Time    // 写入时间,可用于比较两个帧的先后
+		CanRead     bool         // 是否可读取
+		Raw         any          `json:"-" yaml:"-"` // 裸格式
+	}
+)
 
 func (frame *AVFrame) Reset() {
-	frame.DataFrame.Reset()
+	frame.BytesIn = 0
 	frame.Timestamp = 0
 	if frame.Wrap != nil {
 		frame.Wrap.Recycle()
 		frame.Wrap = nil
 	}
-}
-
-type DataFrame struct {
-	WriteTime   time.Time    // 写入时间,可用于比较两个帧的先后
-	Sequence    uint32       // 在一个Track中的序号
-	BytesIn     int          // 输入字节数用于计算BPS
-	CanRead     bool         `json:"-" yaml:"-"` // 是否可读取
-	readerCount atomic.Int32 `json:"-" yaml:"-"` // 读取者数量
-	Raw         any          `json:"-" yaml:"-"` // 裸格式
-	sync.Cond   `json:"-" yaml:"-"`
 }
 
 func (df *DataFrame) IsWriting() bool {
@@ -46,14 +81,6 @@ func (df *DataFrame) IsDiscarded() bool {
 func (df *DataFrame) Discard() int32 {
 	df.L = nil //标记为废弃
 	return df.readerCount.Load()
-}
-
-func (df *DataFrame) SetSequence(sequence uint32) {
-	df.Sequence = sequence
-}
-
-func (df *DataFrame) GetSequence() uint32 {
-	return df.Sequence
 }
 
 func (df *DataFrame) ReaderEnter() int32 {
@@ -89,36 +116,8 @@ func (df *DataFrame) Init() {
 	df.L = EmptyLocker
 }
 
-func (df *DataFrame) Reset() {
-	df.BytesIn = 0
-}
-
-type ICodecCtx interface {
-	GetSequenceFrame() IAVFrame
-}
-type IDataFrame interface {
-}
-type IAVFrame interface {
-	DecodeConfig(*AVTrack) error
-	ToRaw(*AVTrack) (any, error)
-	FromRaw(*AVTrack, any) error
-	GetTimestamp() time.Duration
-	GetSize() int
-	Recycle()
-	IsIDR() bool
-	Print() string
-}
-
-type Nalu [][]byte
-
-type Nalus struct {
-	PTS   time.Duration
-	DTS   time.Duration
-	Nalus []Nalu
-}
-
 func (nalus *Nalus) Append(bytes ...[]byte) {
-	nalus.Nalus = append(nalus.Nalus, Nalu(bytes))
+	nalus.Nalus = append(nalus.Nalus, bytes)
 }
 
 func (nalus *Nalus) ParseAVCC(reader *util.Buffers, naluSizeLen int) error {

@@ -96,7 +96,7 @@ func (rb *RingWriter) Reduce(size int) {
 func (rb *RingWriter) Step() (normal bool) {
 	rb.LastValue.Broadcast() // 防止订阅者还在等待
 	rb.LastValue = &rb.Value
-	nextSeq := rb.LastValue.GetSequence() + 1
+	nextSeq := rb.LastValue.Sequence + 1
 	next := rb.Next()
 	if normal = next.Value.StartWrite(); normal {
 		next.Value.Reset()
@@ -106,7 +106,7 @@ func (rb *RingWriter) Step() (normal bool) {
 		rb.Ring = rb.Glow(1) //补充一个新节点
 		rb.Value.StartWrite()
 	}
-	rb.Value.SetSequence(nextSeq)
+	rb.Value.Sequence = nextSeq
 	rb.LastValue.Ready()
 	return
 }

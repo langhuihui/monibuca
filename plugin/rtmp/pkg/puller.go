@@ -8,25 +8,18 @@ import (
 )
 
 type RTMPPuller struct {
-	*m7s.Puller
 	NetStream
 }
 
-func (puller *RTMPPuller) Connect() (err error) {
-	if puller.NetConnection, err = NewRTMPClient(puller.RemoteURL, puller.Publisher.Logger, 4096); err == nil {
-		puller.Closer = puller.NetConnection.Conn
-		puller.Info("connect", "remoteURL", puller.RemoteURL)
+func (puller *RTMPPuller) Connect(p *m7s.Puller) (err error) {
+	if puller.NetConnection, err = NewRTMPClient(p.RemoteURL, p.Publisher.Logger, 4096); err == nil {
+		puller.Info("connect", "remoteURL", p.RemoteURL)
 	}
 	return
 }
 
-func (puller *RTMPPuller) Disconnect() {
-	if puller.NetConnection != nil {
-		puller.NetConnection.Close()
-	}
-}
-
-func (puller *RTMPPuller) Pull() (err error) {
+func (puller *RTMPPuller) Pull(p *m7s.Puller) (err error) {
+	defer puller.Close()
 	err = puller.SendMessage(RTMP_MSG_AMF0_COMMAND, &CommandMessage{"createStream", 2})
 	for err == nil {
 		msg, err := puller.RecvMessage()
@@ -35,11 +28,11 @@ func (puller *RTMPPuller) Pull() (err error) {
 		}
 		switch msg.MessageTypeID {
 		case RTMP_MSG_AUDIO:
-			puller.WriteAudio(&RTMPAudio{msg.AVData})
+			p.WriteAudio(&RTMPAudio{msg.AVData})
 			msg.AVData = RTMPData{}
 			msg.AVData.ScalableMemoryAllocator = puller.NetConnection.ByteChunkPool
 		case RTMP_MSG_VIDEO:
-			puller.WriteVideo(&RTMPVideo{msg.AVData})
+			p.WriteVideo(&RTMPVideo{msg.AVData})
 			msg.AVData = RTMPData{}
 			msg.AVData.ScalableMemoryAllocator = puller.NetConnection.ByteChunkPool
 		case RTMP_MSG_AMF0_COMMAND:
@@ -52,12 +45,12 @@ func (puller *RTMPPuller) Pull() (err error) {
 					m.StreamId = response.StreamId
 					m.TransactionId = 4
 					m.CommandMessage.CommandName = "play"
-					URL, _ := url.Parse(puller.RemoteURL)
+					URL, _ := url.Parse(p.RemoteURL)
 					ps := strings.Split(URL.Path, "/")
-					puller.Args = URL.Query()
+					p.Args = URL.Query()
 					m.StreamName = ps[len(ps)-1]
-					if len(puller.Args) > 0 {
-						m.StreamName += "?" + puller.Args.Encode()
+					if len(p.Args) > 0 {
+						m.StreamName += "?" + p.Args.Encode()
 					}
 					puller.SendMessage(RTMP_MSG_AMF0_COMMAND, m)
 					// if response, ok := msg.MsgData.(*ResponsePlayMessage); ok {

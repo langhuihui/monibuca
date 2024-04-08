@@ -220,8 +220,19 @@ func (s *Server) eventLoop() {
 
 func (s *Server) onUnsubscribe(subscriber *Subscriber) {
 	s.Info("unsubscribe", "streamPath", subscriber.StreamPath)
+	if subscriber.Closer != nil {
+		subscriber.Close()
+	}
 	if subscriber.Publisher != nil {
 		subscriber.Publisher.RemoveSubscriber(subscriber)
+	}
+	if subscribers, ok := s.Waiting[subscriber.StreamPath]; ok {
+		if index := slices.Index(subscribers, subscriber); index >= 0 {
+			s.Waiting[subscriber.StreamPath] = slices.Delete(subscribers, index, index+1)
+			if len(subscribers) == 1 {
+				delete(s.Waiting, subscriber.StreamPath)
+			}
+		}
 	}
 }
 
@@ -232,8 +243,13 @@ func (s *Server) onUnpublish(publisher *Publisher) {
 		s.Waiting[publisher.StreamPath] = append(s.Waiting[publisher.StreamPath], subscriber)
 		subscriber.TimeoutTimer.Reset(publisher.WaitCloseTimeout)
 	}
+	if publisher.Closer != nil {
+		publisher.Close()
+	}
 	if puller, ok := s.Pulls[publisher.StreamPath]; ok {
-		puller.Disconnect()
+		delete(s.Pulls, publisher.StreamPath)
+		index := slices.Index(s.Pullers, puller)
+		s.Pullers = slices.Delete(s.Pullers, index, index+1)
 	}
 }
 
@@ -242,11 +258,7 @@ func (s *Server) OnPublish(publisher *Publisher) error {
 		if publisher.KickExist {
 			publisher.Warn("kick")
 			oldPublisher.Stop(ErrKick)
-			publisher.VideoTrack = oldPublisher.VideoTrack
-			publisher.AudioTrack = oldPublisher.AudioTrack
-			publisher.DataTrack = oldPublisher.DataTrack
-			publisher.Subscribers = oldPublisher.Subscribers
-			publisher.TransTrack = oldPublisher.TransTrack
+			publisher.TakeOver(oldPublisher)
 			oldPublisher.Subscribers = nil
 		} else {
 			return ErrStreamExist
@@ -264,7 +276,10 @@ func (s *Server) OnPublish(publisher *Publisher) error {
 	publisher.TimeoutTimer = time.NewTimer(p.config.PublishTimeout)
 	publisher.Info("publish")
 	if subscribers, ok := s.Waiting[publisher.StreamPath]; ok {
-		for _, subscriber := range subscribers {
+		for i, subscriber := range subscribers {
+			if i == 0 && subscriber.Publisher != nil {
+				publisher.TakeOver(subscriber.Publisher)
+			}
 			publisher.AddSubscriber(subscriber)
 		}
 		delete(s.Waiting, publisher.StreamPath)

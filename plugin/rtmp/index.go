@@ -18,20 +18,9 @@ type RTMPPlugin struct {
 var _ = m7s.InstallPlugin[RTMPPlugin](m7s.DefaultYaml(`tcp:
   listenaddr: :1935`))
 
-func (p *RTMPPlugin) pull(streamPath, url string) {
-	puller, err := p.Pull(streamPath, url)
-	if err != nil {
-		p.Error("pull", "streamPath", streamPath, "url", url, "error", err)
-		return
-	}
-	var rtmpPuller RTMPPuller
-	rtmpPuller.Puller = puller
-	puller.Start(&rtmpPuller)
-}
-
 func (p *RTMPPlugin) OnInit() {
 	for streamPath, url := range p.GetCommonConf().PullOnStart {
-		go p.pull(streamPath, url)
+		go p.Pull(streamPath, url, &RTMPPuller{})
 	}
 }
 

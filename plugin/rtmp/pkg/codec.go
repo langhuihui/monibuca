@@ -10,21 +10,126 @@ import (
 	"m7s.live/m7s/v5/pkg/util"
 )
 
-type AVCDecoderConfigurationRecord struct {
-	ConfigurationVersion       byte // 8 bits Version
-	AVCProfileIndication       byte // 8 bits
-	ProfileCompatibility       byte // 8 bits
-	AVCLevelIndication         byte // 8 bits
-	Reserved1                  byte // 6 bits
-	LengthSizeMinusOne         byte // 2 bits 非常重要,每个NALU包前面都(lengthSizeMinusOne & 3)+1个字节的NAL包长度描述
-	Reserved2                  byte // 3 bits
-	NumOfSequenceParameterSets byte // 5 bits SPS 的个数,计算方法是 numOfSequenceParameterSets & 0x1F
-	NumOfPictureParameterSets  byte // 8 bits PPS 的个数
+type (
+	AudioCodecID byte
+	VideoCodecID byte
 
-	SequenceParameterSetLength  uint16 // 16 byte SPS Length
-	SequenceParameterSetNALUnit []byte // n byte  SPS
-	PictureParameterSetLength   uint16 // 16 byte PPS Length
-	PictureParameterSetNALUnit  []byte // n byte  PPS
+	H264Ctx struct {
+		SequenceFrame *RTMPVideo
+		codec.SPSInfo
+		NalulenSize int
+		SPS         []byte
+		PPS         []byte
+	}
+
+	H265Ctx struct {
+		H264Ctx
+		VPS []byte
+	}
+
+	G711Ctx struct {
+		SampleRate int
+		Channels   int
+		SampleSize int
+	}
+
+	AACCtx struct {
+		G711Ctx
+		AudioSpecificConfig
+		SequenceFrame *RTMPAudio
+	}
+
+	GASpecificConfig struct {
+		FrameLengthFlag    byte // 1 bit
+		DependsOnCoreCoder byte // 1 bit
+		ExtensionFlag      byte // 1 bit
+	}
+
+	AudioSpecificConfig struct {
+		AudioObjectType        byte // 5 bits
+		SamplingFrequencyIndex byte // 4 bits
+		ChannelConfiguration   byte // 4 bits
+		GASpecificConfig
+	}
+	AVCDecoderConfigurationRecord struct {
+		ConfigurationVersion       byte // 8 bits Version
+		AVCProfileIndication       byte // 8 bits
+		ProfileCompatibility       byte // 8 bits
+		AVCLevelIndication         byte // 8 bits
+		Reserved1                  byte // 6 bits
+		LengthSizeMinusOne         byte // 2 bits 非常重要,每个NALU包前面都(lengthSizeMinusOne & 3)+1个字节的NAL包长度描述
+		Reserved2                  byte // 3 bits
+		NumOfSequenceParameterSets byte // 5 bits SPS 的个数,计算方法是 numOfSequenceParameterSets & 0x1F
+		NumOfPictureParameterSets  byte // 8 bits PPS 的个数
+
+		SequenceParameterSetLength  uint16 // 16 byte SPS Length
+		SequenceParameterSetNALUnit []byte // n byte  SPS
+		PictureParameterSetLength   uint16 // 16 byte PPS Length
+		PictureParameterSetNALUnit  []byte // n byte  PPS
+	}
+)
+
+const (
+	ADTS_HEADER_SIZE              = 7
+	CodecID_AAC      AudioCodecID = 0xA
+	CodecID_PCMA     AudioCodecID = 7
+	CodecID_PCMU     AudioCodecID = 8
+	CodecID_OPUS     AudioCodecID = 0xC
+	CodecID_H264     VideoCodecID = 7
+	CodecID_H265     VideoCodecID = 0xC
+	CodecID_AV1      VideoCodecID = 0xD
+)
+
+func (codecId AudioCodecID) String() string {
+	switch codecId {
+	case CodecID_AAC:
+		return "aac"
+	case CodecID_PCMA:
+		return "pcma"
+	case CodecID_PCMU:
+		return "pcmu"
+	case CodecID_OPUS:
+		return "opus"
+	}
+	return "unknow"
+}
+
+func ParseAudioCodec(name string) AudioCodecID {
+	switch name {
+	case "aac":
+		return CodecID_AAC
+	case "pcma":
+		return CodecID_PCMA
+	case "pcmu":
+		return CodecID_PCMU
+	case "opus":
+		return CodecID_OPUS
+	}
+	return 0
+}
+
+func (codecId VideoCodecID) String() string {
+	switch codecId {
+	case CodecID_H264:
+		return "h264"
+	case CodecID_H265:
+		return "h265"
+	case CodecID_AV1:
+		return "av1"
+	}
+	return "unknow"
+}
+
+func ParseVideoCodec(name string) VideoCodecID {
+	switch name {
+	case "h264":
+		return CodecID_H264
+	case "h265":
+		return CodecID_H265
+	case "av1":
+		return CodecID_AV1
+	}
+	return 0
 }
 
 func (p *AVCDecoderConfigurationRecord) Marshal(b []byte) (n int) {
@@ -308,49 +413,36 @@ func ParseSPS(data []byte) (self codec.SPSInfo, err error) {
 // 	return
 // }
 
-type H264Ctx struct {
-	SequenceFrame *RTMPVideo
-	codec.SPSInfo
-	NalulenSize int
-	SPS         []byte
-	PPS         []byte
-}
+var SamplingFrequencies = [...]int{96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350, 0, 0, 0}
 
 func (ctx *H264Ctx) GetSequenceFrame() IAVFrame {
 	return ctx.SequenceFrame
 }
 
-type H265Ctx struct {
-	H264Ctx
-	VPS []byte
+func (ctx *H264Ctx) GetWidth() int {
+	return int(ctx.SPSInfo.Width)
 }
-type G711Ctx struct {
+
+func (ctx *H264Ctx) GetHeight() int {
+	return int(ctx.SPSInfo.Height)
+}
+
+func (ctx *G711Ctx) GetSampleRate() int {
+	return ctx.SampleRate
+}
+
+func (ctx *G711Ctx) GetChannels() int {
+	return ctx.Channels
+}
+
+func (ctx *G711Ctx) GetSampleSize() int {
+	return ctx.SampleSize
 }
 
 func (ctx *G711Ctx) GetSequenceFrame() IAVFrame {
 	return nil
 }
 
-type AACCtx struct {
-	AudioSpecificConfig
-	SequenceFrame *RTMPAudio
-}
-
 func (ctx *AACCtx) GetSequenceFrame() IAVFrame {
 	return ctx.SequenceFrame
 }
-
-type GASpecificConfig struct {
-	FrameLengthFlag    byte // 1 bit
-	DependsOnCoreCoder byte // 1 bit
-	ExtensionFlag      byte // 1 bit
-}
-
-type AudioSpecificConfig struct {
-	AudioObjectType        byte // 5 bits
-	SamplingFrequencyIndex byte // 4 bits
-	ChannelConfiguration   byte // 4 bits
-	GASpecificConfig
-}
-
-var SamplingFrequencies = [...]int{96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350, 0, 0, 0}

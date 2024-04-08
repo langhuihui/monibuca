@@ -38,3 +38,10 @@ func (ns *NetStream) BeginPlay(tid uint64) (err error) {
 	err = ns.Response(tid, NetStream_Play_Start, Level_Status)
 	return
 }
+
+func (ns *NetStream) Close() error {
+	if ns.NetConnection != nil {
+		return ns.NetConnection.Close()
+	}
+	return nil
+}

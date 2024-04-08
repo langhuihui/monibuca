@@ -8,14 +8,13 @@ import (
 )
 
 type PullHandler interface {
-	Connect() error
-	Disconnect()
-	Pull() error
+	Connect(*Puller) error
+	// Disconnect()
+	Pull(*Puller) error
 }
 
 type Puller struct {
 	Publisher
-	PullHandler
 	config.Pull
 	RemoteURL      string // 远程服务器地址（用于推拉）
 	ReConnectCount int    //重连次数
@@ -29,7 +28,6 @@ func (p *Puller) reconnect() (ok bool) {
 }
 
 func (p *Puller) Start(handler PullHandler) (err error) {
-	p.PullHandler = handler
 	badPuller := true
 	var startTime time.Time
 	for p.Info("start pull"); p.reconnect(); p.Warn("restart pull") {
@@ -37,7 +35,7 @@ func (p *Puller) Start(handler PullHandler) (err error) {
 			time.Sleep(5 * time.Second)
 		}
 		startTime = time.Now()
-		if err = p.Connect(); err != nil {
+		if err = handler.Connect(p); err != nil {
 			if err == io.EOF {
 				p.Info("pull complete")
 				return
@@ -49,7 +47,7 @@ func (p *Puller) Start(handler PullHandler) (err error) {
 		} else {
 			badPuller = false
 			p.ReConnectCount = 0
-			if err = handler.Pull(); err != nil && !p.IsStopped() {
+			if err = handler.Pull(p); err != nil && !p.IsStopped() {
 				p.Error("pull interrupt", "error", err)
 			}
 		}
@@ -57,12 +55,7 @@ func (p *Puller) Start(handler PullHandler) (err error) {
 			p.Info("stop pull")
 			return
 		}
-		handler.Disconnect()
+		// handler.Disconnect()
 	}
 	return nil
-}
-
-func (p *Puller) Stop(err error) {
-	p.Disconnect()
-	p.Publisher.Stop(err)
 }

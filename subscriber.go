@@ -17,19 +17,18 @@ type PubSubBase struct {
 	Unit
 	ID           int
 	Plugin       *Plugin
-	StartTime    time.Time
 	StreamPath   string
 	Args         url.Values
 	TimeoutTimer *time.Timer
 	io.Closer
 }
 
-func (ps *PubSubBase) Stop(reason error) {
-	ps.Unit.Stop(reason)
-	if ps.Closer != nil {
-		ps.Closer.Close()
-	}
-}
+// func (ps *PubSubBase) Stop(reason error) {
+// 	ps.Unit.Stop(reason)
+// 	if ps.Closer != nil {
+// 		ps.Closer.Close()
+// 	}
+// }
 
 func (ps *PubSubBase) Init(p *Plugin, streamPath string, options ...any) {
 	ps.Plugin = p

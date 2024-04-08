@@ -23,10 +23,16 @@ func (avcc *RTMPAudio) DecodeConfig(track *AVTrack) error {
 		case 7:
 			track.Codec = "pcmu"
 			var ctx G711Ctx
+			ctx.SampleRate = 8000
+			ctx.Channels = 1
+			ctx.SampleSize = 8
 			track.ICodecCtx = &ctx
 		case 8:
 			track.Codec = "pcma"
 			var ctx G711Ctx
+			ctx.SampleRate = 8000
+			ctx.Channels = 1
+			ctx.SampleSize = 8
 			track.ICodecCtx = &ctx
 		case 10:
 			track.Codec = "aac"
@@ -46,6 +52,9 @@ func (avcc *RTMPAudio) DecodeConfig(track *AVTrack) error {
 			ctx.DependsOnCoreCoder = (b1 >> 1) & 0x01
 			ctx.ExtensionFlag = b1 & 0x01
 			ctx.SequenceFrame = avcc
+			ctx.Channels = int(ctx.ChannelConfiguration)
+			ctx.SampleRate = SamplingFrequencies[ctx.SamplingFrequencyIndex]
+			ctx.SampleSize = 16
 			track.ICodecCtx = &ctx
 		}
 	}

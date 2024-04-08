@@ -76,7 +76,7 @@ func NewNetConnection(conn net.Conn) *NetConnection {
 		bandwidth:       RTMP_MAX_CHUNK_SIZE << 3,
 		tmpBuf:          make(util.Buffer, 4),
 		chunkHeader:     make(util.Buffer, 0, 16),
-		ByteChunkPool:   util.NewScalableMemoryAllocator(2048, 1),
+		ByteChunkPool:   util.NewScalableMemoryAllocator(2048),
 	}
 }
 

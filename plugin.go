@@ -246,6 +246,16 @@ func (p *Plugin) Pull(streamPath string, url string, options ...any) (puller *Pu
 	puller.RemoteURL = url
 	puller.StreamPath = streamPath
 	puller.Init(p, streamPath, options...)
+	for _, option := range options {
+		switch v := option.(type) {
+		case PullHandler:
+			defer func() {
+				if err == nil {
+					puller.Start(v)
+				}
+			}()
+		}
+	}
 	return puller, sendPromiseToServer(p.server, puller)
 }
 

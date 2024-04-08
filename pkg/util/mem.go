@@ -84,18 +84,10 @@ func (ma *MemoryAllocator) Free(mem []byte) bool {
 	return ma.Free2(start, start+len(mem))
 }
 
-type ScalableMemoryAllocator struct {
-	children []*MemoryAllocator
-}
+type ScalableMemoryAllocator []*MemoryAllocator
 
-func NewScalableMemoryAllocator(size int, count int) (ret *ScalableMemoryAllocator) {
-	ret = &ScalableMemoryAllocator{
-		children: make([]*MemoryAllocator, count),
-	}
-	for i := range count {
-		ret.children[i] = NewMemoryAllocator(size)
-	}
-	return
+func NewScalableMemoryAllocator(size int) (ret *ScalableMemoryAllocator) {
+	return &ScalableMemoryAllocator{NewMemoryAllocator(size)}
 }
 
 func (sma *ScalableMemoryAllocator) Malloc(size int) (memory []byte) {
@@ -104,22 +96,22 @@ func (sma *ScalableMemoryAllocator) Malloc(size int) (memory []byte) {
 }
 
 func (sma *ScalableMemoryAllocator) Malloc2(size int) (memory []byte, index, start, end int) {
-	for i, child := range sma.children {
+	for i, child := range *sma {
 		index = i
 		if memory, start, end = child.Malloc2(size); memory != nil {
 			return
 		}
 	}
-	n := NewMemoryAllocator(max(sma.children[index].Size*2, size))
+	n := NewMemoryAllocator(max((*sma)[index].Size*2, size))
 	index++
 	memory, start, end = n.Malloc2(size)
-	sma.children = append(sma.children, n)
+	*sma = append(*sma, n)
 	return
 }
 
 func (sma *ScalableMemoryAllocator) Free(mem []byte) bool {
 	ptr := uintptr(unsafe.Pointer(&mem[:1][0]))
-	for _, child := range sma.children {
+	for _, child := range *sma {
 		if start := int(int64(ptr) - child.start); child.Free2(start, start+len(mem)) {
 			return true
 		}
@@ -128,10 +120,10 @@ func (sma *ScalableMemoryAllocator) Free(mem []byte) bool {
 }
 
 func (sma *ScalableMemoryAllocator) Free2(index, start, end int) bool {
-	if index < 0 || index >= len(sma.children) {
+	if index < 0 || index >= len(*sma) {
 		return false
 	}
-	return sma.children[index].Free2(start, end)
+	return (*sma)[index].Free2(start, end)
 }
 
 type RecyclableMemory struct {
@@ -145,7 +137,7 @@ func (r *RecyclableMemory) Malloc(size int) (memory []byte) {
 	// if lastI, lastE := ml-3, ml-1; lastI > 0 && r.mem[lastI] == i && r.mem[lastE] == start {
 	// 	r.mem[lastE] = end
 	// } else {
-		r.mem = append(r.mem, i, start, end)
+	r.mem = append(r.mem, i, start, end)
 	// }
 	return ret
 }

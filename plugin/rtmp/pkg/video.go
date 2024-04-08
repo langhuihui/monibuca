@@ -4,7 +4,6 @@ import (
 	"time"
 
 	. "m7s.live/m7s/v5/pkg"
-	"m7s.live/m7s/v5/pkg/codec"
 	"m7s.live/m7s/v5/pkg/util"
 )
 
@@ -72,7 +71,7 @@ func (avcc *RTMPVideo) DecodeConfig(track *AVTrack) error {
 		if err != nil {
 			return err
 		}
-		if codec.VideoCodecID(b0&0x0F) == codec.CodecID_H265 {
+		if VideoCodecID(b0&0x0F) == CodecID_H265 {
 			track.Codec = "h265"
 		} else {
 			track.Codec = "h264"

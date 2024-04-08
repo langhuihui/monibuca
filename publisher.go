@@ -29,6 +29,8 @@ type Publisher struct {
 	TransTrack  map[reflect.Type]*AVTrack
 	Subscribers map[*Subscriber]struct{}
 	GOP         int
+	baseTs      time.Duration
+	lastTs      time.Duration
 }
 
 func (p *Publisher) timeout() (err error) {
@@ -85,13 +87,15 @@ func (p *Publisher) AddSubscriber(subscriber *Subscriber) (err error) {
 	p.Lock()
 	defer p.Unlock()
 	subscriber.Publisher = p
-	p.Subscribers[subscriber] = struct{}{}
-	p.Info("subscriber +1", "count", len(p.Subscribers))
-	switch p.State {
-	case PublisherStateTrackAdded, PublisherStateWaitSubscriber:
-		p.State = PublisherStateSubscribed
-		if p.PublishTimeout > 0 {
-			p.TimeoutTimer.Reset(p.PublishTimeout)
+	if _, ok := p.Subscribers[subscriber]; !ok {
+		p.Subscribers[subscriber] = struct{}{}
+		p.Info("subscriber +1", "count", len(p.Subscribers))
+		switch p.State {
+		case PublisherStateTrackAdded, PublisherStateWaitSubscriber:
+			p.State = PublisherStateSubscribed
+			if p.PublishTimeout > 0 {
+				p.TimeoutTimer.Reset(p.PublishTimeout)
+			}
 		}
 	}
 	return
@@ -100,7 +104,12 @@ func (p *Publisher) AddSubscriber(subscriber *Subscriber) (err error) {
 func (p *Publisher) writeAV(t *AVTrack, data IAVFrame) {
 	frame := &t.Value
 	frame.Wrap = data
-	frame.Timestamp = data.GetTimestamp()
+	ts := data.GetTimestamp()
+	if p.lastTs == 0 {
+		p.baseTs -= ts
+	}
+	frame.Timestamp = max(1, p.baseTs+ts)
+	p.lastTs = frame.Timestamp
 	p.Debug("write", "seq", frame.Sequence)
 	t.Step()
 }
@@ -130,12 +139,12 @@ func (p *Publisher) WriteVideo(data IAVFrame) (err error) {
 	if data.IsIDR() {
 		if t.IDRing != nil {
 			p.GOP = int(t.Value.Sequence - t.IDRing.Value.Sequence)
-			// if t.HistoryRing == nil {
-			// 	if l := t.Size - p.GOP; l > 12 {
-			// 		t.Debug("resize", "gop", p.GOP, "before", t.Size, "after", t.Size-5)
-			// 		t.Reduce(5) //缩小缓冲环节省内存
-			// 	}
-			// }
+			if t.HistoryRing == nil {
+				if l := t.Size - p.GOP; l > 12 {
+					t.Debug("resize", "gop", p.GOP, "before", t.Size, "after", t.Size-5)
+					t.Reduce(5) //缩小缓冲环节省内存
+				}
+			}
 		}
 		if p.BufferTime > 0 {
 			t.IDRingList.AddIDR(t.Ring)
@@ -196,4 +205,20 @@ func (p *Publisher) GetVideoTrack(dataType reflect.Type) (t *AVTrack) {
 		return t
 	}
 	return
+}
+
+func (p *Publisher) TakeOver(old *Publisher) {
+	p.baseTs = old.lastTs
+	p.VideoTrack = old.VideoTrack
+	p.VideoTrack.ICodecCtx = nil
+	p.VideoTrack.Logger = p.Logger.With("track", "video")
+	p.AudioTrack = old.AudioTrack
+	p.AudioTrack.ICodecCtx = nil
+	p.AudioTrack.Logger = p.Logger.With("track", "audio")
+	p.DataTrack = old.DataTrack
+	p.Subscribers = old.Subscribers
+	p.TransTrack = old.TransTrack
+	// for _, track := range p.TransTrack {
+	// 	track.ICodecCtx = nil
+	// }
 }
