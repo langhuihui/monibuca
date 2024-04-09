@@ -16,11 +16,11 @@ import (
 type PubSubBase struct {
 	Unit
 	ID           int
-	Plugin       *Plugin
+	Plugin       *Plugin `json:"-" yaml:"-"`
 	StreamPath   string
 	Args         url.Values
-	TimeoutTimer *time.Timer
-	io.Closer
+	TimeoutTimer *time.Timer `json:"-" yaml:"-"`
+	io.Closer    `json:"-" yaml:"-"`
 }
 
 // func (ps *PubSubBase) Stop(reason error) {

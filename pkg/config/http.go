@@ -20,45 +20,49 @@ type HTTP struct {
 	ReadTimeout   time.Duration `desc:"读取超时"`
 	WriteTimeout  time.Duration `desc:"写入超时"`
 	IdleTimeout   time.Duration `desc:"空闲超时"`
-	mux           *http.ServeMux
+	mux           http.Handler
 	server        *http.Server
 	serverTLS     *http.Server
-	middlewares   []Middleware
+	// middlewares   []Middleware
 }
 type HTTPConfig interface {
 	GetHTTPConfig() *HTTP
-	Handle(string, http.Handler)
-	Handler(*http.Request) (http.Handler, string)
-	AddMiddleware(Middleware)
+	// Handle(string, http.Handler)
+	// Handler(*http.Request) (http.Handler, string)
+	// AddMiddleware(Middleware)
 }
 
-func (config *HTTP) AddMiddleware(middleware Middleware) {
-	config.middlewares = append(config.middlewares, middleware)
+func (config *HTTP) SetMux(mux http.Handler) {
+	config.mux = mux
 }
 
-func (config *HTTP) Handle(path string, f http.Handler) {
-	if config.mux == nil {
-		config.mux = http.NewServeMux()
-	}
-	if config.CORS {
-		// f = util.CORS(f)
-	}
-	if config.UserName != "" && config.Password != "" {
-		// f = util.BasicAuth(config.UserName, config.Password, f)
-	}
-	for _, middleware := range config.middlewares {
-		f = middleware(path, f)
-	}
-	config.mux.Handle(path, f)
-}
+// func (config *HTTP) AddMiddleware(middleware Middleware) {
+// 	config.middlewares = append(config.middlewares, middleware)
+// }
+
+// func (config *HTTP) Handle(path string, f http.Handler) {
+// 	if config.mux == nil {
+// 		config.mux = http.NewServeMux()
+// 	}
+// 	if config.CORS {
+// 		// f = util.CORS(f)
+// 	}
+// 	if config.UserName != "" && config.Password != "" {
+// 		// f = util.BasicAuth(config.UserName, config.Password, f)
+// 	}
+// 	for _, middleware := range config.middlewares {
+// 		f = middleware(path, f)
+// 	}
+// 	config.mux.Handle(path, f)
+// }
 
 func (config *HTTP) GetHTTPConfig() *HTTP {
 	return config
 }
 
-func (config *HTTP) Handler(r *http.Request) (h http.Handler, pattern string) {
-	return config.mux.Handler(r)
-}
+// func (config *HTTP) Handler(r *http.Request) (h http.Handler, pattern string) {
+// 	return config.mux.Handler(r)
+// }
 
 func (config *HTTP) StopListen() {
 	if config.server != nil {

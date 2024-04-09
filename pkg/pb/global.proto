@@ -1,0 +1,35 @@
+syntax = "proto3";
+import "google/api/annotations.proto";
+package m7s;
+option go_package="m7s.live/m7s/v5/pkg/pb";
+
+service Global {
+  rpc StreamSnap (StreamSnapRequest) returns (StreamSnapShot) {
+    option (google.api.http) = {
+      get: "/api/stream/snap/{streamPath=**}"
+    };
+  }
+}
+
+message StreamSnapRequest {
+  string streamPath = 1;
+}
+
+message Wrap {
+  uint32 timestamp = 1;
+  uint32 size = 2;
+  string data = 3;
+}
+
+message TrackSnapShot {
+  uint32 sequence = 1;
+  uint32 timestamp = 2;
+  uint64 writeTime = 3;
+  bool canRead = 4;
+  Wrap wrap = 5;
+}
+
+message StreamSnapShot {
+  repeated TrackSnapShot videoTrack = 1;
+  repeated TrackSnapShot audioTrack = 2;
+}

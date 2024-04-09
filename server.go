@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -13,10 +14,14 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/mcuadros/go-defaults"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"gopkg.in/yaml.v3"
 	. "m7s.live/m7s/v5/pkg"
 	"m7s.live/m7s/v5/pkg/config"
+	"m7s.live/m7s/v5/pkg/pb"
 	"m7s.live/m7s/v5/pkg/util"
 )
 
@@ -34,6 +39,7 @@ var (
 )
 
 type Server struct {
+	pb.UnimplementedGlobalServer
 	Plugin
 	config.Engine
 	eventChan   chan any
@@ -69,8 +75,11 @@ func Run(ctx context.Context, conf any) error {
 func (s *Server) Run(ctx context.Context, conf any) (err error) {
 	s.Logger = slog.With("server", serverIndexG.Add(1))
 	s.Context, s.CancelCauseFunc = context.WithCancelCause(ctx)
+	mux := runtime.NewServeMux()
+	s.config.HTTP.SetMux(mux)
 	s.config.HTTP.ListenAddrTLS = ":8443"
 	s.config.HTTP.ListenAddr = ":8080"
+
 	s.Info("start")
 
 	var cg map[string]map[string]any
@@ -103,7 +112,7 @@ func (s *Server) Run(ctx context.Context, conf any) (err error) {
 	var lv slog.LevelVar
 	lv.UnmarshalText([]byte(s.LogLevel))
 	slog.SetLogLoggerLevel(lv.Level())
-	s.registerHandler()
+	// s.registerHandler()
 	if s.config.HTTP.ListenAddrTLS != "" {
 		s.Info("https listen at ", "addr", s.config.HTTP.ListenAddrTLS)
 		go func() {
@@ -114,6 +123,24 @@ func (s *Server) Run(ctx context.Context, conf any) (err error) {
 		s.Info("http listen at ", "addr", s.config.HTTP.ListenAddr)
 		go func() {
 			s.Stop(s.config.HTTP.Listen())
+		}()
+	}
+	if s.config.TCP.ListenAddr != "" {
+		lis, err := net.Listen("tcp", s.config.TCP.ListenAddr)
+		if err != nil {
+			s.Error("failed to listen", "error", err)
+			return err
+		}
+		var opts []grpc.ServerOption
+		grpcServer := grpc.NewServer(opts...)
+		pb.RegisterGlobalServer(grpcServer, s)
+		gwopts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
+		if err = pb.RegisterGlobalHandlerFromEndpoint(ctx, mux, s.config.TCP.ListenAddr, gwopts); err != nil {
+			s.Error("register handler faild", "error", err)
+			return err
+		}
+		go func() {
+			s.Stop(grpcServer.Serve(lis))
 		}()
 	}
 	for _, plugin := range plugins {
@@ -138,6 +165,16 @@ func (s *Server) eventLoop() {
 	defer pulse.Stop()
 	cases := []reflect.SelectCase{{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(s.Done())}, {Dir: reflect.SelectRecv, Chan: reflect.ValueOf(pulse.C)}, {Dir: reflect.SelectRecv, Chan: reflect.ValueOf(s.eventChan)}}
 	var pubCount, subCount int
+	addPublisher := func(publisher *Publisher) {
+		if nl := len(s.Publishers); nl > pubCount {
+			pubCount = nl
+			if subCount == 0 {
+				cases = append(cases, reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(publisher.Done())})
+			} else {
+				cases = slices.Insert(cases, 3+pubCount, reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(publisher.Done())})
+			}
+		}
+	}
 	for {
 		switch chosen, rev, _ := reflect.Select(cases); chosen {
 		case 0:
@@ -161,18 +198,17 @@ func (s *Server) eventLoop() {
 			event := rev.Interface()
 			switch v := event.(type) {
 			case *util.Promise[*Publisher]:
-				v.Fulfill(s.OnPublish(v.Value))
-				event = v.Value
-				if nl := len(s.Publishers); nl > pubCount {
-					pubCount = nl
-					if subCount == 0 {
-						cases = append(cases, reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(v.Value.Done())})
-					} else {
-						cases = slices.Insert(cases, 3+pubCount, reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(v.Value.Done())})
-					}
+				err := s.OnPublish(v.Value)
+				if v.Fulfill(err); err != nil {
+					continue
 				}
+				event = v.Value
+				addPublisher(v.Value)
 			case *util.Promise[*Subscriber]:
-				v.Fulfill(s.OnSubscribe(v.Value))
+				err := s.OnSubscribe(v.Value)
+				if v.Fulfill(err); err != nil {
+					continue
+				}
 				if nl := len(s.Subscribers); nl > subCount {
 					subCount = nl
 					cases = append(cases, reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(v.Value.Done())})
@@ -182,19 +218,24 @@ func (s *Server) eventLoop() {
 				}
 				event = v.Value
 			case *util.Promise[*Puller]:
-				err := s.OnPublish(&v.Value.Publisher)
-				if err != nil {
-					v.Fulfill(err)
+				if _, ok := s.Pulls[v.Value.StreamPath]; ok {
+					v.Fulfill(ErrStreamExist)
+					continue
 				} else {
-					if _, ok := s.Pulls[v.Value.StreamPath]; ok {
-						v.Fulfill(ErrStreamExist)
-					} else {
-						s.Pulls[v.Value.StreamPath] = v.Value
-						s.Pullers = append(s.Pullers, v.Value)
-						v.Fulfill(nil)
-						event = v.Value
+					err := s.OnPublish(&v.Value.Publisher)
+					v.Fulfill(err)
+					if err != nil {
+						continue
 					}
+					s.Pulls[v.Value.StreamPath] = v.Value
+					s.Pullers = append(s.Pullers, v.Value)
+					addPublisher(&v.Value.Publisher)
+					event = v.Value
 				}
+			case *util.Promise[*StreamSnapShot]:
+				v.Value.Publisher = s.Streams[v.Value.StreamPath]
+				v.Fulfill(nil)
+				continue
 			}
 			for _, plugin := range s.Plugins {
 				if plugin.Disabled {
@@ -314,4 +355,19 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	for _, api := range s.apiList {
 		fmt.Fprintf(w, "%s\n", api)
 	}
+}
+
+type StreamSnapShot struct {
+	StreamPath string
+	*Publisher
+}
+
+func (s *Server) StreamSnap(ctx context.Context, req *pb.StreamSnapRequest) (res *pb.StreamSnapShot, err error) {
+	promise := util.NewPromise(&StreamSnapShot{StreamPath: req.StreamPath})
+	s.eventChan <- promise
+	<-promise.Done()
+	if promise.Value.Publisher == nil {
+		return nil, context.Cause(promise.Context)
+	}
+	return promise.Value.SnapShot(), nil
 }

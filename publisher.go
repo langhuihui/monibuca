@@ -7,6 +7,7 @@ import (
 
 	. "m7s.live/m7s/v5/pkg"
 	"m7s.live/m7s/v5/pkg/config"
+	"m7s.live/m7s/v5/pkg/pb"
 )
 
 type PublisherState int
@@ -20,14 +21,14 @@ const (
 
 type Publisher struct {
 	PubSubBase
-	sync.RWMutex
+	sync.RWMutex `json:"-" yaml:"-"`
 	config.Publish
 	State       PublisherState
 	VideoTrack  *AVTrack
 	AudioTrack  *AVTrack
 	DataTrack   *DataTrack
-	TransTrack  map[reflect.Type]*AVTrack
-	Subscribers map[*Subscriber]struct{}
+	TransTrack  map[reflect.Type]*AVTrack `json:"-" yaml:"-"`
+	Subscribers map[*Subscriber]struct{}  `json:"-" yaml:"-"`
 	GOP         int
 	baseTs      time.Duration
 	lastTs      time.Duration
@@ -221,4 +222,43 @@ func (p *Publisher) TakeOver(old *Publisher) {
 	// for _, track := range p.TransTrack {
 	// 	track.ICodecCtx = nil
 	// }
+}
+
+func (p *Publisher) SnapShot() (ret *pb.StreamSnapShot) {
+	ret = &pb.StreamSnapShot{}
+	if p.VideoTrack != nil {
+		p.VideoTrack.Ring.Do(func(v *AVFrame) {
+			var snap pb.TrackSnapShot
+			snap.CanRead = v.CanRead
+			snap.Sequence = v.Sequence
+			snap.Timestamp = uint32(v.Timestamp)
+			snap.WriteTime = uint64(v.WriteTime.UnixNano())
+			if v.Wrap != nil {
+				snap.Wrap = &pb.Wrap{
+					Timestamp: uint32(v.Wrap.GetTimestamp()),
+					Size:      uint32(v.Wrap.GetSize()),
+					Data:      v.Wrap.Print(),
+				}
+			}
+			ret.VideoTrack = append(ret.VideoTrack, &snap)
+		})
+	}
+	if p.AudioTrack != nil {
+		p.AudioTrack.Ring.Do(func(v *AVFrame) {
+			var snap pb.TrackSnapShot
+			snap.CanRead = v.CanRead
+			snap.Sequence = v.Sequence
+			snap.Timestamp = uint32(v.Timestamp)
+			snap.WriteTime = uint64(v.WriteTime.UnixNano())
+			if v.Wrap != nil {
+				snap.Wrap = &pb.Wrap{
+					Timestamp: uint32(v.Wrap.GetTimestamp()),
+					Size:      uint32(v.Wrap.GetSize()),
+					Data:      v.Wrap.Print(),
+				}
+			}
+			ret.AudioTrack = append(ret.AudioTrack, &snap)
+		})
+	}
+	return
 }

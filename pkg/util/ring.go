@@ -126,11 +126,12 @@ func (r *Ring[T]) Len() int {
 
 // Do calls function f on each element of the ring, in forward order.
 // The behavior of Do is undefined if f changes *r.
-func (r *Ring[T]) Do(f func(T)) {
+func (r *Ring[T]) Do(f func(*T)) {
 	if r != nil {
-		f(r.Value)
+		f(&r.Value)
 		for p := r.Next(); p != r; p = p.next {
-			f(p.Value)
+			f(&p.Value)
 		}
 	}
 }
+

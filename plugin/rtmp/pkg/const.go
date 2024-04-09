@@ -29,6 +29,10 @@ func (avcc *RTMPData) GetSize() int {
 	return avcc.Length
 }
 
+func (avcc *RTMPData) MarshalJSON() ([]byte, error) {
+	return []byte(fmt.Sprintf(`{"Timestamp":%d,"Size":%d,"Data":"%s"}`, avcc.Timestamp, avcc.Length, avcc.Print())), nil
+}
+
 func (avcc *RTMPData) Print() string {
 	return fmt.Sprintf("% 02X", avcc.Buffers.Buffers[0][:5])
 }

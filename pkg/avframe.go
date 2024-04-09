@@ -48,7 +48,7 @@ type (
 	AVFrame struct {
 		DataFrame
 		Timestamp time.Duration // 绝对时间戳
-		Wrap      IAVFrame      `json:"-" yaml:"-"` // 封装格式
+		Wrap      IAVFrame      // 封装格式
 	}
 	DataFrame struct {
 		sync.Cond   `json:"-" yaml:"-"`
