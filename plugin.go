@@ -3,6 +3,7 @@ package m7s
 import (
 	"context"
 	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -33,13 +34,12 @@ func (plugin *PluginMeta) Init(s *Server, userConfig map[string]any) {
 	p.Meta = plugin
 	p.server = s
 	p.Logger = s.Logger.With("plugin", plugin.Name)
-	p.Context, p.CancelCauseFunc = context.WithCancelCause(s.Context)
-	s.Plugins = append(s.Plugins, p)
 	if os.Getenv(strings.ToUpper(plugin.Name)+"_ENABLE") == "false" {
 		p.Disabled = true
 		p.Warn("disabled by env")
 		return
 	}
+	s.Plugins = append(s.Plugins, p)
 	p.Config.Parse(p.GetCommonConf())
 	p.Config.Parse(instance, strings.ToUpper(plugin.Name))
 	for _, fname := range MergeConfigs {
@@ -159,7 +159,7 @@ func (p *Plugin) assign() {
 		}
 		p.Config.ParseModifyFile(modifyConfig)
 	}
-	// p.registerHandler()
+	p.registerHandler()
 }
 
 func (p *Plugin) Stop(err error) {
@@ -169,7 +169,8 @@ func (p *Plugin) Stop(err error) {
 }
 
 func (p *Plugin) Start() {
-	httpConf := p.config.HTTP
+	p.Context, p.CancelCauseFunc = context.WithCancelCause(p.server.Context)
+	httpConf := &p.config.HTTP
 	if httpConf.ListenAddrTLS != "" && (httpConf.ListenAddrTLS != p.server.config.HTTP.ListenAddrTLS) {
 		p.Info("https listen at ", "addr", httpConf.ListenAddrTLS)
 		go func() {
@@ -182,13 +183,13 @@ func (p *Plugin) Start() {
 			p.Stop(httpConf.Listen())
 		}()
 	}
-	tcpConf := p.config.TCP
+	tcpConf := &p.config.TCP
 	tcphandler, ok := p.handler.(ITCPPlugin)
 	if !ok {
 		tcphandler = p
 	}
 
-	if p.config.TCP.ListenAddr != "" {
+	if tcpConf.ListenAddr != "" {
 		p.Info("listen tcp", "addr", tcpConf.ListenAddr)
 		go func() {
 			err := tcpConf.Listen(tcphandler.OnTCPConnect)
@@ -264,48 +265,48 @@ func (p *Plugin) Subscribe(streamPath string, options ...any) (subscriber *Subsc
 	return subscriber, sendPromiseToServer(p.server, subscriber)
 }
 
-// func (p *Plugin) registerHandler() {
-// 	t := reflect.TypeOf(p.handler)
-// 	v := reflect.ValueOf(p.handler)
-// 	// 注册http响应
-// 	for i, j := 0, t.NumMethod(); i < j; i++ {
-// 		name := t.Method(i).Name
-// 		if name == "ServeHTTP" {
-// 			continue
-// 		}
-// 		switch handler := v.Method(i).Interface().(type) {
-// 		case func(http.ResponseWriter, *http.Request):
-// 			patten := strings.ToLower(strings.ReplaceAll(name, "_", "/"))
-// 			p.handle(patten, http.HandlerFunc(handler))
-// 		}
-// 	}
-// 	if rootHandler, ok := p.handler.(http.Handler); ok {
-// 		p.handle("/", rootHandler)
-// 	}
-// }
+func (p *Plugin) registerHandler() {
+	t := reflect.TypeOf(p.handler)
+	v := reflect.ValueOf(p.handler)
+	// 注册http响应
+	for i, j := 0, t.NumMethod(); i < j; i++ {
+		name := t.Method(i).Name
+		if name == "ServeHTTP" {
+			continue
+		}
+		switch handler := v.Method(i).Interface().(type) {
+		case func(http.ResponseWriter, *http.Request):
+			patten := strings.ToLower(strings.ReplaceAll(name, "_", "/"))
+			p.handle(patten, http.HandlerFunc(handler))
+		}
+	}
+	if rootHandler, ok := p.handler.(http.Handler); ok {
+		p.handle("/", rootHandler)
+	}
+}
 
-// func (p *Plugin) logHandler(handler http.Handler) http.Handler {
-// 	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
-// 		p.Debug("visit", "path", r.URL.String(), "remote", r.RemoteAddr)
-// 		name := strings.ToLower(p.Meta.Name)
-// 		r.URL.Path = strings.TrimPrefix(r.URL.Path, "/"+name)
-// 		handler.ServeHTTP(rw, r)
-// 	})
-// }
+func (p *Plugin) logHandler(handler http.Handler) http.Handler {
+	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		p.Debug("visit", "path", r.URL.String(), "remote", r.RemoteAddr)
+		name := strings.ToLower(p.Meta.Name)
+		r.URL.Path = strings.TrimPrefix(r.URL.Path, "/"+name)
+		handler.ServeHTTP(rw, r)
+	})
+}
 
-// func (p *Plugin) handle(pattern string, handler http.Handler) {
-// 	if p == nil {
-// 		return
-// 	}
-// 	if !strings.HasPrefix(pattern, "/") {
-// 		pattern = "/" + pattern
-// 	}
-// 	handler = p.logHandler(handler)
-// 	p.GetCommonConf().Handle(pattern, handler)
-// 	if p.server != p.handler {
-// 		pattern = "/" + strings.ToLower(p.Meta.Name) + pattern
-// 		p.Debug("http handle added to server", "pattern", pattern)
-// 		p.server.GetCommonConf().Handle(pattern, handler)
-// 	}
-// 	p.server.apiList = append(p.server.apiList, pattern)
-// }
+func (p *Plugin) handle(pattern string, handler http.Handler) {
+	if p == nil {
+		return
+	}
+	if !strings.HasPrefix(pattern, "/") {
+		pattern = "/" + pattern
+	}
+	handler = p.logHandler(handler)
+	p.GetCommonConf().Handle(pattern, handler)
+	if p.server != p.handler {
+		pattern = "/" + strings.ToLower(p.Meta.Name) + pattern
+		p.Debug("http handle added to server", "pattern", pattern)
+		p.server.GetCommonConf().Handle(pattern, handler)
+	}
+	p.server.apiList = append(p.server.apiList, pattern)
+}

@@ -24,6 +24,11 @@ func NewPromise[T any](v T) *Promise[T] {
 var ErrResolve = errors.New("promise resolved")
 var ErrTimeout = errors.New("promise timeout")
 
+func (p *Promise[T]) Resolve(v T) {
+	p.Value = v
+	p.CancelCauseFunc(ErrResolve)
+}
+
 func (p *Promise[T]) Fulfill(err error) {
 	// p.timer.Stop()
 	p.CancelCauseFunc(Conditoinal(err == nil, ErrResolve, err))

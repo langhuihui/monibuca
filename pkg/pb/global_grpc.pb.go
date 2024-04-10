@@ -11,6 +11,7 @@ import (
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
+	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
 // This is a compile-time assertion to ensure that this generated file
@@ -22,7 +23,10 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type GlobalClient interface {
+	Shutdown(ctx context.Context, in *RequestWithId, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	Restart(ctx context.Context, in *RequestWithId, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	StreamSnap(ctx context.Context, in *StreamSnapRequest, opts ...grpc.CallOption) (*StreamSnapShot, error)
+	StopSubscribe(ctx context.Context, in *StopSubscribeRequest, opts ...grpc.CallOption) (*StopSubscribeResponse, error)
 }
 
 type globalClient struct {
@@ -31,6 +35,24 @@ type globalClient struct {
 
 func NewGlobalClient(cc grpc.ClientConnInterface) GlobalClient {
 	return &globalClient{cc}
+}
+
+func (c *globalClient) Shutdown(ctx context.Context, in *RequestWithId, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, "/m7s.Global/Shutdown", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *globalClient) Restart(ctx context.Context, in *RequestWithId, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, "/m7s.Global/Restart", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *globalClient) StreamSnap(ctx context.Context, in *StreamSnapRequest, opts ...grpc.CallOption) (*StreamSnapShot, error) {
@@ -42,11 +64,23 @@ func (c *globalClient) StreamSnap(ctx context.Context, in *StreamSnapRequest, op
 	return out, nil
 }
 
+func (c *globalClient) StopSubscribe(ctx context.Context, in *StopSubscribeRequest, opts ...grpc.CallOption) (*StopSubscribeResponse, error) {
+	out := new(StopSubscribeResponse)
+	err := c.cc.Invoke(ctx, "/m7s.Global/StopSubscribe", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // GlobalServer is the server API for Global service.
 // All implementations must embed UnimplementedGlobalServer
 // for forward compatibility
 type GlobalServer interface {
+	Shutdown(context.Context, *RequestWithId) (*emptypb.Empty, error)
+	Restart(context.Context, *RequestWithId) (*emptypb.Empty, error)
 	StreamSnap(context.Context, *StreamSnapRequest) (*StreamSnapShot, error)
+	StopSubscribe(context.Context, *StopSubscribeRequest) (*StopSubscribeResponse, error)
 	mustEmbedUnimplementedGlobalServer()
 }
 
@@ -54,8 +88,17 @@ type GlobalServer interface {
 type UnimplementedGlobalServer struct {
 }
 
+func (UnimplementedGlobalServer) Shutdown(context.Context, *RequestWithId) (*emptypb.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Shutdown not implemented")
+}
+func (UnimplementedGlobalServer) Restart(context.Context, *RequestWithId) (*emptypb.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Restart not implemented")
+}
 func (UnimplementedGlobalServer) StreamSnap(context.Context, *StreamSnapRequest) (*StreamSnapShot, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StreamSnap not implemented")
+}
+func (UnimplementedGlobalServer) StopSubscribe(context.Context, *StopSubscribeRequest) (*StopSubscribeResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StopSubscribe not implemented")
 }
 func (UnimplementedGlobalServer) mustEmbedUnimplementedGlobalServer() {}
 
@@ -68,6 +111,42 @@ type UnsafeGlobalServer interface {
 
 func RegisterGlobalServer(s grpc.ServiceRegistrar, srv GlobalServer) {
 	s.RegisterService(&Global_ServiceDesc, srv)
+}
+
+func _Global_Shutdown_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RequestWithId)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GlobalServer).Shutdown(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/m7s.Global/Shutdown",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GlobalServer).Shutdown(ctx, req.(*RequestWithId))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Global_Restart_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RequestWithId)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GlobalServer).Restart(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/m7s.Global/Restart",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GlobalServer).Restart(ctx, req.(*RequestWithId))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _Global_StreamSnap_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -88,6 +167,24 @@ func _Global_StreamSnap_Handler(srv interface{}, ctx context.Context, dec func(i
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Global_StopSubscribe_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StopSubscribeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GlobalServer).StopSubscribe(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/m7s.Global/StopSubscribe",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GlobalServer).StopSubscribe(ctx, req.(*StopSubscribeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Global_ServiceDesc is the grpc.ServiceDesc for Global service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -96,8 +193,20 @@ var Global_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*GlobalServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
+			MethodName: "Shutdown",
+			Handler:    _Global_Shutdown_Handler,
+		},
+		{
+			MethodName: "Restart",
+			Handler:    _Global_Restart_Handler,
+		},
+		{
 			MethodName: "StreamSnap",
 			Handler:    _Global_StreamSnap_Handler,
+		},
+		{
+			MethodName: "StopSubscribe",
+			Handler:    _Global_StopSubscribe_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

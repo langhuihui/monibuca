@@ -2,6 +2,7 @@ package m7s
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -36,12 +37,15 @@ var (
 		Name:    "Global",
 		Version: Version,
 	}
+	Servers    = make([]*Server, 10)
+	errRestart = errors.New("restart")
 )
 
 type Server struct {
 	pb.UnimplementedGlobalServer
 	Plugin
 	config.Engine
+	ID          int
 	eventChan   chan any
 	Plugins     []*Plugin
 	Streams     map[string]*Publisher
@@ -53,18 +57,24 @@ type Server struct {
 	pidG        int
 	sidG        int
 	apiList     []string
+	grpcServer  *grpc.Server
 }
 
 func NewServer() (s *Server) {
 	s = &Server{
+		ID:        int(serverIndexG.Add(1)),
 		Streams:   make(map[string]*Publisher),
 		Pulls:     make(map[string]*Puller),
 		Waiting:   make(map[string][]*Subscriber),
 		eventChan: make(chan any, 10),
 	}
+	s.config.HTTP.ListenAddrTLS = ":8443"
+	s.config.HTTP.ListenAddr = ":8080"
+	s.Logger = slog.With("server", s.ID)
 	s.handler = s
 	s.server = s
 	s.Meta = &serverMeta
+	Servers[s.ID] = s
 	return
 }
 
@@ -72,17 +82,39 @@ func Run(ctx context.Context, conf any) error {
 	return DefaultServer.Run(ctx, conf)
 }
 
+type rawconfig = map[string]map[string]any
+
+func (s *Server) reset() {
+	server := Server{
+		ID:        s.ID,
+		Streams:   make(map[string]*Publisher),
+		Pulls:     make(map[string]*Puller),
+		Waiting:   make(map[string][]*Subscriber),
+		eventChan: make(chan any, 10),
+	}
+	server.Logger = s.Logger
+	server.handler = s.handler
+	server.server = s.server
+	server.Meta = s.Meta
+	server.config.HTTP.ListenAddrTLS = ":8443"
+	server.config.HTTP.ListenAddr = ":8080"
+	*s = server
+}
+
 func (s *Server) Run(ctx context.Context, conf any) (err error) {
-	s.Logger = slog.With("server", serverIndexG.Add(1))
-	s.Context, s.CancelCauseFunc = context.WithCancelCause(ctx)
+	for err = s.run(ctx, conf); err == errRestart; err = s.run(ctx, conf) {
+		s.reset()
+	}
+	return
+}
+
+func (s *Server) run(ctx context.Context, conf any) (err error) {
 	mux := runtime.NewServeMux()
-	s.config.HTTP.SetMux(mux)
-	s.config.HTTP.ListenAddrTLS = ":8443"
-	s.config.HTTP.ListenAddr = ":8080"
-
+	httpConf, tcpConf := &s.config.HTTP, &s.config.TCP
+	httpConf.SetMux(mux)
+	s.Context, s.CancelCauseFunc = context.WithCancelCause(ctx)
 	s.Info("start")
-
-	var cg map[string]map[string]any
+	var cg rawconfig
 	var configYaml []byte
 	switch v := conf.(type) {
 	case string:
@@ -94,7 +126,7 @@ func (s *Server) Run(ctx context.Context, conf any) (err error) {
 		}
 	case []byte:
 		configYaml = v
-	case map[string]map[string]any:
+	case rawconfig:
 		cg = v
 	}
 	if configYaml != nil {
@@ -112,51 +144,55 @@ func (s *Server) Run(ctx context.Context, conf any) (err error) {
 	var lv slog.LevelVar
 	lv.UnmarshalText([]byte(s.LogLevel))
 	slog.SetLogLoggerLevel(lv.Level())
-	// s.registerHandler()
-	if s.config.HTTP.ListenAddrTLS != "" {
-		s.Info("https listen at ", "addr", s.config.HTTP.ListenAddrTLS)
+	s.registerHandler()
+
+	if httpConf.ListenAddrTLS != "" {
+		s.Info("https listen at ", "addr", httpConf.ListenAddrTLS)
 		go func() {
-			s.Stop(s.config.HTTP.ListenTLS())
+			s.Stop(httpConf.ListenTLS())
 		}()
 	}
-	if s.config.HTTP.ListenAddr != "" {
-		s.Info("http listen at ", "addr", s.config.HTTP.ListenAddr)
+	if httpConf.ListenAddr != "" {
+		s.Info("http listen at ", "addr", httpConf.ListenAddr)
 		go func() {
-			s.Stop(s.config.HTTP.Listen())
+			s.Stop(httpConf.Listen())
 		}()
 	}
-	if s.config.TCP.ListenAddr != "" {
-		lis, err := net.Listen("tcp", s.config.TCP.ListenAddr)
+	if tcpConf.ListenAddr != "" {
+		var opts []grpc.ServerOption
+		s.grpcServer = grpc.NewServer(opts...)
+		pb.RegisterGlobalServer(s.grpcServer, s)
+		gwopts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
+		if err = pb.RegisterGlobalHandlerFromEndpoint(ctx, mux, tcpConf.ListenAddr, gwopts); err != nil {
+			s.Error("register handler faild", "error", err)
+			return err
+		}
+		lis, err := net.Listen("tcp", tcpConf.ListenAddr)
 		if err != nil {
 			s.Error("failed to listen", "error", err)
 			return err
 		}
-		var opts []grpc.ServerOption
-		grpcServer := grpc.NewServer(opts...)
-		pb.RegisterGlobalServer(grpcServer, s)
-		gwopts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
-		if err = pb.RegisterGlobalHandlerFromEndpoint(ctx, mux, s.config.TCP.ListenAddr, gwopts); err != nil {
-			s.Error("register handler faild", "error", err)
-			return err
-		}
+		defer lis.Close()
 		go func() {
-			s.Stop(grpcServer.Serve(lis))
+			s.Stop(s.grpcServer.Serve(lis))
 		}()
 	}
 	for _, plugin := range plugins {
 		plugin.Init(s, cg[strings.ToLower(plugin.Name)])
 	}
 	s.eventLoop()
-	s.Warn("Server is done", "reason", context.Cause(s))
+	err = context.Cause(s)
+	s.Warn("Server is done", "reason", err)
 	for _, publisher := range s.Publishers {
-		publisher.Stop(nil)
+		publisher.Stop(err)
 	}
 	for _, subscriber := range s.Subscribers {
-		subscriber.Stop(nil)
+		subscriber.Stop(err)
 	}
 	for _, p := range s.Plugins {
-		p.Stop(nil)
+		p.Stop(err)
 	}
+	httpConf.StopListen()
 	return
 }
 
@@ -235,6 +271,17 @@ func (s *Server) eventLoop() {
 			case *util.Promise[*StreamSnapShot]:
 				v.Value.Publisher = s.Streams[v.Value.StreamPath]
 				v.Fulfill(nil)
+				continue
+			case *util.Promise[*pb.StopSubscribeRequest]:
+				if index := slices.IndexFunc(s.Subscribers, func(s *Subscriber) bool {
+					return s.ID == int(v.Value.Id)
+				}); index >= 0 {
+					subscriber := s.Subscribers[index]
+					subscriber.Stop(errors.New("stop by api"))
+					v.Fulfill(nil)
+				} else {
+					v.Fulfill(ErrNotFound)
+				}
 				continue
 			}
 			for _, plugin := range s.Plugins {
@@ -357,17 +404,9 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-type StreamSnapShot struct {
-	StreamPath string
-	*Publisher
-}
-
-func (s *Server) StreamSnap(ctx context.Context, req *pb.StreamSnapRequest) (res *pb.StreamSnapShot, err error) {
-	promise := util.NewPromise(&StreamSnapShot{StreamPath: req.StreamPath})
+func (s *Server) Call(arg any) (result any, err error) {
+	promise := util.NewPromise(arg)
 	s.eventChan <- promise
 	<-promise.Done()
-	if promise.Value.Publisher == nil {
-		return nil, context.Cause(promise.Context)
-	}
-	return promise.Value.SnapShot(), nil
+	return promise.Value, context.Cause(promise.Context)
 }

@@ -1,12 +1,29 @@
 syntax = "proto3";
 import "google/api/annotations.proto";
+import "google/protobuf/empty.proto";
 package m7s;
 option go_package="m7s.live/m7s/v5/pkg/pb";
 
 service Global {
+  rpc Shutdown (RequestWithId) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      post: "/api/shutdown/{id}"
+    };
+  }
+  rpc Restart (RequestWithId) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      post: "/api/restart/{id}"
+    };
+  }
   rpc StreamSnap (StreamSnapRequest) returns (StreamSnapShot) {
     option (google.api.http) = {
       get: "/api/stream/snap/{streamPath=**}"
+    };
+  }
+  rpc StopSubscribe (StopSubscribeRequest) returns (StopSubscribeResponse) {
+    option (google.api.http) = {
+      post: "/api/stop/subscribe/{id}"
+      body: "*"
     };
   }
 }
@@ -32,4 +49,16 @@ message TrackSnapShot {
 message StreamSnapShot {
   repeated TrackSnapShot videoTrack = 1;
   repeated TrackSnapShot audioTrack = 2;
+}
+
+message StopSubscribeRequest {
+  uint32 id = 1;
+}
+
+message StopSubscribeResponse {
+  bool success = 1;
+}
+
+message RequestWithId {
+  uint32 id = 1;
 }

@@ -43,7 +43,7 @@ func (tcp *TCP) Listen(handler func(*net.TCPConn)) (err error) {
 			count = runtime.NumCPU()
 		}
 		for range count {
-			tcp.listen(tcp.listener, handler)
+			go tcp.listen(tcp.listener, handler)
 		}
 	}
 	return
@@ -64,7 +64,7 @@ func (tcp *TCP) ListenTLS(handler func(*net.TCPConn)) (err error) {
 				count = runtime.NumCPU()
 			}
 			for range count {
-				tcp.listen(tcp.listenerTls, handler)
+				go tcp.listen(tcp.listenerTls, handler)
 			}
 		}
 	}

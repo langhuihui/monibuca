@@ -4,6 +4,9 @@ global:
     listenaddr: :50051
 rtmp:
   chunksize: 2048
+  publish:
+    idletimeout: 10s
+    closedelaytimeout: 4s
   subscribe:
     # submode: 1
     # subaudio: false

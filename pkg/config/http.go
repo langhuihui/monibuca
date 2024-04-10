@@ -1,8 +1,13 @@
 package config
 
 import (
+	"crypto/sha256"
+	"crypto/subtle"
 	"crypto/tls"
 	"net/http"
+
+	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
+
 	"time"
 )
 
@@ -23,7 +28,7 @@ type HTTP struct {
 	mux           http.Handler
 	server        *http.Server
 	serverTLS     *http.Server
-	// middlewares   []Middleware
+	middlewares   []Middleware
 }
 type HTTPConfig interface {
 	GetHTTPConfig() *HTTP
@@ -36,25 +41,32 @@ func (config *HTTP) SetMux(mux http.Handler) {
 	config.mux = mux
 }
 
-// func (config *HTTP) AddMiddleware(middleware Middleware) {
-// 	config.middlewares = append(config.middlewares, middleware)
-// }
+func (config *HTTP) AddMiddleware(middleware Middleware) {
+	config.middlewares = append(config.middlewares, middleware)
+}
 
-// func (config *HTTP) Handle(path string, f http.Handler) {
-// 	if config.mux == nil {
-// 		config.mux = http.NewServeMux()
-// 	}
-// 	if config.CORS {
-// 		// f = util.CORS(f)
-// 	}
-// 	if config.UserName != "" && config.Password != "" {
-// 		// f = util.BasicAuth(config.UserName, config.Password, f)
-// 	}
-// 	for _, middleware := range config.middlewares {
-// 		f = middleware(path, f)
-// 	}
-// 	config.mux.Handle(path, f)
-// }
+func (config *HTTP) Handle(path string, f http.Handler) {
+	if config.mux == nil {
+		config.mux = http.NewServeMux()
+	}
+	if config.CORS {
+		f = CORS(f)
+	}
+	if config.UserName != "" && config.Password != "" {
+		f = BasicAuth(config.UserName, config.Password, f)
+	}
+	for _, middleware := range config.middlewares {
+		f = middleware(path, f)
+	}
+	switch mux := config.mux.(type) {
+	case *http.ServeMux:
+		mux.Handle(path, f)
+	case *runtime.ServeMux:
+		mux.HandlePath("GET", path, func(w http.ResponseWriter, r *http.Request, pathParams map[string]string) {
+			f.ServeHTTP(w, r)
+		})
+	}
+}
 
 func (config *HTTP) GetHTTPConfig() *HTTP {
 	return config
@@ -117,4 +129,67 @@ func (config *HTTP) Listen() error {
 		Handler:      config.mux,
 	}
 	return config.server.ListenAndServe()
+}
+
+func CORS(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		header := w.Header()
+		header.Set("Access-Control-Allow-Credentials", "true")
+		header.Set("Cross-Origin-Resource-Policy", "cross-origin")
+		header.Set("Access-Control-Allow-Headers", "Content-Type,Access-Token")
+		origin := r.Header["Origin"]
+		if len(origin) == 0 {
+			header.Set("Access-Control-Allow-Origin", "*")
+		} else {
+			header.Set("Access-Control-Allow-Origin", origin[0])
+		}
+		if next != nil && r.Method != "OPTIONS" {
+			next.ServeHTTP(w, r)
+		}
+	})
+}
+
+func BasicAuth(u, p string, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Extract the username and password from the request
+		// Authorization header. If no Authentication header is present
+		// or the header value is invalid, then the 'ok' return value
+		// will be false.
+		username, password, ok := r.BasicAuth()
+		if ok {
+			// Calculate SHA-256 hashes for the provided and expected
+			// usernames and passwords.
+			usernameHash := sha256.Sum256([]byte(username))
+			passwordHash := sha256.Sum256([]byte(password))
+			expectedUsernameHash := sha256.Sum256([]byte(u))
+			expectedPasswordHash := sha256.Sum256([]byte(p))
+
+			// 使用 subtle.ConstantTimeCompare() 进行校验
+			// the provided username and password hashes equal the
+			// expected username and password hashes. ConstantTimeCompare
+			// 如果值相等，则返回1，否则返回0。
+			// Importantly, we should to do the work to evaluate both the
+			// username and password before checking the return values to
+			// 避免泄露信息。
+			usernameMatch := (subtle.ConstantTimeCompare(usernameHash[:], expectedUsernameHash[:]) == 1)
+			passwordMatch := (subtle.ConstantTimeCompare(passwordHash[:], expectedPasswordHash[:]) == 1)
+
+			// If the username and password are correct, then call
+			// the next handler in the chain. Make sure to return
+			// afterwards, so that none of the code below is run.
+			if usernameMatch && passwordMatch {
+				if next != nil {
+					next.ServeHTTP(w, r)
+				}
+				return
+			}
+		}
+
+		// If the Authentication header is not present, is invalid, or the
+		// username or password is wrong, then set a WWW-Authenticate
+		// header to inform the client that we expect them to use basic
+		// authentication and send a 401 Unauthorized response.
+		w.Header().Set("WWW-Authenticate", `Basic realm="restricted", charset="UTF-8"`)
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+	})
 }
