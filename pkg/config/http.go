@@ -5,6 +5,7 @@ import (
 	"crypto/subtle"
 	"crypto/tls"
 	"net/http"
+	"strings"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 
@@ -62,6 +63,9 @@ func (config *HTTP) Handle(path string, f http.Handler) {
 	case *http.ServeMux:
 		mux.Handle(path, f)
 	case *runtime.ServeMux:
+		if strings.HasSuffix(path, "/") {
+			path += "{streamPath=**}"
+		}
 		mux.HandlePath("GET", path, func(w http.ResponseWriter, r *http.Request, pathParams map[string]string) {
 			f.ServeHTTP(w, r)
 		})

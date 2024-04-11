@@ -31,7 +31,29 @@ func (buffers *Buffers) ReadFromBytes(b ...[]byte) {
 		buffers.Length += len(level0)
 	}
 }
-
+func (buffers *Buffers) ReadBytesTo(buf []byte) (err error) {
+	n := len(buf)
+	if n > buffers.Length {
+		return io.EOF
+	}
+	l := n
+	for n > 0 {
+		level1 := buffers.GetLevel1()
+		level1Len := len(level1)
+		if n < level1Len {
+			copy(buf[l-n:], level1[:n])
+			buffers.move1(n)
+			break
+		}
+		copy(buf[l-n:], level1)
+		n -= level1Len
+		buffers.move0()
+		if buffers.Length == 0 && n > 0 {
+			return io.EOF
+		}
+	}
+	return
+}
 func (buffers *Buffers) ReadByteTo(b ...*byte) (err error) {
 	for i := range b {
 		if buffers.Length == 0 {
@@ -132,24 +154,9 @@ func (buffers *Buffers) ReadBytes(n int) ([]byte, error) {
 	if n > buffers.Length {
 		return nil, io.EOF
 	}
-	l := n
 	b := make([]byte, n)
-	for n > 0 {
-		level1 := buffers.GetLevel1()
-		level1Len := len(level1)
-		if n < level1Len {
-			copy(b[l-n:], level1[:n])
-			buffers.move1(n)
-			break
-		}
-		copy(b[l-n:], level1)
-		n -= level1Len
-		buffers.move0()
-		if buffers.Length == 0 && n > 0 {
-			return nil, io.EOF
-		}
-	}
-	return b, nil
+	err := buffers.ReadBytesTo(b)
+	return b, err
 }
 
 func (buffers *Buffers) WriteNTo(n int, result *net.Buffers) (actual int) {

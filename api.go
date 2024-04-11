@@ -24,7 +24,7 @@ func (s *Server) StreamSnap(ctx context.Context, req *pb.StreamSnapRequest) (res
 
 func (s *Server) Restart(ctx context.Context, req *pb.RequestWithId) (res *emptypb.Empty, err error) {
 	if Servers[req.Id] != nil {
-		Servers[req.Id].Stop(errRestart)
+		Servers[req.Id].Stop(pkg.ErrRestart)
 	}
 	return &emptypb.Empty{}, err
 }

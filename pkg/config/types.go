@@ -8,7 +8,7 @@ import (
 )
 
 type PublishConfig interface {
-	GetPublishConfig() Publish
+	GetPublishConfig() *Publish
 }
 
 type SubscribeConfig interface {
@@ -39,7 +39,7 @@ type Publish struct {
 	RingSize          string        `default:"256-1024" desc:"缓冲范围"`          // 初始缓冲区大小
 }
 
-func (c Publish) GetPublishConfig() Publish {
+func (c *Publish) GetPublishConfig() *Publish {
 	return c
 }
 

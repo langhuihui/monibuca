@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"slices"
 
+	"m7s.live/m7s/v5/pkg/codec"
 	"m7s.live/m7s/v5/pkg/util"
 )
 
@@ -23,7 +24,7 @@ type (
 	}
 
 	AVTrack struct {
-		Codec string
+		Codec codec.FourCC
 		Track
 		RingWriter
 		IDRingList `json:"-" yaml:"-"` //最近的关键帧位置，首屏渲染

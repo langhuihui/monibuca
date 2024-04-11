@@ -2,6 +2,7 @@ package rtmp
 
 import (
 	. "m7s.live/m7s/v5/pkg"
+	"m7s.live/m7s/v5/pkg/codec"
 )
 
 type RTMPAudio struct {
@@ -21,21 +22,21 @@ func (avcc *RTMPAudio) DecodeConfig(track *AVTrack) error {
 	if b1 == 0 {
 		switch b0 & 0b1111_0000 >> 4 {
 		case 7:
-			track.Codec = "pcmu"
+			track.Codec = codec.FourCC_ALAW
 			var ctx G711Ctx
 			ctx.SampleRate = 8000
 			ctx.Channels = 1
 			ctx.SampleSize = 8
 			track.ICodecCtx = &ctx
 		case 8:
-			track.Codec = "pcma"
+			track.Codec = codec.FourCC_ULAW
 			var ctx G711Ctx
 			ctx.SampleRate = 8000
 			ctx.Channels = 1
 			ctx.SampleSize = 8
 			track.ICodecCtx = &ctx
 		case 10:
-			track.Codec = "aac"
+			track.Codec = codec.FourCC_MP4A
 			var ctx AACCtx
 			b0, err = reader.ReadByte()
 			if err != nil {
@@ -63,7 +64,7 @@ func (avcc *RTMPAudio) DecodeConfig(track *AVTrack) error {
 
 func (avcc *RTMPAudio) ToRaw(track *AVTrack) (any, error) {
 	reader := avcc.Buffers
-	if track.Codec == "aac" {
+	if track.Codec == codec.FourCC_MP4A {
 		err := reader.Skip(2)
 		return reader.Buffers, err
 	} else {

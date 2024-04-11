@@ -37,8 +37,7 @@ var (
 		Name:    "Global",
 		Version: Version,
 	}
-	Servers    = make([]*Server, 10)
-	errRestart = errors.New("restart")
+	Servers = make([]*Server, 10)
 )
 
 type Server struct {
@@ -102,7 +101,7 @@ func (s *Server) reset() {
 }
 
 func (s *Server) Run(ctx context.Context, conf any) (err error) {
-	for err = s.run(ctx, conf); err == errRestart; err = s.run(ctx, conf) {
+	for err = s.run(ctx, conf); err == ErrRestart; err = s.run(ctx, conf) {
 		s.reset()
 	}
 	return
@@ -148,15 +147,21 @@ func (s *Server) run(ctx context.Context, conf any) (err error) {
 
 	if httpConf.ListenAddrTLS != "" {
 		s.Info("https listen at ", "addr", httpConf.ListenAddrTLS)
-		go func() {
-			s.Stop(httpConf.ListenTLS())
-		}()
+		go func(addr string) {
+			if err := httpConf.ListenTLS(); err != http.ErrServerClosed {
+				s.Stop(err)
+			}
+			s.Info("https stop listen at ", "addr", addr)
+		}(httpConf.ListenAddrTLS)
 	}
 	if httpConf.ListenAddr != "" {
 		s.Info("http listen at ", "addr", httpConf.ListenAddr)
-		go func() {
-			s.Stop(httpConf.Listen())
-		}()
+		go func(addr string) {
+			if err := httpConf.Listen(); err != http.ErrServerClosed {
+				s.Stop(err)
+			}
+			s.Info("http stop listen at ", "addr", addr)
+		}(httpConf.ListenAddr)
 	}
 	if tcpConf.ListenAddr != "" {
 		var opts []grpc.ServerOption
@@ -173,9 +178,12 @@ func (s *Server) run(ctx context.Context, conf any) (err error) {
 			return err
 		}
 		defer lis.Close()
-		go func() {
-			s.Stop(s.grpcServer.Serve(lis))
-		}()
+		go func(addr string) {
+			if err := s.grpcServer.Serve(lis); err != nil {
+				s.Stop(err)
+			}
+			s.Info("grpc stop listen at ", "addr", addr)
+		}(tcpConf.ListenAddr)
 	}
 	for _, plugin := range plugins {
 		plugin.Init(s, cg[strings.ToLower(plugin.Name)])

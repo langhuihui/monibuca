@@ -5,7 +5,9 @@ go 1.22
 toolchain go1.22.1
 
 require (
+	github.com/cnotch/ipchub v1.1.0
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.19.1
+	github.com/q191201771/naza v0.30.48
 	github.com/quic-go/quic-go v0.42.0
 	google.golang.org/genproto/googleapis/api v0.0.0-20240227224415-6ceb2ff114de
 	google.golang.org/grpc v1.63.2

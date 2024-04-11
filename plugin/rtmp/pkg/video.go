@@ -4,6 +4,7 @@ import (
 	"time"
 
 	. "m7s.live/m7s/v5/pkg"
+	"m7s.live/m7s/v5/pkg/codec"
 	"m7s.live/m7s/v5/pkg/util"
 )
 
@@ -12,7 +13,7 @@ type RTMPVideo struct {
 }
 
 func (avcc *RTMPVideo) IsIDR() bool {
-	return avcc.Buffers.Buffers[0][0]&0b1111_0000>>4 == 1
+	return avcc.Buffers.Buffers[0][0]&0b0111_0000>>4 == 1
 }
 
 func (avcc *RTMPVideo) DecodeConfig(track *AVTrack) error {
@@ -27,34 +28,31 @@ func (avcc *RTMPVideo) DecodeConfig(track *AVTrack) error {
 
 	parseSequence := func() (err error) {
 		switch track.Codec {
-		case "h264":
+		case codec.FourCC_H264:
 			var ctx H264Ctx
-			var info AVCDecoderConfigurationRecord
-			if err = info.Unmarshal(&reader); err == nil {
-				ctx.SPSInfo, _ = ParseSPS(info.SequenceParameterSetNALUnit)
-				ctx.NalulenSize = int(info.LengthSizeMinusOne&3 + 1)
-				ctx.SPS = info.SequenceParameterSetNALUnit
-				ctx.PPS = info.PictureParameterSetNALUnit
+			if err = ctx.Unmarshal(&reader); err == nil {
 				ctx.SequenceFrame = avcc
 				track.ICodecCtx = &ctx
 			}
-		case "h265":
-			// var ctx H265Ctx
-		case "av1":
+		case codec.FourCC_H265:
+			var ctx H265Ctx
+			if err = ctx.Unmarshal(&reader); err == nil {
+				ctx.SequenceFrame = avcc
+				track.ICodecCtx = &ctx
+			}
+		case codec.FourCC_AV1:
+			var ctx AV1Ctx
+			if err = ctx.Unmarshal(&reader); err == nil {
+				ctx.SequenceFrame = avcc
+				track.ICodecCtx = &ctx
+			}
 		}
 		return
 	}
 	if enhanced {
-		var fourCC [4]byte
-		_, err = reader.Read(fourCC[:])
+		err = reader.ReadBytesTo(track.Codec[:])
 		if err != nil {
 			return err
-		}
-		switch fourCC {
-		case FourCC_H265:
-			track.Codec = "h265"
-		case FourCC_AV1:
-			track.Codec = "av1"
 		}
 		switch packetType {
 		case PacketTypeSequenceStart:
@@ -72,9 +70,9 @@ func (avcc *RTMPVideo) DecodeConfig(track *AVTrack) error {
 			return err
 		}
 		if VideoCodecID(b0&0x0F) == CodecID_H265 {
-			track.Codec = "h265"
+			track.Codec = codec.FourCC_H265
 		} else {
-			track.Codec = "h264"
+			track.Codec = codec.FourCC_H264
 		}
 		_, err = reader.ReadBE(3) // cts == 0
 		if err != nil {
@@ -89,9 +87,12 @@ func (avcc *RTMPVideo) DecodeConfig(track *AVTrack) error {
 	return nil
 }
 
-func (avcc *RTMPVideo) parseH264(track *AVTrack, reader *util.Buffers, cts uint32) (any, error) {
+func (avcc *RTMPVideo) parseH264(ctx *H264Ctx, reader *util.Buffers) (any, error) {
+	cts, err := reader.ReadBE(3)
+	if err != nil {
+		return nil, err
+	}
 	var nalus Nalus
-	ctx := track.ICodecCtx.(*H264Ctx)
 	nalus.PTS = time.Duration(avcc.Timestamp+uint32(cts)) * 90
 	nalus.DTS = time.Duration(avcc.Timestamp) * 90
 	if err := nalus.ParseAVCC(reader, ctx.NalulenSize); err != nil {
@@ -100,9 +101,12 @@ func (avcc *RTMPVideo) parseH264(track *AVTrack, reader *util.Buffers, cts uint3
 	return nalus, nil
 }
 
-func (avcc *RTMPVideo) parseH265(track *AVTrack, reader *util.Buffers, cts uint32) (any, error) {
+func (avcc *RTMPVideo) parseH265(ctx *H265Ctx, reader *util.Buffers) (any, error) {
+	cts, err := reader.ReadBE(3)
+	if err != nil {
+		return nil, err
+	}
 	var nalus Nalus
-	ctx := track.ICodecCtx.(*H265Ctx)
 	nalus.PTS = time.Duration(avcc.Timestamp+uint32(cts)) * 90
 	nalus.DTS = time.Duration(avcc.Timestamp) * 90
 	if err := nalus.ParseAVCC(reader, ctx.NalulenSize); err != nil {
@@ -111,7 +115,7 @@ func (avcc *RTMPVideo) parseH265(track *AVTrack, reader *util.Buffers, cts uint3
 	return nalus, nil
 }
 
-func (avcc *RTMPVideo) parseAV1(track *AVTrack, reader *util.Buffers) (any, error) {
+func (avcc *RTMPVideo) parseAV1(reader *util.Buffers) (any, error) {
 	var obus OBUs
 	obus.PTS = time.Duration(avcc.Timestamp) * 90
 	if err := obus.ParseAVCC(reader); err != nil {
@@ -143,14 +147,10 @@ func (avcc *RTMPVideo) ToRaw(track *AVTrack) (any, error) {
 			}
 			return nil, nil
 		case PacketTypeCodedFrames:
-			if track.Codec == "h265" {
-				cts, err := reader.ReadBE(3) //cts, only h265
-				if err != nil {
-					return nil, err
-				}
-				return avcc.parseH265(track, &reader, uint32(cts))
+			if track.Codec == codec.FourCC_H265 {
+				return avcc.parseH265(track.ICodecCtx.(*H265Ctx), &reader)
 			} else {
-				return avcc.parseAV1(track, &reader)
+				return avcc.parseAV1(&reader)
 			}
 		case PacketTypeCodedFramesX:
 		}
@@ -159,19 +159,18 @@ func (avcc *RTMPVideo) ToRaw(track *AVTrack) (any, error) {
 		if err != nil {
 			return nil, err
 		}
-		cts, err := reader.ReadBE(3)
-		if err != nil {
-			return nil, err
-		}
 		if b0 == 0 {
+			if err = reader.Skip(3); err != nil {
+				return nil, err
+			}
 			if err = avcc.DecodeConfig(track); err != nil {
 				return nil, err
 			}
 		} else {
-			if track.Codec == "h265" {
-				return avcc.parseH265(track, &reader, uint32(cts))
+			if track.Codec == codec.FourCC_H265 {
+				return avcc.parseH265(track.ICodecCtx.(*H265Ctx), &reader)
 			} else {
-				return avcc.parseH264(track, &reader, uint32(cts))
+				return avcc.parseH264(track.ICodecCtx.(*H264Ctx), &reader)
 			}
 		}
 	}
