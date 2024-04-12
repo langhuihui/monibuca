@@ -1,0 +1,10 @@
+global:
+  loglevel: debug
+  tcp:
+    listenaddr: :50051
+hdl:
+  publish:
+    speed: 2
+  pull:
+    pullonstart:
+      live/test: /Users/dexter/Movies/jb-demo.flv

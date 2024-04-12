@@ -19,10 +19,31 @@ const (
 	PublisherStateWaitSubscriber
 )
 
+type SpeedControl struct {
+	speed          float64
+	beginTime      time.Time
+	beginTimestamp time.Duration
+}
+
+func (s *SpeedControl) speedControl(speed float64, ts time.Duration) {
+	if speed != s.speed {
+		s.speed = speed
+		s.beginTime = time.Now()
+		s.beginTimestamp = ts
+	} else {
+		elapsed := time.Since(s.beginTime)
+		should := time.Duration(float64(ts) / speed)
+		if should > elapsed {
+			time.Sleep(should - elapsed)
+		}
+	}
+}
+
 type Publisher struct {
 	PubSubBase
 	sync.RWMutex `json:"-" yaml:"-"`
 	config.Publish
+	SpeedControl
 	State       PublisherState
 	VideoTrack  *AVTrack
 	AudioTrack  *AVTrack
@@ -32,6 +53,10 @@ type Publisher struct {
 	GOP         int
 	baseTs      time.Duration
 	lastTs      time.Duration
+}
+
+func (p *Publisher) GetKey() string {
+	return p.StreamPath
 }
 
 func (p *Publisher) timeout() (err error) {
@@ -113,6 +138,7 @@ func (p *Publisher) writeAV(t *AVTrack, data IAVFrame) {
 	p.lastTs = frame.Timestamp
 	p.Debug("write", "seq", frame.Sequence)
 	t.Step()
+	p.speedControl(p.Publish.Speed, p.lastTs)
 }
 
 func (p *Publisher) WriteVideo(data IAVFrame) (err error) {

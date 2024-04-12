@@ -47,12 +47,10 @@ type Server struct {
 	ID          int
 	eventChan   chan any
 	Plugins     []*Plugin
-	Streams     map[string]*Publisher
-	Pulls       map[string]*Puller
+	Streams     util.Collection[string, *Publisher]
+	Pulls       util.Collection[string, *Puller]
 	Waiting     map[string][]*Subscriber
-	Publishers  []*Publisher
-	Subscribers []*Subscriber
-	Pullers     []*Puller
+	Subscribers util.Collection[int, *Subscriber]
 	pidG        int
 	sidG        int
 	apiList     []string
@@ -62,8 +60,6 @@ type Server struct {
 func NewServer() (s *Server) {
 	s = &Server{
 		ID:        int(serverIndexG.Add(1)),
-		Streams:   make(map[string]*Publisher),
-		Pulls:     make(map[string]*Puller),
 		Waiting:   make(map[string][]*Subscriber),
 		eventChan: make(chan any, 10),
 	}
@@ -86,8 +82,6 @@ type rawconfig = map[string]map[string]any
 func (s *Server) reset() {
 	server := Server{
 		ID:        s.ID,
-		Streams:   make(map[string]*Publisher),
-		Pulls:     make(map[string]*Puller),
 		Waiting:   make(map[string][]*Subscriber),
 		eventChan: make(chan any, 10),
 	}
@@ -191,10 +185,10 @@ func (s *Server) run(ctx context.Context, conf any) (err error) {
 	s.eventLoop()
 	err = context.Cause(s)
 	s.Warn("Server is done", "reason", err)
-	for _, publisher := range s.Publishers {
+	for _, publisher := range s.Streams.Items {
 		publisher.Stop(err)
 	}
-	for _, subscriber := range s.Subscribers {
+	for _, subscriber := range s.Subscribers.Items {
 		subscriber.Stop(err)
 	}
 	for _, p := range s.Plugins {
@@ -210,7 +204,7 @@ func (s *Server) eventLoop() {
 	cases := []reflect.SelectCase{{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(s.Done())}, {Dir: reflect.SelectRecv, Chan: reflect.ValueOf(pulse.C)}, {Dir: reflect.SelectRecv, Chan: reflect.ValueOf(s.eventChan)}}
 	var pubCount, subCount int
 	addPublisher := func(publisher *Publisher) {
-		if nl := len(s.Publishers); nl > pubCount {
+		if nl := s.Streams.Length; nl > pubCount {
 			pubCount = nl
 			if subCount == 0 {
 				cases = append(cases, reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(publisher.Done())})
@@ -224,7 +218,7 @@ func (s *Server) eventLoop() {
 		case 0:
 			return
 		case 1:
-			for _, publisher := range s.Streams {
+			for _, publisher := range s.Streams.Items {
 				if err := publisher.checkTimeout(); err != nil {
 					publisher.Stop(err)
 				}
@@ -241,19 +235,24 @@ func (s *Server) eventLoop() {
 		case 2:
 			event := rev.Interface()
 			switch v := event.(type) {
-			case *util.Promise[*Publisher]:
-				err := s.OnPublish(v.Value)
-				if v.Fulfill(err); err != nil {
-					continue
+			case *util.Promise[any]:
+				switch vv := v.Value.(type) {
+				case *Publisher:
+					err := s.OnPublish(vv)
+					if v.Fulfill(err); err != nil {
+						continue
+					}
+					event = vv
+					addPublisher(vv)
 				}
-				event = v.Value
-				addPublisher(v.Value)
+			case *util.Promise[*Publisher]:
+
 			case *util.Promise[*Subscriber]:
 				err := s.OnSubscribe(v.Value)
 				if v.Fulfill(err); err != nil {
 					continue
 				}
-				if nl := len(s.Subscribers); nl > subCount {
+				if nl := s.Subscribers.Length; nl > subCount {
 					subCount = nl
 					cases = append(cases, reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(v.Value.Done())})
 				}
@@ -262,7 +261,7 @@ func (s *Server) eventLoop() {
 				}
 				event = v.Value
 			case *util.Promise[*Puller]:
-				if _, ok := s.Pulls[v.Value.StreamPath]; ok {
+				if _, ok := s.Pulls.Get(v.Value.StreamPath); ok {
 					v.Fulfill(ErrStreamExist)
 					continue
 				} else {
@@ -271,20 +270,16 @@ func (s *Server) eventLoop() {
 					if err != nil {
 						continue
 					}
-					s.Pulls[v.Value.StreamPath] = v.Value
-					s.Pullers = append(s.Pullers, v.Value)
+					s.Pulls.Add(v.Value)
 					addPublisher(&v.Value.Publisher)
 					event = v.Value
 				}
 			case *util.Promise[*StreamSnapShot]:
-				v.Value.Publisher = s.Streams[v.Value.StreamPath]
+				v.Value.Publisher, _ = s.Streams.Get(v.Value.StreamPath)
 				v.Fulfill(nil)
 				continue
 			case *util.Promise[*pb.StopSubscribeRequest]:
-				if index := slices.IndexFunc(s.Subscribers, func(s *Subscriber) bool {
-					return s.ID == int(v.Value.Id)
-				}); index >= 0 {
-					subscriber := s.Subscribers[index]
+				if subscriber, ok := s.Subscribers.Get(int(v.Value.Id)); ok {
 					subscriber.Stop(errors.New("stop by api"))
 					v.Fulfill(nil)
 				} else {
@@ -300,14 +295,12 @@ func (s *Server) eventLoop() {
 			}
 		default:
 			if subStart, pubIndex := 3+pubCount, chosen-3; chosen < subStart {
-				s.onUnpublish(s.Publishers[pubIndex])
+				s.onUnpublish(s.Streams.Items[pubIndex])
 				pubCount--
-				s.Publishers = slices.Delete(s.Publishers, pubIndex, pubIndex+1)
 			} else {
 				i := chosen - subStart
-				s.onUnsubscribe(s.Subscribers[i])
+				s.onUnsubscribe(s.Subscribers.Items[i])
 				subCount--
-				s.Subscribers = slices.Delete(s.Subscribers, i, i+1)
 			}
 			cases = slices.Delete(cases, chosen, chosen+1)
 		}
@@ -315,6 +308,7 @@ func (s *Server) eventLoop() {
 }
 
 func (s *Server) onUnsubscribe(subscriber *Subscriber) {
+	s.Subscribers.Remove(subscriber)
 	s.Info("unsubscribe", "streamPath", subscriber.StreamPath)
 	if subscriber.Closer != nil {
 		subscriber.Close()
@@ -333,8 +327,8 @@ func (s *Server) onUnsubscribe(subscriber *Subscriber) {
 }
 
 func (s *Server) onUnpublish(publisher *Publisher) {
-	delete(s.Streams, publisher.StreamPath)
-	s.Info("unpublish", "streamPath", publisher.StreamPath, "count", len(s.Streams))
+	s.Streams.Remove(publisher)
+	s.Info("unpublish", "streamPath", publisher.StreamPath, "count", s.Streams.Length)
 	for subscriber := range publisher.Subscribers {
 		s.Waiting[publisher.StreamPath] = append(s.Waiting[publisher.StreamPath], subscriber)
 		subscriber.TimeoutTimer.Reset(publisher.WaitCloseTimeout)
@@ -342,15 +336,11 @@ func (s *Server) onUnpublish(publisher *Publisher) {
 	if publisher.Closer != nil {
 		publisher.Close()
 	}
-	if puller, ok := s.Pulls[publisher.StreamPath]; ok {
-		delete(s.Pulls, publisher.StreamPath)
-		index := slices.Index(s.Pullers, puller)
-		s.Pullers = slices.Delete(s.Pullers, index, index+1)
-	}
+	s.Pulls.RemoveByKey(publisher.StreamPath)
 }
 
 func (s *Server) OnPublish(publisher *Publisher) error {
-	if oldPublisher, ok := s.Streams[publisher.StreamPath]; ok {
+	if oldPublisher, ok := s.Streams.Get(publisher.StreamPath); ok {
 		if publisher.KickExist {
 			publisher.Warn("kick")
 			oldPublisher.Stop(ErrKick)
@@ -363,8 +353,7 @@ func (s *Server) OnPublish(publisher *Publisher) error {
 		publisher.Subscribers = make(map[*Subscriber]struct{})
 		publisher.TransTrack = make(map[reflect.Type]*AVTrack)
 	}
-	s.Streams[publisher.StreamPath] = publisher
-	s.Publishers = append(s.Publishers, publisher)
+	s.Streams.Set(publisher)
 	s.pidG++
 	p := publisher.Plugin
 	publisher.ID = s.pidG
@@ -388,9 +377,9 @@ func (s *Server) OnSubscribe(subscriber *Subscriber) error {
 	subscriber.ID = s.sidG
 	subscriber.Logger = subscriber.Plugin.With("streamPath", subscriber.StreamPath, "suber", subscriber.ID)
 	subscriber.TimeoutTimer = time.NewTimer(subscriber.Plugin.config.Subscribe.WaitTimeout)
-	s.Subscribers = append(s.Subscribers, subscriber)
+	s.Subscribers.Add(subscriber)
 	subscriber.Info("subscribe")
-	if publisher, ok := s.Streams[subscriber.StreamPath]; ok {
+	if publisher, ok := s.Streams.Get(subscriber.StreamPath); ok {
 		return publisher.AddSubscriber(subscriber)
 	} else {
 		s.Waiting[subscriber.StreamPath] = append(s.Waiting[subscriber.StreamPath], subscriber)

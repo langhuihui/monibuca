@@ -33,6 +33,7 @@ type Publish struct {
 	PauseTimeout      time.Duration `default:"30s" desc:"暂停超时时间"`             // 暂停超时
 	BufferTime        time.Duration `desc:"缓冲长度(单位：秒)，0代表取最近关键帧"`             // 缓冲长度(单位：秒)，0代表取最近关键帧
 	SpeedLimit        time.Duration `default:"500ms" desc:"速度限制最大等待时间,0则不等待"` //速度限制最大等待时间
+	Speed             float64       `default:"1" desc:"倍速"`                   // 倍速
 	Key               string        `desc:"发布鉴权key"`                          // 发布鉴权key
 	SecretArgName     string        `default:"secret" desc:"发布鉴权参数名"`         // 发布鉴权参数名
 	ExpireArgName     string        `default:"expire" desc:"发布鉴权失效时间参数名"`     // 发布鉴权失效时间参数名

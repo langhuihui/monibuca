@@ -17,6 +17,12 @@ type HDLPlugin struct {
 	m7s.Plugin
 }
 
+func (p *HDLPlugin) OnInit() {
+	for streamPath, url := range p.GetCommonConf().PullOnStart {
+		go p.Pull(streamPath, url, NewHDLPuller())
+	}
+}
+
 var _ = m7s.InstallPlugin[HDLPlugin]()
 
 func (p *HDLPlugin) WriteFlvHeader(sub *m7s.Subscriber) (flv net.Buffers) {

@@ -1,0 +1,75 @@
+package util
+
+import "slices"
+
+type Collection[K comparable, T interface{ GetKey() K }] struct {
+	Items  []T
+	m      map[K]T
+	Length int
+}
+
+func (c *Collection[K, T]) Add(item T) {
+	c.Items = append(c.Items, item)
+	if c.Length > 100 || c.m != nil {
+		if c.m == nil {
+			c.m = make(map[K]T)
+			for _, v := range c.Items {
+				c.m[v.GetKey()] = v
+			}
+		}
+		c.m[item.GetKey()] = item
+	}
+	c.Length++
+}
+
+func (c *Collection[K, T]) AddUnique(item T) {
+	if _, ok := c.Get(item.GetKey()); !ok {
+		c.Add(item)
+	}
+}
+
+func (c *Collection[K, T]) Set(item T) {
+	key := item.GetKey()
+	if c.m != nil {
+		c.m[key] = item
+	}
+	for i := range c.Items {
+		if c.Items[i].GetKey() == key {
+			c.Items[i] = item
+			return
+		}
+	}
+	c.Add(item)
+}
+
+func (c *Collection[K, T]) Remove(item T) {
+	c.RemoveByKey(item.GetKey())
+}
+
+func (c *Collection[K, T]) RemoveByKey(key K) {
+	delete(c.m, key)
+	for i := range c.Length {
+		if c.Items[i].GetKey() == key {
+			c.Items = slices.Delete(c.Items, i, i+1)
+			break
+		}
+	}
+	c.Length--
+}
+
+func (c *Collection[K, T]) Get(key K) (item T, ok bool) {
+	if c.m != nil {
+		item, ok = c.m[key]
+		return item, ok
+	}
+	for _, item := range c.Items {
+		if item.GetKey() == key {
+			return item, true
+		}
+	}
+	return
+}
+
+func (c *Collection[K, T]) GetKey() K {
+	return c.Items[0].GetKey()
+}

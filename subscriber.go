@@ -23,12 +23,9 @@ type PubSubBase struct {
 	io.Closer    `json:"-" yaml:"-"`
 }
 
-// func (ps *PubSubBase) Stop(reason error) {
-// 	ps.Unit.Stop(reason)
-// 	if ps.Closer != nil {
-// 		ps.Closer.Close()
-// 	}
-// }
+func (p *PubSubBase) GetKey() int {
+	return p.ID
+}
 
 func (ps *PubSubBase) Init(p *Plugin, streamPath string, options ...any) {
 	ps.Plugin = p

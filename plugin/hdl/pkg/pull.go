@@ -20,6 +20,12 @@ type HDLPuller struct {
 	pool  *util.ScalableMemoryAllocator
 }
 
+func NewHDLPuller() *HDLPuller {
+	return &HDLPuller{
+		pool: util.NewScalableMemoryAllocator(1024),
+	}
+}
+
 func (puller *HDLPuller) Connect(p *m7s.Puller) (err error) {
 	if strings.HasPrefix(p.RemoteURL, "http") {
 		var res *http.Response
@@ -88,8 +94,10 @@ func (puller *HDLPuller) Pull(p *m7s.Puller) (err error) {
 		mem := frame.Malloc(int(dataSize))
 		_, err = io.ReadFull(puller, mem)
 		if err != nil {
+			frame.Recycle()
 			return
 		}
+		frame.ReadFromBytes(mem)
 		puller.absTS = offsetTs + (timestamp - startTs)
 		frame.Timestamp = puller.absTS
 		// fmt.Println(t, offsetTs, timestamp, startTs, puller.absTS)

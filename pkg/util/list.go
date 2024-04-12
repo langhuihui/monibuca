@@ -1,5 +1,7 @@
 package util
 
+import "encoding/json"
+
 // Copyright 2009 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -233,4 +235,20 @@ func (l *List[T]) PushFrontList(other *List[T]) {
 	for i, e := other.Len(), other.Back(); i > 0; i, e = i-1, e.Prev() {
 		l.insertValue(e.Value, &l.root)
 	}
+}
+
+// MarshalJSON returns the JSON encoding of the list.
+func (l *List[T]) MarshalJSON() ([]byte, error) {
+	// Create a slice to hold the JSON-encoded elements
+	elements := make([]T, l.Len())
+
+	// Iterate over the list and populate the slice
+	i := 0
+	for e := l.Front(); e != nil; e = e.Next() {
+		elements[i] = e.Value
+		i++
+	}
+
+	// Marshal the slice to JSON
+	return json.Marshal(elements)
 }
