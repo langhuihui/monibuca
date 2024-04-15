@@ -8,18 +8,13 @@ import (
 	"m7s.live/m7s/v5/pkg/pb"
 )
 
-type StreamSnapShot struct {
-	StreamPath string
-	*Publisher
-}
-
 func (s *Server) StreamSnap(ctx context.Context, req *pb.StreamSnapRequest) (res *pb.StreamSnapShot, err error) {
-	snap := &StreamSnapShot{StreamPath: req.StreamPath}
-	err = sendPromiseToServer(s, snap)
-	if snap.Publisher == nil {
+	result, err := s.Call(req)
+	if err != nil {
 		return nil, err
 	}
-	return snap.SnapShot(), nil
+	puber := result.(*Publisher)
+	return puber.SnapShot(), nil
 }
 
 func (s *Server) Restart(ctx context.Context, req *pb.RequestWithId) (res *emptypb.Empty, err error) {
@@ -39,7 +34,7 @@ func (s *Server) Shutdown(ctx context.Context, req *pb.RequestWithId) (res *empt
 }
 
 func (s *Server) StopSubscribe(ctx context.Context, req *pb.StopSubscribeRequest) (res *pb.StopSubscribeResponse, err error) {
-	err = sendPromiseToServer(s, req)
+	_, err = s.Call(req)
 	return &pb.StopSubscribeResponse{
 		Success: err == nil,
 	}, err

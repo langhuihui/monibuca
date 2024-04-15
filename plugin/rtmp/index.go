@@ -27,7 +27,6 @@ func (p *RTMPPlugin) OnInit() {
 func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
 	defer conn.Close()
 	logger := p.Logger.With("remote", conn.RemoteAddr().String())
-	senders := make(map[uint32]*RTMPSender)
 	receivers := make(map[uint32]*RTMPReceiver)
 	var err error
 	logger.Info("conn")
@@ -156,18 +155,32 @@ func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
 					}
 				case *PlayMessage:
 					streamPath := nc.AppName + "/" + cmd.StreamName
-					sender := &RTMPSender{}
-					sender.NetConnection = nc
-					sender.StreamID = cmd.StreamId
+					ns := NetStream{
+						NetConnection: nc,
+						StreamID:      cmd.StreamId,
+					}
+					var suber *m7s.Subscriber
 					// sender.ID = fmt.Sprintf("%s|%d", conn.RemoteAddr().String(), sender.StreamID)
-					sender.Subscriber, err = p.Subscribe(streamPath, ctx, conn)
+					suber, err = p.Subscribe(streamPath, ctx, conn)
 					if err != nil {
-						err = sender.Response(cmd.TransactionId, NetStream_Play_Failed, Level_Error)
+						err = ns.Response(cmd.TransactionId, NetStream_Play_Failed, Level_Error)
 					} else {
-						senders[sender.StreamID] = sender
-						sender.BeginPlay(cmd.TransactionId)
-						sender.Init()
-						go sender.Handle(sender.SendAudio, sender.SendVideo)
+						ns.BeginPlay(cmd.TransactionId)
+						var audio, video AVSender
+						audio.NetConnection = nc
+						video.NetConnection = nc
+						audio.ChunkStreamID = RTMP_CSID_AUDIO
+						video.ChunkStreamID = RTMP_CSID_VIDEO
+						audio.MessageTypeID = RTMP_MSG_AUDIO
+						video.MessageTypeID = RTMP_MSG_VIDEO
+						audio.MessageStreamID = ns.StreamID
+						video.MessageStreamID = ns.StreamID
+						go suber.Handle(m7s.SubscriberHandler{
+							OnAudio: func(a *RTMPAudio) error {
+								return audio.SendFrame(&a.RTMPData)
+							}, OnVideo: func(v *RTMPVideo) error {
+								return video.SendFrame(&v.RTMPData)
+							}})
 					}
 					if err != nil {
 						logger.Error("sendMessage play", "error", err)
@@ -178,7 +191,7 @@ func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
 				if r, ok := receivers[msg.MessageStreamID]; ok {
 					r.WriteAudio(&RTMPAudio{msg.AVData})
 					msg.AVData = RTMPData{}
-					msg.AVData.ScalableMemoryAllocator = nc.ByteChunkPool
+					msg.AVData.ScalableMemoryAllocator = nc.ReadPool
 				} else {
 					logger.Warn("ReceiveAudio", "MessageStreamID", msg.MessageStreamID)
 				}
@@ -186,7 +199,7 @@ func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
 				if r, ok := receivers[msg.MessageStreamID]; ok {
 					r.WriteVideo(&RTMPVideo{msg.AVData})
 					msg.AVData = RTMPData{}
-					msg.AVData.ScalableMemoryAllocator = nc.ByteChunkPool
+					msg.AVData.ScalableMemoryAllocator = nc.ReadPool
 				} else {
 					logger.Warn("ReceiveVideo", "MessageStreamID", msg.MessageStreamID)
 				}

@@ -2,20 +2,18 @@ package rtmp
 
 import (
 	"errors"
-	"net"
 	"runtime"
 
 	"m7s.live/m7s/v5"
-	"m7s.live/m7s/v5/pkg/util"
 )
 
 type AVSender struct {
-	*RTMPSender
+	*NetConnection
 	ChunkHeader
 	lastAbs uint32
 }
 
-func (av *AVSender) sendFrame(frame *RTMPData) (err error) {
+func (av *AVSender) SendFrame(frame *RTMPData) (err error) {
 	// seq := frame.Sequence
 	payloadLen := frame.Length
 	if payloadLen == 0 {
@@ -37,56 +35,19 @@ func (av *AVSender) sendFrame(frame *RTMPData) (err error) {
 	// 第一次是发送关键帧,需要完整的消息头(Chunk Basic Header(1) + Chunk Message Header(11) + Extended Timestamp(4)(可能会要包括))
 	// 后面开始,就是直接发送音视频数据,那么直接发送,不需要完整的块(Chunk Basic Header(1) + Chunk Message Header(7))
 	// 当Chunk Type为0时(即Chunk12),
-	var chunkHeader util.Buffer = av.mem.Malloc(16)
-	defer av.mem.Recycle()
 	if av.lastAbs == 0 {
 		av.SetTimestamp(frame.Timestamp)
-		av.WriteTo(RTMP_CHUNK_HEAD_12, &chunkHeader)
+		err = av.sendChunk(frame.Buffers, &av.ChunkHeader, RTMP_CHUNK_HEAD_12)
 	} else {
 		av.SetTimestamp(frame.Timestamp - av.lastAbs)
-		av.WriteTo(RTMP_CHUNK_HEAD_8, &chunkHeader)
+		err = av.sendChunk(frame.Buffers, &av.ChunkHeader, RTMP_CHUNK_HEAD_8)
 	}
 	av.lastAbs = frame.Timestamp
 	// //数据被覆盖导致序号变了
 	// if seq != frame.Sequence {
 	// 	return errors.New("sequence is not equal")
 	// }
-	r := frame.Buffers
-	var chunks net.Buffers
-	// av.chunk = append(av.chunk, chunkHeader)
-	chunks = append(chunks, chunkHeader)
-	// var buffer util.Buffer = r.ToBytes()
-	r.WriteNTo(av.WriteChunkSize, &chunks)
-	for r.Length > 0 {
-		chunkHeader = av.mem.Malloc(5)
-		av.WriteTo(RTMP_CHUNK_HEAD_1, &chunkHeader)
-		// 如果在音视频数据太大,一次发送不完,那么这里进行分割(data + Chunk Basic Header(1))
-		chunks = append(chunks, chunkHeader)
-		r.WriteNTo(av.WriteChunkSize, &chunks)
-	}
-	var nw int64
-	nw, err = chunks.WriteTo(av.Conn)
-	av.writeSeqNum += uint32(nw)
 	return err
-}
-
-type RTMPSender struct {
-	*m7s.Subscriber
-	NetStream
-	audio, video AVSender
-	mem          util.RecyclableMemory
-}
-
-func (r *RTMPSender) Init() {
-	r.audio.RTMPSender = r
-	r.video.RTMPSender = r
-	r.audio.ChunkStreamID = RTMP_CSID_AUDIO
-	r.video.ChunkStreamID = RTMP_CSID_VIDEO
-	r.audio.MessageTypeID = RTMP_MSG_AUDIO
-	r.video.MessageTypeID = RTMP_MSG_VIDEO
-	r.audio.MessageStreamID = r.StreamID
-	r.video.MessageStreamID = r.StreamID
-	r.mem.ScalableMemoryAllocator = r.ByteChunkPool
 }
 
 //	func (rtmp *RTMPSender) OnEvent(event any) {
@@ -114,13 +75,6 @@ func (r *RTMPSender) Init() {
 //		}
 //	}
 
-func (r *RTMPSender) SendAudio(audio *RTMPAudio) error {
-	return r.audio.sendFrame(&audio.RTMPData)
-}
-
-func (r *RTMPSender) SendVideo(video *RTMPVideo) error {
-	return r.video.sendFrame(&video.RTMPData)
-}
 
 type RTMPReceiver struct {
 	*m7s.Publisher

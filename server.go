@@ -244,48 +244,48 @@ func (s *Server) eventLoop() {
 					}
 					event = vv
 					addPublisher(vv)
-				}
-			case *util.Promise[*Publisher]:
-
-			case *util.Promise[*Subscriber]:
-				err := s.OnSubscribe(v.Value)
-				if v.Fulfill(err); err != nil {
-					continue
-				}
-				if nl := s.Subscribers.Length; nl > subCount {
-					subCount = nl
-					cases = append(cases, reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(v.Value.Done())})
-				}
-				if !s.EnableSubEvent {
-					continue
-				}
-				event = v.Value
-			case *util.Promise[*Puller]:
-				if _, ok := s.Pulls.Get(v.Value.StreamPath); ok {
-					v.Fulfill(ErrStreamExist)
-					continue
-				} else {
-					err := s.OnPublish(&v.Value.Publisher)
-					v.Fulfill(err)
-					if err != nil {
+				case *Subscriber:
+					err := s.OnSubscribe(vv)
+					if v.Fulfill(err); err != nil {
 						continue
 					}
-					s.Pulls.Add(v.Value)
-					addPublisher(&v.Value.Publisher)
+					if nl := s.Subscribers.Length; nl > subCount {
+						subCount = nl
+						cases = append(cases, reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(vv.Done())})
+					}
+					if !s.EnableSubEvent {
+						continue
+					}
 					event = v.Value
+				case *Puller:
+					if _, ok := s.Pulls.Get(vv.StreamPath); ok {
+						v.Fulfill(ErrStreamExist)
+						continue
+					} else {
+						err := s.OnPublish(&vv.Publisher)
+						v.Fulfill(err)
+						if err != nil {
+							continue
+						}
+						s.Pulls.Add(vv)
+						addPublisher(&vv.Publisher)
+						event = v.Value
+					}
+				case *pb.StreamSnapRequest:
+					if pub, ok := s.Streams.Get(vv.StreamPath); ok {
+						v.Resolve(pub)
+					} else {
+						v.Fulfill(ErrNotFound)
+					}
+					continue
+				case *pb.StopSubscribeRequest:
+					if subscriber, ok := s.Subscribers.Get(int(vv.Id)); ok {
+						subscriber.Stop(errors.New("stop by api"))
+						v.Fulfill(nil)
+					} else {
+						v.Fulfill(ErrNotFound)
+					}
 				}
-			case *util.Promise[*StreamSnapShot]:
-				v.Value.Publisher, _ = s.Streams.Get(v.Value.StreamPath)
-				v.Fulfill(nil)
-				continue
-			case *util.Promise[*pb.StopSubscribeRequest]:
-				if subscriber, ok := s.Subscribers.Get(int(v.Value.Id)); ok {
-					subscriber.Stop(errors.New("stop by api"))
-					v.Fulfill(nil)
-				} else {
-					v.Fulfill(ErrNotFound)
-				}
-				continue
 			}
 			for _, plugin := range s.Plugins {
 				if plugin.Disabled {
@@ -405,5 +405,9 @@ func (s *Server) Call(arg any) (result any, err error) {
 	promise := util.NewPromise(arg)
 	s.eventChan <- promise
 	<-promise.Done()
-	return promise.Value, context.Cause(promise.Context)
+	result = promise.Value
+	if err = context.Cause(promise.Context); err == util.ErrResolve {
+		err = nil
+	}
+	return
 }

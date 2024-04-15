@@ -14,7 +14,6 @@ import (
 	"gopkg.in/yaml.v3"
 	. "m7s.live/m7s/v5/pkg"
 	"m7s.live/m7s/v5/pkg/config"
-	"m7s.live/m7s/v5/pkg/util"
 )
 
 type DefaultYaml string
@@ -114,16 +113,6 @@ func InstallPlugin[C iPlugin](options ...any) error {
 	}
 	plugins = append(plugins, meta)
 	return nil
-}
-
-func sendPromiseToServer[T any](server *Server, value T) (err error) {
-	promise := util.NewPromise(value)
-	server.eventChan <- promise
-	<-promise.Done()
-	if err = context.Cause(promise.Context); err == util.ErrResolve {
-		err = nil
-	}
-	return
 }
 
 type Plugin struct {
@@ -236,7 +225,8 @@ func (p *Plugin) OnTCPConnect(conn *net.TCPConn) {
 func (p *Plugin) Publish(streamPath string, options ...any) (publisher *Publisher, err error) {
 	publisher = &Publisher{Publish: p.config.Publish}
 	publisher.Init(p, streamPath, options...)
-	return publisher, sendPromiseToServer(p.server, publisher)
+	_, err = p.server.Call(publisher)
+	return
 }
 
 func (p *Plugin) Pull(streamPath string, url string, options ...any) (puller *Puller, err error) {
@@ -256,13 +246,15 @@ func (p *Plugin) Pull(streamPath string, url string, options ...any) (puller *Pu
 			}()
 		}
 	}
-	return puller, sendPromiseToServer(p.server, puller)
+	_, err = p.server.Call(puller)
+	return
 }
 
 func (p *Plugin) Subscribe(streamPath string, options ...any) (subscriber *Subscriber, err error) {
 	subscriber = &Subscriber{Subscribe: p.config.Subscribe}
 	subscriber.Init(p, streamPath, options...)
-	return subscriber, sendPromiseToServer(p.server, subscriber)
+	_, err = p.server.Call(subscriber)
+	return
 }
 
 func (p *Plugin) registerHandler() {

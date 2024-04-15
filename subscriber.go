@@ -45,19 +45,18 @@ func (ps *PubSubBase) Init(p *Plugin, streamPath string, options ...any) {
 	ps.StartTime = time.Now()
 }
 
-type UnsubscribeEvent struct {
-	*Subscriber
-}
-
 type Subscriber struct {
 	PubSubBase
 	config.Subscribe
 	Publisher *Publisher
 }
 
-type ISubscriberHandler[T IAVFrame] func(data T)
+type SubscriberHandler struct {
+	OnAudio any
+	OnVideo any
+}
 
-func (s *Subscriber) Handle(audioHandler, videoHandler any) {
+func (s *Subscriber) Handle(handler SubscriberHandler) {
 	var ar, vr *AVRingReader
 	var ah, vh reflect.Value
 	var a1, v1 reflect.Type
@@ -67,11 +66,11 @@ func (s *Subscriber) Handle(audioHandler, videoHandler any) {
 		subMode, _ = strconv.Atoi(s.Args.Get(s.SubModeArgName))
 	}
 	var audioFrame, videoFrame, lastSentAF, lastSentVF *AVFrame
-	if audioHandler != nil && s.SubAudio {
-		a1 = reflect.TypeOf(audioHandler).In(0)
+	if handler.OnAudio != nil && s.SubAudio {
+		a1 = reflect.TypeOf(handler.OnAudio).In(0)
 	}
-	if videoHandler != nil && s.SubVideo {
-		v1 = reflect.TypeOf(videoHandler).In(0)
+	if handler.OnVideo != nil && s.SubVideo {
+		v1 = reflect.TypeOf(handler.OnVideo).In(0)
 	}
 	createAudioReader := func() {
 		if s.Publisher == nil || a1 == nil {
@@ -81,7 +80,7 @@ func (s *Subscriber) Handle(audioHandler, videoHandler any) {
 			ar = NewAVRingReader(at)
 			ar.Logger = s.Logger.With("reader", a1.String())
 			ar.Info("start read")
-			ah = reflect.ValueOf(audioHandler)
+			ah = reflect.ValueOf(handler.OnAudio)
 		}
 	}
 	createVideoReader := func() {
@@ -92,7 +91,7 @@ func (s *Subscriber) Handle(audioHandler, videoHandler any) {
 			vr = NewAVRingReader(vt)
 			vr.Logger = s.Logger.With("reader", v1.String())
 			vr.Info("start read")
-			vh = reflect.ValueOf(videoHandler)
+			vh = reflect.ValueOf(handler.OnVideo)
 		}
 	}
 	createAudioReader()

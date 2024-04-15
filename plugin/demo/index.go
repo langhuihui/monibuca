@@ -6,7 +6,6 @@ import (
 	"m7s.live/m7s/v5"
 	"m7s.live/m7s/v5/pkg"
 	"m7s.live/m7s/v5/pkg/util"
-	"m7s.live/m7s/v5/plugin/rtmp/pkg"
 )
 
 type AnnexB struct {
@@ -56,14 +55,5 @@ type DemoPlugin struct {
 // 		publisher.WriteVideo(&annexB)
 // 	}
 // }
-
-func (p *DemoPlugin) OnPublish(publisher *m7s.Publisher) {
-	subscriber, err := p.Subscribe(publisher.StreamPath)
-	if err == nil {
-		go subscriber.Handle(nil, func(v *rtmp.RTMPVideo) {
-
-		})
-	}
-}
 
 var _ = m7s.InstallPlugin[DemoPlugin]()

@@ -61,13 +61,13 @@ type NetConnection struct {
 	AppName         string
 	tmpBuf          util.Buffer //用来接收/发送小数据，复用内存
 	chunkHeader     util.Buffer
-	ByteChunkPool   *util.ScalableMemoryAllocator
-	chunk           net.Buffers
+	ReadPool        *util.ScalableMemoryAllocator
+	WritePool       util.RecyclableMemory
 	writing         atomic.Bool // false 可写，true 不可写
 }
 
-func NewNetConnection(conn net.Conn) *NetConnection {
-	return &NetConnection{
+func NewNetConnection(conn net.Conn) (ret *NetConnection) {
+	ret = &NetConnection{
 		Conn:            conn,
 		Reader:          bufio.NewReader(conn),
 		WriteChunkSize:  RTMP_DEFAULT_CHUNK_SIZE,
@@ -76,8 +76,10 @@ func NewNetConnection(conn net.Conn) *NetConnection {
 		bandwidth:       RTMP_MAX_CHUNK_SIZE << 3,
 		tmpBuf:          make(util.Buffer, 4),
 		chunkHeader:     make(util.Buffer, 0, 16),
-		ByteChunkPool:   util.NewScalableMemoryAllocator(2048),
+		ReadPool:        util.NewScalableMemoryAllocator(2048),
 	}
+	ret.WritePool.ScalableMemoryAllocator = util.NewScalableMemoryAllocator(1024)
+	return
 }
 
 func (conn *NetConnection) ReadFull(buf []byte) (n int, err error) {
@@ -140,7 +142,7 @@ func (conn *NetConnection) readChunk() (msg *Chunk, err error) {
 	if !ok {
 		chunk = &Chunk{}
 		conn.incommingChunks[ChunkStreamID] = chunk
-		chunk.AVData.ScalableMemoryAllocator = conn.ByteChunkPool
+		chunk.AVData.ScalableMemoryAllocator = conn.ReadPool
 	}
 
 	if err = conn.readChunkType(&chunk.ChunkHeader, ChunkType); err != nil {
@@ -261,7 +263,7 @@ func (conn *NetConnection) RecvMessage() (msg *Chunk, err error) {
 			switch msg.MessageTypeID {
 			case RTMP_MSG_CHUNK_SIZE:
 				conn.readChunkSize = int(msg.MsgData.(Uint32Message))
-				// RTMPPlugin.Info("msg read chunk size", zap.Int("readChunkSize", conn.readChunkSize))
+				conn.Info("msg read chunk size", "readChunkSize", conn.readChunkSize)
 			case RTMP_MSG_ABORT:
 				delete(conn.incommingChunks, uint32(msg.MsgData.(Uint32Message)))
 			case RTMP_MSG_ACK, RTMP_MSG_EDGE:
@@ -308,26 +310,25 @@ func (conn *NetConnection) SendMessage(t byte, msg RtmpMessage) (err error) {
 	if sid, ok := msg.(HaveStreamID); ok {
 		head.MessageStreamID = sid.GetStreamID()
 	}
-	head.WriteTo(RTMP_CHUNK_HEAD_12, &conn.chunkHeader)
-	for b := conn.tmpBuf; b.Len() > 0; {
-		if b.CanReadN(conn.WriteChunkSize) {
-			conn.sendChunk(b.ReadN(conn.WriteChunkSize))
-		} else {
-			conn.sendChunk(b)
-			break
-		}
-	}
-	return nil
+	return conn.sendChunk(*util.NewBuffersFromBytes(conn.tmpBuf), head, RTMP_CHUNK_HEAD_12)
 }
 
-func (conn *NetConnection) sendChunk(writeBuffer ...[]byte) error {
-	if n, err := conn.Write(conn.chunkHeader); err != nil {
-		return err
-	} else {
-		conn.writeSeqNum += uint32(n)
+func (conn *NetConnection) sendChunk(r util.Buffers, head *ChunkHeader, headType byte) (err error) {
+	var chunks net.Buffers
+	var chunkHeader util.Buffer = conn.WritePool.Malloc(16)
+	head.WriteTo(headType, &chunkHeader)
+	chunks = append(chunks, chunkHeader)
+	r.WriteNTo(conn.WriteChunkSize, &chunks)
+	for r.Length > 0 {
+		chunkHeader = conn.WritePool.Malloc(5)
+		head.WriteTo(RTMP_CHUNK_HEAD_1, &chunkHeader)
+		// 如果在音视频数据太大,一次发送不完,那么这里进行分割(data + Chunk Basic Header(1))
+		chunks = append(chunks, chunkHeader)
+		r.WriteNTo(conn.WriteChunkSize, &chunks)
 	}
-	buf := net.Buffers(writeBuffer)
-	n, err := buf.WriteTo(conn)
-	conn.writeSeqNum += uint32(n)
+	var nw int64
+	nw, err = chunks.WriteTo(conn.Conn)
+	conn.writeSeqNum += uint32(nw)
+	conn.WritePool.Recycle()
 	return err
 }

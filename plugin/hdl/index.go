@@ -108,10 +108,11 @@ func (p *HDLPlugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		defer binary.BigEndian.PutUint32(b[:4], uint32(data.Length)+11)
 		return gotFlvTag(append(net.Buffers{b[:]}, data.Buffers.Buffers...))
 	}
-	sub.Handle(func(audio *rtmp.RTMPAudio) error {
-		return rtmpData2FlvTag(FLV_TAG_TYPE_AUDIO, &audio.RTMPData)
-	}, func(video *rtmp.RTMPVideo) error {
-		return rtmpData2FlvTag(FLV_TAG_TYPE_VIDEO, &video.RTMPData)
-	})
+	sub.Handle(m7s.SubscriberHandler{
+		OnAudio: func(audio *rtmp.RTMPAudio) error {
+			return rtmpData2FlvTag(FLV_TAG_TYPE_AUDIO, &audio.RTMPData)
+		}, OnVideo: func(video *rtmp.RTMPVideo) error {
+			return rtmpData2FlvTag(FLV_TAG_TYPE_VIDEO, &video.RTMPData)
+		}})
 	gotFlvTag(net.Buffers{b[:4]})
 }

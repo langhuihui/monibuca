@@ -80,3 +80,24 @@ func (h *ChunkHeader) WriteTo(t byte, b *util.Buffer) {
 		b.WriteUint32(h.ExtendTimestamp)
 	}
 }
+
+type (
+	ChunkHeader8 ChunkHeader
+	ChunkHeader12 ChunkHeader
+	ChunkHeader1 ChunkHeader
+	IChunkHeader	interface {
+		WriteTo(*util.Buffer)
+	}
+)
+
+func (h *ChunkHeader8) WriteTo(b *util.Buffer) {
+	(*ChunkHeader)(h).WriteTo(RTMP_CHUNK_HEAD_8, b)
+}
+
+func (h *ChunkHeader12) WriteTo(b *util.Buffer) {
+	(*ChunkHeader)(h).WriteTo(RTMP_CHUNK_HEAD_12, b)
+}
+
+func (h *ChunkHeader1) WriteTo(b *util.Buffer) {
+	(*ChunkHeader)(h).WriteTo(RTMP_CHUNK_HEAD_1, b)
+}
