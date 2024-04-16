@@ -1,0 +1,4 @@
+global:
+  # loglevel: debug
+rtmp:
+  chunksize: 2048

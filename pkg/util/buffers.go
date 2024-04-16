@@ -6,10 +6,11 @@ import (
 )
 
 type Buffers struct {
-	Offset  int
-	offset0 int
-	offset1 int
-	Length  int
+	Offset    int
+	offset    int
+	Length    int
+	curBuf    []byte
+	curBufLen int
 	net.Buffers
 }
 
@@ -22,6 +23,8 @@ func NewBuffers(buffers net.Buffers) *Buffers {
 	for _, level0 := range buffers {
 		ret.Length += len(level0)
 	}
+	ret.curBuf = buffers[0]
+	ret.curBufLen = len(buffers[0])
 	return ret
 }
 
@@ -30,7 +33,12 @@ func (buffers *Buffers) ReadFromBytes(b ...[]byte) {
 	for _, level0 := range b {
 		buffers.Length += len(level0)
 	}
+	if buffers.curBuf == nil {
+		buffers.curBuf = buffers.Buffers[buffers.offset]
+		buffers.curBufLen = len(buffers.curBuf)
+	}
 }
+
 func (buffers *Buffers) ReadBytesTo(buf []byte) (err error) {
 	n := len(buf)
 	if n > buffers.Length {
@@ -38,16 +46,14 @@ func (buffers *Buffers) ReadBytesTo(buf []byte) (err error) {
 	}
 	l := n
 	for n > 0 {
-		level1 := buffers.GetLevel1()
-		level1Len := len(level1)
-		if n < level1Len {
-			copy(buf[l-n:], level1[:n])
-			buffers.move1(n)
+		if n < buffers.curBufLen {
+			copy(buf[l-n:], buffers.curBuf[:n])
+			buffers.forward(n)
 			break
 		}
-		copy(buf[l-n:], level1)
-		n -= level1Len
-		buffers.move0()
+		copy(buf[l-n:], buffers.curBuf)
+		n -= buffers.curBufLen
+		buffers.skipBuf()
 		if buffers.Length == 0 && n > 0 {
 			return io.EOF
 		}
@@ -79,19 +85,17 @@ func (buffers *Buffers) ReadByte() (byte, error) {
 	if buffers.Length == 0 {
 		return 0, io.EOF
 	}
-	level1 := buffers.GetLevel1()
-	if len(level1) == 1 {
-		defer buffers.move0()
+	if buffers.curBufLen == 1 {
+		defer buffers.skipBuf()
 	} else {
-		defer buffers.move1(1)
+		defer buffers.forward(1)
 	}
-	return level1[0], nil
+	return buffers.curBuf[0], nil
 }
 
 func (buffers *Buffers) LEB128Unmarshal() (uint, int, error) {
 	v := uint(0)
 	n := 0
-
 	for i := 0; i < 8; i++ {
 		b, err := buffers.ReadByte()
 		if err != nil {
@@ -108,27 +112,17 @@ func (buffers *Buffers) LEB128Unmarshal() (uint, int, error) {
 	return v, n, nil
 }
 
-func (buffers *Buffers) GetLevel0() []byte {
-	return buffers.Buffers[buffers.offset0]
-}
-
-func (buffers *Buffers) GetLevel1() []byte {
-	return buffers.GetLevel0()[buffers.offset1:]
-}
-
 func (buffers *Buffers) Skip(n int) error {
 	if n > buffers.Length {
 		return io.EOF
 	}
 	for n > 0 {
-		level1 := buffers.GetLevel1()
-		level1Len := len(level1)
-		if n < level1Len {
-			buffers.move1(n)
+		if n < buffers.curBufLen {
+			buffers.forward(n)
 			break
 		}
-		n -= level1Len
-		buffers.move0()
+		n -= buffers.curBufLen
+		buffers.skipBuf()
 		if buffers.Length == 0 && n > 0 {
 			return io.EOF
 		}
@@ -136,18 +130,24 @@ func (buffers *Buffers) Skip(n int) error {
 	return nil
 }
 
-func (buffers *Buffers) move1(n int) {
-	buffers.offset1 += n
+func (buffers *Buffers) forward(n int) {
+	buffers.curBuf = buffers.curBuf[n:]
+	buffers.curBufLen -= n
 	buffers.Length -= n
 	buffers.Offset += n
 }
 
-func (buffers *Buffers) move0() {
-	len0 := len(buffers.GetLevel0())
-	buffers.Offset += len0
-	buffers.Length -= len0
-	buffers.offset0++
-	buffers.offset1 = 0
+func (buffers *Buffers) skipBuf() {
+	buffers.Offset += buffers.curBufLen
+	buffers.Length -= buffers.curBufLen
+	buffers.offset++
+	if buffers.Length > 0 {
+		buffers.curBuf = buffers.Buffers[buffers.offset]
+		buffers.curBufLen = len(buffers.curBuf)
+	} else {
+		buffers.curBuf = nil
+		buffers.curBufLen = 0
+	}
 }
 
 func (buffers *Buffers) ReadBytes(n int) ([]byte, error) {
@@ -160,16 +160,14 @@ func (buffers *Buffers) ReadBytes(n int) ([]byte, error) {
 }
 
 func (buffers *Buffers) WriteNTo(n int, result *net.Buffers) (actual int) {
-	for actual = n; buffers.Length > 0 && n > 0; buffers.move0() {
-		level1 := buffers.GetLevel1()
-		remain1 := len(level1)
-		if remain1 > n {
-			*result = append(*result, level1[:n])
-			buffers.move1(n)
+	for actual = n; buffers.Length > 0 && n > 0; buffers.skipBuf() {
+		if buffers.curBufLen > n {
+			*result = append(*result, buffers.curBuf[:n])
+			buffers.forward(n)
 			return actual
 		}
-		*result = append(*result, level1)
-		n -= remain1
+		*result = append(*result, buffers.curBuf)
+		n -= buffers.curBufLen
 	}
 	return actual - n
 }
@@ -188,9 +186,9 @@ func (buffers *Buffers) ReadBE(n int) (num int, err error) {
 func (buffers *Buffers) ToBytes() []byte {
 	ret := make([]byte, buffers.Length)
 	buffers.Read(ret)
-	buffers.offset0 = 0
-	buffers.offset1 = 0
+	buffers.offset = 0
 	buffers.Offset = 0
 	buffers.Length = 0
+	buffers.curBuf = nil
 	return ret
 }

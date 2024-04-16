@@ -49,6 +49,7 @@ type Server struct {
 	Plugins     []*Plugin
 	Streams     util.Collection[string, *Publisher]
 	Pulls       util.Collection[string, *Puller]
+	Pushs       util.Collection[string, *Pusher]
 	Waiting     map[string][]*Subscriber
 	Subscribers util.Collection[int, *Subscriber]
 	pidG        int
@@ -213,6 +214,12 @@ func (s *Server) eventLoop() {
 			}
 		}
 	}
+	addSubscriber := func(subscriber *Subscriber) {
+		if nl := s.Subscribers.Length; nl > subCount {
+			subCount = nl
+			cases = append(cases, reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(subscriber.Done())})
+		}
+	}
 	for {
 		switch chosen, rev, _ := reflect.Select(cases); chosen {
 		case 0:
@@ -249,10 +256,7 @@ func (s *Server) eventLoop() {
 					if v.Fulfill(err); err != nil {
 						continue
 					}
-					if nl := s.Subscribers.Length; nl > subCount {
-						subCount = nl
-						cases = append(cases, reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(vv.Done())})
-					}
+					addSubscriber(vv)
 					if !s.EnableSubEvent {
 						continue
 					}
@@ -271,6 +275,20 @@ func (s *Server) eventLoop() {
 						addPublisher(&vv.Publisher)
 						event = v.Value
 					}
+				case *Pusher:
+					if _, ok := s.Pushs.Get(vv.StreamPath); ok {
+						v.Fulfill(ErrStreamExist)
+						continue
+					} else {
+						err := s.OnSubscribe(&vv.Subscriber)
+						v.Fulfill(err)
+						if err != nil {
+							continue
+						}
+						addSubscriber(&vv.Subscriber)
+						s.Pushs.Add(vv)
+						event = v.Value
+					}
 				case *pb.StreamSnapRequest:
 					if pub, ok := s.Streams.Get(vv.StreamPath); ok {
 						v.Resolve(pub)
@@ -285,6 +303,7 @@ func (s *Server) eventLoop() {
 					} else {
 						v.Fulfill(ErrNotFound)
 					}
+					continue
 				}
 			}
 			for _, plugin := range s.Plugins {
@@ -312,6 +331,12 @@ func (s *Server) onUnsubscribe(subscriber *Subscriber) {
 	s.Info("unsubscribe", "streamPath", subscriber.StreamPath)
 	if subscriber.Closer != nil {
 		subscriber.Close()
+	}
+	for _, pusher := range s.Pushs.Items {
+		if &pusher.Subscriber == subscriber {
+			s.Pushs.Remove(pusher)
+			break
+		}
 	}
 	if subscriber.Publisher != nil {
 		subscriber.Publisher.RemoveSubscriber(subscriber)

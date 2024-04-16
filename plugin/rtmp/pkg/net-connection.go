@@ -60,14 +60,15 @@ type NetConnection struct {
 	ObjectEncoding  float64
 	AppName         string
 	tmpBuf          util.Buffer //用来接收/发送小数据，复用内存
-	chunkHeader     util.Buffer
+	chunkHeaderBuf  util.Buffer
 	ReadPool        *util.ScalableMemoryAllocator
 	WritePool       util.RecyclableMemory
 	writing         atomic.Bool // false 可写，true 不可写
 }
 
-func NewNetConnection(conn net.Conn) (ret *NetConnection) {
+func NewNetConnection(conn net.Conn, logger *slog.Logger) (ret *NetConnection) {
 	ret = &NetConnection{
+		Logger:          logger,
 		Conn:            conn,
 		Reader:          bufio.NewReader(conn),
 		WriteChunkSize:  RTMP_DEFAULT_CHUNK_SIZE,
@@ -75,7 +76,7 @@ func NewNetConnection(conn net.Conn) (ret *NetConnection) {
 		incommingChunks: make(map[uint32]*Chunk),
 		bandwidth:       RTMP_MAX_CHUNK_SIZE << 3,
 		tmpBuf:          make(util.Buffer, 4),
-		chunkHeader:     make(util.Buffer, 0, 16),
+		chunkHeaderBuf:  make(util.Buffer, 0, 20),
 		ReadPool:        util.NewScalableMemoryAllocator(2048),
 	}
 	ret.WritePool.ScalableMemoryAllocator = util.NewScalableMemoryAllocator(1024)
@@ -314,17 +315,18 @@ func (conn *NetConnection) SendMessage(t byte, msg RtmpMessage) (err error) {
 }
 
 func (conn *NetConnection) sendChunk(r util.Buffers, head *ChunkHeader, headType byte) (err error) {
-	var chunks net.Buffers
-	var chunkHeader util.Buffer = conn.WritePool.Malloc(16)
-	head.WriteTo(headType, &chunkHeader)
-	chunks = append(chunks, chunkHeader)
-	r.WriteNTo(conn.WriteChunkSize, &chunks)
-	for r.Length > 0 {
-		chunkHeader = conn.WritePool.Malloc(5)
-		head.WriteTo(RTMP_CHUNK_HEAD_1, &chunkHeader)
-		// 如果在音视频数据太大,一次发送不完,那么这里进行分割(data + Chunk Basic Header(1))
-		chunks = append(chunks, chunkHeader)
+	conn.chunkHeaderBuf.Reset()
+	head.WriteTo(headType, &conn.chunkHeaderBuf)
+	chunks := net.Buffers{conn.chunkHeaderBuf}
+	var chunk3 util.Buffer = conn.chunkHeaderBuf[conn.chunkHeaderBuf.Len():20]
+	head.WriteTo(RTMP_CHUNK_HEAD_1, &chunk3)
+	for {
 		r.WriteNTo(conn.WriteChunkSize, &chunks)
+		if r.Length <= 0 {
+			break
+		}
+		// 如果在音视频数据太大,一次发送不完,那么这里进行分割(data + Chunk Basic Header(1))
+		chunks = append(chunks, chunk3)
 	}
 	var nw int64
 	nw, err = chunks.WriteTo(conn.Conn)

@@ -210,6 +210,10 @@ func (p *Plugin) onEvent(event any) {
 		if h, ok := p.handler.(interface{ OnPublish(*Publisher) }); ok {
 			h.OnPublish(v)
 		}
+	case *Puller:
+		if h, ok := p.handler.(interface{ OnPull(*Puller) }); ok {
+			h.OnPull(v)
+		}
 	}
 	p.handler.OnEvent(event)
 }
@@ -231,9 +235,11 @@ func (p *Plugin) Publish(streamPath string, options ...any) (publisher *Publishe
 
 func (p *Plugin) Pull(streamPath string, url string, options ...any) (puller *Puller, err error) {
 	puller = &Puller{Pull: p.config.Pull}
+	puller.Client.Proxy = p.config.Pull.Proxy
+	puller.Client.RemoteURL = url
+	puller.Client.PubSubBase = &puller.PubSubBase
 	puller.Publish = p.config.Publish
 	puller.PublishTimeout = 0
-	puller.RemoteURL = url
 	puller.StreamPath = streamPath
 	puller.Init(p, streamPath, options...)
 	for _, option := range options {
@@ -275,6 +281,28 @@ func (p *Plugin) registerHandler() {
 	if rootHandler, ok := p.handler.(http.Handler); ok {
 		p.handle("/", rootHandler)
 	}
+}
+
+func (p *Plugin) Push(streamPath string, url string, options ...any) (pusher *Pusher, err error) {
+	pusher = &Pusher{Push: p.config.Push}
+	pusher.Client.PubSubBase = &pusher.PubSubBase
+	pusher.Client.Proxy = p.config.Push.Proxy
+	pusher.Client.RemoteURL = url
+	pusher.Subscribe = p.config.Subscribe
+	pusher.StreamPath = streamPath
+	pusher.Init(p, streamPath, options...)
+	for _, option := range options {
+		switch v := option.(type) {
+		case PushHandler:
+			defer func() {
+				if err == nil {
+					pusher.Start(v)
+				}
+			}()
+		}
+	}
+	_, err = p.server.Call(pusher)
+	return
 }
 
 func (p *Plugin) logHandler(handler http.Handler) http.Handler {

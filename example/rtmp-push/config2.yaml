@@ -1,0 +1,16 @@
+global:
+  loglevel: debug
+  http:
+    listenaddr: :8081
+    listenaddrtls: :8555
+rtmp:
+  chunksize: 2048
+  tcp:
+    listenaddr: 
+  push:
+    pushlist:
+      live/test: rtmp://localhost/live/test
+hdl:
+  pull:
+    pullonstart:
+      live/test: /Users/dexter/Movies/jb-demo.flv

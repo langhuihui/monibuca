@@ -7,35 +7,40 @@ import (
 	"m7s.live/m7s/v5/pkg/config"
 )
 
+type Client struct {
+	*PubSubBase
+	RemoteURL      string // 远程服务器地址（用于推拉）
+	ReConnectCount int    //重连次数
+	Proxy          string // 代理地址
+}
+
+func (client *Client) reconnect(count int) (ok bool) {
+	ok = count == -1 || client.ReConnectCount <= count
+	client.ReConnectCount++
+	return
+}
+
 type PullHandler interface {
-	Connect(*Puller) error
+	Connect(*Client) error
 	// Disconnect()
 	Pull(*Puller) error
 }
 
 type Puller struct {
+	Client Client
 	Publisher
 	config.Pull
-	RemoteURL      string // 远程服务器地址（用于推拉）
-	ReConnectCount int    //重连次数
-}
-
-// 是否需要重连
-func (p *Puller) reconnect() (ok bool) {
-	ok = p.RePull == -1 || p.ReConnectCount <= p.RePull
-	p.ReConnectCount++
-	return
 }
 
 func (p *Puller) Start(handler PullHandler) (err error) {
 	badPuller := true
 	var startTime time.Time
-	for p.Info("start pull"); p.reconnect(); p.Warn("restart pull") {
+	for p.Info("start pull"); p.Client.reconnect(p.RePull); p.Warn("restart pull") {
 		if time.Since(startTime) < 5*time.Second {
 			time.Sleep(5 * time.Second)
 		}
 		startTime = time.Now()
-		if err = handler.Connect(p); err != nil {
+		if err = handler.Connect(&p.Client); err != nil {
 			if err == io.EOF {
 				p.Info("pull complete")
 				return
@@ -46,7 +51,7 @@ func (p *Puller) Start(handler PullHandler) (err error) {
 			}
 		} else {
 			badPuller = false
-			p.ReConnectCount = 0
+			p.Client.ReConnectCount = 0
 			if err = handler.Pull(p); err != nil && !p.IsStopped() {
 				p.Error("pull interrupt", "error", err)
 			}

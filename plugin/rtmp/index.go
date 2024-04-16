@@ -20,7 +20,17 @@ var _ = m7s.InstallPlugin[RTMPPlugin](m7s.DefaultYaml(`tcp:
 
 func (p *RTMPPlugin) OnInit() {
 	for streamPath, url := range p.GetCommonConf().PullOnStart {
-		go p.Pull(streamPath, url, &RTMPPuller{})
+		go p.Pull(streamPath, url, &Client{})
+	}
+}
+
+func (p *RTMPPlugin) OnPull(puller *m7s.Puller) {
+	p.OnPublish(&puller.Publisher)
+}
+
+func (p *RTMPPlugin) OnPublish(puber *m7s.Publisher) {
+	if remoteURL, ok := p.GetCommonConf().PushList[puber.StreamPath]; ok {
+		go p.Push(puber.StreamPath, remoteURL, &Client{})
 	}
 }
 
@@ -30,8 +40,7 @@ func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
 	receivers := make(map[uint32]*RTMPReceiver)
 	var err error
 	logger.Info("conn")
-	nc := NewNetConnection(conn)
-	nc.Logger = logger
+	nc := NewNetConnection(conn, logger)
 	ctx, cancel := context.WithCancelCause(p)
 	defer func() {
 		logger.Info("conn close")
@@ -166,15 +175,7 @@ func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
 						err = ns.Response(cmd.TransactionId, NetStream_Play_Failed, Level_Error)
 					} else {
 						ns.BeginPlay(cmd.TransactionId)
-						var audio, video AVSender
-						audio.NetConnection = nc
-						video.NetConnection = nc
-						audio.ChunkStreamID = RTMP_CSID_AUDIO
-						video.ChunkStreamID = RTMP_CSID_VIDEO
-						audio.MessageTypeID = RTMP_MSG_AUDIO
-						video.MessageTypeID = RTMP_MSG_VIDEO
-						audio.MessageStreamID = ns.StreamID
-						video.MessageStreamID = ns.StreamID
+						audio, video := ns.CreateSender()
 						go suber.Handle(m7s.SubscriberHandler{
 							OnAudio: func(a *RTMPAudio) error {
 								return audio.SendFrame(&a.RTMPData)

@@ -13,4 +13,5 @@ var (
 	ErrPublishDelayCloseTimeout = errors.New("publish delay close timeout")
 	ErrSubscribeTimeout         = errors.New("subscribe timeout")
 	ErrRestart                  = errors.New("restart")
+	ErrInterrupt                = errors.New("interrupt")
 )

@@ -2,12 +2,17 @@ package main
 
 import (
 	"context"
+	"time"
 
 	"m7s.live/m7s/v5"
+	_ "m7s.live/m7s/v5/plugin/hdl"
 	_ "m7s.live/m7s/v5/plugin/rtmp"
 )
 
 func main() {
+	ctx := context.Background()
 	// ctx, _ := context.WithDeadline(context.Background(), time.Now().Add(time.Second*100))
-	m7s.Run(context.Background(), "config.yaml")
+	go m7s.Run(ctx, "config1.yaml")
+	time.Sleep(time.Second)
+	m7s.NewServer().Run(ctx, "config2.yaml")
 }

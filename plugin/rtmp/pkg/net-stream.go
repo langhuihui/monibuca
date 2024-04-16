@@ -5,6 +5,28 @@ type NetStream struct {
 	StreamID uint32
 }
 
+func (ns *NetStream) CreateAudioSender() *AVSender {
+	var av AVSender
+	av.NetConnection = ns.NetConnection
+	av.ChunkStreamID = RTMP_CSID_AUDIO
+	av.MessageTypeID = RTMP_MSG_AUDIO
+	av.MessageStreamID = ns.StreamID
+	return &av
+}
+
+func (ns *NetStream) CreateVideoSender() *AVSender {
+	var av AVSender
+	av.NetConnection = ns.NetConnection
+	av.ChunkStreamID = RTMP_CSID_VIDEO
+	av.MessageTypeID = RTMP_MSG_VIDEO
+	av.MessageStreamID = ns.StreamID
+	return &av
+}
+
+func (ns *NetStream) CreateSender() (audio *AVSender, video *AVSender) {
+	return ns.CreateAudioSender(), ns.CreateVideoSender()
+}
+
 func (ns *NetStream) Response(tid uint64, code, level string) error {
 	m := new(ResponsePlayMessage)
 	m.CommandName = Response_OnStatus

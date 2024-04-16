@@ -16,8 +16,10 @@ import (
 
 type HDLPuller struct {
 	*bufio.Reader
-	absTS uint32 //绝对时间戳
-	pool  *util.ScalableMemoryAllocator
+	hasAudio bool
+	hasVideo bool
+	absTS    uint32 //绝对时间戳
+	pool     *util.ScalableMemoryAllocator
 }
 
 func NewHDLPuller() *HDLPuller {
@@ -26,11 +28,11 @@ func NewHDLPuller() *HDLPuller {
 	}
 }
 
-func (puller *HDLPuller) Connect(p *m7s.Puller) (err error) {
+func (puller *HDLPuller) Connect(p *m7s.Client) (err error) {
 	if strings.HasPrefix(p.RemoteURL, "http") {
 		var res *http.Response
 		client := http.DefaultClient
-		if proxyConf := p.GetPullConfig().Proxy; proxyConf != "" {
+		if proxyConf := p.Proxy; proxyConf != "" {
 			proxy, err := url.Parse(proxyConf)
 			if err != nil {
 				return err
@@ -59,13 +61,8 @@ func (puller *HDLPuller) Connect(p *m7s.Puller) (err error) {
 			if header[0] != 'F' || header[1] != 'L' || header[2] != 'V' {
 				err = errors.New("not flv file")
 			} else {
-				configCopy := p.GetPublishConfig()
-				if header[4]&0x04 == 0 {
-					configCopy.PubAudio = false
-				}
-				if header[4]&0x01 == 0 {
-					configCopy.PubVideo = false
-				}
+				puller.hasAudio = header[4]&0x04 != 0
+				puller.hasVideo = header[4]&0x01 != 0
 			}
 		}
 	}
@@ -75,7 +72,14 @@ func (puller *HDLPuller) Connect(p *m7s.Puller) (err error) {
 func (puller *HDLPuller) Pull(p *m7s.Puller) (err error) {
 	var startTs uint32
 	var buf15 [15]byte
-	pubaudio, pubvideo := p.GetPublishConfig().PubAudio, p.GetPublishConfig().PubVideo
+	pubConf := p.GetPublishConfig()
+	if !puller.hasAudio {
+		pubConf.PubAudio = false
+	}
+	if !puller.hasVideo {
+		pubConf.PubVideo = false
+	}
+	pubaudio, pubvideo := pubConf.PubAudio, pubConf.PubVideo
 	for offsetTs := puller.absTS; err == nil; _, err = io.ReadFull(puller, buf15[11:]) {
 		tmp := util.Buffer(buf15[:11])
 		_, err = io.ReadFull(puller, tmp)

@@ -104,23 +104,31 @@ func (s *Subscriber) Handle(handler SubscriberHandler) {
 			lastSentAF.ReaderLeave()
 		}
 	}()
-	sendAudioFrame := func() {
+	sendAudioFrame := func() (err error) {
 		lastSentAF = audioFrame
 		s.Debug("send audio frame", "seq", audioFrame.Sequence)
 		res := ah.Call([]reflect.Value{reflect.ValueOf(audioFrame.Wrap)})
 		if len(res) > 0 && !res[0].IsNil() {
-			s.Stop(res[0].Interface().(error))
+			if err := res[0].Interface().(error); err != ErrInterrupt {
+				s.Stop(err)
+			}
 		}
+		return
 	}
-	sendVideoFrame := func() {
+	sendVideoFrame := func() (err error) {
 		lastSentVF = videoFrame
 		s.Debug("send video frame", "seq", videoFrame.Sequence, "data", videoFrame.Wrap.Print(), "size", videoFrame.Wrap.GetSize())
 		res := vh.Call([]reflect.Value{reflect.ValueOf(videoFrame.Wrap)})
 		if len(res) > 0 && !res[0].IsNil() {
-			s.Stop(res[0].Interface().(error))
+			if err = res[0].Interface().(error); err != ErrInterrupt {
+				s.Stop(err)
+			}
 		}
+		return
 	}
-	for err := s.Err(); err == nil; err = s.Err() {
+	var err error
+	for err == nil {
+		err = s.Err()
 		if vr != nil {
 			for err == nil {
 				err = vr.ReadFrame(subMode)
@@ -143,7 +151,7 @@ func (s *Subscriber) Handle(handler SubscriberHandler) {
 					if audioFrame != nil {
 						if util.Conditoinal(s.SyncMode == 0, videoFrame.Timestamp > audioFrame.Timestamp, videoFrame.WriteTime.After(audioFrame.WriteTime)) {
 							// fmt.Println("switch audio", audioFrame.CanRead)
-							sendAudioFrame()
+							err = sendAudioFrame()
 							audioFrame = nil
 							break
 						}
@@ -153,7 +161,7 @@ func (s *Subscriber) Handle(handler SubscriberHandler) {
 				}
 
 				if !s.IFrameOnly || videoFrame.Wrap.IsIDR() {
-					sendVideoFrame()
+					err = sendVideoFrame()
 				}
 			}
 		} else {
@@ -192,13 +200,13 @@ func (s *Subscriber) Handle(handler SubscriberHandler) {
 				}
 				if vr != nil && videoFrame != nil {
 					if util.Conditoinal(s.SyncMode == 0, audioFrame.Timestamp > videoFrame.Timestamp, audioFrame.WriteTime.After(videoFrame.WriteTime)) {
-						sendVideoFrame()
+						err = sendVideoFrame()
 						videoFrame = nil
 						break
 					}
 				}
 				if audioFrame.Timestamp >= ar.SkipTs {
-					sendAudioFrame()
+					err = sendAudioFrame()
 				} else {
 					s.Debug("skip audio", "frame.AbsTime", audioFrame.Timestamp, "s.AudioReader.SkipTs", ar.SkipTs)
 				}
