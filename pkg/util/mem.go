@@ -156,3 +156,36 @@ func (r *RecyclableMemory) RecycleBack(n int) {
 	r.Free2(r.mem[l-3], start, *end)
 	*end = start
 }
+
+type RecyclableBuffers struct {
+	*ScalableMemoryAllocator
+	Buffers
+}
+
+func (r *RecyclableBuffers) Malloc(size int) (memory []byte) {
+	memory = r.ScalableMemoryAllocator.Malloc(size)
+	r.Buffers.ReadFromBytes(memory)
+	return
+}
+
+func (r *RecyclableBuffers) Recycle() {
+	for _, buf := range r.Buffers.Buffers {
+		r.Free(buf)
+	}
+}
+
+func (r *RecyclableBuffers) RecycleBack(n int) {
+	r.Free(r.ClipBack(n))
+}
+
+func (r *RecyclableBuffers) RecycleFront() {
+	for _, buf := range r.Buffers.ClipFront() {
+		r.Free(buf)
+	}
+}
+
+func (r *RecyclableBuffers) Cut(n int) (child *RecyclableBuffers) {
+	child = &RecyclableBuffers{ScalableMemoryAllocator: r.ScalableMemoryAllocator}
+	child.ReadFromBytes(r.Buffers.Cut(n)...)
+	return
+}

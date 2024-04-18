@@ -6,17 +6,19 @@ import (
 	"net"
 
 	"m7s.live/m7s/v5"
+	"m7s.live/m7s/v5/plugin/rtmp/pb"
 	. "m7s.live/m7s/v5/plugin/rtmp/pkg"
 )
 
 type RTMPPlugin struct {
+	pb.UnimplementedRtmpServer
 	m7s.Plugin
 	ChunkSize int `default:"1024"`
 	KeepAlive bool
 }
 
 var _ = m7s.InstallPlugin[RTMPPlugin](m7s.DefaultYaml(`tcp:
-  listenaddr: :1935`))
+  listenaddr: :1935`), &pb.Rtmp_ServiceDesc, pb.RegisterRtmpHandler)
 
 func (p *RTMPPlugin) OnInit() error {
 	for streamPath, url := range p.GetCommonConf().PullOnStart {

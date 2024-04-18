@@ -3,6 +3,7 @@ package util
 import (
 	"io"
 	"net"
+	"slices"
 )
 
 type Buffers struct {
@@ -181,6 +182,120 @@ func (buffers *Buffers) ReadBE(n int) (num int, err error) {
 		num += int(b) << ((n - i - 1) << 3)
 	}
 	return
+}
+
+func (buffers *Buffers) Consumes() (r net.Buffers) {
+	for i := range buffers.offset {
+		r = append(r, buffers.Buffers[i])
+	}
+	if buffers.curBufLen > 0 {
+		r = append(r, buffers.curBuf[:len(buffers.curBuf)-buffers.curBufLen])
+	}
+	return
+}
+
+func (buffers *Buffers) ClipFront() (r net.Buffers) {
+	if buffers.Offset == 0 {
+		return
+	}
+	if buffers.Length == 0 {
+		r = buffers.Buffers
+		buffers.Buffers = buffers.Buffers[:0]
+		buffers.curBuf = nil
+		buffers.curBufLen = 0
+		buffers.offset = 0
+		buffers.Offset = 0
+		return
+	}
+	for i := range buffers.offset {
+		r = append(r, buffers.Buffers[i])
+		l := len(buffers.Buffers[i])
+		buffers.Offset -= l
+	}
+	if buffers.curBufLen > 0 {
+		l := len(buffers.Buffers[buffers.offset]) - buffers.curBufLen
+		r = append(r, buffers.Buffers[buffers.offset][:l])
+		buffers.Offset -= l
+	}
+	buffers.Buffers = buffers.Buffers[buffers.offset:]
+	buffers.Buffers[0] = buffers.curBuf
+	buffers.offset = 0
+	buffers.Offset = 0
+	return r
+}
+
+func (buffers *Buffers) ClipBack(n int) []byte {
+	lastBuf := buffers.Buffers[len(buffers.Buffers)-1]
+	lastBufLen := len(lastBuf)
+	if lastBufLen < n {
+		panic("ClipBack: n > lastBufLen")
+	}
+	ret := lastBuf[lastBufLen-n:]
+	buffers.Buffers[len(buffers.Buffers)-1] = lastBuf[:lastBufLen-n]
+	buffers.Length -= n
+	if buffers.Length > 0 {
+		if buffers.offset == len(buffers.Buffers)-1 {
+			buffers.curBuf = buffers.curBuf[:buffers.curBufLen-n]
+			buffers.curBufLen -= n
+		}
+	} else {
+		buffers.curBuf = nil
+		buffers.curBufLen = 0
+		buffers.Length = 0
+	}
+	return ret
+}
+
+func (buffers *Buffers) CutAll() (r net.Buffers) {
+	r = append(r, buffers.curBuf)
+	for i := buffers.offset+1; i < len(buffers.Buffers); i++ {
+		r = append(r, buffers.Buffers[i])
+	}
+	if len(buffers.Buffers[buffers.offset]) == buffers.curBufLen {
+		buffers.Buffers = buffers.Buffers[:buffers.offset]
+	} else {
+		buffers.Buffers[buffers.offset] = buffers.Buffers[buffers.offset][:buffers.curBufLen]
+		buffers.offset++
+	}
+	buffers.Length = 0
+	buffers.curBuf = nil
+	buffers.curBufLen = 0
+	return
+}
+
+func (buffers *Buffers) Cut(n int) (r net.Buffers) {
+	buffers.CutTo(n, &r)
+	return
+}
+
+func (buffers *Buffers) CutTo(n int, result *net.Buffers) (actual int) {
+	for actual = n; buffers.Length > 0 && n > 0; {
+		if buffers.curBufLen > n {
+			*result = append(*result, buffers.curBuf[:n])
+			buffers.curBuf = buffers.curBuf[n:]
+			buffers.curBufLen -= n
+			buffers.Buffers[buffers.offset] = buffers.curBuf
+			buffers.Length -= n
+			return actual
+		}
+		*result = append(*result, buffers.curBuf)
+		n -= buffers.curBufLen
+		buffers.Length -= buffers.curBufLen
+		if len(buffers.Buffers[buffers.offset]) == buffers.curBufLen {
+			buffers.Buffers = slices.Delete(buffers.Buffers, buffers.offset, 1)
+		} else {
+			buffers.Buffers[buffers.offset] = buffers.Buffers[buffers.offset][:buffers.curBufLen]
+			buffers.offset++
+		}
+		if buffers.Length > 0 {
+			buffers.curBuf = buffers.Buffers[buffers.offset]
+			buffers.curBufLen = len(buffers.curBuf)
+		} else {
+			buffers.curBuf = nil
+			buffers.curBufLen = 0
+		}
+	}
+	return actual - n
 }
 
 func (buffers *Buffers) ToBytes() []byte {

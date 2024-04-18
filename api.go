@@ -5,7 +5,7 @@ import (
 
 	"google.golang.org/protobuf/types/known/emptypb"
 	"m7s.live/m7s/v5/pkg"
-	"m7s.live/m7s/v5/pkg/pb"
+	"m7s.live/m7s/v5/pb"
 )
 
 func (s *Server) StreamSnap(ctx context.Context, req *pb.StreamSnapRequest) (res *pb.StreamSnapShot, err error) {

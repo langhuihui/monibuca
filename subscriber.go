@@ -106,7 +106,7 @@ func (s *Subscriber) Handle(handler SubscriberHandler) {
 	}()
 	sendAudioFrame := func() (err error) {
 		lastSentAF = audioFrame
-		s.Debug("send audio frame", "seq", audioFrame.Sequence)
+		s.Trace("send audio frame", "seq", audioFrame.Sequence)
 		res := ah.Call([]reflect.Value{reflect.ValueOf(audioFrame.Wrap)})
 		if len(res) > 0 && !res[0].IsNil() {
 			if err := res[0].Interface().(error); err != ErrInterrupt {
@@ -117,7 +117,7 @@ func (s *Subscriber) Handle(handler SubscriberHandler) {
 	}
 	sendVideoFrame := func() (err error) {
 		lastSentVF = videoFrame
-		s.Debug("send video frame", "seq", videoFrame.Sequence, "data", videoFrame.Wrap.String(), "size", videoFrame.Wrap.GetSize())
+		s.Trace("send video frame", "seq", videoFrame.Sequence, "data", videoFrame.Wrap.String(), "size", videoFrame.Wrap.GetSize())
 		res := vh.Call([]reflect.Value{reflect.ValueOf(videoFrame.Wrap)})
 		if len(res) > 0 && !res[0].IsNil() {
 			if err = res[0].Interface().(error); err != ErrInterrupt {

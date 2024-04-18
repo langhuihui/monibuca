@@ -1,0 +1,23 @@
+syntax = "proto3";
+import "google/api/annotations.proto";
+import "google/protobuf/empty.proto";
+package m7s;
+option go_package="m7s.live/m7s/v5/plugin/rtmp/pb";
+
+service rtmp {
+  rpc PushOut (PushRequest) returns (PushResponse) {
+    option (google.api.http) = {
+      post: "/rtmp/api/push/{streamPath=**}"
+      body: "remoteURL"
+    };
+  }
+}
+
+message PushRequest {
+  string streamPath = 1;
+  string remoteURL = 2;
+}
+
+message PushResponse {
+
+}

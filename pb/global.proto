@@ -2,7 +2,7 @@ syntax = "proto3";
 import "google/api/annotations.proto";
 import "google/protobuf/empty.proto";
 package m7s;
-option go_package="m7s.live/m7s/v5/pkg/pb";
+option go_package="m7s.live/m7s/v5/pb";
 
 service Global {
   rpc Shutdown (RequestWithId) returns (google.protobuf.Empty) {

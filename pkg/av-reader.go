@@ -66,7 +66,7 @@ func (r *AVRingReader) ReadFrame(mode int) (err error) {
 		if r.Track.IDRing != nil {
 			startRing = r.Track.IDRing
 		} else {
-			r.Warn("no IDRring")
+			r.Warn("no IDRring", "track", r.Track.Codec.String())
 		}
 		switch mode {
 		case SUBMODE_REAL:

@@ -10,7 +10,9 @@ import (
 	"runtime"
 	"strings"
 
+	gatewayRuntime "github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/mcuadros/go-defaults"
+	"google.golang.org/grpc"
 	"gopkg.in/yaml.v3"
 	. "m7s.live/m7s/v5/pkg"
 	"m7s.live/m7s/v5/pkg/config"
@@ -19,10 +21,12 @@ import (
 type DefaultYaml string
 
 type PluginMeta struct {
-	Name        string
-	Version     string //插件版本
-	Type        reflect.Type
-	defaultYaml DefaultYaml //默认配置
+	Name                string
+	Version             string //插件版本
+	Type                reflect.Type
+	defaultYaml         DefaultYaml //默认配置
+	ServiceDesc         *grpc.ServiceDesc
+	RegisterGRPCHandler func(context.Context, *gatewayRuntime.ServeMux, *grpc.ClientConn) error
 }
 
 func (plugin *PluginMeta) Init(s *Server, userConfig map[string]any) {
@@ -78,6 +82,16 @@ func (plugin *PluginMeta) Init(s *Server, userConfig map[string]any) {
 		p.Stop(err)
 		return
 	}
+	if plugin.ServiceDesc != nil && s.grpcServer != nil {
+		s.grpcServer.RegisterService(plugin.ServiceDesc, instance)
+		if plugin.RegisterGRPCHandler != nil {
+			err = plugin.RegisterGRPCHandler(s.Context, s.config.HTTP.GetGRPCMux(), s.grpcClientConn)
+			if err != nil {
+				p.Error("init", "error", err)
+				p.Stop(err)
+			}
+		}
+	}
 	s.Plugins = append(s.Plugins, p)
 	p.Start()
 }
@@ -117,6 +131,10 @@ func InstallPlugin[C iPlugin](options ...any) error {
 		switch v := option.(type) {
 		case DefaultYaml:
 			meta.defaultYaml = v
+		case *grpc.ServiceDesc:
+			meta.ServiceDesc = v
+		case func(context.Context, *gatewayRuntime.ServeMux, *grpc.ClientConn) error:
+			meta.RegisterGRPCHandler = v
 		}
 	}
 	plugins = append(plugins, meta)
@@ -326,15 +344,16 @@ func (p *Plugin) handle(pattern string, handler http.Handler) {
 	if p == nil {
 		return
 	}
+	last := pattern == "/"
 	if !strings.HasPrefix(pattern, "/") {
 		pattern = "/" + pattern
 	}
 	handler = p.logHandler(handler)
-	p.GetCommonConf().Handle(pattern, handler)
+	p.config.HTTP.Handle(pattern, handler, last)
 	if p.server != p.handler {
 		pattern = "/" + strings.ToLower(p.Meta.Name) + pattern
 		p.Debug("http handle added to server", "pattern", pattern)
-		p.server.GetCommonConf().Handle(pattern, handler)
+		p.server.config.HTTP.Handle(pattern, handler, last)
 	}
 	p.server.apiList = append(p.server.apiList, pattern)
 }

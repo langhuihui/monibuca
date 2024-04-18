@@ -21,9 +21,9 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"gopkg.in/yaml.v3"
+	"m7s.live/m7s/v5/pb"
 	. "m7s.live/m7s/v5/pkg"
 	"m7s.live/m7s/v5/pkg/config"
-	"m7s.live/m7s/v5/pkg/pb"
 	"m7s.live/m7s/v5/pkg/util"
 )
 
@@ -45,18 +45,19 @@ type Server struct {
 	pb.UnimplementedGlobalServer
 	Plugin
 	config.Engine
-	ID          int
-	eventChan   chan any
-	Plugins     []*Plugin
-	Streams     util.Collection[string, *Publisher]
-	Pulls       util.Collection[string, *Puller]
-	Pushs       util.Collection[string, *Pusher]
-	Waiting     map[string][]*Subscriber
-	Subscribers util.Collection[int, *Subscriber]
-	pidG        int
-	sidG        int
-	apiList     []string
-	grpcServer  *grpc.Server
+	ID             int
+	eventChan      chan any
+	Plugins        []*Plugin
+	Streams        util.Collection[string, *Publisher]
+	Pulls          util.Collection[string, *Puller]
+	Pushs          util.Collection[string, *Pusher]
+	Waiting        map[string][]*Subscriber
+	Subscribers    util.Collection[int, *Subscriber]
+	pidG           int
+	sidG           int
+	apiList        []string
+	grpcServer     *grpc.Server
+	grpcClientConn *grpc.ClientConn
 }
 
 func NewServer() (s *Server) {
@@ -104,7 +105,9 @@ func (s *Server) Run(ctx context.Context, conf any) (err error) {
 }
 
 func (s *Server) run(ctx context.Context, conf any) (err error) {
-	mux := runtime.NewServeMux()
+	mux := runtime.NewServeMux(runtime.WithMarshalerOption("text/plain", &pb.TextPlain{}), runtime.WithRoutingErrorHandler(runtime.RoutingErrorHandlerFunc(func(_ context.Context, _ *runtime.ServeMux, _ runtime.Marshaler, w http.ResponseWriter, r *http.Request, _ int) {
+		s.config.HTTP.GetHttpMux().ServeHTTP(w, r)
+	})))
 	httpConf, tcpConf := &s.config.HTTP, &s.config.TCP
 	httpConf.SetMux(mux)
 	s.Context, s.CancelCauseFunc = context.WithCancelCause(ctx)
@@ -144,7 +147,6 @@ func (s *Server) run(ctx context.Context, conf any) (err error) {
 	s.Logger = slog.New(
 		console.NewHandler(os.Stdout, &console.HandlerOptions{Level: lv.Level()}),
 	)
-	// slog.SetLogLoggerLevel(lv.Level())
 	s.registerHandler()
 
 	if httpConf.ListenAddrTLS != "" {
@@ -165,30 +167,39 @@ func (s *Server) run(ctx context.Context, conf any) (err error) {
 			s.Info("http stop listen at ", "addr", addr)
 		}(httpConf.ListenAddr)
 	}
+	var tcplis net.Listener
 	if tcpConf.ListenAddr != "" {
 		var opts []grpc.ServerOption
 		s.grpcServer = grpc.NewServer(opts...)
 		pb.RegisterGlobalServer(s.grpcServer, s)
-		gwopts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
-		if err = pb.RegisterGlobalHandlerFromEndpoint(ctx, mux, tcpConf.ListenAddr, gwopts); err != nil {
+
+		s.grpcClientConn, err = grpc.DialContext(ctx, tcpConf.ListenAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		if err != nil {
+			s.Error("failed to dial", "error", err)
+			return err
+		}
+		defer s.grpcClientConn.Close()
+		if err = pb.RegisterGlobalHandler(ctx, mux, s.grpcClientConn); err != nil {
 			s.Error("register handler faild", "error", err)
 			return err
 		}
-		lis, err := net.Listen("tcp", tcpConf.ListenAddr)
+		tcplis, err = net.Listen("tcp", tcpConf.ListenAddr)
 		if err != nil {
 			s.Error("failed to listen", "error", err)
 			return err
 		}
-		defer lis.Close()
+		defer tcplis.Close()
+	}
+	for _, plugin := range plugins {
+		plugin.Init(s, cg[strings.ToLower(plugin.Name)])
+	}
+	if tcplis != nil {
 		go func(addr string) {
-			if err := s.grpcServer.Serve(lis); err != nil {
+			if err := s.grpcServer.Serve(tcplis); err != nil {
 				s.Stop(err)
 			}
 			s.Info("grpc stop listen at ", "addr", addr)
 		}(tcpConf.ListenAddr)
-	}
-	for _, plugin := range plugins {
-		plugin.Init(s, cg[strings.ToLower(plugin.Name)])
 	}
 	s.eventLoop()
 	err = context.Cause(s)

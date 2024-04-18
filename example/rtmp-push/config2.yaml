@@ -1,5 +1,7 @@
 global:
   loglevel: debug
+  tcp:
+    listenaddr: :50051
   http:
     listenaddr: :8081
     listenaddrtls: :8555
