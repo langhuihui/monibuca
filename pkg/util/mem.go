@@ -62,7 +62,7 @@ func (ma *MemoryAllocator) Malloc(size int) (memory []byte) {
 }
 
 func (ma *MemoryAllocator) Free2(start, end int) bool {
-	if start < 0 || end > ma.Size {
+	if start < 0 || end > ma.Size || start >= end {
 		return false
 	}
 	for e := ma.blocks.Front(); e != nil; e = e.Next() {
@@ -147,4 +147,12 @@ func (r *RecyclableMemory) Recycle() {
 		r.Free2(r.mem[i], r.mem[i+1], r.mem[i+2])
 	}
 	r.mem = r.mem[:0]
+}
+
+func (r *RecyclableMemory) RecycleBack(n int) {
+	l := len(r.mem)
+	end := &r.mem[l-1]
+	start := *end - n
+	r.Free2(r.mem[l-3], start, *end)
+	*end = start
 }

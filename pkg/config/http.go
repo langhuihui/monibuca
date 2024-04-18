@@ -66,9 +66,11 @@ func (config *HTTP) Handle(path string, f http.Handler) {
 		if strings.HasSuffix(path, "/") {
 			path += "{streamPath=**}"
 		}
-		mux.HandlePath("GET", path, func(w http.ResponseWriter, r *http.Request, pathParams map[string]string) {
+		handler := func(w http.ResponseWriter, r *http.Request, pathParams map[string]string) {
 			f.ServeHTTP(w, r)
-		})
+		}
+		mux.HandlePath("GET", path, handler)
+		mux.HandlePath("POST", path, handler)
 	}
 }
 

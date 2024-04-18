@@ -26,7 +26,10 @@ type PluginMeta struct {
 }
 
 func (plugin *PluginMeta) Init(s *Server, userConfig map[string]any) {
-	instance := reflect.New(plugin.Type).Interface().(IPlugin)
+	instance, ok := reflect.New(plugin.Type).Interface().(IPlugin)
+	if !ok {
+		panic("plugin must implement IPlugin")
+	}
 	defaults.SetDefaults(instance)
 	p := reflect.ValueOf(instance).Elem().FieldByName("Plugin").Addr().Interface().(*Plugin)
 	p.handler = instance
@@ -38,7 +41,6 @@ func (plugin *PluginMeta) Init(s *Server, userConfig map[string]any) {
 		p.Warn("disabled by env")
 		return
 	}
-	s.Plugins = append(s.Plugins, p)
 	p.Config.Parse(p.GetCommonConf())
 	p.Config.Parse(instance, strings.ToUpper(plugin.Name))
 	for _, fname := range MergeConfigs {
@@ -70,7 +72,13 @@ func (plugin *PluginMeta) Init(s *Server, userConfig map[string]any) {
 		p.assign()
 	}
 	p.Info("init", "version", plugin.Version)
-	instance.OnInit()
+	err := instance.OnInit()
+	if err != nil {
+		p.Error("init", "error", err)
+		p.Stop(err)
+		return
+	}
+	s.Plugins = append(s.Plugins, p)
 	p.Start()
 }
 
@@ -79,7 +87,7 @@ type iPlugin interface {
 }
 
 type IPlugin interface {
-	OnInit()
+	OnInit() error
 	OnEvent(any)
 }
 
@@ -200,8 +208,8 @@ func (p *Plugin) Start() {
 	}
 }
 
-func (p *Plugin) OnInit() {
-
+func (p *Plugin) OnInit() error {
+	return nil
 }
 
 func (p *Plugin) onEvent(event any) {

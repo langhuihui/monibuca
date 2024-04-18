@@ -35,7 +35,7 @@ type (
 		GetSize() int
 		Recycle()
 		IsIDR() bool
-		Print() string
+		String() string
 	}
 
 	Nalu = [][]byte

@@ -136,7 +136,7 @@ func (p *Publisher) writeAV(t *AVTrack, data IAVFrame) {
 	}
 	frame.Timestamp = max(1, p.baseTs+ts)
 	p.lastTs = frame.Timestamp
-	p.Debug("write", "seq", frame.Sequence)
+	p.Trace("write", "seq", frame.Sequence)
 	t.Step()
 	p.speedControl(p.Publish.Speed, p.lastTs)
 }
@@ -216,13 +216,24 @@ func (p *Publisher) WriteData(data IDataFrame) (err error) {
 	return
 }
 
+func (p *Publisher) createTransTrack(dataType reflect.Type) (t *AVTrack) {
+	p.Lock()
+	defer p.Unlock()
+	t = &AVTrack{}
+	t.Logger = p.Logger.With("track", "audio")
+	t.Init(256)
+	p.TransTrack[dataType] = t
+	return t
+}
+
 func (p *Publisher) GetAudioTrack(dataType reflect.Type) (t *AVTrack) {
 	p.RLock()
-	defer p.RUnlock()
 	if t, ok := p.TransTrack[dataType]; ok {
+		p.RUnlock()
 		return t
 	}
-	return
+	p.RUnlock()
+	return p.createTransTrack(dataType)
 }
 
 func (p *Publisher) GetVideoTrack(dataType reflect.Type) (t *AVTrack) {
@@ -263,7 +274,7 @@ func (p *Publisher) SnapShot() (ret *pb.StreamSnapShot) {
 				snap.Wrap = &pb.Wrap{
 					Timestamp: uint32(v.Wrap.GetTimestamp()),
 					Size:      uint32(v.Wrap.GetSize()),
-					Data:      v.Wrap.Print(),
+					Data:      v.Wrap.String(),
 				}
 			}
 			ret.VideoTrack = append(ret.VideoTrack, &snap)
@@ -280,7 +291,7 @@ func (p *Publisher) SnapShot() (ret *pb.StreamSnapShot) {
 				snap.Wrap = &pb.Wrap{
 					Timestamp: uint32(v.Wrap.GetTimestamp()),
 					Size:      uint32(v.Wrap.GetSize()),
-					Data:      v.Wrap.Print(),
+					Data:      v.Wrap.String(),
 				}
 			}
 			ret.AudioTrack = append(ret.AudioTrack, &snap)

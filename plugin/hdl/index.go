@@ -17,10 +17,11 @@ type HDLPlugin struct {
 	m7s.Plugin
 }
 
-func (p *HDLPlugin) OnInit() {
+func (p *HDLPlugin) OnInit() error {
 	for streamPath, url := range p.GetCommonConf().PullOnStart {
 		go p.Pull(streamPath, url, NewHDLPuller())
 	}
+	return nil
 }
 
 var _ = m7s.InstallPlugin[HDLPlugin]()

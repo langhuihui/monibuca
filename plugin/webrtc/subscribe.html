@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>测试WebRTC拉流</title>
+</head>
+
+<body>
+  <video id="video" width="640" height="480" autoplay muted controls>
+  </video>
+  <!-- <button id="sw" onclick="action()" type="button" style="width:100px;height:30px;display: block;">unpublish</button> -->
+  <pre>
+  <code id="remoteSdp">
+
+  </code>
+</pre>
+</body>
+<script>
+  let action = () => { console.log('action not set'); };
+  (async () => {
+
+    const pc = new RTCPeerConnection();
+    pc.ontrack = (e) => {
+      console.log('ontrack', e);
+      if (e.streams.length === 0) return;
+      document.getElementById('video').srcObject = e.streams[0];
+      document.getElementById('video').play();
+    };
+    pc.oniceconnectionstatechange = () => {
+      console.log('oniceconnectionstatechange', pc.iceConnectionState);
+    };
+    pc.onicecandidate = (e) => {
+      console.log('onicecandidate', e.candidate);
+    };
+    pc.addTransceiver('video', { direction: 'recvonly' });
+    pc.addTransceiver('audio', { direction: 'recvonly' });
+    // const dc = pc.createDataChannel('sdp');
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    const searchParams = new URLSearchParams(location.search);
+    const streamPath = searchParams.get('streamPath') || 'live/webrtc';
+    searchParams.delete('streamPath')
+    const result = await fetch(
+      `/webrtc/play/${streamPath}${location.search?`?${searchParams.toString()}`:''}`,
+      {
+        method: 'POST',
+        mode: 'cors',
+        cache: 'no-cache',
+        credentials: 'include',
+        redirect: 'follow',
+        referrerPolicy: 'no-referrer',
+        headers: { 'Content-Type': 'application/sdp' },
+        body: offer.sdp,
+      },
+    );
+    const remoteSdp = await result.text();
+    document.getElementById('remoteSdp').innerText = remoteSdp;
+    await pc.setRemoteDescription(
+      new RTCSessionDescription({ type: 'answer', sdp: remoteSdp }),
+    );
+    // dc.onmessage = async (e) => {
+    //   await pc.setRemoteDescription(
+    //     new RTCSessionDescription({ type: 'answer', sdp: e.data }),
+    //   );
+    // };
+    // const publish = async () => {
+    //   videoTransceiver.direction = 'sendonly';
+    //   audioTransceiver.direction = 'sendonly';
+    //   const offer = await pc.createOffer();
+    //   await pc.setLocalDescription(offer);
+    //   dc.send('1' + offer.sdp);
+    //   action = unpublish;
+    //   document.getElementById('sw').innerText = 'unpublish';
+    // };
+    // const unpublish = async () => {
+    //   videoTransceiver.direction = 'inactive';
+    //   audioTransceiver.direction = 'inactive';
+    //   const offer = await pc.createOffer();
+    //   await pc.setLocalDescription(offer);
+    //   dc.send('0' + offer.sdp);
+    //   action = publish;
+    //   document.getElementById('sw').innerText = 'publish';
+    // };
+    // action = unpublish;
+  })()
+</script>
+
+</html>

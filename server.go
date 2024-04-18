@@ -17,6 +17,7 @@ import (
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/mcuadros/go-defaults"
+	"github.com/phsym/console-slog"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"gopkg.in/yaml.v3"
@@ -137,7 +138,13 @@ func (s *Server) run(ctx context.Context, conf any) (err error) {
 	}
 	var lv slog.LevelVar
 	lv.UnmarshalText([]byte(s.LogLevel))
-	slog.SetLogLoggerLevel(lv.Level())
+	if s.LogLevel == "trace" {
+		lv.Set(TraceLevel)
+	}
+	s.Logger = slog.New(
+		console.NewHandler(os.Stdout, &console.HandlerOptions{Level: lv.Level()}),
+	)
+	// slog.SetLogLoggerLevel(lv.Level())
 	s.registerHandler()
 
 	if httpConf.ListenAddrTLS != "" {

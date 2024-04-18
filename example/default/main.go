@@ -6,6 +6,7 @@ import (
 	"m7s.live/m7s/v5"
 	_ "m7s.live/m7s/v5/plugin/debug"
 	_ "m7s.live/m7s/v5/plugin/hdl"
+	_ "m7s.live/m7s/v5/plugin/webrtc"
 	_ "m7s.live/m7s/v5/plugin/rtmp"
 )
 

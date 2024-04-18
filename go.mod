@@ -7,6 +7,7 @@ toolchain go1.22.1
 require (
 	github.com/cnotch/ipchub v1.1.0
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.19.1
+	github.com/pion/interceptor v0.1.29
 	github.com/q191201771/naza v0.30.48
 	github.com/quic-go/quic-go v0.42.0
 	google.golang.org/genproto/googleapis/api v0.0.0-20240227224415-6ceb2ff114de
@@ -16,7 +17,23 @@ require (
 
 require (
 	github.com/go-ole/go-ole v1.2.6 // indirect
+	github.com/google/uuid v1.6.0 // indirect
 	github.com/lufia/plan9stats v0.0.0-20211012122336-39d0f177ccd0 // indirect
+	github.com/pion/datachannel v1.5.6 // indirect
+	github.com/pion/dtls/v2 v2.2.10 // indirect
+	github.com/pion/ice/v3 v3.0.6 // indirect
+	github.com/pion/logging v0.2.2 // indirect
+	github.com/pion/mdns/v2 v2.0.7 // indirect
+	github.com/pion/randutil v0.1.0 // indirect
+	github.com/pion/rtcp v1.2.14 // indirect
+	github.com/pion/rtp v1.8.5 // indirect
+	github.com/pion/sctp v1.8.16 // indirect
+	github.com/pion/sdp/v3 v3.0.9 // indirect
+	github.com/pion/srtp/v3 v3.0.1 // indirect
+	github.com/pion/stun/v2 v2.0.0 // indirect
+	github.com/pion/transport/v2 v2.2.4 // indirect
+	github.com/pion/transport/v3 v3.0.2 // indirect
+	github.com/pion/turn/v3 v3.0.2 // indirect
 	github.com/power-devops/perfstat v0.0.0-20210106213030-5aafc221ea8c // indirect
 	github.com/rogpeppe/go-internal v1.12.0 // indirect
 	github.com/shoenig/go-m1cpu v0.1.6 // indirect
@@ -35,6 +52,8 @@ require (
 	github.com/gorilla/websocket v1.5.1
 	github.com/mcuadros/go-defaults v1.2.0
 	github.com/onsi/ginkgo/v2 v2.9.5 // indirect
+	github.com/phsym/console-slog v0.3.1
+	github.com/pion/webrtc/v4 v4.0.0-beta.17
 	github.com/shirou/gopsutil/v3 v3.24.3
 	go.uber.org/mock v0.4.0 // indirect
 	golang.org/x/crypto v0.22.0 // indirect

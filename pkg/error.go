@@ -14,4 +14,5 @@ var (
 	ErrSubscribeTimeout         = errors.New("subscribe timeout")
 	ErrRestart                  = errors.New("restart")
 	ErrInterrupt                = errors.New("interrupt")
+	ErrUnsupportCodec           = errors.New("unsupport codec")
 )

@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>测试WebRTC推流</title>
+</head>
+
+<body>
+  <video id="video" width="640" height="480" autoplay muted>
+  </video>
+  <!-- <button id="sw" onclick="action()" type="button" style="width:100px;height:30px;display: block;">unpublish</button> -->
+  <div id="camera"></div>
+  <pre>
+  <code id="remoteSdp">
+
+  </code>
+</pre>
+</body>
+<script>
+  let action = () => { console.log('action not set'); };
+  const screenshare = location.pathname.endsWith("screenshare");
+  (async () => {
+    const searchParams = new URLSearchParams(location.search);
+    const $camera = document.getElementById('camera');
+    navigator.mediaDevices.enumerateDevices().then((devices) => {
+      devices.forEach((device) => {
+        console.log(device.kind + ": " + device.label + " id = " + device.deviceId);
+        if (device.kind == 'videoinput' && !screenshare) {
+          const a = document.createElement('a');
+          a.href = location.pathname + '?videoinput=' + device.deviceId;
+          a.innerHTML = device.label;
+          $camera.appendChild(a);
+          $camera.appendChild(document.createElement('br'));
+        }
+      });
+    });
+    const mediaStream = await (screenshare ? navigator.mediaDevices.getDisplayMedia() : navigator.mediaDevices.getUserMedia({
+      video: searchParams.get('videoinput') ? {
+        deviceId: searchParams.get('videoinput'),
+      } : true,
+      audio: true,
+    }));
+    searchParams.delete('videoinput');
+    document.getElementById('video').srcObject = mediaStream;
+    const pc = new RTCPeerConnection();
+
+    pc.oniceconnectionstatechange = () => {
+      console.log('oniceconnectionstatechange', pc.iceConnectionState);
+    };
+    pc.onicecandidate = (e) => {
+      console.log('onicecandidate', e.candidate);
+    };
+    const streamPath = searchParams.get('streamPath') || 'live/webrtc';
+    searchParams.delete('streamPath');
+    mediaStream.id = streamPath;
+    mediaStream.getTracks().forEach((t) => {
+      pc.addTrack(t, mediaStream);
+    });
+    // const videoTransceiver = pc.addTransceiver(mediaStream.getVideoTracks()[0], { direction: 'sendonly' });
+    // const audioTransceiver = pc.addTransceiver(mediaStream.getAudioTracks()[0], { direction: 'sendonly' });
+    // const dc = pc.createDataChannel('sdp');
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    const result = await fetch(
+      `/webrtc/push/${streamPath}${location.search ? `?${searchParams.toString()}` : ''}`,
+      {
+        method: 'POST',
+        mode: 'cors',
+        cache: 'no-cache',
+        credentials: 'include',
+        redirect: 'follow',
+        referrerPolicy: 'no-referrer',
+        headers: { 'Content-Type': 'application/sdp' },
+        body: offer.sdp,
+      },
+    );
+    const remoteSdp = await result.text();
+    document.getElementById('remoteSdp').innerText = remoteSdp;
+    await pc.setRemoteDescription(
+      new RTCSessionDescription({ type: 'answer', sdp: remoteSdp }),
+    );
+    // dc.onmessage = async (e) => {
+    //   await pc.setRemoteDescription(
+    //     new RTCSessionDescription({ type: 'answer', sdp: e.data }),
+    //   );
+    // };
+    // const publish = async () => {
+    //   videoTransceiver.direction = 'sendonly';
+    //   audioTransceiver.direction = 'sendonly';
+    //   const offer = await pc.createOffer();
+    //   await pc.setLocalDescription(offer);
+    //   dc.send('1' + offer.sdp);
+    //   action = unpublish;
+    //   document.getElementById('sw').innerText = 'unpublish';
+    // };
+    // const unpublish = async () => {
+    //   videoTransceiver.direction = 'inactive';
+    //   audioTransceiver.direction = 'inactive';
+    //   const offer = await pc.createOffer();
+    //   await pc.setLocalDescription(offer);
+    //   dc.send('0' + offer.sdp);
+    //   action = publish;
+    //   document.getElementById('sw').innerText = 'publish';
+    // };
+    // action = unpublish;
+  })()
+</script>
+
+</html>
