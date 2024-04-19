@@ -66,16 +66,10 @@ var (
 
 // C2 S2 : 参考C1 S1
 
-func (nc *NetConnection) ReadBuf(length int) (buf []byte, err error) {
-	buf = nc.ReadPool.Malloc(length)
-	_, err = io.ReadFull(nc.Reader, buf)
-	return
-}
-
-func (nc *NetConnection) Handshake() error {
-	C0C1, err := nc.ReadBuf(C1S1_SIZE + 1)
-	defer nc.ReadPool.Free(C0C1)
-	if err != nil {
+func (nc *NetConnection) Handshake() (err error) {
+	C0C1 := nc.writePool.Malloc(C1S1_SIZE + 1)
+	defer nc.writePool.Recycle()
+	if _, err = io.ReadFull(nc.Conn, C0C1); err != nil {
 		return err
 	}
 	if C0C1[0] != RTMP_HANDSHAKE_VERSION {
@@ -96,37 +90,36 @@ func (nc *NetConnection) Handshake() error {
 }
 
 func (client *NetConnection) ClientHandshake() (err error) {
-	C0C1 := client.ReadPool.Malloc(C1S1_SIZE + 1)
-	defer client.ReadPool.Free(C0C1)
+	C0C1 := client.writePool.Malloc(C1S1_SIZE + 1)
+	defer client.writePool.Recycle()
 	C0C1[0] = RTMP_HANDSHAKE_VERSION
 	if _, err = client.Write(C0C1); err == nil {
 		// read S0 S1
-		if _, err = io.ReadFull(client.Reader, C0C1); err == nil {
+		if _, err = io.ReadFull(client.Conn, C0C1); err == nil {
 			if C0C1[0] != RTMP_HANDSHAKE_VERSION {
 				err = errors.New("S1 C1 Error")
 				// C2
 			} else if _, err = client.Write(C0C1[1:]); err == nil {
-				_, err = io.ReadFull(client.Reader, C0C1[1:]) // S2
+				_, err = io.ReadFull(client.Conn, C0C1[1:]) // S2
 			}
 		}
 	}
-	return
+	return err
 }
 
 func (nc *NetConnection) simple_handshake(C1 []byte) error {
-	S0S1 := nc.ReadPool.Malloc(C1S1_SIZE + 1)
+	S0S1 := nc.writePool.Malloc(C1S1_SIZE + 1)
 	S0S1[0] = RTMP_HANDSHAKE_VERSION
 	util.PutBE(S0S1[1:5], time.Now().Unix()&0xFFFFFFFF)
 	copy(S0S1[5:], "Monibuca")
 	nc.Write(S0S1)
 	nc.Write(C1) // S2
-	defer nc.ReadPool.Free(S0S1)
-	C2, err := nc.ReadBuf(C1S1_SIZE)
-	defer nc.ReadPool.Free(C2)
+	C2, err := nc.ReadBytes(C1S1_SIZE)
+	defer C2.Recycle()
 	if err != nil {
 		return err
 	}
-	if !bytes.Equal(C2[8:], S0S1[9:]) {
+	if !bytes.Equal(C2.ToBytes()[8:], S0S1[9:]) {
 		return errors.New("C2 Error")
 	}
 	return nil
@@ -181,8 +174,8 @@ func (nc *NetConnection) complex_handshake(C1 []byte) error {
 
 	buffer := net.Buffers{[]byte{RTMP_HANDSHAKE_VERSION}, S1, S2_Random, S2_Digest}
 	buffer.WriteTo(nc)
-	b, _ := nc.ReadBuf(1536)
-	nc.ReadPool.Free(b)
+	b, _ := nc.ReadBytes(1536)
+	b.Recycle()
 	return nil
 }
 

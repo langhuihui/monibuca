@@ -105,10 +105,10 @@ func (s *Server) Run(ctx context.Context, conf any) (err error) {
 }
 
 func (s *Server) run(ctx context.Context, conf any) (err error) {
-	mux := runtime.NewServeMux(runtime.WithMarshalerOption("text/plain", &pb.TextPlain{}), runtime.WithRoutingErrorHandler(runtime.RoutingErrorHandlerFunc(func(_ context.Context, _ *runtime.ServeMux, _ runtime.Marshaler, w http.ResponseWriter, r *http.Request, _ int) {
-		s.config.HTTP.GetHttpMux().ServeHTTP(w, r)
-	})))
 	httpConf, tcpConf := &s.config.HTTP, &s.config.TCP
+	mux := runtime.NewServeMux(runtime.WithMarshalerOption("text/plain", &pb.TextPlain{}), runtime.WithRoutingErrorHandler(runtime.RoutingErrorHandlerFunc(func(_ context.Context, _ *runtime.ServeMux, _ runtime.Marshaler, w http.ResponseWriter, r *http.Request, _ int) {
+		httpConf.GetHttpMux().ServeHTTP(w, r)
+	})))
 	httpConf.SetMux(mux)
 	s.Context, s.CancelCauseFunc = context.WithCancelCause(ctx)
 	s.Info("start")
@@ -146,7 +146,7 @@ func (s *Server) run(ctx context.Context, conf any) (err error) {
 	}
 	s.Logger = slog.New(
 		console.NewHandler(os.Stdout, &console.HandlerOptions{Level: lv.Level()}),
-	)
+	).With("server", s.ID)
 	s.registerHandler()
 
 	if httpConf.ListenAddrTLS != "" {
@@ -321,6 +321,15 @@ func (s *Server) eventLoop() {
 					} else {
 						v.Fulfill(ErrNotFound)
 					}
+					continue
+				case *pb.StreamListRequest:
+					var streams []*pb.StreamInfo
+					for _, publisher := range s.Streams.Items {
+						streams = append(streams, &pb.StreamInfo{
+							Path: publisher.StreamPath,
+						})
+					}
+					v.Resolve(&pb.StreamListResponse{List: streams})
 					continue
 				}
 			}

@@ -15,6 +15,11 @@ service Global {
       post: "/api/restart/{id}"
     };
   }
+  rpc StreamList (StreamListRequest) returns (StreamListResponse) {
+    option (google.api.http) = {
+      get: "/api/stream/list"
+    };
+  }
   rpc StreamSnap (StreamSnapRequest) returns (StreamSnapShot) {
     option (google.api.http) = {
       get: "/api/stream/snap/{streamPath=**}"
@@ -26,6 +31,15 @@ service Global {
       body: "*"
     };
   }
+}
+message StreamInfo {
+    string path = 1;
+}
+message StreamListRequest {
+
+}
+message StreamListResponse {
+  repeated StreamInfo list = 1;
 }
 
 message StreamSnapRequest {

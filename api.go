@@ -39,3 +39,10 @@ func (s *Server) StopSubscribe(ctx context.Context, req *pb.StopSubscribeRequest
 		Success: err == nil,
 	}, err
 }
+
+
+func (s *Server) StreamList(ctx context.Context, req *pb.StreamListRequest) (res *pb.StreamListResponse, err error) {
+	var result any
+	result, err = s.Call(req)
+	return result.(*pb.StreamListResponse), err
+}

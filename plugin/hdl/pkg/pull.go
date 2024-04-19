@@ -1,7 +1,6 @@
 package hdl
 
 import (
-	"bufio"
 	"errors"
 	"io"
 	"net/http"
@@ -15,17 +14,14 @@ import (
 )
 
 type HDLPuller struct {
-	*bufio.Reader
+	*util.BufReader
 	hasAudio bool
 	hasVideo bool
 	absTS    uint32 //绝对时间戳
-	pool     *util.ScalableMemoryAllocator
 }
 
 func NewHDLPuller() *HDLPuller {
-	return &HDLPuller{
-		pool: util.NewScalableMemoryAllocator(1024),
-	}
+	return &HDLPuller{}
 }
 
 func (puller *HDLPuller) Connect(p *m7s.Client) (err error) {
@@ -45,24 +41,28 @@ func (puller *HDLPuller) Connect(p *m7s.Client) (err error) {
 				return io.EOF
 			}
 			p.Closer = res.Body
-			puller.Reader = bufio.NewReader(res.Body)
+			puller.BufReader = util.NewBufReader(res.Body)
 		}
 	} else {
 		var res *os.File
 		if res, err = os.Open(p.RemoteURL); err == nil {
 			p.Closer = res
-			puller.Reader = bufio.NewReader(res)
+			puller.BufReader = util.NewBufReader(res)
 		}
 	}
 	if err == nil {
-		header := puller.pool.Malloc(13)
-		defer puller.pool.Free(header)
-		if _, err = io.ReadFull(puller, header); err == nil {
-			if header[0] != 'F' || header[1] != 'L' || header[2] != 'V' {
+		var head *util.RecyclableBuffers
+		head, err = puller.BufReader.ReadBytes(13)
+		defer head.Recycle()
+		if err == nil {
+			var flvHead [3]byte
+			var version, flag byte
+			head.ReadByteTo(&flvHead[0], &flvHead[1], &flvHead[2], &version, &flag)
+			if flvHead != [...]byte{'F', 'L', 'V'} {
 				err = errors.New("not flv file")
 			} else {
-				puller.hasAudio = header[4]&0x04 != 0
-				puller.hasVideo = header[4]&0x01 != 0
+				puller.hasAudio = flag&0x04 != 0
+				puller.hasVideo = flag&0x01 != 0
 			}
 		}
 	}
@@ -71,7 +71,6 @@ func (puller *HDLPuller) Connect(p *m7s.Client) (err error) {
 
 func (puller *HDLPuller) Pull(p *m7s.Puller) (err error) {
 	var startTs uint32
-	var buf15 [15]byte
 	pubConf := p.GetPublishConfig()
 	if !puller.hasAudio {
 		pubConf.PubAudio = false
@@ -79,43 +78,48 @@ func (puller *HDLPuller) Pull(p *m7s.Puller) (err error) {
 	if !puller.hasVideo {
 		pubConf.PubVideo = false
 	}
-	pubaudio, pubvideo := pubConf.PubAudio, pubConf.PubVideo
-	for offsetTs := puller.absTS; err == nil; _, err = io.ReadFull(puller, buf15[11:]) {
-		tmp := util.Buffer(buf15[:11])
-		_, err = io.ReadFull(puller, tmp)
+	for offsetTs := puller.absTS; err == nil; _, err = puller.ReadBE(4) {
+		t, err := puller.ReadByte()
 		if err != nil {
-			return
+			return err
 		}
-		t := tmp.ReadByte()
-		dataSize := tmp.ReadUint24()
-		timestamp := tmp.ReadUint24() | uint32(tmp.ReadByte())<<24
+		dataSize, err := puller.ReadBE32(3)
+		if err != nil {
+			return err
+		}
+		timestamp, err := puller.ReadBE32(3)
+		if err != nil {
+			return err
+		}
+		h, err := puller.ReadByte()
+		if err != nil {
+			return err
+		}
+		timestamp = timestamp | uint32(h)<<24
 		if startTs == 0 {
 			startTs = timestamp
 		}
-		tmp.ReadUint24()
+		puller.ReadBE(3) // stream id always 0
 		var frame rtmp.RTMPData
-		frame.ScalableMemoryAllocator = puller.pool
-		mem := frame.Malloc(int(dataSize))
-		_, err = io.ReadFull(puller, mem)
+		frame.RecyclableBuffers, err = puller.ReadBytes(int(dataSize))
 		if err != nil {
 			frame.Recycle()
-			return
+			return err
 		}
-		frame.ReadFromBytes(mem)
 		puller.absTS = offsetTs + (timestamp - startTs)
 		frame.Timestamp = puller.absTS
 		// fmt.Println(t, offsetTs, timestamp, startTs, puller.absTS)
 		switch t {
 		case FLV_TAG_TYPE_AUDIO:
-			if pubaudio {
-				p.WriteAudio(&rtmp.RTMPAudio{frame})
+			if pubConf.PubAudio {
+				p.WriteAudio(frame.WrapAudio())
 			}
 		case FLV_TAG_TYPE_VIDEO:
-			if pubvideo {
-				p.WriteVideo(&rtmp.RTMPVideo{frame})
+			if pubConf.PubVideo {
+				p.WriteVideo(frame.WrapVideo())
 			}
 		case FLV_TAG_TYPE_SCRIPT:
-			p.Info("script", "data", mem)
+			p.Info("script")
 			frame.Recycle()
 		}
 	}

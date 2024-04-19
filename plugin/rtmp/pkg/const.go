@@ -18,8 +18,7 @@ const (
 
 type RTMPData struct {
 	Timestamp uint32
-	util.Buffers
-	util.RecyclableMemory
+	*util.RecyclableBuffers
 }
 
 func (avcc *RTMPData) GetSize() int {
@@ -39,4 +38,12 @@ func (avcc *RTMPData) GetTimestamp() time.Duration {
 }
 func (avcc *RTMPData) IsIDR() bool {
 	return false
+}
+
+func (avcc *RTMPData) WrapAudio() *RTMPAudio {
+	return &RTMPAudio{RTMPData: *avcc}
+}
+
+func (avcc *RTMPData) WrapVideo() *RTMPVideo {
+	return &RTMPVideo{RTMPData: *avcc}
 }

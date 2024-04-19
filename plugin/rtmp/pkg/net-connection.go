@@ -1,10 +1,7 @@
 package rtmp
 
 import (
-	"bufio"
-	"encoding/binary"
 	"errors"
-	"io"
 	"log/slog"
 	"net"
 	"runtime"
@@ -47,7 +44,7 @@ const (
 
 type NetConnection struct {
 	*slog.Logger    `json:"-" yaml:"-"`
-	*bufio.Reader   `json:"-" yaml:"-"`
+	*util.BufReader `json:"-" yaml:"-"`
 	net.Conn        `json:"-" yaml:"-"`
 	bandwidth       uint32
 	readSeqNum      uint32 // 当前读的字节
@@ -61,8 +58,7 @@ type NetConnection struct {
 	AppName         string
 	tmpBuf          util.Buffer //用来接收/发送小数据，复用内存
 	chunkHeaderBuf  util.Buffer
-	ReadPool        *util.ScalableMemoryAllocator
-	WritePool       util.RecyclableMemory
+	writePool       util.RecyclableMemory
 	writing         atomic.Bool // false 可写，true 不可写
 }
 
@@ -70,26 +66,18 @@ func NewNetConnection(conn net.Conn, logger *slog.Logger) (ret *NetConnection) {
 	ret = &NetConnection{
 		Logger:          logger,
 		Conn:            conn,
-		Reader:          bufio.NewReader(conn),
+		BufReader:       util.NewBufReader(conn),
 		WriteChunkSize:  RTMP_DEFAULT_CHUNK_SIZE,
 		readChunkSize:   RTMP_DEFAULT_CHUNK_SIZE,
 		incommingChunks: make(map[uint32]*Chunk),
 		bandwidth:       RTMP_MAX_CHUNK_SIZE << 3,
 		tmpBuf:          make(util.Buffer, 4),
 		chunkHeaderBuf:  make(util.Buffer, 0, 20),
-		ReadPool:        util.NewScalableMemoryAllocator(2048),
 	}
-	ret.WritePool.ScalableMemoryAllocator = util.NewScalableMemoryAllocator(1024)
+	ret.writePool.ScalableMemoryAllocator = util.NewScalableMemoryAllocator(1024)
 	return
 }
 
-func (conn *NetConnection) ReadFull(buf []byte) (n int, err error) {
-	n, err = io.ReadFull(conn.Reader, buf)
-	if err == nil {
-		conn.readSeqNum += uint32(n)
-	}
-	return
-}
 func (conn *NetConnection) SendStreamID(eventType uint16, streamID uint32) (err error) {
 	return conn.SendMessage(RTMP_MSG_USER_CONTROL, &StreamIDMessage{UserControlMessage{EventType: eventType}, streamID})
 }
@@ -136,41 +124,47 @@ func (conn *NetConnection) readChunk() (msg *Chunk, err error) {
 	// println("ChunkStreamID:", ChunkStreamID, "ChunkType:", ChunkType)
 	chunk, ok := conn.incommingChunks[ChunkStreamID]
 
-	if ChunkType != 3 && ok && chunk.AVData.Length > 0 {
+	if ChunkType != 3 && ok && chunk.bufLen > 0 {
 		// 如果块类型不为3,那么这个rtmp的body应该为空.
 		return nil, errors.New("incompleteRtmpBody error")
 	}
 	if !ok {
 		chunk = &Chunk{}
 		conn.incommingChunks[ChunkStreamID] = chunk
-		chunk.AVData.ScalableMemoryAllocator = conn.ReadPool
 	}
 
 	if err = conn.readChunkType(&chunk.ChunkHeader, ChunkType); err != nil {
 		return nil, errors.New("get chunk type error :" + err.Error())
 	}
 	msgLen := int(chunk.MessageLength)
-
-	mem := chunk.AVData.Malloc(conn.readChunkSize)
-	if unRead := msgLen - chunk.AVData.Length; unRead < conn.readChunkSize {
-		mem = mem[:unRead]
-	}
-	if n, err := conn.ReadFull(mem); err != nil {
-		chunk.AVData.Recycle()
-		return nil, err
+	var mem *util.RecyclableBuffers
+	if unRead := msgLen - chunk.bufLen; unRead < conn.readChunkSize {
+		mem, err = conn.ReadBytes(unRead)
 	} else {
-		conn.readSeqNum += uint32(n)
+		mem, err = conn.ReadBytes(conn.readChunkSize)
 	}
-	if chunk.AVData.ReadFromBytes(mem); chunk.AVData.Length == msgLen {
+	if err != nil {
+		mem.Recycle()
+		return nil, err
+	}
+	conn.readSeqNum += uint32(mem.Length)
+	if chunk.bufLen == 0 {
+		chunk.AVData.RecyclableBuffers = mem
+	} else {
+		chunk.AVData.ReadFromBytes(mem.Buffers.Buffers...)
+	}
+	chunk.bufLen += mem.Length
+	if chunk.AVData.Length == msgLen {
 		chunk.ChunkHeader.ExtendTimestamp += chunk.ChunkHeader.Timestamp
 		msg = chunk
 		switch chunk.MessageTypeID {
 		case RTMP_MSG_AUDIO, RTMP_MSG_VIDEO:
 			msg.AVData.Timestamp = chunk.ChunkHeader.ExtendTimestamp
 		default:
-			err = GetRtmpMessage(msg, msg.AVData.ToBytes())
 			msg.AVData.Recycle()
+			err = GetRtmpMessage(msg, msg.AVData.ToBytes())
 		}
+		msg.bufLen = 0
 	}
 	return
 }
@@ -208,22 +202,18 @@ func (conn *NetConnection) readChunkStreamID(csid uint32) (chunkStreamID uint32,
 }
 
 func (conn *NetConnection) readChunkType(h *ChunkHeader, chunkType byte) (err error) {
-	conn.tmpBuf.Reset()
-	b4 := conn.tmpBuf.Malloc(4)
-	b3 := b4[:3]
 	if chunkType == 3 {
 		// 3个字节的时间戳
 	} else {
 		// Timestamp 3 bytes
-		if _, err = conn.ReadFull(b3); err != nil {
+		if h.Timestamp, err = conn.ReadBE32(3); err != nil {
 			return err
 		}
-		util.GetBE(b3, &h.Timestamp)
+
 		if chunkType != 2 {
-			if _, err = conn.ReadFull(b3); err != nil {
+			if h.MessageLength, err = conn.ReadBE32(3); err != nil {
 				return err
 			}
-			util.GetBE(b3, &h.MessageLength)
 			// Message Type ID 1 bytes
 			if h.MessageTypeID, err = conn.ReadByte(); err != nil {
 				return err
@@ -231,20 +221,18 @@ func (conn *NetConnection) readChunkType(h *ChunkHeader, chunkType byte) (err er
 			conn.readSeqNum++
 			if chunkType == 0 {
 				// Message Stream ID 4bytes
-				if _, err = conn.ReadFull(b4); err != nil { // 读取Message Stream ID
+				if h.MessageStreamID, err = conn.ReadBE32(4); err != nil { // 读取Message Stream ID
 					return err
 				}
-				h.MessageStreamID = binary.LittleEndian.Uint32(b4)
 			}
 		}
 	}
 
 	// ExtendTimestamp 4 bytes
 	if h.Timestamp == 0xffffff { // 对于type 0的chunk,绝对时间戳在这里表示,如果时间戳值大于等于0xffffff(16777215),该值必须是0xffffff,且时间戳扩展字段必须发送,其他情况没有要求
-		if _, err = conn.ReadFull(b4); err != nil {
+		if h.Timestamp, err = conn.ReadBE32(4); err != nil {
 			return err
 		}
-		util.GetBE(b4, &h.Timestamp)
 	}
 	if chunkType == 0 {
 		h.ExtendTimestamp = h.Timestamp
@@ -331,6 +319,5 @@ func (conn *NetConnection) sendChunk(r util.Buffers, head *ChunkHeader, headType
 	var nw int64
 	nw, err = chunks.WriteTo(conn.Conn)
 	conn.writeSeqNum += uint32(nw)
-	conn.WritePool.Recycle()
 	return err
 }

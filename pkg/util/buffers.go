@@ -160,6 +160,22 @@ func (buffers *Buffers) ReadBytes(n int) ([]byte, error) {
 	return b, err
 }
 
+func (buffers *Buffers) WriteTo(w io.Writer) (n int64, err error) {
+	var buf net.Buffers
+	if len(buffers.Buffers) > buffers.offset {
+		buf = append(buf, buffers.Buffers[buffers.offset:]...)
+	}
+	if buffers.curBufLen > 0 {
+		buf[0] = buffers.curBuf
+	}
+	buffers.curBuf = nil
+	buffers.curBufLen = 0
+	buffers.offset = len(buffers.Buffers)
+	buffers.Offset = buffers.Length
+	buffers.Length = 0
+	return buf.WriteTo(w)
+}
+
 func (buffers *Buffers) WriteNTo(n int, result *net.Buffers) (actual int) {
 	for actual = n; buffers.Length > 0 && n > 0; buffers.skipBuf() {
 		if buffers.curBufLen > n {
@@ -248,7 +264,7 @@ func (buffers *Buffers) ClipBack(n int) []byte {
 
 func (buffers *Buffers) CutAll() (r net.Buffers) {
 	r = append(r, buffers.curBuf)
-	for i := buffers.offset+1; i < len(buffers.Buffers); i++ {
+	for i := buffers.offset + 1; i < len(buffers.Buffers); i++ {
 		r = append(r, buffers.Buffers[i])
 	}
 	if len(buffers.Buffers[buffers.offset]) == buffers.curBufLen {

@@ -5,9 +5,9 @@ import (
 	"sync"
 	"time"
 
+	"m7s.live/m7s/v5/pb"
 	. "m7s.live/m7s/v5/pkg"
 	"m7s.live/m7s/v5/pkg/config"
-	"m7s.live/m7s/v5/pb"
 )
 
 type PublisherState int
@@ -136,7 +136,7 @@ func (p *Publisher) writeAV(t *AVTrack, data IAVFrame) {
 	}
 	frame.Timestamp = max(1, p.baseTs+ts)
 	p.lastTs = frame.Timestamp
-	p.Trace("write", "seq", frame.Sequence)
+	p.Trace("write", "seq", frame.Sequence, "ts", frame.Timestamp, "codec", t.Codec.String(), "size", frame.Wrap.GetSize(), "data", frame.Wrap.String())
 	t.Step()
 	p.speedControl(p.Publish.Speed, p.lastTs)
 }
@@ -167,7 +167,7 @@ func (p *Publisher) WriteVideo(data IAVFrame) (err error) {
 		if t.IDRing != nil {
 			p.GOP = int(t.Value.Sequence - t.IDRing.Value.Sequence)
 			if t.HistoryRing == nil {
-				if l := t.Size - p.GOP; l > 12 {
+				if l := t.Size - p.GOP; l > 12 && t.Size > 100 {
 					t.Debug("resize", "gop", p.GOP, "before", t.Size, "after", t.Size-5)
 					t.Reduce(5) //缩小缓冲环节省内存
 				}
@@ -233,7 +233,10 @@ func (p *Publisher) GetAudioTrack(dataType reflect.Type) (t *AVTrack) {
 		return t
 	}
 	p.RUnlock()
-	return p.createTransTrack(dataType)
+	if p.AudioTrack != nil {
+		return p.createTransTrack(dataType)
+	}
+	return
 }
 
 func (p *Publisher) GetVideoTrack(dataType reflect.Type) (t *AVTrack) {

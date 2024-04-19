@@ -193,17 +193,13 @@ func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
 				}
 			case RTMP_MSG_AUDIO:
 				if r, ok := receivers[msg.MessageStreamID]; ok {
-					r.WriteAudio(&RTMPAudio{msg.AVData})
-					msg.AVData = RTMPData{}
-					msg.AVData.ScalableMemoryAllocator = nc.ReadPool
+					r.WriteAudio(msg.AVData.WrapAudio())
 				} else {
 					logger.Warn("ReceiveAudio", "MessageStreamID", msg.MessageStreamID)
 				}
 			case RTMP_MSG_VIDEO:
 				if r, ok := receivers[msg.MessageStreamID]; ok {
-					r.WriteVideo(&RTMPVideo{msg.AVData})
-					msg.AVData = RTMPData{}
-					msg.AVData.ScalableMemoryAllocator = nc.ReadPool
+					r.WriteVideo(msg.AVData.WrapVideo())
 				} else {
 					logger.Warn("ReceiveVideo", "MessageStreamID", msg.MessageStreamID)
 				}

@@ -25,6 +25,7 @@ const _ = grpc.SupportPackageIsVersion7
 type GlobalClient interface {
 	Shutdown(ctx context.Context, in *RequestWithId, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	Restart(ctx context.Context, in *RequestWithId, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	StreamList(ctx context.Context, in *StreamListRequest, opts ...grpc.CallOption) (*StreamListResponse, error)
 	StreamSnap(ctx context.Context, in *StreamSnapRequest, opts ...grpc.CallOption) (*StreamSnapShot, error)
 	StopSubscribe(ctx context.Context, in *StopSubscribeRequest, opts ...grpc.CallOption) (*StopSubscribeResponse, error)
 }
@@ -55,6 +56,15 @@ func (c *globalClient) Restart(ctx context.Context, in *RequestWithId, opts ...g
 	return out, nil
 }
 
+func (c *globalClient) StreamList(ctx context.Context, in *StreamListRequest, opts ...grpc.CallOption) (*StreamListResponse, error) {
+	out := new(StreamListResponse)
+	err := c.cc.Invoke(ctx, "/m7s.Global/StreamList", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *globalClient) StreamSnap(ctx context.Context, in *StreamSnapRequest, opts ...grpc.CallOption) (*StreamSnapShot, error) {
 	out := new(StreamSnapShot)
 	err := c.cc.Invoke(ctx, "/m7s.Global/StreamSnap", in, out, opts...)
@@ -79,6 +89,7 @@ func (c *globalClient) StopSubscribe(ctx context.Context, in *StopSubscribeReque
 type GlobalServer interface {
 	Shutdown(context.Context, *RequestWithId) (*emptypb.Empty, error)
 	Restart(context.Context, *RequestWithId) (*emptypb.Empty, error)
+	StreamList(context.Context, *StreamListRequest) (*StreamListResponse, error)
 	StreamSnap(context.Context, *StreamSnapRequest) (*StreamSnapShot, error)
 	StopSubscribe(context.Context, *StopSubscribeRequest) (*StopSubscribeResponse, error)
 	mustEmbedUnimplementedGlobalServer()
@@ -93,6 +104,9 @@ func (UnimplementedGlobalServer) Shutdown(context.Context, *RequestWithId) (*emp
 }
 func (UnimplementedGlobalServer) Restart(context.Context, *RequestWithId) (*emptypb.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Restart not implemented")
+}
+func (UnimplementedGlobalServer) StreamList(context.Context, *StreamListRequest) (*StreamListResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StreamList not implemented")
 }
 func (UnimplementedGlobalServer) StreamSnap(context.Context, *StreamSnapRequest) (*StreamSnapShot, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StreamSnap not implemented")
@@ -149,6 +163,24 @@ func _Global_Restart_Handler(srv interface{}, ctx context.Context, dec func(inte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Global_StreamList_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StreamListRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GlobalServer).StreamList(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/m7s.Global/StreamList",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GlobalServer).StreamList(ctx, req.(*StreamListRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Global_StreamSnap_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(StreamSnapRequest)
 	if err := dec(in); err != nil {
@@ -199,6 +231,10 @@ var Global_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Restart",
 			Handler:    _Global_Restart_Handler,
+		},
+		{
+			MethodName: "StreamList",
+			Handler:    _Global_StreamList_Handler,
 		},
 		{
 			MethodName: "StreamSnap",

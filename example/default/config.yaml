@@ -1,5 +1,5 @@
 global:
-  loglevel: debug
+  loglevel: trace
   tcp:
     listenaddr: :50051
 rtmp:
@@ -13,3 +13,7 @@ rtmp:
   pull:
     pullonsub:
       live/pull: rtmp://localhost/live/test
+# hdl:
+#   pull:
+#     pullonstart:
+#       live/test: /Users/dexter/Movies/jb-demo.flv

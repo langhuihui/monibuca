@@ -1,4 +1,6 @@
 global:
-  # loglevel: debug
+  loglevel: debug
+  tcp:
+    listenaddr: :50050
 rtmp:
   chunksize: 2048

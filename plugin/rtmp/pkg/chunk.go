@@ -29,6 +29,7 @@ type Chunk struct {
 	ChunkHeader
 	AVData  RTMPData
 	MsgData RtmpMessage
+	bufLen  int
 }
 
 type ChunkHeader struct {
@@ -82,10 +83,10 @@ func (h *ChunkHeader) WriteTo(t byte, b *util.Buffer) {
 }
 
 type (
-	ChunkHeader8 ChunkHeader
+	ChunkHeader8  ChunkHeader
 	ChunkHeader12 ChunkHeader
-	ChunkHeader1 ChunkHeader
-	IChunkHeader	interface {
+	ChunkHeader1  ChunkHeader
+	IChunkHeader  interface {
 		WriteTo(*util.Buffer)
 	}
 )

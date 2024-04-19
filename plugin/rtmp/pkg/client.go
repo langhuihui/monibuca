@@ -110,13 +110,9 @@ func (puller *Client) Pull(p *m7s.Puller) (err error) {
 		}
 		switch msg.MessageTypeID {
 		case RTMP_MSG_AUDIO:
-			p.WriteAudio(&RTMPAudio{msg.AVData})
-			msg.AVData = RTMPData{}
-			msg.AVData.ScalableMemoryAllocator = puller.NetConnection.ReadPool
+			p.WriteAudio(msg.AVData.WrapAudio())
 		case RTMP_MSG_VIDEO:
-			p.WriteVideo(&RTMPVideo{msg.AVData})
-			msg.AVData = RTMPData{}
-			msg.AVData.ScalableMemoryAllocator = puller.NetConnection.ReadPool
+			p.WriteVideo(msg.AVData.WrapVideo())
 		case RTMP_MSG_AMF0_COMMAND:
 			cmd := msg.MsgData.(Commander).GetCommand()
 			switch cmd.CommandName {
