@@ -1,9 +1,10 @@
 global:
-  loglevel: trace
+  loglevel: info
   tcp:
     listenaddr: :50051
 hdl:
   publish:
+    pubaudio: false
     # speed: 2
   pull:
     pullonstart:

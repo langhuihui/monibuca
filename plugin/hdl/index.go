@@ -27,8 +27,8 @@ func (p *HDLPlugin) OnInit() error {
 var _ = m7s.InstallPlugin[HDLPlugin]()
 
 func (p *HDLPlugin) WriteFlvHeader(sub *m7s.Subscriber) (flv net.Buffers) {
-	at, vt := sub.Publisher.AudioTrack, sub.Publisher.VideoTrack
-	hasAudio, hasVideo := at != nil && sub.SubAudio, vt != nil && sub.SubVideo
+	at, vt := &sub.Publisher.AudioTrack, &sub.Publisher.VideoTrack
+	hasAudio, hasVideo := at.AVTrack != nil && sub.SubAudio, vt.AVTrack != nil && sub.SubVideo
 	var amf rtmp.AMF
 	amf.Marshal("onMetaData")
 	metaData := rtmp.EcmaArray{

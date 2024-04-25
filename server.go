@@ -403,7 +403,6 @@ func (s *Server) OnPublish(publisher *Publisher) error {
 		}
 	} else {
 		publisher.Subscribers = make(map[*Subscriber]struct{})
-		publisher.TransTrack = make(map[reflect.Type]*AVTrack)
 	}
 	s.Streams.Set(publisher)
 	s.pidG++

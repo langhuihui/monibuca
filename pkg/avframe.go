@@ -3,16 +3,19 @@ package pkg
 import (
 	"net"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/bluenviron/mediacommon/pkg/codecs/av1"
+	"m7s.live/m7s/v5/pkg/codec"
 	"m7s.live/m7s/v5/pkg/util"
 )
 
 type (
 	ICodecCtx interface {
 		GetSequenceFrame() IAVFrame
+		CreateFrame(any) (IAVFrame, error)
+		Is(codec.FourCC) bool
+		Codec() codec.FourCC
 	}
 	IAudioCodecCtx interface {
 		ICodecCtx
@@ -28,9 +31,8 @@ type (
 	IDataFrame interface {
 	}
 	IAVFrame interface {
-		DecodeConfig(*AVTrack) error
-		ToRaw(*AVTrack) (any, error)
-		FromRaw(*AVTrack, any) error
+		DecodeConfig(ICodecCtx) (ICodecCtx, error)
+		ToRaw(ICodecCtx) (any, error)
 		GetTimestamp() time.Duration
 		GetSize() int
 		Recycle()
@@ -50,14 +52,14 @@ type (
 		Timestamp time.Duration // 绝对时间戳
 		Wrap      IAVFrame      // 封装格式
 	}
+	AVRing    = util.Ring[AVFrame]
 	DataFrame struct {
-		sync.Cond   `json:"-" yaml:"-"`
-		readerCount atomic.Int32 // 读取者数量
-		Sequence    uint32       // 在一个Track中的序号
-		BytesIn     int          // 输入字节数用于计算BPS
-		WriteTime   time.Time    // 写入时间,可用于比较两个帧的先后
-		CanRead     bool         // 是否可读取
-		Raw         any          `json:"-" yaml:"-"` // 裸格式
+		sync.RWMutex `json:"-" yaml:"-"` // 读写锁
+		discard      bool
+		Sequence     uint32    // 在一个Track中的序号
+		BytesIn      int       // 输入字节数用于计算BPS
+		WriteTime    time.Time // 写入时间,可用于比较两个帧的先后
+		Raw          any       `json:"-" yaml:"-"` // 裸格式
 	}
 )
 
@@ -70,50 +72,18 @@ func (frame *AVFrame) Reset() {
 	}
 }
 
-func (df *DataFrame) IsWriting() bool {
-	return !df.CanRead
-}
-
-func (df *DataFrame) IsDiscarded() bool {
-	return df.L == nil
-}
-
-func (df *DataFrame) Discard() int32 {
-	df.L = nil //标记为废弃
-	return df.readerCount.Load()
-}
-
-func (df *DataFrame) ReaderEnter() int32 {
-	return df.readerCount.Add(1)
-}
-
-func (df *DataFrame) ReaderCount() int32 {
-	return df.readerCount.Load()
-}
-
-func (df *DataFrame) ReaderLeave() int32 {
-	return df.readerCount.Add(-1)
-}
-
 func (df *DataFrame) StartWrite() bool {
-	if df.readerCount.Load() > 0 {
-		df.Discard() //标记为废弃
-		return false
-	} else {
-		df.Init()
-		df.CanRead = false //标记为正在写入
+	if df.TryLock() {
 		return true
+	} else {
+		df.discard = true
+		return false
 	}
 }
 
 func (df *DataFrame) Ready() {
 	df.WriteTime = time.Now()
-	df.CanRead = true //标记为可读取
-	df.Broadcast()
-}
-
-func (df *DataFrame) Init() {
-	df.L = EmptyLocker
+	df.Unlock()
 }
 
 func (nalus *Nalus) Append(bytes ...[]byte) {

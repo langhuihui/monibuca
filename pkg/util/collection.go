@@ -1,14 +1,22 @@
 package util
 
-import "slices"
+import (
+	"slices"
+	"sync"
+)
 
 type Collection[K comparable, T interface{ GetKey() K }] struct {
+	L      *sync.RWMutex
 	Items  []T
 	m      map[K]T
 	Length int
 }
 
 func (c *Collection[K, T]) Add(item T) {
+	if c.L != nil {
+		c.L.Lock()
+		defer c.L.Unlock()
+	}
 	c.Items = append(c.Items, item)
 	if c.Length > 100 || c.m != nil {
 		if c.m == nil {
@@ -47,6 +55,10 @@ func (c *Collection[K, T]) Remove(item T) {
 }
 
 func (c *Collection[K, T]) RemoveByKey(key K) {
+	if c.L != nil {
+		c.L.Lock()
+		defer c.L.Unlock()
+	}
 	delete(c.m, key)
 	for i := range c.Length {
 		if c.Items[i].GetKey() == key {
@@ -58,6 +70,10 @@ func (c *Collection[K, T]) RemoveByKey(key K) {
 }
 
 func (c *Collection[K, T]) Get(key K) (item T, ok bool) {
+	if c.L != nil {
+		c.L.RLock()
+		defer c.L.RUnlock()
+	}
 	if c.m != nil {
 		item, ok = c.m[key]
 		return item, ok

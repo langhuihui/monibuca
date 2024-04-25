@@ -1,6 +1,7 @@
 package rtp
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/pion/rtp"
@@ -12,16 +13,23 @@ import (
 
 type RTPData struct {
 	*webrtc.RTPCodecParameters
-	rtp.Packet
+	Packets []*rtp.Packet
 	util.RecyclableMemory
 }
 
-func (r *RTPData) GetTimestamp() time.Duration {
-	return time.Duration(r.Timestamp) * time.Second / time.Duration(r.ClockRate)
+func (r *RTPData) String() string {
+	return fmt.Sprintf("RTPData{Packets: %d, Codec: %s}", len(r.Packets), r.MimeType)
 }
 
-func (r *RTPData) GetSize() int {
-	return r.Packet.MarshalSize()
+func (r *RTPData) GetTimestamp() time.Duration {
+	return time.Duration(r.Packets[0].Timestamp) * time.Second / time.Duration(r.ClockRate)
+}
+
+func (r *RTPData) GetSize() (s int) {
+	for _, p := range r.Packets {
+		s += p.MarshalSize()
+	}
+	return
 }
 
 func (r *RTPData) IsIDR() bool {
@@ -30,7 +38,10 @@ func (r *RTPData) IsIDR() bool {
 
 type (
 	RTPCtx struct {
+		codec.FourCC
 		webrtc.RTPCodecParameters
+		SequenceNumber uint16
+		SSRC           uint32
 	}
 	RTPG711Ctx struct {
 		RTPCtx
@@ -51,62 +62,79 @@ func (r *RTPCtx) GetSequenceFrame() IAVFrame {
 	return nil
 }
 
-func (r *RTPData) DecodeConfig(track *AVTrack) error {
+func (r *RTPCtx) Parse(ICodecCtx) error {
+	panic("unimplemented")
+}
+
+func (r *RTPData) DecodeConfig(from ICodecCtx) (codecCtx ICodecCtx, err error) {
+	if r == nil {
+		switch fourCC := from.Codec(); fourCC {
+		case codec.FourCC_H264:
+			var ctx RTPH264Ctx
+			ctx.FourCC = fourCC
+			codecCtx = &ctx
+		case codec.FourCC_H265:
+			var ctx RTPH265Ctx
+			ctx.FourCC = fourCC
+			codecCtx = &ctx			
+		}
+		return
+	}
 	switch r.MimeType {
 	case webrtc.MimeTypeOpus:
-		track.Codec = codec.FourCC_OPUS
 		var ctx RTPOPUSCtx
+		ctx.FourCC = codec.FourCC_OPUS
 		ctx.RTPCodecParameters = *r.RTPCodecParameters
-		track.ICodecCtx = &ctx
+		codecCtx = &ctx
 	case webrtc.MimeTypePCMA:
-		track.Codec = codec.FourCC_ALAW
 		var ctx RTPG711Ctx
+		ctx.FourCC = codec.FourCC_ALAW
 		ctx.RTPCodecParameters = *r.RTPCodecParameters
-		track.ICodecCtx = &ctx
+		codecCtx = &ctx
 	case webrtc.MimeTypePCMU:
-		track.Codec = codec.FourCC_ULAW
 		var ctx RTPG711Ctx
+		ctx.FourCC = codec.FourCC_ULAW
 		ctx.RTPCodecParameters = *r.RTPCodecParameters
-		track.ICodecCtx = &ctx
+		codecCtx = &ctx
 	case webrtc.MimeTypeH264:
-		track.Codec = codec.FourCC_H264
 		var ctx RTPH264Ctx
+		ctx.FourCC = codec.FourCC_H264
 		ctx.RTPCodecParameters = *r.RTPCodecParameters
-		track.ICodecCtx = &ctx
+		codecCtx = &ctx
 	case webrtc.MimeTypeVP9:
-		track.Codec = codec.FourCC_VP9
 		var ctx RTPVP9Ctx
+		ctx.FourCC = codec.FourCC_VP9
 		ctx.RTPCodecParameters = *r.RTPCodecParameters
-		track.ICodecCtx = &ctx
+		codecCtx = &ctx
 	case webrtc.MimeTypeAV1:
-		track.Codec = codec.FourCC_AV1
 		var ctx RTPAV1Ctx
+		ctx.FourCC = codec.FourCC_AV1
 		ctx.RTPCodecParameters = *r.RTPCodecParameters
-		track.ICodecCtx = &ctx
+		codecCtx = &ctx
 	case webrtc.MimeTypeH265:
-		track.Codec = codec.FourCC_H265
 		var ctx RTPH265Ctx
+		ctx.FourCC = codec.FourCC_H265
 		ctx.RTPCodecParameters = *r.RTPCodecParameters
-		track.ICodecCtx = &ctx
+		codecCtx = &ctx
 	case "audio/MPEG4-GENERIC", "audio/AAC":
-		track.Codec = codec.FourCC_MP4A
 		var ctx RTPAACCtx
+		ctx.FourCC = codec.FourCC_MP4A
 		ctx.RTPCodecParameters = *r.RTPCodecParameters
-		track.ICodecCtx = &ctx
+		codecCtx = &ctx
 	default:
-		return ErrUnsupportCodec
+		err = ErrUnsupportCodec
 	}
-	return nil
+	return
 }
 
 type RTPAudio struct {
 	RTPData
 }
 
-func (r *RTPAudio) FromRaw(*AVTrack, any) error {
+func (ctx *RTPCtx) CreateFrame(any) (IAVFrame, error) {
 	panic("unimplemented")
 }
 
-func (r *RTPAudio) ToRaw(*AVTrack) (any, error) {
-	return r.Payload, nil
+func (r *RTPAudio) ToRaw(ICodecCtx) (any, error) {
+	return nil, nil
 }

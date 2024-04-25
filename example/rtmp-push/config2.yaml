@@ -1,5 +1,5 @@
 global:
-  loglevel: debug
+  loglevel: info
   tcp:
     listenaddr: :50051
   http:

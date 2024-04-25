@@ -43,8 +43,9 @@
     const searchParams = new URLSearchParams(location.search);
     const streamPath = searchParams.get('streamPath') || 'live/webrtc';
     searchParams.delete('streamPath')
+    const query = searchParams.toString()
     const result = await fetch(
-      `/webrtc/play/${streamPath}${location.search?`?${searchParams.toString()}`:''}`,
+      `/webrtc/play/${streamPath}${query?`?${query}`:''}`,
       {
         method: 'POST',
         mode: 'cors',

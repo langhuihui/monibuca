@@ -9,42 +9,64 @@ type RTMPAudio struct {
 	RTMPData
 }
 
-func (avcc *RTMPAudio) DecodeConfig(track *AVTrack) error {
+func (avcc *RTMPAudio) DecodeConfig(from ICodecCtx) (codecCtx ICodecCtx, err error) {
+	if avcc == nil {
+		switch fourCC := from.Codec(); fourCC {
+		case codec.FourCC_ALAW,codec.FourCC_ULAW:
+			var ctx G711Ctx
+			ctx.FourCC = fourCC
+			ctx.SampleRate = 8000
+			ctx.Channels = 1
+			ctx.SampleSize = 8
+			codecCtx = &ctx
+		case codec.FourCC_MP4A:
+			var ctx AACCtx
+			ctx.FourCC = fourCC
+			ctx.SampleRate = 44100
+			ctx.Channels = 2
+			ctx.SampleSize = 16
+			codecCtx = &ctx
+		}
+		return
+	}
 	reader := avcc.Buffers
-	b0, err := reader.ReadByte()
+	var b byte
+	b, err = reader.ReadByte()
 	if err != nil {
-		return err
+		return
 	}
-	b1, err := reader.ReadByte()
+	b0 := b
+	b, err = reader.ReadByte()
 	if err != nil {
-		return err
+		return
 	}
+	b1 := b
 	if b1 == 0 {
 		switch b0 & 0b1111_0000 >> 4 {
 		case 7:
-			track.Codec = codec.FourCC_ALAW
 			var ctx G711Ctx
+			ctx.FourCC = codec.FourCC_ALAW
 			ctx.SampleRate = 8000
 			ctx.Channels = 1
 			ctx.SampleSize = 8
-			track.ICodecCtx = &ctx
+			codecCtx = &ctx
 		case 8:
-			track.Codec = codec.FourCC_ULAW
 			var ctx G711Ctx
+			ctx.FourCC = codec.FourCC_ULAW
 			ctx.SampleRate = 8000
 			ctx.Channels = 1
 			ctx.SampleSize = 8
-			track.ICodecCtx = &ctx
+			codecCtx = &ctx
 		case 10:
-			track.Codec = codec.FourCC_MP4A
 			var ctx AACCtx
+			ctx.FourCC = codec.FourCC_MP4A
 			b0, err = reader.ReadByte()
 			if err != nil {
-				return err
+				return
 			}
 			b1, err = reader.ReadByte()
 			if err != nil {
-				return err
+				return
 			}
 			ctx.AudioObjectType = b0 >> 3
 			ctx.SamplingFrequencyIndex = (b0 & 0x07 << 1) | (b1 >> 7)
@@ -56,15 +78,15 @@ func (avcc *RTMPAudio) DecodeConfig(track *AVTrack) error {
 			ctx.Channels = int(ctx.ChannelConfiguration)
 			ctx.SampleRate = SamplingFrequencies[ctx.SamplingFrequencyIndex]
 			ctx.SampleSize = 16
-			track.ICodecCtx = &ctx
+			codecCtx = &ctx
 		}
 	}
-	return nil
+	return
 }
 
-func (avcc *RTMPAudio) ToRaw(track *AVTrack) (any, error) {
+func (avcc *RTMPAudio) ToRaw(codecCtx ICodecCtx) (any, error) {
 	reader := avcc.Buffers
-	if track.Codec == codec.FourCC_MP4A {
+	if _, ok := codecCtx.(*AACCtx); ok {
 		err := reader.Skip(2)
 		return reader.Buffers, err
 	} else {
@@ -73,6 +95,6 @@ func (avcc *RTMPAudio) ToRaw(track *AVTrack) (any, error) {
 	}
 }
 
-func (avcc *RTMPAudio) FromRaw(track *AVTrack, raw any) error {
-	return nil
+func (g711 *G711Ctx) CreateFrame(raw any) (frame IAVFrame, err error) {
+	return
 }

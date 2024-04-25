@@ -29,6 +29,14 @@ func NewBuffers(buffers net.Buffers) *Buffers {
 	return ret
 }
 
+func (buffers *Buffers) MoveToEnd() {
+	buffers.curBuf = nil
+	buffers.curBufLen = 0
+	buffers.offset = len(buffers.Buffers)
+	buffers.Offset = buffers.Length
+	buffers.Length = 0
+}
+
 func (buffers *Buffers) ReadFromBytes(b ...[]byte) {
 	buffers.Buffers = append(buffers.Buffers, b...)
 	for _, level0 := range b {
@@ -40,23 +48,33 @@ func (buffers *Buffers) ReadFromBytes(b ...[]byte) {
 	}
 }
 
-func (buffers *Buffers) ReadBytesTo(buf []byte) (err error) {
+func (buffers *Buffers) ReadBytesTo(buf []byte) (actual int) {
 	n := len(buf)
 	if n > buffers.Length {
-		return io.EOF
+		if buffers.curBufLen > 0 {
+			actual += copy(buf, buffers.curBuf)
+			buffers.offset++
+		}
+		for _, b := range buffers.Buffers[buffers.offset:] {
+			actual += copy(buf[actual:], b)
+		}
+		buffers.MoveToEnd()
+		return
 	}
 	l := n
 	for n > 0 {
 		if n < buffers.curBufLen {
+			actual += n
 			copy(buf[l-n:], buffers.curBuf[:n])
 			buffers.forward(n)
 			break
 		}
 		copy(buf[l-n:], buffers.curBuf)
 		n -= buffers.curBufLen
+		actual += buffers.curBufLen
 		buffers.skipBuf()
 		if buffers.Length == 0 && n > 0 {
-			return io.EOF
+			return
 		}
 	}
 	return
@@ -156,8 +174,8 @@ func (buffers *Buffers) ReadBytes(n int) ([]byte, error) {
 		return nil, io.EOF
 	}
 	b := make([]byte, n)
-	err := buffers.ReadBytesTo(b)
-	return b, err
+	actual := buffers.ReadBytesTo(b)
+	return b[:actual], nil
 }
 
 func (buffers *Buffers) WriteTo(w io.Writer) (n int64, err error) {
@@ -168,11 +186,7 @@ func (buffers *Buffers) WriteTo(w io.Writer) (n int64, err error) {
 	if buffers.curBufLen > 0 {
 		buf[0] = buffers.curBuf
 	}
-	buffers.curBuf = nil
-	buffers.curBufLen = 0
-	buffers.offset = len(buffers.Buffers)
-	buffers.Offset = buffers.Length
-	buffers.Length = 0
+	buffers.MoveToEnd()
 	return buf.WriteTo(w)
 }
 

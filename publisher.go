@@ -8,6 +8,7 @@ import (
 	"m7s.live/m7s/v5/pb"
 	. "m7s.live/m7s/v5/pkg"
 	"m7s.live/m7s/v5/pkg/config"
+	"m7s.live/m7s/v5/pkg/util"
 )
 
 type PublisherState int
@@ -39,17 +40,36 @@ func (s *SpeedControl) speedControl(speed float64, ts time.Duration) {
 	}
 }
 
+type AVTracks struct {
+	*AVTrack
+	util.Collection[reflect.Type, *AVTrack]
+}
+
+func (t *AVTracks) IsEmpty() bool {
+	return t.Length == 0
+}
+
+func (t *AVTracks) CreateSubTrack(dataType reflect.Type) (track *AVTrack) {
+	track = &AVTrack{}
+	track.FrameType = dataType
+	track.Codec = t.Codec
+	track.Logger = t.Logger.With("subtrack", dataType.String())
+	track.Init(t.AVTrack.Size)
+	t.Add(track)
+	track.Info("create")
+	return
+}
+
 type Publisher struct {
 	PubSubBase
 	sync.RWMutex `json:"-" yaml:"-"`
 	config.Publish
 	SpeedControl
 	State       PublisherState
-	VideoTrack  *AVTrack
-	AudioTrack  *AVTrack
+	VideoTrack  AVTracks
+	AudioTrack  AVTracks
 	DataTrack   *DataTrack
-	TransTrack  map[reflect.Type]*AVTrack `json:"-" yaml:"-"`
-	Subscribers map[*Subscriber]struct{}  `json:"-" yaml:"-"`
+	Subscribers map[*Subscriber]struct{} `json:"-" yaml:"-"`
 	GOP         int
 	baseTs      time.Duration
 	lastTs      time.Duration
@@ -84,10 +104,10 @@ func (p *Publisher) checkTimeout() (err error) {
 		err = p.timeout()
 	default:
 		if p.PublishTimeout > 0 {
-			if p.VideoTrack != nil && !p.VideoTrack.LastValue.WriteTime.IsZero() && time.Since(p.VideoTrack.LastValue.WriteTime) > p.PublishTimeout {
+			if !p.VideoTrack.IsEmpty() && !p.VideoTrack.LastValue.WriteTime.IsZero() && time.Since(p.VideoTrack.LastValue.WriteTime) > p.PublishTimeout {
 				err = ErrPublishTimeout
 			}
-			if p.AudioTrack != nil && !p.AudioTrack.LastValue.WriteTime.IsZero() && time.Since(p.AudioTrack.LastValue.WriteTime) > p.PublishTimeout {
+			if !p.AudioTrack.IsEmpty() && !p.AudioTrack.LastValue.WriteTime.IsZero() && time.Since(p.AudioTrack.LastValue.WriteTime) > p.PublishTimeout {
 				err = ErrPublishTimeout
 			}
 		}
@@ -136,7 +156,9 @@ func (p *Publisher) writeAV(t *AVTrack, data IAVFrame) {
 	}
 	frame.Timestamp = max(1, p.baseTs+ts)
 	p.lastTs = frame.Timestamp
-	p.Trace("write", "seq", frame.Sequence, "ts", frame.Timestamp, "codec", t.Codec.String(), "size", frame.Wrap.GetSize(), "data", frame.Wrap.String())
+	if p.Enabled(p, TraceLevel) {
+		p.Trace("write", "seq", frame.Sequence, "ts", frame.Timestamp, "codec", t.Codec.String(), "size", frame.Wrap.GetSize(), "data", frame.Wrap.String())
+	}
 	t.Step()
 	p.speedControl(p.Publish.Speed, p.lastTs)
 }
@@ -145,14 +167,15 @@ func (p *Publisher) WriteVideo(data IAVFrame) (err error) {
 	if !p.PubVideo || p.IsStopped() {
 		return
 	}
-	t := p.VideoTrack
+	t := p.VideoTrack.AVTrack
 	if t == nil {
 		t = &AVTrack{}
+		t.FrameType = reflect.TypeOf(data)
 		t.Logger = p.Logger.With("track", "video")
 		t.Init(256)
 		p.Lock()
-		p.VideoTrack = t
-		p.TransTrack[reflect.TypeOf(data)] = t
+		p.VideoTrack.AVTrack = t
+		p.VideoTrack.Add(t)
 		if len(p.Subscribers) > 0 {
 			p.State = PublisherStateSubscribed
 		} else {
@@ -161,12 +184,16 @@ func (p *Publisher) WriteVideo(data IAVFrame) (err error) {
 		p.Unlock()
 	}
 	if t.ICodecCtx == nil {
-		return data.DecodeConfig(t)
+		t.ICodecCtx, err = data.DecodeConfig(nil)
+		return
 	}
-	if data.IsIDR() {
-		if t.IDRing != nil {
-			p.GOP = int(t.Value.Sequence - t.IDRing.Value.Sequence)
-			if t.HistoryRing == nil {
+	idr := t.IDRing.Load()
+	hidr := t.HistoryRing.Load()
+	isIDR := data.IsIDR()
+	if isIDR {
+		if idr != nil {
+			p.GOP = int(t.Value.Sequence - idr.Value.Sequence)
+			if hidr == nil {
 				if l := t.Size - p.GOP; l > 12 && t.Size > 100 {
 					t.Debug("resize", "gop", p.GOP, "before", t.Size, "after", t.Size-5)
 					t.Reduce(5) //缩小缓冲环节省内存
@@ -175,14 +202,64 @@ func (p *Publisher) WriteVideo(data IAVFrame) (err error) {
 		}
 		if p.BufferTime > 0 {
 			t.IDRingList.AddIDR(t.Ring)
-			if t.HistoryRing == nil {
-				t.HistoryRing = t.IDRing
+			if hidr == nil {
+				t.HistoryRing.Store(t.Ring)
 			}
 		} else {
-			t.IDRing = t.Ring
+			t.IDRing.Store(t.Ring)
 		}
+		if !p.AudioTrack.IsEmpty() {
+			p.AudioTrack.IDRing.Store(p.AudioTrack.Ring)
+		}
+	} else if nextValue := t.Next(); nextValue == idr || nextValue == hidr {
+		t.Glow(5)
 	}
 	p.writeAV(t, data)
+	if p.VideoTrack.Length > 1 {
+		t.LastValue.Raw, err = t.LastValue.Wrap.ToRaw(t.ICodecCtx)
+		if err != nil {
+			t.Error("to raw", "err", err)
+			return err
+		}
+		var toFrame IAVFrame
+		for i, track := range p.VideoTrack.Items[1:] {
+			if track.ICodecCtx == nil {
+				track.ICodecCtx, err = (*reflect.New(track.FrameType).Interface().(*IAVFrame)).DecodeConfig(t.ICodecCtx)
+				if p.BufferTime > 0 {
+					track.IDRingList.AddIDR(track.Ring)
+					track.HistoryRing.Store(track.Ring)
+				} else {
+					track.IDRing.Store(track.Ring)
+				}
+				for rf := idr; rf != t.Ring; rf = rf.Next() {
+					if i == 0 {
+						rf.Value.Raw, err = rf.Value.Wrap.ToRaw(t.ICodecCtx)
+						if err != nil {
+							t.Error("to raw", "err", err)
+							return err
+						}
+					}
+					if toFrame, err = track.CreateFrame(rf.Value.Raw); err != nil {
+						t.Error("from raw", "err", err)
+						return
+					}
+					p.writeAV(track, toFrame)
+				}
+			} else {
+				p.writeSubAV(t, track)
+			}
+		}
+	}
+	return
+}
+
+func (p *Publisher) writeSubAV(from, to *AVTrack) (err error) {
+	var toFrame IAVFrame
+	if toFrame, err = to.CreateFrame(from.LastValue.Raw); err != nil {
+		to.Error("from raw", "err", err)
+		return
+	}
+	p.writeAV(to, toFrame)
 	return
 }
 
@@ -190,14 +267,15 @@ func (p *Publisher) WriteAudio(data IAVFrame) (err error) {
 	if !p.PubAudio || p.IsStopped() {
 		return
 	}
-	t := p.AudioTrack
+	t := p.AudioTrack.AVTrack
 	if t == nil {
 		t = &AVTrack{}
+		t.FrameType = reflect.TypeOf(data)
 		t.Logger = p.Logger.With("track", "audio")
 		t.Init(256)
 		p.Lock()
-		p.AudioTrack = t
-		p.TransTrack[reflect.TypeOf(data)] = t
+		p.AudioTrack.AVTrack = t
+		p.AudioTrack.Add(t)
 		if len(p.Subscribers) > 0 {
 			p.State = PublisherStateSubscribed
 		} else {
@@ -206,7 +284,8 @@ func (p *Publisher) WriteAudio(data IAVFrame) (err error) {
 		p.Unlock()
 	}
 	if t.ICodecCtx == nil {
-		return data.DecodeConfig(t)
+		t.ICodecCtx, err = data.DecodeConfig(nil)
+		return
 	}
 	p.writeAV(t, data)
 	return
@@ -216,34 +295,26 @@ func (p *Publisher) WriteData(data IDataFrame) (err error) {
 	return
 }
 
-func (p *Publisher) createTransTrack(dataType reflect.Type) (t *AVTrack) {
+func (p *Publisher) GetAudioTrack(dataType reflect.Type) (t *AVTrack) {
 	p.Lock()
 	defer p.Unlock()
-	t = &AVTrack{}
-	t.Logger = p.Logger.With("track", "audio")
-	t.Init(256)
-	p.TransTrack[dataType] = t
-	return t
-}
-
-func (p *Publisher) GetAudioTrack(dataType reflect.Type) (t *AVTrack) {
-	p.RLock()
-	if t, ok := p.TransTrack[dataType]; ok {
-		p.RUnlock()
+	if t, ok := p.AudioTrack.Get(dataType); ok {
 		return t
 	}
-	p.RUnlock()
-	if p.AudioTrack != nil {
-		return p.createTransTrack(dataType)
+	if !p.AudioTrack.IsEmpty() {
+		return p.AudioTrack.CreateSubTrack(dataType)
 	}
 	return
 }
 
 func (p *Publisher) GetVideoTrack(dataType reflect.Type) (t *AVTrack) {
-	p.RLock()
-	defer p.RUnlock()
-	if t, ok := p.TransTrack[dataType]; ok {
+	p.Lock()
+	defer p.Unlock()
+	if t, ok := p.VideoTrack.Get(dataType); ok {
 		return t
+	}
+	if !p.VideoTrack.IsEmpty() {
+		return p.VideoTrack.CreateSubTrack(dataType)
 	}
 	return
 }
@@ -258,7 +329,6 @@ func (p *Publisher) TakeOver(old *Publisher) {
 	p.AudioTrack.Logger = p.Logger.With("track", "audio")
 	p.DataTrack = old.DataTrack
 	p.Subscribers = old.Subscribers
-	p.TransTrack = old.TransTrack
 	// for _, track := range p.TransTrack {
 	// 	track.ICodecCtx = nil
 	// }
@@ -266,10 +336,10 @@ func (p *Publisher) TakeOver(old *Publisher) {
 
 func (p *Publisher) SnapShot() (ret *pb.StreamSnapShot) {
 	ret = &pb.StreamSnapShot{}
-	if p.VideoTrack != nil {
+	if !p.VideoTrack.IsEmpty() {
 		p.VideoTrack.Ring.Do(func(v *AVFrame) {
 			var snap pb.TrackSnapShot
-			snap.CanRead = v.CanRead
+			// snap.CanRead = v.CanRead
 			snap.Sequence = v.Sequence
 			snap.Timestamp = uint32(v.Timestamp)
 			snap.WriteTime = uint64(v.WriteTime.UnixNano())
@@ -283,10 +353,10 @@ func (p *Publisher) SnapShot() (ret *pb.StreamSnapShot) {
 			ret.VideoTrack = append(ret.VideoTrack, &snap)
 		})
 	}
-	if p.AudioTrack != nil {
+	if !p.AudioTrack.IsEmpty() {
 		p.AudioTrack.Ring.Do(func(v *AVFrame) {
 			var snap pb.TrackSnapShot
-			snap.CanRead = v.CanRead
+			// snap.CanRead = v.CanRead
 			snap.Sequence = v.Sequence
 			snap.Timestamp = uint32(v.Timestamp)
 			snap.WriteTime = uint64(v.WriteTime.UnixNano())

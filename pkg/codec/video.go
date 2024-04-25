@@ -24,9 +24,18 @@ func (f *FourCC) Uint32() uint32 {
 	return binary.BigEndian.Uint32(f[:])
 }
 
+func (f *FourCC) Codec() FourCC {
+	return *f
+}
+
+func (f *FourCC) Is(fourcc FourCC) bool {
+	return *f == fourcc
+}
+
 type SPSInfo struct {
-	ProfileIdc uint
-	LevelIdc   uint
+	ConstraintSetFlag uint
+	ProfileIdc        uint
+	LevelIdc          uint
 
 	MbWidth  uint
 	MbHeight uint

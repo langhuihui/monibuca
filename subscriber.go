@@ -98,32 +98,40 @@ func (s *Subscriber) Handle(handler SubscriberHandler) {
 	createVideoReader()
 	defer func() {
 		if lastSentVF != nil {
-			lastSentVF.ReaderLeave()
+			// lastSentVF.ReaderLeave()
+			lastSentVF.RUnlock()
 		}
 		if lastSentAF != nil {
-			lastSentAF.ReaderLeave()
+			// lastSentAF.ReaderLeave()
+			lastSentAF.RUnlock()
 		}
 	}()
 	sendAudioFrame := func() (err error) {
-		lastSentAF = audioFrame
-		s.Trace("send audio frame", "seq", audioFrame.Sequence)
+		if s.Enabled(s, TraceLevel) {
+			s.Trace("send audio frame", "seq", audioFrame.Sequence)
+		}
 		res := ah.Call([]reflect.Value{reflect.ValueOf(audioFrame.Wrap)})
 		if len(res) > 0 && !res[0].IsNil() {
 			if err := res[0].Interface().(error); err != ErrInterrupt {
 				s.Stop(err)
 			}
 		}
+		audioFrame = nil
+		lastSentAF = nil
 		return
 	}
 	sendVideoFrame := func() (err error) {
-		lastSentVF = videoFrame
-		s.Trace("send video frame", "seq", videoFrame.Sequence, "data", videoFrame.Wrap.String(), "size", videoFrame.Wrap.GetSize())
+		if s.Enabled(s, TraceLevel) {
+			s.Trace("send video frame", "seq", videoFrame.Sequence, "data", videoFrame.Wrap.String(), "size", videoFrame.Wrap.GetSize())
+		}
 		res := vh.Call([]reflect.Value{reflect.ValueOf(videoFrame.Wrap)})
 		if len(res) > 0 && !res[0].IsNil() {
 			if err = res[0].Interface().(error); err != ErrInterrupt {
 				s.Stop(err)
 			}
 		}
+		videoFrame = nil
+		lastSentVF = nil
 		return
 	}
 	var err error
@@ -134,6 +142,7 @@ func (s *Subscriber) Handle(handler SubscriberHandler) {
 				err = vr.ReadFrame(subMode)
 				if err == nil {
 					videoFrame = &vr.Value
+					lastSentVF = videoFrame
 					err = s.Err()
 				} else {
 					s.Stop(err)
@@ -154,7 +163,6 @@ func (s *Subscriber) Handle(handler SubscriberHandler) {
 						if util.Conditoinal(s.SyncMode == 0, videoFrame.Timestamp > audioFrame.Timestamp, videoFrame.WriteTime.After(audioFrame.WriteTime)) {
 							// fmt.Println("switch audio", audioFrame.CanRead)
 							err = sendAudioFrame()
-							audioFrame = nil
 							break
 						}
 					} else if initState++; initState >= 2 {
@@ -186,6 +194,7 @@ func (s *Subscriber) Handle(handler SubscriberHandler) {
 				err = ar.ReadFrame(subMode)
 				if err == nil {
 					audioFrame = &ar.Value
+					lastSentAF = audioFrame
 					err = s.Err()
 				} else {
 					s.Stop(err)
@@ -203,7 +212,6 @@ func (s *Subscriber) Handle(handler SubscriberHandler) {
 				if vr != nil && videoFrame != nil {
 					if util.Conditoinal(s.SyncMode == 0, audioFrame.Timestamp > videoFrame.Timestamp, audioFrame.WriteTime.After(videoFrame.WriteTime)) {
 						err = sendVideoFrame()
-						videoFrame = nil
 						break
 					}
 				}

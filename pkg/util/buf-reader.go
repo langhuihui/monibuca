@@ -12,10 +12,18 @@ type BufReader struct {
 	BufLen int
 }
 
+func NewBufReaderWithBufLen(reader io.Reader, bufLen int) (r *BufReader) {
+	r = &BufReader{}
+	r.reader = reader
+	r.buf.ScalableMemoryAllocator = NewScalableMemoryAllocator(bufLen)
+	r.BufLen = bufLen
+	return
+}
+
 func NewBufReader(reader io.Reader) (r *BufReader) {
 	r = &BufReader{}
 	r.reader = reader
-	r.buf.ScalableMemoryAllocator = NewScalableMemoryAllocator(65536)
+	r.buf.ScalableMemoryAllocator = NewScalableMemoryAllocator(defaultBufSize)
 	r.BufLen = defaultBufSize
 	return
 }

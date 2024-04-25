@@ -18,6 +18,7 @@ type (
 	VideoCodecID byte
 
 	H264Ctx struct {
+		codec.FourCC
 		ConfigurationVersion byte // 8 bits Version
 		AVCProfileIndication byte // 8 bits
 		ProfileCompatibility byte // 8 bits
@@ -35,6 +36,7 @@ type (
 		VPS [][]byte
 	}
 	AV1Ctx struct {
+		codec.FourCC
 		SequenceFrame                    *RTMPVideo
 		Version                          byte
 		SeqProfile                       byte
@@ -51,6 +53,7 @@ type (
 		ConfigOBUs                       []byte
 	}
 	G711Ctx struct {
+		codec.FourCC
 		SampleRate int
 		Channels   int
 		SampleSize int
@@ -203,6 +206,10 @@ func (p *AVCDecoderConfigurationRecord) Marshal(b []byte) (n int) {
 
 var ErrDecconfInvalid = errors.New("decode error")
 
+func (ctx *H264Ctx) GetSPSInfo() codec.SPSInfo {
+	return ctx.SPSInfo
+}
+
 func (ctx *H264Ctx) Unmarshal(b *util.Buffers) (err error) {
 	if b.Length < 7 {
 		err = errors.New("not enough len")
@@ -265,7 +272,7 @@ func ParseSPS(data []byte) (self codec.SPSInfo, err error) {
 	}
 
 	// constraint_set0_flag-constraint_set6_flag,reserved_zero_2bits
-	if _, err = r.ReadBits(8); err != nil {
+	if self.ConstraintSetFlag, err = r.ReadBits(8); err != nil {
 		return
 	}
 
@@ -457,6 +464,10 @@ func ParseHevcSPS(data []byte) (self codec.SPSInfo, err error) {
 
 var SamplingFrequencies = [...]int{96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350, 0, 0, 0}
 
+func (ctx *H264Ctx) Parse(ICodecCtx) error {
+	panic("unimplemented")
+}
+
 func (ctx *H264Ctx) GetSequenceFrame() IAVFrame {
 	return ctx.SequenceFrame
 }
@@ -481,9 +492,17 @@ func (ctx *G711Ctx) GetSampleSize() int {
 	return ctx.SampleSize
 }
 
+func (ctx *G711Ctx) Parse(ICodecCtx) error {
+	return nil
+}
+
 func (ctx *G711Ctx) GetSequenceFrame() IAVFrame {
 	return nil
 }
+func (ctx *AACCtx) Parse(ICodecCtx) error {
+	panic("unimplemented")
+}
+
 
 func (ctx *AACCtx) GetSequenceFrame() IAVFrame {
 	return ctx.SequenceFrame
@@ -491,6 +510,10 @@ func (ctx *AACCtx) GetSequenceFrame() IAVFrame {
 
 func (ctx *AV1Ctx) GetSequenceFrame() IAVFrame {
 	return ctx.SequenceFrame
+}
+
+func (ctx *AV1Ctx) Parse(ICodecCtx) error {
+	panic("unimplemented")
 }
 
 var ErrHevc = errors.New("hevc parse config error")

@@ -13,12 +13,13 @@ import (
 
 	"github.com/pion/interceptor"
 	"github.com/pion/rtcp"
+	"github.com/pion/rtp"
 	. "github.com/pion/webrtc/v4"
 	"m7s.live/m7s/v5"
 	. "m7s.live/m7s/v5/pkg"
 	"m7s.live/m7s/v5/pkg/codec"
 	"m7s.live/m7s/v5/pkg/util"
-	rtp "m7s.live/m7s/v5/plugin/rtp/pkg"
+	mrtp "m7s.live/m7s/v5/plugin/rtp/pkg"
 	. "m7s.live/m7s/v5/plugin/webrtc/pkg"
 )
 
@@ -178,23 +179,35 @@ func (conf *WebRTCPlugin) Push_(w http.ResponseWriter, r *http.Request) {
 		var err error
 		if codecP := track.Codec(); track.Kind() == RTPCodecTypeAudio {
 			mem := util.NewScalableMemoryAllocator(1460 * 100)
+			frame := &mrtp.RTPAudio{}
+			frame.RTPCodecParameters = &codecP
+			frame.ScalableMemoryAllocator = mem
 			for {
-				var packet rtp.RTPAudio
-				packet.RTPCodecParameters = &codecP
-				packet.ScalableMemoryAllocator = mem
-				buf := packet.Malloc(1460)
+				var packet rtp.Packet
+				buf := frame.Malloc(1460)
 				if n, _, err = track.Read(buf); err == nil {
 					err = packet.Unmarshal(buf[:n])
-					packet.RecycleBack(1460 - n)
+					frame.RecycleBack(1460 - n)
 				}
 				if err != nil {
 					return
 				}
-				publisher.WriteAudio(&packet)
+				if len(frame.Packets) == 0 || packet.Timestamp == frame.Packets[0].Timestamp {
+					frame.Packets = append(frame.Packets, &packet)
+				} else {
+					publisher.WriteAudio(frame)
+					frame = &mrtp.RTPAudio{}
+					frame.Packets = []*rtp.Packet{&packet}
+					frame.RTPCodecParameters = &codecP
+					frame.ScalableMemoryAllocator = mem
+				}
 			}
 		} else {
 			var lastPLISent time.Time
 			mem := util.NewScalableMemoryAllocator(1460 * 100)
+			frame := &mrtp.RTPVideo{}
+			frame.RTPCodecParameters = &codecP
+			frame.ScalableMemoryAllocator = mem
 			for {
 				if time.Since(lastPLISent) > conf.PLI {
 					if rtcpErr := conn.WriteRTCP([]rtcp.Packet{&rtcp.PictureLossIndication{MediaSSRC: uint32(track.SSRC())}}); rtcpErr != nil {
@@ -203,18 +216,24 @@ func (conf *WebRTCPlugin) Push_(w http.ResponseWriter, r *http.Request) {
 					}
 					lastPLISent = time.Now()
 				}
-				var packet rtp.RTPVideo
-				packet.RTPCodecParameters = &codecP
-				packet.ScalableMemoryAllocator = mem
-				buf := packet.Malloc(1460)
+				var packet rtp.Packet
+				buf := frame.Malloc(1460)
 				if n, _, err = track.Read(buf); err == nil {
 					err = packet.Unmarshal(buf[:n])
-					packet.RecycleBack(1460 - n)
+					frame.RecycleBack(1460 - n)
 				}
 				if err != nil {
 					return
 				}
-				publisher.WriteVideo(&packet)
+				if len(frame.Packets) == 0 || packet.Timestamp == frame.Packets[0].Timestamp {
+					frame.Packets = append(frame.Packets, &packet)
+				} else {
+					publisher.WriteVideo(frame)
+					frame = &mrtp.RTPVideo{}
+					frame.Packets = []*rtp.Packet{&packet}
+					frame.RTPCodecParameters = &codecP
+					frame.ScalableMemoryAllocator = mem
+				}
 			}
 		}
 	})
@@ -297,14 +316,31 @@ func (conf *WebRTCPlugin) Play_(w http.ResponseWriter, r *http.Request) {
 	var audioTLSRTP, videoTLSRTP *TrackLocalStaticRTP
 	var audioSender, videoSender *RTPSender
 	if suber.Publisher != nil {
-		if vt := suber.Publisher.VideoTrack; vt != nil {
+		if vt := suber.Publisher.VideoTrack.AVTrack; vt != nil {
 			if vt.Codec == codec.FourCC_H265 {
 				useDC = true
 			} else {
-				ctx := vt.ICodecCtx.(interface {
+				var rcc RTPCodecCapability
+				rcc.ClockRate = 90000
+				if ctx, ok := vt.ICodecCtx.(interface {
 					GetRTPCodecCapability() RTPCodecCapability
-				})
-				videoTLSRTP, err = NewTrackLocalStaticRTP(ctx.GetRTPCodecCapability(), vt.Codec.String(), suber.StreamPath)
+				}); ok {
+					rcc = ctx.GetRTPCodecCapability()
+				} else {
+					switch vt.Codec {
+					case codec.FourCC_H264:
+						rcc.MimeType = MimeTypeH264
+						spsInfo := vt.ICodecCtx.(interface{ GetSPSInfo() codec.SPSInfo }).GetSPSInfo()
+						rcc.SDPFmtpLine = fmt.Sprintf("profile-level-id=%02x%02x%02x;level-asymmetry-allowed=1;packetization-mode=1", spsInfo.ProfileIdc, spsInfo.ConstraintSetFlag, spsInfo.LevelIdc)
+					case codec.FourCC_VP9:
+						rcc.MimeType = MimeTypeVP9
+					case codec.FourCC_H265:
+						rcc.MimeType = MimeTypeH265
+					case codec.FourCC_AV1:
+						rcc.MimeType = MimeTypeAV1
+					}
+				}
+				videoTLSRTP, err = NewTrackLocalStaticRTP(rcc, vt.Codec.String(), suber.StreamPath)
 				if err != nil {
 					return
 				}
@@ -332,7 +368,7 @@ func (conf *WebRTCPlugin) Play_(w http.ResponseWriter, r *http.Request) {
 				}()
 			}
 		}
-		if at := suber.Publisher.AudioTrack; at != nil {
+		if at := suber.Publisher.AudioTrack.AVTrack; at != nil {
 			if at.Codec == codec.FourCC_MP4A {
 				useDC = true
 			} else {
@@ -373,11 +409,21 @@ func (conf *WebRTCPlugin) Play_(w http.ResponseWriter, r *http.Request) {
 			suber.SubVideo = false
 		}
 		go suber.Handle(m7s.SubscriberHandler{
-			OnAudio: func(frame *rtp.RTPAudio) error {
-				return audioTLSRTP.WriteRTP(&frame.Packet)
+			OnAudio: func(frame *mrtp.RTPAudio) (err error) {
+				for _, p := range frame.Packets {
+					if err = audioTLSRTP.WriteRTP(p); err != nil {
+						return
+					}
+				}
+				return
 			},
-			OnVideo: func(frame *rtp.RTPVideo) error {
-				return videoTLSRTP.WriteRTP(&frame.Packet)
+			OnVideo: func(frame *mrtp.RTPVideo) error {
+				for _, p := range frame.Packets {
+					if err := videoTLSRTP.WriteRTP(p); err != nil {
+						return err
+					}
+				}
+				return nil
 			},
 		})
 	}

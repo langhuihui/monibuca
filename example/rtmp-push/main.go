@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"time"
 
 	"m7s.live/m7s/v5"
@@ -12,8 +13,12 @@ import (
 
 func main() {
 	ctx := context.Background()
-	// ctx, _ := context.WithDeadline(context.Background(), time.Now().Add(time.Second*100))
-	go m7s.Run(ctx, "config1.yaml")
+	var multi bool
+	flag.BoolVar(&multi, "multi", false, "debug")
+	flag.Parse()
+	if multi {
+		go m7s.Run(ctx, "config1.yaml")
+	}
 	time.Sleep(time.Second)
 	m7s.NewServer().Run(ctx, "config2.yaml")
 }
