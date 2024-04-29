@@ -3,13 +3,8 @@ services:
     build:
       dockerfile: ./Dockerfile
     image: monibuca:v4
-    container_name: monibuca
     restart: unless-stopped
-    ports:
-      - "5060:5060/udp"
-      - "58200-59200:58200-59200/udp"
-      - "8000-9000:8000-9000/udp"
-      - "554:554"
-      - "1935:1935"
-      - "8000-9000:8000-9000"
-      - "58200-59200:58200-59200"
+    #please use host mode as expose large number of ports will cause docker extremely slow
+    network_mode: host
+    volumes:
+      - ${PWD}/config.yaml:/monibuca/config.yaml
