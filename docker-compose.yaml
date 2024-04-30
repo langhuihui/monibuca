@@ -1,0 +1,10 @@
+services:
+  monibuca:
+    build:
+      dockerfile: ./Dockerfile
+    image: monibuca:v4
+    restart: unless-stopped
+    #please use host mode as expose large number of ports will cause docker extremely slow
+    network_mode: host
+    volumes:
+      - ${PWD}/config.yaml:/monibuca/config.yaml
