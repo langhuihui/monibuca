@@ -38,8 +38,9 @@ func (b H264NALUType) Byte() byte {
 func ParseH264NALUType(b byte) H264NALUType {
 	return H264NALUType(b & 0x1F)
 }
-func (H264NALUType) Parse(b byte) H264NALUType {
-	return H264NALUType(b & 0x1F)
+func (t *H264NALUType) Parse(b byte) H264NALUType {
+	*t = H264NALUType(b & 0x1F)
+	return *t
 }
 
 func (H264NALUType) ParseBytes(bs []byte) H264NALUType {
@@ -101,4 +102,23 @@ func SplitH264(payload []byte) (nalus [][]byte) {
 		nalus = append(nalus, bytes.SplitN(v, NALU_Delimiter1, -1)...)
 	}
 	return
+}
+
+type (
+	IH264Ctx interface {
+		GetH264Ctx() *H264Ctx
+	}
+	H264Ctx struct {
+		SPSInfo
+		SPS [][]byte
+		PPS [][]byte
+	}
+)
+
+func (*H264Ctx) FourCC() FourCC {
+	return FourCC_H264
+}
+
+func (h264 *H264Ctx) GetH264Ctx() *H264Ctx {
+	return h264
 }

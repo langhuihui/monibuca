@@ -151,9 +151,9 @@ func (s *Subscriber) Handle(handler SubscriberHandler) {
 					return
 				}
 				// fmt.Println("video", s.VideoReader.Track.PreFrame().Sequence-frame.Sequence)
-				if videoFrame.Wrap.IsIDR() && vr.DecConfChanged() {
+				if videoFrame.IDR && vr.DecConfChanged() {
 					vr.LastCodecCtx = vr.Track.ICodecCtx
-					if seqFrame := vr.Track.ICodecCtx.GetSequenceFrame(); seqFrame != nil {
+					if seqFrame := vr.Track.SequenceFrame; seqFrame != nil {
 						s.Debug("video codec changed", "data", seqFrame.String())
 						vh.Call([]reflect.Value{reflect.ValueOf(seqFrame)})
 					}
@@ -170,7 +170,7 @@ func (s *Subscriber) Handle(handler SubscriberHandler) {
 					}
 				}
 
-				if !s.IFrameOnly || videoFrame.Wrap.IsIDR() {
+				if !s.IFrameOnly || videoFrame.IDR {
 					err = sendVideoFrame()
 				}
 			}
@@ -205,7 +205,7 @@ func (s *Subscriber) Handle(handler SubscriberHandler) {
 				// fmt.Println("audio", s.AudioReader.Track.PreFrame().Sequence-frame.Sequence)
 				if ar.DecConfChanged() {
 					ar.LastCodecCtx = ar.Track.ICodecCtx
-					if seqFrame := ar.Track.ICodecCtx.GetSequenceFrame(); seqFrame != nil {
+					if seqFrame := ar.Track.SequenceFrame; seqFrame != nil {
 						ah.Call([]reflect.Value{reflect.ValueOf(seqFrame)})
 					}
 				}

@@ -108,7 +108,9 @@ func (sma *ScalableMemoryAllocator) Malloc2(size int) (memory []byte, index, sta
 	*sma = append(*sma, n)
 	return
 }
-
+func (sma *ScalableMemoryAllocator) GetScalableMemoryAllocator() *ScalableMemoryAllocator {
+	return sma
+}
 func (sma *ScalableMemoryAllocator) Free(mem []byte) bool {
 	ptr := uintptr(unsafe.Pointer(&mem[:1][0]))
 	for _, child := range *sma {
@@ -188,4 +190,9 @@ func (r *RecyclableBuffers) Cut(n int) (child *RecyclableBuffers) {
 	child = &RecyclableBuffers{ScalableMemoryAllocator: r.ScalableMemoryAllocator}
 	child.ReadFromBytes(r.Buffers.Cut(n)...)
 	return
+}
+
+type IAllocator interface {
+	Malloc(int) []byte
+	Free([]byte) bool
 }

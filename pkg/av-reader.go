@@ -39,7 +39,9 @@ func (r *AVRingReader) DecConfChanged() bool {
 }
 
 func NewAVRingReader(t *AVTrack) *AVRingReader {
-	t.Debug("reader +1", "count", t.ReaderCount.Add(1))
+	t.Debug("create reader")
+	<-t.Ready.Done()
+	t.Info("reader +1", "count", t.ReaderCount.Add(1))
 	return &AVRingReader{
 		Track: t,
 	}
@@ -71,7 +73,7 @@ func (r *AVRingReader) ReadFrame(mode int) (err error) {
 		if idr != nil {
 			startRing = idr
 		} else {
-			r.Warn("no IDRring", "track", r.Track.Codec.String())
+			r.Warn("no IDRring", "track", r.Track.FourCC().String())
 		}
 		switch mode {
 		case SUBMODE_REAL:
@@ -126,7 +128,7 @@ func (r *AVRingReader) ReadFrame(mode int) (err error) {
 		r.AbsTime = 1
 	}
 	r.Delay = uint32(r.Track.LastValue.Sequence - r.Value.Sequence)
-	r.Log(context.TODO(), TraceLevel, r.Track.Codec.String(), "delay", r.Delay)
+	r.Log(context.TODO(), TraceLevel, r.Track.FourCC().String(), "delay", r.Delay)
 	return
 }
 

@@ -46,7 +46,7 @@ func (p *HDLPlugin) WriteFlvHeader(sub *m7s.Subscriber) (flv net.Buffers) {
 	var flags byte
 	if hasAudio {
 		flags |= (1 << 2)
-		metaData["audiocodecid"] = int(rtmp.ParseAudioCodec(at.Codec))
+		metaData["audiocodecid"] = int(rtmp.ParseAudioCodec(at.FourCC()))
 		ctx := at.ICodecCtx.(IAudioCodecCtx)
 		metaData["audiosamplerate"] = ctx.GetSampleRate()
 		metaData["audiosamplesize"] = ctx.GetSampleSize()
@@ -54,7 +54,7 @@ func (p *HDLPlugin) WriteFlvHeader(sub *m7s.Subscriber) (flv net.Buffers) {
 	}
 	if hasVideo {
 		flags |= 1
-		metaData["videocodecid"] = int(rtmp.ParseVideoCodec(vt.Codec))
+		metaData["videocodecid"] = int(rtmp.ParseVideoCodec(vt.FourCC()))
 		ctx := vt.ICodecCtx.(IVideoCodecCtx)
 		metaData["width"] = ctx.GetWidth()
 		metaData["height"] = ctx.GetHeight()

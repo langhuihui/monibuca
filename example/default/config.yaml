@@ -1,7 +1,10 @@
 global:
-  loglevel: trace
+  # loglevel: trace
   tcp:
     listenaddr: :50051
+webrtc:
+  publish:
+    pubaudio: false
 rtmp:
   chunksize: 2048
   publish:

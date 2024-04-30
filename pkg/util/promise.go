@@ -33,3 +33,7 @@ func (p *Promise[T]) Fulfill(err error) {
 	// p.timer.Stop()
 	p.CancelCauseFunc(Conditoinal(err == nil, ErrResolve, err))
 }
+
+func (p *Promise[T]) Pendding() bool {
+	return context.Cause(p.Context) == nil
+}

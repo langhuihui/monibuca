@@ -86,3 +86,21 @@ const (
 )
 
 var AudNalu = []byte{0x00, 0x00, 0x00, 0x01, 0x46, 0x01, 0x10}
+
+type (
+	IH265Ctx interface {
+		GetH265Ctx() *H265Ctx
+	}
+	H265Ctx struct {
+		H264Ctx
+		VPS [][]byte
+	}
+)
+
+func (*H265Ctx) FourCC() FourCC {
+	return FourCC_H265
+}
+
+func (h265 *H265Ctx) GetH265Ctx() *H265Ctx {
+	return h265
+}

@@ -1,6 +1,5 @@
 package codec
 
-
 const (
 	AV1_OBU_SEQUENCE_HEADER        = 1
 	AV1_OBU_TEMPORAL_DELIMITER     = 2
@@ -12,3 +11,20 @@ const (
 	AV1_OBU_TILE_LIST              = 8
 	AV1_OBU_PADDING                = 15
 )
+
+type (
+	IAV1Ctx interface {
+		GetAV1Ctx() *AV1Ctx
+	}
+	AV1Ctx struct {
+		ConfigOBUs []byte
+	}
+)
+
+func (ctx *AV1Ctx) GetAV1Ctx() *AV1Ctx {
+	return ctx
+}
+
+func (*AV1Ctx) FourCC() FourCC {
+	return FourCC_AV1
+}

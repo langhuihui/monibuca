@@ -42,8 +42,8 @@ type WebRTCPlugin struct {
 	PLI        time.Duration `default:"2s" desc:"发送PLI请求间隔"`         // 视频流丢包后，发送PLI请求
 	EnableOpus bool          `default:"true" desc:"是否启用opus编码"`      // 是否启用opus编码
 	EnableVP9  bool          `default:"false" desc:"是否启用vp9编码"`      // 是否启用vp9编码
-	EnableAv1  bool          `default:"true" desc:"是否启用av1编码"`       // 是否启用av1编码
-	EnableDC   bool          `default:"true" desc:"是否启用DataChannel"` // 在不支持编码格式的情况下是否启用DataChannel传输
+	EnableAv1  bool          `default:"false" desc:"是否启用av1编码"`       // 是否启用av1编码
+	EnableDC   bool          `default:"false" desc:"是否启用DataChannel"` // 在不支持编码格式的情况下是否启用DataChannel传输
 	m          MediaEngine
 	s          SettingEngine
 	api        *API
@@ -317,30 +317,23 @@ func (conf *WebRTCPlugin) Play_(w http.ResponseWriter, r *http.Request) {
 	var audioSender, videoSender *RTPSender
 	if suber.Publisher != nil {
 		if vt := suber.Publisher.VideoTrack.AVTrack; vt != nil {
-			if vt.Codec == codec.FourCC_H265 {
+			if vt.FourCC() == codec.FourCC_H265 {
 				useDC = true
 			} else {
 				var rcc RTPCodecCapability
-				rcc.ClockRate = 90000
-				if ctx, ok := vt.ICodecCtx.(interface {
-					GetRTPCodecCapability() RTPCodecCapability
-				}); ok {
+				if ctx, ok := vt.ICodecCtx.(mrtp.IRTPCtx); ok {
 					rcc = ctx.GetRTPCodecCapability()
 				} else {
-					switch vt.Codec {
-					case codec.FourCC_H264:
-						rcc.MimeType = MimeTypeH264
-						spsInfo := vt.ICodecCtx.(interface{ GetSPSInfo() codec.SPSInfo }).GetSPSInfo()
-						rcc.SDPFmtpLine = fmt.Sprintf("profile-level-id=%02x%02x%02x;level-asymmetry-allowed=1;packetization-mode=1", spsInfo.ProfileIdc, spsInfo.ConstraintSetFlag, spsInfo.LevelIdc)
-					case codec.FourCC_VP9:
-						rcc.MimeType = MimeTypeVP9
-					case codec.FourCC_H265:
-						rcc.MimeType = MimeTypeH265
-					case codec.FourCC_AV1:
-						rcc.MimeType = MimeTypeAV1
+					var rtpCtx mrtp.RTPData
+					var tmpAVTrack AVTrack
+					err = rtpCtx.DecodeConfig(&tmpAVTrack, vt.ICodecCtx)
+					if err == nil {
+						rcc = tmpAVTrack.ICodecCtx.(mrtp.IRTPCtx).GetRTPCodecCapability()
+					} else {
+						return
 					}
 				}
-				videoTLSRTP, err = NewTrackLocalStaticRTP(rcc, vt.Codec.String(), suber.StreamPath)
+				videoTLSRTP, err = NewTrackLocalStaticRTP(rcc, vt.FourCC().String(), suber.StreamPath)
 				if err != nil {
 					return
 				}
@@ -369,13 +362,13 @@ func (conf *WebRTCPlugin) Play_(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if at := suber.Publisher.AudioTrack.AVTrack; at != nil {
-			if at.Codec == codec.FourCC_MP4A {
+			if at.FourCC() == codec.FourCC_MP4A {
 				useDC = true
 			} else {
 				ctx := at.ICodecCtx.(interface {
 					GetRTPCodecCapability() RTPCodecCapability
 				})
-				audioTLSRTP, err = NewTrackLocalStaticRTP(ctx.GetRTPCodecCapability(), at.Codec.String(), suber.StreamPath)
+				audioTLSRTP, err = NewTrackLocalStaticRTP(ctx.GetRTPCodecCapability(), at.FourCC().String(), suber.StreamPath)
 				if err != nil {
 					return
 				}

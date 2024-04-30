@@ -12,10 +12,8 @@ import (
 
 type (
 	ICodecCtx interface {
-		GetSequenceFrame() IAVFrame
-		CreateFrame(any) (IAVFrame, error)
-		Is(codec.FourCC) bool
-		Codec() codec.FourCC
+		CreateFrame(*AVFrame) (IAVFrame, error)
+		FourCC() codec.FourCC
 	}
 	IAudioCodecCtx interface {
 		ICodecCtx
@@ -31,12 +29,13 @@ type (
 	IDataFrame interface {
 	}
 	IAVFrame interface {
-		DecodeConfig(ICodecCtx) (ICodecCtx, error)
+		GetScalableMemoryAllocator() *util.ScalableMemoryAllocator
+		Parse(*AVTrack) (bool, bool, any, error)
+		DecodeConfig(*AVTrack, ICodecCtx) error
 		ToRaw(ICodecCtx) (any, error)
 		GetTimestamp() time.Duration
 		GetSize() int
 		Recycle()
-		IsIDR() bool
 		String() string
 	}
 
@@ -49,6 +48,7 @@ type (
 	}
 	AVFrame struct {
 		DataFrame
+		IDR       bool
 		Timestamp time.Duration // 绝对时间戳
 		Wrap      IAVFrame      // 封装格式
 	}
@@ -84,6 +84,14 @@ func (df *DataFrame) StartWrite() bool {
 func (df *DataFrame) Ready() {
 	df.WriteTime = time.Now()
 	df.Unlock()
+}
+
+func (nalus *Nalus) H264Type() codec.H264NALUType {
+	return codec.ParseH264NALUType(nalus.Nalus[0][0][0])
+}
+
+func (nalus *Nalus) H265Type() codec.H265NALUType {
+	return codec.ParseH265NALUType(nalus.Nalus[0][0][0])
 }
 
 func (nalus *Nalus) Append(bytes ...[]byte) {

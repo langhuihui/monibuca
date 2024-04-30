@@ -1,6 +1,7 @@
 package rtmp
 
 import (
+	"encoding/binary"
 	"time"
 
 	. "m7s.live/m7s/v5/pkg"
@@ -14,20 +15,7 @@ type RTMPVideo struct {
 	RTMPData
 }
 
-func (avcc *RTMPVideo) IsIDR() bool {
-	return avcc.Buffers.Buffers[0][0]&0b0111_0000>>4 == 1
-}
-
-func (avcc *RTMPVideo) DecodeConfig(from ICodecCtx) (codecCtx ICodecCtx, err error) {
-	if avcc == nil {
-		switch fourCC := from.Codec(); fourCC {
-		case codec.FourCC_H264:
-			var ctx H264Ctx
-			ctx.FourCC = fourCC
-			codecCtx = &ctx
-		}
-		return
-	}
+func (avcc *RTMPVideo) Parse(t *AVTrack) (isIDR, isSeq bool, raw any, err error) {
 	reader := avcc.Buffers
 	var b0 byte
 	b0, err = reader.ReadByte()
@@ -35,31 +23,29 @@ func (avcc *RTMPVideo) DecodeConfig(from ICodecCtx) (codecCtx ICodecCtx, err err
 		return
 	}
 	enhanced := b0&0b1000_0000 != 0 // https://veovera.github.io/enhanced-rtmp/docs/enhanced/enhanced-rtmp-v1.pdf
-	// frameType := b0 & 0b0111_0000 >> 4
+	isIDR = b0&0b0111_0000>>4 == 1
 	packetType := b0 & 0b1111
 	var fourCC codec.FourCC
 	parseSequence := func() (err error) {
+		isSeq = true
 		switch fourCC {
 		case codec.FourCC_H264:
 			var ctx H264Ctx
-			ctx.FourCC = fourCC
 			if err = ctx.Unmarshal(&reader); err == nil {
-				ctx.SequenceFrame = avcc
-				codecCtx = &ctx
+				t.SequenceFrame = avcc
+				t.ICodecCtx = &ctx
 			}
 		case codec.FourCC_H265:
 			var ctx H265Ctx
-			ctx.FourCC = fourCC
 			if err = ctx.Unmarshal(&reader); err == nil {
-				ctx.SequenceFrame = avcc
-				codecCtx = &ctx
+				t.SequenceFrame = avcc
+				t.ICodecCtx = &ctx
 			}
 		case codec.FourCC_AV1:
 			var ctx AV1Ctx
-			ctx.FourCC = fourCC
 			if err = ctx.Unmarshal(&reader); err == nil {
-				ctx.SequenceFrame = avcc
-				codecCtx = &ctx
+				t.SequenceFrame = avcc
+				t.ICodecCtx = &ctx
 			}
 		}
 		return
@@ -94,6 +80,38 @@ func (avcc *RTMPVideo) DecodeConfig(from ICodecCtx) (codecCtx ICodecCtx, err err
 			}
 		}
 	}
+	return
+}
+
+func (avcc *RTMPVideo) DecodeConfig(t *AVTrack, from ICodecCtx) (err error) {
+	switch fourCC := from.FourCC(); fourCC {
+	case codec.FourCC_H264:
+		h264ctx := from.(codec.IH264Ctx).GetH264Ctx()
+		var ctx H264Ctx
+		ctx.H264Ctx = *h264ctx
+		lenSPS := len(h264ctx.SPS[0])
+		lenPPS := len(h264ctx.PPS[0])
+		var b util.Buffer
+		if lenSPS > 3 {
+			b.Write(RTMP_AVC_HEAD[:6])
+			b.Write(h264ctx.SPS[0][1:4])
+			b.Write(RTMP_AVC_HEAD[9:10])
+		} else {
+			b.Write(RTMP_AVC_HEAD)
+		}
+		b.WriteByte(0xE1)
+		b.WriteUint16(uint16(lenSPS))
+		b.Write(h264ctx.SPS[0])
+		b.WriteByte(0x01)
+		b.WriteUint16(uint16(lenPPS))
+		b.Write(h264ctx.PPS[0])
+		var seqFrame RTMPData
+		seqFrame.RecyclableBuffers = &util.RecyclableBuffers{}
+		seqFrame.Buffers.ReadFromBytes(b)
+		t.SequenceFrame = seqFrame.WrapVideo()
+		t.ICodecCtx = &ctx
+	}
+
 	return
 }
 
@@ -152,12 +170,12 @@ func (avcc *RTMPVideo) ToRaw(codecCtx ICodecCtx) (any, error) {
 		}
 		switch packetType {
 		case PacketTypeSequenceStart:
-			if _, err = avcc.DecodeConfig(nil); err != nil {
-				return nil, err
-			}
+			// if _, err = avcc.DecodeConfig(nil); err != nil {
+			// 	return nil, err
+			// }
 			return nil, nil
 		case PacketTypeCodedFrames:
-			if codecCtx.Is(codec.FourCC_H265) {
+			if codecCtx.FourCC() == codec.FourCC_H265 {
 				return avcc.parseH265(codecCtx.(*H265Ctx), &reader)
 			} else {
 				return avcc.parseAV1(&reader)
@@ -173,11 +191,11 @@ func (avcc *RTMPVideo) ToRaw(codecCtx ICodecCtx) (any, error) {
 			if err = reader.Skip(3); err != nil {
 				return nil, err
 			}
-			if _, err = avcc.DecodeConfig(nil); err != nil {
-				return nil, err
-			}
+			// if _, err = avcc.DecodeConfig(nil); err != nil {
+			// 	return nil, err
+			// }
 		} else {
-			if codecCtx.Is(codec.FourCC_H265) {
+			if codecCtx.FourCC() == codec.FourCC_H265 {
 				return avcc.parseH265(codecCtx.(*H265Ctx), &reader)
 			} else {
 				return avcc.parseH264(codecCtx.(*H264Ctx), &reader)
@@ -187,10 +205,27 @@ func (avcc *RTMPVideo) ToRaw(codecCtx ICodecCtx) (any, error) {
 	return nil, nil
 }
 
-func (h264 *H264Ctx) CreateFrame(raw any) (frame IAVFrame, err error) {
+func (h264 *H264Ctx) CreateFrame(from *AVFrame) (frame IAVFrame, err error) {
+	var rtmpVideo RTMPVideo
+	rtmpVideo.ScalableMemoryAllocator = from.Wrap.GetScalableMemoryAllocator()
+	nalus := from.Raw.(Nalus)
+	head := rtmpVideo.Malloc(5)
+	head[0] = util.Conditoinal[byte](from.IDR, 0x10, 0x20) | byte(ParseVideoCodec(h264.FourCC()))
+	head[1] = 1
+	util.PutBE(head[2:5], (nalus.PTS-nalus.DTS)/90) // cts
+	rtmpVideo.ReadFromBytes(head)
+	for _, nalu := range nalus.Nalus {
+		naluLenM := rtmpVideo.Malloc(4)
+		binary.BigEndian.PutUint32(naluLenM, uint32(util.LenOfBuffers(nalu)))
+		rtmpVideo.ReadFromBytes(naluLenM)
+		rtmpVideo.ReadFromBytes(nalu...)
+	}
+	frame = &rtmpVideo
 	return
 }
-
-func (av1 *AV1Ctx) CreateFrame(raw any) (frame IAVFrame, err error) {
+func (h265 *H265Ctx) CreateFrame(*AVFrame) (frame IAVFrame, err error) {
+	return
+}
+func (av1 *AV1Ctx) CreateFrame(*AVFrame) (frame IAVFrame, err error) {
 	return
 }
