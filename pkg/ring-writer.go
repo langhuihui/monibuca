@@ -106,7 +106,3 @@ func (rb *RingWriter) Step() (normal bool) {
 	rb.LastValue.Ready()
 	return
 }
-
-func (rb *RingWriter) GetReaderCount() int32 {
-	return rb.ReaderCount.Load()
-}

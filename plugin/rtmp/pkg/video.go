@@ -1,6 +1,7 @@
 package rtmp
 
 import (
+	"context"
 	"encoding/binary"
 	"time"
 
@@ -105,11 +106,14 @@ func (avcc *RTMPVideo) DecodeConfig(t *AVTrack, from ICodecCtx) (err error) {
 		b.WriteByte(0x01)
 		b.WriteUint16(uint16(lenPPS))
 		b.Write(h264ctx.PPS[0])
+		t.ICodecCtx = &ctx
 		var seqFrame RTMPData
 		seqFrame.RecyclableBuffers = &util.RecyclableBuffers{}
 		seqFrame.Buffers.ReadFromBytes(b)
 		t.SequenceFrame = seqFrame.WrapVideo()
-		t.ICodecCtx = &ctx
+		if t.Enabled(context.TODO(), TraceLevel) {
+			t.Trace("decConfig", "codec", t.FourCC().String(), "size", seqFrame.GetSize(), "data", seqFrame.String())
+		}
 	}
 
 	return
@@ -207,6 +211,7 @@ func (avcc *RTMPVideo) ToRaw(codecCtx ICodecCtx) (any, error) {
 
 func (h264 *H264Ctx) CreateFrame(from *AVFrame) (frame IAVFrame, err error) {
 	var rtmpVideo RTMPVideo
+	rtmpVideo.RecyclableBuffers = &util.RecyclableBuffers{}
 	rtmpVideo.ScalableMemoryAllocator = from.Wrap.GetScalableMemoryAllocator()
 	nalus := from.Raw.(Nalus)
 	head := rtmpVideo.Malloc(5)

@@ -53,7 +53,7 @@
     pc.onicecandidate = (e) => {
       console.log('onicecandidate', e.candidate);
     };
-    const streamPath = searchParams.get('streamPath') || 'live/webrtc';
+    const streamPath = searchParams.get('streamPath') || 'live/test';
     searchParams.delete('streamPath');
     mediaStream.id = streamPath;
     mediaStream.getTracks().forEach((t) => {

@@ -41,7 +41,7 @@
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
     const searchParams = new URLSearchParams(location.search);
-    const streamPath = searchParams.get('streamPath') || 'live/webrtc';
+    const streamPath = searchParams.get('streamPath') || 'live/test';
     searchParams.delete('streamPath')
     const query = searchParams.toString()
     const result = await fetch(

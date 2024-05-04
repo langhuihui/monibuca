@@ -152,7 +152,9 @@ func (p *Publisher) writeAV(t *AVTrack, data IAVFrame) {
 	frame.Timestamp = max(1, p.baseTs+ts)
 	p.lastTs = frame.Timestamp
 	if p.Enabled(p, TraceLevel) {
-		p.Trace("write", "seq", frame.Sequence, "ts", frame.Timestamp, "codec", t.FourCC().String(), "size", frame.Wrap.GetSize(), "data", frame.Wrap.String())
+		codec := t.FourCC().String()
+		size, data := frame.Wrap.GetSize(), frame.Wrap.String()
+		p.Trace("write", "seq", frame.Sequence, "ts", frame.Timestamp, "codec", codec, "size", size, "data", data)
 	}
 	t.Step()
 	p.speedControl(p.Publish.Speed, p.lastTs)
@@ -176,7 +178,8 @@ func (p *Publisher) WriteVideo(data IAVFrame) (err error) {
 		p.Unlock()
 	}
 	isIDR, isSeq, raw, err := data.Parse(t)
-	if isSeq && !isIDR {
+	if err != nil || (isSeq && !isIDR) {
+		p.Error("parse", "err", err)
 		return err
 	}
 	t.Value.Raw = raw
@@ -200,6 +203,7 @@ func (p *Publisher) WriteVideo(data IAVFrame) (err error) {
 			t.IDRing.Store(t.Ring)
 		}
 		if idr == nil {
+			p.Info("ready")
 			t.Ready.Fulfill(nil)
 		}
 		if !p.AudioTrack.IsEmpty() {
@@ -209,7 +213,7 @@ func (p *Publisher) WriteVideo(data IAVFrame) (err error) {
 		t.Glow(5)
 	}
 	p.writeAV(t, data)
-	if p.VideoTrack.Length > 1 {
+	if p.VideoTrack.Length > 1 && !p.VideoTrack.AVTrack.Ready.Pendding() {
 		if t.LastValue.Raw == nil {
 			t.LastValue.Raw, err = t.LastValue.Wrap.ToRaw(t.ICodecCtx)
 			if err != nil {
@@ -219,6 +223,7 @@ func (p *Publisher) WriteVideo(data IAVFrame) (err error) {
 		}
 		for i, track := range p.VideoTrack.Items[1:] {
 			if track.ICodecCtx == nil {
+				err = (reflect.New(track.FrameType.Elem()).Interface().(IAVFrame)).DecodeConfig(track, t.ICodecCtx)
 				if p.BufferTime > 0 {
 					track.IDRingList.AddIDR(track.Ring)
 					track.HistoryRing.Store(track.Ring)
@@ -235,7 +240,6 @@ func (p *Publisher) WriteVideo(data IAVFrame) (err error) {
 					}
 					p.writeSubAV(track, &rf.Value)
 				}
-				err = (reflect.New(track.FrameType.Elem()).Interface().(IAVFrame)).DecodeConfig(track, t.ICodecCtx)
 				track.Ready.Fulfill(err)
 				if err != nil {
 					track.Error("DecodeConfig", "err", err)
@@ -258,6 +262,9 @@ func (p *Publisher) writeSubAV(to *AVTrack, frame *AVFrame) (err error) {
 	to.Value.Wrap = toFrame
 	to.Value.IDR = frame.IDR
 	to.Value.Timestamp = frame.Timestamp
+	if p.Enabled(p, TraceLevel) {
+		p.Trace("write", "seq", to.Value.Sequence, "ts", to.Value.Timestamp, "codec", to.FourCC().String(), "size", toFrame.GetSize(), "data", toFrame.String())
+	}
 	to.Step()
 	return
 }

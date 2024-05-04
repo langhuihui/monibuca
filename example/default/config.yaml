@@ -1,5 +1,5 @@
 global:
-  # loglevel: trace
+  loglevel: trace
   tcp:
     listenaddr: :50051
 webrtc:

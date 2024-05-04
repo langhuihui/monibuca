@@ -2,6 +2,7 @@ package rtp
 
 import (
 	"errors"
+	"fmt"
 	"slices"
 	"time"
 
@@ -38,9 +39,14 @@ var _ IAVFrame = (*RTPVideo)(nil)
 func (r *RTPVideo) Parse(t *AVTrack) (isIDR, isSeq bool, raw any, err error) {
 	switch r.MimeType {
 	case webrtc.MimeTypeH264:
-		var ctx RTPH264Ctx
-		ctx.RTPCodecParameters = *r.RTPCodecParameters
-		raw, err = r.ToRaw(&ctx)
+		var ctx *RTPH264Ctx
+		if t.ICodecCtx != nil {
+			ctx = t.ICodecCtx.(*RTPH264Ctx)
+		} else {
+			ctx = &RTPH264Ctx{}
+			ctx.RTPCodecParameters = *r.RTPCodecParameters
+		}
+		raw, err = r.ToRaw(ctx)
 		if err != nil {
 			return
 		}
@@ -48,7 +54,7 @@ func (r *RTPVideo) Parse(t *AVTrack) (isIDR, isSeq bool, raw any, err error) {
 		if len(nalus.Nalus) > 0 {
 			isIDR = nalus.H264Type() == codec.NALU_IDR_Picture
 		}
-		t.ICodecCtx = &ctx
+		t.ICodecCtx = ctx
 	case webrtc.MimeTypeVP9:
 		// var ctx RTPVP9Ctx
 		// ctx.FourCC = codec.FourCC_VP9
@@ -147,27 +153,42 @@ func (r *RTPVideo) ToRaw(ictx ICodecCtx) (any, error) {
 		for i := 0; i < len(r.Packets); i++ {
 			packet := r.Packets[i]
 			nalus.PTS = time.Duration(packet.Timestamp)
+			nalus.DTS = nalus.PTS
 			if t := codec.ParseH264NALUType(packet.Payload[0]); t < 24 {
 				nalu = [][]byte{packet.Payload}
 				gotNalu(t)
 			} else {
-				offset := naluType.Offset()
+				offset := t.Offset()
 				switch t {
-				case codec.NALU_FUA:
+				case codec.NALU_STAPA, codec.NALU_STAPB:
+					if len(packet.Payload) <= offset {
+						return nil, errors.New("invalid nalu size")
+					}
+					for buffer := util.Buffer(packet.Payload[offset:]); buffer.CanRead(); {
+						if nextSize := int(buffer.ReadUint16()); buffer.Len() >= nextSize {
+							nalu = [][]byte{buffer.ReadN(nextSize)}
+							gotNalu(codec.ParseH264NALUType(nalu[0][0]))
+						} else {
+							return nil, errors.New("invalid nalu size")
+						}
+					}
+				case codec.NALU_FUA, codec.NALU_FUB:
 					b1 := packet.Payload[1]
 					if util.Bit1(b1, 0) {
-						t = codec.ParseH264NALUType(b1)
-						firstByte := t.Or(packet.Payload[0] & 0x60)
-						nalu = append([][]byte{{firstByte}}, packet.Payload[1:])
+						naluType.Parse(b1)
+						firstByte := naluType.Or(packet.Payload[0] & 0x60)
+						nalu = append([][]byte{{firstByte}}, packet.Payload[offset:])
 					}
-					if len(nalus.Nalus) > 0 {
+					if len(nalu) > 0 {
 						nalu = append(nalu, packet.Payload[offset:])
 					} else {
 						return nil, errors.New("fu have no start")
 					}
 					if util.Bit1(b1, 1) {
-						gotNalu(t)
+						gotNalu(naluType)
 					}
+				default:
+					return nil, fmt.Errorf("unsupported nalu type %d", t)
 				}
 			}
 		}

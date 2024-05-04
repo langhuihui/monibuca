@@ -39,9 +39,9 @@ type WebRTCPlugin struct {
 	PublicIP   string        `desc:"公网IP"`
 	PublicIPv6 string        `desc:"公网IPv6"`
 	Port       string        `default:"tcp:9000" desc:"监听端口"`
-	PLI        time.Duration `default:"2s" desc:"发送PLI请求间隔"`         // 视频流丢包后，发送PLI请求
-	EnableOpus bool          `default:"true" desc:"是否启用opus编码"`      // 是否启用opus编码
-	EnableVP9  bool          `default:"false" desc:"是否启用vp9编码"`      // 是否启用vp9编码
+	PLI        time.Duration `default:"2s" desc:"发送PLI请求间隔"`          // 视频流丢包后，发送PLI请求
+	EnableOpus bool          `default:"true" desc:"是否启用opus编码"`       // 是否启用opus编码
+	EnableVP9  bool          `default:"false" desc:"是否启用vp9编码"`       // 是否启用vp9编码
 	EnableAv1  bool          `default:"false" desc:"是否启用av1编码"`       // 是否启用av1编码
 	EnableDC   bool          `default:"false" desc:"是否启用DataChannel"` // 在不支持编码格式的情况下是否启用DataChannel传输
 	m          MediaEngine
@@ -219,11 +219,18 @@ func (conf *WebRTCPlugin) Push_(w http.ResponseWriter, r *http.Request) {
 				var packet rtp.Packet
 				buf := frame.Malloc(1460)
 				if n, _, err = track.Read(buf); err == nil {
-					err = packet.Unmarshal(buf[:n])
-					frame.RecycleBack(1460 - n)
+					buf := buf[:n]
+					err = packet.Unmarshal(buf)
+					if n < 1460 {
+						frame.RecycleBack(1460 - n)
+					}
 				}
 				if err != nil {
 					return
+				}
+				if len(packet.Payload) == 0 {
+					frame.RecycleBack(len(buf))
+					continue
 				}
 				if len(frame.Packets) == 0 || packet.Timestamp == frame.Packets[0].Timestamp {
 					frame.Packets = append(frame.Packets, &packet)

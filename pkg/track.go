@@ -1,6 +1,7 @@
 package pkg
 
 import (
+	"context"
 	"log/slog"
 	"reflect"
 	"slices"
@@ -56,6 +57,10 @@ func NewAVTrack(args ...any) (t *AVTrack) {
 
 func (t *Track) GetKey() reflect.Type {
 	return t.FrameType
+}
+
+func (t *Track) Trace(msg string, fields ...any) {
+	t.Log(context.TODO(), TraceLevel, msg, fields...)
 }
 
 func (p *IDRingList) AddIDR(IDRing *AVRing) {
