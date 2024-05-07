@@ -6,10 +6,10 @@ toolchain go1.21.8
 
 require (
 	go.uber.org/zap v1.27.0
-	m7s.live/engine/v4 v4.15.2-0.20240402112224-9f9b2392735a
+	m7s.live/engine/v4 v4.15.2-0.20240507090929-4a481a016544
 	m7s.live/plugin/debug/v4 v4.0.3
 	m7s.live/plugin/fmp4/v4 v4.0.6
-	m7s.live/plugin/gb28181/v4 v4.4.4
+	m7s.live/plugin/gb28181/v4 v4.4.5-0.20240403021512-d35b18f1a977
 	m7s.live/plugin/hdl/v4 v4.1.11-0.20240313041408-780dcc14aa1b
 	m7s.live/plugin/hls/v4 v4.3.9-0.20240313063851-81841202e6ab
 	m7s.live/plugin/hook/v4 v4.0.3
@@ -32,6 +32,7 @@ require (
 	github.com/bluenviron/mediacommon v1.9.2 // indirect
 	github.com/cnotch/ipchub v1.1.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/deepch/vdk v0.0.27 // indirect
 	github.com/denisbrodbeck/machineid v1.0.1 // indirect
 	github.com/discoviking/fsm v0.0.0-20150126104936-f4a273feecca // indirect
 	github.com/ghettovoice/gosip v0.0.0-20231227123312-6b80e2d3e6f7 // indirect

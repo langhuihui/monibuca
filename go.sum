@@ -16,6 +16,8 @@ github.com/cnotch/xlog v0.0.0-20201208005456-cfda439cd3a0/go.mod h1:RW9oHsR79ffl
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
+github.com/deepch/vdk v0.0.27 h1:j/SHaTiZhA47wRpaue8NRp7P9xwOOO/lunxrDJBwcao=
+github.com/deepch/vdk v0.0.27/go.mod h1:JlgGyR2ld6+xOIHa7XAxJh+stSDBAkdNvIPkUIdIywk=
 github.com/denisbrodbeck/machineid v1.0.1 h1:geKr9qtkB876mXguW2X6TU4ZynleN6ezuMSRhl4D7AQ=
 github.com/denisbrodbeck/machineid v1.0.1/go.mod h1:dJUwb7PTidGDeYyUBmXZ2GphQBbjJCrnectwCyxcUSI=
 github.com/discoviking/fsm v0.0.0-20150126104936-f4a273feecca h1:cTTdXpkQ1aVbOOmHwdwtYuwUZcQtcMrleD1UXLWhAq8=
@@ -397,12 +399,16 @@ m7s.live/engine/v4 v4.15.2-0.20240402075636-a44ad2830b3a h1:P6v5yMV6P8kf4LcgZ1CM
 m7s.live/engine/v4 v4.15.2-0.20240402075636-a44ad2830b3a/go.mod h1:FRtMPBGzNE6kCLgY0wuS3H7d1btKocRiVe9fAkDtP1g=
 m7s.live/engine/v4 v4.15.2-0.20240402112224-9f9b2392735a h1:5/nM2MKhx28ADM8Ev62sGI7jKbG7GJpNcoBqAhERSPg=
 m7s.live/engine/v4 v4.15.2-0.20240402112224-9f9b2392735a/go.mod h1:FRtMPBGzNE6kCLgY0wuS3H7d1btKocRiVe9fAkDtP1g=
+m7s.live/engine/v4 v4.15.2-0.20240507090929-4a481a016544 h1:yx0ucrNDpttU3Jy3b8IpCCseFo7ua3664SIVL1L1UXA=
+m7s.live/engine/v4 v4.15.2-0.20240507090929-4a481a016544/go.mod h1:uKxjmsjU1WARUNowEkP83BSrJMUjGwkJrX5nPi6DGmE=
 m7s.live/plugin/debug/v4 v4.0.3 h1:lwqKkySXhu47kon/YeF+h5UXXac6c9seb2L6Y8X5ktM=
 m7s.live/plugin/debug/v4 v4.0.3/go.mod h1:muzikl1KrHfbT/+2aHzKg9qDGfpArViQAtpcfFrST88=
 m7s.live/plugin/fmp4/v4 v4.0.6 h1:X4FXfYuI1OCgaJzyJUNySDRPNPHzLJ5StgX/IxljQIA=
 m7s.live/plugin/fmp4/v4 v4.0.6/go.mod h1:0P3IbefEJ6Cs9AeMME0FbEiOK7XNn1fJ5xHohtefIQA=
 m7s.live/plugin/gb28181/v4 v4.4.4 h1:2ZeHCYk1qyYoF9YwEJPFkqZzH/FmkadSxT2GC+tkKFk=
 m7s.live/plugin/gb28181/v4 v4.4.4/go.mod h1:mK5embLQwDULFJjA7jBls1Cwvow98lTWS6n/uZ7Ampk=
+m7s.live/plugin/gb28181/v4 v4.4.5-0.20240403021512-d35b18f1a977 h1:VE6e41Q+o5/Hj0gUtKyuNtyJQgSGvZ+/8F6PEzJfNvs=
+m7s.live/plugin/gb28181/v4 v4.4.5-0.20240403021512-d35b18f1a977/go.mod h1:mK5embLQwDULFJjA7jBls1Cwvow98lTWS6n/uZ7Ampk=
 m7s.live/plugin/hdl/v4 v4.1.11-0.20240313041408-780dcc14aa1b h1:kVDaiqUVPo2pMBcTnrAFk5Q/kKJACmOgSNE71lcF0B0=
 m7s.live/plugin/hdl/v4 v4.1.11-0.20240313041408-780dcc14aa1b/go.mod h1:SzMML8acGj8QD5AwihVTnTuCAdKCOpdf+q/CYl/3/Hc=
 m7s.live/plugin/hls/v4 v4.3.9-0.20240313063851-81841202e6ab h1:bj2EUd8Ur1cVIssj3ZdrQeE4Fueh8qtthptJQkqM9ZY=
