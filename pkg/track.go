@@ -29,10 +29,10 @@ type (
 
 	AVTrack struct {
 		Track
-		RingWriter
-		IDRingList `json:"-" yaml:"-"` //最近的关键帧位置，首屏渲染
+		*RingWriter
 		ICodecCtx
 		SequenceFrame IAVFrame
+		WrapIndex     int
 	}
 )
 
@@ -46,8 +46,11 @@ func NewAVTrack(args ...any) (t *AVTrack) {
 			t.FrameType = v
 		case *slog.Logger:
 			t.Logger = v
+		case *AVTrack:
+			t.Logger = v.Logger.With("subtrack", t.FrameType.String())
+			t.RingWriter = v.RingWriter
 		case int:
-			t.Init(v)
+			t.RingWriter = NewRingWriter(v)
 		}
 	}
 	t.Ready = util.NewPromise(struct{}{})

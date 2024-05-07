@@ -15,19 +15,22 @@ var EmptyLocker emptyLocker
 
 type RingWriter struct {
 	*util.Ring[AVFrame] `json:"-" yaml:"-"`
-	ReaderCount         atomic.Int32 `json:"-" yaml:"-"`
+	IDRingList          `json:"-" yaml:"-"` //最近的关键帧位置，首屏渲染
+	ReaderCount         atomic.Int32        `json:"-" yaml:"-"`
 	pool                *util.Ring[AVFrame]
 	poolSize            int
 	Size                int
 	LastValue           *AVFrame
 }
 
-func (rb *RingWriter) Init(n int) *RingWriter {
-	rb.Ring = util.NewRing[AVFrame](n)
-	rb.Size = n
+func NewRingWriter(n int) (rb *RingWriter) {
+	rb = &RingWriter{
+		Size: n,
+		Ring: util.NewRing[AVFrame](n),
+	}
 	rb.LastValue = &rb.Value
 	rb.LastValue.StartWrite()
-	return rb
+	return
 }
 
 func (rb *RingWriter) Resize(size int) {

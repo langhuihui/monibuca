@@ -357,3 +357,7 @@ func (p *Plugin) handle(pattern string, handler http.Handler) {
 	}
 	p.server.apiList = append(p.server.apiList, pattern)
 }
+
+func (p *Plugin) PostToServer(event any) {
+	p.server.PostMessage(event)
+}

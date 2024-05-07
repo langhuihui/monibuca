@@ -34,8 +34,8 @@ func (s *SpeedControl) speedControl(speed float64, ts time.Duration) {
 	} else {
 		elapsed := time.Since(s.beginTime)
 		should := time.Duration(float64(ts) / speed)
-		if should > elapsed {
-			time.Sleep(should - elapsed)
+		if needSleep := should - elapsed; needSleep > time.Second {
+			time.Sleep(needSleep)
 		}
 	}
 }
@@ -50,7 +50,8 @@ func (t *AVTracks) IsEmpty() bool {
 }
 
 func (t *AVTracks) CreateSubTrack(dataType reflect.Type) (track *AVTrack) {
-	track = NewAVTrack(dataType, t.Logger.With("subtrack", dataType.String()), t.AVTrack.Size)
+	track = NewAVTrack(dataType, t.AVTrack)
+	track.WrapIndex = len(t.Items)
 	t.Add(track)
 	return
 }
@@ -144,7 +145,7 @@ func (p *Publisher) AddSubscriber(subscriber *Subscriber) (err error) {
 
 func (p *Publisher) writeAV(t *AVTrack, data IAVFrame) {
 	frame := &t.Value
-	frame.Wrap = data
+	frame.Wraps = append(frame.Wraps, data)
 	ts := data.GetTimestamp()
 	if p.lastTs == 0 {
 		p.baseTs -= ts
@@ -153,7 +154,7 @@ func (p *Publisher) writeAV(t *AVTrack, data IAVFrame) {
 	p.lastTs = frame.Timestamp
 	if p.Enabled(p, TraceLevel) {
 		codec := t.FourCC().String()
-		size, data := frame.Wrap.GetSize(), frame.Wrap.String()
+		size, data := frame.Wraps[0].GetSize(), frame.Wraps[0].String()
 		p.Trace("write", "seq", frame.Sequence, "ts", frame.Timestamp, "codec", codec, "size", size, "data", data)
 	}
 	t.Step()
@@ -215,7 +216,7 @@ func (p *Publisher) WriteVideo(data IAVFrame) (err error) {
 	p.writeAV(t, data)
 	if p.VideoTrack.Length > 1 && !p.VideoTrack.AVTrack.Ready.Pendding() {
 		if t.LastValue.Raw == nil {
-			t.LastValue.Raw, err = t.LastValue.Wrap.ToRaw(t.ICodecCtx)
+			t.LastValue.Raw, err = t.LastValue.Wraps[0].ToRaw(t.ICodecCtx)
 			if err != nil {
 				t.Error("to raw", "err", err)
 				return err
@@ -224,15 +225,9 @@ func (p *Publisher) WriteVideo(data IAVFrame) (err error) {
 		for i, track := range p.VideoTrack.Items[1:] {
 			if track.ICodecCtx == nil {
 				err = (reflect.New(track.FrameType.Elem()).Interface().(IAVFrame)).DecodeConfig(track, t.ICodecCtx)
-				if p.BufferTime > 0 {
-					track.IDRingList.AddIDR(track.Ring)
-					track.HistoryRing.Store(track.Ring)
-				} else {
-					track.IDRing.Store(track.Ring)
-				}
 				for rf := idr; rf != t.Ring; rf = rf.Next() {
 					if i == 0 && rf.Value.Raw == nil {
-						rf.Value.Raw, err = rf.Value.Wrap.ToRaw(t.ICodecCtx)
+						rf.Value.Raw, err = rf.Value.Wraps[0].ToRaw(t.ICodecCtx)
 						if err != nil {
 							t.Error("to raw", "err", err)
 							return err
@@ -259,7 +254,7 @@ func (p *Publisher) writeSubAV(to *AVTrack, frame *AVFrame) (err error) {
 		to.Error("from raw", "err", err)
 		return
 	}
-	to.Value.Wrap = toFrame
+	to.Value.Wraps = append(to.Value.Wraps, toFrame)
 	to.Value.IDR = frame.IDR
 	to.Value.Timestamp = frame.Timestamp
 	if p.Enabled(p, TraceLevel) {
@@ -347,13 +342,13 @@ func (p *Publisher) SnapShot() (ret *pb.StreamSnapShot) {
 			snap.Sequence = v.Sequence
 			snap.Timestamp = uint32(v.Timestamp)
 			snap.WriteTime = uint64(v.WriteTime.UnixNano())
-			if v.Wrap != nil {
-				snap.Wrap = &pb.Wrap{
-					Timestamp: uint32(v.Wrap.GetTimestamp()),
-					Size:      uint32(v.Wrap.GetSize()),
-					Data:      v.Wrap.String(),
-				}
-			}
+			// if v.Wrap != nil {
+			// 	snap.Wrap = &pb.Wrap{
+			// 		Timestamp: uint32(v.Wrap.GetTimestamp()),
+			// 		Size:      uint32(v.Wrap.GetSize()),
+			// 		Data:      v.Wrap.String(),
+			// 	}
+			// }
 			ret.VideoTrack = append(ret.VideoTrack, &snap)
 		})
 	}
@@ -364,13 +359,13 @@ func (p *Publisher) SnapShot() (ret *pb.StreamSnapShot) {
 			snap.Sequence = v.Sequence
 			snap.Timestamp = uint32(v.Timestamp)
 			snap.WriteTime = uint64(v.WriteTime.UnixNano())
-			if v.Wrap != nil {
-				snap.Wrap = &pb.Wrap{
-					Timestamp: uint32(v.Wrap.GetTimestamp()),
-					Size:      uint32(v.Wrap.GetSize()),
-					Data:      v.Wrap.String(),
-				}
-			}
+			// if v.Wrap != nil {
+			// 	snap.Wrap = &pb.Wrap{
+			// 		Timestamp: uint32(v.Wrap.GetTimestamp()),
+			// 		Size:      uint32(v.Wrap.GetSize()),
+			// 		Data:      v.Wrap.String(),
+			// 	}
+			// }
 			ret.AudioTrack = append(ret.AudioTrack, &snap)
 		})
 	}

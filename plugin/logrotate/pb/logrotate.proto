@@ -1,0 +1,35 @@
+syntax = "proto3";
+import "google/api/annotations.proto";
+import "google/protobuf/empty.proto";
+package m7s;
+option go_package="m7s.live/m7s/v5/plugin/logrotate/pb";
+
+service logrotate {
+  rpc List (google.protobuf.Empty) returns (ResponseFileInfo) {
+    option (google.api.http) = {
+      get: "/logrotate/api/list"
+    };
+  }
+  rpc Get (RequestFileInfo) returns (ResponseOpen) {
+    option (google.api.http) = {
+      get: "/logrotate/api/get/{fileName=**}"
+    };
+  }
+}
+
+message ResponseOpen {
+  string content = 1;
+}
+
+message RequestFileInfo {
+  string fileName = 1;
+}
+
+message ResponseFileInfo {
+  repeated FileInfo files = 1;
+}
+
+message FileInfo {
+  string name = 1;
+  int64 size = 2;
+}

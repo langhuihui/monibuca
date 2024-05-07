@@ -7,8 +7,7 @@ import (
 )
 
 func TestRing(t *testing.T) {
-	var w RingWriter
-	w.Init(10)
+	w := NewRingWriter(10)
 	ctx, _ := context.WithTimeout(context.Background(), time.Second*5)
 	go t.Run("writer", func(t *testing.T) {
 		for i := 0; ctx.Err() == nil; i++ {
@@ -23,7 +22,7 @@ func TestRing(t *testing.T) {
 		var reader RingReader
 		err := reader.StartRead(w.Ring)
 		if err != nil {
-			t.Error(err)	
+			t.Error(err)
 			return
 		}
 		for ctx.Err() == nil {
@@ -41,9 +40,9 @@ func TestRing(t *testing.T) {
 	// slow reader
 	t.Run("reader2", func(t *testing.T) {
 		var reader RingReader
-		err := 	reader.StartRead(w.Ring)
+		err := reader.StartRead(w.Ring)
 		if err != nil {
-			t.Error(err)	
+			t.Error(err)
 			return
 		}
 		for ctx.Err() == nil {
@@ -61,8 +60,7 @@ func TestRing(t *testing.T) {
 }
 
 func BenchmarkRing(b *testing.B) {
-	var w RingWriter
-	w.Init(10)
+	w := NewRingWriter(10)
 	ctx, _ := context.WithTimeout(context.Background(), time.Second*5)
 	go func() {
 		for i := 0; ctx.Err() == nil; i++ {

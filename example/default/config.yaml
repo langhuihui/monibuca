@@ -2,6 +2,8 @@ global:
   loglevel: trace
   tcp:
     listenaddr: :50051
+logrotate:
+  level: trace
 webrtc:
   publish:
     pubaudio: false

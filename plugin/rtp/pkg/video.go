@@ -82,7 +82,7 @@ func (r *RTPVideo) Parse(t *AVTrack) (isIDR, isSeq bool, raw any, err error) {
 
 func (h264 *RTPH264Ctx) CreateFrame(from *AVFrame) (frame IAVFrame, err error) {
 	var r RTPVideo
-	r.ScalableMemoryAllocator = from.Wrap.GetScalableMemoryAllocator()
+	r.ScalableMemoryAllocator = from.Wraps[0].GetScalableMemoryAllocator()
 	nalus := from.Raw.(Nalus)
 	nalutype := nalus.H264Type()
 	var lastPacket *rtp.Packet
@@ -162,14 +162,14 @@ func (r *RTPVideo) ToRaw(ictx ICodecCtx) (any, error) {
 				switch t {
 				case codec.NALU_STAPA, codec.NALU_STAPB:
 					if len(packet.Payload) <= offset {
-						return nil, errors.New("invalid nalu size")
+						return nil, fmt.Errorf("invalid nalu size %d", len(packet.Payload))
 					}
 					for buffer := util.Buffer(packet.Payload[offset:]); buffer.CanRead(); {
 						if nextSize := int(buffer.ReadUint16()); buffer.Len() >= nextSize {
 							nalu = [][]byte{buffer.ReadN(nextSize)}
 							gotNalu(codec.ParseH264NALUType(nalu[0][0]))
 						} else {
-							return nil, errors.New("invalid nalu size")
+							return nil, fmt.Errorf("invalid nalu size %d", nextSize)
 						}
 					}
 				case codec.NALU_FUA, codec.NALU_FUB:

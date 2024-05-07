@@ -53,6 +53,7 @@ type Server struct {
 	Pushs          util.Collection[string, *Pusher]
 	Waiting        map[string][]*Subscriber
 	Subscribers    util.Collection[int, *Subscriber]
+	LogHandler     MultiLogHandler
 	pidG           int
 	sidG           int
 	apiList        []string
@@ -68,10 +69,11 @@ func NewServer() (s *Server) {
 	}
 	s.config.HTTP.ListenAddrTLS = ":8443"
 	s.config.HTTP.ListenAddr = ":8080"
-	s.Logger = slog.With("server", s.ID)
 	s.handler = s
 	s.server = s
 	s.Meta = &serverMeta
+	s.LogHandler.Add(console.NewHandler(os.Stdout, nil))
+	s.Logger = slog.New(&s.LogHandler).With("server", s.ID)
 	Servers[s.ID] = s
 	return
 }
@@ -94,6 +96,9 @@ func (s *Server) reset() {
 	server.Meta = s.Meta
 	server.config.HTTP.ListenAddrTLS = ":8443"
 	server.config.HTTP.ListenAddr = ":8080"
+	server.LogHandler = MultiLogHandler{}
+	server.LogHandler.Add(console.NewHandler(os.Stdout, nil))
+	// server.Logger = slog.New(&server.LogHandler).With("server", s.ID)
 	*s = server
 }
 
@@ -144,9 +149,7 @@ func (s *Server) run(ctx context.Context, conf any) (err error) {
 	if s.LogLevel == "trace" {
 		lv.Set(TraceLevel)
 	}
-	s.Logger = slog.New(
-		console.NewHandler(os.Stdout, &console.HandlerOptions{Level: lv.Level()}),
-	).With("server", s.ID)
+	s.LogHandler.SetLevel(lv.Level())
 	s.registerHandler()
 
 	if httpConf.ListenAddrTLS != "" {
@@ -332,6 +335,8 @@ func (s *Server) eventLoop() {
 					v.Resolve(&pb.StreamListResponse{List: streams})
 					continue
 				}
+			case slog.Handler:
+				s.LogHandler.Add(v)
 			}
 			for _, plugin := range s.Plugins {
 				if plugin.Disabled {
@@ -461,4 +466,8 @@ func (s *Server) Call(arg any) (result any, err error) {
 		err = nil
 	}
 	return
+}
+
+func (s *Server) PostMessage(msg any) {
+	s.eventChan <- msg
 }

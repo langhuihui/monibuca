@@ -50,7 +50,7 @@ type (
 		DataFrame
 		IDR       bool
 		Timestamp time.Duration // 绝对时间戳
-		Wrap      IAVFrame      // 封装格式
+		Wraps     []IAVFrame      // 封装格式
 	}
 	AVRing    = util.Ring[AVFrame]
 	DataFrame struct {
@@ -66,9 +66,9 @@ type (
 func (frame *AVFrame) Reset() {
 	frame.BytesIn = 0
 	frame.Timestamp = 0
-	if frame.Wrap != nil {
-		frame.Wrap.Recycle()
-		frame.Wrap = nil
+	for _, wrap := range frame.Wraps {
+		wrap.Recycle()
+		wrap = nil
 	}
 }
 

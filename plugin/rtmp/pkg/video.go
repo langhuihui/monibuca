@@ -212,7 +212,7 @@ func (avcc *RTMPVideo) ToRaw(codecCtx ICodecCtx) (any, error) {
 func (h264 *H264Ctx) CreateFrame(from *AVFrame) (frame IAVFrame, err error) {
 	var rtmpVideo RTMPVideo
 	rtmpVideo.RecyclableBuffers = &util.RecyclableBuffers{}
-	rtmpVideo.ScalableMemoryAllocator = from.Wrap.GetScalableMemoryAllocator()
+	rtmpVideo.ScalableMemoryAllocator = from.Wraps[0].GetScalableMemoryAllocator()
 	nalus := from.Raw.(Nalus)
 	head := rtmpVideo.Malloc(5)
 	head[0] = util.Conditoinal[byte](from.IDR, 0x10, 0x20) | byte(ParseVideoCodec(h264.FourCC()))

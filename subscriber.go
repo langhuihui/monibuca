@@ -60,6 +60,7 @@ func (s *Subscriber) Handle(handler SubscriberHandler) {
 	var ar, vr *AVRingReader
 	var ah, vh reflect.Value
 	var a1, v1 reflect.Type
+	var awi, vwi int
 	var initState = 0
 	var subMode = s.SubMode //订阅模式
 	if s.Args.Has(s.SubModeArgName) {
@@ -77,6 +78,7 @@ func (s *Subscriber) Handle(handler SubscriberHandler) {
 			return
 		}
 		if at := s.Publisher.GetAudioTrack(a1); at != nil {
+			awi = at.WrapIndex
 			ar = NewAVRingReader(at)
 			ar.Logger = s.Logger.With("reader", a1.String())
 			ar.Info("start read")
@@ -88,6 +90,7 @@ func (s *Subscriber) Handle(handler SubscriberHandler) {
 			return
 		}
 		if vt := s.Publisher.GetVideoTrack(v1); vt != nil {
+			vwi = vt.WrapIndex
 			vr = NewAVRingReader(vt)
 			vr.Logger = s.Logger.With("reader", v1.String())
 			vr.Info("start read")
@@ -110,7 +113,7 @@ func (s *Subscriber) Handle(handler SubscriberHandler) {
 		if s.Enabled(s, TraceLevel) {
 			s.Trace("send audio frame", "seq", audioFrame.Sequence)
 		}
-		res := ah.Call([]reflect.Value{reflect.ValueOf(audioFrame.Wrap)})
+		res := ah.Call([]reflect.Value{reflect.ValueOf(audioFrame.Wraps[awi])})
 		if len(res) > 0 && !res[0].IsNil() {
 			if err := res[0].Interface().(error); err != ErrInterrupt {
 				s.Stop(err)
@@ -122,9 +125,9 @@ func (s *Subscriber) Handle(handler SubscriberHandler) {
 	}
 	sendVideoFrame := func() (err error) {
 		if s.Enabled(s, TraceLevel) {
-			s.Trace("send video frame", "seq", videoFrame.Sequence, "data", videoFrame.Wrap.String(), "size", videoFrame.Wrap.GetSize())
+			s.Trace("send video frame", "seq", videoFrame.Sequence, "data", videoFrame.Wraps[vwi].String(), "size", videoFrame.Wraps[vwi].GetSize())
 		}
-		res := vh.Call([]reflect.Value{reflect.ValueOf(videoFrame.Wrap)})
+		res := vh.Call([]reflect.Value{reflect.ValueOf(videoFrame.Wraps[vwi])})
 		if len(res) > 0 && !res[0].IsNil() {
 			if err = res[0].Interface().(error); err != ErrInterrupt {
 				s.Stop(err)
