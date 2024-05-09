@@ -2,7 +2,6 @@ package m7s
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -45,20 +44,22 @@ type Server struct {
 	pb.UnimplementedGlobalServer
 	Plugin
 	config.Engine
-	ID             int
-	eventChan      chan any
-	Plugins        []*Plugin
-	Streams        util.Collection[string, *Publisher]
-	Pulls          util.Collection[string, *Puller]
-	Pushs          util.Collection[string, *Pusher]
-	Waiting        map[string][]*Subscriber
-	Subscribers    util.Collection[int, *Subscriber]
-	LogHandler     MultiLogHandler
-	pidG           int
-	sidG           int
-	apiList        []string
-	grpcServer     *grpc.Server
-	grpcClientConn *grpc.ClientConn
+	ID              int
+	eventChan       chan any
+	Plugins         []*Plugin
+	Streams         util.Collection[string, *Publisher]
+	Pulls           util.Collection[string, *Puller]
+	Pushs           util.Collection[string, *Pusher]
+	Waiting         map[string][]*Subscriber
+	Subscribers     util.Collection[int, *Subscriber]
+	LogHandler      MultiLogHandler
+	pidG            int
+	sidG            int
+	apiList         []string
+	grpcServer      *grpc.Server
+	grpcClientConn  *grpc.ClientConn
+	lastSummaryTime time.Time
+	lastSummary     *pb.SummaryResponse
 }
 
 func NewServer() (s *Server) {
@@ -103,6 +104,7 @@ func (s *Server) reset() {
 }
 
 func (s *Server) Run(ctx context.Context, conf any) (err error) {
+	s.StartTime = time.Now()
 	for err = s.run(ctx, conf); err == ErrRestart; err = s.run(ctx, conf) {
 		s.reset()
 	}
@@ -265,6 +267,13 @@ func (s *Server) eventLoop() {
 			switch v := event.(type) {
 			case *util.Promise[any]:
 				switch vv := v.Value.(type) {
+				case func():
+					vv()
+					v.Fulfill(nil)
+					continue
+				case func() error:
+					v.Fulfill(vv())
+					continue
 				case *Publisher:
 					err := s.OnPublish(vv)
 					if v.Fulfill(err); err != nil {
@@ -310,30 +319,6 @@ func (s *Server) eventLoop() {
 						s.Pushs.Add(vv)
 						event = v.Value
 					}
-				case *pb.StreamSnapRequest:
-					if pub, ok := s.Streams.Get(vv.StreamPath); ok {
-						v.Resolve(pub)
-					} else {
-						v.Fulfill(ErrNotFound)
-					}
-					continue
-				case *pb.StopSubscribeRequest:
-					if subscriber, ok := s.Subscribers.Get(int(vv.Id)); ok {
-						subscriber.Stop(errors.New("stop by api"))
-						v.Fulfill(nil)
-					} else {
-						v.Fulfill(ErrNotFound)
-					}
-					continue
-				case *pb.StreamListRequest:
-					var streams []*pb.StreamInfo
-					for _, publisher := range s.Streams.Items {
-						streams = append(streams, &pb.StreamInfo{
-							Path: publisher.StreamPath,
-						})
-					}
-					v.Resolve(&pb.StreamListResponse{List: streams})
-					continue
 				}
 			case slog.Handler:
 				s.LogHandler.Add(v)

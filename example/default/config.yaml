@@ -1,9 +1,11 @@
 global:
-  loglevel: trace
+  loglevel: debug
   tcp:
     listenaddr: :50051
+console:
+  secret: de2c0bb9fd47684adc07a426e139239b
 logrotate:
-  level: trace
+  level: info
 webrtc:
   publish:
     pubaudio: false

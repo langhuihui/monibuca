@@ -23,6 +23,8 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type GlobalClient interface {
+	SysInfo(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*SysInfoResponse, error)
+	Summary(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*SummaryResponse, error)
 	Shutdown(ctx context.Context, in *RequestWithId, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	Restart(ctx context.Context, in *RequestWithId, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	StreamList(ctx context.Context, in *StreamListRequest, opts ...grpc.CallOption) (*StreamListResponse, error)
@@ -36,6 +38,24 @@ type globalClient struct {
 
 func NewGlobalClient(cc grpc.ClientConnInterface) GlobalClient {
 	return &globalClient{cc}
+}
+
+func (c *globalClient) SysInfo(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*SysInfoResponse, error) {
+	out := new(SysInfoResponse)
+	err := c.cc.Invoke(ctx, "/m7s.Global/SysInfo", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *globalClient) Summary(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*SummaryResponse, error) {
+	out := new(SummaryResponse)
+	err := c.cc.Invoke(ctx, "/m7s.Global/Summary", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *globalClient) Shutdown(ctx context.Context, in *RequestWithId, opts ...grpc.CallOption) (*emptypb.Empty, error) {
@@ -87,6 +107,8 @@ func (c *globalClient) StopSubscribe(ctx context.Context, in *StopSubscribeReque
 // All implementations must embed UnimplementedGlobalServer
 // for forward compatibility
 type GlobalServer interface {
+	SysInfo(context.Context, *emptypb.Empty) (*SysInfoResponse, error)
+	Summary(context.Context, *emptypb.Empty) (*SummaryResponse, error)
 	Shutdown(context.Context, *RequestWithId) (*emptypb.Empty, error)
 	Restart(context.Context, *RequestWithId) (*emptypb.Empty, error)
 	StreamList(context.Context, *StreamListRequest) (*StreamListResponse, error)
@@ -99,6 +121,12 @@ type GlobalServer interface {
 type UnimplementedGlobalServer struct {
 }
 
+func (UnimplementedGlobalServer) SysInfo(context.Context, *emptypb.Empty) (*SysInfoResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SysInfo not implemented")
+}
+func (UnimplementedGlobalServer) Summary(context.Context, *emptypb.Empty) (*SummaryResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Summary not implemented")
+}
 func (UnimplementedGlobalServer) Shutdown(context.Context, *RequestWithId) (*emptypb.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Shutdown not implemented")
 }
@@ -125,6 +153,42 @@ type UnsafeGlobalServer interface {
 
 func RegisterGlobalServer(s grpc.ServiceRegistrar, srv GlobalServer) {
 	s.RegisterService(&Global_ServiceDesc, srv)
+}
+
+func _Global_SysInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(emptypb.Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GlobalServer).SysInfo(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/m7s.Global/SysInfo",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GlobalServer).SysInfo(ctx, req.(*emptypb.Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Global_Summary_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(emptypb.Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GlobalServer).Summary(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/m7s.Global/Summary",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GlobalServer).Summary(ctx, req.(*emptypb.Empty))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _Global_Shutdown_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -224,6 +288,14 @@ var Global_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "m7s.Global",
 	HandlerType: (*GlobalServer)(nil),
 	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "SysInfo",
+			Handler:    _Global_SysInfo_Handler,
+		},
+		{
+			MethodName: "Summary",
+			Handler:    _Global_Summary_Handler,
+		},
 		{
 			MethodName: "Shutdown",
 			Handler:    _Global_Shutdown_Handler,

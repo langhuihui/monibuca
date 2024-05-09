@@ -40,6 +40,7 @@ func (plugin *PluginMeta) Init(s *Server, userConfig map[string]any) {
 	p.Meta = plugin
 	p.server = s
 	p.Logger = s.Logger.With("plugin", plugin.Name)
+	p.Context, p.CancelCauseFunc = context.WithCancelCause(s.Context)
 	if os.Getenv(strings.ToUpper(plugin.Name)+"_ENABLE") == "false" {
 		p.Disabled = true
 		p.Warn("disabled by env")
@@ -85,7 +86,7 @@ func (plugin *PluginMeta) Init(s *Server, userConfig map[string]any) {
 	if plugin.ServiceDesc != nil && s.grpcServer != nil {
 		s.grpcServer.RegisterService(plugin.ServiceDesc, instance)
 		if plugin.RegisterGRPCHandler != nil {
-			err = plugin.RegisterGRPCHandler(s.Context, s.config.HTTP.GetGRPCMux(), s.grpcClientConn)
+			err = plugin.RegisterGRPCHandler(p.Context, s.config.HTTP.GetGRPCMux(), s.grpcClientConn)
 			if err != nil {
 				p.Error("init", "error", err)
 				p.Stop(err)
@@ -155,6 +156,10 @@ func (Plugin) nothing() {
 
 }
 
+func (p *Plugin) GetGlobalCommonConf() *config.Common {
+	return p.server.GetCommonConf()
+}
+
 func (p *Plugin) GetCommonConf() *config.Common {
 	return &p.config
 }
@@ -184,7 +189,6 @@ func (p *Plugin) Stop(err error) {
 }
 
 func (p *Plugin) Start() {
-	p.Context, p.CancelCauseFunc = context.WithCancelCause(p.server.Context)
 	httpConf := &p.config.HTTP
 	if httpConf.ListenAddrTLS != "" && (httpConf.ListenAddrTLS != p.server.config.HTTP.ListenAddrTLS) {
 		p.Info("https listen at ", "addr", httpConf.ListenAddrTLS)

@@ -52,6 +52,10 @@ func NewSSE(w http.ResponseWriter, ctx context.Context) *SSE {
 	header.Set("Connection", "keep-alive")
 	header.Set("X-Accel-Buffering", "no")
 	header.Set("Access-Control-Allow-Origin", "*")
+	// rw.Header().Set("Access-Control-Allow-Headers", "Content-Type,Authorization")
+	// rw.Header().Set("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS")
+	// rw.Header().Set("Access-Control-Allow-Credentials", "true")
+	// rw.Header().Set("Transfer-Encoding", "chunked")
 	return &SSE{
 		ResponseWriter: w,
 		Context:        ctx,

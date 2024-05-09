@@ -1,10 +1,21 @@
 syntax = "proto3";
 import "google/api/annotations.proto";
 import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
 package m7s;
 option go_package="m7s.live/m7s/v5/pb";
 
 service Global {
+  rpc SysInfo (google.protobuf.Empty) returns (SysInfoResponse) {
+    option (google.api.http) = {
+      get: "/api/sysinfo"
+    };
+  }
+  rpc Summary (google.protobuf.Empty) returns (SummaryResponse) {
+    option (google.api.http) = {
+      get: "/api/summary"
+    };
+  }
   rpc Shutdown (RequestWithId) returns (google.protobuf.Empty) {
     option (google.api.http) = {
       post: "/api/shutdown/{id}"
@@ -32,14 +43,57 @@ service Global {
     };
   }
 }
-message StreamInfo {
-    string path = 1;
-}
-message StreamListRequest {
 
+message NetWorkInfo {
+	string name = 1;
+	uint64 receive = 2;
+	uint64 sent = 3;
+	uint64 receiveSpeed = 4;
+	uint64 sentSpeed = 5;
 }
+
+message Usage {
+  uint64 total = 1;
+  uint64 free = 2;
+  uint64 used = 3;
+  float usage = 4;
+}
+
+message SummaryResponse {
+  string address = 1;
+  Usage memory = 2;
+  float cpuUsage = 3;
+  Usage hardDisk = 4;
+  repeated NetWorkInfo netWork = 5;
+  int32 streamCount = 6;
+}
+
+message StreamSummay {
+  string path = 1;
+  int32 state = 2;
+  int32 subscribers = 3;
+  repeated string tracks = 4;
+  google.protobuf.Timestamp startTime = 5;
+  string type = 6;
+  int32 bps = 7;
+}
+
+message SysInfoResponse {
+  google.protobuf.Timestamp startTime = 1;
+  string localIP = 2;
+  string version = 3;
+}
+
+message StreamListRequest {
+  int32 pageNum = 1;
+  int32 pageSize = 2;
+}
+
 message StreamListResponse {
-  repeated StreamInfo list = 1;
+  int32 total = 1;
+  int32 pageNum = 2;
+  int32 pageSize = 3;
+  repeated StreamSummay list = 4;
 }
 
 message StreamSnapRequest {

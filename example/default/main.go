@@ -9,6 +9,7 @@ import (
 	_ "m7s.live/m7s/v5/plugin/webrtc"
 	_ "m7s.live/m7s/v5/plugin/rtmp"
 	_ "m7s.live/m7s/v5/plugin/logrotate"
+	_ "m7s.live/m7s/v5/plugin/console"
 )
 
 func main() {
