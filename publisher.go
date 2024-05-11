@@ -151,11 +151,13 @@ func (p *Publisher) writeAV(t *AVTrack, data IAVFrame) {
 		p.baseTs -= ts
 	}
 	frame.Timestamp = max(1, p.baseTs+ts)
+	bytesIn := frame.Wraps[0].GetSize()
+	t.AddBytesIn(bytesIn)
 	p.lastTs = frame.Timestamp
 	if p.Enabled(p, TraceLevel) {
 		codec := t.FourCC().String()
-		size, data := frame.Wraps[0].GetSize(), frame.Wraps[0].String()
-		p.Trace("write", "seq", frame.Sequence, "ts", frame.Timestamp, "codec", codec, "size", size, "data", data)
+		data := frame.Wraps[0].String()
+		p.Trace("write", "seq", frame.Sequence, "ts", frame.Timestamp, "codec", codec, "size", bytesIn, "data", data)
 	}
 	t.Step()
 	p.speedControl(p.Publish.Speed, p.lastTs)

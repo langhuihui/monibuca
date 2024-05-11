@@ -93,7 +93,7 @@ func (plugin *PluginMeta) Init(s *Server, userConfig map[string]any) {
 			}
 		}
 	}
-	s.Plugins = append(s.Plugins, p)
+	s.Plugins.Add(p)
 	p.Start()
 }
 
@@ -156,6 +156,10 @@ func (Plugin) nothing() {
 
 }
 
+func (p *Plugin) GetKey() string {
+	return p.Meta.Name
+}
+
 func (p *Plugin) GetGlobalCommonConf() *config.Common {
 	return p.server.GetCommonConf()
 }
@@ -179,7 +183,13 @@ func (p *Plugin) assign() {
 		}
 		p.Config.ParseModifyFile(modifyConfig)
 	}
-	p.registerHandler()
+	var handlerMap map[string]http.HandlerFunc
+	if v, ok := p.handler.(interface {
+		RegisterHandler() map[string]http.HandlerFunc
+	}); ok {
+		handlerMap = v.RegisterHandler()
+	}
+	p.registerHandler(handlerMap)
 }
 
 func (p *Plugin) Stop(err error) {
@@ -293,7 +303,7 @@ func (p *Plugin) Subscribe(streamPath string, options ...any) (subscriber *Subsc
 	return
 }
 
-func (p *Plugin) registerHandler() {
+func (p *Plugin) registerHandler(handlers map[string]http.HandlerFunc) {
 	t := reflect.TypeOf(p.handler)
 	v := reflect.ValueOf(p.handler)
 	// 注册http响应
@@ -307,6 +317,9 @@ func (p *Plugin) registerHandler() {
 			patten := strings.ToLower(strings.ReplaceAll(name, "_", "/"))
 			p.handle(patten, http.HandlerFunc(handler))
 		}
+	}
+	for patten, handler := range handlers {
+		p.handle(patten, handler)
 	}
 	if rootHandler, ok := p.handler.(http.Handler); ok {
 		p.handle("/", rootHandler)
@@ -364,4 +377,23 @@ func (p *Plugin) handle(pattern string, handler http.Handler) {
 
 func (p *Plugin) PostToServer(event any) {
 	p.server.PostMessage(event)
+}
+
+func (p *Plugin) SaveConfig() (err error) {
+	_, err = p.server.Call(func() error {
+		if p.Modify == nil {
+			os.Remove(p.settingPath())
+			return nil
+		}
+		file, err := os.OpenFile(p.settingPath(), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
+		if err == nil {
+			defer file.Close()
+			err = yaml.NewEncoder(file).Encode(p.Modify)
+		}
+		if err == nil {
+			p.Info("config saved")
+		}
+		return err
+	})
+	return
 }

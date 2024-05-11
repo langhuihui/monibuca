@@ -6,15 +6,19 @@ import (
 	"reflect"
 	"slices"
 	"sync/atomic"
+	"time"
 
 	"m7s.live/m7s/v5/pkg/util"
 )
 
 type (
 	Track struct {
-		*slog.Logger `json:"-" yaml:"-"`
-		Ready        *util.Promise[struct{}]
-		FrameType    reflect.Type
+		*slog.Logger
+		Ready       *util.Promise[struct{}]
+		FrameType   reflect.Type
+		bytesIn     int
+		lastBPSTime time.Time
+		BPS         int
 	}
 
 	DataTrack struct {
@@ -60,6 +64,15 @@ func NewAVTrack(args ...any) (t *AVTrack) {
 
 func (t *Track) GetKey() reflect.Type {
 	return t.FrameType
+}
+
+func (t *Track) AddBytesIn(n int) {
+	t.bytesIn += n
+	if dur := time.Since(t.lastBPSTime); dur > time.Second {
+		t.BPS = int(float64(t.bytesIn) / dur.Seconds())
+		t.bytesIn = 0
+		t.lastBPSTime = time.Now()
+	}
 }
 
 func (t *Track) Trace(msg string, fields ...any) {

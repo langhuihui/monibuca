@@ -46,7 +46,7 @@ type Server struct {
 	config.Engine
 	ID              int
 	eventChan       chan any
-	Plugins         []*Plugin
+	Plugins         util.Collection[string, *Plugin]
 	Streams         util.Collection[string, *Publisher]
 	Pulls           util.Collection[string, *Puller]
 	Pushs           util.Collection[string, *Pusher]
@@ -152,7 +152,9 @@ func (s *Server) run(ctx context.Context, conf any) (err error) {
 		lv.Set(TraceLevel)
 	}
 	s.LogHandler.SetLevel(lv.Level())
-	s.registerHandler()
+	s.registerHandler(map[string]http.HandlerFunc{
+		"/api/config/json/{name}": s.api_Config_JSON_,
+	})
 
 	if httpConf.ListenAddrTLS != "" {
 		s.Info("https listen at ", "addr", httpConf.ListenAddrTLS)
@@ -215,7 +217,7 @@ func (s *Server) run(ctx context.Context, conf any) (err error) {
 	for _, subscriber := range s.Subscribers.Items {
 		subscriber.Stop(err)
 	}
-	for _, p := range s.Plugins {
+	for _, p := range s.Plugins.Items {
 		p.Stop(err)
 	}
 	httpConf.StopListen()
@@ -323,7 +325,7 @@ func (s *Server) eventLoop() {
 			case slog.Handler:
 				s.LogHandler.Add(v)
 			}
-			for _, plugin := range s.Plugins {
+			for _, plugin := range s.Plugins.Items {
 				if plugin.Disabled {
 					continue
 				}
@@ -434,7 +436,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	fmt.Fprintf(w, "Monibuca Engine %s StartTime:%s\n", Version, s.StartTime)
-	for _, plugin := range s.Plugins {
+	for _, plugin := range s.Plugins.Items {
 		fmt.Fprintf(w, "Plugin %s Version:%s\n", plugin.Meta.Name, plugin.Meta.Version)
 	}
 	for _, api := range s.apiList {

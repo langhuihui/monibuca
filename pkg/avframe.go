@@ -50,21 +50,19 @@ type (
 		DataFrame
 		IDR       bool
 		Timestamp time.Duration // 绝对时间戳
-		Wraps     []IAVFrame      // 封装格式
+		Wraps     []IAVFrame    // 封装格式
 	}
 	AVRing    = util.Ring[AVFrame]
 	DataFrame struct {
 		sync.RWMutex `json:"-" yaml:"-"` // 读写锁
 		discard      bool
 		Sequence     uint32    // 在一个Track中的序号
-		BytesIn      int       // 输入字节数用于计算BPS
 		WriteTime    time.Time // 写入时间,可用于比较两个帧的先后
 		Raw          any       `json:"-" yaml:"-"` // 裸格式
 	}
 )
 
 func (frame *AVFrame) Reset() {
-	frame.BytesIn = 0
 	frame.Timestamp = 0
 	for _, wrap := range frame.Wraps {
 		wrap.Recycle()

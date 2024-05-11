@@ -2,6 +2,7 @@ syntax = "proto3";
 import "google/api/annotations.proto";
 import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";
+import "google/protobuf/any.proto";
 package m7s;
 option go_package="m7s.live/m7s/v5/pb";
 
@@ -42,6 +43,53 @@ service Global {
       body: "*"
     };
   }
+  rpc GetConfig (GetConfigRequest) returns (GetConfigResponse) {
+    option (google.api.http) = {
+      get: "/api/config/get/{name}"
+    };
+  }
+  rpc GetFormily (GetConfigRequest) returns (GetConfigResponse) {
+    option (google.api.http) = {
+      get: "/api/config/formily/{name}"
+    };
+  }
+  rpc ModifyConfig (ModifyConfigRequest) returns (ModifyConfigResponse) {
+    option (google.api.http) = {
+      post: "/api/config/modify/{name}"
+      body: "yaml"
+    };
+  }
+}
+
+message GetConfigRequest {
+  string name = 1;
+}
+
+message Formily {
+  string type = 1;
+  map<string, Formily> properties = 2;
+  string component = 3;
+  map<string, google.protobuf.Any> componentProps = 4;
+}
+
+message FormilyResponse {
+  string type = 1;
+  map<string, Formily> properties = 2;
+}
+
+message GetConfigResponse {
+  string file = 1;
+  string modified = 2;
+  string merged = 3;
+}
+
+message ModifyConfigRequest {
+  string name = 1;
+  string yaml = 2;
+}
+
+message ModifyConfigResponse {
+  bool success = 1;
 }
 
 message NetWorkInfo {

@@ -30,6 +30,9 @@ type GlobalClient interface {
 	StreamList(ctx context.Context, in *StreamListRequest, opts ...grpc.CallOption) (*StreamListResponse, error)
 	StreamSnap(ctx context.Context, in *StreamSnapRequest, opts ...grpc.CallOption) (*StreamSnapShot, error)
 	StopSubscribe(ctx context.Context, in *StopSubscribeRequest, opts ...grpc.CallOption) (*StopSubscribeResponse, error)
+	GetConfig(ctx context.Context, in *GetConfigRequest, opts ...grpc.CallOption) (*GetConfigResponse, error)
+	GetFormily(ctx context.Context, in *GetConfigRequest, opts ...grpc.CallOption) (*GetConfigResponse, error)
+	ModifyConfig(ctx context.Context, in *ModifyConfigRequest, opts ...grpc.CallOption) (*ModifyConfigResponse, error)
 }
 
 type globalClient struct {
@@ -103,6 +106,33 @@ func (c *globalClient) StopSubscribe(ctx context.Context, in *StopSubscribeReque
 	return out, nil
 }
 
+func (c *globalClient) GetConfig(ctx context.Context, in *GetConfigRequest, opts ...grpc.CallOption) (*GetConfigResponse, error) {
+	out := new(GetConfigResponse)
+	err := c.cc.Invoke(ctx, "/m7s.Global/GetConfig", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *globalClient) GetFormily(ctx context.Context, in *GetConfigRequest, opts ...grpc.CallOption) (*GetConfigResponse, error) {
+	out := new(GetConfigResponse)
+	err := c.cc.Invoke(ctx, "/m7s.Global/GetFormily", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *globalClient) ModifyConfig(ctx context.Context, in *ModifyConfigRequest, opts ...grpc.CallOption) (*ModifyConfigResponse, error) {
+	out := new(ModifyConfigResponse)
+	err := c.cc.Invoke(ctx, "/m7s.Global/ModifyConfig", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // GlobalServer is the server API for Global service.
 // All implementations must embed UnimplementedGlobalServer
 // for forward compatibility
@@ -114,6 +144,9 @@ type GlobalServer interface {
 	StreamList(context.Context, *StreamListRequest) (*StreamListResponse, error)
 	StreamSnap(context.Context, *StreamSnapRequest) (*StreamSnapShot, error)
 	StopSubscribe(context.Context, *StopSubscribeRequest) (*StopSubscribeResponse, error)
+	GetConfig(context.Context, *GetConfigRequest) (*GetConfigResponse, error)
+	GetFormily(context.Context, *GetConfigRequest) (*GetConfigResponse, error)
+	ModifyConfig(context.Context, *ModifyConfigRequest) (*ModifyConfigResponse, error)
 	mustEmbedUnimplementedGlobalServer()
 }
 
@@ -141,6 +174,15 @@ func (UnimplementedGlobalServer) StreamSnap(context.Context, *StreamSnapRequest)
 }
 func (UnimplementedGlobalServer) StopSubscribe(context.Context, *StopSubscribeRequest) (*StopSubscribeResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StopSubscribe not implemented")
+}
+func (UnimplementedGlobalServer) GetConfig(context.Context, *GetConfigRequest) (*GetConfigResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetConfig not implemented")
+}
+func (UnimplementedGlobalServer) GetFormily(context.Context, *GetConfigRequest) (*GetConfigResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetFormily not implemented")
+}
+func (UnimplementedGlobalServer) ModifyConfig(context.Context, *ModifyConfigRequest) (*ModifyConfigResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ModifyConfig not implemented")
 }
 func (UnimplementedGlobalServer) mustEmbedUnimplementedGlobalServer() {}
 
@@ -281,6 +323,60 @@ func _Global_StopSubscribe_Handler(srv interface{}, ctx context.Context, dec fun
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Global_GetConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetConfigRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GlobalServer).GetConfig(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/m7s.Global/GetConfig",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GlobalServer).GetConfig(ctx, req.(*GetConfigRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Global_GetFormily_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetConfigRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GlobalServer).GetFormily(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/m7s.Global/GetFormily",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GlobalServer).GetFormily(ctx, req.(*GetConfigRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Global_ModifyConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ModifyConfigRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GlobalServer).ModifyConfig(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/m7s.Global/ModifyConfig",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GlobalServer).ModifyConfig(ctx, req.(*ModifyConfigRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Global_ServiceDesc is the grpc.ServiceDesc for Global service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -315,6 +411,18 @@ var Global_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "StopSubscribe",
 			Handler:    _Global_StopSubscribe_Handler,
+		},
+		{
+			MethodName: "GetConfig",
+			Handler:    _Global_GetConfig_Handler,
+		},
+		{
+			MethodName: "GetFormily",
+			Handler:    _Global_GetFormily_Handler,
+		},
+		{
+			MethodName: "ModifyConfig",
+			Handler:    _Global_ModifyConfig_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

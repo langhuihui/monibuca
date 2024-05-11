@@ -2,6 +2,7 @@ package m7s
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net"
 	"net/http"
@@ -14,8 +15,10 @@ import (
 	. "github.com/shirou/gopsutil/v3/net"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
+	"gopkg.in/yaml.v3"
 	"m7s.live/m7s/v5/pb"
 	"m7s.live/m7s/v5/pkg"
+	"m7s.live/m7s/v5/pkg/config"
 	"m7s.live/m7s/v5/pkg/util"
 )
 
@@ -74,13 +77,29 @@ func (s *Server) StopSubscribe(ctx context.Context, req *pb.StopSubscribeRequest
 		Success: err == nil,
 	}, err
 }
-
+// /api/stream/list
 func (s *Server) StreamList(_ context.Context, req *pb.StreamListRequest) (res *pb.StreamListResponse, err error) {
 	s.Call(func() {
 		var streams []*pb.StreamSummay
 		for _, publisher := range s.Streams.Items {
+			var tracks []string
+			var bps int32
+			if !publisher.VideoTrack.IsEmpty() {
+				bps += int32(publisher.VideoTrack.AVTrack.BPS)
+				tracks = append(tracks, publisher.VideoTrack.FourCC().String())
+			}
+			if !publisher.AudioTrack.IsEmpty() {
+				bps += int32(publisher.AudioTrack.AVTrack.BPS)
+				tracks = append(tracks, publisher.AudioTrack.FourCC().String())
+			}
 			streams = append(streams, &pb.StreamSummay{
 				Path: publisher.StreamPath,
+				State: int32(publisher.State),
+				StartTime: timestamppb.New(publisher.StartTime),
+				Subscribers: int32(len(publisher.Subscribers)),
+				Tracks: tracks,
+				Bps: bps,
+				Type: publisher.Plugin.Meta.Name,
 			})
 		}
 		res = &pb.StreamListResponse{List: streams, Total: int32(s.Streams.Length), PageNum: req.PageNum, PageSize: req.PageSize}
@@ -140,5 +159,83 @@ func (s *Server) Summary(context.Context, *emptypb.Empty) (res *pb.SummaryRespon
 		s.lastSummary = res
 		s.lastSummaryTime = time.Now()
 	})
+	return
+}
+
+// /api/config/json/{name}
+func (s *Server) api_Config_JSON_(rw http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	var conf *config.Config
+	if name == "global" {
+		conf = &s.Config
+	} else {
+		p, ok := s.Plugins.Get(name)
+		if !ok {
+			http.Error(rw, pkg.ErrNotFound.Error(), http.StatusNotFound)
+			return
+		}
+		conf = &p.Config
+	}
+	rw.Header().Set("Content-Type", "application/json")
+	err := json.NewEncoder(rw).Encode(conf.GetMap())
+	if err != nil {
+		http.Error(rw, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+func (s *Server) GetConfig(_ context.Context, req *pb.GetConfigRequest) (res *pb.GetConfigResponse, err error) {
+	res = &pb.GetConfigResponse{}
+	var conf *config.Config
+	if req.Name == "global" {
+		conf = &s.Config
+	} else {
+		p, ok := s.Plugins.Get(req.Name)
+		if !ok {
+			err = pkg.ErrNotFound
+			return
+		}
+		conf = &p.Config
+	}
+	var mm []byte
+	mm, err = yaml.Marshal(conf.File)
+	if err != nil {
+		return
+	}
+	res.File = string(mm)
+
+	mm, err = yaml.Marshal(conf.Modify)
+	if err != nil {
+		return
+	}
+	res.Modified = string(mm)
+
+	mm, err = yaml.Marshal(conf.GetMap())
+	if err != nil {
+		return
+	}
+	res.Merged = string(mm)
+	return
+}
+
+func (s *Server) ModifyConfig(_ context.Context, req *pb.ModifyConfigRequest) (res *pb.ModifyConfigResponse, err error) {
+	var conf *config.Config
+	if req.Name == "global" {
+		conf = &s.Config
+		defer s.SaveConfig()
+	} else {
+		p, ok := s.Plugins.Get(req.Name)
+		if !ok {
+			err = pkg.ErrNotFound
+			return
+		}
+		defer p.SaveConfig()
+		conf = &p.Config
+	}
+	var modified map[string]any
+	err = yaml.Unmarshal([]byte(req.Yaml), &modified)
+	if err != nil {
+		return
+	}
+	conf.ParseModifyFile(modified)
 	return
 }

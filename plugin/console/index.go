@@ -100,6 +100,10 @@ func (cfg *ConsolePlugin) OnInit() error {
 				go cfg.ReceiveRequest(s, conn)
 			}
 		}
+		if !cfg.IsStopped() {
+			<-time.After(time.Second)
+			cfg.OnInit()
+		}
 	}()
 	return err
 }

@@ -235,9 +235,9 @@ func (conf *WebRTCPlugin) Push_(w http.ResponseWriter, r *http.Request) {
 				if len(frame.Packets) == 0 || packet.Timestamp == frame.Packets[0].Timestamp {
 					frame.Packets = append(frame.Packets, &packet)
 				} else {
-					t := time.Now()
+					// t := time.Now()
 					publisher.WriteVideo(frame)
-					fmt.Println("write video", time.Since(t))
+					// fmt.Println("write video", time.Since(t))
 					frame = &mrtp.RTPVideo{}
 					frame.Packets = []*rtp.Packet{&packet}
 					frame.RTPCodecParameters = &codecP
