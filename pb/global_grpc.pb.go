@@ -28,7 +28,9 @@ type GlobalClient interface {
 	Shutdown(ctx context.Context, in *RequestWithId, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	Restart(ctx context.Context, in *RequestWithId, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	StreamList(ctx context.Context, in *StreamListRequest, opts ...grpc.CallOption) (*StreamListResponse, error)
-	StreamSnap(ctx context.Context, in *StreamSnapRequest, opts ...grpc.CallOption) (*StreamSnapShot, error)
+	StreamInfo(ctx context.Context, in *StreamSnapRequest, opts ...grpc.CallOption) (*StreamInfoResponse, error)
+	AudioTrackSnap(ctx context.Context, in *StreamSnapRequest, opts ...grpc.CallOption) (*AudioTrackSnapShotResponse, error)
+	VideoTrackSnap(ctx context.Context, in *StreamSnapRequest, opts ...grpc.CallOption) (*VideoTrackSnapShotResponse, error)
 	StopSubscribe(ctx context.Context, in *StopSubscribeRequest, opts ...grpc.CallOption) (*StopSubscribeResponse, error)
 	GetConfig(ctx context.Context, in *GetConfigRequest, opts ...grpc.CallOption) (*GetConfigResponse, error)
 	GetFormily(ctx context.Context, in *GetConfigRequest, opts ...grpc.CallOption) (*GetConfigResponse, error)
@@ -88,9 +90,27 @@ func (c *globalClient) StreamList(ctx context.Context, in *StreamListRequest, op
 	return out, nil
 }
 
-func (c *globalClient) StreamSnap(ctx context.Context, in *StreamSnapRequest, opts ...grpc.CallOption) (*StreamSnapShot, error) {
-	out := new(StreamSnapShot)
-	err := c.cc.Invoke(ctx, "/m7s.Global/StreamSnap", in, out, opts...)
+func (c *globalClient) StreamInfo(ctx context.Context, in *StreamSnapRequest, opts ...grpc.CallOption) (*StreamInfoResponse, error) {
+	out := new(StreamInfoResponse)
+	err := c.cc.Invoke(ctx, "/m7s.Global/StreamInfo", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *globalClient) AudioTrackSnap(ctx context.Context, in *StreamSnapRequest, opts ...grpc.CallOption) (*AudioTrackSnapShotResponse, error) {
+	out := new(AudioTrackSnapShotResponse)
+	err := c.cc.Invoke(ctx, "/m7s.Global/AudioTrackSnap", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *globalClient) VideoTrackSnap(ctx context.Context, in *StreamSnapRequest, opts ...grpc.CallOption) (*VideoTrackSnapShotResponse, error) {
+	out := new(VideoTrackSnapShotResponse)
+	err := c.cc.Invoke(ctx, "/m7s.Global/VideoTrackSnap", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -142,7 +162,9 @@ type GlobalServer interface {
 	Shutdown(context.Context, *RequestWithId) (*emptypb.Empty, error)
 	Restart(context.Context, *RequestWithId) (*emptypb.Empty, error)
 	StreamList(context.Context, *StreamListRequest) (*StreamListResponse, error)
-	StreamSnap(context.Context, *StreamSnapRequest) (*StreamSnapShot, error)
+	StreamInfo(context.Context, *StreamSnapRequest) (*StreamInfoResponse, error)
+	AudioTrackSnap(context.Context, *StreamSnapRequest) (*AudioTrackSnapShotResponse, error)
+	VideoTrackSnap(context.Context, *StreamSnapRequest) (*VideoTrackSnapShotResponse, error)
 	StopSubscribe(context.Context, *StopSubscribeRequest) (*StopSubscribeResponse, error)
 	GetConfig(context.Context, *GetConfigRequest) (*GetConfigResponse, error)
 	GetFormily(context.Context, *GetConfigRequest) (*GetConfigResponse, error)
@@ -169,8 +191,14 @@ func (UnimplementedGlobalServer) Restart(context.Context, *RequestWithId) (*empt
 func (UnimplementedGlobalServer) StreamList(context.Context, *StreamListRequest) (*StreamListResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StreamList not implemented")
 }
-func (UnimplementedGlobalServer) StreamSnap(context.Context, *StreamSnapRequest) (*StreamSnapShot, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method StreamSnap not implemented")
+func (UnimplementedGlobalServer) StreamInfo(context.Context, *StreamSnapRequest) (*StreamInfoResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StreamInfo not implemented")
+}
+func (UnimplementedGlobalServer) AudioTrackSnap(context.Context, *StreamSnapRequest) (*AudioTrackSnapShotResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AudioTrackSnap not implemented")
+}
+func (UnimplementedGlobalServer) VideoTrackSnap(context.Context, *StreamSnapRequest) (*VideoTrackSnapShotResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method VideoTrackSnap not implemented")
 }
 func (UnimplementedGlobalServer) StopSubscribe(context.Context, *StopSubscribeRequest) (*StopSubscribeResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StopSubscribe not implemented")
@@ -287,20 +315,56 @@ func _Global_StreamList_Handler(srv interface{}, ctx context.Context, dec func(i
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Global_StreamSnap_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Global_StreamInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(StreamSnapRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(GlobalServer).StreamSnap(ctx, in)
+		return srv.(GlobalServer).StreamInfo(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/m7s.Global/StreamSnap",
+		FullMethod: "/m7s.Global/StreamInfo",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(GlobalServer).StreamSnap(ctx, req.(*StreamSnapRequest))
+		return srv.(GlobalServer).StreamInfo(ctx, req.(*StreamSnapRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Global_AudioTrackSnap_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StreamSnapRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GlobalServer).AudioTrackSnap(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/m7s.Global/AudioTrackSnap",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GlobalServer).AudioTrackSnap(ctx, req.(*StreamSnapRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Global_VideoTrackSnap_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StreamSnapRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GlobalServer).VideoTrackSnap(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/m7s.Global/VideoTrackSnap",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GlobalServer).VideoTrackSnap(ctx, req.(*StreamSnapRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -405,8 +469,16 @@ var Global_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Global_StreamList_Handler,
 		},
 		{
-			MethodName: "StreamSnap",
-			Handler:    _Global_StreamSnap_Handler,
+			MethodName: "StreamInfo",
+			Handler:    _Global_StreamInfo_Handler,
+		},
+		{
+			MethodName: "AudioTrackSnap",
+			Handler:    _Global_AudioTrackSnap_Handler,
+		},
+		{
+			MethodName: "VideoTrackSnap",
+			Handler:    _Global_VideoTrackSnap_Handler,
 		},
 		{
 			MethodName: "StopSubscribe",

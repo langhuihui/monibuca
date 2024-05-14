@@ -119,6 +119,14 @@ func (*H264Ctx) FourCC() FourCC {
 	return FourCC_H264
 }
 
+func (h264 *H264Ctx) GetWidth() int {
+	return int(h264.Width)
+}
+
+func (h264 *H264Ctx) GetHeight() int {
+	return int(h264.Height)
+}
+
 func (h264 *H264Ctx) GetH264Ctx() *H264Ctx {
 	return h264
 }

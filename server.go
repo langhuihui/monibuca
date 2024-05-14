@@ -74,6 +74,7 @@ func NewServer() (s *Server) {
 	s.server = s
 	s.Meta = &serverMeta
 	s.LogHandler.Add(console.NewHandler(os.Stdout, nil))
+	s.LogHandler.SetLevel(slog.LevelInfo)
 	s.Logger = slog.New(&s.LogHandler).With("server", s.ID)
 	Servers[s.ID] = s
 	return
@@ -98,6 +99,7 @@ func (s *Server) reset() {
 	server.config.HTTP.ListenAddrTLS = ":8443"
 	server.config.HTTP.ListenAddr = ":8080"
 	server.LogHandler = MultiLogHandler{}
+	server.LogHandler.SetLevel(slog.LevelInfo)
 	server.LogHandler.Add(console.NewHandler(os.Stdout, nil))
 	// server.Logger = slog.New(&server.LogHandler).With("server", s.ID)
 	*s = server

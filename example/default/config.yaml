@@ -1,19 +1,19 @@
 global:
-  loglevel: debug
+  loglevel: trace
   tcp:
     listenaddr: :50051
 console:
   secret: de2c0bb9fd47684adc07a426e139239b
 logrotate:
-  level: info
+  level: trace
 webrtc:
   publish:
     pubaudio: false
 rtmp:
   chunksize: 2048
   publish:
-    idletimeout: 10s
-    closedelaytimeout: 4s
+    # idletimeout: 10s
+    # closedelaytimeout: 4s
   subscribe:
     # submode: 1
     # subaudio: false

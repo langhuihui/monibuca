@@ -32,9 +32,19 @@ service Global {
       get: "/api/stream/list"
     };
   }
-  rpc StreamSnap (StreamSnapRequest) returns (StreamSnapShot) {
+  rpc StreamInfo (StreamSnapRequest) returns (StreamInfoResponse) {
     option (google.api.http) = {
-      get: "/api/stream/snap/{streamPath=**}"
+      get: "/api/stream/info/{streamPath=**}"
+    };
+  }
+  rpc AudioTrackSnap (StreamSnapRequest) returns (AudioTrackSnapShotResponse) {
+    option (google.api.http) = {
+      get: "/api/audiotrack/snap/{streamPath=**}"
+    };
+  }
+  rpc VideoTrackSnap (StreamSnapRequest) returns (VideoTrackSnapShotResponse) {
+    option (google.api.http) = {
+      get: "/api/videotrack/snap/{streamPath=**}"
     };
   }
   rpc StopSubscribe (StopSubscribeRequest) returns (StopSubscribeResponse) {
@@ -120,10 +130,11 @@ message StreamSummay {
   string path = 1;
   int32 state = 2;
   int32 subscribers = 3;
-  repeated string tracks = 4;
-  google.protobuf.Timestamp startTime = 5;
-  string type = 6;
-  int32 bps = 7;
+  string audioTrack = 4;
+  string videoTrack = 5;
+  google.protobuf.Timestamp startTime = 6;
+  string type = 7;
+  int32 bps = 8;
 }
 
 message SysInfoResponse {
@@ -148,6 +159,10 @@ message StreamSnapRequest {
   string streamPath = 1;
 }
 
+message StreamInfoResponse {
+
+}
+
 message Wrap {
   uint32 timestamp = 1;
   uint32 size = 2;
@@ -157,14 +172,23 @@ message Wrap {
 message TrackSnapShot {
   uint32 sequence = 1;
   uint32 timestamp = 2;
-  uint64 writeTime = 3;
-  bool canRead = 4;
-  Wrap wrap = 5;
+  google.protobuf.Timestamp writeTime = 3;
+  bool keyFrame = 4;
+  repeated Wrap wrap = 5;
 }
 
-message StreamSnapShot {
-  repeated TrackSnapShot videoTrack = 1;
-  repeated TrackSnapShot audioTrack = 2;
+message AudioTrackSnapShotResponse {
+  repeated TrackSnapShot ring = 1;
+  uint32 sampleRate = 2;
+  uint32 channels = 3;
+  string info = 4;
+}
+
+message VideoTrackSnapShotResponse {
+  repeated TrackSnapShot ring = 1;
+  uint32 width = 2;
+  uint32 height = 3;
+  string info = 4;
 }
 
 message StopSubscribeRequest {

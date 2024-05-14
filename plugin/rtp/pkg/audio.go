@@ -18,8 +18,11 @@ type RTPData struct {
 	util.RecyclableMemory
 }
 
-func (r *RTPData) String() string {
-	return fmt.Sprintf("RTPData{Packets: %d, Codec: %s}", len(r.Packets), r.MimeType)
+func (r *RTPData) String() (s string) {
+	for _, p := range r.Packets {
+		s += fmt.Sprintf("t: %d, s: %d, p: %d\n", p.Timestamp, p.SequenceNumber, len(p.Payload))
+	}
+	return
 }
 
 func (r *RTPData) GetTimestamp() time.Duration {
@@ -53,6 +56,10 @@ type (
 		GetRTPCodecCapability() webrtc.RTPCodecCapability
 	}
 )
+
+func (r *RTPCtx) GetInfo() string {
+	return r.GetRTPCodecCapability().SDPFmtpLine
+}
 
 func (r *RTPCtx) GetRTPCodecCapability() webrtc.RTPCodecCapability {
 	return r.RTPCodecCapability

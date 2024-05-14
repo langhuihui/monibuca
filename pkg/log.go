@@ -10,7 +10,7 @@ var _ slog.Handler = (*MultiLogHandler)(nil)
 
 type MultiLogHandler struct {
 	handlers []slog.Handler
-	level    slog.Level
+	level    *slog.Level
 }
 
 func (m *MultiLogHandler) Add(h ...slog.Handler) {
@@ -24,12 +24,16 @@ func (m *MultiLogHandler) Remove(h slog.Handler) {
 }
 
 func (m *MultiLogHandler) SetLevel(level slog.Level) {
-	m.level = level
+	if m.level == nil {
+		m.level = &level
+	} else {
+		*m.level = level
+	}
 }
 
 // Enabled implements slog.Handler.
 func (m *MultiLogHandler) Enabled(_ context.Context, l slog.Level) bool {
-	return l >= m.level
+	return l >= *m.level
 }
 
 // Handle implements slog.Handler.

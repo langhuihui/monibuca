@@ -5,7 +5,6 @@ import (
 	"sync"
 	"time"
 
-	"m7s.live/m7s/v5/pb"
 	. "m7s.live/m7s/v5/pkg"
 	"m7s.live/m7s/v5/pkg/config"
 	"m7s.live/m7s/v5/pkg/util"
@@ -159,8 +158,6 @@ func (p *Publisher) writeAV(t *AVTrack, data IAVFrame) {
 		data := frame.Wraps[0].String()
 		p.Trace("write", "seq", frame.Sequence, "ts", frame.Timestamp, "codec", codec, "size", bytesIn, "data", data)
 	}
-	t.Step()
-	p.speedControl(p.Publish.Speed, p.lastTs)
 }
 
 func (p *Publisher) WriteVideo(data IAVFrame) (err error) {
@@ -186,6 +183,7 @@ func (p *Publisher) WriteVideo(data IAVFrame) (err error) {
 		return err
 	}
 	t.Value.Raw = raw
+	t.Value.IDR = isIDR
 	idr, hidr := t.IDRing.Load(), t.HistoryRing.Load()
 	if isIDR {
 		if idr != nil {
@@ -217,17 +215,18 @@ func (p *Publisher) WriteVideo(data IAVFrame) (err error) {
 	}
 	p.writeAV(t, data)
 	if p.VideoTrack.Length > 1 && !p.VideoTrack.AVTrack.Ready.Pendding() {
-		if t.LastValue.Raw == nil {
-			t.LastValue.Raw, err = t.LastValue.Wraps[0].ToRaw(t.ICodecCtx)
+		if t.Value.Raw == nil {
+			t.Value.Raw, err = t.Value.Wraps[0].ToRaw(t.ICodecCtx)
 			if err != nil {
 				t.Error("to raw", "err", err)
 				return err
 			}
 		}
+		var toFrame IAVFrame
 		for i, track := range p.VideoTrack.Items[1:] {
 			if track.ICodecCtx == nil {
 				err = (reflect.New(track.FrameType.Elem()).Interface().(IAVFrame)).DecodeConfig(track, t.ICodecCtx)
-				for rf := idr; rf != t.Ring; rf = rf.Next() {
+				for rf := idr; rf != t.Next(); rf = rf.Next() {
 					if i == 0 && rf.Value.Raw == nil {
 						rf.Value.Raw, err = rf.Value.Wraps[0].ToRaw(t.ICodecCtx)
 						if err != nil {
@@ -235,7 +234,12 @@ func (p *Publisher) WriteVideo(data IAVFrame) (err error) {
 							return err
 						}
 					}
-					p.writeSubAV(track, &rf.Value)
+
+					if toFrame, err = track.CreateFrame(&rf.Value); err != nil {
+						track.Error("from raw", "err", err)
+						return
+					}
+					rf.Value.Wraps = append(rf.Value.Wraps, toFrame)
 				}
 				track.Ready.Fulfill(err)
 				if err != nil {
@@ -243,26 +247,16 @@ func (p *Publisher) WriteVideo(data IAVFrame) (err error) {
 					return
 				}
 			} else {
-				p.writeSubAV(track, t.LastValue)
+				if toFrame, err = track.CreateFrame(&t.Value); err != nil {
+					track.Error("from raw", "err", err)
+					return
+				}
+				t.Value.Wraps = append(t.Value.Wraps, toFrame)
 			}
 		}
 	}
-	return
-}
-
-func (p *Publisher) writeSubAV(to *AVTrack, frame *AVFrame) (err error) {
-	var toFrame IAVFrame
-	if toFrame, err = to.CreateFrame(frame); err != nil {
-		to.Error("from raw", "err", err)
-		return
-	}
-	to.Value.Wraps = append(to.Value.Wraps, toFrame)
-	to.Value.IDR = frame.IDR
-	to.Value.Timestamp = frame.Timestamp
-	if p.Enabled(p, TraceLevel) {
-		p.Trace("write", "seq", to.Value.Sequence, "ts", to.Value.Timestamp, "codec", to.FourCC().String(), "size", toFrame.GetSize(), "data", toFrame.String())
-	}
-	to.Step()
+	t.Step()
+	p.speedControl(p.Publish.Speed, p.lastTs)
 	return
 }
 
@@ -289,6 +283,8 @@ func (p *Publisher) WriteAudio(data IAVFrame) (err error) {
 		return
 	}
 	p.writeAV(t, data)
+	t.Step()
+	p.speedControl(p.Publish.Speed, p.lastTs)
 	return
 }
 
@@ -333,43 +329,4 @@ func (p *Publisher) TakeOver(old *Publisher) {
 	// for _, track := range p.TransTrack {
 	// 	track.ICodecCtx = nil
 	// }
-}
-
-func (p *Publisher) SnapShot() (ret *pb.StreamSnapShot) {
-	ret = &pb.StreamSnapShot{}
-	if !p.VideoTrack.IsEmpty() {
-		p.VideoTrack.Ring.Do(func(v *AVFrame) {
-			var snap pb.TrackSnapShot
-			// snap.CanRead = v.CanRead
-			snap.Sequence = v.Sequence
-			snap.Timestamp = uint32(v.Timestamp)
-			snap.WriteTime = uint64(v.WriteTime.UnixNano())
-			// if v.Wrap != nil {
-			// 	snap.Wrap = &pb.Wrap{
-			// 		Timestamp: uint32(v.Wrap.GetTimestamp()),
-			// 		Size:      uint32(v.Wrap.GetSize()),
-			// 		Data:      v.Wrap.String(),
-			// 	}
-			// }
-			ret.VideoTrack = append(ret.VideoTrack, &snap)
-		})
-	}
-	if !p.AudioTrack.IsEmpty() {
-		p.AudioTrack.Ring.Do(func(v *AVFrame) {
-			var snap pb.TrackSnapShot
-			// snap.CanRead = v.CanRead
-			snap.Sequence = v.Sequence
-			snap.Timestamp = uint32(v.Timestamp)
-			snap.WriteTime = uint64(v.WriteTime.UnixNano())
-			// if v.Wrap != nil {
-			// 	snap.Wrap = &pb.Wrap{
-			// 		Timestamp: uint32(v.Wrap.GetTimestamp()),
-			// 		Size:      uint32(v.Wrap.GetSize()),
-			// 		Data:      v.Wrap.String(),
-			// 	}
-			// }
-			ret.AudioTrack = append(ret.AudioTrack, &snap)
-		})
-	}
-	return
 }

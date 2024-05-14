@@ -23,6 +23,7 @@ import (
 )
 
 var localIP string
+var empty = &emptypb.Empty{}
 
 func (s *Server) SysInfo(context.Context, *emptypb.Empty) (res *pb.SysInfoResponse, err error) {
 	if localIP == "" {
@@ -38,10 +39,55 @@ func (s *Server) SysInfo(context.Context, *emptypb.Empty) (res *pb.SysInfoRespon
 	return
 }
 
-func (s *Server) StreamSnap(ctx context.Context, req *pb.StreamSnapRequest) (res *pb.StreamSnapShot, err error) {
+func (s *Server) StreamInfo(ctx context.Context, req *pb.StreamSnapRequest) (res *pb.StreamInfoResponse, err error) {
+	// s.Call(func() {
+	// 	if pub, ok := s.Streams.Get(req.StreamPath); ok {
+	// 		res = &pb.StreamInfoResponse{
+	// 		}
+	// 	} else {
+	// 		err = pkg.ErrNotFound
+	// 	}
+	// })
+	return
+}
+
+func (s *Server) AudioTrackSnap(ctx context.Context, req *pb.StreamSnapRequest) (res *pb.AudioTrackSnapShotResponse, err error) {
+	// s.Call(func() {
+	// 	if pub, ok := s.Streams.Get(req.StreamPath); ok {
+	// 		res = pub.AudioSnapShot()
+	// 	} else {
+	// 		err = pkg.ErrNotFound
+	// 	}
+	// })
+	return
+}
+
+func (s *Server) VideoTrackSnap(ctx context.Context, req *pb.StreamSnapRequest) (res *pb.VideoTrackSnapShotResponse, err error) {
 	s.Call(func() {
 		if pub, ok := s.Streams.Get(req.StreamPath); ok {
-			res = pub.SnapShot()
+			res = &pb.VideoTrackSnapShotResponse{}
+			if !pub.VideoTrack.IsEmpty() {
+				vcc := pub.VideoTrack.AVTrack.ICodecCtx.(pkg.IVideoCodecCtx)
+				res.Width = uint32(vcc.GetWidth())
+				res.Height = uint32(vcc.GetHeight())
+				res.Info = pub.VideoTrack.GetInfo()
+				pub.VideoTrack.Ring.Next().Do(func(v *pkg.AVFrame) {
+					var snap pb.TrackSnapShot
+					snap.Sequence = v.Sequence
+					snap.Timestamp = uint32(v.Timestamp / time.Millisecond)
+					snap.WriteTime = timestamppb.New(v.WriteTime)
+					snap.Wrap = make([]*pb.Wrap, len(v.Wraps))
+					snap.KeyFrame = v.IDR
+					for i, wrap := range v.Wraps {
+						snap.Wrap[i] = &pb.Wrap{
+							Timestamp: uint32(wrap.GetTimestamp() / time.Millisecond),
+							Size:      uint32(wrap.GetSize()),
+							Data:      wrap.String(),
+						}
+					}
+					res.Ring = append(res.Ring, &snap)
+				})
+			}
 		} else {
 			err = pkg.ErrNotFound
 		}
@@ -53,7 +99,7 @@ func (s *Server) Restart(ctx context.Context, req *pb.RequestWithId) (res *empty
 	if Servers[req.Id] != nil {
 		Servers[req.Id].Stop(pkg.ErrRestart)
 	}
-	return &emptypb.Empty{}, err
+	return empty, err
 }
 
 func (s *Server) Shutdown(ctx context.Context, req *pb.RequestWithId) (res *emptypb.Empty, err error) {
@@ -62,7 +108,7 @@ func (s *Server) Shutdown(ctx context.Context, req *pb.RequestWithId) (res *empt
 	} else {
 		return nil, pkg.ErrNotFound
 	}
-	return &emptypb.Empty{}, err
+	return empty, err
 }
 
 func (s *Server) StopSubscribe(ctx context.Context, req *pb.StopSubscribeRequest) (res *pb.StopSubscribeResponse, err error) {
@@ -77,29 +123,31 @@ func (s *Server) StopSubscribe(ctx context.Context, req *pb.StopSubscribeRequest
 		Success: err == nil,
 	}, err
 }
+
 // /api/stream/list
 func (s *Server) StreamList(_ context.Context, req *pb.StreamListRequest) (res *pb.StreamListResponse, err error) {
 	s.Call(func() {
 		var streams []*pb.StreamSummay
 		for _, publisher := range s.Streams.Items {
-			var tracks []string
+			var audioTrack, videoTrack string
 			var bps int32
 			if !publisher.VideoTrack.IsEmpty() {
 				bps += int32(publisher.VideoTrack.AVTrack.BPS)
-				tracks = append(tracks, publisher.VideoTrack.FourCC().String())
+				videoTrack = publisher.VideoTrack.FourCC().String()
 			}
 			if !publisher.AudioTrack.IsEmpty() {
 				bps += int32(publisher.AudioTrack.AVTrack.BPS)
-				tracks = append(tracks, publisher.AudioTrack.FourCC().String())
+				audioTrack = publisher.AudioTrack.FourCC().String()
 			}
 			streams = append(streams, &pb.StreamSummay{
-				Path: publisher.StreamPath,
-				State: int32(publisher.State),
-				StartTime: timestamppb.New(publisher.StartTime),
+				Path:        publisher.StreamPath,
+				State:       int32(publisher.State),
+				StartTime:   timestamppb.New(publisher.StartTime),
 				Subscribers: int32(len(publisher.Subscribers)),
-				Tracks: tracks,
-				Bps: bps,
-				Type: publisher.Plugin.Meta.Name,
+				AudioTrack:  audioTrack,
+				VideoTrack:  videoTrack,
+				Bps:         bps,
+				Type:        publisher.Plugin.Meta.Name,
 			})
 		}
 		res = &pb.StreamListResponse{List: streams, Total: int32(s.Streams.Length), PageNum: req.PageNum, PageSize: req.PageSize}

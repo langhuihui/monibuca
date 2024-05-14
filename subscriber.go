@@ -3,7 +3,9 @@ package m7s
 import (
 	"context"
 	"io"
+	"net"
 	"net/url"
+	"os"
 	"reflect"
 	"strconv"
 	"time"
@@ -13,9 +15,15 @@ import (
 	"m7s.live/m7s/v5/pkg/util"
 )
 
+type Owner struct {
+	Conn net.Conn
+	File *os.File
+}
+
 type PubSubBase struct {
 	Unit
 	ID           int
+	Owner        `json:"-" yaml:"-"`
 	Plugin       *Plugin `json:"-" yaml:"-"`
 	StreamPath   string
 	Args         url.Values
@@ -34,6 +42,12 @@ func (ps *PubSubBase) Init(p *Plugin, streamPath string, options ...any) {
 		switch v := option.(type) {
 		case context.Context:
 			ctx = v
+		case net.Conn:
+			ps.Conn = v
+			ps.Closer = v
+		case *os.File:
+			ps.File = v
+			ps.Closer = v
 		case io.Closer:
 			ps.Closer = v
 		}

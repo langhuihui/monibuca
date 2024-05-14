@@ -97,6 +97,10 @@ type (
 	}
 )
 
+func (h265 *H265Ctx) GetWidth() int {
+	return int(h265.Width)
+}
+
 func (*H265Ctx) FourCC() FourCC {
 	return FourCC_H265
 }

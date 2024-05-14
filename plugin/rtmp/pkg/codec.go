@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 
 	"github.com/cnotch/ipchub/av/codec/hevc"
@@ -198,16 +199,8 @@ func (p *AVCDecoderConfigurationRecord) Marshal(b []byte) (n int) {
 
 var ErrDecconfInvalid = errors.New("decode error")
 
-func (ctx *H264Ctx) GetSPSInfo() codec.SPSInfo {
-	return ctx.SPSInfo
-}
-
-func (ctx *H264Ctx) GetSPS() [][]byte {
-	return ctx.SPS
-}
-
-func (ctx *H264Ctx) GetPPS() [][]byte {
-	return ctx.PPS
+func (ctx *H264Ctx) GetInfo() string {
+	return fmt.Sprintf("sps: % 02X,pps: % 02X", ctx.SPS[0], ctx.PPS[0])
 }
 
 func (ctx *H264Ctx) Unmarshal(b *util.Buffers) (err error) {
@@ -272,20 +265,11 @@ func ParseHevcSPS(data []byte) (self codec.SPSInfo, err error) {
 var SamplingFrequencies = [...]int{96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350, 0, 0, 0}
 var RTMP_AVC_HEAD = []byte{0x17, 0x00, 0x00, 0x00, 0x00, 0x01, 0x42, 0x00, 0x1E, 0xFF}
 
-func (ctx *H264Ctx) GetWidth() int {
-	return int(ctx.SPSInfo.Width)
-}
-
-func (ctx *H264Ctx) GetHeight() int {
-	return int(ctx.SPSInfo.Height)
-}
-
 var ErrHevc = errors.New("hevc parse config error")
 
-func (ctx *H265Ctx) GetVPS() [][]byte {
-	return ctx.VPS
+func (ctx *H265Ctx) GetInfo() string {
+	return fmt.Sprintf("sps: % 02X,pps: % 02X,vps: % 02X", ctx.SPS[0], ctx.PPS[0], ctx.VPS[0])
 }
-
 func (ctx *H265Ctx) Unmarshal(b *util.Buffers) (err error) {
 	if b.Length < 23 {
 		err = errors.New("not enough len")
@@ -722,6 +706,10 @@ var (
 	ErrNonZeroReservedBits = errors.New("non-zero reserved bits found in AV1CodecConfigurationRecord")
 )
 
+func (p *AV1Ctx) GetInfo() string {
+	return fmt.Sprintf("% 02X", p.ConfigOBUs)
+}
+
 func (p *AV1Ctx) Unmarshal(data *util.Buffers) (err error) {
 	if data.Length < 4 {
 		err = io.ErrShortWrite
@@ -782,4 +770,16 @@ func (p *AV1Ctx) Unmarshal(data *util.Buffers) (err error) {
 		p.ConfigOBUs, err = data.ReadBytes(data.Length)
 	}
 	return nil
+}
+
+func (PCMACtx) GetInfo() string {
+	return "pcma"
+}
+
+func (PCMUCtx) GetInfo() string {
+	return "pcmu"
+}
+
+func (ctx *AACCtx) GetInfo() string {
+	return fmt.Sprintf("AudioObjectType: %d, SamplingFrequencyIndex: %d, ChannelConfiguration: %d, FrameLengthFlag: %d, DependsOnCoreCoder: %d, ExtensionFlag: %d", ctx.AudioObjectType, ctx.SamplingFrequencyIndex, ctx.ChannelConfiguration, ctx.FrameLengthFlag, ctx.DependsOnCoreCoder, ctx.ExtensionFlag)
 }

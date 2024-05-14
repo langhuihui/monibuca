@@ -25,6 +25,14 @@ func (ctx *AV1Ctx) GetAV1Ctx() *AV1Ctx {
 	return ctx
 }
 
+func (ctx *AV1Ctx) GetWidth() int {
+	return 0
+}
+
+func (ctx *AV1Ctx) GetHeight() int {
+	return 0
+}
+
 func (*AV1Ctx) FourCC() FourCC {
 	return FourCC_AV1
 }

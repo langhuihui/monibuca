@@ -14,6 +14,7 @@ type (
 	ICodecCtx interface {
 		CreateFrame(*AVFrame) (IAVFrame, error)
 		FourCC() codec.FourCC
+		GetInfo() string
 	}
 	IAudioCodecCtx interface {
 		ICodecCtx
@@ -68,6 +69,7 @@ func (frame *AVFrame) Reset() {
 		wrap.Recycle()
 		wrap = nil
 	}
+	frame.Wraps = frame.Wraps[:0]
 }
 
 func (df *DataFrame) StartWrite() bool {

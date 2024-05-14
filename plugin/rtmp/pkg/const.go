@@ -30,14 +30,15 @@ func (avcc *RTMPData) MarshalJSON() ([]byte, error) {
 }
 
 func (avcc *RTMPData) String() string {
-	return fmt.Sprintf("% 02X", avcc.Buffers.Buffers[0][:5])
+	reader := avcc.Buffers
+	first10 := avcc.Malloc(10)
+	reader.ReadBytesTo(first10)
+	defer avcc.Free(first10)
+	return fmt.Sprintf("%d % 02X", avcc.Timestamp, first10)
 }
 
 func (avcc *RTMPData) GetTimestamp() time.Duration {
 	return time.Duration(avcc.Timestamp) * time.Millisecond
-}
-func (avcc *RTMPData) IsIDR() bool {
-	return false
 }
 
 func (avcc *RTMPData) WrapAudio() *RTMPAudio {

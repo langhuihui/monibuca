@@ -34,7 +34,12 @@ type (
 	}
 )
 
-var _ IAVFrame = (*RTPVideo)(nil)
+var (
+	_ IAVFrame       = (*RTPVideo)(nil)
+	_ IVideoCodecCtx = (*RTPH264Ctx)(nil)
+	_ IVideoCodecCtx = (*RTPH265Ctx)(nil)
+	_ IVideoCodecCtx = (*RTPAV1Ctx)(nil)
+)
 
 func (r *RTPVideo) Parse(t *AVTrack) (isIDR, isSeq bool, raw any, err error) {
 	switch r.MimeType {
