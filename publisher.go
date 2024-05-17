@@ -23,6 +23,7 @@ type SpeedControl struct {
 	speed          float64
 	beginTime      time.Time
 	beginTimestamp time.Duration
+	Delta          time.Duration
 }
 
 func (s *SpeedControl) speedControl(speed float64, ts time.Duration) {
@@ -32,15 +33,21 @@ func (s *SpeedControl) speedControl(speed float64, ts time.Duration) {
 		s.beginTimestamp = ts
 	} else {
 		elapsed := time.Since(s.beginTime)
+		if speed == 0 {
+			s.Delta = ts - elapsed
+			return
+		}
 		should := time.Duration(float64(ts) / speed)
-		if needSleep := should - elapsed; needSleep > time.Second {
-			time.Sleep(needSleep)
+		s.Delta = should - elapsed
+		if s.Delta > time.Second {
+			time.Sleep(s.Delta)
 		}
 	}
 }
 
 type AVTracks struct {
 	*AVTrack
+	SpeedControl
 	util.Collection[reflect.Type, *AVTrack]
 }
 
@@ -59,7 +66,6 @@ type Publisher struct {
 	PubSubBase
 	sync.RWMutex `json:"-" yaml:"-"`
 	config.Publish
-	SpeedControl
 	State       PublisherState
 	VideoTrack  AVTracks
 	AudioTrack  AVTracks
@@ -100,9 +106,11 @@ func (p *Publisher) checkTimeout() (err error) {
 	default:
 		if p.PublishTimeout > 0 {
 			if !p.VideoTrack.IsEmpty() && !p.VideoTrack.LastValue.WriteTime.IsZero() && time.Since(p.VideoTrack.LastValue.WriteTime) > p.PublishTimeout {
+				p.Error("video timeout", "writeTime", p.VideoTrack.LastValue.WriteTime)
 				err = ErrPublishTimeout
 			}
 			if !p.AudioTrack.IsEmpty() && !p.AudioTrack.LastValue.WriteTime.IsZero() && time.Since(p.AudioTrack.LastValue.WriteTime) > p.PublishTimeout {
+				p.Error("audio timeout", "writeTime", p.AudioTrack.LastValue.WriteTime)
 				err = ErrPublishTimeout
 			}
 		}
@@ -156,7 +164,7 @@ func (p *Publisher) writeAV(t *AVTrack, data IAVFrame) {
 	if p.Enabled(p, TraceLevel) {
 		codec := t.FourCC().String()
 		data := frame.Wraps[0].String()
-		p.Trace("write", "seq", frame.Sequence, "ts", frame.Timestamp, "codec", codec, "size", bytesIn, "data", data)
+		p.Trace("write", "seq", frame.Sequence, "ts", uint32(frame.Timestamp/time.Millisecond), "codec", codec, "size", bytesIn, "data", data)
 	}
 }
 
@@ -177,7 +185,9 @@ func (p *Publisher) WriteVideo(data IAVFrame) (err error) {
 		}
 		p.Unlock()
 	}
+	oldCodecCtx := t.ICodecCtx
 	isIDR, isSeq, raw, err := data.Parse(t)
+	codecCtxChanged := oldCodecCtx != t.ICodecCtx
 	if err != nil || (isSeq && !isIDR) {
 		p.Error("parse", "err", err)
 		return err
@@ -189,7 +199,7 @@ func (p *Publisher) WriteVideo(data IAVFrame) (err error) {
 		if idr != nil {
 			p.GOP = int(t.Value.Sequence - idr.Value.Sequence)
 			if hidr == nil {
-				if l := t.Size - p.GOP; l > 12 && t.Size > 100 {
+				if l := t.Size - p.GOP; l > 50 {
 					t.Debug("resize", "gop", p.GOP, "before", t.Size, "after", t.Size-5)
 					t.Reduce(5) //缩小缓冲环节省内存
 				}
@@ -226,7 +236,11 @@ func (p *Publisher) WriteVideo(data IAVFrame) (err error) {
 		for i, track := range p.VideoTrack.Items[1:] {
 			if track.ICodecCtx == nil {
 				err = (reflect.New(track.FrameType.Elem()).Interface().(IAVFrame)).DecodeConfig(track, t.ICodecCtx)
-				for rf := idr; rf != t.Next(); rf = rf.Next() {
+				if err != nil {
+					track.Error("DecodeConfig", "err", err)
+					return
+				}
+				for rf := idr; rf != t.Ring; rf = rf.Next() {
 					if i == 0 && rf.Value.Raw == nil {
 						rf.Value.Raw, err = rf.Value.Wraps[0].ToRaw(t.ICodecCtx)
 						if err != nil {
@@ -234,29 +248,26 @@ func (p *Publisher) WriteVideo(data IAVFrame) (err error) {
 							return err
 						}
 					}
-
 					if toFrame, err = track.CreateFrame(&rf.Value); err != nil {
 						track.Error("from raw", "err", err)
 						return
 					}
 					rf.Value.Wraps = append(rf.Value.Wraps, toFrame)
 				}
-				track.Ready.Fulfill(err)
-				if err != nil {
-					track.Error("DecodeConfig", "err", err)
-					return
-				}
-			} else {
-				if toFrame, err = track.CreateFrame(&t.Value); err != nil {
-					track.Error("from raw", "err", err)
-					return
-				}
-				t.Value.Wraps = append(t.Value.Wraps, toFrame)
+				defer track.Ready.Fulfill(err)
 			}
+			if toFrame, err = track.CreateFrame(&t.Value); err != nil {
+				track.Error("from raw", "err", err)
+				return
+			}
+			if codecCtxChanged {
+				toFrame.DecodeConfig(track, t.ICodecCtx)
+			}
+			t.Value.Wraps = append(t.Value.Wraps, toFrame)
 		}
 	}
 	t.Step()
-	p.speedControl(p.Publish.Speed, p.lastTs)
+	p.VideoTrack.speedControl(p.Speed, p.lastTs)
 	return
 }
 
@@ -284,7 +295,7 @@ func (p *Publisher) WriteAudio(data IAVFrame) (err error) {
 	}
 	p.writeAV(t, data)
 	t.Step()
-	p.speedControl(p.Publish.Speed, p.lastTs)
+	p.AudioTrack.speedControl(p.Publish.Speed, p.lastTs)
 	return
 }
 

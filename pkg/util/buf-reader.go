@@ -29,7 +29,7 @@ func NewBufReader(reader io.Reader) (r *BufReader) {
 }
 
 func (r *BufReader) eat() error {
-	buf := r.buf.Malloc(r.BufLen)
+	buf := r.buf.NextN(r.BufLen)
 	if n, err := r.reader.Read(buf); err != nil {
 		return err
 	} else if n < r.BufLen {

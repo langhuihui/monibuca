@@ -91,6 +91,9 @@ func NewScalableMemoryAllocator(size int) (ret *ScalableMemoryAllocator) {
 }
 
 func (sma *ScalableMemoryAllocator) Malloc(size int) (memory []byte) {
+	if sma == nil {
+		return make([]byte, size)
+	}
 	memory, _, _, _ = sma.Malloc2(size)
 	return memory
 }
@@ -112,6 +115,9 @@ func (sma *ScalableMemoryAllocator) GetScalableMemoryAllocator() *ScalableMemory
 	return sma
 }
 func (sma *ScalableMemoryAllocator) Free(mem []byte) bool {
+	if sma == nil {
+		return false
+	}
 	ptr := uintptr(unsafe.Pointer(&mem[:1][0]))
 	for _, child := range *sma {
 		if start := int(int64(ptr) - child.start); child.Free2(start, start+len(mem)) {
@@ -144,6 +150,20 @@ func (r *RecyclableMemory) Malloc(size int) (memory []byte) {
 	return ret
 }
 
+func (r *RecyclableMemory) Pop() []int {
+	l := len(r.mem)
+	if l == 0 {
+		return nil
+	}
+	ret := r.mem[l-3:]
+	r.mem = r.mem[:l-3]
+	return ret
+}
+
+func (r *RecyclableMemory) Push(args ...int) {
+	r.mem = append(r.mem, args...)
+}
+
 func (r *RecyclableMemory) Recycle() {
 	for i := 0; i < len(r.mem); i += 3 {
 		r.Free2(r.mem[i], r.mem[i+1], r.mem[i+2])
@@ -157,6 +177,9 @@ func (r *RecyclableMemory) RecycleBack(n int) {
 	start := *end - n
 	r.Free2(r.mem[l-3], start, *end)
 	*end = start
+	if start == r.mem[l-2] {
+		r.mem = r.mem[:l-3]
+	}
 }
 
 type RecyclableBuffers struct {
@@ -164,7 +187,7 @@ type RecyclableBuffers struct {
 	Buffers
 }
 
-func (r *RecyclableBuffers) Malloc(size int) (memory []byte) {
+func (r *RecyclableBuffers) NextN(size int) (memory []byte) {
 	memory = r.ScalableMemoryAllocator.Malloc(size)
 	r.Buffers.ReadFromBytes(memory)
 	return

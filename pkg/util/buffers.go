@@ -190,6 +190,11 @@ func (buffers *Buffers) WriteTo(w io.Writer) (n int64, err error) {
 	return buf.WriteTo(w)
 }
 
+func (buffers *Buffers) ReadN(n int) (r net.Buffers, actual int) {
+	actual = buffers.WriteNTo(n, &r)
+	return
+}
+
 func (buffers *Buffers) WriteNTo(n int, result *net.Buffers) (actual int) {
 	for actual = n; buffers.Length > 0 && n > 0; buffers.skipBuf() {
 		if buffers.curBufLen > n {

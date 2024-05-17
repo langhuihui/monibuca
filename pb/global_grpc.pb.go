@@ -29,12 +29,13 @@ type GlobalClient interface {
 	Restart(ctx context.Context, in *RequestWithId, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	StreamList(ctx context.Context, in *StreamListRequest, opts ...grpc.CallOption) (*StreamListResponse, error)
 	StreamInfo(ctx context.Context, in *StreamSnapRequest, opts ...grpc.CallOption) (*StreamInfoResponse, error)
-	AudioTrackSnap(ctx context.Context, in *StreamSnapRequest, opts ...grpc.CallOption) (*AudioTrackSnapShotResponse, error)
-	VideoTrackSnap(ctx context.Context, in *StreamSnapRequest, opts ...grpc.CallOption) (*VideoTrackSnapShotResponse, error)
-	StopSubscribe(ctx context.Context, in *StopSubscribeRequest, opts ...grpc.CallOption) (*StopSubscribeResponse, error)
+	GetSubscribers(ctx context.Context, in *SubscribersRequest, opts ...grpc.CallOption) (*SubscribersResponse, error)
+	AudioTrackSnap(ctx context.Context, in *StreamSnapRequest, opts ...grpc.CallOption) (*TrackSnapShotResponse, error)
+	VideoTrackSnap(ctx context.Context, in *StreamSnapRequest, opts ...grpc.CallOption) (*TrackSnapShotResponse, error)
+	StopSubscribe(ctx context.Context, in *RequestWithId, opts ...grpc.CallOption) (*SuccessResponse, error)
 	GetConfig(ctx context.Context, in *GetConfigRequest, opts ...grpc.CallOption) (*GetConfigResponse, error)
 	GetFormily(ctx context.Context, in *GetConfigRequest, opts ...grpc.CallOption) (*GetConfigResponse, error)
-	ModifyConfig(ctx context.Context, in *ModifyConfigRequest, opts ...grpc.CallOption) (*ModifyConfigResponse, error)
+	ModifyConfig(ctx context.Context, in *ModifyConfigRequest, opts ...grpc.CallOption) (*SuccessResponse, error)
 }
 
 type globalClient struct {
@@ -99,8 +100,17 @@ func (c *globalClient) StreamInfo(ctx context.Context, in *StreamSnapRequest, op
 	return out, nil
 }
 
-func (c *globalClient) AudioTrackSnap(ctx context.Context, in *StreamSnapRequest, opts ...grpc.CallOption) (*AudioTrackSnapShotResponse, error) {
-	out := new(AudioTrackSnapShotResponse)
+func (c *globalClient) GetSubscribers(ctx context.Context, in *SubscribersRequest, opts ...grpc.CallOption) (*SubscribersResponse, error) {
+	out := new(SubscribersResponse)
+	err := c.cc.Invoke(ctx, "/m7s.Global/GetSubscribers", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *globalClient) AudioTrackSnap(ctx context.Context, in *StreamSnapRequest, opts ...grpc.CallOption) (*TrackSnapShotResponse, error) {
+	out := new(TrackSnapShotResponse)
 	err := c.cc.Invoke(ctx, "/m7s.Global/AudioTrackSnap", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -108,8 +118,8 @@ func (c *globalClient) AudioTrackSnap(ctx context.Context, in *StreamSnapRequest
 	return out, nil
 }
 
-func (c *globalClient) VideoTrackSnap(ctx context.Context, in *StreamSnapRequest, opts ...grpc.CallOption) (*VideoTrackSnapShotResponse, error) {
-	out := new(VideoTrackSnapShotResponse)
+func (c *globalClient) VideoTrackSnap(ctx context.Context, in *StreamSnapRequest, opts ...grpc.CallOption) (*TrackSnapShotResponse, error) {
+	out := new(TrackSnapShotResponse)
 	err := c.cc.Invoke(ctx, "/m7s.Global/VideoTrackSnap", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -117,8 +127,8 @@ func (c *globalClient) VideoTrackSnap(ctx context.Context, in *StreamSnapRequest
 	return out, nil
 }
 
-func (c *globalClient) StopSubscribe(ctx context.Context, in *StopSubscribeRequest, opts ...grpc.CallOption) (*StopSubscribeResponse, error) {
-	out := new(StopSubscribeResponse)
+func (c *globalClient) StopSubscribe(ctx context.Context, in *RequestWithId, opts ...grpc.CallOption) (*SuccessResponse, error) {
+	out := new(SuccessResponse)
 	err := c.cc.Invoke(ctx, "/m7s.Global/StopSubscribe", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -144,8 +154,8 @@ func (c *globalClient) GetFormily(ctx context.Context, in *GetConfigRequest, opt
 	return out, nil
 }
 
-func (c *globalClient) ModifyConfig(ctx context.Context, in *ModifyConfigRequest, opts ...grpc.CallOption) (*ModifyConfigResponse, error) {
-	out := new(ModifyConfigResponse)
+func (c *globalClient) ModifyConfig(ctx context.Context, in *ModifyConfigRequest, opts ...grpc.CallOption) (*SuccessResponse, error) {
+	out := new(SuccessResponse)
 	err := c.cc.Invoke(ctx, "/m7s.Global/ModifyConfig", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -163,12 +173,13 @@ type GlobalServer interface {
 	Restart(context.Context, *RequestWithId) (*emptypb.Empty, error)
 	StreamList(context.Context, *StreamListRequest) (*StreamListResponse, error)
 	StreamInfo(context.Context, *StreamSnapRequest) (*StreamInfoResponse, error)
-	AudioTrackSnap(context.Context, *StreamSnapRequest) (*AudioTrackSnapShotResponse, error)
-	VideoTrackSnap(context.Context, *StreamSnapRequest) (*VideoTrackSnapShotResponse, error)
-	StopSubscribe(context.Context, *StopSubscribeRequest) (*StopSubscribeResponse, error)
+	GetSubscribers(context.Context, *SubscribersRequest) (*SubscribersResponse, error)
+	AudioTrackSnap(context.Context, *StreamSnapRequest) (*TrackSnapShotResponse, error)
+	VideoTrackSnap(context.Context, *StreamSnapRequest) (*TrackSnapShotResponse, error)
+	StopSubscribe(context.Context, *RequestWithId) (*SuccessResponse, error)
 	GetConfig(context.Context, *GetConfigRequest) (*GetConfigResponse, error)
 	GetFormily(context.Context, *GetConfigRequest) (*GetConfigResponse, error)
-	ModifyConfig(context.Context, *ModifyConfigRequest) (*ModifyConfigResponse, error)
+	ModifyConfig(context.Context, *ModifyConfigRequest) (*SuccessResponse, error)
 	mustEmbedUnimplementedGlobalServer()
 }
 
@@ -194,13 +205,16 @@ func (UnimplementedGlobalServer) StreamList(context.Context, *StreamListRequest)
 func (UnimplementedGlobalServer) StreamInfo(context.Context, *StreamSnapRequest) (*StreamInfoResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StreamInfo not implemented")
 }
-func (UnimplementedGlobalServer) AudioTrackSnap(context.Context, *StreamSnapRequest) (*AudioTrackSnapShotResponse, error) {
+func (UnimplementedGlobalServer) GetSubscribers(context.Context, *SubscribersRequest) (*SubscribersResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetSubscribers not implemented")
+}
+func (UnimplementedGlobalServer) AudioTrackSnap(context.Context, *StreamSnapRequest) (*TrackSnapShotResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method AudioTrackSnap not implemented")
 }
-func (UnimplementedGlobalServer) VideoTrackSnap(context.Context, *StreamSnapRequest) (*VideoTrackSnapShotResponse, error) {
+func (UnimplementedGlobalServer) VideoTrackSnap(context.Context, *StreamSnapRequest) (*TrackSnapShotResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method VideoTrackSnap not implemented")
 }
-func (UnimplementedGlobalServer) StopSubscribe(context.Context, *StopSubscribeRequest) (*StopSubscribeResponse, error) {
+func (UnimplementedGlobalServer) StopSubscribe(context.Context, *RequestWithId) (*SuccessResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StopSubscribe not implemented")
 }
 func (UnimplementedGlobalServer) GetConfig(context.Context, *GetConfigRequest) (*GetConfigResponse, error) {
@@ -209,7 +223,7 @@ func (UnimplementedGlobalServer) GetConfig(context.Context, *GetConfigRequest) (
 func (UnimplementedGlobalServer) GetFormily(context.Context, *GetConfigRequest) (*GetConfigResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetFormily not implemented")
 }
-func (UnimplementedGlobalServer) ModifyConfig(context.Context, *ModifyConfigRequest) (*ModifyConfigResponse, error) {
+func (UnimplementedGlobalServer) ModifyConfig(context.Context, *ModifyConfigRequest) (*SuccessResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ModifyConfig not implemented")
 }
 func (UnimplementedGlobalServer) mustEmbedUnimplementedGlobalServer() {}
@@ -333,6 +347,24 @@ func _Global_StreamInfo_Handler(srv interface{}, ctx context.Context, dec func(i
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Global_GetSubscribers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SubscribersRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GlobalServer).GetSubscribers(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/m7s.Global/GetSubscribers",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GlobalServer).GetSubscribers(ctx, req.(*SubscribersRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Global_AudioTrackSnap_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(StreamSnapRequest)
 	if err := dec(in); err != nil {
@@ -370,7 +402,7 @@ func _Global_VideoTrackSnap_Handler(srv interface{}, ctx context.Context, dec fu
 }
 
 func _Global_StopSubscribe_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(StopSubscribeRequest)
+	in := new(RequestWithId)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -382,7 +414,7 @@ func _Global_StopSubscribe_Handler(srv interface{}, ctx context.Context, dec fun
 		FullMethod: "/m7s.Global/StopSubscribe",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(GlobalServer).StopSubscribe(ctx, req.(*StopSubscribeRequest))
+		return srv.(GlobalServer).StopSubscribe(ctx, req.(*RequestWithId))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -471,6 +503,10 @@ var Global_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "StreamInfo",
 			Handler:    _Global_StreamInfo_Handler,
+		},
+		{
+			MethodName: "GetSubscribers",
+			Handler:    _Global_GetSubscribers_Handler,
 		},
 		{
 			MethodName: "AudioTrackSnap",

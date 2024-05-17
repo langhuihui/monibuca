@@ -3,7 +3,9 @@ global:
   http:
     listenaddr: :8081
     listenaddrtls: :8555
+  disableall: true
 rtmp:
+  enable: true
   chunksize: 2048
   tcp:
     listenaddr: 

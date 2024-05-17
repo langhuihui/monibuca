@@ -1,5 +1,12 @@
 global:
   # loglevel: debug
+  tcp:
+    listenaddr: :50051
+console:
+  secret: de2c0bb9fd47684adc07a426e139239b
+webrtc:
+  publish:
+    pubaudio: false
 rtmp:
   chunksize: 2048
   subscribe:

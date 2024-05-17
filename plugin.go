@@ -73,6 +73,7 @@ func (plugin *PluginMeta) Init(s *Server, userConfig map[string]any) {
 	}
 	if p.Disabled {
 		p.Warn("plugin disabled")
+		return
 	} else {
 		p.assign()
 	}

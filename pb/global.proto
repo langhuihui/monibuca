@@ -37,17 +37,22 @@ service Global {
       get: "/api/stream/info/{streamPath=**}"
     };
   }
-  rpc AudioTrackSnap (StreamSnapRequest) returns (AudioTrackSnapShotResponse) {
+  rpc GetSubscribers(SubscribersRequest) returns (SubscribersResponse) {
+    option (google.api.http) = {
+      get: "/api/subscribers/{streamPath=**}"
+    };
+  }
+  rpc AudioTrackSnap (StreamSnapRequest) returns (TrackSnapShotResponse) {
     option (google.api.http) = {
       get: "/api/audiotrack/snap/{streamPath=**}"
     };
   }
-  rpc VideoTrackSnap (StreamSnapRequest) returns (VideoTrackSnapShotResponse) {
+  rpc VideoTrackSnap (StreamSnapRequest) returns (TrackSnapShotResponse) {
     option (google.api.http) = {
       get: "/api/videotrack/snap/{streamPath=**}"
     };
   }
-  rpc StopSubscribe (StopSubscribeRequest) returns (StopSubscribeResponse) {
+  rpc StopSubscribe (RequestWithId) returns (SuccessResponse) {
     option (google.api.http) = {
       post: "/api/stop/subscribe/{id}"
       body: "*"
@@ -63,7 +68,7 @@ service Global {
       get: "/api/config/formily/{name}"
     };
   }
-  rpc ModifyConfig (ModifyConfigRequest) returns (ModifyConfigResponse) {
+  rpc ModifyConfig (ModifyConfigRequest) returns (SuccessResponse) {
     option (google.api.http) = {
       post: "/api/config/modify/{name}"
       body: "yaml"
@@ -96,10 +101,6 @@ message GetConfigResponse {
 message ModifyConfigRequest {
   string name = 1;
   string yaml = 2;
-}
-
-message ModifyConfigResponse {
-  bool success = 1;
 }
 
 message NetWorkInfo {
@@ -160,7 +161,9 @@ message StreamSnapRequest {
 }
 
 message StreamInfoResponse {
-
+  string meta = 1;
+  AudioTrackInfo audioTrack = 2;
+  VideoTrackInfo videoTrack = 3;
 }
 
 message Wrap {
@@ -177,28 +180,60 @@ message TrackSnapShot {
   repeated Wrap wrap = 5;
 }
 
-message AudioTrackSnapShotResponse {
+message AudioTrackInfo {
+  string delta = 1;
+  string meta = 2;
+  uint32 bps = 3;
+  uint32 sampleRate = 4;
+  uint32 channels = 5;
+}
+
+message TrackSnapShotResponse {
   repeated TrackSnapShot ring = 1;
-  uint32 sampleRate = 2;
-  uint32 channels = 3;
-  string info = 4;
+  map<uint32, uint32> reader = 2;
 }
 
-message VideoTrackSnapShotResponse {
-  repeated TrackSnapShot ring = 1;
-  uint32 width = 2;
-  uint32 height = 3;
-  string info = 4;
+message VideoTrackInfo {
+  string delta = 1;
+  string meta = 2;
+  uint32 bps = 3;
+  uint32 width = 4;
+  uint32 height = 5;
+  uint32 gop = 6;
 }
 
-message StopSubscribeRequest {
-  uint32 id = 1;
-}
-
-message StopSubscribeResponse {
+message SuccessResponse {
   bool success = 1;
 }
 
 message RequestWithId {
   uint32 id = 1;
+}
+
+message SubscribersRequest {
+  string streamPath = 1;
+  int32 pageNum = 2;
+  int32 pageSize = 3;
+}
+
+message RingReaderSnapShot {
+  uint32 sequence = 1;
+  uint32 timestamp = 2;
+  uint32 delay = 3;
+  int32 state = 4;
+}
+
+message SubscriberSnapShot {
+  uint32 id = 1;
+  google.protobuf.Timestamp startTime = 2;
+  RingReaderSnapShot audioReader = 3;
+  RingReaderSnapShot videoReader = 4;
+  string meta = 5;
+}
+
+message SubscribersResponse {
+  int32 total = 1;
+  int32 pageNum = 2;
+  int32 pageSize = 3;
+  repeated SubscriberSnapShot list = 4;
 }

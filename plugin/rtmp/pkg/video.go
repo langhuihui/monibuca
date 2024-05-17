@@ -79,6 +79,20 @@ func (avcc *RTMPVideo) Parse(t *AVTrack) (isIDR, isSeq bool, raw any, err error)
 			if err = parseSequence(); err != nil {
 				return
 			}
+		} else {
+			// var naluLen int
+			// for reader.Length > 0 {
+			// 	naluLen, err = reader.ReadBE(4) // naluLenM
+			// 	if err != nil {
+			// 		return
+			// 	}
+			// 	_, n := reader.ReadN(naluLen)
+			// 	fmt.Println(avcc.Timestamp, n)
+			// 	if n != naluLen {
+			// 		err = fmt.Errorf("naluLen:%d != n:%d", naluLen, n)
+			// 		return
+			// 	}
+			// }
 		}
 	}
 	return
@@ -112,7 +126,10 @@ func (avcc *RTMPVideo) DecodeConfig(t *AVTrack, from ICodecCtx) (err error) {
 		seqFrame.Buffers.ReadFromBytes(b)
 		t.SequenceFrame = seqFrame.WrapVideo()
 		if t.Enabled(context.TODO(), TraceLevel) {
-			t.Trace("decConfig", "codec", t.FourCC().String(), "size", seqFrame.GetSize(), "data", seqFrame.String())
+			codec := t.FourCC().String()
+			size := seqFrame.GetSize()
+			data := seqFrame.String()
+			t.Trace("decConfig", "codec", codec, "size", size, "data", data)
 		}
 	}
 
@@ -211,18 +228,18 @@ func (avcc *RTMPVideo) ToRaw(codecCtx ICodecCtx) (any, error) {
 
 func (h264 *H264Ctx) CreateFrame(from *AVFrame) (frame IAVFrame, err error) {
 	var rtmpVideo RTMPVideo
+	rtmpVideo.Timestamp = uint32(from.Timestamp / time.Millisecond)
 	rtmpVideo.RecyclableBuffers = &util.RecyclableBuffers{}
-	rtmpVideo.ScalableMemoryAllocator = from.Wraps[0].GetScalableMemoryAllocator()
+	// TODO: rtmpVideo.ScalableMemoryAllocator = from.Wraps[0].GetScalableMemoryAllocator()
 	nalus := from.Raw.(Nalus)
-	head := rtmpVideo.Malloc(5)
+	head := rtmpVideo.NextN(5)
 	head[0] = util.Conditoinal[byte](from.IDR, 0x10, 0x20) | byte(ParseVideoCodec(h264.FourCC()))
 	head[1] = 1
 	util.PutBE(head[2:5], (nalus.PTS-nalus.DTS)/90) // cts
-	rtmpVideo.ReadFromBytes(head)
 	for _, nalu := range nalus.Nalus {
-		naluLenM := rtmpVideo.Malloc(4)
-		binary.BigEndian.PutUint32(naluLenM, uint32(util.LenOfBuffers(nalu)))
-		rtmpVideo.ReadFromBytes(naluLenM)
+		naluLenM := rtmpVideo.NextN(4)
+		naluLen := uint32(util.LenOfBuffers(nalu))
+		binary.BigEndian.PutUint32(naluLenM, naluLen)
 		rtmpVideo.ReadFromBytes(nalu...)
 	}
 	frame = &rtmpVideo

@@ -16,8 +16,9 @@ import (
 )
 
 type Owner struct {
-	Conn net.Conn
-	File *os.File
+	Conn     net.Conn
+	File     *os.File
+	MetaData any
 }
 
 type PubSubBase struct {
@@ -50,6 +51,8 @@ func (ps *PubSubBase) Init(p *Plugin, streamPath string, options ...any) {
 			ps.Closer = v
 		case io.Closer:
 			ps.Closer = v
+		default:
+			ps.MetaData = v
 		}
 	}
 	ps.Context, ps.CancelCauseFunc = context.WithCancelCause(ctx)
@@ -63,6 +66,8 @@ type Subscriber struct {
 	PubSubBase
 	config.Subscribe
 	Publisher *Publisher
+	AudioReader *AVRingReader
+	VideoReader *AVRingReader
 }
 
 type SubscriberHandler struct {
@@ -94,6 +99,7 @@ func (s *Subscriber) Handle(handler SubscriberHandler) {
 		if at := s.Publisher.GetAudioTrack(a1); at != nil {
 			awi = at.WrapIndex
 			ar = NewAVRingReader(at)
+			s.AudioReader = ar
 			ar.Logger = s.Logger.With("reader", a1.String())
 			ar.Info("start read")
 			ah = reflect.ValueOf(handler.OnAudio)
@@ -106,6 +112,7 @@ func (s *Subscriber) Handle(handler SubscriberHandler) {
 		if vt := s.Publisher.GetVideoTrack(v1); vt != nil {
 			vwi = vt.WrapIndex
 			vr = NewAVRingReader(vt)
+			s.VideoReader = vr
 			vr.Logger = s.Logger.With("reader", v1.String())
 			vr.Info("start read")
 			vh = reflect.ValueOf(handler.OnVideo)
@@ -115,11 +122,9 @@ func (s *Subscriber) Handle(handler SubscriberHandler) {
 	createVideoReader()
 	defer func() {
 		if lastSentVF != nil {
-			// lastSentVF.ReaderLeave()
 			lastSentVF.RUnlock()
 		}
 		if lastSentAF != nil {
-			// lastSentAF.ReaderLeave()
 			lastSentAF.RUnlock()
 		}
 	}()

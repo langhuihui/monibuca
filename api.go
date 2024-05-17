@@ -40,18 +40,77 @@ func (s *Server) SysInfo(context.Context, *emptypb.Empty) (res *pb.SysInfoRespon
 }
 
 func (s *Server) StreamInfo(ctx context.Context, req *pb.StreamSnapRequest) (res *pb.StreamInfoResponse, err error) {
-	// s.Call(func() {
-	// 	if pub, ok := s.Streams.Get(req.StreamPath); ok {
-	// 		res = &pb.StreamInfoResponse{
-	// 		}
-	// 	} else {
-	// 		err = pkg.ErrNotFound
-	// 	}
-	// })
+	s.Call(func() {
+		if pub, ok := s.Streams.Get(req.StreamPath); ok {
+			tmp, _ := json.Marshal(pub.MetaData)
+			res = &pb.StreamInfoResponse{
+				Meta:       string(tmp),
+			}
+			if t := pub.AudioTrack.AVTrack; t != nil {
+				res.AudioTrack = &pb.AudioTrackInfo{
+					Meta:  t.GetInfo(),
+					Bps:   uint32(t.BPS),
+					Delta: pub.AudioTrack.Delta.String(),
+				}
+				if t.ICodecCtx != nil {
+					res.AudioTrack.SampleRate = uint32(t.ICodecCtx.(pkg.IAudioCodecCtx).GetSampleRate())
+					res.AudioTrack.Channels = uint32(t.ICodecCtx.(pkg.IAudioCodecCtx).GetChannels())
+				}
+			}
+			if t := pub.VideoTrack.AVTrack; t != nil {
+				res.VideoTrack = &pb.VideoTrackInfo{
+					Meta:  t.GetInfo(),
+					Bps:   uint32(t.BPS),
+					Delta: pub.VideoTrack.Delta.String(),
+					Gop:   uint32(pub.GOP),
+				}
+				if t.ICodecCtx != nil {
+					res.VideoTrack.Width = uint32(t.ICodecCtx.(pkg.IVideoCodecCtx).GetWidth())
+					res.VideoTrack.Height = uint32(t.ICodecCtx.(pkg.IVideoCodecCtx).GetHeight())
+				}
+			}
+		} else {
+			err = pkg.ErrNotFound
+		}
+	})
 	return
 }
-
-func (s *Server) AudioTrackSnap(ctx context.Context, req *pb.StreamSnapRequest) (res *pb.AudioTrackSnapShotResponse, err error) {
+func (s *Server) GetSubscribers(ctx context.Context, req *pb.SubscribersRequest) (res *pb.SubscribersResponse, err error) {
+	s.Call(func() {
+		var subscribers []*pb.SubscriberSnapShot
+		for _, subscriber := range s.Subscribers.Items {
+			meta, _ := json.Marshal(subscriber.MetaData)
+			snap := &pb.SubscriberSnapShot{
+				Id:        uint32(subscriber.ID),
+				StartTime: timestamppb.New(subscriber.StartTime),
+				Meta:      string(meta),
+			}
+			if ar := subscriber.AudioReader; ar != nil {
+				snap.AudioReader = &pb.RingReaderSnapShot{
+					Sequence:  uint32(ar.Value.Sequence),
+					Timestamp: ar.AbsTime,
+					Delay:     ar.Delay,
+					State:     int32(ar.State),
+				}
+			}
+			if vr := subscriber.VideoReader; vr != nil {
+				snap.VideoReader = &pb.RingReaderSnapShot{
+					Sequence:  uint32(vr.Value.Sequence),
+					Timestamp: vr.AbsTime,
+					Delay:     vr.Delay,
+					State:     int32(vr.State),
+				}
+			}
+			subscribers = append(subscribers, snap)
+		}
+		res = &pb.SubscribersResponse{
+			List:  subscribers,
+			Total: int32(s.Subscribers.Length),
+		}
+	})
+	return
+}
+func (s *Server) AudioTrackSnap(ctx context.Context, req *pb.StreamSnapRequest) (res *pb.TrackSnapShotResponse, err error) {
 	// s.Call(func() {
 	// 	if pub, ok := s.Streams.Get(req.StreamPath); ok {
 	// 		res = pub.AudioSnapShot()
@@ -62,30 +121,37 @@ func (s *Server) AudioTrackSnap(ctx context.Context, req *pb.StreamSnapRequest) 
 	return
 }
 
-func (s *Server) VideoTrackSnap(ctx context.Context, req *pb.StreamSnapRequest) (res *pb.VideoTrackSnapShotResponse, err error) {
+func (s *Server) VideoTrackSnap(ctx context.Context, req *pb.StreamSnapRequest) (res *pb.TrackSnapShotResponse, err error) {
 	s.Call(func() {
 		if pub, ok := s.Streams.Get(req.StreamPath); ok {
-			res = &pb.VideoTrackSnapShotResponse{}
+			res = &pb.TrackSnapShotResponse{}
 			if !pub.VideoTrack.IsEmpty() {
-				vcc := pub.VideoTrack.AVTrack.ICodecCtx.(pkg.IVideoCodecCtx)
-				res.Width = uint32(vcc.GetWidth())
-				res.Height = uint32(vcc.GetHeight())
-				res.Info = pub.VideoTrack.GetInfo()
-				pub.VideoTrack.Ring.Next().Do(func(v *pkg.AVFrame) {
-					var snap pb.TrackSnapShot
-					snap.Sequence = v.Sequence
-					snap.Timestamp = uint32(v.Timestamp / time.Millisecond)
-					snap.WriteTime = timestamppb.New(v.WriteTime)
-					snap.Wrap = make([]*pb.Wrap, len(v.Wraps))
-					snap.KeyFrame = v.IDR
-					for i, wrap := range v.Wraps {
-						snap.Wrap[i] = &pb.Wrap{
-							Timestamp: uint32(wrap.GetTimestamp() / time.Millisecond),
-							Size:      uint32(wrap.GetSize()),
-							Data:      wrap.String(),
-						}
+				// vcc := pub.VideoTrack.AVTrack.ICodecCtx.(pkg.IVideoCodecCtx)
+				res.Reader = make(map[uint32]uint32)
+				for sub := range pub.Subscribers {
+					if sub.VideoReader == nil {
+						continue
 					}
-					res.Ring = append(res.Ring, &snap)
+					res.Reader[uint32(sub.ID)] = sub.VideoReader.Value.Sequence
+				}
+				pub.VideoTrack.Ring.Do(func(v *pkg.AVFrame) {
+					if v.TryRLock() {
+						var snap pb.TrackSnapShot
+						snap.Sequence = v.Sequence
+						snap.Timestamp = uint32(v.Timestamp / time.Millisecond)
+						snap.WriteTime = timestamppb.New(v.WriteTime)
+						snap.Wrap = make([]*pb.Wrap, len(v.Wraps))
+						snap.KeyFrame = v.IDR
+						for i, wrap := range v.Wraps {
+							snap.Wrap[i] = &pb.Wrap{
+								Timestamp: uint32(wrap.GetTimestamp() / time.Millisecond),
+								Size:      uint32(wrap.GetSize()),
+								Data:      wrap.String(),
+							}
+						}
+						res.Ring = append(res.Ring, &snap)
+						v.RUnlock()
+					}
 				})
 			}
 		} else {
@@ -111,7 +177,7 @@ func (s *Server) Shutdown(ctx context.Context, req *pb.RequestWithId) (res *empt
 	return empty, err
 }
 
-func (s *Server) StopSubscribe(ctx context.Context, req *pb.StopSubscribeRequest) (res *pb.StopSubscribeResponse, err error) {
+func (s *Server) StopSubscribe(ctx context.Context, req *pb.RequestWithId) (res *pb.SuccessResponse, err error) {
 	s.Call(func() {
 		if subscriber, ok := s.Subscribers.Get(int(req.Id)); ok {
 			subscriber.Stop(errors.New("stop by api"))
@@ -119,7 +185,7 @@ func (s *Server) StopSubscribe(ctx context.Context, req *pb.StopSubscribeRequest
 			err = pkg.ErrNotFound
 		}
 	})
-	return &pb.StopSubscribeResponse{
+	return &pb.SuccessResponse{
 		Success: err == nil,
 	}, err
 }
@@ -265,7 +331,7 @@ func (s *Server) GetConfig(_ context.Context, req *pb.GetConfigRequest) (res *pb
 	return
 }
 
-func (s *Server) ModifyConfig(_ context.Context, req *pb.ModifyConfigRequest) (res *pb.ModifyConfigResponse, err error) {
+func (s *Server) ModifyConfig(_ context.Context, req *pb.ModifyConfigRequest) (res *pb.SuccessResponse, err error) {
 	var conf *config.Config
 	if req.Name == "global" {
 		conf = &s.Config
