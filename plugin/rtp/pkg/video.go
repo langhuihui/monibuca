@@ -121,8 +121,7 @@ func (h264 *RTPH264Ctx) CreateFrame(from *AVFrame) (frame IAVFrame, err error) {
 	}
 	for _, nalu := range nalus.Nalus {
 		reader := util.NewBuffersFromBytes(nalu...)
-		startIndex := len(r.Packets)
-		if reader.Length > 1460 {
+		if startIndex := len(r.Packets); reader.Length > 1460 {
 			//fu-a
 			for reader.Length > 0 {
 				mem := r.Malloc(1460)
@@ -130,6 +129,7 @@ func (h264 *RTPH264Ctx) CreateFrame(from *AVFrame) (frame IAVFrame, err error) {
 				mem[0] = codec.NALU_FUA.Or(mem[1] & 0x60)
 				if n < 1459 {
 					r.RecycleBack(1459 - n)
+					mem = mem[:n+1]
 				}
 				r.Packets = append(r.Packets, createPacket(mem))
 			}
@@ -183,7 +183,6 @@ func (r *RTPVideo) ToRaw(ictx ICodecCtx) (any, error) {
 					}
 				case codec.NALU_FUA, codec.NALU_FUB:
 					b1 := packet.Payload[1]
-					fmt.Printf("%08b\n", b1)
 					if util.Bit1(b1, 0) {
 						naluType.Parse(b1)
 						nalu = [][]byte{{naluType.Or(b0 & 0x60)}}

@@ -17,8 +17,10 @@ type (
 		Ready       *util.Promise[struct{}]
 		FrameType   reflect.Type
 		bytesIn     int
+		frameCount  int
 		lastBPSTime time.Time
 		BPS         int
+		FPS         int
 	}
 
 	DataTrack struct {
@@ -68,9 +70,12 @@ func (t *Track) GetKey() reflect.Type {
 
 func (t *Track) AddBytesIn(n int) {
 	t.bytesIn += n
+	t.frameCount++
 	if dur := time.Since(t.lastBPSTime); dur > time.Second {
 		t.BPS = int(float64(t.bytesIn) / dur.Seconds())
 		t.bytesIn = 0
+		t.FPS = int(float64(t.frameCount) / dur.Seconds())
+		t.frameCount = 0
 		t.lastBPSTime = time.Now()
 	}
 }

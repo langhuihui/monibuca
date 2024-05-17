@@ -20,7 +20,7 @@ type RTPData struct {
 
 func (r *RTPData) String() (s string) {
 	for _, p := range r.Packets {
-		s += fmt.Sprintf("t: %d, s: %d, p: %d\n", p.Timestamp, p.SequenceNumber, len(p.Payload))
+		s += fmt.Sprintf("t: %d, s: %d, p: %02X %d\n", p.Timestamp, p.SequenceNumber, p.Payload[0:2], len(p.Payload))
 	}
 	return
 }

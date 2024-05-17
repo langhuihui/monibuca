@@ -184,8 +184,9 @@ message AudioTrackInfo {
   string delta = 1;
   string meta = 2;
   uint32 bps = 3;
-  uint32 sampleRate = 4;
-  uint32 channels = 5;
+  uint32 fps = 4;
+  uint32 sampleRate = 5;
+  uint32 channels = 6;
 }
 
 message TrackSnapShotResponse {
@@ -197,9 +198,10 @@ message VideoTrackInfo {
   string delta = 1;
   string meta = 2;
   uint32 bps = 3;
-  uint32 width = 4;
-  uint32 height = 5;
-  uint32 gop = 6;
+  uint32 fps = 4;
+  uint32 width = 5;
+  uint32 height = 6;
+  uint32 gop = 7;
 }
 
 message SuccessResponse {

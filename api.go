@@ -50,6 +50,7 @@ func (s *Server) StreamInfo(ctx context.Context, req *pb.StreamSnapRequest) (res
 				res.AudioTrack = &pb.AudioTrackInfo{
 					Meta:  t.GetInfo(),
 					Bps:   uint32(t.BPS),
+					Fps:  uint32(t.FPS),
 					Delta: pub.AudioTrack.Delta.String(),
 				}
 				if t.ICodecCtx != nil {
@@ -61,6 +62,7 @@ func (s *Server) StreamInfo(ctx context.Context, req *pb.StreamSnapRequest) (res
 				res.VideoTrack = &pb.VideoTrackInfo{
 					Meta:  t.GetInfo(),
 					Bps:   uint32(t.BPS),
+					Fps:  uint32(t.FPS),
 					Delta: pub.VideoTrack.Delta.String(),
 					Gop:   uint32(pub.GOP),
 				}
