@@ -2,6 +2,8 @@ global:
   loglevel: trace
   tcp:
     listenaddr: :50051
+  # publish:
+  #   speed: 1
 console:
   secret: de2c0bb9fd47684adc07a426e139239b
 logrotate:

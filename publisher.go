@@ -27,7 +27,7 @@ type SpeedControl struct {
 }
 
 func (s *SpeedControl) speedControl(speed float64, ts time.Duration) {
-	if speed != s.speed {
+	if speed != s.speed || s.beginTime.IsZero() {
 		s.speed = speed
 		s.beginTime = time.Now()
 		s.beginTimestamp = ts

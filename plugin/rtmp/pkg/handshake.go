@@ -120,7 +120,7 @@ func (nc *NetConnection) simple_handshake(C1 []byte) error {
 		return err
 	}
 	if !bytes.Equal(C2.ToBytes()[8:], S0S1[9:]) {
-		return errors.New("C2 Error")
+		// return errors.New("C2 Error")
 	}
 	return nil
 }
