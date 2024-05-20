@@ -17,9 +17,9 @@ require (
 	m7s.live/plugin/logrotate/v4 v4.0.6
 	m7s.live/plugin/monitor/v4 v4.0.5
 	m7s.live/plugin/preview/v4 v4.1.5-0.20240313053841-3228fb004004
-	m7s.live/plugin/record/v4 v4.4.7-0.20240326145629-cfa781bce27d
+	m7s.live/plugin/record/v4 v4.4.7-0.20240520050010-6a749d194324
 	m7s.live/plugin/room/v4 v4.1.1-0.20240402112256-da53fe368413
-	m7s.live/plugin/rtmp/v4 v4.3.1-0.20240307124858-efe5c2b0ee20
+	m7s.live/plugin/rtmp/v4 v4.3.1-0.20240520045725-f0ac19813b34
 	m7s.live/plugin/rtsp/v4 v4.3.5-0.20240228010654-14ef344d0848
 	m7s.live/plugin/snap/v4 v4.0.8
 	m7s.live/plugin/webrtc/v4 v4.2.6-0.20240228010952-272f6e1bc8bd
