@@ -429,6 +429,10 @@ m7s.live/plugin/record/v4 v4.4.7-0.20240306125017-a6567ad9ea5e h1:JqV8SZMk0RBaEs
 m7s.live/plugin/record/v4 v4.4.7-0.20240306125017-a6567ad9ea5e/go.mod h1:4fSAA/AYCNsFA0Ii0UVuBqsbhoTXC1s3lC/en5qabjg=
 m7s.live/plugin/record/v4 v4.4.7-0.20240326145629-cfa781bce27d h1:F8nfxjDiJXmwRonmhKr0hffOgA2GhJoluJ9ftiEUfOU=
 m7s.live/plugin/record/v4 v4.4.7-0.20240326145629-cfa781bce27d/go.mod h1:4fSAA/AYCNsFA0Ii0UVuBqsbhoTXC1s3lC/en5qabjg=
+m7s.live/plugin/record/v4 v4.4.7-0.20240517091257-9476c9a36ce1 h1:MJSHaphhuDbg4sk7nwGlyoQdAKcIQurpQJ5Ot36YVeI=
+m7s.live/plugin/record/v4 v4.4.7-0.20240517091257-9476c9a36ce1/go.mod h1:4fSAA/AYCNsFA0Ii0UVuBqsbhoTXC1s3lC/en5qabjg=
+m7s.live/plugin/record/v4 v4.4.7-0.20240520050010-6a749d194324 h1:SjFJBrNX1Ecyn9psYYLftyH1E/BfSnIyWYEDzPKalqA=
+m7s.live/plugin/record/v4 v4.4.7-0.20240520050010-6a749d194324/go.mod h1:4fSAA/AYCNsFA0Ii0UVuBqsbhoTXC1s3lC/en5qabjg=
 m7s.live/plugin/room/v4 v4.1.0 h1:7avMuCnYHX1z9jmoPaGl4tdw5DKFDWiAgFK0+RWVqzA=
 m7s.live/plugin/room/v4 v4.1.0/go.mod h1:4GBdAHUYtdp+nkHcGIClI8xkIUo/VTrD9Y0YMlTE7HU=
 m7s.live/plugin/room/v4 v4.1.1-0.20240402092359-8f5f31f2c93a h1:LcWqBbHMg+tffvjddVRf9MEdv4kIDLNKMXo7JHwqxyw=
@@ -437,6 +441,10 @@ m7s.live/plugin/room/v4 v4.1.1-0.20240402112256-da53fe368413 h1:FT7i+1fVF4qO71Iv
 m7s.live/plugin/room/v4 v4.1.1-0.20240402112256-da53fe368413/go.mod h1:4GBdAHUYtdp+nkHcGIClI8xkIUo/VTrD9Y0YMlTE7HU=
 m7s.live/plugin/rtmp/v4 v4.3.1-0.20240307124858-efe5c2b0ee20 h1:ugC5795EjCm0sNFUYp7NzmfZGy46Rz1/PY240DFSpOQ=
 m7s.live/plugin/rtmp/v4 v4.3.1-0.20240307124858-efe5c2b0ee20/go.mod h1:6yihulC3KwZaT28qIHHgD68/aP7S6LpA2x3L8mMq6+w=
+m7s.live/plugin/rtmp/v4 v4.3.1-0.20240520045725-f0ac19813b34 h1:xpVvWqBHwmhatw0TkIa5CB/voPnRvCBEV7NQz/oRxts=
+m7s.live/plugin/rtmp/v4 v4.3.1-0.20240520045725-f0ac19813b34/go.mod h1:6yihulC3KwZaT28qIHHgD68/aP7S6LpA2x3L8mMq6+w=
+m7s.live/plugin/rtmp/v4 v4.3.1-0.20240520092204-743bd75a7789 h1:tmP3nrUR2NKm6GuMufKlnGrTrBoeo1YZIJBjExhZQ7I=
+m7s.live/plugin/rtmp/v4 v4.3.1-0.20240520092204-743bd75a7789/go.mod h1:6yihulC3KwZaT28qIHHgD68/aP7S6LpA2x3L8mMq6+w=
 m7s.live/plugin/rtsp/v4 v4.3.5-0.20240228010654-14ef344d0848 h1:vjI/Pc9kOcvXClq6i3i0U93GdZ73OLWCJ5PsJq9q2f0=
 m7s.live/plugin/rtsp/v4 v4.3.5-0.20240228010654-14ef344d0848/go.mod h1:eU4T50gY67EqNRQqUNeEgCi4W9Pa6tGxltHuOJTFwio=
 m7s.live/plugin/snap/v4 v4.0.8 h1:65t4Wd9wiBdD1/ucCSVma5/LhEg/6XbC4yqf95uvCxI=
