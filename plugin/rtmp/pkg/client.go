@@ -14,6 +14,7 @@ import (
 
 type Client struct {
 	NetStream
+	ServerInfo map[string]any
 }
 
 func (client *Client) Connect(p *m7s.Client) (err error) {
@@ -85,6 +86,7 @@ func (client *Client) Connect(p *m7s.Client) (err error) {
 			cmd := msg.MsgData.(Commander).GetCommand()
 			switch cmd.CommandName {
 			case "_result":
+				client.ServerInfo = msg.MsgData.(*ResponseMessage).Properties
 				response := msg.MsgData.(*ResponseMessage)
 				if response.Infomation["code"] == NetConnection_Connect_Success {
 
@@ -101,6 +103,7 @@ func (client *Client) Connect(p *m7s.Client) (err error) {
 }
 
 func (puller *Client) Pull(p *m7s.Puller) (err error) {
+	p.MetaData = puller.ServerInfo
 	defer puller.Close()
 	err = puller.SendMessage(RTMP_MSG_AMF0_COMMAND, &CommandMessage{"createStream", 2})
 	for err == nil {
@@ -148,6 +151,7 @@ func (puller *Client) Pull(p *m7s.Puller) (err error) {
 }
 
 func (pusher *Client) Push(p *m7s.Pusher) (err error) {
+	p.MetaData = pusher.ServerInfo
 	pusher.SendMessage(RTMP_MSG_AMF0_COMMAND, &CommandMessage{"createStream", 2})
 	for {
 		msg, err := pusher.RecvMessage()

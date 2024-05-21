@@ -57,6 +57,7 @@ func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
 	}
 	var msg *Chunk
 	var gstreamid uint32
+	var connectInfo map[string]any
 	for {
 		if msg, err = nc.RecvMessage(); err == nil {
 			if msg.MessageLength <= 0 {
@@ -71,6 +72,7 @@ func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
 				logger.Debug("recv cmd", "commandName", cmd.CommandName, "streamID", msg.MessageStreamID)
 				switch cmd := msg.MsgData.(type) {
 				case *CallMessage: //connect
+					connectInfo = cmd.Object
 					app := cmd.Object["app"]                       // 客户端要连接到的服务应用名
 					objectEncoding := cmd.Object["objectEncoding"] // AMF编码方法
 					switch v := objectEncoding.(type) {
@@ -154,7 +156,7 @@ func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
 							StreamID:      cmd.StreamId,
 						},
 					}
-					receiver.Publisher, err = p.Publish(nc.AppName+"/"+cmd.PublishingName, ctx, conn)
+					receiver.Publisher, err = p.Publish(nc.AppName+"/"+cmd.PublishingName, ctx, conn, connectInfo)
 					if err != nil {
 						delete(receivers, cmd.StreamId)
 						err = receiver.Response(cmd.TransactionId, NetStream_Publish_BadName, Level_Error)
@@ -174,7 +176,7 @@ func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
 					}
 					var suber *m7s.Subscriber
 					// sender.ID = fmt.Sprintf("%s|%d", conn.RemoteAddr().String(), sender.StreamID)
-					suber, err = p.Subscribe(streamPath, ctx, conn)
+					suber, err = p.Subscribe(streamPath, ctx, conn, connectInfo)
 					if err != nil {
 						err = ns.Response(cmd.TransactionId, NetStream_Play_Failed, Level_Error)
 					} else {

@@ -169,7 +169,7 @@ func (conf *WebRTCPlugin) Push_(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var publisher *m7s.Publisher
-	if publisher, err = conf.Publish(streamPath, conn.PeerConnection); err != nil {
+	if publisher, err = conf.Publish(streamPath, conn.PeerConnection, r.RemoteAddr); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
