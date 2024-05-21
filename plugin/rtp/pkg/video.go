@@ -96,6 +96,14 @@ func (r *RTPVideo) Parse(t *AVTrack) (isIDR, isSeq bool, raw any, err error) {
 	return
 }
 
+func (h264 *RTPH264Ctx) GetInfo() string {
+	return h264.SDPFmtpLine
+}
+
+func (h265 *RTPH265Ctx) GetInfo() string {
+	return h265.SDPFmtpLine
+}
+
 func (h264 *RTPH264Ctx) CreateFrame(from *AVFrame) (frame IAVFrame, err error) {
 	var r RTPVideo
 	r.ScalableMemoryAllocator = from.Wraps[0].GetScalableMemoryAllocator()

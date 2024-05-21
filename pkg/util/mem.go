@@ -134,53 +134,53 @@ func (sma *ScalableMemoryAllocator) Free2(index, start, end int) bool {
 	return (*sma)[index].Free2(start, end)
 }
 
-type RecyclableMemory struct {
-	*ScalableMemoryAllocator
-	mem []int
-}
+// type RecyclableMemory struct {
+// 	*ScalableMemoryAllocator
+// 	mem []int
+// }
 
-func (r *RecyclableMemory) Malloc(size int) (memory []byte) {
-	ret, i, start, end := r.Malloc2(size)
-	// ml := len(r.mem)
-	// if lastI, lastE := ml-3, ml-1; lastI > 0 && r.mem[lastI] == i && r.mem[lastE] == start {
-	// 	r.mem[lastE] = end
-	// } else {
-	r.mem = append(r.mem, i, start, end)
-	// }
-	return ret
-}
+// func (r *RecyclableMemory) Malloc(size int) (memory []byte) {
+// 	ret, i, start, end := r.Malloc2(size)
+// 	// ml := len(r.mem)
+// 	// if lastI, lastE := ml-3, ml-1; lastI > 0 && r.mem[lastI] == i && r.mem[lastE] == start {
+// 	// 	r.mem[lastE] = end
+// 	// } else {
+// 	r.mem = append(r.mem, i, start, end)
+// 	// }
+// 	return ret
+// }
 
-func (r *RecyclableMemory) Pop() []int {
-	l := len(r.mem)
-	if l == 0 {
-		return nil
-	}
-	ret := r.mem[l-3:]
-	r.mem = r.mem[:l-3]
-	return ret
-}
+// func (r *RecyclableMemory) Pop() []int {
+// 	l := len(r.mem)
+// 	if l == 0 {
+// 		return nil
+// 	}
+// 	ret := r.mem[l-3:]
+// 	r.mem = r.mem[:l-3]
+// 	return ret
+// }
 
-func (r *RecyclableMemory) Push(args ...int) {
-	r.mem = append(r.mem, args...)
-}
+// func (r *RecyclableMemory) Push(args ...int) {
+// 	r.mem = append(r.mem, args...)
+// }
 
-func (r *RecyclableMemory) Recycle() {
-	for i := 0; i < len(r.mem); i += 3 {
-		r.Free2(r.mem[i], r.mem[i+1], r.mem[i+2])
-	}
-	r.mem = r.mem[:0]
-}
+// func (r *RecyclableMemory) Recycle() {
+// 	for i := 0; i < len(r.mem); i += 3 {
+// 		r.Free2(r.mem[i], r.mem[i+1], r.mem[i+2])
+// 	}
+// 	r.mem = r.mem[:0]
+// }
 
-func (r *RecyclableMemory) RecycleBack(n int) {
-	l := len(r.mem)
-	end := &r.mem[l-1]
-	start := *end - n
-	r.Free2(r.mem[l-3], start, *end)
-	*end = start
-	if start == r.mem[l-2] {
-		r.mem = r.mem[:l-3]
-	}
-}
+// func (r *RecyclableMemory) RecycleBack(n int) {
+// 	l := len(r.mem)
+// 	end := &r.mem[l-1]
+// 	start := *end - n
+// 	r.Free2(r.mem[l-3], start, *end)
+// 	*end = start
+// 	if start == r.mem[l-2] {
+// 		r.mem = r.mem[:l-3]
+// 	}
+// }
 
 type RecyclableBuffers struct {
 	*ScalableMemoryAllocator
@@ -209,11 +209,11 @@ func (r *RecyclableBuffers) RecycleFront() {
 	}
 }
 
-func (r *RecyclableBuffers) Cut(n int) (child *RecyclableBuffers) {
-	child = &RecyclableBuffers{ScalableMemoryAllocator: r.ScalableMemoryAllocator}
-	child.ReadFromBytes(r.Buffers.Cut(n)...)
-	return
-}
+// func (r *RecyclableBuffers) Cut(n int) (child RecyclableBuffers) {
+// 	child.ScalableMemoryAllocator = r.ScalableMemoryAllocator
+// 	child.ReadFromBytes(r.Buffers.Cut(n)...)
+// 	return
+// }
 
 type IAllocator interface {
 	Malloc(int) []byte

@@ -51,7 +51,7 @@ func (puller *HDLPuller) Connect(p *m7s.Client) (err error) {
 		}
 	}
 	if err == nil {
-		var head *util.RecyclableBuffers
+		var head util.RecyclableBuffers
 		head, err = puller.BufReader.ReadBytes(13)
 		defer head.Recycle()
 		if err == nil {

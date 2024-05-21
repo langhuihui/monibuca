@@ -29,6 +29,7 @@ func (avcc *RTMPVideo) Parse(t *AVTrack) (isIDR, isSeq bool, raw any, err error)
 	var fourCC codec.FourCC
 	parseSequence := func() (err error) {
 		isSeq = true
+		isIDR = false
 		switch fourCC {
 		case codec.FourCC_H264:
 			var ctx H264Ctx
@@ -122,7 +123,6 @@ func (avcc *RTMPVideo) DecodeConfig(t *AVTrack, from ICodecCtx) (err error) {
 		b.Write(h264ctx.PPS[0])
 		t.ICodecCtx = &ctx
 		var seqFrame RTMPData
-		seqFrame.RecyclableBuffers = &util.RecyclableBuffers{}
 		seqFrame.Buffers.ReadFromBytes(b)
 		t.SequenceFrame = seqFrame.WrapVideo()
 		if t.Enabled(context.TODO(), TraceLevel) {
@@ -229,7 +229,6 @@ func (avcc *RTMPVideo) ToRaw(codecCtx ICodecCtx) (any, error) {
 func (h264 *H264Ctx) CreateFrame(from *AVFrame) (frame IAVFrame, err error) {
 	var rtmpVideo RTMPVideo
 	rtmpVideo.Timestamp = uint32(from.Timestamp / time.Millisecond)
-	rtmpVideo.RecyclableBuffers = &util.RecyclableBuffers{}
 	// TODO: rtmpVideo.ScalableMemoryAllocator = from.Wraps[0].GetScalableMemoryAllocator()
 	nalus := from.Raw.(Nalus)
 	head := rtmpVideo.NextN(5)

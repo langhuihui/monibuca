@@ -39,38 +39,88 @@ func (s *Server) SysInfo(context.Context, *emptypb.Empty) (res *pb.SysInfoRespon
 	return
 }
 
+// /api/stream/annexb/{streamPath}
+func (s *Server) api_Stream_AnnexB_(rw http.ResponseWriter, r *http.Request) {
+	publisher, ok := s.Streams.Get(r.PathValue("streamPath"))
+	if !ok || publisher.VideoTrack.AVTrack == nil {
+		http.Error(rw, pkg.ErrNotFound.Error(), http.StatusNotFound)
+		return
+	}
+	rw.Header().Set("Content-Type", "application/octet-stream")
+	reader := pkg.NewAVRingReader(publisher.VideoTrack.AVTrack)
+	err := reader.StartRead(publisher.VideoTrack.IDRing.Load())
+	if err != nil {
+		http.Error(rw, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	defer reader.Value.RUnlock()
+	if reader.Value.Raw == nil {
+		reader.Value.Raw, err = reader.Value.Wraps[0].ToRaw(publisher.VideoTrack.ICodecCtx)
+		if err != nil {
+			http.Error(rw, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+	var annexb pkg.AnnexB
+	var t pkg.AVTrack
+	annexb.DecodeConfig(&t, publisher.VideoTrack.ICodecCtx)
+	if t.ICodecCtx == nil {
+		http.Error(rw, "unsupported codec", http.StatusInternalServerError)
+		return
+	}
+	frame, err := t.CreateFrame(&reader.Value)
+	if err != nil {
+		http.Error(rw, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	frame.(*pkg.AnnexB).WriteTo(rw)
+}
+
+func (s *Server) getStreamInfo(pub *Publisher) (res *pb.StreamInfoResponse, err error) {
+	tmp, _ := json.Marshal(pub.MetaData)
+	res = &pb.StreamInfoResponse{
+		Meta:        string(tmp),
+		Path:        pub.StreamPath,
+		State:       int32(pub.State),
+		StartTime:   timestamppb.New(pub.StartTime),
+		Subscribers: int32(len(pub.Subscribers)),
+		Type:        pub.Plugin.Meta.Name,
+	}
+
+	if t := pub.AudioTrack.AVTrack; t != nil {
+		if t.ICodecCtx != nil {
+			res.AudioTrack = &pb.AudioTrackInfo{
+				Codec: t.FourCC().String(),
+				Meta:  t.GetInfo(),
+				Bps:   uint32(t.BPS),
+				Fps:   uint32(t.FPS),
+				Delta: pub.AudioTrack.Delta.String(),
+			}
+			res.AudioTrack.SampleRate = uint32(t.ICodecCtx.(pkg.IAudioCodecCtx).GetSampleRate())
+			res.AudioTrack.Channels = uint32(t.ICodecCtx.(pkg.IAudioCodecCtx).GetChannels())
+		}
+	}
+	if t := pub.VideoTrack.AVTrack; t != nil {
+		if t.ICodecCtx != nil {
+			res.VideoTrack = &pb.VideoTrackInfo{
+				Codec: t.FourCC().String(),
+				Meta:  t.GetInfo(),
+				Bps:   uint32(t.BPS),
+				Fps:   uint32(t.FPS),
+				Delta: pub.VideoTrack.Delta.String(),
+				Gop:   uint32(pub.GOP),
+			}
+			res.VideoTrack.Width = uint32(t.ICodecCtx.(pkg.IVideoCodecCtx).GetWidth())
+			res.VideoTrack.Height = uint32(t.ICodecCtx.(pkg.IVideoCodecCtx).GetHeight())
+		}
+	}
+	return
+}
 func (s *Server) StreamInfo(ctx context.Context, req *pb.StreamSnapRequest) (res *pb.StreamInfoResponse, err error) {
 	s.Call(func() {
 		if pub, ok := s.Streams.Get(req.StreamPath); ok {
-			tmp, _ := json.Marshal(pub.MetaData)
-			res = &pb.StreamInfoResponse{
-				Meta:       string(tmp),
-			}
-			if t := pub.AudioTrack.AVTrack; t != nil {
-				res.AudioTrack = &pb.AudioTrackInfo{
-					Meta:  t.GetInfo(),
-					Bps:   uint32(t.BPS),
-					Fps:  uint32(t.FPS),
-					Delta: pub.AudioTrack.Delta.String(),
-				}
-				if t.ICodecCtx != nil {
-					res.AudioTrack.SampleRate = uint32(t.ICodecCtx.(pkg.IAudioCodecCtx).GetSampleRate())
-					res.AudioTrack.Channels = uint32(t.ICodecCtx.(pkg.IAudioCodecCtx).GetChannels())
-				}
-			}
-			if t := pub.VideoTrack.AVTrack; t != nil {
-				res.VideoTrack = &pb.VideoTrackInfo{
-					Meta:  t.GetInfo(),
-					Bps:   uint32(t.BPS),
-					Fps:  uint32(t.FPS),
-					Delta: pub.VideoTrack.Delta.String(),
-					Gop:   uint32(pub.GOP),
-				}
-				if t.ICodecCtx != nil {
-					res.VideoTrack.Width = uint32(t.ICodecCtx.(pkg.IVideoCodecCtx).GetWidth())
-					res.VideoTrack.Height = uint32(t.ICodecCtx.(pkg.IVideoCodecCtx).GetHeight())
-				}
-			}
+			res, err = s.getStreamInfo(pub)
 		} else {
 			err = pkg.ErrNotFound
 		}
@@ -195,28 +245,13 @@ func (s *Server) StopSubscribe(ctx context.Context, req *pb.RequestWithId) (res 
 // /api/stream/list
 func (s *Server) StreamList(_ context.Context, req *pb.StreamListRequest) (res *pb.StreamListResponse, err error) {
 	s.Call(func() {
-		var streams []*pb.StreamSummay
+		var streams []*pb.StreamInfoResponse
 		for _, publisher := range s.Streams.Items {
-			var audioTrack, videoTrack string
-			var bps int32
-			if !publisher.VideoTrack.IsEmpty() {
-				bps += int32(publisher.VideoTrack.AVTrack.BPS)
-				videoTrack = publisher.VideoTrack.FourCC().String()
+			info, err := s.getStreamInfo(publisher)
+			if err != nil {
+				continue
 			}
-			if !publisher.AudioTrack.IsEmpty() {
-				bps += int32(publisher.AudioTrack.AVTrack.BPS)
-				audioTrack = publisher.AudioTrack.FourCC().String()
-			}
-			streams = append(streams, &pb.StreamSummay{
-				Path:        publisher.StreamPath,
-				State:       int32(publisher.State),
-				StartTime:   timestamppb.New(publisher.StartTime),
-				Subscribers: int32(len(publisher.Subscribers)),
-				AudioTrack:  audioTrack,
-				VideoTrack:  videoTrack,
-				Bps:         bps,
-				Type:        publisher.Plugin.Meta.Name,
-			})
+			streams = append(streams, info)
 		}
 		res = &pb.StreamListResponse{List: streams, Total: int32(s.Streams.Length), PageNum: req.PageNum, PageSize: req.PageSize}
 	})

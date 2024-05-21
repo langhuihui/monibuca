@@ -29,6 +29,21 @@ func NewBuffers(buffers net.Buffers) *Buffers {
 	return ret
 }
 
+func (buffers *Buffers) Pop() []byte {
+	if buffers.Length == 0 {
+		return nil
+	}
+	l := len(buffers.Buffers) - 1
+	last := buffers.Buffers[l]
+	buffers.Buffers = buffers.Buffers[:l]
+	buffers.Length -= len(last)
+	if buffers.offset == l {
+		buffers.curBuf = nil
+		buffers.curBufLen = 0
+	}
+	return last
+}
+
 func (buffers *Buffers) MoveToEnd() {
 	buffers.curBuf = nil
 	buffers.curBufLen = 0

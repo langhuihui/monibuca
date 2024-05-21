@@ -2,6 +2,7 @@ package codec
 
 import (
 	"bytes"
+	"fmt"
 )
 
 // Start Code + NAL Unit -> NALU Header + NALU Body
@@ -117,6 +118,10 @@ type (
 
 func (*H264Ctx) FourCC() FourCC {
 	return FourCC_H264
+}
+
+func (ctx *H264Ctx) GetInfo() string {
+	return fmt.Sprintf("sps: % 02X,pps: % 02X", ctx.SPS[0], ctx.PPS[0])
 }
 
 func (h264 *H264Ctx) GetWidth() int {

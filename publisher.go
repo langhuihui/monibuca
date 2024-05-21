@@ -186,11 +186,14 @@ func (p *Publisher) WriteVideo(data IAVFrame) (err error) {
 		p.Unlock()
 	}
 	oldCodecCtx := t.ICodecCtx
-	isIDR, isSeq, raw, err := data.Parse(t)
+	isIDR, _, raw, err := data.Parse(t)
 	codecCtxChanged := oldCodecCtx != t.ICodecCtx
-	if err != nil || (isSeq && !isIDR) {
+	if err != nil {
 		p.Error("parse", "err", err)
 		return err
+	}
+	if t.ICodecCtx == nil {
+		return
 	}
 	t.Value.Raw = raw
 	t.Value.IDR = isIDR
@@ -289,6 +292,9 @@ func (p *Publisher) WriteAudio(data IAVFrame) (err error) {
 		p.Unlock()
 	}
 	_, _, _, err = data.Parse(t)
+	if t.ICodecCtx == nil {
+		return
+	}
 	if t.Ready.Pendding() {
 		t.Ready.Fulfill(err)
 		return

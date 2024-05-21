@@ -66,7 +66,7 @@ var (
 
 // C2 S2 : 参考C1 S1
 
-func (nc *NetConnection) Handshake() (err error) {
+func (nc *NetConnection) Handshake(checkC2 bool) (err error) {
 	C0C1 := nc.writePool.Malloc(C1S1_SIZE + 1)
 	defer nc.writePool.Recycle()
 	if _, err = io.ReadFull(nc.Conn, C0C1); err != nil {
@@ -83,7 +83,7 @@ func (nc *NetConnection) Handshake() (err error) {
 	util.GetBE(C1[4:8], &ts)
 
 	if ts == 0 {
-		return nc.simple_handshake(C1)
+		return nc.simple_handshake(C1, checkC2)
 	}
 
 	return nc.complex_handshake(C1)
@@ -107,7 +107,7 @@ func (client *NetConnection) ClientHandshake() (err error) {
 	return err
 }
 
-func (nc *NetConnection) simple_handshake(C1 []byte) error {
+func (nc *NetConnection) simple_handshake(C1 []byte, checkC2 bool) error {
 	S0S1 := nc.writePool.Malloc(C1S1_SIZE + 1)
 	S0S1[0] = RTMP_HANDSHAKE_VERSION
 	util.PutBE(S0S1[1:5], time.Now().Unix()&0xFFFFFFFF)
@@ -119,8 +119,8 @@ func (nc *NetConnection) simple_handshake(C1 []byte) error {
 	if err != nil {
 		return err
 	}
-	if !bytes.Equal(C2.ToBytes()[8:], S0S1[9:]) {
-		// return errors.New("C2 Error")
+	if checkC2 && !bytes.Equal(C2.ToBytes()[8:], S0S1[9:]) {
+		return errors.New("C2 Error")
 	}
 	return nil
 }

@@ -105,15 +105,13 @@ func BenchmarkBufRead(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		var testData = make([]byte, 10*1024*1024)
 		var err error
-		var mem *RecyclableBuffers
+		var mem RecyclableBuffers
 		for pb.Next() {
 			rand.Read(testData)
 			testReader := bytes.NewReader(testData)
 			reader := NewBufReaderWithBufLen(testReader, 1024)
 			for err == nil {
-				if mem != nil {
-					mem.Recycle()
-				}
+				mem.Recycle()
 				r := rand.Intn(10)
 				if r < 4 {
 					_, err = reader.ReadByte()

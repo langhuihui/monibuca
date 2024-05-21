@@ -18,7 +18,7 @@ const (
 
 type RTMPData struct {
 	Timestamp uint32
-	*util.RecyclableBuffers
+	util.RecyclableBuffers
 }
 
 func (avcc *RTMPData) GetSize() int {

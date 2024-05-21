@@ -156,6 +156,7 @@ func (s *Server) run(ctx context.Context, conf any) (err error) {
 	s.LogHandler.SetLevel(lv.Level())
 	s.registerHandler(map[string]http.HandlerFunc{
 		"/api/config/json/{name}": s.api_Config_JSON_,
+		"/api/stream/annexb/{streamPath...}": s.api_Stream_AnnexB_,
 	})
 
 	if httpConf.ListenAddrTLS != "" {

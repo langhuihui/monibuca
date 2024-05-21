@@ -15,7 +15,7 @@ import (
 type RTPData struct {
 	*webrtc.RTPCodecParameters
 	Packets []*rtp.Packet
-	util.RecyclableMemory
+	util.RecyclableBuffers
 }
 
 func (r *RTPData) String() (s string) {
@@ -70,22 +70,23 @@ func (r *RTPCtx) GetSequenceFrame() IAVFrame {
 }
 
 func (r *RTPData) DecodeConfig(t *AVTrack, from ICodecCtx) (err error) {
-	switch fourCC := from.FourCC(); fourCC {
-	case codec.FourCC_H264:
-		h264ctx := from.(codec.IH264Ctx).GetH264Ctx()
+	switch c := from.(type) {
+	case codec.IH264Ctx:
 		var ctx RTPH264Ctx
-		ctx.H264Ctx = *h264ctx
+		ctx.H264Ctx = *c.GetH264Ctx()
 		ctx.PayloadType = 96
 		ctx.MimeType = webrtc.MimeTypeH264
 		ctx.ClockRate = 90000
-		spsInfo := h264ctx.SPSInfo
+		spsInfo := ctx.SPSInfo
 		ctx.SDPFmtpLine = fmt.Sprintf("profile-level-id=%02x%02x%02x;level-asymmetry-allowed=1;packetization-mode=1", spsInfo.ProfileIdc, spsInfo.ConstraintSetFlag, spsInfo.LevelIdc)
 		ctx.SSRC = uint32(uintptr(unsafe.Pointer(&ctx)))
 		t.ICodecCtx = &ctx
-	case codec.FourCC_H265:
-		h265ctx := from.(codec.IH265Ctx).GetH265Ctx()
+	case codec.IH265Ctx:
 		var ctx RTPH265Ctx
-		ctx.H265Ctx = *h265ctx
+		ctx.H265Ctx = *c.GetH265Ctx()
+		ctx.PayloadType = 98
+		ctx.MimeType = webrtc.MimeTypeH265
+		ctx.ClockRate = 90000
 		ctx.SSRC = uint32(uintptr(unsafe.Pointer(&ctx)))
 		t.ICodecCtx = &ctx
 	}

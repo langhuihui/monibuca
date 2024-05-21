@@ -15,6 +15,7 @@ type RTMPPlugin struct {
 	m7s.Plugin
 	ChunkSize int `default:"1024"`
 	KeepAlive bool
+	C2        bool
 }
 
 var _ = m7s.InstallPlugin[RTMPPlugin](m7s.DefaultYaml(`tcp:
@@ -50,7 +51,7 @@ func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
 		cancel(err)
 	}()
 	/* Handshake */
-	if err = nc.Handshake(); err != nil {
+	if err = nc.Handshake(p.C2); err != nil {
 		logger.Error("handshake", "error", err)
 		return
 	}

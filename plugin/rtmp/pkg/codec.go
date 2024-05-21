@@ -199,10 +199,6 @@ func (p *AVCDecoderConfigurationRecord) Marshal(b []byte) (n int) {
 
 var ErrDecconfInvalid = errors.New("decode error")
 
-func (ctx *H264Ctx) GetInfo() string {
-	return fmt.Sprintf("sps: % 02X,pps: % 02X", ctx.SPS[0], ctx.PPS[0])
-}
-
 func (ctx *H264Ctx) Unmarshal(b *util.Buffers) (err error) {
 	if b.Length < 7 {
 		err = errors.New("not enough len")
@@ -267,9 +263,7 @@ var RTMP_AVC_HEAD = []byte{0x17, 0x00, 0x00, 0x00, 0x00, 0x01, 0x42, 0x00, 0x1E,
 
 var ErrHevc = errors.New("hevc parse config error")
 
-func (ctx *H265Ctx) GetInfo() string {
-	return fmt.Sprintf("sps: % 02X,pps: % 02X,vps: % 02X", ctx.SPS[0], ctx.PPS[0], ctx.VPS[0])
-}
+
 func (ctx *H265Ctx) Unmarshal(b *util.Buffers) (err error) {
 	if b.Length < 23 {
 		err = errors.New("not enough len")

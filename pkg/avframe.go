@@ -62,7 +62,7 @@ type (
 		Raw          any       `json:"-" yaml:"-"` // 裸格式
 	}
 )
-
+var _ IAVFrame = (*AnnexB)(nil)
 func (frame *AVFrame) Reset() {
 	frame.Timestamp = 0
 	for _, wrap := range frame.Wraps {

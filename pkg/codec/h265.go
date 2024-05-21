@@ -1,5 +1,7 @@
 package codec
 
+import "fmt"
+
 type H265NALUType byte
 
 func (H265NALUType) Parse(b byte) H265NALUType {
@@ -96,6 +98,14 @@ type (
 		VPS [][]byte
 	}
 )
+
+func (ctx *H265Ctx) GetInfo() string {
+	return fmt.Sprintf("sps: % 02X,pps: % 02X,vps: % 02X", ctx.SPS[0], ctx.PPS[0], ctx.VPS[0])
+}
+
+func (h265 *H265Ctx) GetHeight() int {
+	return int(h265.Height)
+}
 
 func (h265 *H265Ctx) GetWidth() int {
 	return int(h265.Width)

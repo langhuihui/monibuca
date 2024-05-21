@@ -81,8 +81,8 @@ func (r *BufReader) ReadBE32(n int) (num uint32, err error) {
 	return
 }
 
-func (r *BufReader) ReadBytes(n int) (mem *RecyclableBuffers, err error) {
-	mem = &RecyclableBuffers{ScalableMemoryAllocator: r.buf.ScalableMemoryAllocator}
+func (r *BufReader) ReadBytes(n int) (mem RecyclableBuffers, err error) {
+	mem.ScalableMemoryAllocator = r.buf.ScalableMemoryAllocator
 	for r.buf.RecycleFront(); n > 0 && err == nil; err = r.eat() {
 		if r.buf.Length > 0 {
 			if r.buf.Length >= n {
