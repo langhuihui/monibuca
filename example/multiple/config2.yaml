@@ -4,6 +4,8 @@ global:
     listenaddr: :8081
     listenaddrtls: :8555
   disableall: true
+console:
+  secret: 00aea3af031f134d6307618b05ec4899
 rtmp:
   enable: true
   chunksize: 2048

@@ -105,6 +105,8 @@ func (s *Server) reset() {
 	server.LogHandler = MultiLogHandler{}
 	server.LogHandler.SetLevel(slog.LevelInfo)
 	server.LogHandler.Add(console.NewHandler(os.Stdout, nil))
+	server.OnAuthPubs = s.OnAuthPubs
+	server.OnAuthSubs = s.OnAuthSubs
 	// server.Logger = slog.New(&server.LogHandler).With("server", s.ID)
 	*s = server
 }
@@ -466,7 +468,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "favicon.ico")
 		return
 	}
-	fmt.Fprintf(w, "Monibuca Engine %s StartTime:%s\n", Version, s.StartTime)
+	fmt.Fprintf(w, "visit:%s\nMonibuca Engine %s StartTime:%s\n", r.URL.Path, Version, s.StartTime)
 	for _, plugin := range s.Plugins.Items {
 		fmt.Fprintf(w, "Plugin %s Version:%s\n", plugin.Meta.Name, plugin.Meta.Version)
 	}

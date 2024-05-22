@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"runtime"
 	"strings"
 	"time"
 
@@ -35,6 +36,17 @@ func (s *Server) SysInfo(context.Context, *emptypb.Empty) (res *pb.SysInfoRespon
 		Version:   Version,
 		LocalIP:   localIP,
 		StartTime: timestamppb.New(s.StartTime),
+		GoVersion: runtime.Version(),
+		Os:        runtime.GOOS,
+		Arch:      runtime.GOARCH,
+		Cpus:      int32(runtime.NumCPU()),
+	}
+	for _, p := range s.Plugins.Items {
+		res.Plugins = append(res.Plugins, &pb.PluginInfo{
+			Name:    p.Meta.Name,
+			Version: p.Meta.Version,
+			Enable:  !p.Disabled,
+		})
 	}
 	return
 }
@@ -258,6 +270,18 @@ func (s *Server) StreamList(_ context.Context, req *pb.StreamListRequest) (res *
 	return
 }
 
+func (s *Server) WaitList(context.Context, *emptypb.Empty) (res *pb.StreamWaitListResponse, err error) {
+	s.Call(func() {
+		res = &pb.StreamWaitListResponse{
+			List: make(map[string]int32),
+		}
+		for streamPath, subs := range s.Waiting {
+			res.List[streamPath] = int32(len(subs))
+		}
+	})
+	return
+}
+
 func (s *Server) API_Summary_SSE(rw http.ResponseWriter, r *http.Request) {
 	util.ReturnFetchValue(func() *pb.SummaryResponse {
 		ret, _ := s.Summary(r.Context(), nil)
@@ -306,6 +330,9 @@ func (s *Server) Summary(context.Context, *emptypb.Empty) (res *pb.SummaryRespon
 			netWorks = append(netWorks, info)
 		}
 		res.StreamCount = int32(s.Streams.Length)
+		res.PullCount = int32(s.Pulls.Length)
+		res.PushCount = int32(s.Pushs.Length)
+		res.SubscribeCount = int32(s.Subscribers.Length)
 		res.NetWork = netWorks
 		s.lastSummary = res
 		s.lastSummaryTime = time.Now()

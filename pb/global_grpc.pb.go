@@ -28,6 +28,7 @@ type GlobalClient interface {
 	Shutdown(ctx context.Context, in *RequestWithId, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	Restart(ctx context.Context, in *RequestWithId, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	StreamList(ctx context.Context, in *StreamListRequest, opts ...grpc.CallOption) (*StreamListResponse, error)
+	WaitList(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*StreamWaitListResponse, error)
 	StreamInfo(ctx context.Context, in *StreamSnapRequest, opts ...grpc.CallOption) (*StreamInfoResponse, error)
 	GetSubscribers(ctx context.Context, in *SubscribersRequest, opts ...grpc.CallOption) (*SubscribersResponse, error)
 	AudioTrackSnap(ctx context.Context, in *StreamSnapRequest, opts ...grpc.CallOption) (*TrackSnapShotResponse, error)
@@ -85,6 +86,15 @@ func (c *globalClient) Restart(ctx context.Context, in *RequestWithId, opts ...g
 func (c *globalClient) StreamList(ctx context.Context, in *StreamListRequest, opts ...grpc.CallOption) (*StreamListResponse, error) {
 	out := new(StreamListResponse)
 	err := c.cc.Invoke(ctx, "/m7s.Global/StreamList", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *globalClient) WaitList(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*StreamWaitListResponse, error) {
+	out := new(StreamWaitListResponse)
+	err := c.cc.Invoke(ctx, "/m7s.Global/WaitList", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -172,6 +182,7 @@ type GlobalServer interface {
 	Shutdown(context.Context, *RequestWithId) (*emptypb.Empty, error)
 	Restart(context.Context, *RequestWithId) (*emptypb.Empty, error)
 	StreamList(context.Context, *StreamListRequest) (*StreamListResponse, error)
+	WaitList(context.Context, *emptypb.Empty) (*StreamWaitListResponse, error)
 	StreamInfo(context.Context, *StreamSnapRequest) (*StreamInfoResponse, error)
 	GetSubscribers(context.Context, *SubscribersRequest) (*SubscribersResponse, error)
 	AudioTrackSnap(context.Context, *StreamSnapRequest) (*TrackSnapShotResponse, error)
@@ -201,6 +212,9 @@ func (UnimplementedGlobalServer) Restart(context.Context, *RequestWithId) (*empt
 }
 func (UnimplementedGlobalServer) StreamList(context.Context, *StreamListRequest) (*StreamListResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StreamList not implemented")
+}
+func (UnimplementedGlobalServer) WaitList(context.Context, *emptypb.Empty) (*StreamWaitListResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method WaitList not implemented")
 }
 func (UnimplementedGlobalServer) StreamInfo(context.Context, *StreamSnapRequest) (*StreamInfoResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StreamInfo not implemented")
@@ -325,6 +339,24 @@ func _Global_StreamList_Handler(srv interface{}, ctx context.Context, dec func(i
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(GlobalServer).StreamList(ctx, req.(*StreamListRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Global_WaitList_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(emptypb.Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GlobalServer).WaitList(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/m7s.Global/WaitList",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GlobalServer).WaitList(ctx, req.(*emptypb.Empty))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -499,6 +531,10 @@ var Global_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "StreamList",
 			Handler:    _Global_StreamList_Handler,
+		},
+		{
+			MethodName: "WaitList",
+			Handler:    _Global_WaitList_Handler,
 		},
 		{
 			MethodName: "StreamInfo",
