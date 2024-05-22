@@ -1,5 +1,6 @@
 global:
   loglevel: trace
+  enableauth: true
   tcp:
     listenaddr: :50051
   # publish:

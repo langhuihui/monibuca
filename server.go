@@ -60,6 +60,8 @@ type Server struct {
 	grpcClientConn  *grpc.ClientConn
 	lastSummaryTime time.Time
 	lastSummary     *pb.SummaryResponse
+	OnAuthPubs      map[string]func(p *util.Promise[*Publisher])
+	OnAuthSubs      map[string]func(p *util.Promise[*Subscriber])
 }
 
 func NewServer() (s *Server) {
@@ -76,6 +78,8 @@ func NewServer() (s *Server) {
 	s.LogHandler.Add(console.NewHandler(os.Stdout, nil))
 	s.LogHandler.SetLevel(slog.LevelInfo)
 	s.Logger = slog.New(&s.LogHandler).With("server", s.ID)
+	s.OnAuthPubs = make(map[string]func(p *util.Promise[*Publisher]))
+	s.OnAuthSubs = make(map[string]func(p *util.Promise[*Subscriber]))
 	Servers[s.ID] = s
 	return
 }
@@ -155,7 +159,7 @@ func (s *Server) run(ctx context.Context, conf any) (err error) {
 	}
 	s.LogHandler.SetLevel(lv.Level())
 	s.registerHandler(map[string]http.HandlerFunc{
-		"/api/config/json/{name}": s.api_Config_JSON_,
+		"/api/config/json/{name}":            s.api_Config_JSON_,
 		"/api/stream/annexb/{streamPath...}": s.api_Stream_AnnexB_,
 	})
 
@@ -280,6 +284,18 @@ func (s *Server) eventLoop() {
 					v.Fulfill(vv())
 					continue
 				case *Publisher:
+					if s.EnableAuth {
+						if onAuthPub, ok := s.OnAuthPubs[vv.Plugin.Meta.Name]; ok {
+							authPromise := util.NewPromise(vv)
+							onAuthPub(authPromise)
+							<-authPromise.Done()
+							if err := context.Cause(authPromise.Context); err != util.ErrResolve {
+								s.Warn("auth failed", "error", err)
+								v.Fulfill(err)
+								continue
+							}
+						}
+					}
 					err := s.OnPublish(vv)
 					if v.Fulfill(err); err != nil {
 						continue
@@ -287,6 +303,18 @@ func (s *Server) eventLoop() {
 					event = vv
 					addPublisher(vv)
 				case *Subscriber:
+					if s.EnableAuth {
+						if onAuthSub, ok := s.OnAuthSubs[vv.Plugin.Meta.Name]; ok {
+							authPromise := util.NewPromise(vv)
+							onAuthSub(authPromise)
+							<-authPromise.Done()
+							if err := context.Cause(authPromise.Context); err != util.ErrResolve {
+								s.Warn("auth failed", "error", err)
+								v.Fulfill(err)
+								continue
+							}
+						}
+					}
 					err := s.OnSubscribe(vv)
 					if v.Fulfill(err); err != nil {
 						continue
