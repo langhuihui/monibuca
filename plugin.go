@@ -16,6 +16,7 @@ import (
 	"gopkg.in/yaml.v3"
 	. "m7s.live/m7s/v5/pkg"
 	"m7s.live/m7s/v5/pkg/config"
+	"m7s.live/m7s/v5/pkg/util"
 )
 
 type DefaultYaml string
@@ -269,6 +270,17 @@ func (p *Plugin) OnTCPConnect(conn *net.TCPConn) {
 
 func (p *Plugin) Publish(streamPath string, options ...any) (publisher *Publisher, err error) {
 	publisher = &Publisher{Publish: p.config.Publish}
+	if p.server.EnableAuth {
+		if onAuthPub, ok := p.server.OnAuthPubs[p.Meta.Name]; ok {
+			authPromise := util.NewPromise(publisher)
+			onAuthPub(authPromise)
+			<-authPromise.Done()
+			if err = context.Cause(authPromise.Context); err != util.ErrResolve {
+				p.Warn("auth failed", "error", err)
+				return
+			}
+		}
+	}
 	publisher.Init(p, streamPath, options...)
 	_, err = p.server.Call(publisher)
 	return
@@ -299,6 +311,17 @@ func (p *Plugin) Pull(streamPath string, url string, options ...any) (puller *Pu
 
 func (p *Plugin) Subscribe(streamPath string, options ...any) (subscriber *Subscriber, err error) {
 	subscriber = &Subscriber{Subscribe: p.config.Subscribe}
+	if p.server.EnableAuth {
+		if onAuthSub, ok := p.server.OnAuthSubs[p.Meta.Name]; ok {
+			authPromise := util.NewPromise(subscriber)
+			onAuthSub(authPromise)
+			<-authPromise.Done()
+			if err = context.Cause(authPromise.Context); err != util.ErrResolve {
+				p.Warn("auth failed", "error", err)
+				return
+			}
+		}
+	}
 	subscriber.Init(p, streamPath, options...)
 	_, err = p.server.Call(subscriber)
 	return

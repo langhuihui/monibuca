@@ -234,69 +234,39 @@ func (s *Server) run(ctx context.Context, conf any) (err error) {
 	return
 }
 
-func (s *Server) eventLoop() {
-	pulse := time.NewTicker(s.PulseInterval)
-	defer pulse.Stop()
-	pubChan := make(chan reflect.SelectCase, 10)
-	subChan := make(chan reflect.SelectCase, 10)
-	var pubCount, subCount int
-	caseBases := []reflect.SelectCase{{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(s.Done())}, {Dir: reflect.SelectRecv, Chan: reflect.ValueOf(pulse.C)}, {Dir: reflect.SelectRecv, Chan: reflect.ValueOf(s.eventChan)}}
-	addPublisher := func(publisher *Publisher) {
-		//TODO pubCount与casePubs的长度可能会出现不一致的情况
-		if nl := s.Streams.Length; nl > pubCount {
-			pubChan <- reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(publisher.Done())}
-		}
-	}
-	addSubscriber := func(subscriber *Subscriber) {
-		if nl := s.Subscribers.Length; nl > subCount {
-			subChan <- reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(subscriber.Done())}
-		}
-	}
+type DoneChan = <-chan struct{}
 
-	//发布者退出事件
-	go func() {
-		casePubs := []reflect.SelectCase{{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(s.Done())}, {Dir: reflect.SelectRecv, Chan: reflect.ValueOf(pubChan)}}
-		for {
-			switch chosen, rev, _ := reflect.Select(casePubs); chosen {
-			case 0:
-				return
-			case 1:
-				//TODO 存在bug，interface conversion: interface {} is struct {}, not reflect.SelectCase
-				casePubs = append(casePubs, rev.Interface().(reflect.SelectCase))
-				pubCount++
-			default:
-				sPos := chosen - 2
-				s.onUnpublish(s.Streams.Items[sPos])
-				casePubs = slices.Delete(casePubs, sPos, sPos+1)
-				pubCount--
-			}
-		}
-	}()
-
-	//订阅退出事件
-	go func() {
-		caseSubs := []reflect.SelectCase{{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(s.Done())}, {Dir: reflect.SelectRecv, Chan: reflect.ValueOf(subChan)}}
-		for {
-			switch chosen, rev, _ := reflect.Select(caseSubs); chosen {
-			case 0:
-				return
-			case 1:
-				caseSubs = append(caseSubs, rev.Interface().(reflect.SelectCase))
-				subCount++
-			default:
-				sPos := chosen - 2
-				s.onUnsubscribe(s.Subscribers.Items[sPos])
-				caseSubs = slices.Delete(caseSubs, sPos, sPos+1)
-				subCount--
-			}
-		}
-	}()
-
+func (s *Server) doneEventLoop(input chan DoneChan, output chan int) {
+	cases := []reflect.SelectCase{{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(s.Done())}, {Dir: reflect.SelectRecv, Chan: reflect.ValueOf(input)}}
 	for {
-		switch chosen, rev, _ := reflect.Select(caseBases); chosen {
+		switch chosen, rev, _ := reflect.Select(cases); chosen {
 		case 0:
 			return
 		case 1:
+			cases = append(cases, reflect.SelectCase{Dir: reflect.SelectRecv, Chan: rev})
+		default:
+			sPos := chosen - 2
+			output <- sPos
+			cases = slices.Delete(cases, chosen, chosen+1)
+		}
+	}
+}
+
+func (s *Server) eventLoop() {
+	pulse := time.NewTicker(s.PulseInterval)
+	defer pulse.Stop()
+	pubChan := make(chan DoneChan, 10)
+	pubDoneChan := make(chan int, 10)
+	subChan := make(chan DoneChan, 10)
+	subDoneChan := make(chan int, 10)
+
+	go s.doneEventLoop(pubChan, pubDoneChan)
+	go s.doneEventLoop(subChan, subDoneChan)
+	for {
+		select {
+		case <-s.Done():
+			return
+		case <-pulse.C:
 			for _, publisher := range s.Streams.Items {
 				if err := publisher.checkTimeout(); err != nil {
 					publisher.Stop(err)
@@ -311,8 +281,11 @@ func (s *Server) eventLoop() {
 					}
 				}
 			}
-		case 2:
-			event := rev.Interface()
+		case pubDone := <-pubDoneChan:
+			s.onUnpublish(s.Streams.Items[pubDone])
+		case subDone := <-subDoneChan:
+			s.onUnsubscribe(s.Subscribers.Items[subDone])
+		case event := <-s.eventChan:
 			switch v := event.(type) {
 			case *util.Promise[any]:
 				switch vv := v.Value.(type) {
@@ -324,42 +297,18 @@ func (s *Server) eventLoop() {
 					v.Fulfill(vv())
 					continue
 				case *Publisher:
-					if s.EnableAuth {
-						if onAuthPub, ok := s.OnAuthPubs[vv.Plugin.Meta.Name]; ok {
-							authPromise := util.NewPromise(vv)
-							onAuthPub(authPromise)
-							<-authPromise.Done()
-							if err := context.Cause(authPromise.Context); err != util.ErrResolve {
-								s.Warn("auth failed", "error", err)
-								v.Fulfill(err)
-								continue
-							}
-						}
-					}
 					err := s.OnPublish(vv)
 					if v.Fulfill(err); err != nil {
 						continue
 					}
 					event = vv
-					addPublisher(vv)
+					pubChan <- vv.Done()
 				case *Subscriber:
-					if s.EnableAuth {
-						if onAuthSub, ok := s.OnAuthSubs[vv.Plugin.Meta.Name]; ok {
-							authPromise := util.NewPromise(vv)
-							onAuthSub(authPromise)
-							<-authPromise.Done()
-							if err := context.Cause(authPromise.Context); err != util.ErrResolve {
-								s.Warn("auth failed", "error", err)
-								v.Fulfill(err)
-								continue
-							}
-						}
-					}
 					err := s.OnSubscribe(vv)
 					if v.Fulfill(err); err != nil {
 						continue
 					}
-					addSubscriber(vv)
+					subChan <- vv.Done()
 					if !s.EnableSubEvent {
 						continue
 					}
@@ -375,7 +324,7 @@ func (s *Server) eventLoop() {
 							continue
 						}
 						s.Pulls.Add(vv)
-						addPublisher(&vv.Publisher)
+						pubChan <- vv.Done()
 						event = v.Value
 					}
 				case *Pusher:
@@ -388,7 +337,7 @@ func (s *Server) eventLoop() {
 						if err != nil {
 							continue
 						}
-						addSubscriber(&vv.Subscriber)
+						subChan <- vv.Done()
 						s.Pushs.Add(vv)
 						event = v.Value
 					}

@@ -152,6 +152,7 @@ func (conf *WebRTCPlugin) Push_(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/sdp")
 	w.Header().Set("Location", "/webrtc/api/stop/push/"+streamPath)
+	w.Header().Set("Access-Control-Allow-Private-Network", "true")
 	if rawQuery != "" {
 		streamPath += "?" + rawQuery
 	}
