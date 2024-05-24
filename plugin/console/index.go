@@ -53,7 +53,7 @@ func (w *myResponseWriter3) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 
 type ConsolePlugin struct {
 	m7s.Plugin
-	Server string `default:"console.monibuca.com:44944" desc:"远程控制台地址"` //远程控制台地址
+	Server string `default:"console.monibuca.com:17173" desc:"远程控制台地址"` //远程控制台地址
 	Secret string `desc:"远程控制台密钥"`                                      //远程控制台密钥
 }
 

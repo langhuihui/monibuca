@@ -45,7 +45,7 @@ func (s *Server) SysInfo(context.Context, *emptypb.Empty) (res *pb.SysInfoRespon
 		res.Plugins = append(res.Plugins, &pb.PluginInfo{
 			Name:    p.Meta.Name,
 			Version: p.Meta.Version,
-			Enable:  !p.Disabled,
+			Disabled:  p.Disabled,
 		})
 	}
 	return

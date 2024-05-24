@@ -33,7 +33,7 @@ func (config *LogRotatePlugin) OnInit() (err error) {
 		lv.Set(pkg.TraceLevel)
 	}
 	builder := func(w io.Writer, opts *slog.HandlerOptions) slog.Handler {
-		return console.NewHandler(w, &console.HandlerOptions{NoColor: true, Level: lv.Level()})
+		return console.NewHandler(w, &console.HandlerOptions{NoColor: true, Level: lv.Level(),TimeFormat: "2006-01-02 15:04:05.000"})
 	}
 	config.handler, err = rotoslog.NewHandler(rotoslog.LogHandlerBuilder(builder), rotoslog.LogDir(config.Path), rotoslog.MaxFileSize(config.Size), rotoslog.DateTimeLayout(config.Formatter), rotoslog.MaxRotatedFiles(config.MaxFiles))
 	if err == nil {

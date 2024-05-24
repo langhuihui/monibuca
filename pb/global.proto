@@ -138,7 +138,7 @@ message SummaryResponse {
 message PluginInfo {
   string name = 1;
   string version = 2;
-  bool enable = 3;
+  bool disabled = 3;
 }
 
 message SysInfoResponse {

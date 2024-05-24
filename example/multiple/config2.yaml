@@ -3,8 +3,11 @@ global:
   http:
     listenaddr: :8081
     listenaddrtls: :8555
+  tcp:
+    listenaddr: :50052
   disableall: true
 console:
+  enable: true
   secret: 00aea3af031f134d6307618b05ec4899
 rtmp:
   enable: true

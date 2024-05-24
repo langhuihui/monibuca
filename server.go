@@ -38,6 +38,7 @@ var (
 		Version: Version,
 	}
 	Servers = make([]*Server, 10)
+	defaultLogHandler = console.NewHandler(os.Stdout, &console.HandlerOptions{TimeFormat: "15:04:05.000000"})
 )
 
 type Server struct {
@@ -75,7 +76,7 @@ func NewServer() (s *Server) {
 	s.handler = s
 	s.server = s
 	s.Meta = &serverMeta
-	s.LogHandler.Add(console.NewHandler(os.Stdout, nil))
+	s.LogHandler.Add(defaultLogHandler)
 	s.LogHandler.SetLevel(slog.LevelInfo)
 	s.Logger = slog.New(&s.LogHandler).With("server", s.ID)
 	s.OnAuthPubs = make(map[string]func(p *util.Promise[*Publisher]))
@@ -104,7 +105,7 @@ func (s *Server) reset() {
 	server.config.HTTP.ListenAddr = ":8080"
 	server.LogHandler = MultiLogHandler{}
 	server.LogHandler.SetLevel(slog.LevelInfo)
-	server.LogHandler.Add(console.NewHandler(os.Stdout, nil))
+	server.LogHandler.Add(defaultLogHandler)
 	server.OnAuthPubs = s.OnAuthPubs
 	server.OnAuthSubs = s.OnAuthSubs
 	// server.Logger = slog.New(&server.LogHandler).With("server", s.ID)
