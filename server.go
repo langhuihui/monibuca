@@ -37,7 +37,7 @@ var (
 		Name:    "Global",
 		Version: Version,
 	}
-	Servers = make([]*Server, 10)
+	Servers           = make([]*Server, 10)
 	defaultLogHandler = console.NewHandler(os.Stdout, &console.HandlerOptions{TimeFormat: "15:04:05.000000"})
 )
 
@@ -237,26 +237,63 @@ func (s *Server) run(ctx context.Context, conf any) (err error) {
 func (s *Server) eventLoop() {
 	pulse := time.NewTicker(s.PulseInterval)
 	defer pulse.Stop()
-	cases := []reflect.SelectCase{{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(s.Done())}, {Dir: reflect.SelectRecv, Chan: reflect.ValueOf(pulse.C)}, {Dir: reflect.SelectRecv, Chan: reflect.ValueOf(s.eventChan)}}
+	pubChan := make(chan reflect.SelectCase, 10)
+	subChan := make(chan reflect.SelectCase, 10)
 	var pubCount, subCount int
+	caseBases := []reflect.SelectCase{{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(s.Done())}, {Dir: reflect.SelectRecv, Chan: reflect.ValueOf(pulse.C)}, {Dir: reflect.SelectRecv, Chan: reflect.ValueOf(s.eventChan)}}
 	addPublisher := func(publisher *Publisher) {
+		//TODO pubCount与casePubs的长度可能会出现不一致的情况
 		if nl := s.Streams.Length; nl > pubCount {
-			pubCount = nl
-			if subCount == 0 {
-				cases = append(cases, reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(publisher.Done())})
-			} else {
-				cases = slices.Insert(cases, 3+pubCount, reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(publisher.Done())})
-			}
+			pubChan <- reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(publisher.Done())}
 		}
 	}
 	addSubscriber := func(subscriber *Subscriber) {
 		if nl := s.Subscribers.Length; nl > subCount {
-			subCount = nl
-			cases = append(cases, reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(subscriber.Done())})
+			subChan <- reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(subscriber.Done())}
 		}
 	}
+
+	//发布者退出事件
+	go func() {
+		casePubs := []reflect.SelectCase{{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(s.Done())}, {Dir: reflect.SelectRecv, Chan: reflect.ValueOf(pubChan)}}
+		for {
+			switch chosen, rev, _ := reflect.Select(casePubs); chosen {
+			case 0:
+				return
+			case 1:
+				//TODO 存在bug，interface conversion: interface {} is struct {}, not reflect.SelectCase
+				casePubs = append(casePubs, rev.Interface().(reflect.SelectCase))
+				pubCount++
+			default:
+				sPos := chosen - 2
+				s.onUnpublish(s.Streams.Items[sPos])
+				casePubs = slices.Delete(casePubs, sPos, sPos+1)
+				pubCount--
+			}
+		}
+	}()
+
+	//订阅退出事件
+	go func() {
+		caseSubs := []reflect.SelectCase{{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(s.Done())}, {Dir: reflect.SelectRecv, Chan: reflect.ValueOf(subChan)}}
+		for {
+			switch chosen, rev, _ := reflect.Select(caseSubs); chosen {
+			case 0:
+				return
+			case 1:
+				caseSubs = append(caseSubs, rev.Interface().(reflect.SelectCase))
+				subCount++
+			default:
+				sPos := chosen - 2
+				s.onUnsubscribe(s.Subscribers.Items[sPos])
+				caseSubs = slices.Delete(caseSubs, sPos, sPos+1)
+				subCount--
+			}
+		}
+	}()
+
 	for {
-		switch chosen, rev, _ := reflect.Select(cases); chosen {
+		switch chosen, rev, _ := reflect.Select(caseBases); chosen {
 		case 0:
 			return
 		case 1:
@@ -365,16 +402,6 @@ func (s *Server) eventLoop() {
 				}
 				plugin.onEvent(event)
 			}
-		default:
-			if subStart, pubIndex := 3+pubCount, chosen-3; chosen < subStart {
-				s.onUnpublish(s.Streams.Items[pubIndex])
-				pubCount--
-			} else {
-				i := chosen - subStart
-				s.onUnsubscribe(s.Subscribers.Items[i])
-				subCount--
-			}
-			cases = slices.Delete(cases, chosen, chosen+1)
 		}
 	}
 }
