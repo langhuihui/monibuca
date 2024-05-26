@@ -336,10 +336,14 @@ func (p *Publisher) GetVideoTrack(dataType reflect.Type) (t *AVTrack) {
 func (p *Publisher) TakeOver(old *Publisher) {
 	p.baseTs = old.lastTs
 	p.VideoTrack = old.VideoTrack
-	p.VideoTrack.ICodecCtx = nil
+	if p.VideoTrack.ICodecCtx != nil {
+		p.VideoTrack.ICodecCtx = nil
+	}
 	p.VideoTrack.Logger = p.Logger.With("track", "video")
 	p.AudioTrack = old.AudioTrack
-	p.AudioTrack.ICodecCtx = nil
+	if p.AudioTrack.ICodecCtx != nil {
+		p.AudioTrack.ICodecCtx = nil
+	}
 	p.AudioTrack.Logger = p.Logger.With("track", "audio")
 	p.DataTrack = old.DataTrack
 	p.Subscribers = old.Subscribers
