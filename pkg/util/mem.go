@@ -84,6 +84,13 @@ func (ma *MemoryAllocator) Free(mem []byte) bool {
 	return ma.Free2(start, start+len(mem))
 }
 
+func (ma *MemoryAllocator) GetBlocks() (blocks []Block) {
+	for e := ma.blocks.Front(); e != nil; e = e.Next() {
+		blocks = append(blocks, e.Value)
+	}
+	return
+}
+
 type ScalableMemoryAllocator []*MemoryAllocator
 
 func NewScalableMemoryAllocator(size int) (ret *ScalableMemoryAllocator) {

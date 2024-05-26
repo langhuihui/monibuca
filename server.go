@@ -237,16 +237,16 @@ func (s *Server) run(ctx context.Context, conf any) (err error) {
 type DoneChan = <-chan struct{}
 
 func (s *Server) doneEventLoop(input chan DoneChan, output chan int) {
-	cases := []reflect.SelectCase{{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(s.Done())}, {Dir: reflect.SelectRecv, Chan: reflect.ValueOf(input)}}
+	cases := []reflect.SelectCase{{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(input)}}
 	for {
-		switch chosen, rev, _ := reflect.Select(cases); chosen {
+		switch chosen, rev, ok := reflect.Select(cases); chosen {
 		case 0:
-			return
-		case 1:
+			if !ok {
+				return
+			}
 			cases = append(cases, reflect.SelectCase{Dir: reflect.SelectRecv, Chan: rev})
 		default:
-			sPos := chosen - 2
-			output <- sPos
+			output <- chosen - 1
 			cases = slices.Delete(cases, chosen, chosen+1)
 		}
 	}
@@ -259,7 +259,8 @@ func (s *Server) eventLoop() {
 	pubDoneChan := make(chan int, 10)
 	subChan := make(chan DoneChan, 10)
 	subDoneChan := make(chan int, 10)
-
+	defer close(pubChan)
+	defer close(subChan)
 	go s.doneEventLoop(pubChan, pubDoneChan)
 	go s.doneEventLoop(subChan, subDoneChan)
 	for {

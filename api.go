@@ -43,9 +43,9 @@ func (s *Server) SysInfo(context.Context, *emptypb.Empty) (res *pb.SysInfoRespon
 	}
 	for _, p := range s.Plugins.Items {
 		res.Plugins = append(res.Plugins, &pb.PluginInfo{
-			Name:    p.Meta.Name,
-			Version: p.Meta.Version,
-			Disabled:  p.Disabled,
+			Name:     p.Meta.Name,
+			Version:  p.Meta.Version,
+			Disabled: p.Disabled,
 		})
 	}
 	return
@@ -184,7 +184,9 @@ func (s *Server) AudioTrackSnap(ctx context.Context, req *pb.StreamSnapRequest) 
 	// })
 	return
 }
+func (s *Server) API_VideoTrack_SSE(rw http.ResponseWriter, r *http.Request) {
 
+}
 func (s *Server) VideoTrackSnap(ctx context.Context, req *pb.StreamSnapRequest) (res *pb.TrackSnapShotResponse, err error) {
 	s.Call(func() {
 		if pub, ok := s.Streams.Get(req.StreamPath); ok {

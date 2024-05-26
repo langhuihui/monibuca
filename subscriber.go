@@ -19,17 +19,17 @@ type Owner struct {
 	Conn     net.Conn
 	File     *os.File
 	MetaData any
+	io.Closer
 }
 
 type PubSubBase struct {
 	Unit
-	ID           int
-	Owner        `json:"-" yaml:"-"`
-	Plugin       *Plugin `json:"-" yaml:"-"`
+	ID int
+	Owner
+	Plugin       *Plugin
 	StreamPath   string
 	Args         url.Values
-	TimeoutTimer *time.Timer `json:"-" yaml:"-"`
-	io.Closer    `json:"-" yaml:"-"`
+	TimeoutTimer *time.Timer
 }
 
 func (p *PubSubBase) GetKey() int {
@@ -65,7 +65,7 @@ func (ps *PubSubBase) Init(p *Plugin, streamPath string, options ...any) {
 type Subscriber struct {
 	PubSubBase
 	config.Subscribe
-	Publisher *Publisher
+	Publisher   *Publisher
 	AudioReader *AVRingReader
 	VideoReader *AVRingReader
 }

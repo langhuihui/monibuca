@@ -14,13 +14,14 @@ func (*emptyLocker) Unlock() {}
 var EmptyLocker emptyLocker
 
 type RingWriter struct {
-	*util.Ring[AVFrame] `json:"-" yaml:"-"`
-	IDRingList          `json:"-" yaml:"-"` //最近的关键帧位置，首屏渲染
-	ReaderCount         atomic.Int32        `json:"-" yaml:"-"`
-	pool                *util.Ring[AVFrame]
-	poolSize            int
-	Size                int
-	LastValue           *AVFrame
+	*util.Ring[AVFrame]
+	IDRingList  //最近的关键帧位置，首屏渲染
+	ReaderCount atomic.Int32
+	Allocator   *util.ScalableMemoryAllocator
+	pool        *util.Ring[AVFrame]
+	poolSize    int
+	Size        int
+	LastValue   *AVFrame
 }
 
 func NewRingWriter(n int) (rb *RingWriter) {

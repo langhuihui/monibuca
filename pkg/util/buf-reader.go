@@ -28,6 +28,10 @@ func NewBufReader(reader io.Reader) (r *BufReader) {
 	return
 }
 
+func (r *BufReader) GetAllocator() *ScalableMemoryAllocator {
+	return r.buf.ScalableMemoryAllocator
+}
+
 func (r *BufReader) eat() error {
 	buf := r.buf.NextN(r.BufLen)
 	if n, err := r.reader.Read(buf); err != nil {

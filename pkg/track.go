@@ -48,6 +48,7 @@ func NewAVTrack(args ...any) (t *AVTrack) {
 		switch v := arg.(type) {
 		case IAVFrame:
 			t.FrameType = reflect.TypeOf(v)
+			t.Allocator = v.GetScalableMemoryAllocator()
 		case reflect.Type:
 			t.FrameType = v
 		case *slog.Logger:
