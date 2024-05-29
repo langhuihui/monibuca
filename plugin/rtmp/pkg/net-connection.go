@@ -58,7 +58,7 @@ type NetConnection struct {
 	AppName         string
 	tmpBuf          util.Buffer //用来接收/发送小数据，复用内存
 	chunkHeaderBuf  util.Buffer
-	writePool       util.RecyclableBuffers
+	writePool       util.RecyclableMemory
 	writing         atomic.Bool // false 可写，true 不可写
 }
 
@@ -137,7 +137,7 @@ func (conn *NetConnection) readChunk() (msg *Chunk, err error) {
 		return nil, errors.New("get chunk type error :" + err.Error())
 	}
 	msgLen := int(chunk.MessageLength)
-	var mem util.RecyclableBuffers
+	var mem util.RecyclableMemory
 	if unRead := msgLen - chunk.bufLen; unRead < conn.readChunkSize {
 		mem, err = conn.ReadBytes(unRead)
 	} else {
@@ -147,15 +147,15 @@ func (conn *NetConnection) readChunk() (msg *Chunk, err error) {
 		mem.Recycle()
 		return nil, err
 	}
-	conn.readSeqNum += uint32(mem.Length)
+	conn.readSeqNum += uint32(mem.Size)
 	if chunk.bufLen == 0 {
-		chunk.AVData.RecyclableBuffers = mem
+		chunk.AVData.RecyclableMemory = mem
 	} else {
-		chunk.AVData.ReadFromBytes(mem.Buffers.Buffers...)
+		chunk.AVData.ReadFromBytes(mem.Buffers...)
 	}
-	
-	chunk.bufLen += mem.Length
-	if chunk.AVData.Length == msgLen {
+
+	chunk.bufLen += mem.Size
+	if chunk.AVData.Size == msgLen {
 		msg = chunk
 		switch chunk.MessageTypeID {
 		case RTMP_MSG_AUDIO, RTMP_MSG_VIDEO:
@@ -227,7 +227,7 @@ func (conn *NetConnection) readChunkType(h *ChunkHeader, chunkType byte) (err er
 			}
 		}
 	}
-	
+
 	// ExtendTimestamp 4 bytes
 	if h.Timestamp >= 0xffffff { // 对于type 0的chunk,绝对时间戳在这里表示,如果时间戳值大于等于0xffffff(16777215),该值必须是0xffffff,且时间戳扩展字段必须发送,其他情况没有要求
 		if h.Timestamp, err = conn.ReadBE32(4); err != nil {
@@ -237,7 +237,7 @@ func (conn *NetConnection) readChunkType(h *ChunkHeader, chunkType byte) (err er
 		case 0:
 			h.ExtendTimestamp = h.Timestamp
 		case 1, 2:
-			h.ExtendTimestamp += (h.Timestamp -0xffffff)
+			h.ExtendTimestamp += (h.Timestamp - 0xffffff)
 		}
 	} else {
 		switch chunkType {
@@ -309,15 +309,16 @@ func (conn *NetConnection) SendMessage(t byte, msg RtmpMessage) (err error) {
 	if sid, ok := msg.(HaveStreamID); ok {
 		head.MessageStreamID = sid.GetStreamID()
 	}
-	return conn.sendChunk(*util.NewBuffersFromBytes(conn.tmpBuf), head, RTMP_CHUNK_HEAD_12)
+	return conn.sendChunk(net.Buffers{conn.tmpBuf}, head, RTMP_CHUNK_HEAD_12)
 }
 
-func (conn *NetConnection) sendChunk(r util.Buffers, head *ChunkHeader, headType byte) (err error) {
+func (conn *NetConnection) sendChunk(data net.Buffers, head *ChunkHeader, headType byte) (err error) {
 	conn.chunkHeaderBuf.Reset()
 	head.WriteTo(headType, &conn.chunkHeaderBuf)
 	chunks := net.Buffers{conn.chunkHeaderBuf}
 	var chunk3 util.Buffer = conn.chunkHeaderBuf[conn.chunkHeaderBuf.Len():20]
 	head.WriteTo(RTMP_CHUNK_HEAD_1, &chunk3)
+	r := util.NewReadableBuffersFromBytes(data...)
 	for {
 		r.WriteNTo(conn.WriteChunkSize, &chunks)
 		if r.Length <= 0 {

@@ -15,7 +15,7 @@ import (
 type RTPData struct {
 	*webrtc.RTPCodecParameters
 	Packets []*rtp.Packet
-	util.RecyclableBuffers
+	util.RecyclableMemory
 }
 
 func (r *RTPData) String() (s string) {

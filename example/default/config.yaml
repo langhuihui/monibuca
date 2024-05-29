@@ -15,6 +15,7 @@ webrtc:
 rtmp:
   chunksize: 2048
   publish:
+    pubaudio: false
     # idletimeout: 10s
     # closedelaytimeout: 4s
   subscribe:

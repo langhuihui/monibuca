@@ -128,7 +128,7 @@ func (h264 *RTPH264Ctx) CreateFrame(from *AVFrame) (frame IAVFrame, err error) {
 		r.Packets = append(r.Packets, createPacket(h264.SPS[0]), createPacket(h264.PPS[0]))
 	}
 	for _, nalu := range nalus.Nalus {
-		reader := util.NewBuffersFromBytes(nalu...)
+		reader := util.NewReadableBuffersFromBytes(nalu...)
 		if startIndex := len(r.Packets); reader.Length > 1460 {
 			//fu-a
 			for reader.Length > 0 {
@@ -136,7 +136,7 @@ func (h264 *RTPH264Ctx) CreateFrame(from *AVFrame) (frame IAVFrame, err error) {
 				n := reader.ReadBytesTo(mem[1:])
 				mem[0] = codec.NALU_FUA.Or(mem[1] & 0x60)
 				if n < 1459 {
-					r.RecycleBack(1459 - n)
+					r.Free(mem[n+1:])
 					mem = mem[:n+1]
 				}
 				r.Packets = append(r.Packets, createPacket(mem))

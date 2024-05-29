@@ -1,33 +1,43 @@
 package util
 
 import (
+	"fmt"
 	"unsafe"
 )
 
-type Block [2]int
-
-func (block Block) Len() int {
-	return block[1] - block[0]
+type Block struct {
+	start int
+	end   int
 }
 
-func (block Block) Split() (int, int) {
-	return block[0], block[1]
+func (block Block) Len() int {
+	return block.end - block.start
 }
 
 func (block *Block) Combine(s, e int) (ret bool) {
-	if ret = block[0] == e; ret {
-		block[0] = s
-	} else if ret = block[1] == s; ret {
-		block[1] = e
+	if block.start == e {
+		block.start = s
+	} else if block.end == s {
+		block.end = e
+	} else {
+		return
 	}
-	return
+	return true
+}
+
+func (block *Block) CutFront(n int) bool {
+	if n > block.Len() {
+		return false
+	}
+	block.start += n
+	return true
 }
 
 type MemoryAllocator struct {
 	start  int64
 	memory []byte
-	Size   int
 	blocks *List[Block]
+	Size   int
 }
 
 func NewMemoryAllocator(size int) (ret *MemoryAllocator) {
@@ -41,188 +51,178 @@ func NewMemoryAllocator(size int) (ret *MemoryAllocator) {
 	return
 }
 
-func (ma *MemoryAllocator) Malloc2(size int) (memory []byte, start, end int) {
+func (ma *MemoryAllocator) Malloc(size int) (memory []byte) {
 	for be := ma.blocks.Front(); be != nil; be = be.Next() {
-		start, end = be.Value.Split()
-		if e := start + size; end >= e {
-			memory = ma.memory[start:e]
-			if be.Value[0] = e; end == e {
+		if start := be.Value.start; be.Value.CutFront(size) {
+			if be.Value.Len() == 0 {
 				ma.blocks.Remove(be)
 			}
-			end = e
+			memory = ma.memory[start:be.Value.start]
 			return
 		}
 	}
 	return
 }
 
-func (ma *MemoryAllocator) Malloc(size int) (memory []byte) {
-	memory, _, _ = ma.Malloc2(size)
+func (ma *MemoryAllocator) GetFreeSize() (ret int) {
+	for e := ma.blocks.Front(); e != nil; e = e.Next() {
+		ret += e.Value.Len()
+	}
 	return
 }
 
-func (ma *MemoryAllocator) Free2(start, end int) bool {
+func (ma *MemoryAllocator) free(start, end int) (ret bool) {
 	if start < 0 || end > ma.Size || start >= end {
-		return false
+		return
 	}
-	for e := ma.blocks.Front(); e != nil; e = e.Next() {
-		if e.Value.Combine(start, end) {
-			return true
+	ret = true
+	l := end - start
+	freeSize := ma.GetFreeSize()
+	defer func() {
+		if freeSize+l != ma.GetFreeSize() {
+			panic("freeSize")
 		}
-		if end < e.Value[0] {
+	}()
+	for e := ma.blocks.Front(); e != nil; e = e.Next() {
+		if end < e.Value.start {
 			ma.blocks.InsertBefore(Block{start, end}, e)
-			return true
+			return
+		}
+		// combine to next block
+		if e.Value.start == end {
+			e.Value.start = start
+			return
+		}
+		// combine to previous block
+		if e.Value.end == start {
+			e.Value.end = end
+			// combine 3 blocks
+			if next := e.Next(); next != nil && next.Value.start == end {
+				e.Value.end = next.Value.end
+				ma.blocks.Remove(next)
+			}
+			return
 		}
 	}
 	ma.blocks.PushBack(Block{start, end})
-	return true
+	return
 }
 
 func (ma *MemoryAllocator) Free(mem []byte) bool {
-	ptr := uintptr(unsafe.Pointer(&mem[:1][0]))
+	ptr := uintptr(unsafe.Pointer(&mem[0]))
 	start := int(int64(ptr) - ma.start)
-	return ma.Free2(start, start+len(mem))
+	return ma.free(start, start+len(mem))
 }
 
-func (ma *MemoryAllocator) GetBlocks() (blocks []Block) {
+func (ma *MemoryAllocator) GetBlocks() (blocks [][2]int) {
 	for e := ma.blocks.Front(); e != nil; e = e.Next() {
-		blocks = append(blocks, e.Value)
+		blocks = append(blocks, [2]int{e.Value.start, e.Value.end})
 	}
 	return
 }
 
-type ScalableMemoryAllocator []*MemoryAllocator
+var EnableCheckSize bool = true
+
+type ScalableMemoryAllocator struct {
+	children    []*MemoryAllocator
+	totalMalloc int64
+	totalFree   int64
+	size        int
+}
 
 func NewScalableMemoryAllocator(size int) (ret *ScalableMemoryAllocator) {
-	return &ScalableMemoryAllocator{NewMemoryAllocator(size)}
+	return &ScalableMemoryAllocator{children: []*MemoryAllocator{NewMemoryAllocator(size)}, size: size}
+}
+
+func (sma *ScalableMemoryAllocator) checkSize() {
+	var totalFree int
+	for _, child := range sma.children {
+		totalFree += child.GetFreeSize()
+	}
+	if totalFree != sma.size-(int(sma.totalMalloc)-int(sma.totalFree)) {
+		panic("CheckSize")
+	}
+}
+
+func (sma *ScalableMemoryAllocator) addMallocCount(size int) {
+	sma.totalMalloc += int64(size)
+}
+
+func (sma *ScalableMemoryAllocator) addFreeCount(size int) {
+	sma.totalFree += int64(size)
+}
+
+func (sma *ScalableMemoryAllocator) GetTotalMalloc() int64 {
+	return sma.totalMalloc
+}
+
+func (sma *ScalableMemoryAllocator) GetTotalFree() int64 {
+	return sma.totalFree
+}
+
+func (sma *ScalableMemoryAllocator) GetChildren() []*MemoryAllocator {
+	return sma.children
 }
 
 func (sma *ScalableMemoryAllocator) Malloc(size int) (memory []byte) {
 	if sma == nil {
 		return make([]byte, size)
 	}
-	memory, _, _, _ = sma.Malloc2(size)
-	return memory
-}
-
-func (sma *ScalableMemoryAllocator) Malloc2(size int) (memory []byte, index, start, end int) {
-	for i, child := range *sma {
-		index = i
-		if memory, start, end = child.Malloc2(size); memory != nil {
+	if EnableCheckSize {
+		defer sma.checkSize()
+	}
+	defer sma.addMallocCount(size)
+	var child *MemoryAllocator
+	for _, child = range sma.children {
+		if memory = child.Malloc(size); memory != nil {
 			return
 		}
 	}
-	n := NewMemoryAllocator(max((*sma)[index].Size*2, size))
-	index++
-	memory, start, end = n.Malloc2(size)
-	*sma = append(*sma, n)
+	child = NewMemoryAllocator(max(child.Size*2, size))
+	sma.size += child.Size
+	memory = child.Malloc(size)
+	sma.children = append(sma.children, child)
 	return
 }
+
 func (sma *ScalableMemoryAllocator) GetScalableMemoryAllocator() *ScalableMemoryAllocator {
 	return sma
 }
+
 func (sma *ScalableMemoryAllocator) Free(mem []byte) bool {
 	if sma == nil {
 		return false
 	}
-	ptr := uintptr(unsafe.Pointer(&mem[:1][0]))
-	for _, child := range *sma {
-		if start := int(int64(ptr) - child.start); child.Free2(start, start+len(mem)) {
+	if EnableCheckSize {
+		defer sma.checkSize()
+	}
+	ptr := int64(uintptr(unsafe.Pointer(&mem[0])))
+	size := len(mem)
+	for _, child := range sma.children {
+		if start := int(ptr - child.start); child.free(start, start+size) {
+			sma.addFreeCount(size)
 			return true
 		}
 	}
 	return false
 }
 
-func (sma *ScalableMemoryAllocator) Free2(index, start, end int) bool {
-	if index < 0 || index >= len(*sma) {
-		return false
-	}
-	return (*sma)[index].Free2(start, end)
-}
-
-// type RecyclableMemory struct {
-// 	*ScalableMemoryAllocator
-// 	mem []int
-// }
-
-// func (r *RecyclableMemory) Malloc(size int) (memory []byte) {
-// 	ret, i, start, end := r.Malloc2(size)
-// 	// ml := len(r.mem)
-// 	// if lastI, lastE := ml-3, ml-1; lastI > 0 && r.mem[lastI] == i && r.mem[lastE] == start {
-// 	// 	r.mem[lastE] = end
-// 	// } else {
-// 	r.mem = append(r.mem, i, start, end)
-// 	// }
-// 	return ret
-// }
-
-// func (r *RecyclableMemory) Pop() []int {
-// 	l := len(r.mem)
-// 	if l == 0 {
-// 		return nil
-// 	}
-// 	ret := r.mem[l-3:]
-// 	r.mem = r.mem[:l-3]
-// 	return ret
-// }
-
-// func (r *RecyclableMemory) Push(args ...int) {
-// 	r.mem = append(r.mem, args...)
-// }
-
-// func (r *RecyclableMemory) Recycle() {
-// 	for i := 0; i < len(r.mem); i += 3 {
-// 		r.Free2(r.mem[i], r.mem[i+1], r.mem[i+2])
-// 	}
-// 	r.mem = r.mem[:0]
-// }
-
-// func (r *RecyclableMemory) RecycleBack(n int) {
-// 	l := len(r.mem)
-// 	end := &r.mem[l-1]
-// 	start := *end - n
-// 	r.Free2(r.mem[l-3], start, *end)
-// 	*end = start
-// 	if start == r.mem[l-2] {
-// 		r.mem = r.mem[:l-3]
-// 	}
-// }
-
-type RecyclableBuffers struct {
+type RecyclableMemory struct {
 	*ScalableMemoryAllocator
-	Buffers
+	Memory
 }
 
-func (r *RecyclableBuffers) NextN(size int) (memory []byte) {
+func (r *RecyclableMemory) NextN(size int) (memory []byte) {
 	memory = r.ScalableMemoryAllocator.Malloc(size)
-	r.Buffers.ReadFromBytes(memory)
+	r.Memory.ReadFromBytes(memory)
 	return
 }
 
-func (r *RecyclableBuffers) Recycle() {
-	for _, buf := range r.Buffers.Buffers {
-		r.Free(buf)
+func (r *RecyclableMemory) Recycle() {
+	for i, buf := range r.Memory.Buffers {
+		ret := r.Free(buf)
+		if !ret {
+			fmt.Println(i)
+		}
 	}
-}
-
-func (r *RecyclableBuffers) RecycleBack(n int) {
-	r.Free(r.ClipBack(n))
-}
-
-func (r *RecyclableBuffers) RecycleFront() {
-	for _, buf := range r.Buffers.ClipFront() {
-		r.Free(buf)
-	}
-}
-
-// func (r *RecyclableBuffers) Cut(n int) (child RecyclableBuffers) {
-// 	child.ScalableMemoryAllocator = r.ScalableMemoryAllocator
-// 	child.ReadFromBytes(r.Buffers.Cut(n)...)
-// 	return
-// }
-
-type IAllocator interface {
-	Malloc(int) []byte
-	Free([]byte) bool
 }

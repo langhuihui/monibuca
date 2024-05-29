@@ -170,6 +170,7 @@ func (p *Publisher) writeAV(t *AVTrack, data IAVFrame) {
 
 func (p *Publisher) WriteVideo(data IAVFrame) (err error) {
 	if !p.PubVideo || p.IsStopped() {
+		data.Recycle()
 		return
 	}
 	t := p.VideoTrack.AVTrack
@@ -276,6 +277,7 @@ func (p *Publisher) WriteVideo(data IAVFrame) (err error) {
 
 func (p *Publisher) WriteAudio(data IAVFrame) (err error) {
 	if !p.PubAudio || p.IsStopped() {
+		data.Recycle()
 		return
 	}
 	t := p.AudioTrack.AVTrack

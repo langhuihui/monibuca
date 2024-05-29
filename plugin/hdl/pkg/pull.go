@@ -51,13 +51,14 @@ func (puller *HDLPuller) Connect(p *m7s.Client) (err error) {
 		}
 	}
 	if err == nil {
-		var head util.RecyclableBuffers
+		var head util.RecyclableMemory
 		head, err = puller.BufReader.ReadBytes(13)
 		defer head.Recycle()
 		if err == nil {
 			var flvHead [3]byte
 			var version, flag byte
-			head.ReadByteTo(&flvHead[0], &flvHead[1], &flvHead[2], &version, &flag)
+			var reader = head.NewReader()
+			reader.ReadByteTo(&flvHead[0], &flvHead[1], &flvHead[2], &version, &flag)
 			if flvHead != [...]byte{'F', 'L', 'V'} {
 				err = errors.New("not flv file")
 			} else {
@@ -101,7 +102,7 @@ func (puller *HDLPuller) Pull(p *m7s.Puller) (err error) {
 		}
 		puller.ReadBE(3) // stream id always 0
 		var frame rtmp.RTMPData
-		frame.RecyclableBuffers, err = puller.ReadBytes(int(dataSize))
+		frame.RecyclableMemory, err = puller.ReadBytes(int(dataSize))
 		if err != nil {
 			frame.Recycle()
 			return err
@@ -111,13 +112,9 @@ func (puller *HDLPuller) Pull(p *m7s.Puller) (err error) {
 		// fmt.Println(t, offsetTs, timestamp, startTs, puller.absTS)
 		switch t {
 		case FLV_TAG_TYPE_AUDIO:
-			if pubConf.PubAudio {
-				p.WriteAudio(frame.WrapAudio())
-			}
+			p.WriteAudio(frame.WrapAudio())
 		case FLV_TAG_TYPE_VIDEO:
-			if pubConf.PubVideo {
-				p.WriteVideo(frame.WrapVideo())
-			}
+			p.WriteVideo(frame.WrapVideo())
 		case FLV_TAG_TYPE_SCRIPT:
 			p.Info("script")
 			frame.Recycle()

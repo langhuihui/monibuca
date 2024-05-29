@@ -4,15 +4,30 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/binary"
+	"io"
 	"math/rand"
 	"testing"
 )
+
+type limitReader struct {
+	reader io.Reader
+	limit  int
+}
+
+func (l *limitReader) Read(p []byte) (n int, err error) {
+	if len(p) > l.limit {
+		p = p[:l.limit]
+	}
+	n, err = l.reader.Read(p)
+	return
+}
 
 func TestBufRead(t *testing.T) {
 	t.Run(t.Name(), func(t *testing.T) {
 		var testData = []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20}
 		testReader := bytes.NewReader(testData)
-		reader := NewBufReader(testReader)
+		limitReader := &limitReader{reader: testReader, limit: 2}
+		reader := NewBufReader(limitReader)
 		reader.BufLen = 5
 		b, err := reader.ReadByte()
 		if err != nil {
@@ -32,10 +47,6 @@ func TestBufRead(t *testing.T) {
 			t.Error("read be error")
 			return
 		}
-		if reader.buf.Length != 0 {
-			t.Error("reader.buf.Length != 0")
-			return
-		}
 		b, err = reader.ReadByte()
 		if err != nil {
 			t.Error(err)
@@ -50,16 +61,14 @@ func TestBufRead(t *testing.T) {
 			t.Error(err)
 			return
 		}
-		if len(mem.Buffers.Buffers) != 2 {
-			t.Error("len(mem.Buffers.Buffers) != 2")
+		reader2 := mem.NewReader()
+		b, err = reader2.ReadByte()
+		if err != nil {
+			t.Error(err)
 			return
 		}
-		if mem.Buffers.Buffers[0][0] != 7 {
-			t.Error("mem.Buffers.Buffers[0][0] != 7")
-			return
-		}
-		if mem.Buffers.Buffers[1][0] != 11 {
-			t.Error("mem.Buffers.Buffers[1][0] != 10")
+		if b != 7 {
+			t.Error("byte read error")
 			return
 		}
 		b, err = reader.ReadByte()
@@ -105,7 +114,7 @@ func BenchmarkBufRead(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		var testData = make([]byte, 10*1024*1024)
 		var err error
-		var mem RecyclableBuffers
+		var mem RecyclableMemory
 		for pb.Next() {
 			rand.Read(testData)
 			testReader := bytes.NewReader(testData)

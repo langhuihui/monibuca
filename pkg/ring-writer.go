@@ -17,7 +17,6 @@ type RingWriter struct {
 	*util.Ring[AVFrame]
 	IDRingList  //最近的关键帧位置，首屏渲染
 	ReaderCount atomic.Int32
-	Allocator   *util.ScalableMemoryAllocator
 	pool        *util.Ring[AVFrame]
 	poolSize    int
 	Size        int
@@ -60,7 +59,7 @@ func (rb *RingWriter) Glow(size int) (newItem *util.Ring[AVFrame]) {
 	return
 }
 
-func (rb *RingWriter) Recycle(r *util.Ring[AVFrame]) {
+func (rb *RingWriter) recycle(r *util.Ring[AVFrame]) {
 	rb.poolSize++
 	r.Value.Reset()
 	if rb.pool == nil {
@@ -72,23 +71,18 @@ func (rb *RingWriter) Recycle(r *util.Ring[AVFrame]) {
 
 func (rb *RingWriter) Reduce(size int) (r *util.Ring[AVFrame]) {
 	r = rb.Unlink(size)
-	if size > 1 {
-		for p := r.Next(); p != r; {
-			next := p.Next() //先保存下一个节点
-			if p.Value.discard {
-				p.Prev().Unlink(1)
-			}
-			// if p.Value.Discard() == 0 {
-			// 	rb.Recycle(p.Prev().Unlink(1))
-			// } else {
-			// 	// fmt.Println("Reduce", p.Value.ReaderCount())
-			// }
-			p = next
+	for p := r.Next(); p != r; {
+		next := p.Next() //先保存下一个节点
+		if p.Value.TryLock() {
+			rb.recycle(p)
+			p.Value.Unlock()
+		} else {
+			p.Value.discard = true
+			dr := p.Prev().Unlink(1)
+			dr.Value.Reset()
 		}
+		p = next
 	}
-	// if r.Value.Discard() == 0 {
-	// 	rb.Recycle(r)
-	// }
 	rb.Size -= size
 	return
 }

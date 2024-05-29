@@ -105,9 +105,9 @@ func (p *HDLPlugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	copy(b[:4], flv[3])
 	gotFlvTag(flv[:3])
 	rtmpData2FlvTag := func(t byte, data *rtmp.RTMPData) error {
-		WriteFLVTag(t, data.Timestamp, uint32(data.Length), b[4:])
-		defer binary.BigEndian.PutUint32(b[:4], uint32(data.Length)+11)
-		return gotFlvTag(append(net.Buffers{b[:]}, data.Buffers.Buffers...))
+		WriteFLVTag(t, data.Timestamp, uint32(data.Size), b[4:])
+		defer binary.BigEndian.PutUint32(b[:4], uint32(data.Size)+11)
+		return gotFlvTag(append(net.Buffers{b[:]}, data.Memory.Buffers...))
 	}
 	sub.Handle(m7s.SubscriberHandler{
 		OnAudio: func(audio *rtmp.RTMPAudio) error {

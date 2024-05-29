@@ -11,7 +11,7 @@ import (
 type AnnexB struct {
 	PTS time.Duration
 	DTS time.Duration
-	util.RecyclableBuffers
+	util.RecyclableMemory
 }
 
 // DecodeConfig implements pkg.IAVFrame.
@@ -27,7 +27,7 @@ func (a *AnnexB) DecodeConfig(t *AVTrack, ctx ICodecCtx) error {
 
 // GetSize implements pkg.IAVFrame.
 func (a *AnnexB) GetSize() int {
-	return a.Length
+	return a.Size
 }
 
 func (a *AnnexB) GetTimestamp() time.Duration {
@@ -41,7 +41,7 @@ func (a *AnnexB) Parse(t *AVTrack) (isIDR bool, isSeq bool, raw any, err error) 
 
 // String implements pkg.IAVFrame.
 func (a *AnnexB) String() string {
-	return fmt.Sprintf("%d %d", a.DTS, a.Buffers.Length)
+	return fmt.Sprintf("%d %d", a.DTS, a.Memory.Size)
 }
 
 // ToRaw implements pkg.IAVFrame.

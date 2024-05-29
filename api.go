@@ -129,6 +129,7 @@ func (s *Server) getStreamInfo(pub *Publisher) (res *pb.StreamInfoResponse, err 
 	}
 	return
 }
+
 func (s *Server) StreamInfo(ctx context.Context, req *pb.StreamSnapRequest) (res *pb.StreamInfoResponse, err error) {
 	s.Call(func() {
 		if pub, ok := s.Streams.Get(req.StreamPath); ok {
@@ -193,6 +194,16 @@ func (s *Server) VideoTrackSnap(ctx context.Context, req *pb.StreamSnapRequest) 
 			res = &pb.TrackSnapShotResponse{}
 			if !pub.VideoTrack.IsEmpty() {
 				// vcc := pub.VideoTrack.AVTrack.ICodecCtx.(pkg.IVideoCodecCtx)
+				for _, memlist := range pub.VideoTrack.Allocator.GetChildren() {
+					var list []*pb.MemoryBlock
+					for _, block := range memlist.GetBlocks() {
+						list = append(list, &pb.MemoryBlock{
+							S: uint32(block[0]),
+							E: uint32(block[1]),
+						})
+					}
+					res.Memory = append(res.Memory, &pb.MemoryBlockGroup{List: list, Size: uint32(memlist.Size)})
+				}
 				res.Reader = make(map[uint32]uint32)
 				for sub := range pub.Subscribers {
 					if sub.VideoReader == nil {

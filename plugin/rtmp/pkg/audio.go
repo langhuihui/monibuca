@@ -10,7 +10,7 @@ type RTMPAudio struct {
 }
 
 func (avcc *RTMPAudio) Parse(t *AVTrack) (isIDR, isSeq bool, raw any, err error) {
-	reader := avcc.Buffers
+	reader := avcc.NewReader()
 	var b, b0, b1 byte
 	b, err = reader.ReadByte()
 	if err != nil {
@@ -87,13 +87,13 @@ func (avcc *RTMPAudio) DecodeConfig(t *AVTrack, from ICodecCtx) (err error) {
 }
 
 func (avcc *RTMPAudio) ToRaw(codecCtx ICodecCtx) (any, error) {
-	reader := avcc.Buffers
+	reader := avcc.NewReader()
 	if _, ok := codecCtx.(*AACCtx); ok {
 		err := reader.Skip(2)
-		return reader.Buffers, err
+		return reader.Memory, err
 	} else {
 		err := reader.Skip(1)
-		return reader.Buffers, err
+		return reader.Memory, err
 	}
 }
 

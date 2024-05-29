@@ -62,7 +62,9 @@ type (
 		Raw          any       `json:"-" yaml:"-"` // 裸格式
 	}
 )
+
 var _ IAVFrame = (*AnnexB)(nil)
+
 func (frame *AVFrame) Reset() {
 	frame.Timestamp = 0
 	for _, wrap := range frame.Wraps {
@@ -98,7 +100,7 @@ func (nalus *Nalus) Append(bytes ...[]byte) {
 	nalus.Nalus = append(nalus.Nalus, bytes)
 }
 
-func (nalus *Nalus) ParseAVCC(reader *util.Buffers, naluSizeLen int) error {
+func (nalus *Nalus) ParseAVCC(reader *util.MemoryReader, naluSizeLen int) error {
 	for reader.Length > 0 {
 		l, err := reader.ReadBE(naluSizeLen)
 		if err != nil {
@@ -122,20 +124,20 @@ func (obus *OBUs) Append(bytes ...[]byte) {
 	obus.OBUs = append(obus.OBUs, bytes)
 }
 
-func (obus *OBUs) ParseAVCC(reader *util.Buffers) error {
+func (obus *OBUs) ParseAVCC(reader *util.MemoryReader) error {
 	var obuHeader av1.OBUHeader
+	startLen := reader.Length
 	for reader.Length > 0 {
-		offset := reader.Offset
+		offset := reader.Size - reader.Length
 		b, _ := reader.ReadByte()
 		obuHeader.Unmarshal([]byte{b})
 		// if log.Trace {
 		// 	vt.Trace("obu", zap.Any("type", obuHeader.Type), zap.Bool("iframe", vt.Value.IFrame))
 		// }
 		obuSize, _, _ := reader.LEB128Unmarshal()
-		end := reader.Offset
+		end := reader.Size - reader.Length
 		size := end - offset + int(obuSize)
-		reader = &util.Buffers{Buffers: reader.Buffers}
-		reader.Skip(offset)
+		reader = &util.MemoryReader{Memory: reader.Memory, Length: startLen - offset}
 		obu, err := reader.ReadBytes(size)
 		if err != nil {
 			return err

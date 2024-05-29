@@ -17,7 +17,7 @@ type RTMPVideo struct {
 }
 
 func (avcc *RTMPVideo) Parse(t *AVTrack) (isIDR, isSeq bool, raw any, err error) {
-	reader := avcc.Buffers
+	reader := avcc.NewReader()
 	var b0 byte
 	b0, err = reader.ReadByte()
 	if err != nil {
@@ -33,19 +33,19 @@ func (avcc *RTMPVideo) Parse(t *AVTrack) (isIDR, isSeq bool, raw any, err error)
 		switch fourCC {
 		case codec.FourCC_H264:
 			var ctx H264Ctx
-			if err = ctx.Unmarshal(&reader); err == nil {
+			if err = ctx.Unmarshal(reader); err == nil {
 				t.SequenceFrame = avcc
 				t.ICodecCtx = &ctx
 			}
 		case codec.FourCC_H265:
 			var ctx H265Ctx
-			if err = ctx.Unmarshal(&reader); err == nil {
+			if err = ctx.Unmarshal(reader); err == nil {
 				t.SequenceFrame = avcc
 				t.ICodecCtx = &ctx
 			}
 		case codec.FourCC_AV1:
 			var ctx AV1Ctx
-			if err = ctx.Unmarshal(&reader); err == nil {
+			if err = ctx.Unmarshal(reader); err == nil {
 				t.SequenceFrame = avcc
 				t.ICodecCtx = &ctx
 			}
@@ -123,7 +123,7 @@ func (avcc *RTMPVideo) DecodeConfig(t *AVTrack, from ICodecCtx) (err error) {
 		b.Write(h264ctx.PPS[0])
 		t.ICodecCtx = &ctx
 		var seqFrame RTMPData
-		seqFrame.Buffers.ReadFromBytes(b)
+		seqFrame.Memory.ReadFromBytes(b)
 		t.SequenceFrame = seqFrame.WrapVideo()
 		if t.Enabled(context.TODO(), TraceLevel) {
 			codec := t.FourCC().String()
@@ -136,7 +136,7 @@ func (avcc *RTMPVideo) DecodeConfig(t *AVTrack, from ICodecCtx) (err error) {
 	return
 }
 
-func (avcc *RTMPVideo) parseH264(ctx *H264Ctx, reader *util.Buffers) (any, error) {
+func (avcc *RTMPVideo) parseH264(ctx *H264Ctx, reader *util.MemoryReader) (any, error) {
 	cts, err := reader.ReadBE(3)
 	if err != nil {
 		return nil, err
@@ -150,7 +150,7 @@ func (avcc *RTMPVideo) parseH264(ctx *H264Ctx, reader *util.Buffers) (any, error
 	return nalus, nil
 }
 
-func (avcc *RTMPVideo) parseH265(ctx *H265Ctx, reader *util.Buffers) (any, error) {
+func (avcc *RTMPVideo) parseH265(ctx *H265Ctx, reader *util.MemoryReader) (any, error) {
 	cts, err := reader.ReadBE(3)
 	if err != nil {
 		return nil, err
@@ -164,7 +164,7 @@ func (avcc *RTMPVideo) parseH265(ctx *H265Ctx, reader *util.Buffers) (any, error
 	return nalus, nil
 }
 
-func (avcc *RTMPVideo) parseAV1(reader *util.Buffers) (any, error) {
+func (avcc *RTMPVideo) parseAV1(reader *util.MemoryReader) (any, error) {
 	var obus OBUs
 	obus.PTS = time.Duration(avcc.Timestamp) * 90
 	if err := obus.ParseAVCC(reader); err != nil {
@@ -174,7 +174,7 @@ func (avcc *RTMPVideo) parseAV1(reader *util.Buffers) (any, error) {
 }
 
 func (avcc *RTMPVideo) ToRaw(codecCtx ICodecCtx) (any, error) {
-	reader := avcc.Buffers
+	reader := avcc.NewReader()
 	b0, err := reader.ReadByte()
 	if err != nil {
 		return nil, err
@@ -197,9 +197,9 @@ func (avcc *RTMPVideo) ToRaw(codecCtx ICodecCtx) (any, error) {
 			return nil, nil
 		case PacketTypeCodedFrames:
 			if codecCtx.FourCC() == codec.FourCC_H265 {
-				return avcc.parseH265(codecCtx.(*H265Ctx), &reader)
+				return avcc.parseH265(codecCtx.(*H265Ctx), reader)
 			} else {
-				return avcc.parseAV1(&reader)
+				return avcc.parseAV1(reader)
 			}
 		case PacketTypeCodedFramesX:
 		}
@@ -217,9 +217,9 @@ func (avcc *RTMPVideo) ToRaw(codecCtx ICodecCtx) (any, error) {
 			// }
 		} else {
 			if codecCtx.FourCC() == codec.FourCC_H265 {
-				return avcc.parseH265(codecCtx.(*H265Ctx), &reader)
+				return avcc.parseH265(codecCtx.(*H265Ctx), reader)
 			} else {
-				return avcc.parseH264(codecCtx.(*H264Ctx), &reader)
+				return avcc.parseH264(codecCtx.(*H264Ctx), reader)
 			}
 		}
 	}

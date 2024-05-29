@@ -7,15 +7,16 @@ import (
 const defaultBufSize = 65536
 
 type BufReader struct {
-	reader io.Reader
-	buf    RecyclableBuffers
-	BufLen int
+	reader    io.Reader
+	allocator *ScalableMemoryAllocator
+	buf       MemoryReader
+	BufLen    int
 }
 
 func NewBufReaderWithBufLen(reader io.Reader, bufLen int) (r *BufReader) {
 	r = &BufReader{}
 	r.reader = reader
-	r.buf.ScalableMemoryAllocator = NewScalableMemoryAllocator(bufLen)
+	r.allocator = NewScalableMemoryAllocator(bufLen)
 	r.BufLen = bufLen
 	return
 }
@@ -23,33 +24,33 @@ func NewBufReaderWithBufLen(reader io.Reader, bufLen int) (r *BufReader) {
 func NewBufReader(reader io.Reader) (r *BufReader) {
 	r = &BufReader{}
 	r.reader = reader
-	r.buf.ScalableMemoryAllocator = NewScalableMemoryAllocator(defaultBufSize)
+	r.allocator = NewScalableMemoryAllocator(defaultBufSize)
 	r.BufLen = defaultBufSize
 	return
 }
 
-func (r *BufReader) GetAllocator() *ScalableMemoryAllocator {
-	return r.buf.ScalableMemoryAllocator
-}
-
 func (r *BufReader) eat() error {
-	buf := r.buf.NextN(r.BufLen)
+	buf := r.allocator.Malloc(r.BufLen)
 	if n, err := r.reader.Read(buf); err != nil {
+		r.allocator.Free(buf)
 		return err
 	} else if n < r.BufLen {
-		r.buf.RecycleBack(r.BufLen - n)
+		r.buf.ReadFromBytes(buf[:n])
+		r.allocator.Free(buf[n:])
+	} else if n == r.BufLen {
+		r.buf.ReadFromBytes(buf)
 	}
 	return nil
 }
 
-func (r *BufReader) ReadByte() (byte, error) {
-	for r.buf.Length == 0 {
-		err := r.eat()
-		if err != nil {
-			return 0, err
-		}
+func (r *BufReader) ReadByte() (b byte, err error) {
+	for ; r.buf.Length == 0 && err == nil; err = r.eat() {
+
 	}
-	return r.buf.ReadByte()
+	if err == nil {
+		b, err = r.buf.ReadByte()
+	}
+	return
 }
 
 func (r *BufReader) ReadBE(n int) (num int, err error) {
@@ -85,17 +86,24 @@ func (r *BufReader) ReadBE32(n int) (num uint32, err error) {
 	return
 }
 
-func (r *BufReader) ReadBytes(n int) (mem RecyclableBuffers, err error) {
-	mem.ScalableMemoryAllocator = r.buf.ScalableMemoryAllocator
-	for r.buf.RecycleFront(); n > 0 && err == nil; err = r.eat() {
+func (r *BufReader) ReadBytes(n int) (mem RecyclableMemory, err error) {
+	mem.ScalableMemoryAllocator = r.allocator
+	for r.recycleFront(); n > 0 && err == nil; err = r.eat() {
 		if r.buf.Length > 0 {
 			if r.buf.Length >= n {
-				mem.ReadFromBytes(r.buf.Buffers.Cut(n)...)
+				mem.ReadFromBytes(r.buf.ClipN(n)...)
 				return
 			}
 			n -= r.buf.Length
-			mem.ReadFromBytes(r.buf.CutAll()...)
+			mem.ReadFromBytes(r.buf.Memory.Buffers...)
+			r.buf = MemoryReader{}
 		}
 	}
 	return
+}
+
+func (r *BufReader) recycleFront() {
+	for _, buf := range r.buf.ClipFront() {
+		r.allocator.Free(buf)
+	}
 }

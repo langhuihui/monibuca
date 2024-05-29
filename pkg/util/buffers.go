@@ -6,71 +6,105 @@ import (
 	"slices"
 )
 
-type Buffers struct {
-	Offset    int
-	offset    int
-	Length    int
-	curBuf    []byte
-	curBufLen int
+type Memory struct {
+	Size int
 	net.Buffers
 }
 
-func NewBuffersFromBytes(b ...[]byte) *Buffers {
-	return NewBuffers(net.Buffers(b))
+type MemoryReader struct {
+	Memory
+	Length  int
+	offset0 int
+	offset1 int
 }
 
-func NewBuffers(buffers net.Buffers) *Buffers {
-	ret := &Buffers{Buffers: buffers}
+func NewMemoryFromBytes(b ...[]byte) *Memory {
+	return NewMemory(b)
+}
+
+func NewReadableBuffersFromBytes(b ...[]byte) *MemoryReader {
+	buf := NewMemory(b)
+	return &MemoryReader{Memory: *buf, Length: buf.Size}
+}
+
+func NewMemory(buffers net.Buffers) *Memory {
+	ret := &Memory{Buffers: buffers}
 	for _, level0 := range buffers {
-		ret.Length += len(level0)
+		ret.Size += len(level0)
 	}
-	ret.curBuf = buffers[0]
-	ret.curBufLen = len(buffers[0])
 	return ret
 }
 
-func (buffers *Buffers) Pop() []byte {
-	if buffers.Length == 0 {
+func (buffers *Memory) ReadFromBytes(b ...[]byte) {
+	buffers.Buffers = append(buffers.Buffers, b...)
+	for _, level0 := range b {
+		buffers.Size += len(level0)
+	}
+}
+
+func (buffers *Memory) Count() int {
+	return len(buffers.Buffers)
+}
+
+func (buffers *Memory) Pop() []byte {
+	if buffers.Size == 0 {
 		return nil
 	}
 	l := len(buffers.Buffers) - 1
 	last := buffers.Buffers[l]
 	buffers.Buffers = buffers.Buffers[:l]
-	buffers.Length -= len(last)
-	if buffers.offset == l {
-		buffers.curBuf = nil
-		buffers.curBufLen = 0
-	}
+	buffers.Size -= len(last)
 	return last
 }
 
-func (buffers *Buffers) MoveToEnd() {
-	buffers.curBuf = nil
-	buffers.curBufLen = 0
-	buffers.offset = len(buffers.Buffers)
-	buffers.Offset = buffers.Length
+//	func (buffers *Buffers) WriteTo(w io.Writer) (n int64, err error) {
+//		var buf net.Buffers
+//		for _, buffer := range buffers.Buffers {
+//			buf = append(buf, buffer)
+//		}
+//		return buf.WriteTo(w)
+//	}
+
+func (r Memory) NewReader() *MemoryReader {
+	var reader MemoryReader
+	reader.Memory = r
+	reader.Length = r.Size
+	return &reader
+}
+
+func (buffers *MemoryReader) ReadFromBytes(b ...[]byte) {
+	buffers.Memory.Buffers = append(buffers.Memory.Buffers, b...)
+	for _, level0 := range b {
+		buffers.Size += len(level0)
+		buffers.Length += len(level0)
+	}
+}
+
+func (buffers *MemoryReader) Pop() []byte {
+	panic("ReadableBuffers Pop not allowed")
+}
+
+func (buffers *MemoryReader) GetCurrent() []byte {
+	return buffers.Memory.Buffers[buffers.offset0][buffers.offset1:]
+}
+
+func (buffers *MemoryReader) MoveToEnd() {
+	buffers.offset0 = buffers.Count()
+	buffers.offset1 = 0
 	buffers.Length = 0
 }
 
-func (buffers *Buffers) ReadFromBytes(b ...[]byte) {
-	buffers.Buffers = append(buffers.Buffers, b...)
-	for _, level0 := range b {
-		buffers.Length += len(level0)
-	}
-	if buffers.curBuf == nil {
-		buffers.curBuf = buffers.Buffers[buffers.offset]
-		buffers.curBufLen = len(buffers.curBuf)
-	}
-}
-
-func (buffers *Buffers) ReadBytesTo(buf []byte) (actual int) {
+func (buffers *MemoryReader) ReadBytesTo(buf []byte) (actual int) {
 	n := len(buf)
+	curBuf := buffers.GetCurrent()
+	curBufLen := len(curBuf)
 	if n > buffers.Length {
-		if buffers.curBufLen > 0 {
-			actual += copy(buf, buffers.curBuf)
-			buffers.offset++
+		if curBufLen > 0 {
+			actual += copy(buf, curBuf)
+			buffers.offset0++
+			buffers.offset1 = 0
 		}
-		for _, b := range buffers.Buffers[buffers.offset:] {
+		for _, b := range buffers.Memory.Buffers[buffers.offset0:] {
 			actual += copy(buf[actual:], b)
 		}
 		buffers.MoveToEnd()
@@ -78,15 +112,15 @@ func (buffers *Buffers) ReadBytesTo(buf []byte) (actual int) {
 	}
 	l := n
 	for n > 0 {
-		if n < buffers.curBufLen {
+		if n < curBufLen {
 			actual += n
-			copy(buf[l-n:], buffers.curBuf[:n])
+			copy(buf[l-n:], curBuf[:n])
 			buffers.forward(n)
 			break
 		}
-		copy(buf[l-n:], buffers.curBuf)
-		n -= buffers.curBufLen
-		actual += buffers.curBufLen
+		copy(buf[l-n:], curBuf)
+		n -= curBufLen
+		actual += curBufLen
 		buffers.skipBuf()
 		if buffers.Length == 0 && n > 0 {
 			return
@@ -94,12 +128,12 @@ func (buffers *Buffers) ReadBytesTo(buf []byte) (actual int) {
 	}
 	return
 }
-func (buffers *Buffers) ReadByteTo(b ...*byte) (err error) {
+func (reader *MemoryReader) ReadByteTo(b ...*byte) (err error) {
 	for i := range b {
-		if buffers.Length == 0 {
+		if reader.Length == 0 {
 			return io.EOF
 		}
-		*b[i], err = buffers.ReadByte()
+		*b[i], err = reader.ReadByte()
 		if err != nil {
 			return
 		}
@@ -107,31 +141,33 @@ func (buffers *Buffers) ReadByteTo(b ...*byte) (err error) {
 	return
 }
 
-func (buffers *Buffers) ReadByteMask(mask byte) (byte, error) {
-	b, err := buffers.ReadByte()
+func (reader *MemoryReader) ReadByteMask(mask byte) (byte, error) {
+	b, err := reader.ReadByte()
 	if err != nil {
 		return 0, err
 	}
 	return b & mask, nil
 }
 
-func (buffers *Buffers) ReadByte() (byte, error) {
-	if buffers.Length == 0 {
+func (reader *MemoryReader) ReadByte() (b byte, err error) {
+	if reader.Length == 0 {
 		return 0, io.EOF
 	}
-	if buffers.curBufLen == 1 {
-		defer buffers.skipBuf()
+	curBuf := reader.GetCurrent()
+	b = curBuf[0]
+	if len(curBuf) == 1 {
+		reader.skipBuf()
 	} else {
-		defer buffers.forward(1)
+		reader.forward(1)
 	}
-	return buffers.curBuf[0], nil
+	return
 }
 
-func (buffers *Buffers) LEB128Unmarshal() (uint, int, error) {
+func (reader *MemoryReader) LEB128Unmarshal() (uint, int, error) {
 	v := uint(0)
 	n := 0
 	for i := 0; i < 8; i++ {
-		b, err := buffers.ReadByte()
+		b, err := reader.ReadByte()
 		if err != nil {
 			return 0, 0, err
 		}
@@ -145,87 +181,82 @@ func (buffers *Buffers) LEB128Unmarshal() (uint, int, error) {
 
 	return v, n, nil
 }
-
-func (buffers *Buffers) Skip(n int) error {
-	if n > buffers.Length {
+func (reader *MemoryReader) getCurrentBufLen() int {
+	return len(reader.Memory.Buffers[reader.offset0]) - reader.offset1
+}
+func (reader *MemoryReader) Skip(n int) error {
+	if n > reader.Length {
 		return io.EOF
 	}
+	curBufLen := reader.getCurrentBufLen()
 	for n > 0 {
-		if n < buffers.curBufLen {
-			buffers.forward(n)
+		if n < curBufLen {
+			reader.forward(n)
 			break
 		}
-		n -= buffers.curBufLen
-		buffers.skipBuf()
-		if buffers.Length == 0 && n > 0 {
+		n -= curBufLen
+		reader.skipBuf()
+		if reader.Length == 0 && n > 0 {
 			return io.EOF
 		}
 	}
 	return nil
 }
 
-func (buffers *Buffers) forward(n int) {
-	buffers.curBuf = buffers.curBuf[n:]
-	buffers.curBufLen -= n
-	buffers.Length -= n
-	buffers.Offset += n
+func (reader *MemoryReader) forward(n int) {
+	reader.Length -= n
+	reader.offset1 += n
 }
 
-func (buffers *Buffers) skipBuf() {
-	buffers.Offset += buffers.curBufLen
-	buffers.Length -= buffers.curBufLen
-	buffers.offset++
-	if buffers.Length > 0 {
-		buffers.curBuf = buffers.Buffers[buffers.offset]
-		buffers.curBufLen = len(buffers.curBuf)
-	} else {
-		buffers.curBuf = nil
-		buffers.curBufLen = 0
-	}
+func (buffers *MemoryReader) skipBuf() {
+	curBufLen := buffers.getCurrentBufLen()
+	buffers.Length -= curBufLen
+	buffers.offset0++
+	buffers.offset1 = 0
 }
 
-func (buffers *Buffers) ReadBytes(n int) ([]byte, error) {
-	if n > buffers.Length {
+func (reader *MemoryReader) ReadBytes(n int) ([]byte, error) {
+	if n > reader.Length {
 		return nil, io.EOF
 	}
 	b := make([]byte, n)
-	actual := buffers.ReadBytesTo(b)
+	actual := reader.ReadBytesTo(b)
 	return b[:actual], nil
 }
 
-func (buffers *Buffers) WriteTo(w io.Writer) (n int64, err error) {
-	var buf net.Buffers
-	if len(buffers.Buffers) > buffers.offset {
-		buf = append(buf, buffers.Buffers[buffers.offset:]...)
-	}
-	if buffers.curBufLen > 0 {
-		buf[0] = buffers.curBuf
-	}
-	buffers.MoveToEnd()
-	return buf.WriteTo(w)
-}
+// func (buffers *ReadableBuffers) WriteTo(w io.Writer) (n int64, err error) {
+// 	var buf net.Buffers
+// 	if buffers.Count() > buffers.offset1 {
+// 		buf = append(buf, buffers.Buffers[buffers.offset:]...)
+// 	}
+// 	if buffers.curBufLen > 0 {
+// 		buf[0] = buffers.curBuf
+// 	}
+// 	buffers.MoveToEnd()
+// 	return buf.WriteTo(w)
+// }
 
-func (buffers *Buffers) ReadN(n int) (r net.Buffers, actual int) {
-	actual = buffers.WriteNTo(n, &r)
-	return
-}
-
-func (buffers *Buffers) WriteNTo(n int, result *net.Buffers) (actual int) {
-	for actual = n; buffers.Length > 0 && n > 0; buffers.skipBuf() {
-		if buffers.curBufLen > n {
-			*result = append(*result, buffers.curBuf[:n])
-			buffers.forward(n)
+func (reader *MemoryReader) WriteNTo(n int, result *net.Buffers) (actual int) {
+	for actual = n; reader.Length > 0 && n > 0; reader.skipBuf() {
+		curBuf := reader.GetCurrent()
+		if len(curBuf) > n {
+			if result != nil {
+				*result = append(*result, curBuf[:n])
+			}
+			reader.forward(n)
 			return actual
 		}
-		*result = append(*result, buffers.curBuf)
-		n -= buffers.curBufLen
+		if result != nil {
+			*result = append(*result, curBuf)
+		}
+		n -= len(curBuf)
 	}
 	return actual - n
 }
 
-func (buffers *Buffers) ReadBE(n int) (num int, err error) {
+func (reader *MemoryReader) ReadBE(n int) (num int, err error) {
 	for i := range n {
-		b, err := buffers.ReadByte()
+		b, err := reader.ReadByte()
 		if err != nil {
 			return -1, err
 		}
@@ -234,126 +265,41 @@ func (buffers *Buffers) ReadBE(n int) (num int, err error) {
 	return
 }
 
-func (buffers *Buffers) Consumes() (r net.Buffers) {
-	for i := range buffers.offset {
-		r = append(r, buffers.Buffers[i])
-	}
-	if buffers.curBufLen > 0 {
-		r = append(r, buffers.curBuf[:len(buffers.curBuf)-buffers.curBufLen])
-	}
-	return
+func (reader *MemoryReader) ClipN(n int) (r net.Buffers) {
+	reader.WriteNTo(n, nil)
+	return reader.ClipFront()
 }
 
-func (buffers *Buffers) ClipFront() (r net.Buffers) {
-	if buffers.Offset == 0 {
+func (reader *MemoryReader) ClipFront() (r net.Buffers) {
+	offset := reader.Size - reader.Length
+	if offset == 0 {
 		return
 	}
-	if buffers.Length == 0 {
+	buffers := &reader.Memory
+	if reader.Length == 0 {
 		r = buffers.Buffers
 		buffers.Buffers = buffers.Buffers[:0]
-		buffers.curBuf = nil
-		buffers.curBufLen = 0
-		buffers.offset = 0
-		buffers.Offset = 0
-		return
-	}
-	for i := range buffers.offset {
-		r = append(r, buffers.Buffers[i])
-		l := len(buffers.Buffers[i])
-		buffers.Offset -= l
-	}
-	if buffers.curBufLen > 0 {
-		l := len(buffers.Buffers[buffers.offset]) - buffers.curBufLen
-		r = append(r, buffers.Buffers[buffers.offset][:l])
-		buffers.Offset -= l
-	}
-	buffers.Buffers = buffers.Buffers[buffers.offset:]
-	buffers.Buffers[0] = buffers.curBuf
-	buffers.offset = 0
-	buffers.Offset = 0
-	return r
-}
-
-func (buffers *Buffers) ClipBack(n int) []byte {
-	lastBuf := buffers.Buffers[len(buffers.Buffers)-1]
-	lastBufLen := len(lastBuf)
-	if lastBufLen < n {
-		panic("ClipBack: n > lastBufLen")
-	}
-	ret := lastBuf[lastBufLen-n:]
-	buffers.Buffers[len(buffers.Buffers)-1] = lastBuf[:lastBufLen-n]
-	buffers.Length -= n
-	if buffers.Length > 0 {
-		if buffers.offset == len(buffers.Buffers)-1 {
-			buffers.curBuf = buffers.curBuf[:buffers.curBufLen-n]
-			buffers.curBufLen -= n
+	} else {
+		for i := range reader.offset0 {
+			r = append(r, buffers.Buffers[i])
 		}
-	} else {
-		buffers.curBuf = nil
-		buffers.curBufLen = 0
-		buffers.Length = 0
+		if reader.getCurrentBufLen() > 0 {
+			r = append(r, buffers.Buffers[reader.offset0][:reader.offset1])
+			buffers.Buffers[reader.offset0] = reader.GetCurrent()
+		}
+		if reader.offset0 > 0 {
+			buffers.Buffers = slices.Delete(buffers.Buffers, 0, reader.offset0)
+		}
 	}
-	return ret
-}
-
-func (buffers *Buffers) CutAll() (r net.Buffers) {
-	r = append(r, buffers.curBuf)
-	for i := buffers.offset + 1; i < len(buffers.Buffers); i++ {
-		r = append(r, buffers.Buffers[i])
-	}
-	if len(buffers.Buffers[buffers.offset]) == buffers.curBufLen {
-		buffers.Buffers = buffers.Buffers[:buffers.offset]
-	} else {
-		buffers.Buffers[buffers.offset] = buffers.Buffers[buffers.offset][:buffers.curBufLen]
-		buffers.offset++
-	}
-	buffers.Length = 0
-	buffers.curBuf = nil
-	buffers.curBufLen = 0
+	reader.Size -= offset
+	reader.offset0 = 0
+	reader.offset1 = 0
 	return
 }
 
-func (buffers *Buffers) Cut(n int) (r net.Buffers) {
-	buffers.CutTo(n, &r)
-	return
-}
-
-func (buffers *Buffers) CutTo(n int, result *net.Buffers) (actual int) {
-	for actual = n; buffers.Length > 0 && n > 0; {
-		if buffers.curBufLen > n {
-			*result = append(*result, buffers.curBuf[:n])
-			buffers.curBuf = buffers.curBuf[n:]
-			buffers.curBufLen -= n
-			buffers.Buffers[buffers.offset] = buffers.curBuf
-			buffers.Length -= n
-			return actual
-		}
-		*result = append(*result, buffers.curBuf)
-		n -= buffers.curBufLen
-		buffers.Length -= buffers.curBufLen
-		if len(buffers.Buffers[buffers.offset]) == buffers.curBufLen {
-			buffers.Buffers = slices.Delete(buffers.Buffers, buffers.offset, 1)
-		} else {
-			buffers.Buffers[buffers.offset] = buffers.Buffers[buffers.offset][:buffers.curBufLen]
-			buffers.offset++
-		}
-		if buffers.Length > 0 {
-			buffers.curBuf = buffers.Buffers[buffers.offset]
-			buffers.curBufLen = len(buffers.curBuf)
-		} else {
-			buffers.curBuf = nil
-			buffers.curBufLen = 0
-		}
-	}
-	return actual - n
-}
-
-func (buffers *Buffers) ToBytes() []byte {
-	ret := make([]byte, buffers.Length)
+func (buffers *Memory) ToBytes() []byte {
+	ret := make([]byte, buffers.Size)
 	buffers.Read(ret)
-	buffers.offset = 0
-	buffers.Offset = 0
-	buffers.Length = 0
-	buffers.curBuf = nil
+	buffers.Size = 0
 	return ret
 }

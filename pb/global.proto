@@ -197,6 +197,16 @@ message TrackSnapShot {
   repeated Wrap wrap = 5;
 }
 
+message MemoryBlock {
+  uint32 s = 1;
+  uint32 e = 2;
+}
+
+message MemoryBlockGroup {
+  uint32 size = 1;
+  repeated MemoryBlock list = 2;
+}
+
 message AudioTrackInfo {
   string codec = 1;
   string delta = 2;
@@ -210,6 +220,7 @@ message AudioTrackInfo {
 message TrackSnapShotResponse {
   repeated TrackSnapShot ring = 1;
   map<uint32, uint32> reader = 2;
+  repeated MemoryBlockGroup memory = 3;
 }
 
 message VideoTrackInfo {

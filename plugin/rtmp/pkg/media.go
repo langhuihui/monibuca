@@ -15,7 +15,7 @@ type AVSender struct {
 
 func (av *AVSender) SendFrame(frame *RTMPData) (err error) {
 	// seq := frame.Sequence
-	payloadLen := frame.Length
+	payloadLen := frame.Size
 	if payloadLen == 0 {
 		err = errors.New("payload is empty")
 		// av.Error("payload is empty", zap.Error(err))
@@ -37,10 +37,10 @@ func (av *AVSender) SendFrame(frame *RTMPData) (err error) {
 	// 当Chunk Type为0时(即Chunk12),
 	if av.lastAbs == 0 {
 		av.SetTimestamp(frame.Timestamp)
-		err = av.sendChunk(frame.Buffers, &av.ChunkHeader, RTMP_CHUNK_HEAD_12)
+		err = av.sendChunk(frame.Memory.Buffers, &av.ChunkHeader, RTMP_CHUNK_HEAD_12)
 	} else {
 		av.SetTimestamp(frame.Timestamp - av.lastAbs)
-		err = av.sendChunk(frame.Buffers, &av.ChunkHeader, RTMP_CHUNK_HEAD_8)
+		err = av.sendChunk(frame.Memory.Buffers, &av.ChunkHeader, RTMP_CHUNK_HEAD_8)
 	}
 	av.lastAbs = frame.Timestamp
 	// //数据被覆盖导致序号变了
@@ -74,7 +74,6 @@ func (av *AVSender) SendFrame(frame *RTMPData) (err error) {
 //			rtmp.Subscriber.OnEvent(event)
 //		}
 //	}
-
 
 type RTMPReceiver struct {
 	*m7s.Publisher

@@ -18,23 +18,22 @@ const (
 
 type RTMPData struct {
 	Timestamp uint32
-	util.RecyclableBuffers
+	util.RecyclableMemory
 }
 
 func (avcc *RTMPData) GetSize() int {
-	return avcc.Length
+	return avcc.Size
 }
 
 func (avcc *RTMPData) MarshalJSON() ([]byte, error) {
-	return []byte(fmt.Sprintf(`{"Timestamp":%d,"Size":%d,"Data":"%s"}`, avcc.Timestamp, avcc.Length, avcc.String())), nil
+	return []byte(fmt.Sprintf(`{"Timestamp":%d,"Size":%d,"Data":"%s"}`, avcc.Timestamp, avcc.Size, avcc.String())), nil
 }
 
 func (avcc *RTMPData) String() string {
-	reader := avcc.Buffers
-	first10 := avcc.Malloc(10)
-	reader.ReadBytesTo(first10)
-	defer avcc.Free(first10)
-	return fmt.Sprintf("%d % 02X", avcc.Timestamp, first10)
+	reader := avcc.NewReader()
+	var bytes10 [10]byte
+	reader.ReadBytesTo(bytes10[:])
+	return fmt.Sprintf("%d % 02X", avcc.Timestamp, bytes10[:])
 }
 
 func (avcc *RTMPData) GetTimestamp() time.Duration {
