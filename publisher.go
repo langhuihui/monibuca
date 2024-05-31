@@ -203,7 +203,7 @@ func (p *Publisher) WriteVideo(data IAVFrame) (err error) {
 		if idr != nil {
 			p.GOP = int(t.Value.Sequence - idr.Value.Sequence)
 			if hidr == nil {
-				if l := t.Size - p.GOP; l > 50 {
+				if l := t.Size - p.GOP; l > p.GetPublishConfig().MinRingSize {
 					t.Debug("resize", "gop", p.GOP, "before", t.Size, "after", t.Size-5)
 					t.Reduce(5) //缩小缓冲环节省内存
 				}
@@ -225,7 +225,9 @@ func (p *Publisher) WriteVideo(data IAVFrame) (err error) {
 			p.AudioTrack.IDRing.Store(p.AudioTrack.Ring)
 		}
 	} else if nextValue := t.Next(); nextValue == idr || nextValue == hidr {
-		t.Glow(5)
+		if t.Size < p.Plugin.GetCommonConf().MaxRingSize {
+			t.Glow(5)
+		}
 	}
 	p.writeAV(t, data)
 	if p.VideoTrack.Length > 1 && !p.VideoTrack.AVTrack.Ready.Pendding() {

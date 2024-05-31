@@ -2,8 +2,8 @@ package util
 
 type (
 	Tree struct {
-		Left, Right *Block
-		Height      int
+		left, right *Block
+		height      int
 	}
 	Block struct {
 		Start, End int
@@ -17,26 +17,26 @@ type (
 	// }
 	Allocator struct {
 		pool       []*Block
-		SizeTree   *Block
-		OffsetTree *Block
+		sizeTree   *Block
+		offsetTree *Block
 		Size       int
 		// history    []History
 	}
 )
 
 func (t *Tree) deleteLeft(b *Block, treeIndex int) {
-	t.Left = t.Left.delete(b, treeIndex)
+	t.left = t.left.delete(b, treeIndex)
 }
 
 func (t *Tree) deleteRight(b *Block, treeIndex int) {
-	t.Right = t.Right.delete(b, treeIndex)
+	t.right = t.right.delete(b, treeIndex)
 }
 
 func NewAllocator(size int) (result *Allocator) {
 	root := &Block{Start: 0, End: size}
 	result = &Allocator{
-		SizeTree:   root,
-		OffsetTree: root,
+		sizeTree:   root,
+		offsetTree: root,
 		Size:       size,
 	}
 	root.allocator = result
@@ -65,31 +65,31 @@ func (b *Block) insert(block *Block, treeIndex int) *Block {
 		return block
 	}
 	if tree := &b.trees[treeIndex]; compares[treeIndex](block, b) {
-		tree.Left = tree.Left.insert(block, treeIndex)
+		tree.left = tree.left.insert(block, treeIndex)
 	} else {
-		tree.Right = tree.Right.insert(block, treeIndex)
+		tree.right = tree.right.insert(block, treeIndex)
 	}
 	b.updateHeight(treeIndex)
 	return b.balance(treeIndex)
 }
 
 func (b *Block) getLeftHeight(treeIndex int) int {
-	return b.trees[treeIndex].Left.getHeight(treeIndex)
+	return b.trees[treeIndex].left.getHeight(treeIndex)
 }
 
 func (b *Block) getRightHeight(treeIndex int) int {
-	return b.trees[treeIndex].Right.getHeight(treeIndex)
+	return b.trees[treeIndex].right.getHeight(treeIndex)
 }
 
 func (b *Block) getHeight(treeIndex int) int {
 	if b == nil {
 		return 0
 	}
-	return b.trees[treeIndex].Height
+	return b.trees[treeIndex].height
 }
 
 func (b *Block) updateHeight(treeIndex int) {
-	b.trees[treeIndex].Height = 1 + max(b.getLeftHeight(treeIndex), b.getRightHeight(treeIndex))
+	b.trees[treeIndex].height = 1 + max(b.getLeftHeight(treeIndex), b.getRightHeight(treeIndex))
 }
 
 func (b *Block) balance(treeIndex int) *Block {
@@ -97,13 +97,13 @@ func (b *Block) balance(treeIndex int) *Block {
 		return nil
 	}
 	if tree := &b.trees[treeIndex]; b.getLeftHeight(treeIndex)-b.getRightHeight(treeIndex) > 1 {
-		if tree.Left.getRightHeight(treeIndex) > tree.Left.getLeftHeight(treeIndex) {
-			tree.Left = tree.Left.rotateLeft(treeIndex)
+		if tree.left.getRightHeight(treeIndex) > tree.left.getLeftHeight(treeIndex) {
+			tree.left = tree.left.rotateLeft(treeIndex)
 		}
 		return b.rotateRight(treeIndex)
 	} else if b.getRightHeight(treeIndex)-b.getLeftHeight(treeIndex) > 1 {
-		if tree.Right.getLeftHeight(treeIndex) > tree.Right.getRightHeight(treeIndex) {
-			tree.Right = tree.Right.rotateRight(treeIndex)
+		if tree.right.getLeftHeight(treeIndex) > tree.right.getRightHeight(treeIndex) {
+			tree.right = tree.right.rotateRight(treeIndex)
 		}
 		return b.rotateLeft(treeIndex)
 	}
@@ -111,25 +111,25 @@ func (b *Block) balance(treeIndex int) *Block {
 }
 
 func (b *Block) rotateLeft(treeIndex int) *Block {
-	newRoot := b.trees[treeIndex].Right
-	b.trees[treeIndex].Right = newRoot.trees[treeIndex].Left
-	newRoot.trees[treeIndex].Left = b
+	newRoot := b.trees[treeIndex].right
+	b.trees[treeIndex].right = newRoot.trees[treeIndex].left
+	newRoot.trees[treeIndex].left = b
 	b.updateHeight(treeIndex)
 	newRoot.updateHeight(treeIndex)
 	return newRoot
 }
 
 func (b *Block) rotateRight(treeIndex int) *Block {
-	newRoot := b.trees[treeIndex].Left
-	b.trees[treeIndex].Left = newRoot.trees[treeIndex].Right
-	newRoot.trees[treeIndex].Right = b
+	newRoot := b.trees[treeIndex].left
+	b.trees[treeIndex].left = newRoot.trees[treeIndex].right
+	newRoot.trees[treeIndex].right = b
 	b.updateHeight(treeIndex)
 	newRoot.updateHeight(treeIndex)
 	return newRoot
 }
 
 func (b *Block) findMin(treeIndex int) *Block {
-	if left := b.trees[treeIndex].Left; left == nil {
+	if left := b.trees[treeIndex].left; left == nil {
 		return b
 	} else {
 		return left.findMin(treeIndex)
@@ -141,17 +141,17 @@ func (b *Block) delete(block *Block, treeIndex int) *Block {
 		return nil
 	}
 	if compareFunc, tree := compares[treeIndex], &b.trees[treeIndex]; b == block {
-		if tree.Left == nil {
-			return tree.Right
-		} else if tree.Right == nil {
-			return tree.Left
+		if tree.left == nil {
+			return tree.right
+		} else if tree.right == nil {
+			return tree.left
 		}
-		minBlock := tree.Right.findMin(treeIndex)
+		minBlock := tree.right.findMin(treeIndex)
 		tree.deleteRight(minBlock, treeIndex)
 		minTree := &minBlock.trees[treeIndex]
-		minTree.Left = tree.Left
-		minTree.Right = tree.Right
-		minTree.Height = tree.Height
+		minTree.left = tree.left
+		minTree.right = tree.right
+		minTree.height = tree.height
 		return minBlock
 	} else if compareFunc(block, b) {
 		tree.deleteLeft(block, treeIndex)
@@ -164,7 +164,7 @@ func (b *Block) delete(block *Block, treeIndex int) *Block {
 
 func (a *Allocator) Allocate(size int) (offset int) {
 	// a.history = append(a.history, History{Malloc: true, Size: size})
-	block := a.findAvailableBlock(a.SizeTree, size)
+	block := a.findAvailableBlock(a.sizeTree, size)
 	if block == nil {
 		return -1
 	}
@@ -173,25 +173,30 @@ func (a *Allocator) Allocate(size int) (offset int) {
 	a.deleteOffsetTree(block)
 	if newStart := offset + size; newStart < block.End {
 		newBlock := a.getBlock(newStart, block.End)
-		a.SizeTree = a.SizeTree.insert(newBlock, 0)
-		a.OffsetTree = a.OffsetTree.insert(newBlock, 1)
+		a.sizeTree = a.sizeTree.insert(newBlock, 0)
+		a.offsetTree = a.offsetTree.insert(newBlock, 1)
 		// block.End = block.Start + size
 	}
 	return
 }
 
 func (a *Allocator) findAvailableBlock(block *Block, size int) *Block {
-	if block == nil {
-		return nil
-	}
-	if tree := &block.trees[0]; block.End-block.Start < size {
-		if block1 := a.findAvailableBlock(tree.Left, size); block1 == nil {
-			return a.findAvailableBlock(tree.Right, size)
+	for block != nil {
+		if bSize := block.End - block.Start; bSize == size {
+			return block
+		} else if tree := &block.trees[0]; size < bSize {
+			if tree.left == nil {
+				return block
+			}
+			block = tree.left
 		} else {
-			return block1
+			if tree.right == nil {
+				return nil
+			}
+			block = tree.right
 		}
 	}
-	return block
+	return nil
 }
 
 func (a *Allocator) getBlock(start, end int) *Block {
@@ -218,49 +223,49 @@ func (a *Allocator) putBlock(b *Block) {
 func (a *Allocator) Free(offset, size int) {
 	// a.history = append(a.history, History{Malloc: false, Offset: offset, Size: size})
 	block := a.getBlock(offset, offset+size)
-	a.SizeTree, a.OffsetTree = a.SizeTree.insert(block, 0), a.OffsetTree.insert(block, 1)
+	a.sizeTree, a.offsetTree = a.sizeTree.insert(block, 0), a.offsetTree.insert(block, 1)
 	a.mergeAdjacentBlocks(block)
 }
 
 func (a *Allocator) GetBlocks() (blocks []*Block) {
-	a.OffsetTree.Walk(func(block *Block) {
+	a.offsetTree.Walk(func(block *Block) {
 		blocks = append(blocks, block)
 	}, 1)
 	return
 }
 
 func (a *Allocator) GetFreeSize() (ret int) {
-	a.OffsetTree.Walk(func(block *Block) {
+	a.offsetTree.Walk(func(block *Block) {
 		ret += block.End - block.Start
 	}, 1)
 	return
 }
 
 func (a *Allocator) deleteSizeTree(block *Block) {
-	a.SizeTree = a.SizeTree.delete(block, 0)
+	a.sizeTree = a.sizeTree.delete(block, 0)
 	block.trees[0] = emptyTrees[0]
 }
 
 func (a *Allocator) deleteOffsetTree(block *Block) {
-	a.OffsetTree = a.OffsetTree.delete(block, 1)
+	a.offsetTree = a.offsetTree.delete(block, 1)
 	block.trees[1] = emptyTrees[1]
 }
 
 func (a *Allocator) mergeAdjacentBlocks(block *Block) {
-	if leftAdjacent := a.OffsetTree.findLeftAdjacentBlock(block.Start); leftAdjacent != nil {
+	if leftAdjacent := a.offsetTree.findLeftAdjacentBlock(block.Start); leftAdjacent != nil {
 		a.deleteSizeTree(leftAdjacent)
 		a.deleteOffsetTree(leftAdjacent)
 		a.deleteSizeTree(block)
 		block.Start = leftAdjacent.Start
-		a.SizeTree = a.SizeTree.insert(block, 0)
+		a.sizeTree = a.sizeTree.insert(block, 0)
 		leftAdjacent.recycle()
 	}
-	if rightAdjacent := a.OffsetTree.findRightAdjacentBlock(block.End); rightAdjacent != nil {
+	if rightAdjacent := a.offsetTree.findRightAdjacentBlock(block.End); rightAdjacent != nil {
 		a.deleteSizeTree(rightAdjacent)
 		a.deleteOffsetTree(rightAdjacent)
 		a.deleteSizeTree(block)
 		block.End = rightAdjacent.End
-		a.SizeTree = a.SizeTree.insert(block, 0)
+		a.sizeTree = a.sizeTree.insert(block, 0)
 		rightAdjacent.recycle()
 	}
 }
@@ -269,14 +274,14 @@ func (b *Block) findLeftAdjacentBlock(offset int) *Block {
 	if b == nil {
 		return nil
 	}
-	tree := &b.trees[1]
 	if b.End == offset {
 		return b
 	}
+	tree := &b.trees[1]
 	if b.End > offset {
-		return tree.Left.findLeftAdjacentBlock(offset)
+		return tree.left.findLeftAdjacentBlock(offset)
 	}
-	return tree.Right.findLeftAdjacentBlock(offset)
+	return tree.right.findLeftAdjacentBlock(offset)
 }
 
 func (b *Block) findRightAdjacentBlock(offset int) *Block {
@@ -288,16 +293,16 @@ func (b *Block) findRightAdjacentBlock(offset int) *Block {
 	}
 	tree := &b.trees[1]
 	if b.Start < offset {
-		return tree.Right.findRightAdjacentBlock(offset)
+		return tree.right.findRightAdjacentBlock(offset)
 	}
-	return tree.Left.findRightAdjacentBlock(offset)
+	return tree.left.findRightAdjacentBlock(offset)
 }
 
 func (b *Block) Walk(fn func(*Block), index int) {
 	if b == nil {
 		return
 	}
-	b.trees[index].Left.Walk(fn, index)
+	b.trees[index].left.Walk(fn, index)
 	fn(b)
-	b.trees[index].Right.Walk(fn, index)
+	b.trees[index].right.Walk(fn, index)
 }
