@@ -182,11 +182,11 @@ func (a *Allocator) Allocate(size int) (offset int) {
 
 func (a *Allocator) findAvailableBlock(block *Block, size int) *Block {
 	for block != nil {
-		if bSize := block.End - block.Start; bSize == size {
+		if bSize := block.End - block.Start; bSize >= size {
 			return block
 		} else if tree := &block.trees[0]; size < bSize {
 			if tree.left == nil {
-				return block
+				return nil
 			}
 			block = tree.left
 		} else {
