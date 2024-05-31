@@ -136,7 +136,7 @@ func (h264 *RTPH264Ctx) CreateFrame(from *AVFrame) (frame IAVFrame, err error) {
 				n := reader.ReadBytesTo(mem[1:])
 				mem[0] = codec.NALU_FUA.Or(mem[1] & 0x60)
 				if n < 1459 {
-					r.Free(mem[n+1:])
+					// r.Free(mem[n+1:])
 					mem = mem[:n+1]
 				}
 				r.Packets = append(r.Packets, createPacket(mem))

@@ -76,6 +76,7 @@ func (s *Server) api_Stream_AnnexB_(rw http.ResponseWriter, r *http.Request) {
 	}
 	var annexb pkg.AnnexB
 	var t pkg.AVTrack
+	<-publisher.VideoTrack.Ready.Done()
 	annexb.DecodeConfig(&t, publisher.VideoTrack.ICodecCtx)
 	if t.ICodecCtx == nil {
 		http.Error(rw, "unsupported codec", http.StatusInternalServerError)
@@ -186,7 +187,21 @@ func (s *Server) AudioTrackSnap(ctx context.Context, req *pb.StreamSnapRequest) 
 	return
 }
 func (s *Server) API_VideoTrack_SSE(rw http.ResponseWriter, r *http.Request) {
-
+	streamPath := r.PathValue("streamPath")
+	if r.URL.RawQuery != "" {
+		streamPath += "?" + r.URL.RawQuery
+	}
+	_, err := s.Subscribe(streamPath, rw, r.Context(), func(c *config.Subscribe) {
+		c.Internal = true
+	}, SubscriberHandler{
+		OnVideo: func(v *pkg.AVFrame) error {
+			return nil
+		},
+	})
+	if err != nil {
+		http.Error(rw, err.Error(), http.StatusBadRequest)
+		return
+	}
 }
 func (s *Server) VideoTrackSnap(ctx context.Context, req *pb.StreamSnapRequest) (res *pb.TrackSnapShotResponse, err error) {
 	s.Call(func() {
@@ -198,8 +213,8 @@ func (s *Server) VideoTrackSnap(ctx context.Context, req *pb.StreamSnapRequest) 
 					var list []*pb.MemoryBlock
 					for _, block := range memlist.GetBlocks() {
 						list = append(list, &pb.MemoryBlock{
-							S: uint32(block[0]),
-							E: uint32(block[1]),
+							S: uint32(block.Start),
+							E: uint32(block.End),
 						})
 					}
 					res.Memory = append(res.Memory, &pb.MemoryBlockGroup{List: list, Size: uint32(memlist.Size)})

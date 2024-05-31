@@ -79,6 +79,7 @@ func (s *Subscriber) Handle(handler SubscriberHandler) {
 	var ar, vr *AVRingReader
 	var ah, vh reflect.Value
 	var a1, v1 reflect.Type
+	// var ahrow, vhrow func(*AVFrame)
 	var awi, vwi int
 	var initState = 0
 	var subMode = s.SubMode //订阅模式
@@ -87,6 +88,7 @@ func (s *Subscriber) Handle(handler SubscriberHandler) {
 	}
 	var audioFrame, videoFrame, lastSentAF, lastSentVF *AVFrame
 	if handler.OnAudio != nil && s.SubAudio {
+
 		a1 = reflect.TypeOf(handler.OnAudio).In(0)
 	}
 	if handler.OnVideo != nil && s.SubVideo {
@@ -128,11 +130,17 @@ func (s *Subscriber) Handle(handler SubscriberHandler) {
 			lastSentAF.RUnlock()
 		}
 	}()
+	inputs := make([]reflect.Value, 1)
 	sendAudioFrame := func() (err error) {
-		if s.Enabled(s, TraceLevel) {
-			s.Trace("send audio frame", "seq", audioFrame.Sequence)
+		if awi > 0 {
+			if s.Enabled(s, TraceLevel) {
+				s.Trace("send audio frame", "seq", audioFrame.Sequence)
+			}
+			inputs[0] = reflect.ValueOf(audioFrame.Wraps[awi])
+		} else {
+			inputs[0] = reflect.ValueOf(audioFrame)
 		}
-		res := ah.Call([]reflect.Value{reflect.ValueOf(audioFrame.Wraps[awi])})
+		res := ah.Call(inputs)
 		if len(res) > 0 && !res[0].IsNil() {
 			if err := res[0].Interface().(error); err != ErrInterrupt {
 				s.Stop(err)
@@ -143,10 +151,15 @@ func (s *Subscriber) Handle(handler SubscriberHandler) {
 		return
 	}
 	sendVideoFrame := func() (err error) {
-		if s.Enabled(s, TraceLevel) {
-			s.Trace("send video frame", "seq", videoFrame.Sequence, "data", videoFrame.Wraps[vwi].String(), "size", videoFrame.Wraps[vwi].GetSize())
+		if vwi > 0 {
+			if s.Enabled(s, TraceLevel) {
+				s.Trace("send video frame", "seq", videoFrame.Sequence, "data", videoFrame.Wraps[vwi].String(), "size", videoFrame.Wraps[vwi].GetSize())
+			}
+			inputs[0] = reflect.ValueOf(videoFrame.Wraps[vwi])
+		} else {
+			inputs[0] = reflect.ValueOf(videoFrame)
 		}
-		res := vh.Call([]reflect.Value{reflect.ValueOf(videoFrame.Wraps[vwi])})
+		res := vh.Call(inputs)
 		if len(res) > 0 && !res[0].IsNil() {
 			if err = res[0].Interface().(error); err != ErrInterrupt {
 				s.Stop(err)

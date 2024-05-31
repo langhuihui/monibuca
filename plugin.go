@@ -281,6 +281,12 @@ func (p *Plugin) Publish(streamPath string, options ...any) (publisher *Publishe
 			}
 		}
 	}
+	for _, option := range options {
+		switch v := option.(type) {
+		case func(*config.Publish):
+			v(&publisher.Publish)
+		}
+	}
 	publisher.Init(p, streamPath, options...)
 	_, err = p.server.Call(publisher)
 	return
@@ -294,7 +300,6 @@ func (p *Plugin) Pull(streamPath string, url string, options ...any) (puller *Pu
 	puller.Publish = p.config.Publish
 	puller.PublishTimeout = 0
 	puller.StreamPath = streamPath
-	puller.Init(p, streamPath, options...)
 	for _, option := range options {
 		switch v := option.(type) {
 		case PullHandler:
@@ -305,6 +310,7 @@ func (p *Plugin) Pull(streamPath string, url string, options ...any) (puller *Pu
 			}()
 		}
 	}
+	puller.Init(p, streamPath, options...)
 	_, err = p.server.Call(puller)
 	return
 }
@@ -320,6 +326,18 @@ func (p *Plugin) Subscribe(streamPath string, options ...any) (subscriber *Subsc
 				p.Warn("auth failed", "error", err)
 				return
 			}
+		}
+	}
+	for _, option := range options {
+		switch v := option.(type) {
+		case func(*config.Subscribe):
+			v(&subscriber.Subscribe)
+		case SubscriberHandler:
+			defer func() {
+				if err == nil {
+					subscriber.Handle(v)
+				}
+			}()
 		}
 	}
 	subscriber.Init(p, streamPath, options...)
@@ -357,7 +375,6 @@ func (p *Plugin) Push(streamPath string, url string, options ...any) (pusher *Pu
 	pusher.Client.RemoteURL = url
 	pusher.Subscribe = p.config.Subscribe
 	pusher.StreamPath = streamPath
-	pusher.Init(p, streamPath, options...)
 	for _, option := range options {
 		switch v := option.(type) {
 		case PushHandler:
@@ -368,6 +385,7 @@ func (p *Plugin) Push(streamPath string, url string, options ...any) (pusher *Pu
 			}()
 		}
 	}
+	pusher.Init(p, streamPath, options...)
 	_, err = p.server.Call(pusher)
 	return
 }
