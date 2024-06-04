@@ -2,6 +2,7 @@ package util
 
 import (
 	"io"
+
 )
 
 const defaultBufSize = 65536
@@ -27,6 +28,12 @@ func NewBufReader(reader io.Reader) (r *BufReader) {
 	r.allocator = NewScalableMemoryAllocator(defaultBufSize)
 	r.BufLen = defaultBufSize
 	return
+}
+
+func (r *BufReader) Recycle() {
+	r.reader = nil
+	r.buf = MemoryReader{}
+	r.allocator.Recycle()
 }
 
 func (r *BufReader) eat() error {

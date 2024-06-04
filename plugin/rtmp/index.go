@@ -39,12 +39,13 @@ func (p *RTMPPlugin) OnPublish(puber *m7s.Publisher) {
 }
 
 func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
-	defer conn.Close()
 	logger := p.Logger.With("remote", conn.RemoteAddr().String())
 	receivers := make(map[uint32]*RTMPReceiver)
 	var err error
 	logger.Info("conn")
 	nc := NewNetConnection(conn, logger)
+	defer nc.BufReader.Recycle()
+	defer conn.Close()
 	ctx, cancel := context.WithCancelCause(p)
 	defer func() {
 		logger.Info("conn close")

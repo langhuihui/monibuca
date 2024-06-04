@@ -42,6 +42,7 @@ func NewAllocator(size int) (result *Allocator) {
 	root.allocator = result
 	return
 }
+
 func compareBySize(a, b *Block) bool {
 	if sizea, sizeb := a.End-a.Start, b.End-b.Start; sizea != sizeb {
 		return sizea < sizeb

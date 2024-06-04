@@ -2,6 +2,7 @@ package util
 
 import (
 	"fmt"
+	"sync"
 	"unsafe"
 )
 
@@ -22,6 +23,10 @@ func NewMemoryAllocator(size int) (ret *MemoryAllocator) {
 	}
 	ret.start = int64(uintptr(unsafe.Pointer(&ret.memory[0])))
 	return
+}
+
+func (ma *MemoryAllocator) Reset() {
+	ma.allocator = NewAllocator(ma.Size)
 }
 
 func (ma *MemoryAllocator) Malloc(size int) (memory []byte) {
@@ -50,6 +55,8 @@ func (ma *MemoryAllocator) GetBlocks() (blocks []*Block) {
 
 var EnableCheckSize bool = false
 
+var pools sync.Map
+
 type ScalableMemoryAllocator struct {
 	children    []*MemoryAllocator
 	totalMalloc int64
@@ -58,7 +65,12 @@ type ScalableMemoryAllocator struct {
 }
 
 func NewScalableMemoryAllocator(size int) (ret *ScalableMemoryAllocator) {
-	return &ScalableMemoryAllocator{children: []*MemoryAllocator{NewMemoryAllocator(size)}, size: size}
+	if value, ok := pools.Load(size); ok {
+		ret = value.(*sync.Pool).Get().(*ScalableMemoryAllocator)
+	} else {
+		ret = &ScalableMemoryAllocator{children: []*MemoryAllocator{NewMemoryAllocator(size)}, size: size}
+	}
+	return
 }
 
 func (sma *ScalableMemoryAllocator) checkSize() {
@@ -89,6 +101,19 @@ func (sma *ScalableMemoryAllocator) GetTotalFree() int64 {
 
 func (sma *ScalableMemoryAllocator) GetChildren() []*MemoryAllocator {
 	return sma.children
+}
+
+func (sma *ScalableMemoryAllocator) Recycle() {
+	for _, child := range sma.children {
+		child.Reset()
+	}
+	size := sma.children[0].Size
+	pool, _ := pools.LoadOrStore(size, &sync.Pool{
+		New: func() interface{} {
+			return &ScalableMemoryAllocator{children: []*MemoryAllocator{NewMemoryAllocator(size)}, size: size}
+		},
+	})
+	pool.(*sync.Pool).Put(sma)
 }
 
 func (sma *ScalableMemoryAllocator) Malloc(size int) (memory []byte) {
