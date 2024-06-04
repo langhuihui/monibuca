@@ -299,7 +299,8 @@ func (reader *MemoryReader) ClipFront() (r net.Buffers) {
 
 func (buffers *Memory) ToBytes() []byte {
 	ret := make([]byte, buffers.Size)
-	buffers.Read(ret)
-	buffers.Size = 0
+	var clone net.Buffers
+	clone = append(clone, buffers.Buffers...)
+	clone.Read(ret)
 	return ret
 }

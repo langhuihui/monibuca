@@ -50,31 +50,6 @@ func (av *AVSender) SendFrame(frame *RTMPData) (err error) {
 	return err
 }
 
-//	func (rtmp *RTMPSender) OnEvent(event any) {
-//		switch v := event.(type) {
-//		case SEwaitPublish:
-//			rtmp.Response(1, NetStream_Play_UnpublishNotify, Response_OnStatus)
-//		case SEpublish:
-//			rtmp.Response(1, NetStream_Play_PublishNotify, Response_OnStatus)
-//		case ISubscriber:
-//
-//		case AudioDeConf:
-//			rtmp.audio.sendSequenceHead(v)
-//		case VideoDeConf:
-//			rtmp.video.sendSequenceHead(v)
-//		case AudioFrame:
-//			if err := rtmp.audio.sendFrame(v.AVFrame, v.AbsTime); err != nil {
-//				rtmp.Stop(zap.Error(err))
-//			}
-//		case VideoFrame:
-//			if err := rtmp.video.sendFrame(v.AVFrame, v.AbsTime); err != nil {
-//				rtmp.Stop(zap.Error(err))
-//			}
-//		default:
-//			rtmp.Subscriber.OnEvent(event)
-//		}
-//	}
-
 type RTMPReceiver struct {
 	*m7s.Publisher
 	NetStream

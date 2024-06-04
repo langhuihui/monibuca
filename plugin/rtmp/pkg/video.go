@@ -30,23 +30,25 @@ func (avcc *RTMPVideo) Parse(t *AVTrack) (isIDR, isSeq bool, raw any, err error)
 	parseSequence := func() (err error) {
 		isSeq = true
 		isIDR = false
+		var cloneFrame RTMPVideo
+		cloneFrame.ReadFromBytes(avcc.ToBytes())
 		switch fourCC {
 		case codec.FourCC_H264:
 			var ctx H264Ctx
 			if err = ctx.Unmarshal(reader); err == nil {
-				t.SequenceFrame = avcc
+				t.SequenceFrame = &cloneFrame
 				t.ICodecCtx = &ctx
 			}
 		case codec.FourCC_H265:
 			var ctx H265Ctx
 			if err = ctx.Unmarshal(reader); err == nil {
-				t.SequenceFrame = avcc
+				t.SequenceFrame = &cloneFrame
 				t.ICodecCtx = &ctx
 			}
 		case codec.FourCC_AV1:
 			var ctx AV1Ctx
 			if err = ctx.Unmarshal(reader); err == nil {
-				t.SequenceFrame = avcc
+				t.SequenceFrame = &cloneFrame
 				t.ICodecCtx = &ctx
 			}
 		}
@@ -87,8 +89,8 @@ func (avcc *RTMPVideo) Parse(t *AVTrack) (isIDR, isSeq bool, raw any, err error)
 			// 	if err != nil {
 			// 		return
 			// 	}
-			// 	_, n := reader.ReadN(naluLen)
-			// 	fmt.Println(avcc.Timestamp, n)
+			// 	var nalus net.Buffers
+			// 	n := reader.WriteNTo(naluLen, &nalus)
 			// 	if n != naluLen {
 			// 		err = fmt.Errorf("naluLen:%d != n:%d", naluLen, n)
 			// 		return
