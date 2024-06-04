@@ -5,6 +5,8 @@ import (
 	"unsafe"
 )
 
+const MaxBlockSize = 4 * 1024 * 1024
+
 type MemoryAllocator struct {
 	allocator *Allocator
 	start     int64
@@ -103,7 +105,7 @@ func (sma *ScalableMemoryAllocator) Malloc(size int) (memory []byte) {
 			return
 		}
 	}
-	child = NewMemoryAllocator(max(child.Size*2, size))
+	child = NewMemoryAllocator(max(min(MaxBlockSize, child.Size*2), size))
 	sma.size += child.Size
 	memory = child.Malloc(size)
 	sma.children = append(sma.children, child)

@@ -58,15 +58,19 @@ func (s *Server) api_Stream_AnnexB_(rw http.ResponseWriter, r *http.Request) {
 		http.Error(rw, pkg.ErrNotFound.Error(), http.StatusNotFound)
 		return
 	}
-	rw.Header().Set("Content-Type", "application/octet-stream")
-	reader := pkg.NewAVRingReader(publisher.VideoTrack.AVTrack)
-	err := reader.StartRead(publisher.VideoTrack.IDRing.Load())
+	_, err := publisher.VideoTrack.Ready.Await()
 	if err != nil {
 		http.Error(rw, err.Error(), http.StatusInternalServerError)
 		return
 	}
-
-	defer reader.Value.RUnlock()
+	rw.Header().Set("Content-Type", "application/octet-stream")
+	reader := pkg.NewAVRingReader(publisher.VideoTrack.AVTrack)
+	err = reader.StartRead(publisher.VideoTrack.IDRing.Load())
+	if err != nil {
+		http.Error(rw, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer reader.StopRead()
 	if reader.Value.Raw == nil {
 		reader.Value.Raw, err = reader.Value.Wraps[0].ToRaw(publisher.VideoTrack.ICodecCtx)
 		if err != nil {
@@ -76,7 +80,7 @@ func (s *Server) api_Stream_AnnexB_(rw http.ResponseWriter, r *http.Request) {
 	}
 	var annexb pkg.AnnexB
 	var t pkg.AVTrack
-	<-publisher.VideoTrack.Ready.Done()
+
 	annexb.DecodeConfig(&t, publisher.VideoTrack.ICodecCtx)
 	if t.ICodecCtx == nil {
 		http.Error(rw, "unsupported codec", http.StatusInternalServerError)
@@ -186,18 +190,31 @@ func (s *Server) AudioTrackSnap(ctx context.Context, req *pb.StreamSnapRequest) 
 	// })
 	return
 }
-func (s *Server) API_VideoTrack_SSE(rw http.ResponseWriter, r *http.Request) {
+func (s *Server) api_VideoTrack_SSE(rw http.ResponseWriter, r *http.Request) {
 	streamPath := r.PathValue("streamPath")
 	if r.URL.RawQuery != "" {
 		streamPath += "?" + r.URL.RawQuery
 	}
-	_, err := s.Subscribe(streamPath, rw, r.Context(), func(c *config.Subscribe) {
-		c.Internal = true
-	}, SubscriberHandler{
-		OnVideo: func(v *pkg.AVFrame) error {
-			return nil
-		},
-	})
+	suber, err := s.Subscribe(streamPath, rw, r.Context(), "api_VideoTrack_SSE")
+	sse := util.NewSSE(rw, r.Context())
+	for frame := range suber.OnVideoFrame {
+		var snap pb.TrackSnapShot
+		snap.Sequence = frame.Sequence
+		snap.Timestamp = uint32(frame.Timestamp / time.Millisecond)
+		snap.WriteTime = timestamppb.New(frame.WriteTime)
+		snap.Wrap = make([]*pb.Wrap, len(frame.Wraps))
+		snap.KeyFrame = frame.IDR
+		for i, wrap := range frame.Wraps {
+			snap.Wrap[i] = &pb.Wrap{
+				Timestamp: uint32(wrap.GetTimestamp() / time.Millisecond),
+				Size:      uint32(wrap.GetSize()),
+				Data:      wrap.String(),
+			}
+		}
+		if err = sse.WriteJSON(&snap); err != nil {
+			break
+		}
+	}
 	if err != nil {
 		http.Error(rw, err.Error(), http.StatusBadRequest)
 		return
@@ -207,33 +224,38 @@ func (s *Server) VideoTrackSnap(ctx context.Context, req *pb.StreamSnapRequest) 
 	s.Call(func() {
 		if pub, ok := s.Streams.Get(req.StreamPath); ok {
 			res = &pb.TrackSnapShotResponse{}
-			if !pub.VideoTrack.IsEmpty() {
-				// vcc := pub.VideoTrack.AVTrack.ICodecCtx.(pkg.IVideoCodecCtx)
-				for _, memlist := range pub.VideoTrack.Allocator.GetChildren() {
-					var list []*pb.MemoryBlock
-					for _, block := range memlist.GetBlocks() {
-						list = append(list, &pb.MemoryBlock{
-							S: uint32(block.Start),
-							E: uint32(block.End),
-						})
-					}
-					res.Memory = append(res.Memory, &pb.MemoryBlockGroup{List: list, Size: uint32(memlist.Size)})
+			_, err = pub.VideoTrack.Ready.Await()
+			if err != nil {
+				return
+			}
+			// vcc := pub.VideoTrack.AVTrack.ICodecCtx.(pkg.IVideoCodecCtx)
+			for _, memlist := range pub.VideoTrack.Allocator.GetChildren() {
+				var list []*pb.MemoryBlock
+				for _, block := range memlist.GetBlocks() {
+					list = append(list, &pb.MemoryBlock{
+						S: uint32(block.Start),
+						E: uint32(block.End),
+					})
 				}
-				res.Reader = make(map[uint32]uint32)
-				for sub := range pub.Subscribers {
-					if sub.VideoReader == nil {
-						continue
-					}
-					res.Reader[uint32(sub.ID)] = sub.VideoReader.Value.Sequence
+				res.Memory = append(res.Memory, &pb.MemoryBlockGroup{List: list, Size: uint32(memlist.Size)})
+			}
+			res.Reader = make(map[uint32]uint32)
+			for sub := range pub.Subscribers {
+				if sub.VideoReader == nil {
+					continue
 				}
-				pub.VideoTrack.Ring.Do(func(v *pkg.AVFrame) {
-					if v.TryRLock() {
+				res.Reader[uint32(sub.ID)] = sub.VideoReader.Value.Sequence
+			}
+			pub.VideoTrack.Ring.Do(func(v *pkg.AVFrame) {
+				if v.TryRLock() {
+					if len(v.Wraps) > 0 {
 						var snap pb.TrackSnapShot
 						snap.Sequence = v.Sequence
 						snap.Timestamp = uint32(v.Timestamp / time.Millisecond)
 						snap.WriteTime = timestamppb.New(v.WriteTime)
 						snap.Wrap = make([]*pb.Wrap, len(v.Wraps))
 						snap.KeyFrame = v.IDR
+						res.RingDataSize += uint32(v.Wraps[0].GetSize())
 						for i, wrap := range v.Wraps {
 							snap.Wrap[i] = &pb.Wrap{
 								Timestamp: uint32(wrap.GetTimestamp() / time.Millisecond),
@@ -242,10 +264,10 @@ func (s *Server) VideoTrackSnap(ctx context.Context, req *pb.StreamSnapRequest) 
 							}
 						}
 						res.Ring = append(res.Ring, &snap)
-						v.RUnlock()
 					}
-				})
-			}
+					v.RUnlock()
+				}
+			})
 		} else {
 			err = pkg.ErrNotFound
 		}
@@ -310,7 +332,7 @@ func (s *Server) WaitList(context.Context, *emptypb.Empty) (res *pb.StreamWaitLi
 	return
 }
 
-func (s *Server) API_Summary_SSE(rw http.ResponseWriter, r *http.Request) {
+func (s *Server) Api_Summary_SSE(rw http.ResponseWriter, r *http.Request) {
 	util.ReturnFetchValue(func() *pb.SummaryResponse {
 		ret, _ := s.Summary(r.Context(), nil)
 		return ret

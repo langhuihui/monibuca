@@ -34,7 +34,7 @@ func TestRing(t *testing.T) {
 			}
 			time.Sleep(time.Millisecond * 10)
 		}
-		reader.Value.RUnlock()
+		reader.StopRead()
 		<-ctx.Done()
 	})
 	// slow reader
@@ -54,7 +54,7 @@ func TestRing(t *testing.T) {
 			}
 			time.Sleep(time.Millisecond * 100)
 		}
-		reader.Value.RUnlock()
+		reader.StopRead()
 		<-ctx.Done()
 	})
 }

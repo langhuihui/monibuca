@@ -29,6 +29,15 @@ func (p *Promise[T]) Resolve(v T) {
 	p.CancelCauseFunc(ErrResolve)
 }
 
+func (p *Promise[T]) Await() (T, error) {
+	<-p.Done()
+	err := context.Cause(p.Context)
+	if err == ErrResolve {
+		err = nil
+	}
+	return p.Value, err
+}
+
 func (p *Promise[T]) Fulfill(err error) {
 	// p.timer.Stop()
 	p.CancelCauseFunc(Conditoinal(err == nil, ErrResolve, err))

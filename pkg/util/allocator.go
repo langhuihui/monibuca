@@ -267,31 +267,31 @@ func (a *Allocator) mergeAdjacentBlocks(block *Block) {
 }
 
 func (b *Block) findLeftAdjacentBlock(offset int) *Block {
-	if b == nil {
-		return nil
+	for b != nil {
+		if b.End == offset {
+			return b
+		}
+		if tree := &b.trees[1]; b.End > offset {
+			b = tree.left
+		} else {
+			b = tree.right
+		}
 	}
-	if b.End == offset {
-		return b
-	}
-	tree := &b.trees[1]
-	if b.End > offset {
-		return tree.left.findLeftAdjacentBlock(offset)
-	}
-	return tree.right.findLeftAdjacentBlock(offset)
+	return nil
 }
 
 func (b *Block) findRightAdjacentBlock(offset int) *Block {
-	if b == nil {
-		return nil
+	for b != nil {
+		if b.Start == offset {
+			return b
+		}
+		if tree := &b.trees[1]; b.Start < offset {
+			b = tree.right
+		} else {
+			b = tree.left
+		}
 	}
-	if b.Start == offset {
-		return b
-	}
-	tree := &b.trees[1]
-	if b.Start < offset {
-		return tree.right.findRightAdjacentBlock(offset)
-	}
-	return tree.left.findRightAdjacentBlock(offset)
+	return nil
 }
 
 func (b *Block) Walk(fn func(*Block), index int) {

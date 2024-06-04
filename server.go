@@ -164,6 +164,7 @@ func (s *Server) run(ctx context.Context, conf any) (err error) {
 	s.registerHandler(map[string]http.HandlerFunc{
 		"/api/config/json/{name}":            s.api_Config_JSON_,
 		"/api/stream/annexb/{streamPath...}": s.api_Stream_AnnexB_,
+		"/api/videotrack/sse/{streamPath...}":    s.api_VideoTrack_SSE,
 	})
 
 	if httpConf.ListenAddrTLS != "" {

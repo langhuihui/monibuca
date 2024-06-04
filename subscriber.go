@@ -75,18 +75,112 @@ type SubscriberHandler struct {
 	OnVideo any
 }
 
+func (s *Subscriber) OnVideoFrame(yield func(*AVFrame) bool) {
+	if !s.SubVideo || s.Publisher == nil {
+		return
+	}
+	_, err := s.Publisher.VideoTrack.Ready.Await()
+	if err != nil {
+		s.Stop(err)
+		return
+	}
+	vt := s.Publisher.VideoTrack.AVTrack
+	if vt == nil {
+		return
+	}
+	vr := NewAVRingReader(vt)
+	s.VideoReader = vr
+	vr.Logger = s.Logger.With("reader", "videoFrame")
+	vr.Info("start read")
+	var subMode = s.SubMode //订阅模式
+	if s.Args.Has(s.SubModeArgName) {
+		subMode, _ = strconv.Atoi(s.Args.Get(s.SubModeArgName))
+	}
+	defer vr.StopRead()
+	for s.Err() == nil {
+		err := vr.ReadFrame(subMode)
+		if err != nil {
+			s.Stop(err)
+			return
+		}
+		if vr.Value.IDR && vr.DecConfChanged() {
+			vr.LastCodecCtx = vr.Track.ICodecCtx
+			if seqFrame := vr.Track.SequenceFrame; seqFrame != nil {
+				s.Debug("video codec changed", "data", seqFrame.String())
+				// if !yield(seqFrame.(T)) {
+				// 	return
+				// }
+			}
+		}
+		if !s.IFrameOnly || vr.Value.IDR {
+			if !yield(&vr.Value) {
+				return
+			}
+		}
+	}
+}
+
+func HandleVideo[T IAVFrame](s *Subscriber) func(func(T) bool) {
+	var t T
+	var tt = reflect.TypeOf(t)
+	return func(yield func(T) bool) {
+		if !s.SubVideo || s.Publisher == nil {
+			return
+		}
+		_, err := s.Publisher.VideoTrack.Ready.Await()
+		if err != nil {
+			s.Stop(err)
+			return
+		}
+		vt := s.Publisher.GetVideoTrack(tt)
+		if vt == nil {
+			return
+		}
+		vwi := vt.WrapIndex
+		vr := NewAVRingReader(vt)
+		s.VideoReader = vr
+		vr.Logger = s.Logger.With("reader", tt.String())
+		vr.Info("start read")
+		var subMode = s.SubMode //订阅模式
+		if s.Args.Has(s.SubModeArgName) {
+			subMode, _ = strconv.Atoi(s.Args.Get(s.SubModeArgName))
+		}
+		for {
+			err := vr.ReadFrame(subMode)
+			if err != nil {
+				s.Stop(err)
+				return
+			}
+			if vr.Value.IDR && vr.DecConfChanged() {
+				vr.LastCodecCtx = vr.Track.ICodecCtx
+				if seqFrame := vr.Track.SequenceFrame; seqFrame != nil {
+					s.Debug("video codec changed", "data", seqFrame.String())
+					if !yield(seqFrame.(T)) {
+						return
+					}
+				}
+			}
+			if !s.IFrameOnly || vr.Value.IDR {
+				if !yield(vr.Value.Wraps[vwi].(T)) {
+					return
+				}
+			}
+		}
+	}
+}
+
 func (s *Subscriber) Handle(handler SubscriberHandler) {
 	var ar, vr *AVRingReader
 	var ah, vh reflect.Value
 	var a1, v1 reflect.Type
-	// var ahrow, vhrow func(*AVFrame)
+	var at, vt *AVTrack
 	var awi, vwi int
 	var initState = 0
 	var subMode = s.SubMode //订阅模式
 	if s.Args.Has(s.SubModeArgName) {
 		subMode, _ = strconv.Atoi(s.Args.Get(s.SubModeArgName))
 	}
-	var audioFrame, videoFrame, lastSentAF, lastSentVF *AVFrame
+	var audioFrame, videoFrame *AVFrame
 	if handler.OnAudio != nil && s.SubAudio {
 
 		a1 = reflect.TypeOf(handler.OnAudio).In(0)
@@ -98,8 +192,16 @@ func (s *Subscriber) Handle(handler SubscriberHandler) {
 		if s.Publisher == nil || a1 == nil {
 			return
 		}
-		if at := s.Publisher.GetAudioTrack(a1); at != nil {
-			awi = at.WrapIndex
+		if a1 == reflect.TypeOf(audioFrame) {
+			at = s.Publisher.AudioTrack.AVTrack
+			awi = -1
+		} else {
+			at = s.Publisher.GetAudioTrack(a1)
+			if at != nil {
+				awi = at.WrapIndex
+			}
+		}
+		if at != nil {
 			ar = NewAVRingReader(at)
 			s.AudioReader = ar
 			ar.Logger = s.Logger.With("reader", a1.String())
@@ -111,8 +213,16 @@ func (s *Subscriber) Handle(handler SubscriberHandler) {
 		if s.Publisher == nil || v1 == nil {
 			return
 		}
-		if vt := s.Publisher.GetVideoTrack(v1); vt != nil {
-			vwi = vt.WrapIndex
+		if v1 == reflect.TypeOf(videoFrame) {
+			vt = s.Publisher.VideoTrack.AVTrack
+			vwi = -1
+		} else {
+			vt = s.Publisher.GetVideoTrack(v1)
+			if vt != nil {
+				vwi = vt.WrapIndex
+			}
+		}
+		if vt != nil {
 			vr = NewAVRingReader(vt)
 			s.VideoReader = vr
 			vr.Logger = s.Logger.With("reader", v1.String())
@@ -123,16 +233,16 @@ func (s *Subscriber) Handle(handler SubscriberHandler) {
 	createAudioReader()
 	createVideoReader()
 	defer func() {
-		if lastSentVF != nil {
-			lastSentVF.RUnlock()
+		if ar != nil {
+			ar.StopRead()
 		}
-		if lastSentAF != nil {
-			lastSentAF.RUnlock()
+		if vr != nil {
+			vr.StopRead()
 		}
 	}()
 	inputs := make([]reflect.Value, 1)
 	sendAudioFrame := func() (err error) {
-		if awi > 0 {
+		if awi >= 0 {
 			if s.Enabled(s, TraceLevel) {
 				s.Trace("send audio frame", "seq", audioFrame.Sequence)
 			}
@@ -147,11 +257,10 @@ func (s *Subscriber) Handle(handler SubscriberHandler) {
 			}
 		}
 		audioFrame = nil
-		lastSentAF = nil
 		return
 	}
 	sendVideoFrame := func() (err error) {
-		if vwi > 0 {
+		if vwi >= 0 {
 			if s.Enabled(s, TraceLevel) {
 				s.Trace("send video frame", "seq", videoFrame.Sequence, "data", videoFrame.Wraps[vwi].String(), "size", videoFrame.Wraps[vwi].GetSize())
 			}
@@ -166,7 +275,6 @@ func (s *Subscriber) Handle(handler SubscriberHandler) {
 			}
 		}
 		videoFrame = nil
-		lastSentVF = nil
 		return
 	}
 	var err error
@@ -177,7 +285,6 @@ func (s *Subscriber) Handle(handler SubscriberHandler) {
 				err = vr.ReadFrame(subMode)
 				if err == nil {
 					videoFrame = &vr.Value
-					lastSentVF = videoFrame
 					err = s.Err()
 				} else {
 					s.Stop(err)
@@ -229,7 +336,6 @@ func (s *Subscriber) Handle(handler SubscriberHandler) {
 				err = ar.ReadFrame(subMode)
 				if err == nil {
 					audioFrame = &ar.Value
-					lastSentAF = audioFrame
 					err = s.Err()
 				} else {
 					s.Stop(err)

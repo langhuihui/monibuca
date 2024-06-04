@@ -219,8 +219,9 @@ message AudioTrackInfo {
 
 message TrackSnapShotResponse {
   repeated TrackSnapShot ring = 1;
-  map<uint32, uint32> reader = 2;
-  repeated MemoryBlockGroup memory = 3;
+  uint32 ringDataSize = 2;
+  map<uint32, uint32> reader = 3;
+  repeated MemoryBlockGroup memory = 4;
 }
 
 message VideoTrackInfo {

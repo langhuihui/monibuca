@@ -6,13 +6,6 @@ import (
 	"m7s.live/m7s/v5/pkg/util"
 )
 
-type emptyLocker struct{}
-
-func (*emptyLocker) Lock()   {}
-func (*emptyLocker) Unlock() {}
-
-var EmptyLocker emptyLocker
-
 type RingWriter struct {
 	*util.Ring[AVFrame]
 	IDRingList  //最近的关键帧位置，首屏渲染
