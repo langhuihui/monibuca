@@ -2,7 +2,6 @@ package util
 
 import (
 	"io"
-
 )
 
 const defaultBufSize = 65536
@@ -98,11 +97,11 @@ func (r *BufReader) ReadBytes(n int) (mem RecyclableMemory, err error) {
 	for r.recycleFront(); n > 0 && err == nil; err = r.eat() {
 		if r.buf.Length > 0 {
 			if r.buf.Length >= n {
-				mem.ReadFromBytes(r.buf.ClipN(n)...)
+				mem.AddRecycleBytes(r.buf.ClipN(n)...)
 				return
 			}
 			n -= r.buf.Length
-			mem.ReadFromBytes(r.buf.Memory.Buffers...)
+			mem.AddRecycleBytes(r.buf.Memory.Buffers...)
 			r.buf = MemoryReader{}
 		}
 	}

@@ -188,28 +188,29 @@ func (conf *WebRTCPlugin) Push_(w http.ResponseWriter, r *http.Request) {
 			frame.ScalableMemoryAllocator = mem
 			for {
 				var packet rtp.Packet
-				buf := frame.Malloc(1460)
+				buf := frame.NextN(1460)
 				if n, _, err = track.Read(buf); err == nil {
-					err = packet.Unmarshal(buf[:n])
-					frame.ReadFromBytes(buf[:n])
 					if n < 1460 {
 						frame.Free(buf[n:])
+						buf = buf[:n]
+						frame.UpdateBuffer(-1, buf)
 					}
+					err = packet.Unmarshal(buf)
 				}
 				if err != nil {
 					return
 				}
 				if len(packet.Payload) == 0 {
-					frame.Free(frame.Pop())
+					frame.Free(frame.RemoveRecycleBytes(-1))
 					continue
 				}
 				if len(frame.Packets) == 0 || packet.Timestamp == frame.Packets[0].Timestamp {
 					frame.Packets = append(frame.Packets, &packet)
 				} else {
-					m := frame.Pop()
+					m := frame.RemoveRecycleBytes(-1)
 					publisher.WriteAudio(frame)
 					frame = &mrtp.RTPAudio{}
-					frame.ReadFromBytes(m)
+					frame.AddRecycleBytes(m)
 					frame.Packets = []*rtp.Packet{&packet}
 					frame.RTPCodecParameters = &codecP
 					frame.ScalableMemoryAllocator = mem
@@ -233,30 +234,31 @@ func (conf *WebRTCPlugin) Push_(w http.ResponseWriter, r *http.Request) {
 					lastPLISent = time.Now()
 				}
 				var packet rtp.Packet
-				buf := frame.Malloc(1460)
+				buf := frame.NextN(1460)
 				if n, _, err = track.Read(buf); err == nil {
-					err = packet.Unmarshal(buf[:n])
-					frame.ReadFromBytes(buf[:n])
 					if n < 1460 {
 						frame.Free(buf[n:])
+						buf = buf[:n]
+						frame.UpdateBuffer(-1, buf)
 					}
+					err = packet.Unmarshal(buf)
 				}
 				if err != nil {
 					return
 				}
 				if len(packet.Payload) == 0 {
-					frame.Free(frame.Pop())
+					frame.Free(frame.RemoveRecycleBytes(-1))
 					continue
 				}
 				if len(frame.Packets) == 0 || packet.Timestamp == frame.Packets[0].Timestamp {
 					frame.Packets = append(frame.Packets, &packet)
 				} else {
 					// t := time.Now()
-					m := frame.Pop()
+					m := frame.RemoveRecycleBytes(-1)
 					publisher.WriteVideo(frame)
 					// fmt.Println("write video", time.Since(t))
 					frame = &mrtp.RTPVideo{}
-					frame.ReadFromBytes(m)
+					frame.AddRecycleBytes(m)
 					frame.Packets = []*rtp.Packet{&packet}
 					frame.RTPCodecParameters = &codecP
 					frame.ScalableMemoryAllocator = mem

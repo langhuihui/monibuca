@@ -35,6 +35,14 @@ func NewMemory(buffers net.Buffers) *Memory {
 	return ret
 }
 
+func (buffers *Memory) UpdateBuffer(index int, buf []byte) {
+	if index < 0 {
+		index = len(buffers.Buffers) + index
+	}
+	buffers.Size = len(buf) - len(buffers.Buffers[index])
+	buffers.Buffers[index] = buf
+}
+
 func (buffers *Memory) ReadFromBytes(b ...[]byte) {
 	buffers.Buffers = append(buffers.Buffers, b...)
 	for _, level0 := range b {
@@ -45,25 +53,6 @@ func (buffers *Memory) ReadFromBytes(b ...[]byte) {
 func (buffers *Memory) Count() int {
 	return len(buffers.Buffers)
 }
-
-func (buffers *Memory) Pop() []byte {
-	if buffers.Size == 0 {
-		return nil
-	}
-	l := len(buffers.Buffers) - 1
-	last := buffers.Buffers[l]
-	buffers.Buffers = buffers.Buffers[:l]
-	buffers.Size -= len(last)
-	return last
-}
-
-//	func (buffers *Buffers) WriteTo(w io.Writer) (n int64, err error) {
-//		var buf net.Buffers
-//		for _, buffer := range buffers.Buffers {
-//			buf = append(buf, buffer)
-//		}
-//		return buf.WriteTo(w)
-//	}
 
 func (r Memory) NewReader() *MemoryReader {
 	var reader MemoryReader

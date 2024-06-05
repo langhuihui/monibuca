@@ -49,6 +49,8 @@ func (avcc *RTMPAudio) Parse(t *AVTrack) (isIDR, isSeq bool, raw any, err error)
 			if err != nil {
 				return
 			}
+			var cloneFrame RTMPAudio
+			cloneFrame.ReadFromBytes(avcc.ToBytes())
 			ctx.AudioObjectType = b0 >> 3
 			ctx.SamplingFrequencyIndex = (b0 & 0x07 << 1) | (b1 >> 7)
 			ctx.ChannelConfiguration = (b1 >> 3) & 0x0F
@@ -58,7 +60,7 @@ func (avcc *RTMPAudio) Parse(t *AVTrack) (isIDR, isSeq bool, raw any, err error)
 			ctx.Channels = int(ctx.ChannelConfiguration)
 			ctx.SampleRate = SamplingFrequencies[ctx.SamplingFrequencyIndex]
 			ctx.SampleSize = 16
-			t.SequenceFrame = avcc
+			t.SequenceFrame = &cloneFrame
 			t.ICodecCtx = &ctx
 		}
 	}
@@ -98,6 +100,8 @@ func (avcc *RTMPAudio) ToRaw(codecCtx ICodecCtx) (any, error) {
 }
 
 func (aac *AACCtx) CreateFrame(*AVFrame) (frame IAVFrame, err error) {
+	var rtmpAudio RTMPAudio
+	frame = &rtmpAudio
 	return
 }
 
@@ -108,5 +112,7 @@ func (g711 *PCMACtx) CreateFrame(*AVFrame) (frame IAVFrame, err error) {
 }
 
 func (g711 *PCMUCtx) CreateFrame(*AVFrame) (frame IAVFrame, err error) {
+	var rtmpAudio RTMPAudio
+	frame = &rtmpAudio
 	return
 }

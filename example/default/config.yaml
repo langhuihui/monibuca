@@ -1,5 +1,5 @@
 global:
-  loglevel: trace
+  loglevel: debug
   enableauth: true
   tcp:
     listenaddr: :50051
@@ -8,7 +8,7 @@ global:
 console:
   secret: de2c0bb9fd47684adc07a426e139239b
 logrotate:
-  level: trace
+  level: debug
 webrtc:
   publish:
     pubaudio: false

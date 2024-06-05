@@ -231,7 +231,7 @@ func (avcc *RTMPVideo) ToRaw(codecCtx ICodecCtx) (any, error) {
 func (h264 *H264Ctx) CreateFrame(from *AVFrame) (frame IAVFrame, err error) {
 	var rtmpVideo RTMPVideo
 	rtmpVideo.Timestamp = uint32(from.Timestamp / time.Millisecond)
-	// TODO: rtmpVideo.ScalableMemoryAllocator = from.Wraps[0].GetScalableMemoryAllocator()
+	rtmpVideo.ScalableMemoryAllocator = from.Wraps[0].GetScalableMemoryAllocator()
 	nalus := from.Raw.(Nalus)
 	head := rtmpVideo.NextN(5)
 	head[0] = util.Conditoinal[byte](from.IDR, 0x10, 0x20) | byte(ParseVideoCodec(h264.FourCC()))
@@ -246,9 +246,26 @@ func (h264 *H264Ctx) CreateFrame(from *AVFrame) (frame IAVFrame, err error) {
 	frame = &rtmpVideo
 	return
 }
-func (h265 *H265Ctx) CreateFrame(*AVFrame) (frame IAVFrame, err error) {
+
+func (h265 *H265Ctx) CreateFrame(from *AVFrame) (frame IAVFrame, err error) {
+	var rtmpVideo RTMPVideo
+	rtmpVideo.Timestamp = uint32(from.Timestamp / time.Millisecond)
+	rtmpVideo.ScalableMemoryAllocator = from.Wraps[0].GetScalableMemoryAllocator()
+	nalus := from.Raw.(Nalus)
+	head := rtmpVideo.NextN(5)
+	head[0] = util.Conditoinal[byte](from.IDR, 0x10, 0x20) | byte(ParseVideoCodec(h265.FourCC()))
+	head[1] = 1
+	util.PutBE(head[2:5], (nalus.PTS-nalus.DTS)/90) // cts
+	for _, nalu := range nalus.Nalus {
+		naluLenM := rtmpVideo.NextN(4)
+		naluLen := uint32(util.LenOfBuffers(nalu))
+		binary.BigEndian.PutUint32(naluLenM, naluLen)
+		rtmpVideo.ReadFromBytes(nalu...)
+	}
+	frame = &rtmpVideo
 	return
 }
+
 func (av1 *AV1Ctx) CreateFrame(*AVFrame) (frame IAVFrame, err error) {
 	return
 }

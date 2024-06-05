@@ -1,7 +1,7 @@
 package util
 
 import (
-	"fmt"
+	"slices"
 	"sync"
 	"unsafe"
 )
@@ -162,19 +162,38 @@ func (sma *ScalableMemoryAllocator) Free(mem []byte) bool {
 type RecyclableMemory struct {
 	*ScalableMemoryAllocator
 	Memory
+	mallocIndexes []int
 }
 
 func (r *RecyclableMemory) NextN(size int) (memory []byte) {
 	memory = r.ScalableMemoryAllocator.Malloc(size)
-	r.Memory.ReadFromBytes(memory)
+	r.mallocIndexes = append(r.mallocIndexes, len(r.Buffers))
+	r.ReadFromBytes(memory)
+	return
+}
+
+func (r *RecyclableMemory) AddRecycleBytes(b ...[]byte) {
+	start := len(r.Buffers)
+	for i := range b {
+		r.mallocIndexes = append(r.mallocIndexes, start+i)
+	}
+	r.ReadFromBytes(b...)
+}
+
+func (r *RecyclableMemory) RemoveRecycleBytes(index int) (buf []byte) {
+	if index < 0 {
+		index = len(r.Buffers) + index
+	}
+	buf = r.Buffers[index]
+	i := slices.Index(r.mallocIndexes, index)
+	r.mallocIndexes = slices.Delete(r.mallocIndexes, i, i+1)
+	r.Buffers = slices.Delete(r.Buffers, index, index+1)
+	r.Size -= len(buf)
 	return
 }
 
 func (r *RecyclableMemory) Recycle() {
-	for i, buf := range r.Memory.Buffers {
-		ret := r.Free(buf)
-		if !ret {
-			fmt.Println(i)
-		}
+	for _, index := range r.mallocIndexes {
+		r.Free(r.Buffers[index])
 	}
 }

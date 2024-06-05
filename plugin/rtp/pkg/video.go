@@ -82,9 +82,40 @@ func (r *RTPVideo) Parse(t *AVTrack) (isIDR, isSeq bool, raw any, err error) {
 		// ctx.RTPCodecParameters = *r.RTPCodecParameters
 		// codecCtx = &ctx
 	case webrtc.MimeTypeH265:
-		var ctx RTPH265Ctx
-		ctx.RTPCodecParameters = *r.RTPCodecParameters
-		t.ICodecCtx = &ctx
+		var ctx *RTPH265Ctx
+		if t.ICodecCtx != nil {
+			ctx = t.ICodecCtx.(*RTPH265Ctx)
+		} else {
+			ctx = &RTPH265Ctx{}
+			ctx.RTPCodecParameters = *r.RTPCodecParameters
+			t.ICodecCtx = ctx
+		}
+		raw, err = r.ToRaw(ctx)
+		if err != nil {
+			return
+		}
+		nalus := raw.(Nalus)
+		for _, nalu := range nalus.Nalus {
+			switch codec.ParseH265NALUType(nalu[0][0]) {
+			case codec.NAL_UNIT_SPS:
+				ctx = &RTPH265Ctx{}
+				ctx.SPS = [][]byte{slices.Concat(nalu...)}
+				ctx.SPSInfo.Unmarshal(ctx.SPS[0])
+				ctx.RTPCodecParameters = *r.RTPCodecParameters
+				t.ICodecCtx = ctx
+			case codec.NAL_UNIT_PPS:
+				ctx.PPS = [][]byte{slices.Concat(nalu...)}
+			case codec.NAL_UNIT_VPS:
+				ctx.VPS = [][]byte{slices.Concat(nalu...)}
+			case codec.NAL_UNIT_CODED_SLICE_BLA,
+				codec.NAL_UNIT_CODED_SLICE_BLANT,
+				codec.NAL_UNIT_CODED_SLICE_BLA_N_LP,
+				codec.NAL_UNIT_CODED_SLICE_IDR,
+				codec.NAL_UNIT_CODED_SLICE_IDR_N_LP,
+				codec.NAL_UNIT_CODED_SLICE_CRA:
+				isIDR = true
+			}
+		}
 	case "audio/MPEG4-GENERIC", "audio/AAC":
 		// var ctx RTPAACCtx
 		// ctx.FourCC = codec.FourCC_MP4A
@@ -132,19 +163,20 @@ func (h264 *RTPH264Ctx) CreateFrame(from *AVFrame) (frame IAVFrame, err error) {
 		if startIndex := len(r.Packets); reader.Length > 1460 {
 			//fu-a
 			for reader.Length > 0 {
-				mem := r.Malloc(1460)
+				mem := r.NextN(1460)
 				n := reader.ReadBytesTo(mem[1:])
 				mem[0] = codec.NALU_FUA.Or(mem[1] & 0x60)
 				if n < 1459 {
-					// r.Free(mem[n+1:])
+					r.Free(mem[n+1:])
 					mem = mem[:n+1]
 				}
+				r.UpdateBuffer(-1, mem)
 				r.Packets = append(r.Packets, createPacket(mem))
 			}
 			r.Packets[startIndex].Payload[1] |= 1 << 7 // set start bit
 			lastPacket.Payload[1] |= 1 << 6            // set end bit
 		} else {
-			mem := r.Malloc(reader.Length)
+			mem := r.NextN(reader.Length)
 			reader.ReadBytesTo(mem)
 			r.Packets = append(r.Packets, createPacket(mem))
 		}

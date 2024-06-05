@@ -43,7 +43,10 @@ func RegisterCodecs(m *MediaEngine) error {
 		// 	RTPCodecCapability: RTPCodecCapability{"video/rtx", 90000, 0, "apt=102", nil},
 		// 	PayloadType:        121,
 		// },
-
+		{
+			RTPCodecCapability: RTPCodecCapability{MimeTypeH264, 90000, 0, "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=64001f", videoRTCPFeedback},
+			PayloadType:        112,
+		},
 		{
 			RTPCodecCapability: RTPCodecCapability{MimeTypeH264, 90000, 0, "level-asymmetry-allowed=1;packetization-mode=0;profile-level-id=42001f", videoRTCPFeedback},
 			PayloadType:        127,
