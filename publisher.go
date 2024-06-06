@@ -310,6 +310,18 @@ func (p *Publisher) WriteAudio(data IAVFrame) (err error) {
 }
 
 func (p *Publisher) WriteData(data IDataFrame) (err error) {
+	if p.DataTrack == nil {
+		p.DataTrack = &DataTrack{}
+		p.DataTrack.Logger = p.Logger.With("track", "data")
+		p.Lock()
+		if len(p.Subscribers) > 0 {
+			p.State = PublisherStateSubscribed
+		} else {
+			p.State = PublisherStateTrackAdded
+		}
+		p.Unlock()
+	}
+	// TODO: Implement this function
 	return
 }
 

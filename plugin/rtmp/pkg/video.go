@@ -125,7 +125,7 @@ func (avcc *RTMPVideo) DecodeConfig(t *AVTrack, from ICodecCtx) (err error) {
 		b.Write(h264ctx.PPS[0])
 		t.ICodecCtx = &ctx
 		var seqFrame RTMPData
-		seqFrame.Memory.ReadFromBytes(b)
+		seqFrame.ReadFromBytes(b)
 		t.SequenceFrame = seqFrame.WrapVideo()
 		if t.Enabled(context.TODO(), TraceLevel) {
 			codec := t.FourCC().String()

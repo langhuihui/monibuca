@@ -183,6 +183,7 @@ func (conf *WebRTCPlugin) Push_(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			mem := util.NewScalableMemoryAllocator(1460 * 100)
+			defer mem.Recycle()
 			frame := &mrtp.RTPAudio{}
 			frame.RTPCodecParameters = &codecP
 			frame.ScalableMemoryAllocator = mem
@@ -222,6 +223,7 @@ func (conf *WebRTCPlugin) Push_(w http.ResponseWriter, r *http.Request) {
 			}
 			var lastPLISent time.Time
 			mem := util.NewScalableMemoryAllocator(1460 * 100)
+			defer mem.Recycle()
 			frame := &mrtp.RTPVideo{}
 			frame.RTPCodecParameters = &codecP
 			frame.ScalableMemoryAllocator = mem

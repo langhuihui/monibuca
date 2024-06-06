@@ -181,13 +181,56 @@ func (s *Server) GetSubscribers(ctx context.Context, req *pb.SubscribersRequest)
 	return
 }
 func (s *Server) AudioTrackSnap(ctx context.Context, req *pb.StreamSnapRequest) (res *pb.TrackSnapShotResponse, err error) {
-	// s.Call(func() {
-	// 	if pub, ok := s.Streams.Get(req.StreamPath); ok {
-	// 		res = pub.AudioSnapShot()
-	// 	} else {
-	// 		err = pkg.ErrNotFound
-	// 	}
-	// })
+	s.Call(func() {
+		if pub, ok := s.Streams.Get(req.StreamPath); ok {
+			res = &pb.TrackSnapShotResponse{}
+			_, err = pub.AudioTrack.Ready.Await()
+			if err != nil {
+				return
+			}
+			for _, memlist := range pub.AudioTrack.Allocator.GetChildren() {
+				var list []*pb.MemoryBlock
+				for _, block := range memlist.GetBlocks() {
+					list = append(list, &pb.MemoryBlock{
+						S: uint32(block.Start),
+						E: uint32(block.End),
+					})
+				}
+				res.Memory = append(res.Memory, &pb.MemoryBlockGroup{List: list, Size: uint32(memlist.Size)})
+			}
+			res.Reader = make(map[uint32]uint32)
+			for sub := range pub.Subscribers {
+				if sub.AudioReader == nil {
+					continue
+				}
+				res.Reader[uint32(sub.ID)] = sub.AudioReader.Value.Sequence
+			}
+			pub.AudioTrack.Ring.Do(func(v *pkg.AVFrame) {
+				if v.TryRLock() {
+					if len(v.Wraps) > 0 {
+						var snap pb.TrackSnapShot
+						snap.Sequence = v.Sequence
+						snap.Timestamp = uint32(v.Timestamp / time.Millisecond)
+						snap.WriteTime = timestamppb.New(v.WriteTime)
+						snap.Wrap = make([]*pb.Wrap, len(v.Wraps))
+						snap.KeyFrame = v.IDR
+						res.RingDataSize += uint32(v.Wraps[0].GetSize())
+						for i, wrap := range v.Wraps {
+							snap.Wrap[i] = &pb.Wrap{
+								Timestamp: uint32(wrap.GetTimestamp() / time.Millisecond),
+								Size:      uint32(wrap.GetSize()),
+								Data:      wrap.String(),
+							}
+						}
+						res.Ring = append(res.Ring, &snap)
+					}
+					v.RUnlock()
+				}
+			})
+		} else {
+			err = pkg.ErrNotFound
+		}
+	})
 	return
 }
 func (s *Server) api_VideoTrack_SSE(rw http.ResponseWriter, r *http.Request) {
@@ -228,7 +271,6 @@ func (s *Server) VideoTrackSnap(ctx context.Context, req *pb.StreamSnapRequest) 
 			if err != nil {
 				return
 			}
-			// vcc := pub.VideoTrack.AVTrack.ICodecCtx.(pkg.IVideoCodecCtx)
 			for _, memlist := range pub.VideoTrack.Allocator.GetChildren() {
 				var list []*pb.MemoryBlock
 				for _, block := range memlist.GetBlocks() {

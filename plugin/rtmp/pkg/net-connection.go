@@ -151,7 +151,7 @@ func (conn *NetConnection) readChunk() (msg *Chunk, err error) {
 	if chunk.bufLen == 0 {
 		chunk.AVData.RecyclableMemory = mem
 	} else {
-		chunk.AVData.ReadFromBytes(mem.Buffers...)
+		chunk.AVData.AddRecycleBytes(mem.Buffers...)
 	}
 
 	chunk.bufLen += mem.Size

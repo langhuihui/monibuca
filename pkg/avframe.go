@@ -68,7 +68,9 @@ var _ IAVFrame = (*AnnexB)(nil)
 func (frame *AVFrame) Reset() {
 	frame.Timestamp = 0
 	if len(frame.Wraps) > 0 {
-		frame.Wraps[0].Recycle()
+		for _, wrap := range frame.Wraps {
+			wrap.Recycle()
+		}
 		frame.Wraps = frame.Wraps[:0]
 	}
 }

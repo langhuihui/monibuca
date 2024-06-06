@@ -63,10 +63,10 @@ func (c *Collection[K, T]) RemoveByKey(key K) {
 	for i := range c.Length {
 		if c.Items[i].GetKey() == key {
 			c.Items = slices.Delete(c.Items, i, i+1)
+			c.Length--
 			break
 		}
 	}
-	c.Length--
 }
 
 func (c *Collection[K, T]) Get(key K) (item T, ok bool) {

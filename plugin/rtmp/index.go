@@ -199,12 +199,14 @@ func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
 				if r, ok := receivers[msg.MessageStreamID]; ok {
 					r.WriteAudio(msg.AVData.WrapAudio())
 				} else {
+					msg.AVData.Recycle()
 					logger.Warn("ReceiveAudio", "MessageStreamID", msg.MessageStreamID)
 				}
 			case RTMP_MSG_VIDEO:
 				if r, ok := receivers[msg.MessageStreamID]; ok {
 					r.WriteVideo(msg.AVData.WrapVideo())
 				} else {
+					msg.AVData.Recycle()
 					logger.Warn("ReceiveVideo", "MessageStreamID", msg.MessageStreamID)
 				}
 			}

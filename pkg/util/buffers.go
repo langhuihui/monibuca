@@ -266,13 +266,11 @@ func (reader *MemoryReader) ClipFront() (r net.Buffers) {
 	}
 	buffers := &reader.Memory
 	if reader.Length == 0 {
-		r = buffers.Buffers
+		r = slices.Clone(buffers.Buffers)
 		buffers.Buffers = buffers.Buffers[:0]
 	} else {
-		for i := range reader.offset0 {
-			r = append(r, buffers.Buffers[i])
-		}
-		if reader.getCurrentBufLen() > 0 {
+		r = slices.Clone(buffers.Buffers[:reader.offset0])
+		if reader.offset1 > 0 {
 			r = append(r, buffers.Buffers[reader.offset0][:reader.offset1])
 			buffers.Buffers[reader.offset0] = reader.GetCurrent()
 		}
@@ -280,6 +278,13 @@ func (reader *MemoryReader) ClipFront() (r net.Buffers) {
 			buffers.Buffers = slices.Delete(buffers.Buffers, 0, reader.offset0)
 		}
 	}
+	// bs := 0
+	// for _, b := range r {
+	// 	bs += len(b)
+	// }
+	// if bs != offset {
+	// 	panic("ClipFront error")
+	// }
 	reader.Size -= offset
 	reader.offset0 = 0
 	reader.offset1 = 0

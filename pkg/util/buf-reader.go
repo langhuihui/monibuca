@@ -40,10 +40,11 @@ func (r *BufReader) eat() error {
 	if n, err := r.reader.Read(buf); err != nil {
 		r.allocator.Free(buf)
 		return err
-	} else if n < r.BufLen {
-		r.buf.ReadFromBytes(buf[:n])
-		r.allocator.Free(buf[n:])
-	} else if n == r.BufLen {
+	} else {
+		if n < r.BufLen {
+			r.allocator.Free(buf[n:])
+			buf = buf[:n]
+		}
 		r.buf.ReadFromBytes(buf)
 	}
 	return nil
@@ -101,7 +102,7 @@ func (r *BufReader) ReadBytes(n int) (mem RecyclableMemory, err error) {
 				return
 			}
 			n -= r.buf.Length
-			mem.AddRecycleBytes(r.buf.Memory.Buffers...)
+			mem.AddRecycleBytes(r.buf.Buffers...)
 			r.buf = MemoryReader{}
 		}
 	}

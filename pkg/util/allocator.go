@@ -8,7 +8,6 @@ type (
 	Block struct {
 		Start, End int
 		trees      [2]Tree
-		allocator  *Allocator
 	}
 	// History struct {
 	// 	Malloc bool
@@ -39,7 +38,6 @@ func NewAllocator(size int) (result *Allocator) {
 		offsetTree: root,
 		Size:       size,
 	}
-	root.allocator = result
 	return
 }
 
@@ -56,10 +54,6 @@ func compareByOffset(a, b *Block) bool {
 
 var compares = [...]func(a, b *Block) bool{compareBySize, compareByOffset}
 var emptyTrees = [2]Tree{}
-
-func (b *Block) recycle() {
-	b.allocator.putBlock(b)
-}
 
 func (b *Block) insert(block *Block, treeIndex int) *Block {
 	if b == nil {
@@ -198,22 +192,17 @@ func (a *Allocator) findAvailableBlock(block *Block, size int) *Block {
 
 func (a *Allocator) getBlock(start, end int) *Block {
 	if l := len(a.pool); l == 0 {
-		return &Block{Start: start, End: end, allocator: a}
+		return &Block{Start: start, End: end}
 	} else {
 		block := a.pool[l-1]
 		a.pool = a.pool[:l-1]
 		block.Start, block.End = start, end
-		block.allocator = a
 		return block
 	}
 }
 
 func (a *Allocator) putBlock(b *Block) {
-	if b.allocator == nil {
-		return
-	}
 	b.trees = emptyTrees
-	b.allocator = nil
 	a.pool = append(a.pool, b)
 }
 
@@ -255,7 +244,7 @@ func (a *Allocator) mergeAdjacentBlocks(block *Block) {
 		a.deleteSizeTree(block)
 		block.Start = leftAdjacent.Start
 		a.sizeTree = a.sizeTree.insert(block, 0)
-		leftAdjacent.recycle()
+		a.putBlock(leftAdjacent)
 	}
 	if rightAdjacent := a.offsetTree.findRightAdjacentBlock(block.End); rightAdjacent != nil {
 		a.deleteSizeTree(rightAdjacent)
@@ -263,7 +252,7 @@ func (a *Allocator) mergeAdjacentBlocks(block *Block) {
 		a.deleteSizeTree(block)
 		block.End = rightAdjacent.End
 		a.sizeTree = a.sizeTree.insert(block, 0)
-		rightAdjacent.recycle()
+		a.putBlock(rightAdjacent)
 	}
 }
 
