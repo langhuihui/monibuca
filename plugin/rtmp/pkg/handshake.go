@@ -120,8 +120,12 @@ func (nc *NetConnection) simple_handshake(C1 []byte, checkC2 bool) error {
 	if err != nil {
 		return err
 	}
-	if checkC2 && !bytes.Equal(C2.ToBytes()[8:], S0S1[9:]) {
-		return errors.New("C2 Error")
+	if checkC2 {
+		buf := nc.mediaDataPool.NextN(C2.Size)
+		C2.Read(buf)
+		if !bytes.Equal(buf[8:], S0S1[9:]) {
+			return errors.New("C2 Error")
+		}
 	}
 	return nil
 }
