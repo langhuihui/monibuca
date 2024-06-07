@@ -67,8 +67,8 @@ var (
 // C2 S2 : 参考C1 S1
 
 func (nc *NetConnection) Handshake(checkC2 bool) (err error) {
-	C0C1 := nc.writePool.NextN(C1S1_SIZE + 1)
-	defer nc.writePool.Recycle()
+	C0C1 := nc.mediaDataPool.NextN(C1S1_SIZE + 1)
+	defer nc.mediaDataPool.Recycle()
 	if _, err = io.ReadFull(nc.Conn, C0C1); err != nil {
 		return err
 	}
@@ -90,8 +90,8 @@ func (nc *NetConnection) Handshake(checkC2 bool) (err error) {
 }
 
 func (client *NetConnection) ClientHandshake() (err error) {
-	C0C1 := client.writePool.NextN(C1S1_SIZE + 1)
-	defer client.writePool.Recycle()
+	C0C1 := client.mediaDataPool.NextN(C1S1_SIZE + 1)
+	defer client.mediaDataPool.Recycle()
 	C0C1[0] = RTMP_HANDSHAKE_VERSION
 	if _, err = client.Write(C0C1); err == nil {
 		// read S0 S1
@@ -108,15 +108,15 @@ func (client *NetConnection) ClientHandshake() (err error) {
 }
 
 func (nc *NetConnection) simple_handshake(C1 []byte, checkC2 bool) error {
-	S0S1 := nc.writePool.NextN(C1S1_SIZE + 1)
-	defer nc.writePool.Recycle()
+	S0S1 := nc.mediaDataPool.NextN(C1S1_SIZE + 1)
+	defer nc.mediaDataPool.Recycle()
 	S0S1[0] = RTMP_HANDSHAKE_VERSION
 	util.PutBE(S0S1[1:5], time.Now().Unix()&0xFFFFFFFF)
 	copy(S0S1[5:], "Monibuca")
 	nc.Write(S0S1)
 	nc.Write(C1) // S2
 	C2, err := nc.ReadBytes(C1S1_SIZE)
-	defer C2.Recycle()
+	C2.Recycle()
 	if err != nil {
 		return err
 	}

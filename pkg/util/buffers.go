@@ -43,6 +43,13 @@ func (buffers *Memory) UpdateBuffer(index int, buf []byte) {
 	buffers.Buffers[index] = buf
 }
 
+func (buffers *Memory) CopyFrom(b Memory) {
+	buf := make([]byte, b.Size)
+	bufs := slices.Clone(b.Buffers)
+	bufs.Read(buf)
+	buffers.ReadFromBytes(buf)
+}
+
 func (buffers *Memory) ReadFromBytes(b ...[]byte) {
 	buffers.Buffers = append(buffers.Buffers, b...)
 	for _, level0 := range b {

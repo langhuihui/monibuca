@@ -40,7 +40,7 @@ func (r *AVRingReader) DecConfChanged() bool {
 
 func NewAVRingReader(t *AVTrack) *AVRingReader {
 	t.Debug("create reader")
-	<-t.Ready.Done()
+	t.Ready.Await()
 	t.Info("reader +1", "count", t.ReaderCount.Add(1))
 	return &AVRingReader{
 		Track: t,

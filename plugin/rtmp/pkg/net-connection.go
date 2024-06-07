@@ -58,7 +58,7 @@ type NetConnection struct {
 	AppName         string
 	tmpBuf          util.Buffer //用来接收/发送小数据，复用内存
 	chunkHeaderBuf  util.Buffer
-	writePool       util.RecyclableMemory
+	mediaDataPool   util.RecyclableMemory
 	writing         atomic.Bool // false 可写，true 不可写
 }
 
@@ -74,10 +74,14 @@ func NewNetConnection(conn net.Conn, logger *slog.Logger) (ret *NetConnection) {
 		tmpBuf:          make(util.Buffer, 4),
 		chunkHeaderBuf:  make(util.Buffer, 0, 20),
 	}
-	ret.writePool.ScalableMemoryAllocator = util.NewScalableMemoryAllocator(1024)
+	ret.mediaDataPool.ScalableMemoryAllocator = util.NewScalableMemoryAllocator(1024)
 	return
 }
-
+func (conn *NetConnection) Destroy() {
+	conn.Conn.Close()
+	conn.BufReader.Recycle()
+	conn.mediaDataPool.Recycle()
+}
 func (conn *NetConnection) SendStreamID(eventType uint16, streamID uint32) (err error) {
 	return conn.SendMessage(RTMP_MSG_USER_CONTROL, &StreamIDMessage{UserControlMessage{EventType: eventType}, streamID})
 }
@@ -143,26 +147,30 @@ func (conn *NetConnection) readChunk() (msg *Chunk, err error) {
 	} else {
 		mem, err = conn.ReadBytes(conn.readChunkSize)
 	}
+	mem.Recycle()
 	if err != nil {
-		mem.Recycle()
 		return nil, err
 	}
 	conn.readSeqNum += uint32(mem.Size)
 	if chunk.bufLen == 0 {
-		chunk.AVData.RecyclableMemory = mem
-	} else {
-		chunk.AVData.AddRecycleBytes(mem.Buffers...)
+		chunk.AVData.RecyclableMemory = util.RecyclableMemory{
+			ScalableMemoryAllocator: conn.mediaDataPool.ScalableMemoryAllocator,
+		}
+		chunk.AVData.NextN(msgLen)
 	}
-
-	chunk.bufLen += mem.Size
-	if chunk.AVData.Size == msgLen {
+	buffer := chunk.AVData.Buffers[0]
+	for _, b := range mem.Buffers {
+		copy(buffer[chunk.bufLen:], b)
+		chunk.bufLen += len(b)
+	}
+	if chunk.bufLen == msgLen {
 		msg = chunk
 		switch chunk.MessageTypeID {
 		case RTMP_MSG_AUDIO, RTMP_MSG_VIDEO:
 			msg.AVData.Timestamp = chunk.ChunkHeader.ExtendTimestamp
 		default:
-			msg.AVData.Recycle()
-			err = GetRtmpMessage(msg, msg.AVData.ToBytes())
+			chunk.AVData.Recycle()
+			err = GetRtmpMessage(msg, buffer)
 		}
 		msg.bufLen = 0
 	}

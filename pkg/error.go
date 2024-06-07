@@ -15,4 +15,5 @@ var (
 	ErrRestart                  = errors.New("restart")
 	ErrInterrupt                = errors.New("interrupt")
 	ErrUnsupportCodec           = errors.New("unsupport codec")
+	ErrMuted                    = errors.New("muted")
 )

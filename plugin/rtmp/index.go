@@ -44,8 +44,7 @@ func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
 	var err error
 	logger.Info("conn")
 	nc := NewNetConnection(conn, logger)
-	defer nc.BufReader.Recycle()
-	defer conn.Close()
+	defer nc.Destroy()
 	ctx, cancel := context.WithCancelCause(p)
 	defer func() {
 		logger.Info("conn close")

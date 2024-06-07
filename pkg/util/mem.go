@@ -80,12 +80,7 @@ type ScalableMemoryAllocator struct {
 }
 
 func NewScalableMemoryAllocator(size int) (ret *ScalableMemoryAllocator) {
-	if value, ok := pools.Load(size); ok {
-		ret = value.(*sync.Pool).Get().(*ScalableMemoryAllocator)
-	} else {
-		ret = &ScalableMemoryAllocator{children: []*MemoryAllocator{NewMemoryAllocator(size)}, size: size}
-	}
-	return
+	return &ScalableMemoryAllocator{children: []*MemoryAllocator{GetMemoryAllocator(size)}, size: size}
 }
 
 func (sma *ScalableMemoryAllocator) checkSize() {
@@ -138,7 +133,7 @@ func (sma *ScalableMemoryAllocator) Malloc(size int) (memory []byte) {
 			return
 		}
 	}
-	child = NewMemoryAllocator(max(min(MaxBlockSize, child.Size*2), size))
+	child = GetMemoryAllocator(max(min(MaxBlockSize, child.Size*2), size))
 	sma.size += child.Size
 	memory = child.Malloc(size)
 	sma.children = append(sma.children, child)
@@ -175,20 +170,24 @@ func (sma *ScalableMemoryAllocator) Free(mem []byte) bool {
 type RecyclableMemory struct {
 	*ScalableMemoryAllocator
 	Memory
-	mallocIndexes []int
+	RecycleIndexes []int
 }
 
 func (r *RecyclableMemory) NextN(size int) (memory []byte) {
 	memory = r.ScalableMemoryAllocator.Malloc(size)
-	r.mallocIndexes = append(r.mallocIndexes, len(r.Buffers))
+	if r.RecycleIndexes != nil {
+		r.RecycleIndexes = append(r.RecycleIndexes, len(r.Buffers))
+	}
 	r.ReadFromBytes(memory)
 	return
 }
 
 func (r *RecyclableMemory) AddRecycleBytes(b ...[]byte) {
-	start := len(r.Buffers)
-	for i := range b {
-		r.mallocIndexes = append(r.mallocIndexes, start+i)
+	if r.RecycleIndexes != nil {
+		start := len(r.Buffers)
+		for i := range b {
+			r.RecycleIndexes = append(r.RecycleIndexes, start+i)
+		}
 	}
 	r.ReadFromBytes(b...)
 }
@@ -198,15 +197,24 @@ func (r *RecyclableMemory) RemoveRecycleBytes(index int) (buf []byte) {
 		index = len(r.Buffers) + index
 	}
 	buf = r.Buffers[index]
-	i := slices.Index(r.mallocIndexes, index)
-	r.mallocIndexes = slices.Delete(r.mallocIndexes, i, i+1)
+	if r.RecycleIndexes != nil {
+		i := slices.Index(r.RecycleIndexes, index)
+		r.RecycleIndexes = slices.Delete(r.RecycleIndexes, i, i+1)
+	}
 	r.Buffers = slices.Delete(r.Buffers, index, index+1)
 	r.Size -= len(buf)
 	return
 }
 
 func (r *RecyclableMemory) Recycle() {
-	for _, index := range r.mallocIndexes {
-		r.Free(r.Buffers[index])
+	if r.RecycleIndexes != nil {
+		for _, index := range r.RecycleIndexes {
+			r.Free(r.Buffers[index])
+		}
+		r.RecycleIndexes = r.RecycleIndexes[:0]
+	} else {
+		for _, buf := range r.Buffers {
+			r.Free(buf)
+		}
 	}
 }

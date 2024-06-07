@@ -169,13 +169,17 @@ func (p *Publisher) writeAV(t *AVTrack, data IAVFrame) {
 }
 
 func (p *Publisher) WriteVideo(data IAVFrame) (err error) {
+	defer func() {
+		if err != nil {
+			data.Recycle()
+		}
+	}()
 	if !p.PubVideo || p.IsStopped() {
-		data.Recycle()
-		return
+		return ErrMuted
 	}
 	t := p.VideoTrack.AVTrack
 	if t == nil {
-		t = NewAVTrack(data, p.Logger.With("track", "video"), 256)
+		t = NewAVTrack(data, p.Logger.With("track", "video"), 50)
 		p.Lock()
 		p.VideoTrack.AVTrack = t
 		p.VideoTrack.Add(t)
@@ -187,19 +191,17 @@ func (p *Publisher) WriteVideo(data IAVFrame) (err error) {
 		p.Unlock()
 	}
 	oldCodecCtx := t.ICodecCtx
-	isIDR, _, raw, err := data.Parse(t)
+	t.Value.IDR, _, t.Value.Raw, err = data.Parse(t)
 	codecCtxChanged := oldCodecCtx != t.ICodecCtx
 	if err != nil {
 		p.Error("parse", "err", err)
 		return err
 	}
 	if t.ICodecCtx == nil {
-		return
+		return ErrUnsupportCodec
 	}
-	t.Value.Raw = raw
-	t.Value.IDR = isIDR
 	idr, hidr := t.IDRing.Load(), t.HistoryRing.Load()
-	if isIDR {
+	if t.Value.IDR {
 		if idr != nil {
 			p.GOP = int(t.Value.Sequence - idr.Value.Sequence)
 			if hidr == nil {
@@ -230,7 +232,7 @@ func (p *Publisher) WriteVideo(data IAVFrame) (err error) {
 		}
 	}
 	p.writeAV(t, data)
-	if p.VideoTrack.Length > 1 && !p.VideoTrack.AVTrack.Ready.Pendding() {
+	if p.VideoTrack.Length > 1 && !p.VideoTrack.AVTrack.Ready.IsPending() {
 		if t.Value.Raw == nil {
 			t.Value.Raw, err = t.Value.Wraps[0].ToRaw(t.ICodecCtx)
 			if err != nil {
@@ -278,9 +280,13 @@ func (p *Publisher) WriteVideo(data IAVFrame) (err error) {
 }
 
 func (p *Publisher) WriteAudio(data IAVFrame) (err error) {
+	defer func() {
+		if err != nil {
+			data.Recycle()
+		}
+	}()
 	if !p.PubAudio || p.IsStopped() {
-		data.Recycle()
-		return
+		return ErrMuted
 	}
 	t := p.AudioTrack.AVTrack
 	if t == nil {
@@ -297,11 +303,10 @@ func (p *Publisher) WriteAudio(data IAVFrame) (err error) {
 	}
 	_, _, _, err = data.Parse(t)
 	if t.ICodecCtx == nil {
-		return
+		return ErrUnsupportCodec
 	}
-	if t.Ready.Pendding() {
+	if t.Ready.IsPending() {
 		t.Ready.Fulfill(err)
-		return
 	}
 	p.writeAV(t, data)
 	t.Step()
