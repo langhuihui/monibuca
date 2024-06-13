@@ -5,26 +5,28 @@ type NetStream struct {
 	StreamID uint32
 }
 
-func (ns *NetStream) CreateAudioSender() *AVSender {
+func (ns *NetStream) CreateAudioSender(c bool) *AVSender {
 	var av AVSender
 	av.NetConnection = ns.NetConnection
 	av.ChunkStreamID = RTMP_CSID_AUDIO
 	av.MessageTypeID = RTMP_MSG_AUDIO
 	av.MessageStreamID = ns.StreamID
+	av.errContinue = c
 	return &av
 }
 
-func (ns *NetStream) CreateVideoSender() *AVSender {
+func (ns *NetStream) CreateVideoSender(c bool) *AVSender {
 	var av AVSender
 	av.NetConnection = ns.NetConnection
 	av.ChunkStreamID = RTMP_CSID_VIDEO
 	av.MessageTypeID = RTMP_MSG_VIDEO
 	av.MessageStreamID = ns.StreamID
+	av.errContinue = c
 	return &av
 }
 
-func (ns *NetStream) CreateSender() (audio *AVSender, video *AVSender) {
-	return ns.CreateAudioSender(), ns.CreateVideoSender()
+func (ns *NetStream) CreateSender(c bool) (audio *AVSender, video *AVSender) {
+	return ns.CreateAudioSender(c), ns.CreateVideoSender(c)
 }
 
 func (ns *NetStream) Response(tid uint64, code, level string) error {
@@ -63,7 +65,7 @@ func (ns *NetStream) BeginPlay(tid uint64) (err error) {
 
 func (ns *NetStream) Close() error {
 	if ns.NetConnection != nil {
-		return ns.NetConnection.Close()
+		ns.NetConnection.Destroy()
 	}
 	return nil
 }

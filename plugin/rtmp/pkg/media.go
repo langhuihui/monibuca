@@ -2,6 +2,7 @@ package rtmp
 
 import (
 	"errors"
+	"m7s.live/m7s/v5/pkg"
 	"runtime"
 
 	"m7s.live/m7s/v5"
@@ -10,12 +11,28 @@ import (
 type AVSender struct {
 	*NetConnection
 	ChunkHeader
-	lastAbs uint32
+	errContinue bool
+	lastAbs     uint32
+}
+
+func (av *AVSender) HandleAudio(frame *RTMPAudio) (err error) {
+	return av.SendFrame(&frame.RTMPData)
+}
+
+func (av *AVSender) HandleVideo(frame *RTMPVideo) (err error) {
+	return av.SendFrame(&frame.RTMPData)
 }
 
 func (av *AVSender) SendFrame(frame *RTMPData) (err error) {
 	// seq := frame.Sequence
 	payloadLen := frame.Size
+	if av.errContinue {
+		defer func() {
+			if err != nil {
+				err = pkg.ErrInterrupt
+			}
+		}()
+	}
 	if payloadLen == 0 {
 		err = errors.New("payload is empty")
 		// av.Error("payload is empty", zap.Error(err))
@@ -47,7 +64,7 @@ func (av *AVSender) SendFrame(frame *RTMPData) (err error) {
 	// if seq != frame.Sequence {
 	// 	return errors.New("sequence is not equal")
 	// }
-	return err
+	return
 }
 
 type RTMPReceiver struct {

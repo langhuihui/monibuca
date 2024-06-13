@@ -4,7 +4,7 @@ import (
 	"io"
 )
 
-const defaultBufSize = 65536
+const defaultBufSize = 1 << 16
 
 type BufReader struct {
 	reader    io.Reader
@@ -95,6 +95,12 @@ func (r *BufReader) ReadBE32(n int) (num uint32, err error) {
 
 func (r *BufReader) ReadBytes(n int) (mem RecyclableMemory, err error) {
 	mem.ScalableMemoryAllocator = r.allocator
+	defer func() {
+		if err != nil {
+			mem.Recycle()
+			mem = RecyclableMemory{}
+		}
+	}()
 	for r.recycleFront(); n > 0 && err == nil; err = r.eat() {
 		if r.buf.Length > 0 {
 			if r.buf.Length >= n {

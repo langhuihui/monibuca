@@ -9,17 +9,17 @@ type (
 		Start, End int
 		trees      [2]Tree
 	}
-	// History struct {
-	// 	Malloc bool
-	// 	Offset int
-	// 	Size   int
-	// }
+	History struct {
+		Malloc bool
+		Offset int
+		Size   int
+	}
 	Allocator struct {
 		pool       []*Block
 		sizeTree   *Block
 		offsetTree *Block
 		Size       int
-		// history    []History
+		//history    []History
 	}
 )
 
@@ -158,7 +158,7 @@ func (b *Block) delete(block *Block, treeIndex int) *Block {
 }
 
 func (a *Allocator) Allocate(size int) (offset int) {
-	// a.history = append(a.history, History{Malloc: true, Size: size})
+	//a.history = append(a.history, History{Malloc: true, Size: size})
 	block := a.findAvailableBlock(a.sizeTree, size)
 	if block == nil {
 		return -1
@@ -207,7 +207,7 @@ func (a *Allocator) putBlock(b *Block) {
 }
 
 func (a *Allocator) Free(offset, size int) {
-	// a.history = append(a.history, History{Malloc: false, Offset: offset, Size: size})
+	//a.history = append(a.history, History{Malloc: false, Offset: offset, Size: size})
 	block := a.getBlock(offset, offset+size)
 	a.sizeTree, a.offsetTree = a.sizeTree.insert(block, 0), a.offsetTree.insert(block, 1)
 	a.mergeAdjacentBlocks(block)

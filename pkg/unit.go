@@ -20,12 +20,11 @@ func (unit *Unit) Trace(msg string, fields ...any) {
 }
 
 func (unit *Unit) IsStopped() bool {
-	select {
-	case <-unit.Done():
-		return true
-	default:
-	}
-	return false
+	return unit.StopReason() != nil
+}
+
+func (unit *Unit) StopReason() error {
+	return context.Cause(unit.Context)
 }
 
 func (unit *Unit) Stop(err error) {

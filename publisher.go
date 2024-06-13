@@ -1,6 +1,7 @@
 package m7s
 
 import (
+	"errors"
 	"reflect"
 	"sync"
 	"time"
@@ -17,6 +18,7 @@ const (
 	PublisherStateTrackAdded
 	PublisherStateSubscribed
 	PublisherStateWaitSubscriber
+	PublisherStateDisposed
 )
 
 type SpeedControl struct {
@@ -57,7 +59,7 @@ func (t *AVTracks) IsEmpty() bool {
 
 func (t *AVTracks) CreateSubTrack(dataType reflect.Type) (track *AVTrack) {
 	track = NewAVTrack(dataType, t.AVTrack)
-	track.WrapIndex = len(t.Items)
+	track.WrapIndex = t.Length
 	t.Add(track)
 	return
 }
@@ -70,10 +72,14 @@ type Publisher struct {
 	VideoTrack  AVTracks
 	AudioTrack  AVTracks
 	DataTrack   *DataTrack
-	Subscribers map[*Subscriber]struct{} `json:"-" yaml:"-"`
+	Subscribers util.Collection[int, *Subscriber] `json:"-" yaml:"-"`
 	GOP         int
 	baseTs      time.Duration
 	lastTs      time.Duration
+}
+
+func (p *Publisher) SubscriberRange(yield func(sub *Subscriber) bool) {
+	p.Subscribers.Range(yield)
 }
 
 func (p *Publisher) GetKey() string {
@@ -118,27 +124,25 @@ func (p *Publisher) checkTimeout() (err error) {
 	return
 }
 
-func (p *Publisher) RemoveSubscriber(subscriber *Subscriber) (err error) {
+func (p *Publisher) RemoveSubscriber(subscriber *Subscriber) {
 	p.Lock()
 	defer p.Unlock()
-	delete(p.Subscribers, subscriber)
-	p.Info("subscriber -1", "count", len(p.Subscribers))
-	if p.State == PublisherStateSubscribed && len(p.Subscribers) == 0 {
+	p.Subscribers.Remove(subscriber)
+	p.Info("subscriber -1", "count", p.Subscribers.Length)
+	if p.State == PublisherStateSubscribed && p.Subscribers.Length == 0 {
 		p.State = PublisherStateWaitSubscriber
 		if p.DelayCloseTimeout > 0 {
 			p.TimeoutTimer.Reset(p.DelayCloseTimeout)
 		}
 	}
-	return
 }
 
-func (p *Publisher) AddSubscriber(subscriber *Subscriber) (err error) {
+func (p *Publisher) AddSubscriber(subscriber *Subscriber) {
 	p.Lock()
 	defer p.Unlock()
 	subscriber.Publisher = p
-	if _, ok := p.Subscribers[subscriber]; !ok {
-		p.Subscribers[subscriber] = struct{}{}
-		p.Info("subscriber +1", "count", len(p.Subscribers))
+	if p.Subscribers.AddUnique(subscriber) {
+		p.Info("subscriber +1", "count", p.Subscribers.Length)
 		switch p.State {
 		case PublisherStateTrackAdded, PublisherStateWaitSubscriber:
 			p.State = PublisherStateSubscribed
@@ -147,7 +151,6 @@ func (p *Publisher) AddSubscriber(subscriber *Subscriber) (err error) {
 			}
 		}
 	}
-	return
 }
 
 func (p *Publisher) writeAV(t *AVTrack, data IAVFrame) {
@@ -179,11 +182,11 @@ func (p *Publisher) WriteVideo(data IAVFrame) (err error) {
 	}
 	t := p.VideoTrack.AVTrack
 	if t == nil {
-		t = NewAVTrack(data, p.Logger.With("track", "video"), 50)
+		t = NewAVTrack(data, p.Logger.With("track", "video"), 100)
 		p.Lock()
 		p.VideoTrack.AVTrack = t
 		p.VideoTrack.Add(t)
-		if len(p.Subscribers) > 0 {
+		if p.Subscribers.Length > 0 {
 			p.State = PublisherStateSubscribed
 		} else {
 			p.State = PublisherStateTrackAdded
@@ -294,7 +297,7 @@ func (p *Publisher) WriteAudio(data IAVFrame) (err error) {
 		p.Lock()
 		p.AudioTrack.AVTrack = t
 		p.AudioTrack.Add(t)
-		if len(p.Subscribers) > 0 {
+		if p.Subscribers.Length > 0 {
 			p.State = PublisherStateSubscribed
 		} else {
 			p.State = PublisherStateTrackAdded
@@ -319,7 +322,7 @@ func (p *Publisher) WriteData(data IDataFrame) (err error) {
 		p.DataTrack = &DataTrack{}
 		p.DataTrack.Logger = p.Logger.With("track", "data")
 		p.Lock()
-		if len(p.Subscribers) > 0 {
+		if p.Subscribers.Length > 0 {
 			p.State = PublisherStateSubscribed
 		} else {
 			p.State = PublisherStateTrackAdded
@@ -354,6 +357,25 @@ func (p *Publisher) GetVideoTrack(dataType reflect.Type) (t *AVTrack) {
 	return
 }
 
+func (p *Publisher) Dispose(err error) {
+	p.Lock()
+	defer p.Unlock()
+	if p.State == PublisherStateDisposed {
+		return
+	}
+	if !errors.Is(p.StopReason(), ErrKick) && p.IsStopped() {
+		if !p.AudioTrack.IsEmpty() {
+			p.AudioTrack.Dispose()
+		}
+		if !p.VideoTrack.IsEmpty() {
+			p.VideoTrack.Dispose()
+		}
+		p.State = PublisherStateDisposed
+		return
+	}
+	p.Stop(err)
+}
+
 func (p *Publisher) TakeOver(old *Publisher) {
 	p.baseTs = old.lastTs
 	p.VideoTrack = old.VideoTrack
@@ -363,7 +385,10 @@ func (p *Publisher) TakeOver(old *Publisher) {
 	p.AudioTrack.ICodecCtx = nil
 	p.AudioTrack.Logger = p.Logger.With("track", "audio")
 	p.DataTrack = old.DataTrack
-	p.Subscribers = old.Subscribers
+	for subscriber := range old.SubscriberRange {
+		p.AddSubscriber(subscriber)
+	}
+	old.Subscribers = util.Collection[int, *Subscriber]{}
 	// for _, track := range p.TransTrack {
 	// 	track.ICodecCtx = nil
 	// }

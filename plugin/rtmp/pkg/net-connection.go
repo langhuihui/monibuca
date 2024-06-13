@@ -74,13 +74,15 @@ func NewNetConnection(conn net.Conn, logger *slog.Logger) (ret *NetConnection) {
 		tmpBuf:          make(util.Buffer, 4),
 		chunkHeaderBuf:  make(util.Buffer, 0, 20),
 	}
-	ret.mediaDataPool.ScalableMemoryAllocator = util.NewScalableMemoryAllocator(1024)
+	ret.mediaDataPool.ScalableMemoryAllocator = util.NewScalableMemoryAllocator(1 << util.MinPowerOf2)
+	ret.Info("new connection")
 	return
 }
 func (conn *NetConnection) Destroy() {
 	conn.Conn.Close()
 	conn.BufReader.Recycle()
 	conn.mediaDataPool.Recycle()
+	conn.Info("destroy connection")
 }
 func (conn *NetConnection) SendStreamID(eventType uint16, streamID uint32) (err error) {
 	return conn.SendMessage(RTMP_MSG_USER_CONTROL, &StreamIDMessage{UserControlMessage{EventType: eventType}, streamID})
@@ -141,13 +143,15 @@ func (conn *NetConnection) readChunk() (msg *Chunk, err error) {
 		return nil, errors.New("get chunk type error :" + err.Error())
 	}
 	msgLen := int(chunk.MessageLength)
+	if msgLen == 0 {
+		return nil, nil
+	}
 	var mem util.RecyclableMemory
 	if unRead := msgLen - chunk.bufLen; unRead < conn.readChunkSize {
 		mem, err = conn.ReadBytes(unRead)
 	} else {
 		mem, err = conn.ReadBytes(conn.readChunkSize)
 	}
-	mem.Recycle()
 	if err != nil {
 		return nil, err
 	}

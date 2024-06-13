@@ -182,7 +182,7 @@ func (conf *WebRTCPlugin) Push_(w http.ResponseWriter, r *http.Request) {
 			if !publisher.PubAudio {
 				return
 			}
-			mem := util.NewScalableMemoryAllocator(1460 * 100)
+			mem := util.NewScalableMemoryAllocator(1 << 12)
 			defer mem.Recycle()
 			frame := &mrtp.RTPAudio{}
 			frame.RTPCodecParameters = &codecP
@@ -222,7 +222,7 @@ func (conf *WebRTCPlugin) Push_(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			var lastPLISent time.Time
-			mem := util.NewScalableMemoryAllocator(1460 * 100)
+			mem := util.NewScalableMemoryAllocator(1 << 12)
 			defer mem.Recycle()
 			frame := &mrtp.RTPVideo{}
 			frame.RTPCodecParameters = &codecP
@@ -432,23 +432,20 @@ func (conf *WebRTCPlugin) Play_(w http.ResponseWriter, r *http.Request) {
 		if videoSender == nil {
 			suber.SubVideo = false
 		}
-		go suber.Handle(m7s.SubscriberHandler{
-			OnAudio: func(frame *mrtp.RTPAudio) (err error) {
-				for _, p := range frame.Packets {
-					if err = audioTLSRTP.WriteRTP(p); err != nil {
-						return
-					}
+		go m7s.PlayBlock(suber, func(frame *mrtp.RTPAudio) (err error) {
+			for _, p := range frame.Packets {
+				if err = audioTLSRTP.WriteRTP(p); err != nil {
+					return
 				}
-				return
-			},
-			OnVideo: func(frame *mrtp.RTPVideo) error {
-				for _, p := range frame.Packets {
-					if err := videoTLSRTP.WriteRTP(p); err != nil {
-						return err
-					}
+			}
+			return
+		}, func(frame *mrtp.RTPVideo) error {
+			for _, p := range frame.Packets {
+				if err := videoTLSRTP.WriteRTP(p); err != nil {
+					return err
 				}
-				return nil
-			},
+			}
+			return nil
 		})
 	}
 	conn.OnICECandidate(func(ice *ICECandidate) {

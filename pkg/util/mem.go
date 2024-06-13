@@ -6,10 +6,19 @@ import (
 	"unsafe"
 )
 
-const MaxBlockSize = 4 * 1024 * 1024
+const (
+	MaxBlockSize = 1 << 22
+	BuddySize    = MaxBlockSize << 4
+	MinPowerOf2  = 10
+)
 
-var pools sync.Map
-var EnableCheckSize bool = false
+var (
+	memoryPool [BuddySize]byte
+	buddy      = NewBuddy(BuddySize >> MinPowerOf2)
+	lock       sync.Mutex
+	poolStart  = int64(uintptr(unsafe.Pointer(&memoryPool[0])))
+	//EnableCheckSize bool = false
+)
 
 type MemoryAllocator struct {
 	allocator *Allocator
@@ -19,11 +28,19 @@ type MemoryAllocator struct {
 }
 
 func GetMemoryAllocator(size int) (ret *MemoryAllocator) {
-	if value, ok := pools.Load(size); ok {
-		ret = value.(*sync.Pool).Get().(*MemoryAllocator)
-	} else {
-		ret = NewMemoryAllocator(size)
+	lock.Lock()
+	offset, err := buddy.Alloc(size >> MinPowerOf2)
+	lock.Unlock()
+	if err != nil {
+		return NewMemoryAllocator(size)
 	}
+	offset = offset << MinPowerOf2
+	ret = &MemoryAllocator{
+		Size:      size,
+		memory:    memoryPool[offset : offset+size],
+		allocator: NewAllocator(size),
+	}
+	ret.start = poolStart + int64(offset)
 	return
 }
 
@@ -38,14 +55,9 @@ func NewMemoryAllocator(size int) (ret *MemoryAllocator) {
 }
 
 func (ma *MemoryAllocator) Recycle() {
-	ma.allocator = NewAllocator(ma.Size)
-	size := ma.Size
-	pool, _ := pools.LoadOrStore(size, &sync.Pool{
-		New: func() any {
-			return NewMemoryAllocator(size)
-		},
-	})
-	pool.(*sync.Pool).Put(ma)
+	lock.Lock()
+	_ = buddy.Free(int((poolStart - ma.start) >> 10))
+	lock.Unlock()
 }
 
 func (ma *MemoryAllocator) Malloc(size int) (memory []byte) {
@@ -77,10 +89,11 @@ type ScalableMemoryAllocator struct {
 	totalMalloc int64
 	totalFree   int64
 	size        int
+	childSize   int
 }
 
 func NewScalableMemoryAllocator(size int) (ret *ScalableMemoryAllocator) {
-	return &ScalableMemoryAllocator{children: []*MemoryAllocator{GetMemoryAllocator(size)}, size: size}
+	return &ScalableMemoryAllocator{children: []*MemoryAllocator{GetMemoryAllocator(size)}, size: size, childSize: size}
 }
 
 func (sma *ScalableMemoryAllocator) checkSize() {
@@ -123,9 +136,9 @@ func (sma *ScalableMemoryAllocator) Malloc(size int) (memory []byte) {
 	if sma == nil {
 		return make([]byte, size)
 	}
-	if EnableCheckSize {
-		defer sma.checkSize()
-	}
+	//if EnableCheckSize {
+	//	defer sma.checkSize()
+	//}
 	defer sma.addMallocCount(size)
 	var child *MemoryAllocator
 	for _, child = range sma.children {
@@ -133,7 +146,13 @@ func (sma *ScalableMemoryAllocator) Malloc(size int) (memory []byte) {
 			return
 		}
 	}
-	child = GetMemoryAllocator(max(min(MaxBlockSize, child.Size*2), size))
+	for sma.childSize <= MaxBlockSize {
+		sma.childSize = sma.childSize << 1
+		if sma.childSize >= size {
+			break
+		}
+	}
+	child = GetMemoryAllocator(sma.childSize)
 	sma.size += child.Size
 	memory = child.Malloc(size)
 	sma.children = append(sma.children, child)
@@ -148,9 +167,9 @@ func (sma *ScalableMemoryAllocator) Free(mem []byte) bool {
 	if sma == nil {
 		return false
 	}
-	if EnableCheckSize {
-		defer sma.checkSize()
-	}
+	//if EnableCheckSize {
+	//	defer sma.checkSize()
+	//}
 	ptr := int64(uintptr(unsafe.Pointer(&mem[0])))
 	size := len(mem)
 	for i, child := range sma.children {

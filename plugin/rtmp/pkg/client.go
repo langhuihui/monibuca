@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"m7s.live/m7s/v5"
-	. "m7s.live/m7s/v5/pkg"
 )
 
 type Client struct {
@@ -104,7 +103,13 @@ func (client *Client) Connect(p *m7s.Client) (err error) {
 
 func (puller *Client) Pull(p *m7s.Puller) (err error) {
 	p.MetaData = puller.ServerInfo
-	defer puller.Close()
+	defer func() {
+		puller.Close()
+		if p := recover(); p != nil {
+			err = p.(error)
+		}
+		p.Dispose(err)
+	}()
 	err = puller.SendMessage(RTMP_MSG_AMF0_COMMAND, &CommandMessage{"createStream", 2})
 	for err == nil {
 		msg, err := puller.RecvMessage()
@@ -185,19 +190,8 @@ func (pusher *Client) Push(p *m7s.Pusher) (err error) {
 					})
 				} else if response, ok := msg.MsgData.(*ResponsePublishMessage); ok {
 					if response.Infomation["code"] == NetStream_Publish_Start {
-						audio, video := pusher.CreateSender()
-						go p.Handle(m7s.SubscriberHandler{
-							OnAudio: func(a *RTMPAudio) error {
-								if audio.SendFrame(&a.RTMPData) != nil {
-									return ErrInterrupt
-								}
-								return nil
-							}, OnVideo: func(v *RTMPVideo) error {
-								if video.SendFrame(&v.RTMPData) != nil {
-									return ErrInterrupt
-								}
-								return nil
-							}})
+						audio, video := pusher.CreateSender(true)
+						go m7s.PlayBlock(&p.Subscriber, audio.HandleAudio, video.HandleVideo)
 					} else {
 						return errors.New(response.Infomation["code"].(string))
 					}

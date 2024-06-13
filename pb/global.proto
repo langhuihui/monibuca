@@ -57,9 +57,16 @@ service Global {
       get: "/api/videotrack/snap/{streamPath=**}"
     };
   }
+  rpc ChangeSubscribe (ChangeSubscribeRequest) returns (SuccessResponse) {
+    option (google.api.http) = {
+      post: "/api/subscribe/change/{id}/{streamPath=**}"
+      body: "*"
+    };
+  }
+
   rpc StopSubscribe (RequestWithId) returns (SuccessResponse) {
     option (google.api.http) = {
-      post: "/api/stop/subscribe/{id}"
+      post: "/api/subscribe/stop/{id}"
       body: "*"
     };
   }
@@ -241,6 +248,11 @@ message SuccessResponse {
 
 message RequestWithId {
   uint32 id = 1;
+}
+
+message ChangeSubscribeRequest {
+  uint32 id = 1;
+  string streamPath = 2;
 }
 
 message SubscribersRequest {

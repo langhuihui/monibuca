@@ -104,7 +104,6 @@ func (puller *HDLPuller) Pull(p *m7s.Puller) (err error) {
 		var frame rtmp.RTMPData
 		frame.RecyclableMemory, err = puller.ReadBytes(int(dataSize))
 		if err != nil {
-			frame.Recycle()
 			return err
 		}
 		puller.absTS = offsetTs + (timestamp - startTs)

@@ -80,8 +80,11 @@ func (rb *RingWriter) Reduce(size int) (r *util.Ring[AVFrame]) {
 	return
 }
 
+func (rb *RingWriter) Dispose() {
+	rb.Value.Ready()
+}
+
 func (rb *RingWriter) Step() (normal bool) {
-	// rb.LastValue.Broadcast() // 防止订阅者还在等待
 	rb.LastValue = &rb.Value
 	nextSeq := rb.LastValue.Sequence + 1
 	next := rb.Next()
@@ -91,7 +94,10 @@ func (rb *RingWriter) Step() (normal bool) {
 	} else {
 		rb.Reduce(1)         //抛弃还有订阅者的节点
 		rb.Ring = rb.Glow(1) //补充一个新节点
-		rb.Value.StartWrite()
+		normal = rb.Value.StartWrite()
+		if !normal {
+			panic("RingWriter.Step")
+		}
 	}
 	rb.Value.Sequence = nextSeq
 	rb.LastValue.Ready()

@@ -1,7 +1,7 @@
 package plugin_rtmp
 
 import (
-	"context"
+	"errors"
 	"io"
 	"net"
 
@@ -42,13 +42,17 @@ func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
 	logger := p.Logger.With("remote", conn.RemoteAddr().String())
 	receivers := make(map[uint32]*RTMPReceiver)
 	var err error
-	logger.Info("conn")
 	nc := NewNetConnection(conn, logger)
-	defer nc.Destroy()
-	ctx, cancel := context.WithCancelCause(p)
 	defer func() {
-		logger.Info("conn close")
-		cancel(err)
+		nc.Destroy()
+		if p := recover(); p != nil {
+			err = p.(error)
+		}
+		if len(receivers) > 0 {
+			for _, receiver := range receivers {
+				receiver.Dispose(err)
+			}
+		}
 	}()
 	/* Handshake */
 	if err = nc.Handshake(p.C2); err != nil {
@@ -156,7 +160,7 @@ func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
 							StreamID:      cmd.StreamId,
 						},
 					}
-					receiver.Publisher, err = p.Publish(nc.AppName+"/"+cmd.PublishingName, ctx, conn, connectInfo)
+					receiver.Publisher, err = p.Publish(nc.AppName+"/"+cmd.PublishingName, p.Context, conn, connectInfo)
 					if err != nil {
 						delete(receivers, cmd.StreamId)
 						err = receiver.Response(cmd.TransactionId, NetStream_Publish_BadName, Level_Error)
@@ -176,18 +180,13 @@ func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
 					}
 					var suber *m7s.Subscriber
 					// sender.ID = fmt.Sprintf("%s|%d", conn.RemoteAddr().String(), sender.StreamID)
-					suber, err = p.Subscribe(streamPath, ctx, conn, connectInfo)
+					suber, err = p.Subscribe(streamPath, p.Context, conn, connectInfo)
 					if err != nil {
 						err = ns.Response(cmd.TransactionId, NetStream_Play_Failed, Level_Error)
 					} else {
 						ns.BeginPlay(cmd.TransactionId)
-						audio, video := ns.CreateSender()
-						go suber.Handle(m7s.SubscriberHandler{
-							OnAudio: func(a *RTMPAudio) error {
-								return audio.SendFrame(&a.RTMPData)
-							}, OnVideo: func(v *RTMPVideo) error {
-								return video.SendFrame(&v.RTMPData)
-							}})
+						audio, video := ns.CreateSender(false)
+						go m7s.PlayBlock(suber, audio.HandleAudio, video.HandleVideo)
 					}
 					if err != nil {
 						logger.Error("sendMessage play", "error", err)
@@ -209,7 +208,7 @@ func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
 					logger.Warn("ReceiveVideo", "MessageStreamID", msg.MessageStreamID)
 				}
 			}
-		} else if err == io.EOF || err == io.ErrUnexpectedEOF {
+		} else if err == io.EOF || errors.Is(err, io.ErrUnexpectedEOF) {
 			logger.Info("rtmp client closed")
 			return
 		} else {

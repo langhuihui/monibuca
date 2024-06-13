@@ -30,10 +30,11 @@ func (c *Collection[K, T]) Add(item T) {
 	c.Length++
 }
 
-func (c *Collection[K, T]) AddUnique(item T) {
-	if _, ok := c.Get(item.GetKey()); !ok {
+func (c *Collection[K, T]) AddUnique(item T) (ok bool) {
+	if _, ok = c.Get(item.GetKey()); !ok {
 		c.Add(item)
 	}
+	return !ok
 }
 
 func (c *Collection[K, T]) Set(item T) {
@@ -48,6 +49,18 @@ func (c *Collection[K, T]) Set(item T) {
 		}
 	}
 	c.Add(item)
+}
+
+func (c *Collection[K, T]) Range(f func(T) bool) {
+	if c.L != nil {
+		c.L.RLock()
+		defer c.L.RUnlock()
+	}
+	for _, item := range c.Items {
+		if !f(item) {
+			break
+		}
+	}
 }
 
 func (c *Collection[K, T]) Remove(item T) {

@@ -33,6 +33,7 @@ type GlobalClient interface {
 	GetSubscribers(ctx context.Context, in *SubscribersRequest, opts ...grpc.CallOption) (*SubscribersResponse, error)
 	AudioTrackSnap(ctx context.Context, in *StreamSnapRequest, opts ...grpc.CallOption) (*TrackSnapShotResponse, error)
 	VideoTrackSnap(ctx context.Context, in *StreamSnapRequest, opts ...grpc.CallOption) (*TrackSnapShotResponse, error)
+	ChangeSubscribe(ctx context.Context, in *ChangeSubscribeRequest, opts ...grpc.CallOption) (*SuccessResponse, error)
 	StopSubscribe(ctx context.Context, in *RequestWithId, opts ...grpc.CallOption) (*SuccessResponse, error)
 	GetConfig(ctx context.Context, in *GetConfigRequest, opts ...grpc.CallOption) (*GetConfigResponse, error)
 	GetFormily(ctx context.Context, in *GetConfigRequest, opts ...grpc.CallOption) (*GetConfigResponse, error)
@@ -137,6 +138,15 @@ func (c *globalClient) VideoTrackSnap(ctx context.Context, in *StreamSnapRequest
 	return out, nil
 }
 
+func (c *globalClient) ChangeSubscribe(ctx context.Context, in *ChangeSubscribeRequest, opts ...grpc.CallOption) (*SuccessResponse, error) {
+	out := new(SuccessResponse)
+	err := c.cc.Invoke(ctx, "/m7s.Global/ChangeSubscribe", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *globalClient) StopSubscribe(ctx context.Context, in *RequestWithId, opts ...grpc.CallOption) (*SuccessResponse, error) {
 	out := new(SuccessResponse)
 	err := c.cc.Invoke(ctx, "/m7s.Global/StopSubscribe", in, out, opts...)
@@ -187,6 +197,7 @@ type GlobalServer interface {
 	GetSubscribers(context.Context, *SubscribersRequest) (*SubscribersResponse, error)
 	AudioTrackSnap(context.Context, *StreamSnapRequest) (*TrackSnapShotResponse, error)
 	VideoTrackSnap(context.Context, *StreamSnapRequest) (*TrackSnapShotResponse, error)
+	ChangeSubscribe(context.Context, *ChangeSubscribeRequest) (*SuccessResponse, error)
 	StopSubscribe(context.Context, *RequestWithId) (*SuccessResponse, error)
 	GetConfig(context.Context, *GetConfigRequest) (*GetConfigResponse, error)
 	GetFormily(context.Context, *GetConfigRequest) (*GetConfigResponse, error)
@@ -227,6 +238,9 @@ func (UnimplementedGlobalServer) AudioTrackSnap(context.Context, *StreamSnapRequ
 }
 func (UnimplementedGlobalServer) VideoTrackSnap(context.Context, *StreamSnapRequest) (*TrackSnapShotResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method VideoTrackSnap not implemented")
+}
+func (UnimplementedGlobalServer) ChangeSubscribe(context.Context, *ChangeSubscribeRequest) (*SuccessResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ChangeSubscribe not implemented")
 }
 func (UnimplementedGlobalServer) StopSubscribe(context.Context, *RequestWithId) (*SuccessResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StopSubscribe not implemented")
@@ -433,6 +447,24 @@ func _Global_VideoTrackSnap_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Global_ChangeSubscribe_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ChangeSubscribeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GlobalServer).ChangeSubscribe(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/m7s.Global/ChangeSubscribe",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GlobalServer).ChangeSubscribe(ctx, req.(*ChangeSubscribeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Global_StopSubscribe_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RequestWithId)
 	if err := dec(in); err != nil {
@@ -551,6 +583,10 @@ var Global_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "VideoTrackSnap",
 			Handler:    _Global_VideoTrackSnap_Handler,
+		},
+		{
+			MethodName: "ChangeSubscribe",
+			Handler:    _Global_ChangeSubscribe_Handler,
 		},
 		{
 			MethodName: "StopSubscribe",

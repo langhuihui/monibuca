@@ -41,7 +41,7 @@ func (s *Server) SysInfo(context.Context, *emptypb.Empty) (res *pb.SysInfoRespon
 		Arch:      runtime.GOARCH,
 		Cpus:      int32(runtime.NumCPU()),
 	}
-	for _, p := range s.Plugins.Items {
+	for p := range s.Plugins.Range {
 		res.Plugins = append(res.Plugins, &pb.PluginInfo{
 			Name:     p.Meta.Name,
 			Version:  p.Meta.Version,
@@ -101,7 +101,7 @@ func (s *Server) getStreamInfo(pub *Publisher) (res *pb.StreamInfoResponse, err 
 		Path:        pub.StreamPath,
 		State:       int32(pub.State),
 		StartTime:   timestamppb.New(pub.StartTime),
-		Subscribers: int32(len(pub.Subscribers)),
+		Subscribers: int32(pub.Subscribers.Length),
 		Type:        pub.Plugin.Meta.Name,
 	}
 
@@ -148,7 +148,7 @@ func (s *Server) StreamInfo(ctx context.Context, req *pb.StreamSnapRequest) (res
 func (s *Server) GetSubscribers(ctx context.Context, req *pb.SubscribersRequest) (res *pb.SubscribersResponse, err error) {
 	s.Call(func() {
 		var subscribers []*pb.SubscriberSnapShot
-		for _, subscriber := range s.Subscribers.Items {
+		for subscriber := range s.Subscribers.Range {
 			meta, _ := json.Marshal(subscriber.MetaData)
 			snap := &pb.SubscriberSnapShot{
 				Id:        uint32(subscriber.ID),
@@ -195,7 +195,7 @@ func (s *Server) AudioTrackSnap(ctx context.Context, req *pb.StreamSnapRequest) 
 				res.Memory = append(res.Memory, &pb.MemoryBlockGroup{List: list, Size: uint32(memlist.Size)})
 			}
 			res.Reader = make(map[uint32]uint32)
-			for sub := range pub.Subscribers {
+			for sub := range pub.SubscriberRange {
 				if sub.AudioReader == nil {
 					continue
 				}
@@ -259,6 +259,7 @@ func (s *Server) api_VideoTrack_SSE(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 }
+
 func (s *Server) VideoTrackSnap(ctx context.Context, req *pb.StreamSnapRequest) (res *pb.TrackSnapShotResponse, err error) {
 	s.Call(func() {
 		if pub, ok := s.Streams.Get(req.StreamPath); ok && !pub.VideoTrack.IsEmpty() {
@@ -274,7 +275,7 @@ func (s *Server) VideoTrackSnap(ctx context.Context, req *pb.StreamSnapRequest) 
 				res.Memory = append(res.Memory, &pb.MemoryBlockGroup{List: list, Size: uint32(memlist.Size)})
 			}
 			res.Reader = make(map[uint32]uint32)
-			for sub := range pub.Subscribers {
+			for sub := range pub.SubscriberRange {
 				if sub.VideoReader == nil {
 					continue
 				}
@@ -325,6 +326,23 @@ func (s *Server) Shutdown(ctx context.Context, req *pb.RequestWithId) (res *empt
 	return empty, err
 }
 
+func (s *Server) ChangeSubscribe(ctx context.Context, req *pb.ChangeSubscribeRequest) (res *pb.SuccessResponse, err error) {
+	s.Call(func() {
+		if subscriber, ok := s.Subscribers.Get(int(req.Id)); ok {
+			if pub, ok := s.Streams.Get(req.StreamPath); ok {
+				subscriber.Publisher.RemoveSubscriber(subscriber)
+				subscriber.StreamPath = req.StreamPath
+				pub.AddSubscriber(subscriber)
+				return
+			}
+		}
+		err = pkg.ErrNotFound
+	})
+	return &pb.SuccessResponse{
+		Success: err == nil,
+	}, err
+}
+
 func (s *Server) StopSubscribe(ctx context.Context, req *pb.RequestWithId) (res *pb.SuccessResponse, err error) {
 	s.Call(func() {
 		if subscriber, ok := s.Subscribers.Get(int(req.Id)); ok {
@@ -342,7 +360,7 @@ func (s *Server) StopSubscribe(ctx context.Context, req *pb.RequestWithId) (res 
 func (s *Server) StreamList(_ context.Context, req *pb.StreamListRequest) (res *pb.StreamListResponse, err error) {
 	s.Call(func() {
 		var streams []*pb.StreamInfoResponse
-		for _, publisher := range s.Streams.Items {
+		for publisher := range s.Streams.Range {
 			info, err := s.getStreamInfo(publisher)
 			if err != nil {
 				continue
@@ -359,8 +377,8 @@ func (s *Server) WaitList(context.Context, *emptypb.Empty) (res *pb.StreamWaitLi
 		res = &pb.StreamWaitListResponse{
 			List: make(map[string]int32),
 		}
-		for streamPath, subs := range s.Waiting {
-			res.List[streamPath] = int32(len(subs))
+		for subs := range s.Waiting.Range {
+			res.List[subs.StreamPath] = int32(subs.Subscribers.Length)
 		}
 	})
 	return

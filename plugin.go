@@ -332,12 +332,6 @@ func (p *Plugin) Subscribe(streamPath string, options ...any) (subscriber *Subsc
 		switch v := option.(type) {
 		case func(*config.Subscribe):
 			v(&subscriber.Subscribe)
-		case SubscriberHandler:
-			defer func() {
-				if err == nil {
-					subscriber.Handle(v)
-				}
-			}()
 		}
 	}
 	subscriber.Init(p, streamPath, options...)
