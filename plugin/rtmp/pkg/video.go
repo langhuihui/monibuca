@@ -31,7 +31,7 @@ func (avcc *RTMPVideo) Parse(t *AVTrack) (isIDR, isSeq bool, raw any, err error)
 		isSeq = true
 		isIDR = false
 		var cloneFrame RTMPVideo
-		cloneFrame.CopyFrom(avcc.Memory)
+		cloneFrame.CopyFrom(&avcc.Memory)
 		switch fourCC {
 		case codec.FourCC_H264:
 			var ctx H264Ctx
@@ -125,7 +125,7 @@ func (avcc *RTMPVideo) DecodeConfig(t *AVTrack, from ICodecCtx) (err error) {
 		b.Write(h264ctx.PPS[0])
 		t.ICodecCtx = &ctx
 		var seqFrame RTMPData
-		seqFrame.ReadFromBytes(b)
+		seqFrame.Append(b)
 		t.SequenceFrame = seqFrame.WrapVideo()
 		if t.Enabled(context.TODO(), TraceLevel) {
 			c := t.FourCC().String()
@@ -241,7 +241,7 @@ func createH26xFrame(from *AVFrame, codecID VideoCodecID) (frame IAVFrame, err e
 		naluLenM := rtmpVideo.NextN(4)
 		naluLen := uint32(util.LenOfBuffers(nalu))
 		binary.BigEndian.PutUint32(naluLenM, naluLen)
-		rtmpVideo.ReadFromBytes(nalu...)
+		rtmpVideo.Append(nalu...)
 	}
 	frame = &rtmpVideo
 	return

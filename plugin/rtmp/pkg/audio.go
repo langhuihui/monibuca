@@ -50,7 +50,7 @@ func (avcc *RTMPAudio) Parse(t *AVTrack) (isIDR, isSeq bool, raw any, err error)
 				return
 			}
 			var cloneFrame RTMPAudio
-			cloneFrame.CopyFrom(avcc.Memory)
+			cloneFrame.CopyFrom(&avcc.Memory)
 			ctx.AudioObjectType = b0 >> 3
 			ctx.SamplingFrequencyIndex = (b0 & 0x07 << 1) | (b1 >> 7)
 			ctx.ChannelConfiguration = (b1 >> 3) & 0x0F

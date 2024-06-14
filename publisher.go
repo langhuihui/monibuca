@@ -1,7 +1,6 @@
 package m7s
 
 import (
-	"errors"
 	"reflect"
 	"sync"
 	"time"
@@ -182,7 +181,7 @@ func (p *Publisher) WriteVideo(data IAVFrame) (err error) {
 	}
 	t := p.VideoTrack.AVTrack
 	if t == nil {
-		t = NewAVTrack(data, p.Logger.With("track", "video"), 100)
+		t = NewAVTrack(data, p.Logger.With("track", "video"), 20)
 		p.Lock()
 		p.VideoTrack.AVTrack = t
 		p.VideoTrack.Add(t)
@@ -293,7 +292,7 @@ func (p *Publisher) WriteAudio(data IAVFrame) (err error) {
 	}
 	t := p.AudioTrack.AVTrack
 	if t == nil {
-		t = NewAVTrack(data, p.Logger.With("track", "audio"), 256)
+		t = NewAVTrack(data, p.Logger.With("track", "audio"), 20)
 		p.Lock()
 		p.AudioTrack.AVTrack = t
 		p.AudioTrack.Add(t)
@@ -363,7 +362,7 @@ func (p *Publisher) Dispose(err error) {
 	if p.State == PublisherStateDisposed {
 		return
 	}
-	if !errors.Is(p.StopReason(), ErrKick) && p.IsStopped() {
+	if p.IsStopped() {
 		if !p.AudioTrack.IsEmpty() {
 			p.AudioTrack.Dispose()
 		}
@@ -378,18 +377,12 @@ func (p *Publisher) Dispose(err error) {
 
 func (p *Publisher) TakeOver(old *Publisher) {
 	p.baseTs = old.lastTs
-	p.VideoTrack = old.VideoTrack
-	p.VideoTrack.ICodecCtx = nil
-	p.VideoTrack.Logger = p.Logger.With("track", "video")
-	p.AudioTrack = old.AudioTrack
-	p.AudioTrack.ICodecCtx = nil
-	p.AudioTrack.Logger = p.Logger.With("track", "audio")
-	p.DataTrack = old.DataTrack
+	p.Info("takeOver", "old", old.ID)
 	for subscriber := range old.SubscriberRange {
 		p.AddSubscriber(subscriber)
 	}
+	if old.Plugin != nil {
+		old.Dispose(nil)
+	}
 	old.Subscribers = util.Collection[int, *Subscriber]{}
-	// for _, track := range p.TransTrack {
-	// 	track.ICodecCtx = nil
-	// }
 }

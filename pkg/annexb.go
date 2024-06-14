@@ -63,16 +63,16 @@ type Annexb265Ctx struct {
 func (a *Annexb264Ctx) CreateFrame(frame *AVFrame) (IAVFrame, error) {
 	var annexb AnnexB
 	// annexb.RecyclableBuffers.ScalableMemoryAllocator = frame.Wraps[0].GetScalableMemoryAllocator()
-	annexb.ReadFromBytes(codec.NALU_Delimiter2)
+	annexb.Append(codec.NALU_Delimiter2)
 	if frame.IDR {
-		annexb.ReadFromBytes(a.SPS[0], codec.NALU_Delimiter2, a.PPS[0], codec.NALU_Delimiter2)
+		annexb.Append(a.SPS[0], codec.NALU_Delimiter2, a.PPS[0], codec.NALU_Delimiter2)
 	}
 	var nalus = frame.Raw.(Nalus)
 	for i, nalu := range nalus.Nalus {
 		if i > 0 {
-			annexb.ReadFromBytes(codec.NALU_Delimiter1)
+			annexb.Append(codec.NALU_Delimiter1)
 		}
-		annexb.ReadFromBytes(nalu...)
+		annexb.Append(nalu...)
 	}
 	return &annexb, nil
 }

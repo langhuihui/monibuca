@@ -119,10 +119,9 @@ func (nc *NetConnection) simple_handshake(C1 []byte, checkC2 bool) error {
 	if err != nil {
 		return err
 	}
-	C2.Recycle()
 	if checkC2 {
 		buf := nc.mediaDataPool.NextN(C2.Size)
-		_, err = C2.Read(buf)
+		C2.CopyTo(buf)
 		if !bytes.Equal(buf[8:], S0S1[9:]) {
 			return errors.New("C2 Error")
 		}
@@ -179,9 +178,7 @@ func (nc *NetConnection) complex_handshake(C1 []byte) error {
 
 	buffer := net.Buffers{[]byte{RTMP_HANDSHAKE_VERSION}, S1, S2_Random, S2_Digest}
 	_, err = buffer.WriteTo(nc)
-	b, _ := nc.ReadBytes(1536)
-	b.Recycle()
-	return err
+	return nc.Skip(1536)
 }
 
 func validateClient(C1 []byte) (scheme int, challenge []byte, digest []byte, ok bool, err error) {

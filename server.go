@@ -276,9 +276,7 @@ func (s *Server) eventLoop() {
 				if publisher.Plugin != nil {
 					if err := publisher.checkTimeout(); err != nil {
 						publisher.Dispose(err)
-						newPublisher := &Publisher{}
-						newPublisher.StreamPath = publisher.StreamPath
-						s.Waiting.Set(newPublisher)
+						s.createWait(publisher.StreamPath)
 					}
 				}
 				for sub := range publisher.SubscriberRange {
@@ -365,7 +363,7 @@ func (s *Server) eventLoop() {
 
 func (s *Server) onUnsubscribe(subscriber *Subscriber) {
 	s.Subscribers.Remove(subscriber)
-	s.Info("unsubscribe", "streamPath", subscriber.StreamPath)
+	s.Info("unsubscribe", "streamPath", subscriber.StreamPath, "reason", subscriber.StopReason())
 	if subscriber.Closer != nil {
 		subscriber.Close()
 	}
@@ -383,9 +381,13 @@ func (s *Server) onUnsubscribe(subscriber *Subscriber) {
 func (s *Server) onUnpublish(publisher *Publisher) {
 	s.Streams.Remove(publisher)
 	s.Waiting.Add(publisher)
-	s.Info("unpublish", "streamPath", publisher.StreamPath, "count", s.Streams.Length)
+	s.Info("unpublish", "streamPath", publisher.StreamPath, "count", s.Streams.Length, "reason", publisher.StopReason())
 	for subscriber := range publisher.SubscriberRange {
-		subscriber.TimeoutTimer.Reset(publisher.WaitCloseTimeout)
+		waitCloseTimeout := publisher.WaitCloseTimeout
+		if waitCloseTimeout == 0 {
+			waitCloseTimeout = subscriber.WaitTimeout
+		}
+		subscriber.TimeoutTimer.Reset(waitCloseTimeout)
 	}
 	if publisher.Closer != nil {
 		_ = publisher.Close()
@@ -407,26 +409,31 @@ func (s *Server) OnPublish(publisher *Publisher) error {
 	s.pidG++
 	p := publisher.Plugin
 	publisher.ID = s.pidG
-	publisher.Logger = p.With("streamPath", publisher.StreamPath, "puber", publisher.ID)
+	publisher.Logger = p.With("streamPath", publisher.StreamPath, "pubID", publisher.ID)
 	publisher.TimeoutTimer = time.NewTimer(p.config.PublishTimeout)
 	publisher.Info("publish")
 	if waiting, ok := s.Waiting.Get(publisher.StreamPath); ok {
-		if waiting.Plugin != nil {
-			publisher.TakeOver(waiting)
-		} else {
-			for subscriber := range waiting.SubscriberRange {
-				publisher.AddSubscriber(subscriber)
-			}
-		}
+		publisher.TakeOver(waiting)
 		s.Waiting.Remove(waiting)
 	}
 	return nil
 }
 
+func (s *Server) createWait(streamPath string) *Publisher {
+	newPublisher := &Publisher{}
+	s.pidG++
+	newPublisher.ID = s.pidG
+	newPublisher.Logger = s.Logger.With("pubID", newPublisher.ID, "streamPath", streamPath)
+	s.Info("createWait")
+	newPublisher.StreamPath = streamPath
+	s.Waiting.Set(newPublisher)
+	return newPublisher
+}
+
 func (s *Server) OnSubscribe(subscriber *Subscriber) error {
 	s.sidG++
 	subscriber.ID = s.sidG
-	subscriber.Logger = subscriber.Plugin.With("streamPath", subscriber.StreamPath, "suber", subscriber.ID)
+	subscriber.Logger = subscriber.Plugin.With("streamPath", subscriber.StreamPath, "subID", subscriber.ID)
 	subscriber.TimeoutTimer = time.NewTimer(subscriber.Plugin.config.Subscribe.WaitTimeout)
 	s.Subscribers.Add(subscriber)
 	subscriber.Info("subscribe")
@@ -435,9 +442,7 @@ func (s *Server) OnSubscribe(subscriber *Subscriber) error {
 	} else if publisher, ok = s.Waiting.Get(subscriber.StreamPath); ok {
 		publisher.AddSubscriber(subscriber)
 	} else {
-		newPublisher := &Publisher{}
-		newPublisher.StreamPath = subscriber.StreamPath
-		newPublisher.AddSubscriber(subscriber)
+		s.createWait(subscriber.StreamPath).AddSubscriber(subscriber)
 	}
 	return nil
 }

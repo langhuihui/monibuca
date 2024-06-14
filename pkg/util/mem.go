@@ -1,6 +1,7 @@
 package util
 
 import (
+	"fmt"
 	"slices"
 	"sync"
 	"unsafe"
@@ -8,16 +9,16 @@ import (
 
 const (
 	MaxBlockSize = 1 << 22
-	BuddySize    = MaxBlockSize << 4
+	BuddySize    = MaxBlockSize << 7
 	MinPowerOf2  = 10
 )
 
 var (
-	memoryPool [BuddySize]byte
-	buddy      = NewBuddy(BuddySize >> MinPowerOf2)
-	lock       sync.Mutex
-	poolStart  = int64(uintptr(unsafe.Pointer(&memoryPool[0])))
-	//EnableCheckSize bool = false
+	memoryPool      [BuddySize]byte
+	buddy           = NewBuddy(BuddySize >> MinPowerOf2)
+	lock            sync.Mutex
+	poolStart            = int64(uintptr(unsafe.Pointer(&memoryPool[0])))
+	EnableCheckSize bool = false
 )
 
 type MemoryAllocator struct {
@@ -50,13 +51,14 @@ func NewMemoryAllocator(size int) (ret *MemoryAllocator) {
 		memory:    make([]byte, size),
 		allocator: NewAllocator(size),
 	}
+	fmt.Println(size)
 	ret.start = int64(uintptr(unsafe.Pointer(&ret.memory[0])))
 	return
 }
 
 func (ma *MemoryAllocator) Recycle() {
 	lock.Lock()
-	_ = buddy.Free(int((poolStart - ma.start) >> 10))
+	_ = buddy.Free(int((poolStart - ma.start) >> MinPowerOf2))
 	lock.Unlock()
 }
 
@@ -101,8 +103,12 @@ func (sma *ScalableMemoryAllocator) checkSize() {
 	for _, child := range sma.children {
 		totalFree += child.allocator.GetFreeSize()
 	}
-	if totalFree != sma.size-(int(sma.totalMalloc)-int(sma.totalFree)) {
+	if inUse := sma.totalMalloc - sma.totalFree; totalFree != sma.size-int(inUse) {
 		panic("CheckSize")
+	} else {
+		if inUse > 3000000 {
+			fmt.Println(uintptr(unsafe.Pointer(sma)), inUse)
+		}
 	}
 }
 
@@ -136,9 +142,9 @@ func (sma *ScalableMemoryAllocator) Malloc(size int) (memory []byte) {
 	if sma == nil {
 		return make([]byte, size)
 	}
-	//if EnableCheckSize {
-	//	defer sma.checkSize()
-	//}
+	if EnableCheckSize {
+		defer sma.checkSize()
+	}
 	defer sma.addMallocCount(size)
 	var child *MemoryAllocator
 	for _, child = range sma.children {
@@ -146,7 +152,7 @@ func (sma *ScalableMemoryAllocator) Malloc(size int) (memory []byte) {
 			return
 		}
 	}
-	for sma.childSize <= MaxBlockSize {
+	for sma.childSize < MaxBlockSize {
 		sma.childSize = sma.childSize << 1
 		if sma.childSize >= size {
 			break
@@ -167,19 +173,19 @@ func (sma *ScalableMemoryAllocator) Free(mem []byte) bool {
 	if sma == nil {
 		return false
 	}
-	//if EnableCheckSize {
-	//	defer sma.checkSize()
-	//}
+	if EnableCheckSize {
+		defer sma.checkSize()
+	}
 	ptr := int64(uintptr(unsafe.Pointer(&mem[0])))
 	size := len(mem)
-	for i, child := range sma.children {
+	for _, child := range sma.children {
 		if start := int(ptr - child.start); start >= 0 && start < child.Size && child.free(start, size) {
 			sma.addFreeCount(size)
-			if len(sma.children) > 1 && child.allocator.sizeTree.End-child.allocator.sizeTree.Start == child.Size {
-				child.Recycle()
-				sma.children = slices.Delete(sma.children, i, i+1)
-				sma.size -= child.Size
-			}
+			//if len(sma.children) > 1 && child.allocator.sizeTree.End-child.allocator.sizeTree.Start == child.Size {
+			//	child.Recycle()
+			//	sma.children = slices.Delete(sma.children, i, i+1)
+			//	sma.size -= child.Size
+			//}
 			return true
 		}
 	}
@@ -195,25 +201,22 @@ type RecyclableMemory struct {
 func (r *RecyclableMemory) NextN(size int) (memory []byte) {
 	memory = r.ScalableMemoryAllocator.Malloc(size)
 	if r.RecycleIndexes != nil {
-		r.RecycleIndexes = append(r.RecycleIndexes, len(r.Buffers))
+		r.RecycleIndexes = append(r.RecycleIndexes, r.Count())
 	}
-	r.ReadFromBytes(memory)
+	r.Append(memory)
 	return
 }
 
-func (r *RecyclableMemory) AddRecycleBytes(b ...[]byte) {
+func (r *RecyclableMemory) AddRecycleBytes(b []byte) {
 	if r.RecycleIndexes != nil {
-		start := len(r.Buffers)
-		for i := range b {
-			r.RecycleIndexes = append(r.RecycleIndexes, start+i)
-		}
+		r.RecycleIndexes = append(r.RecycleIndexes, r.Count())
 	}
-	r.ReadFromBytes(b...)
+	r.Append(b)
 }
 
 func (r *RecyclableMemory) RemoveRecycleBytes(index int) (buf []byte) {
 	if index < 0 {
-		index = len(r.Buffers) + index
+		index = r.Count() + index
 	}
 	buf = r.Buffers[index]
 	if r.RecycleIndexes != nil {

@@ -15,13 +15,16 @@ import (
 
 type HDLPuller struct {
 	*util.BufReader
+	*util.ScalableMemoryAllocator
 	hasAudio bool
 	hasVideo bool
 	absTS    uint32 //绝对时间戳
 }
 
 func NewHDLPuller() *HDLPuller {
-	return &HDLPuller{}
+	return &HDLPuller{
+		ScalableMemoryAllocator: util.NewScalableMemoryAllocator(1024),
+	}
 }
 
 func (puller *HDLPuller) Connect(p *m7s.Client) (err error) {
@@ -51,9 +54,8 @@ func (puller *HDLPuller) Connect(p *m7s.Client) (err error) {
 		}
 	}
 	if err == nil {
-		var head util.RecyclableMemory
+		var head util.Memory
 		head, err = puller.BufReader.ReadBytes(13)
-		defer head.Recycle()
 		if err == nil {
 			var flvHead [3]byte
 			var version, flag byte
@@ -102,9 +104,14 @@ func (puller *HDLPuller) Pull(p *m7s.Puller) (err error) {
 		}
 		puller.ReadBE(3) // stream id always 0
 		var frame rtmp.RTMPData
-		frame.RecyclableMemory, err = puller.ReadBytes(int(dataSize))
+		frame.ScalableMemoryAllocator = puller.ScalableMemoryAllocator
+		mem, err := puller.ReadBytes(int(dataSize))
 		if err != nil {
 			return err
+		}
+		switch t {
+		case FLV_TAG_TYPE_AUDIO, FLV_TAG_TYPE_VIDEO:
+			mem.CopyTo(frame.NextN(mem.Size))
 		}
 		puller.absTS = offsetTs + (timestamp - startTs)
 		frame.Timestamp = puller.absTS
@@ -116,7 +123,6 @@ func (puller *HDLPuller) Pull(p *m7s.Puller) (err error) {
 			p.WriteVideo(frame.WrapVideo())
 		case FLV_TAG_TYPE_SCRIPT:
 			p.Info("script")
-			frame.Recycle()
 		}
 	}
 	return

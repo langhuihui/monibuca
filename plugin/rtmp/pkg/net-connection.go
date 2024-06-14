@@ -146,16 +146,13 @@ func (conn *NetConnection) readChunk() (msg *Chunk, err error) {
 	if msgLen == 0 {
 		return nil, nil
 	}
-	var mem util.RecyclableMemory
+	var bufSize = 0
 	if unRead := msgLen - chunk.bufLen; unRead < conn.readChunkSize {
-		mem, err = conn.ReadBytes(unRead)
+		bufSize = unRead
 	} else {
-		mem, err = conn.ReadBytes(conn.readChunkSize)
+		bufSize = conn.readChunkSize
 	}
-	if err != nil {
-		return nil, err
-	}
-	conn.readSeqNum += uint32(mem.Size)
+	conn.readSeqNum += uint32(bufSize)
 	if chunk.bufLen == 0 {
 		chunk.AVData.RecyclableMemory = util.RecyclableMemory{
 			ScalableMemoryAllocator: conn.mediaDataPool.ScalableMemoryAllocator,
@@ -163,9 +160,12 @@ func (conn *NetConnection) readChunk() (msg *Chunk, err error) {
 		chunk.AVData.NextN(msgLen)
 	}
 	buffer := chunk.AVData.Buffers[0]
-	for _, b := range mem.Buffers {
-		copy(buffer[chunk.bufLen:], b)
-		chunk.bufLen += len(b)
+	for buf := range conn.ReadRange(bufSize) {
+		copy(buffer[chunk.bufLen:], buf)
+		chunk.bufLen += len(buf)
+	}
+	if conn.Err != nil {
+		return nil, conn.Err
 	}
 	if chunk.bufLen == msgLen {
 		msg = chunk
@@ -332,7 +332,9 @@ func (conn *NetConnection) sendChunk(data net.Buffers, head *ChunkHeader, headTy
 	head.WriteTo(RTMP_CHUNK_HEAD_1, &chunk3)
 	r := util.NewReadableBuffersFromBytes(data...)
 	for {
-		r.WriteNTo(conn.WriteChunkSize, &chunks)
+		for buf := range r.RangeN(conn.WriteChunkSize) {
+			chunks = append(chunks, buf)
+		}
 		if r.Length <= 0 {
 			break
 		}

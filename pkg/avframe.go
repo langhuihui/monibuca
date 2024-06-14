@@ -107,11 +107,9 @@ func (nalus *Nalus) ParseAVCC(reader *util.MemoryReader, naluSizeLen int) error 
 		if err != nil {
 			return err
 		}
-		nalu, err := reader.ReadBytes(int(l))
-		if err != nil {
-			return err
+		for nalu := range reader.RangeN(l) {
+			nalus.Append(nalu)
 		}
-		nalus.Append(nalu)
 	}
 	return nil
 }

@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"reflect"
+	"runtime"
 	"strconv"
 	"time"
 
@@ -239,10 +240,14 @@ func PlayBlock[A any, V any](s *Subscriber, onAudio func(A) error, onVideo func(
 	}()
 	sendAudioFrame := func() (err error) {
 		if awi >= 0 {
-			if s.Enabled(s, TraceLevel) {
-				s.Trace("send audio frame", "seq", audioFrame.Sequence)
+			if len(audioFrame.Wraps) > awi {
+				if s.Enabled(s, TraceLevel) {
+					s.Trace("send audio frame", "seq", audioFrame.Sequence)
+				}
+				err = onAudio(audioFrame.Wraps[awi].(A))
+			} else {
+				ar.StopRead()
 			}
-			err = onAudio(audioFrame.Wraps[awi].(A))
 		} else {
 			err = onAudio(any(audioFrame).(A))
 		}
@@ -254,10 +259,14 @@ func PlayBlock[A any, V any](s *Subscriber, onAudio func(A) error, onVideo func(
 	}
 	sendVideoFrame := func() (err error) {
 		if vwi >= 0 {
-			if s.Enabled(s, TraceLevel) {
-				s.Trace("send video frame", "seq", videoFrame.Sequence, "data", videoFrame.Wraps[vwi].String(), "size", videoFrame.Wraps[vwi].GetSize())
+			if len(videoFrame.Wraps) > vwi {
+				if s.Enabled(s, TraceLevel) {
+					s.Trace("send video frame", "seq", videoFrame.Sequence, "data", videoFrame.Wraps[vwi].String(), "size", videoFrame.Wraps[vwi].GetSize())
+				}
+				err = onVideo(videoFrame.Wraps[vwi].(V))
+			} else {
+				vr.StopRead()
 			}
-			err = onVideo(videoFrame.Wraps[vwi].(V))
 		} else {
 			err = onVideo(any(videoFrame).(V))
 		}
@@ -269,13 +278,16 @@ func PlayBlock[A any, V any](s *Subscriber, onAudio func(A) error, onVideo func(
 	}
 	checkPublisherChange := func() {
 		if prePublisher != s.Publisher {
+			s.Info("publisher changed", "prePublisher", prePublisher.ID, "publisher", s.Publisher.ID)
 			if ar != nil {
 				startAudioTs = time.Duration(ar.AbsTime) * time.Millisecond
 				ar.StopRead()
+				ar = nil
 			}
 			if vr != nil {
 				startVideoTs = time.Duration(vr.AbsTime) * time.Millisecond
 				vr.StopRead()
+				vr = nil
 			}
 			createAudioReader()
 			createVideoReader()
@@ -374,5 +386,6 @@ func PlayBlock[A any, V any](s *Subscriber, onAudio func(A) error, onVideo func(
 			createAudioReader()
 		}
 		checkPublisherChange()
+		runtime.Gosched()
 	}
 }
