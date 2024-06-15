@@ -66,7 +66,7 @@ var (
 
 func main() {
 	fmt.Println("start github.com/langhuihui/monibuca version:", version)
-	confPathFromEnv := os.Getenv("BUCA_CONFIG_FILE")
+	confPathFromEnv := os.Getenv("M7S_CONFIG_FILE")
 	if confPathFromEnv == "" {
 		confPathFromEnv = "config.yaml" // 如果环境变量未设置，默认使用此路径
 	}
