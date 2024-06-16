@@ -68,6 +68,12 @@ func (m *Memory) Count() int {
 	return len(m.Buffers)
 }
 
+func (m *Memory) Range(yield func([]byte) bool) {
+	for i := range m.Count() {
+		yield(m.Buffers[i])
+	}
+}
+
 func (m *Memory) NewReader() *MemoryReader {
 	var reader MemoryReader
 	reader.Memory = m

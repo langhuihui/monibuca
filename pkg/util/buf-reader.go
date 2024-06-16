@@ -115,9 +115,7 @@ func (r *BufReader) ReadRange(n int) func(func([]byte) bool) {
 					return
 				}
 				n -= r.buf.Length
-				for _, buf := range r.buf.Buffers {
-					yield(buf)
-				}
+				r.buf.Range(yield)
 				r.buf.MoveToEnd()
 			}
 		}
