@@ -70,7 +70,6 @@ func main() {
 	if confPathFromEnv == "" {
 		confPathFromEnv = "config.yaml" // 如果环境变量未设置，默认使用此路径
 	}
-	fmt.Println("=== config file: ", confPathFromEnv)
 	conf := flag.String("c", confPathFromEnv, "config file")
 	flag.Parse()
 	ctx, cancel := context.WithCancel(context.WithValue(context.Background(), "version", version))
