@@ -1,6 +1,7 @@
 package util
 
 import (
+	"container/list"
 	"fmt"
 	"slices"
 	"sync"
@@ -18,6 +19,7 @@ var (
 	buddy           = NewBuddy(BuddySize >> MinPowerOf2)
 	lock            sync.Mutex
 	poolStart            = int64(uintptr(unsafe.Pointer(&memoryPool[0])))
+	blockPool            = list.New()
 	EnableCheckSize bool = false
 )
 
@@ -31,34 +33,33 @@ type MemoryAllocator struct {
 func GetMemoryAllocator(size int) (ret *MemoryAllocator) {
 	lock.Lock()
 	offset, err := buddy.Alloc(size >> MinPowerOf2)
+	if blockPool.Len() > 0 {
+		ret = blockPool.Remove(blockPool.Front()).(*MemoryAllocator)
+	} else {
+		ret = &MemoryAllocator{
+			allocator: NewAllocator(size),
+		}
+	}
 	lock.Unlock()
+	ret.Size = size
+	ret.allocator.Init(size)
 	if err != nil {
-		return NewMemoryAllocator(size)
+		ret.memory = make([]byte, size)
+		ret.start = int64(uintptr(unsafe.Pointer(&ret.memory[0])))
+		return
 	}
 	offset = offset << MinPowerOf2
-	ret = &MemoryAllocator{
-		Size:      size,
-		memory:    memoryPool[offset : offset+size],
-		allocator: NewAllocator(size),
-	}
+	ret.memory = memoryPool[offset : offset+size]
 	ret.start = poolStart + int64(offset)
 	return
 }
 
-func NewMemoryAllocator(size int) (ret *MemoryAllocator) {
-	ret = &MemoryAllocator{
-		Size:      size,
-		memory:    make([]byte, size),
-		allocator: NewAllocator(size),
-	}
-	fmt.Println(size)
-	ret.start = int64(uintptr(unsafe.Pointer(&ret.memory[0])))
-	return
-}
-
 func (ma *MemoryAllocator) Recycle() {
+	ma.allocator.Recycle()
 	lock.Lock()
+	blockPool.PushBack(ma)
 	_ = buddy.Free(int((poolStart - ma.start) >> MinPowerOf2))
+	ma.memory = nil
 	lock.Unlock()
 }
 
@@ -161,6 +162,9 @@ func (sma *ScalableMemoryAllocator) Malloc(size int) (memory []byte) {
 	child = GetMemoryAllocator(sma.childSize)
 	sma.size += child.Size
 	memory = child.Malloc(size)
+	if memory == nil {
+		panic(fmt.Errorf("malloc faild %d", size))
+	}
 	sma.children = append(sma.children, child)
 	return
 }
@@ -178,14 +182,14 @@ func (sma *ScalableMemoryAllocator) Free(mem []byte) bool {
 	}
 	ptr := int64(uintptr(unsafe.Pointer(&mem[0])))
 	size := len(mem)
-	for _, child := range sma.children {
+	for i, child := range sma.children {
 		if start := int(ptr - child.start); start >= 0 && start < child.Size && child.free(start, size) {
 			sma.addFreeCount(size)
-			//if len(sma.children) > 1 && child.allocator.sizeTree.End-child.allocator.sizeTree.Start == child.Size {
-			//	child.Recycle()
-			//	sma.children = slices.Delete(sma.children, i, i+1)
-			//	sma.size -= child.Size
-			//}
+			if len(sma.children) > 1 && child.allocator.sizeTree.End-child.allocator.sizeTree.Start == child.Size {
+				child.Recycle()
+				sma.children = slices.Delete(sma.children, i, i+1)
+				sma.size -= child.Size
+			}
 			return true
 		}
 	}

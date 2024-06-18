@@ -160,12 +160,12 @@ func (conn *NetConnection) readChunk() (msg *Chunk, err error) {
 		chunk.AVData.NextN(msgLen)
 	}
 	buffer := chunk.AVData.Buffers[0]
-	for buf := range conn.ReadRange(bufSize) {
+	err = conn.ReadRange(bufSize, func(buf []byte) {
 		copy(buffer[chunk.bufLen:], buf)
 		chunk.bufLen += len(buf)
-	}
-	if conn.Err != nil {
-		return nil, conn.Err
+	})
+	if err != nil {
+		return nil, err
 	}
 	if chunk.bufLen == msgLen {
 		msg = chunk
@@ -332,9 +332,9 @@ func (conn *NetConnection) sendChunk(data net.Buffers, head *ChunkHeader, headTy
 	head.WriteTo(RTMP_CHUNK_HEAD_1, &chunk3)
 	r := util.NewReadableBuffersFromBytes(data...)
 	for {
-		for buf := range r.RangeN(conn.WriteChunkSize) {
+		r.RangeN(conn.WriteChunkSize, func(buf []byte) {
 			chunks = append(chunks, buf)
-		}
+		})
 		if r.Length <= 0 {
 			break
 		}

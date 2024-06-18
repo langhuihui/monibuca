@@ -2,7 +2,18 @@ package util
 
 import (
 	"testing"
+	"unsafe"
 )
+
+func NewMemoryAllocator(size int) (ret *MemoryAllocator) {
+	ret = &MemoryAllocator{
+		Size:      size,
+		memory:    make([]byte, size),
+		allocator: NewAllocator(size),
+	}
+	ret.start = int64(uintptr(unsafe.Pointer(&ret.memory[0])))
+	return
+}
 
 func TestMem(t *testing.T) {
 	t.Run(t.Name(), func(t *testing.T) {

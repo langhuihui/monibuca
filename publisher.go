@@ -204,12 +204,16 @@ func (p *Publisher) WriteVideo(data IAVFrame) (err error) {
 	}
 	idr, hidr := t.IDRing.Load(), t.HistoryRing.Load()
 	if t.Value.IDR {
+		if t.Ring == idr {
+			panic("idr ring is full")
+		}
 		if idr != nil {
 			p.GOP = int(t.Value.Sequence - idr.Value.Sequence)
-			if hidr == nil {
+			if hidr == nil && p.GOP > 0 {
 				if l := t.Size - p.GOP; l > p.GetPublishConfig().MinRingSize {
-					t.Debug("resize", "gop", p.GOP, "before", t.Size, "after", t.Size-5)
+					t.Debug("reduce", "gop", p.GOP, "before", t.Size, "after", t.Size-5)
 					t.Reduce(5) //缩小缓冲环节省内存
+					t.Debug("check", "real", t.Len())
 				}
 			}
 		}
@@ -230,7 +234,9 @@ func (p *Publisher) WriteVideo(data IAVFrame) (err error) {
 		}
 	} else if nextValue := t.Next(); nextValue == idr || nextValue == hidr {
 		if t.Size < p.Plugin.GetCommonConf().MaxRingSize {
+			t.Debug("glow", "gop", p.GOP, "before", t.Size, "after", t.Size+5)
 			t.Glow(5)
+			t.Debug("check", "real", t.Len())
 		}
 	}
 	p.writeAV(t, data)

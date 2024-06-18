@@ -15,7 +15,7 @@ type (
 		Size   int
 	}
 	Allocator struct {
-		pool       []*Block
+		pool       *Block
 		sizeTree   *Block
 		offsetTree *Block
 		Size       int
@@ -157,6 +157,13 @@ func (b *Block) delete(block *Block, treeIndex int) *Block {
 	return b.balance(treeIndex)
 }
 
+func (a *Allocator) Init(size int) {
+	a.Size = size
+	root := a.getBlock(0, size)
+	a.sizeTree = root
+	a.offsetTree = root
+}
+
 func (a *Allocator) Allocate(size int) (offset int) {
 	//a.history = append(a.history, History{Malloc: true, Size: size})
 	block := a.findAvailableBlock(a.sizeTree, size)
@@ -191,11 +198,12 @@ func (a *Allocator) findAvailableBlock(block *Block, size int) *Block {
 }
 
 func (a *Allocator) getBlock(start, end int) *Block {
-	if l := len(a.pool); l == 0 {
+	if a.pool == nil {
 		return &Block{Start: start, End: end}
 	} else {
-		block := a.pool[l-1]
-		a.pool = a.pool[:l-1]
+		block := a.pool
+		a.pool = block.trees[0].left
+		block.trees = emptyTrees
 		block.Start, block.End = start, end
 		return block
 	}
@@ -203,7 +211,8 @@ func (a *Allocator) getBlock(start, end int) *Block {
 
 func (a *Allocator) putBlock(b *Block) {
 	b.trees = emptyTrees
-	a.pool = append(a.pool, b)
+	b.trees[0].left = a.pool
+	a.pool = b
 }
 
 func (a *Allocator) Free(offset, size int) {
@@ -282,6 +291,14 @@ func (b *Block) findRightAdjacentBlock(offset int) *Block {
 		}
 	}
 	return nil
+}
+
+func (a *Allocator) Recycle() {
+	a.sizeTree.Walk(func(block *Block) {
+		a.putBlock(block)
+	}, 0)
+	a.sizeTree = nil
+	a.offsetTree = nil
 }
 
 func (b *Block) Walk(fn func(*Block), index int) {

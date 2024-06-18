@@ -11,7 +11,6 @@ type BufReader struct {
 	allocator *ScalableMemoryAllocator
 	buf       MemoryReader
 	BufLen    int
-	Err       error
 }
 
 func NewBufReaderWithBufLen(reader io.Reader, bufLen int) (r *BufReader) {
@@ -39,7 +38,6 @@ func (r *BufReader) eat() error {
 	buf := r.allocator.Malloc(r.BufLen)
 	if n, err := r.reader.Read(buf); err != nil {
 		r.allocator.Free(buf)
-		r.Err = err
 		return err
 	} else {
 		if n < r.BufLen {
@@ -102,32 +100,31 @@ func (r *BufReader) Skip(n int) (err error) {
 			return err
 		}
 	}
-	r.buf.RangeN(n)(nil)
+	r.buf.RangeN(n, nil)
 	return
 }
 
-func (r *BufReader) ReadRange(n int) func(func([]byte) bool) {
-	return func(yield func([]byte) bool) {
-		for r.recycleFront(); n > 0 && r.Err == nil; r.eat() {
-			if r.buf.Length > 0 {
-				if r.buf.Length >= n {
-					r.buf.RangeN(n)(yield)
-					return
-				}
-				n -= r.buf.Length
-				r.buf.Range(yield)
-				r.buf.MoveToEnd()
+func (r *BufReader) ReadRange(n int, yield func([]byte)) (err error) {
+	for r.recycleFront(); n > 0 && err == nil; err = r.eat() {
+		if r.buf.Length > 0 {
+			if r.buf.Length >= n {
+				r.buf.RangeN(n, yield)
+				return
 			}
+			n -= r.buf.Length
+			r.buf.Range(yield)
+			r.buf.MoveToEnd()
 		}
 	}
+	return
 }
 
 func (r *BufReader) ReadBytes(n int) (mem Memory, err error) {
-	for buf := range r.ReadRange(n) {
+	err = r.ReadRange(n, func(buf []byte) {
 		mem.Buffers = append(mem.Buffers, buf)
-	}
+	})
 	mem.Size = n
-	return mem, r.Err
+	return
 }
 
 func (r *BufReader) recycleFront() {

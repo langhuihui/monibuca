@@ -35,16 +35,14 @@ func (rb *RingWriter) Resize(size int) {
 }
 
 func (rb *RingWriter) Glow(size int) (newItem *util.Ring[AVFrame]) {
-	if size < rb.poolSize {
+	if newCount := size - rb.poolSize; newCount > 0 {
+		newItem = util.NewRing[AVFrame](newCount).Link(rb.pool)
+		rb.poolSize = 0
+	} else {
 		newItem = rb.pool.Unlink(size)
 		rb.poolSize -= size
-	} else if size == rb.poolSize {
-		newItem = rb.pool
-		rb.poolSize = 0
-		rb.pool = nil
-	} else {
-		newItem = util.NewRing[AVFrame](size - rb.poolSize).Link(rb.pool)
-		rb.poolSize = 0
+	}
+	if rb.poolSize == 0 {
 		rb.pool = nil
 	}
 	rb.Link(newItem)
@@ -53,8 +51,6 @@ func (rb *RingWriter) Glow(size int) (newItem *util.Ring[AVFrame]) {
 }
 
 func (rb *RingWriter) recycle(r *util.Ring[AVFrame]) {
-	rb.poolSize++
-	r.Value.Reset()
 	if rb.pool == nil {
 		rb.pool = r
 	} else {
@@ -64,18 +60,19 @@ func (rb *RingWriter) recycle(r *util.Ring[AVFrame]) {
 
 func (rb *RingWriter) Reduce(size int) (r *util.Ring[AVFrame]) {
 	r = rb.Unlink(size)
-	for p := r.Next(); p != r; {
-		next := p.Next() //先保存下一个节点
-		if p.Value.TryLock() {
-			rb.recycle(p)
-			p.Value.Unlock()
+	for range size {
+		if r.Value.TryLock() {
+			rb.poolSize++
+			r.Value.Reset()
+			r.Value.Unlock()
 		} else {
-			p.Value.discard = true
-			dr := p.Prev().Unlink(1)
-			dr.Value.Reset()
+			r.Value.Discard()
+			r = r.Prev()
+			r.Unlink(1)
 		}
-		p = next
+		r = r.Next()
 	}
+	rb.recycle(r)
 	rb.Size -= size
 	return
 }

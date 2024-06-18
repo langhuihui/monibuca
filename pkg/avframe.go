@@ -75,6 +75,11 @@ func (frame *AVFrame) Reset() {
 	}
 }
 
+func (frame *AVFrame) Discard() {
+	frame.discard = true
+	frame.Reset()
+}
+
 func (df *DataFrame) StartWrite() bool {
 	if df.TryLock() {
 		return true
@@ -107,9 +112,9 @@ func (nalus *Nalus) ParseAVCC(reader *util.MemoryReader, naluSizeLen int) error 
 		if err != nil {
 			return err
 		}
-		for nalu := range reader.RangeN(l) {
+		reader.RangeN(l, func(nalu []byte) {
 			nalus.Append(nalu)
-		}
+		})
 	}
 	return nil
 }

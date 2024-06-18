@@ -24,7 +24,7 @@ func NewMemoryFromBytes(b ...[]byte) *Memory {
 
 func NewReadableBuffersFromBytes(b ...[]byte) *MemoryReader {
 	buf := NewMemory(b)
-	return &MemoryReader{Memory: NewMemory(b), Length: buf.Size}
+	return &MemoryReader{Memory: buf, Length: buf.Size}
 }
 
 func NewMemory(buffers net.Buffers) *Memory {
@@ -68,7 +68,7 @@ func (m *Memory) Count() int {
 	return len(m.Buffers)
 }
 
-func (m *Memory) Range(yield func([]byte) bool) {
+func (m *Memory) Range(yield func([]byte)) {
 	for i := range m.Count() {
 		yield(m.Buffers[i])
 	}
@@ -236,18 +236,16 @@ func (r *MemoryReader) ReadBE(n int) (num int, err error) {
 	return
 }
 
-func (r *MemoryReader) RangeN(n int) func(yield func([]byte) bool) {
-	return func(yield func([]byte) bool) {
-		for good := yield != nil; r.Length > 0 && n > 0; r.skipBuf() {
-			curBuf := r.GetCurrent()
-			if curBufLen := len(curBuf); curBufLen > n {
-				if r.forward(n); good {
-					good = yield(curBuf[:n])
-				}
-				return
-			} else if n -= curBufLen; good {
-				good = yield(curBuf)
+func (r *MemoryReader) RangeN(n int, yield func([]byte)) {
+	for good := yield != nil; r.Length > 0 && n > 0; r.skipBuf() {
+		curBuf := r.GetCurrent()
+		if curBufLen := len(curBuf); curBufLen > n {
+			if r.forward(n); good {
+				yield(curBuf[:n])
 			}
+			return
+		} else if n -= curBufLen; good {
+			yield(curBuf)
 		}
 	}
 }

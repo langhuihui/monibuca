@@ -58,7 +58,13 @@ func TestRing(t *testing.T) {
 		<-ctx.Done()
 	})
 }
-
+func TestRingWriter_Resize(t *testing.T) {
+	w := NewRingWriter(10)
+	w.Resize(5)
+	w.Resize(-5)
+	w.Resize(5)
+	w.Resize(-5)
+}
 func BenchmarkRing(b *testing.B) {
 	w := NewRingWriter(10)
 	ctx, _ := context.WithTimeout(context.Background(), time.Second*5)

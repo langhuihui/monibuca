@@ -236,7 +236,7 @@ func (s *Server) api_VideoTrack_SSE(rw http.ResponseWriter, r *http.Request) {
 	}
 	suber, err := s.Subscribe(streamPath, rw, r.Context(), "api_VideoTrack_SSE")
 	sse := util.NewSSE(rw, r.Context())
-	for frame := range suber.OnVideoFrame {
+	PlayBlock(suber, (func(frame *pkg.AVFrame) (err error))(nil), func(frame *pkg.AVFrame) (err error) {
 		var snap pb.TrackSnapShot
 		snap.Sequence = frame.Sequence
 		snap.Timestamp = uint32(frame.Timestamp / time.Millisecond)
@@ -250,10 +250,8 @@ func (s *Server) api_VideoTrack_SSE(rw http.ResponseWriter, r *http.Request) {
 				Data:      wrap.String(),
 			}
 		}
-		if err = sse.WriteJSON(&snap); err != nil {
-			break
-		}
-	}
+		return sse.WriteJSON(&snap)
+	})
 	if err != nil {
 		http.Error(rw, err.Error(), http.StatusBadRequest)
 		return
