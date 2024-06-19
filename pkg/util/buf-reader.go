@@ -94,14 +94,7 @@ func (r *BufReader) ReadBE32(n int) (num uint32, err error) {
 }
 
 func (r *BufReader) Skip(n int) (err error) {
-	r.recycleFront()
-	for r.buf.Length < n {
-		if err = r.eat(); err != nil {
-			return err
-		}
-	}
-	r.buf.RangeN(n, nil)
-	return
+	return r.ReadRange(n, nil)
 }
 
 func (r *BufReader) ReadRange(n int, yield func([]byte)) (err error) {
@@ -112,11 +105,22 @@ func (r *BufReader) ReadRange(n int, yield func([]byte)) (err error) {
 				return
 			}
 			n -= r.buf.Length
-			r.buf.Range(yield)
+			if yield != nil {
+				r.buf.Range(yield)
+			}
 			r.buf.MoveToEnd()
 		}
 	}
 	return
+}
+
+func (r *BufReader) ReadNto(n int, to []byte) (err error) {
+	l := 0
+	return r.ReadRange(n, func(buf []byte) {
+		ll := len(buf)
+		copy(to[l:l+ll], buf)
+		l += ll
+	})
 }
 
 func (r *BufReader) ReadBytes(n int) (mem Memory, err error) {

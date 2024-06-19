@@ -60,7 +60,7 @@ func (puller *HDLPuller) Connect(p *m7s.Client) (err error) {
 			var flvHead [3]byte
 			var version, flag byte
 			var reader = head.NewReader()
-			reader.ReadByteTo(&flvHead[0], &flvHead[1], &flvHead[2], &version, &flag)
+			err = reader.ReadByteTo(&flvHead[0], &flvHead[1], &flvHead[2], &version, &flag)
 			if flvHead != [...]byte{'F', 'L', 'V'} {
 				err = errors.New("not flv file")
 			} else {
@@ -102,16 +102,19 @@ func (puller *HDLPuller) Pull(p *m7s.Puller) (err error) {
 		if startTs == 0 {
 			startTs = timestamp
 		}
-		puller.ReadBE(3) // stream id always 0
-		var frame rtmp.RTMPData
-		frame.ScalableMemoryAllocator = puller.ScalableMemoryAllocator
-		mem, err := puller.ReadBytes(int(dataSize))
-		if err != nil {
+		if _, err = puller.ReadBE(3); err != nil { // stream id always 0
 			return err
 		}
-		switch t {
+		var frame rtmp.RTMPData
+		switch ds := int(dataSize); t {
 		case FLV_TAG_TYPE_AUDIO, FLV_TAG_TYPE_VIDEO:
-			mem.CopyTo(frame.NextN(mem.Size))
+			frame.ScalableMemoryAllocator = puller.ScalableMemoryAllocator
+			err = puller.ReadNto(ds, frame.NextN(ds))
+		default:
+			err = puller.Skip(ds)
+		}
+		if err != nil {
+			return err
 		}
 		puller.absTS = offsetTs + (timestamp - startTs)
 		frame.Timestamp = puller.absTS

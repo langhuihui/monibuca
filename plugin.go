@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	gatewayRuntime "github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
-	"github.com/mcuadros/go-defaults"
 	"google.golang.org/grpc"
 	"gopkg.in/yaml.v3"
 	. "m7s.live/m7s/v5/pkg"
@@ -35,7 +34,6 @@ func (plugin *PluginMeta) Init(s *Server, userConfig map[string]any) {
 	if !ok {
 		panic("plugin must implement IPlugin")
 	}
-	defaults.SetDefaults(instance)
 	p := reflect.ValueOf(instance).Elem().FieldByName("Plugin").Addr().Interface().(*Plugin)
 	p.handler = instance
 	p.Meta = plugin
@@ -49,6 +47,7 @@ func (plugin *PluginMeta) Init(s *Server, userConfig map[string]any) {
 	}
 	p.Config.Parse(p.GetCommonConf())
 	p.Config.Parse(instance, strings.ToUpper(plugin.Name))
+
 	for _, fname := range MergeConfigs {
 		if name := strings.ToLower(fname); p.Config.Has(name) {
 			p.Config.Get(name).ParseGlobal(s.Config.Get(name))
@@ -62,8 +61,9 @@ func (plugin *PluginMeta) Init(s *Server, userConfig map[string]any) {
 			p.Config.ParseDefaultYaml(defaultConf)
 		}
 	}
-
 	p.Config.ParseUserFile(userConfig)
+	finalConfig, _ := yaml.Marshal(p.Config.GetMap())
+	p.Debug("config", "detail", string(finalConfig))
 	if s.DisableAll {
 		p.Disabled = true
 	}
@@ -274,8 +274,7 @@ func (p *Plugin) Publish(streamPath string, options ...any) (publisher *Publishe
 		if onAuthPub, ok := p.server.OnAuthPubs[p.Meta.Name]; ok {
 			authPromise := util.NewPromise(publisher)
 			onAuthPub(authPromise)
-			<-authPromise.Done()
-			if err = context.Cause(authPromise.Context); err != util.ErrResolve {
+			if _, err = authPromise.Await(); err != nil {
 				p.Warn("auth failed", "error", err)
 				return
 			}
@@ -287,7 +286,7 @@ func (p *Plugin) Publish(streamPath string, options ...any) (publisher *Publishe
 			v(&publisher.Publish)
 		}
 	}
-	publisher.Init(p, streamPath, options...)
+	publisher.Init(p, streamPath, &publisher.Publish, options...)
 	_, err = p.server.Call(publisher)
 	return
 }
@@ -310,7 +309,7 @@ func (p *Plugin) Pull(streamPath string, url string, options ...any) (puller *Pu
 			}()
 		}
 	}
-	puller.Init(p, streamPath, options...)
+	puller.Init(p, streamPath, &puller.Publish, options...)
 	_, err = p.server.Call(puller)
 	return
 }
@@ -321,8 +320,7 @@ func (p *Plugin) Subscribe(streamPath string, options ...any) (subscriber *Subsc
 		if onAuthSub, ok := p.server.OnAuthSubs[p.Meta.Name]; ok {
 			authPromise := util.NewPromise(subscriber)
 			onAuthSub(authPromise)
-			<-authPromise.Done()
-			if err = context.Cause(authPromise.Context); err != util.ErrResolve {
+			if _, err = authPromise.Await(); err != nil {
 				p.Warn("auth failed", "error", err)
 				return
 			}
@@ -334,7 +332,7 @@ func (p *Plugin) Subscribe(streamPath string, options ...any) (subscriber *Subsc
 			v(&subscriber.Subscribe)
 		}
 	}
-	subscriber.Init(p, streamPath, options...)
+	subscriber.Init(p, streamPath, &subscriber.Subscribe, options...)
 	_, err = p.server.Call(subscriber)
 	return
 }
@@ -379,7 +377,7 @@ func (p *Plugin) Push(streamPath string, url string, options ...any) (pusher *Pu
 			}()
 		}
 	}
-	pusher.Init(p, streamPath, options...)
+	pusher.Init(p, streamPath, &pusher.Subscribe, options...)
 	_, err = p.server.Call(pusher)
 	return
 }

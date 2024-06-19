@@ -3,6 +3,7 @@ package pkg
 import (
 	"context"
 	"log/slog"
+	"m7s.live/m7s/v5/pkg/config"
 	"time"
 )
 
@@ -19,7 +20,6 @@ const (
 
 type AVRingReader struct {
 	RingReader
-	mode         int
 	Track        *AVTrack
 	State        byte
 	FirstSeq     uint32
@@ -40,22 +40,18 @@ func (r *AVRingReader) DecConfChanged() bool {
 
 func NewAVRingReader(t *AVTrack) *AVRingReader {
 	t.Debug("create reader")
-	t.Ready.Await()
-	t.Info("reader +1", "count", t.ReaderCount.Add(1))
 	return &AVRingReader{
 		Track: t,
 	}
 }
 
-func (r *AVRingReader) readFrame() (err error) {
-	err = r.ReadNext()
-	if err != nil {
-		return err
+func (r *AVRingReader) readFrame(mode int) (err error) {
+	if err = r.ReadNext(); err != nil {
+		return
 	}
 	// 超过一半的缓冲区大小，说明Reader太慢，需要丢帧
-	if r.mode != SUBMODE_BUFFER && r.State == READSTATE_NORMAL && r.Track.LastValue.Sequence-r.Value.Sequence > uint32(r.Track.Size/2) {
-		idr := r.Track.IDRing.Load()
-		if idr != nil && idr.Value.Sequence > r.Value.Sequence {
+	if mode != SUBMODE_BUFFER && r.State == READSTATE_NORMAL && r.Track.LastValue.Sequence-r.Value.Sequence > uint32(r.Track.Size/2) {
+		if idr := r.Track.GetIDR(); idr != nil && idr.Value.Sequence > r.Value.Sequence {
 			r.Warn("reader too slow", "lastSeq", r.Track.LastValue.Sequence, "seq", r.Value.Sequence)
 			return r.Read(idr)
 		}
@@ -63,19 +59,18 @@ func (r *AVRingReader) readFrame() (err error) {
 	return
 }
 
-func (r *AVRingReader) ReadFrame(mode int) (err error) {
-	r.mode = mode
+func (r *AVRingReader) ReadFrame(conf *config.Subscribe) (err error) {
 	switch r.State {
 	case READSTATE_INIT:
-		r.Info("start read", "mode", mode)
+		r.Info("start read", "mode", conf.SubMode)
 		startRing := r.Track.Ring
-		idr := r.Track.IDRing.Load()
+		idr := r.Track.GetIDR()
 		if idr != nil {
 			startRing = idr
 		} else {
 			r.Warn("no IDRring", "track", r.Track.FourCC().String())
 		}
-		switch mode {
+		switch conf.SubMode {
 		case SUBMODE_REAL:
 			if idr != nil {
 				r.State = READSTATE_FIRST
@@ -85,7 +80,16 @@ func (r *AVRingReader) ReadFrame(mode int) (err error) {
 		case SUBMODE_NOJUMP:
 			r.State = READSTATE_NORMAL
 		case SUBMODE_BUFFER:
-			if idr := r.Track.HistoryRing.Load(); idr != nil {
+			for {
+				currentBft := r.Track.CurrentBufferTime()
+				if delta := conf.BufferTime - currentBft; delta > 0 {
+					r.Info("wait buffer", "currentBft", currentBft, "delta", delta)
+					time.Sleep(delta)
+				} else {
+					break
+				}
+			}
+			if idr := r.Track.GetHistoryIDR(conf.BufferTime); idr != nil {
 				startRing = idr
 			}
 			r.State = READSTATE_NORMAL
@@ -101,7 +105,7 @@ func (r *AVRingReader) ReadFrame(mode int) (err error) {
 		r.FirstSeq = r.Value.Sequence
 		r.Info("first frame read", "firstTs", r.FirstTs, "firstSeq", r.FirstSeq)
 	case READSTATE_FIRST:
-		if idr := r.Track.IDRing.Load(); idr.Value.Sequence != r.FirstSeq {
+		if idr := r.Track.GetIDR(); idr.Value.Sequence != r.FirstSeq {
 			if err = r.Read(idr); err != nil {
 				return
 			}
@@ -109,7 +113,7 @@ func (r *AVRingReader) ReadFrame(mode int) (err error) {
 			r.Info("jump", "skipSeq", idr.Value.Sequence-r.FirstSeq, "skipTs", r.SkipTs)
 			r.State = READSTATE_NORMAL
 		} else {
-			if err = r.readFrame(); err != nil {
+			if err = r.readFrame(conf.SubMode); err != nil {
 				return
 			}
 			r.beforeJump = r.Value.Timestamp - r.FirstTs
@@ -119,7 +123,7 @@ func (r *AVRingReader) ReadFrame(mode int) (err error) {
 			}
 		}
 	case READSTATE_NORMAL:
-		if err = r.readFrame(); err != nil {
+		if err = r.readFrame(conf.SubMode); err != nil {
 			return
 		}
 	}

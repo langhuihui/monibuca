@@ -115,13 +115,12 @@ func (nc *NetConnection) simple_handshake(C1 []byte, checkC2 bool) error {
 	copy(S0S1[5:], "Monibuca")
 	nc.Write(S0S1)
 	nc.Write(C1) // S2
-	C2, err := nc.ReadBytes(C1S1_SIZE)
+	buf := nc.mediaDataPool.NextN(C1S1_SIZE)
+	err := nc.ReadNto(C1S1_SIZE, buf)
 	if err != nil {
 		return err
 	}
 	if checkC2 {
-		buf := nc.mediaDataPool.NextN(C2.Size)
-		C2.CopyTo(buf)
 		if !bytes.Equal(buf[8:], S0S1[9:]) {
 			return errors.New("C2 Error")
 		}

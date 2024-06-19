@@ -65,7 +65,7 @@ func (s *Server) api_Stream_AnnexB_(rw http.ResponseWriter, r *http.Request) {
 	}
 	rw.Header().Set("Content-Type", "application/octet-stream")
 	reader := pkg.NewAVRingReader(publisher.VideoTrack.AVTrack)
-	err = reader.StartRead(publisher.VideoTrack.IDRing.Load())
+	err = reader.StartRead(publisher.VideoTrack.GetIDR())
 	if err != nil {
 		http.Error(rw, err.Error(), http.StatusInternalServerError)
 		return
@@ -81,7 +81,7 @@ func (s *Server) api_Stream_AnnexB_(rw http.ResponseWriter, r *http.Request) {
 	var annexb pkg.AnnexB
 	var t pkg.AVTrack
 
-	annexb.DecodeConfig(&t, publisher.VideoTrack.ICodecCtx)
+	err = annexb.DecodeConfig(&t, publisher.VideoTrack.ICodecCtx)
 	if t.ICodecCtx == nil {
 		http.Error(rw, "unsupported codec", http.StatusInternalServerError)
 		return
@@ -91,7 +91,7 @@ func (s *Server) api_Stream_AnnexB_(rw http.ResponseWriter, r *http.Request) {
 		http.Error(rw, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	frame.(*pkg.AnnexB).WriteTo(rw)
+	_, err = frame.(*pkg.AnnexB).WriteTo(rw)
 }
 
 func (s *Server) getStreamInfo(pub *Publisher) (res *pb.StreamInfoResponse, err error) {

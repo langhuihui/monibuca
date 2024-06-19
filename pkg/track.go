@@ -3,9 +3,8 @@ package pkg
 import (
 	"context"
 	"log/slog"
+	"m7s.live/m7s/v5/pkg/config"
 	"reflect"
-	"slices"
-	"sync/atomic"
 	"time"
 
 	"m7s.live/m7s/v5/pkg/util"
@@ -25,12 +24,6 @@ type (
 
 	DataTrack struct {
 		Track
-	}
-
-	IDRingList struct {
-		IDRList     []*AVRing
-		IDRing      atomic.Pointer[AVRing]
-		HistoryRing atomic.Pointer[AVRing]
 	}
 
 	AVTrack struct {
@@ -57,8 +50,10 @@ func NewAVTrack(args ...any) (t *AVTrack) {
 		case *AVTrack:
 			t.Logger = v.Logger.With("subtrack", t.FrameType.String())
 			t.RingWriter = v.RingWriter
-		case int:
-			t.RingWriter = NewRingWriter(v)
+		case *config.Publish:
+			t.RingWriter = NewRingWriter(v.RingSize)
+			t.BufferRange[0] = v.BufferTime
+			t.RingWriter.SLogger = t.Logger
 		}
 	}
 	t.Ready = util.NewPromise(struct{}{})
@@ -84,14 +79,4 @@ func (t *Track) AddBytesIn(n int) {
 
 func (t *Track) Trace(msg string, fields ...any) {
 	t.Log(context.TODO(), TraceLevel, msg, fields...)
-}
-
-func (p *IDRingList) AddIDR(IDRing *AVRing) {
-	p.IDRList = append(p.IDRList, IDRing)
-	p.IDRing.Store(IDRing)
-}
-
-func (p *IDRingList) ShiftIDR() {
-	p.IDRList = slices.Delete(p.IDRList, 0, 1)
-	p.HistoryRing.Store(p.IDRList[0])
 }

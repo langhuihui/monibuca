@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
-	"github.com/mcuadros/go-defaults"
 	"github.com/phsym/console-slog"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -146,8 +145,6 @@ func (s *Server) run(ctx context.Context, conf any) (err error) {
 			s.Error("parsing yml error:", err)
 		}
 	}
-	defaults.SetDefaults(&s.Engine)
-	defaults.SetDefaults(&s.config)
 	s.Config.Parse(&s.config)
 	s.Config.Parse(&s.Engine, "GLOBAL")
 	if cg != nil {

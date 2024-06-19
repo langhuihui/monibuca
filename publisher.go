@@ -2,6 +2,7 @@ package m7s
 
 import (
 	"reflect"
+	"slices"
 	"sync"
 	"time"
 
@@ -128,6 +129,19 @@ func (p *Publisher) RemoveSubscriber(subscriber *Subscriber) {
 	defer p.Unlock()
 	p.Subscribers.Remove(subscriber)
 	p.Info("subscriber -1", "count", p.Subscribers.Length)
+	if subscriber.BufferTime == p.BufferTime && p.Subscribers.Length > 0 {
+		p.BufferTime = slices.MaxFunc(p.Subscribers.Items, func(a, b *Subscriber) int {
+			return int(a.BufferTime - b.BufferTime)
+		}).BufferTime
+	} else {
+		p.BufferTime = p.Plugin.GetCommonConf().Publish.BufferTime
+	}
+	if !p.AudioTrack.IsEmpty() {
+		p.AudioTrack.AVTrack.BufferRange[0] = p.BufferTime
+	}
+	if !p.VideoTrack.IsEmpty() {
+		p.VideoTrack.AVTrack.BufferRange[0] = p.BufferTime
+	}
 	if p.State == PublisherStateSubscribed && p.Subscribers.Length == 0 {
 		p.State = PublisherStateWaitSubscriber
 		if p.DelayCloseTimeout > 0 {
@@ -142,6 +156,15 @@ func (p *Publisher) AddSubscriber(subscriber *Subscriber) {
 	subscriber.Publisher = p
 	if p.Subscribers.AddUnique(subscriber) {
 		p.Info("subscriber +1", "count", p.Subscribers.Length)
+		if subscriber.BufferTime > p.BufferTime {
+			p.BufferTime = subscriber.BufferTime
+			if !p.AudioTrack.IsEmpty() {
+				p.AudioTrack.AVTrack.BufferRange[0] = p.BufferTime
+			}
+			if !p.VideoTrack.IsEmpty() {
+				p.VideoTrack.AVTrack.BufferRange[0] = p.BufferTime
+			}
+		}
 		switch p.State {
 		case PublisherStateTrackAdded, PublisherStateWaitSubscriber:
 			p.State = PublisherStateSubscribed
@@ -181,7 +204,7 @@ func (p *Publisher) WriteVideo(data IAVFrame) (err error) {
 	}
 	t := p.VideoTrack.AVTrack
 	if t == nil {
-		t = NewAVTrack(data, p.Logger.With("track", "video"), 20)
+		t = NewAVTrack(data, p.Logger.With("track", "video"), &p.Publish)
 		p.Lock()
 		p.VideoTrack.AVTrack = t
 		p.VideoTrack.Add(t)
@@ -202,41 +225,18 @@ func (p *Publisher) WriteVideo(data IAVFrame) (err error) {
 	if t.ICodecCtx == nil {
 		return ErrUnsupportCodec
 	}
-	idr, hidr := t.IDRing.Load(), t.HistoryRing.Load()
+	var idr *util.Ring[AVFrame]
+	if t.IDRingList.Len() > 0 {
+		idr = t.IDRingList.Back().Value
+	}
 	if t.Value.IDR {
-		if t.Ring == idr {
-			panic("idr ring is full")
-		}
-		if idr != nil {
-			p.GOP = int(t.Value.Sequence - idr.Value.Sequence)
-			if hidr == nil && p.GOP > 0 {
-				if l := t.Size - p.GOP; l > p.GetPublishConfig().MinRingSize {
-					t.Debug("reduce", "gop", p.GOP, "before", t.Size, "after", t.Size-5)
-					t.Reduce(5) //缩小缓冲环节省内存
-					t.Debug("check", "real", t.Len())
-				}
-			}
-		}
-		if p.BufferTime > 0 {
-			t.IDRingList.AddIDR(t.Ring)
-			if hidr == nil {
-				t.HistoryRing.Store(t.Ring)
-			}
-		} else {
-			t.IDRing.Store(t.Ring)
-		}
-		if idr == nil {
+		if t.Ready.IsPending() {
 			p.Info("ready")
 			t.Ready.Fulfill(nil)
-		}
-		if !p.AudioTrack.IsEmpty() {
-			p.AudioTrack.IDRing.Store(p.AudioTrack.Ring)
-		}
-	} else if nextValue := t.Next(); nextValue == idr || nextValue == hidr {
-		if t.Size < p.Plugin.GetCommonConf().MaxRingSize {
-			t.Debug("glow", "gop", p.GOP, "before", t.Size, "after", t.Size+5)
-			t.Glow(5)
-			t.Debug("check", "real", t.Len())
+		} else if idr != nil {
+			p.GOP = int(t.Value.Sequence - idr.Value.Sequence)
+		} else {
+			p.GOP = 0
 		}
 	}
 	p.writeAV(t, data)
@@ -298,7 +298,7 @@ func (p *Publisher) WriteAudio(data IAVFrame) (err error) {
 	}
 	t := p.AudioTrack.AVTrack
 	if t == nil {
-		t = NewAVTrack(data, p.Logger.With("track", "audio"), 20)
+		t = NewAVTrack(data, p.Logger.With("track", "audio"), &p.Publish)
 		p.Lock()
 		p.AudioTrack.AVTrack = t
 		p.AudioTrack.Add(t)

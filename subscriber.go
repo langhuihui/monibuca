@@ -9,7 +9,7 @@ import (
 	"os"
 	"reflect"
 	"runtime"
-	"strconv"
+	"strings"
 	"time"
 
 	. "m7s.live/m7s/v5/pkg"
@@ -38,7 +38,7 @@ func (p *PubSubBase) GetKey() int {
 	return p.ID
 }
 
-func (ps *PubSubBase) Init(p *Plugin, streamPath string, options ...any) {
+func (ps *PubSubBase) Init(p *Plugin, streamPath string, conf any, options ...any) {
 	ps.Plugin = p
 	ctx := p.Context
 	for _, option := range options {
@@ -61,6 +61,23 @@ func (ps *PubSubBase) Init(p *Plugin, streamPath string, options ...any) {
 	if u, err := url.Parse(streamPath); err == nil {
 		ps.StreamPath, ps.Args = u.Path, u.Query()
 	}
+	// args to config
+	if len(ps.Args) != 0 {
+		var c config.Config
+		c.Parse(conf)
+		ignores, cc := make(map[string]struct{}), make(map[string]any)
+		for key, value := range ps.Args {
+			if strings.HasSuffix(key, "ArgName") {
+				targetArgName := strings.TrimSuffix(key, "ArgName")
+				cc[targetArgName] = ps.Args.Get(value[0])[0]
+				ignores[value[0]] = struct{}{}
+				delete(cc, value[0])
+			} else if _, ok := ignores[key]; !ok {
+				cc[key] = value[0]
+			}
+		}
+		c.ParseModifyFile(cc)
+	}
 	ps.StartTime = time.Now()
 }
 
@@ -79,11 +96,7 @@ func PlayBlock[A any, V any](s *Subscriber, onAudio func(A) error, onVideo func(
 	var awi, vwi int
 	var startAudioTs, startVideoTs time.Duration
 	var initState = 0
-	var prePublisher *Publisher
-	var subMode = s.SubMode //订阅模式
-	if s.Args.Has(s.SubModeArgName) {
-		subMode, _ = strconv.Atoi(s.Args.Get(s.SubModeArgName))
-	}
+	prePublisher := s.Publisher
 	var audioFrame, videoFrame *AVFrame
 	if s.SubAudio {
 		a1 = reflect.TypeOf(onAudio).In(0)
@@ -105,6 +118,9 @@ func PlayBlock[A any, V any](s *Subscriber, onAudio func(A) error, onVideo func(
 			}
 		}
 		if at != nil {
+			if _, err := at.Ready.Await(); err != nil {
+				return
+			}
 			ar = NewAVRingReader(at)
 			s.AudioReader = ar
 			ar.StartTs = startAudioTs
@@ -126,6 +142,9 @@ func PlayBlock[A any, V any](s *Subscriber, onAudio func(A) error, onVideo func(
 			}
 		}
 		if vt != nil {
+			if _, err := vt.Ready.Await(); err != nil {
+				return
+			}
 			vr = NewAVRingReader(vt)
 			vr.StartTs = startVideoTs
 			s.VideoReader = vr
@@ -135,7 +154,6 @@ func PlayBlock[A any, V any](s *Subscriber, onAudio func(A) error, onVideo func(
 	}
 	createAudioReader()
 	createVideoReader()
-	prePublisher = s.Publisher
 	defer func() {
 		if ar != nil {
 			ar.StopRead()
@@ -205,7 +223,7 @@ func PlayBlock[A any, V any](s *Subscriber, onAudio func(A) error, onVideo func(
 		err = s.Err()
 		if vr != nil {
 			for err == nil {
-				err = vr.ReadFrame(subMode)
+				err = vr.ReadFrame(&s.Subscribe)
 				if err == nil {
 					videoFrame = &vr.Value
 					err = s.Err()
@@ -259,8 +277,7 @@ func PlayBlock[A any, V any](s *Subscriber, onAudio func(A) error, onVideo func(
 						ar.SkipTs = vr.SkipTs
 					}
 				}
-				err = ar.ReadFrame(subMode)
-				if err == nil {
+				if err = ar.ReadFrame(&s.Subscribe); err == nil {
 					audioFrame = &ar.Value
 					err = s.Err()
 				} else {

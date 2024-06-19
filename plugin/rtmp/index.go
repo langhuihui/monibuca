@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io"
 	"net"
+	"runtime/debug"
 
 	"m7s.live/m7s/v5"
 	"m7s.live/m7s/v5/plugin/rtmp/pb"
@@ -47,6 +48,7 @@ func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
 		nc.Destroy()
 		if p := recover(); p != nil {
 			err = p.(error)
+			logger.Error(err.Error(), "stack", string(debug.Stack()))
 		}
 		if len(receivers) > 0 {
 			for _, receiver := range receivers {

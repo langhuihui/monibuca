@@ -85,7 +85,7 @@ func (config *Config) Get(key string) (v *Config) {
 	}
 }
 
-func (config Config) Has(key string) (ok bool) {
+func (config *Config) Has(key string) (ok bool) {
 	if config.propsMap == nil {
 		return false
 	}
@@ -116,19 +116,26 @@ func (config *Config) Parse(s any, prefix ...string) {
 	if t.Kind() == reflect.Pointer {
 		t, v = t.Elem(), v.Elem()
 	}
+
 	config.Ptr = v
 	config.Default = v.Interface()
-	if len(prefix) > 0 { // 读取环境变量
-		envKey := strings.Join(prefix, "_")
-		if envValue := os.Getenv(envKey); envValue != "" {
-			envv := config.assign(strings.ToLower(prefix[0]), envValue)
-			config.Env = envv.Interface()
-			config.Ptr.Set(envv)
+
+	if l := len(prefix); l > 0 { // 读取环境变量
+		name := strings.ToLower(prefix[l-1])
+		if tag := config.tag.Get("default"); tag != "" {
+			v.Set(config.assign(name, tag))
+			config.Default = v.Interface()
+		}
+		if envValue := os.Getenv(strings.Join(prefix, "_")); envValue != "" {
+			v.Set(config.assign(name, envValue))
+			config.Env = v.Interface()
 		}
 	}
+
 	if t.Kind() == reflect.Struct && t != regexpType {
 		for i, j := 0, t.NumField(); i < j; i++ {
 			ft, fv := t.Field(i), v.Field(i)
+
 			if !ft.IsExported() {
 				continue
 			}
@@ -143,8 +150,9 @@ func (config *Config) Parse(s any, prefix ...string) {
 				name, _, _ = strings.Cut(tag, ",")
 			}
 			prop := config.Get(name)
-			prop.Parse(fv, append(prefix, strings.ToUpper(ft.Name))...)
+
 			prop.tag = ft.Tag
+			prop.Parse(fv, append(prefix, strings.ToUpper(ft.Name))...)
 			for _, kv := range strings.Split(ft.Tag.Get("enum"), ",") {
 				kvs := strings.Split(kv, ":")
 				if len(kvs) != 2 {
@@ -340,8 +348,7 @@ func (config *Config) assign(k string, v any) (target reflect.Value) {
 			},
 		})
 		tmpValue := reflect.New(tmpStruct)
-		tmpByte, _ := yaml.Marshal(map[string]any{k: v})
-		yaml.Unmarshal(tmpByte, tmpValue.Interface())
+		yaml.Unmarshal([]byte(fmt.Sprintf("%s: %v", k, v)), tmpValue.Interface())
 		target = tmpValue.Elem().Field(0)
 	}
 	return

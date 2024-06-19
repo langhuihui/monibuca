@@ -6,14 +6,13 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"github.com/quic-go/quic-go"
 	"io"
+	"m7s.live/m7s/v5"
 	"net"
 	"net/http"
 	"strings"
 	"time"
-
-	"github.com/quic-go/quic-go"
-	"m7s.live/m7s/v5"
 )
 
 type myResponseWriter struct {
@@ -59,12 +58,12 @@ type ConsolePlugin struct {
 
 var _ = m7s.InstallPlugin[ConsolePlugin]()
 
-func (cfg *ConsolePlugin) OnInit() error {
+func (cfg *ConsolePlugin) connect() (conn quic.Connection, err error) {
 	tlsConf := &tls.Config{
 		InsecureSkipVerify: true,
 		NextProtos:         []string{"monibuca"},
 	}
-	conn, err := quic.DialAddr(cfg.Context, cfg.Server, tlsConf, &quic.Config{
+	conn, err = quic.DialAddr(cfg.Context, cfg.Server, tlsConf, &quic.Config{
 		KeepAlivePeriod: time.Second * 10,
 		EnableDatagrams: true,
 	})
@@ -77,7 +76,7 @@ func (cfg *ConsolePlugin) OnInit() error {
 					if err = json.Unmarshal(msg[:len(msg)-1], &rMessage); err == nil {
 						if rMessage["code"].(float64) != 0 {
 							// cfg.Error("response from console server ", cfg.Server, rMessage["msg"])
-							return fmt.Errorf("response from console server %s %s", cfg.Server, rMessage["msg"])
+							return nil, fmt.Errorf("response from console server %s %s", cfg.Server, rMessage["msg"])
 						} else {
 							// cfg.reportStream = stream
 							cfg.Info("response from console server ", cfg.Server, rMessage)
@@ -93,16 +92,27 @@ func (cfg *ConsolePlugin) OnInit() error {
 			}
 		}
 	}
+	return
+}
+
+func (cfg *ConsolePlugin) OnInit() error {
+	conn, err := cfg.connect()
+	if err != nil {
+		return err
+	}
 	go func() {
-		for err == nil {
-			var s quic.Stream
-			if s, err = conn.AcceptStream(cfg.Context); err == nil {
-				go cfg.ReceiveRequest(s, conn)
+		for !cfg.IsStopped() {
+			for err == nil {
+				var s quic.Stream
+				if s, err = conn.AcceptStream(cfg.Context); err == nil {
+					go cfg.ReceiveRequest(s, conn)
+				}
 			}
-		}
-		if !cfg.IsStopped() {
-			<-time.After(time.Second)
-			cfg.OnInit()
+			time.Sleep(time.Second)
+			conn, err = cfg.connect()
+			if err != nil {
+				break
+			}
 		}
 	}()
 	return err

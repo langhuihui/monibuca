@@ -1,40 +1,48 @@
 package pkg
 
 import (
-	"sync/atomic"
-
+	"fmt"
+	"log/slog"
 	"m7s.live/m7s/v5/pkg/util"
+	"sync"
+	"time"
 )
 
 type RingWriter struct {
 	*util.Ring[AVFrame]
-	IDRingList  //最近的关键帧位置，首屏渲染
-	ReaderCount atomic.Int32
+	sync.RWMutex
+	IDRingList  util.List[*util.Ring[AVFrame]] // 关键帧链表
+	BufferRange util.Range[time.Duration]
+	SizeRange   util.Range[int]
 	pool        *util.Ring[AVFrame]
 	poolSize    int
 	Size        int
 	LastValue   *AVFrame
+	SLogger     *slog.Logger
 }
 
-func NewRingWriter(n int) (rb *RingWriter) {
+func NewRingWriter(sizeRange util.Range[int]) (rb *RingWriter) {
 	rb = &RingWriter{
-		Size: n,
-		Ring: util.NewRing[AVFrame](n),
+		Size:      sizeRange[0],
+		Ring:      util.NewRing[AVFrame](sizeRange[0]),
+		SizeRange: sizeRange,
 	}
 	rb.LastValue = &rb.Value
 	rb.LastValue.StartWrite()
+	rb.IDRingList.Init()
 	return
 }
 
 func (rb *RingWriter) Resize(size int) {
 	if size > 0 {
-		rb.Glow(size)
+		rb.glow(size)
 	} else {
-		rb.Reduce(-size)
+		rb.reduce(-size)
 	}
 }
 
-func (rb *RingWriter) Glow(size int) (newItem *util.Ring[AVFrame]) {
+func (rb *RingWriter) glow(size int) (newItem *util.Ring[AVFrame]) {
+	before, poolBefore := rb.Size, rb.poolSize
 	if newCount := size - rb.poolSize; newCount > 0 {
 		newItem = util.NewRing[AVFrame](newCount).Link(rb.pool)
 		rb.poolSize = 0
@@ -47,50 +55,117 @@ func (rb *RingWriter) Glow(size int) (newItem *util.Ring[AVFrame]) {
 	}
 	rb.Link(newItem)
 	rb.Size += size
+	rb.SLogger.Debug("glow", "size", fmt.Sprintf("%d -> %d", before, rb.Size), "pool", fmt.Sprintf("%d -> %d", poolBefore, rb.poolSize))
 	return
 }
 
-func (rb *RingWriter) recycle(r *util.Ring[AVFrame]) {
-	if rb.pool == nil {
-		rb.pool = r
-	} else {
-		rb.pool.Link(r)
-	}
-}
-
-func (rb *RingWriter) Reduce(size int) (r *util.Ring[AVFrame]) {
-	r = rb.Unlink(size)
+func (rb *RingWriter) reduce(size int) {
+	before, poolBefore := rb.Size, rb.poolSize
+	r := rb.Unlink(size)
+	rb.Size -= size
 	for range size {
 		if r.Value.TryLock() {
 			rb.poolSize++
 			r.Value.Reset()
 			r.Value.Unlock()
 		} else {
+			rb.SLogger.Debug("discard", "seq", r.Value.Sequence)
 			r.Value.Discard()
 			r = r.Prev()
 			r.Unlink(1)
 		}
 		r = r.Next()
 	}
-	rb.recycle(r)
-	rb.Size -= size
-	return
+	if poolBefore != rb.poolSize {
+		if rb.pool == nil {
+			rb.pool = r
+		} else {
+			rb.pool.Link(r)
+		}
+	}
+	rb.SLogger.Debug("reduce", "size", fmt.Sprintf("%d -> %d", before, rb.Size), "pool", fmt.Sprintf("%d -> %d", poolBefore, rb.poolSize))
 }
 
 func (rb *RingWriter) Dispose() {
+	rb.SLogger.Debug("dispose")
 	rb.Value.Ready()
 }
 
+func (rb *RingWriter) GetIDR() *util.Ring[AVFrame] {
+	rb.RLock()
+	defer rb.RUnlock()
+	return rb.IDRingList.Back().Value
+}
+
+func (rb *RingWriter) GetHistoryIDR(bufTime time.Duration) *util.Ring[AVFrame] {
+	rb.RLock()
+	defer rb.RUnlock()
+	for item := rb.IDRingList.Back(); item != nil; item = item.Prev() {
+		if item.Value.Value.Timestamp-rb.LastValue.Timestamp > bufTime {
+			return item.Value
+		}
+	}
+	return nil
+}
+
+func (rb *RingWriter) durationFrom(from *util.Ring[AVFrame]) time.Duration {
+	return rb.Value.Timestamp - from.Value.Timestamp
+}
+
+func (rb *RingWriter) CurrentBufferTime() time.Duration {
+	return rb.BufferRange[1]
+}
+
 func (rb *RingWriter) Step() (normal bool) {
+	isIDR := rb.Value.IDR
+	next := rb.Next()
+	if isIDR {
+		rb.SLogger.Debug("add idr")
+		rb.Lock()
+		rb.IDRingList.PushBack(rb.Ring)
+		rb.Unlock()
+	}
+	if rb.IDRingList.Len() > 0 {
+		oldIDR := rb.IDRingList.Front()
+		rb.BufferRange[1] = rb.durationFrom(oldIDR.Value)
+		// do not remove only idr
+		if next == rb.IDRingList.Back().Value {
+			if rb.Size < rb.SizeRange[1] {
+				rb.glow(5)
+				next = rb.Next()
+			}
+		} else if next == oldIDR.Value {
+			if nextOld := oldIDR.Next(); nextOld != nil && rb.durationFrom(nextOld.Value) > rb.BufferRange[0] {
+				rb.SLogger.Debug("remove old idr")
+				rb.Lock()
+				rb.IDRingList.Remove(oldIDR)
+				rb.Unlock()
+			} else {
+				rb.SLogger.Debug("not enough buffer")
+				rb.glow(5)
+				next = rb.Next()
+			}
+		} else if rb.BufferRange[1] > rb.BufferRange[0] {
+			for tmpP, reduceCount := rb.Next(), 0; reduceCount < 5; reduceCount++ {
+				if tmpP == oldIDR.Value {
+					break
+				}
+				if tmpP = tmpP.Next(); reduceCount == 4 && rb.Size > rb.SizeRange[0] {
+					rb.reduce(5)
+					next = rb.Next()
+				}
+			}
+		}
+	}
+
 	rb.LastValue = &rb.Value
 	nextSeq := rb.LastValue.Sequence + 1
-	next := rb.Next()
 	if normal = next.Value.StartWrite(); normal {
 		next.Value.Reset()
 		rb.Ring = next
 	} else {
-		rb.Reduce(1)         //抛弃还有订阅者的节点
-		rb.Ring = rb.Glow(1) //补充一个新节点
+		rb.reduce(1)         //抛弃还有订阅者的节点
+		rb.Ring = rb.glow(1) //补充一个新节点
 		normal = rb.Value.StartWrite()
 		if !normal {
 			panic("RingWriter.Step")

@@ -140,8 +140,8 @@ func (sma *ScalableMemoryAllocator) Recycle() {
 }
 
 func (sma *ScalableMemoryAllocator) Malloc(size int) (memory []byte) {
-	if sma == nil {
-		return make([]byte, size)
+	if sma == nil || size > MaxBlockSize {
+		return
 	}
 	if EnableCheckSize {
 		defer sma.checkSize()
@@ -162,9 +162,6 @@ func (sma *ScalableMemoryAllocator) Malloc(size int) (memory []byte) {
 	child = GetMemoryAllocator(sma.childSize)
 	sma.size += child.Size
 	memory = child.Malloc(size)
-	if memory == nil {
-		panic(fmt.Errorf("malloc faild %d", size))
-	}
 	sma.children = append(sma.children, child)
 	return
 }
@@ -204,7 +201,9 @@ type RecyclableMemory struct {
 
 func (r *RecyclableMemory) NextN(size int) (memory []byte) {
 	memory = r.ScalableMemoryAllocator.Malloc(size)
-	if r.RecycleIndexes != nil {
+	if memory == nil {
+		memory = make([]byte, size)
+	} else if r.RecycleIndexes != nil {
 		r.RecycleIndexes = append(r.RecycleIndexes, r.Count())
 	}
 	r.Append(memory)
