@@ -112,6 +112,10 @@ type ITCPPlugin interface {
 	OnTCPConnect(*net.TCPConn)
 }
 
+type IUDPPlugin interface {
+	OnUDPConnect(*net.UDPConn)
+}
+
 var plugins []PluginMeta
 
 func InstallPlugin[C iPlugin](options ...any) error {
@@ -220,7 +224,7 @@ func (p *Plugin) Start() {
 		tcphandler = p
 	}
 
-	if tcpConf.ListenAddr != "" {
+	if tcpConf.ListenAddr != "" && tcpConf.AutoListen {
 		p.Info("listen tcp", "addr", tcpConf.ListenAddr)
 		go func() {
 			err := tcpConf.Listen(tcphandler.OnTCPConnect)
@@ -230,7 +234,7 @@ func (p *Plugin) Start() {
 			}
 		}()
 	}
-	if tcpConf.ListenAddrTLS != "" {
+	if tcpConf.ListenAddrTLS != "" && tcpConf.AutoListen {
 		p.Info("listen tcp tls", "addr", tcpConf.ListenAddrTLS)
 		go func() {
 			err := tcpConf.ListenTLS(tcphandler.OnTCPConnect)

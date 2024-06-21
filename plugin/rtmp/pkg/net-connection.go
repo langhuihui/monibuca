@@ -43,9 +43,9 @@ const (
 )
 
 type NetConnection struct {
-	*slog.Logger    `json:"-" yaml:"-"`
-	*util.BufReader `json:"-" yaml:"-"`
-	net.Conn        `json:"-" yaml:"-"`
+	*slog.Logger
+	*util.BufReader
+	net.Conn
 	bandwidth       uint32
 	readSeqNum      uint32 // 当前读的字节
 	writeSeqNum     uint32 // 当前写的字节

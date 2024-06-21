@@ -8,22 +8,22 @@ import (
 	"m7s.live/m7s/v5"
 )
 
-type AVSender struct {
+type Sender struct {
 	*NetConnection
 	ChunkHeader
 	errContinue bool
 	lastAbs     uint32
 }
 
-func (av *AVSender) HandleAudio(frame *RTMPAudio) (err error) {
+func (av *Sender) HandleAudio(frame *RTMPAudio) (err error) {
 	return av.SendFrame(&frame.RTMPData)
 }
 
-func (av *AVSender) HandleVideo(frame *RTMPVideo) (err error) {
+func (av *Sender) HandleVideo(frame *RTMPVideo) (err error) {
 	return av.SendFrame(&frame.RTMPData)
 }
 
-func (av *AVSender) SendFrame(frame *RTMPData) (err error) {
+func (av *Sender) SendFrame(frame *RTMPData) (err error) {
 	// seq := frame.Sequence
 	payloadLen := frame.Size
 	if av.errContinue {
@@ -67,7 +67,7 @@ func (av *AVSender) SendFrame(frame *RTMPData) (err error) {
 	return
 }
 
-type RTMPReceiver struct {
+type Receiver struct {
 	*m7s.Publisher
 	NetStream
 }

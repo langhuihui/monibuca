@@ -8,6 +8,7 @@ type (
 	}
 	PCMACtx AudioCtx
 	PCMUCtx AudioCtx
+	OPUSCtx AudioCtx
 	AACCtx  struct {
 		AudioCtx
 	}
@@ -35,4 +36,8 @@ func (*PCMACtx) FourCC() FourCC {
 
 func (*AACCtx) FourCC() FourCC {
 	return FourCC_MP4A
+}
+
+func (*OPUSCtx) FourCC() FourCC {
+	return FourCC_OPUS
 }

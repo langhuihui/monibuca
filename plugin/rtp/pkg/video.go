@@ -1,8 +1,10 @@
 package rtp
 
 import (
+	"encoding/base64"
 	"errors"
 	"fmt"
+	"regexp"
 	"slices"
 	"time"
 
@@ -35,10 +37,11 @@ type (
 )
 
 var (
-	_ IAVFrame       = (*RTPVideo)(nil)
-	_ IVideoCodecCtx = (*RTPH264Ctx)(nil)
-	_ IVideoCodecCtx = (*RTPH265Ctx)(nil)
-	_ IVideoCodecCtx = (*RTPAV1Ctx)(nil)
+	_        IAVFrame       = (*RTPVideo)(nil)
+	_        IVideoCodecCtx = (*RTPH264Ctx)(nil)
+	_        IVideoCodecCtx = (*RTPH265Ctx)(nil)
+	_        IVideoCodecCtx = (*RTPAV1Ctx)(nil)
+	spropReg                = regexp.MustCompile(`sprop-parameter-sets=(.+),([^;]+)(;|$)`)
 )
 
 func (r *RTPVideo) Parse(t *AVTrack) (isIDR, isSeq bool, raw any, err error) {
@@ -49,7 +52,16 @@ func (r *RTPVideo) Parse(t *AVTrack) (isIDR, isSeq bool, raw any, err error) {
 			ctx = t.ICodecCtx.(*RTPH264Ctx)
 		} else {
 			ctx = &RTPH264Ctx{}
+			//packetization-mode=1; sprop-parameter-sets=J2QAKaxWgHgCJ+WagICAgQ==,KO48sA==; profile-level-id=640029
 			ctx.RTPCodecParameters = *r.RTPCodecParameters
+			if match := spropReg.FindStringSubmatch(ctx.SDPFmtpLine); len(match) > 2 {
+				if sps, err := base64.StdEncoding.DecodeString(match[1]); err == nil {
+					ctx.SPS = [][]byte{sps}
+				}
+				if pps, err := base64.StdEncoding.DecodeString(match[2]); err == nil {
+					ctx.PPS = [][]byte{pps}
+				}
+			}
 			t.ICodecCtx = ctx
 		}
 		raw, err = r.ToRaw(ctx)

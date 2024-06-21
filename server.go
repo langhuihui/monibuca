@@ -27,7 +27,7 @@ import (
 
 var (
 	Version       = "v5.0.0"
-	MergeConfigs  = []string{"Publish", "Subscribe", "HTTP"}
+	MergeConfigs  = []string{"Publish", "Subscribe", "HTTP", "PublicIP"}
 	ExecPath      = os.Args[0]
 	ExecDir       = filepath.Dir(ExecPath)
 	serverIndexG  atomic.Uint32
@@ -377,7 +377,9 @@ func (s *Server) onUnsubscribe(subscriber *Subscriber) {
 
 func (s *Server) onUnpublish(publisher *Publisher) {
 	s.Streams.Remove(publisher)
-	s.Waiting.Add(publisher)
+	if publisher.Subscribers.Length > 0 {
+		s.Waiting.Add(publisher)
+	}
 	s.Info("unpublish", "streamPath", publisher.StreamPath, "count", s.Streams.Length, "reason", publisher.StopReason())
 	for subscriber := range publisher.SubscriberRange {
 		waitCloseTimeout := publisher.WaitCloseTimeout

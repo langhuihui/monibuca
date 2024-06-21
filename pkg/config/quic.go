@@ -9,7 +9,7 @@ import (
 )
 
 type QuicConfig interface {
-	ListenQuic(context.Context, QuicPlugin) error
+	ListenQuic(context.Context, func(connection quic.Connection)) error
 }
 
 type Quic struct {
@@ -18,7 +18,7 @@ type Quic struct {
 	KeyFile    string `desc:"私钥文件"`
 }
 
-func (q *Quic) ListenQuic(ctx context.Context, plugin QuicPlugin) error {
+func (q *Quic) ListenQuic(ctx context.Context, handler func(connection quic.Connection)) error {
 	listener, err := quic.ListenAddr(q.ListenAddr, q.generateTLSConfig(), &quic.Config{
 		EnableDatagrams: true,
 	})
@@ -31,7 +31,7 @@ func (q *Quic) ListenQuic(ctx context.Context, plugin QuicPlugin) error {
 		if err != nil {
 			return err
 		}
-		go plugin.ServeQuic(conn)
+		go handler(conn)
 	}
 }
 

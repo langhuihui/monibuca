@@ -232,7 +232,7 @@ func createH26xFrame(from *AVFrame, codecID VideoCodecID) (frame IAVFrame, err e
 	rtmpVideo.Timestamp = uint32(from.Timestamp / time.Millisecond)
 	rtmpVideo.ScalableMemoryAllocator = from.Wraps[0].GetScalableMemoryAllocator()
 	nalus := from.Raw.(Nalus)
-	rtmpVideo.RecycleIndexes = make([]int, len(nalus.Nalus)) // Recycle partial data
+	rtmpVideo.RecycleIndexes = make([]int, 0, len(nalus.Nalus)) // Recycle partial data
 	head := rtmpVideo.NextN(5)
 	head[0] = util.Conditoinal[byte](from.IDR, 0x10, 0x20) | byte(codecID)
 	head[1] = 1

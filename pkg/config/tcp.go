@@ -22,6 +22,7 @@ type TCP struct {
 	ListenNum     int    `desc:"同时并行监听数量，0为CPU核心数量"` //同时并行监听数量，0为CPU核心数量
 	NoDelay       bool   `desc:"是否禁用Nagle算法"`        //是否禁用Nagle算法
 	KeepAlive     bool   `desc:"是否启用KeepAlive"`      //是否启用KeepAlive
+	AutoListen    bool   `default:"true" desc:"是否自动监听"`
 	listener      net.Listener
 	listenerTls   net.Listener
 }

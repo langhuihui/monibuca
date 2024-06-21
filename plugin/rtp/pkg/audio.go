@@ -42,11 +42,17 @@ type (
 		SequenceNumber uint16
 		SSRC           uint32
 	}
-	RTPG711Ctx struct {
+	RTPPCMACtx struct {
 		RTPCtx
+		codec.PCMACtx
+	}
+	RTPPCMUCtx struct {
+		RTPCtx
+		codec.PCMUCtx
 	}
 	RTPOPUSCtx struct {
 		RTPCtx
+		codec.OPUSCtx
 	}
 	RTPAACCtx struct {
 		RTPCtx
@@ -100,20 +106,21 @@ type RTPAudio struct {
 func (r *RTPAudio) Parse(t *AVTrack) (isIDR, isSeq bool, raw any, err error) {
 	switch r.MimeType {
 	case webrtc.MimeTypeOpus:
-		// var ctx RTPOPUSCtx
-		// ctx.FourCC = codec.FourCC_OPUS
-		// ctx.RTPCodecParameters = *r.RTPCodecParameters
-		// codecCtx = &ctx
+		var ctx RTPOPUSCtx
+		ctx.RTPCodecParameters = *r.RTPCodecParameters
+		t.ICodecCtx = &ctx
 	case webrtc.MimeTypePCMA:
-		// var ctx RTPG711Ctx
-		// ctx.FourCC = codec.FourCC_ALAW
-		// ctx.RTPCodecParameters = *r.RTPCodecParameters
-		// codecCtx = &ctx
+		var ctx RTPPCMACtx
+		ctx.RTPCodecParameters = *r.RTPCodecParameters
+		t.ICodecCtx = &ctx
 	case webrtc.MimeTypePCMU:
-		// var ctx RTPG711Ctx
-		// ctx.FourCC = codec.FourCC_ULAW
-		// ctx.RTPCodecParameters = *r.RTPCodecParameters
-		// codecCtx = &ctx
+		var ctx RTPPCMUCtx
+		ctx.RTPCodecParameters = *r.RTPCodecParameters
+		t.ICodecCtx = &ctx
+	case "audio/MPEG4-GENERIC":
+		var ctx RTPAACCtx
+		ctx.RTPCodecParameters = *r.RTPCodecParameters
+		t.ICodecCtx = &ctx
 	}
 	return
 }

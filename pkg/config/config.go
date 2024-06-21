@@ -4,15 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"net"
-	"net/http"
 	"os"
 	"reflect"
 	"regexp"
 	"strings"
 	"time"
 
-	"github.com/quic-go/quic-go"
 	"gopkg.in/yaml.v3"
 )
 
@@ -35,26 +32,6 @@ type Config struct {
 
 var durationType = reflect.TypeOf(time.Duration(0))
 var regexpType = reflect.TypeOf(Regexp{})
-
-type Plugin interface {
-	// 可能的入参类型：FirstConfig 第一次初始化配置，Config 后续配置更新，SE系列（StateEvent）流状态变化事件
-	OnEvent(any)
-}
-
-type TCPPlugin interface {
-	Plugin
-	ServeTCP(net.Conn)
-}
-
-type HTTPPlugin interface {
-	Plugin
-	http.Handler
-}
-
-type QuicPlugin interface {
-	Plugin
-	ServeQuic(quic.Connection)
-}
 
 func (config *Config) Range(f func(key string, value Config)) {
 	if m, ok := config.GetValue().(map[string]Config); ok {

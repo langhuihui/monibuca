@@ -5,8 +5,8 @@ type NetStream struct {
 	StreamID uint32
 }
 
-func (ns *NetStream) CreateAudioSender(c bool) *AVSender {
-	var av AVSender
+func (ns *NetStream) CreateAudioSender(c bool) *Sender {
+	var av Sender
 	av.NetConnection = ns.NetConnection
 	av.ChunkStreamID = RTMP_CSID_AUDIO
 	av.MessageTypeID = RTMP_MSG_AUDIO
@@ -15,8 +15,8 @@ func (ns *NetStream) CreateAudioSender(c bool) *AVSender {
 	return &av
 }
 
-func (ns *NetStream) CreateVideoSender(c bool) *AVSender {
-	var av AVSender
+func (ns *NetStream) CreateVideoSender(c bool) *Sender {
+	var av Sender
 	av.NetConnection = ns.NetConnection
 	av.ChunkStreamID = RTMP_CSID_VIDEO
 	av.MessageTypeID = RTMP_MSG_VIDEO
@@ -25,7 +25,7 @@ func (ns *NetStream) CreateVideoSender(c bool) *AVSender {
 	return &av
 }
 
-func (ns *NetStream) CreateSender(c bool) (audio *AVSender, video *AVSender) {
+func (ns *NetStream) CreateSender(c bool) (audio *Sender, video *Sender) {
 	return ns.CreateAudioSender(c), ns.CreateVideoSender(c)
 }
 

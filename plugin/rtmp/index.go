@@ -41,7 +41,7 @@ func (p *RTMPPlugin) OnPublish(puber *m7s.Publisher) {
 
 func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
 	logger := p.Logger.With("remote", conn.RemoteAddr().String())
-	receivers := make(map[uint32]*RTMPReceiver)
+	receivers := make(map[uint32]*Receiver)
 	var err error
 	nc := NewNetConnection(conn, logger)
 	defer func() {
@@ -148,7 +148,7 @@ func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
 					// }
 					// s := engine.Streams.Get(nc.appName + "/" + cmd.StreamName)
 					// if s != nil && s.Publisher != nil {
-					// 	if p, ok := s.Publisher.(*RTMPReceiver); ok {
+					// 	if p, ok := s.Publisher.(*Receiver); ok {
 					// 		// m.CommandName = "releaseStream_result"
 					// 		p.Stop()
 					// 		delete(receivers, p.StreamID)
@@ -156,7 +156,7 @@ func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
 					// }
 					// err = nc.SendMessage(RTMP_MSG_AMF0_COMMAND, m)
 				case *PublishMessage:
-					receiver := &RTMPReceiver{
+					receiver := &Receiver{
 						NetStream: NetStream{
 							NetConnection: nc,
 							StreamID:      cmd.StreamId,

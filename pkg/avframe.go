@@ -55,11 +55,11 @@ type (
 	}
 	AVRing    = util.Ring[AVFrame]
 	DataFrame struct {
-		sync.RWMutex `json:"-" yaml:"-"` // 读写锁
-		discard      bool
-		Sequence     uint32    // 在一个Track中的序号
-		WriteTime    time.Time // 写入时间,可用于比较两个帧的先后
-		Raw          any       `json:"-" yaml:"-"` // 裸格式
+		sync.RWMutex
+		discard   bool
+		Sequence  uint32    // 在一个Track中的序号
+		WriteTime time.Time // 写入时间,可用于比较两个帧的先后
+		Raw       any       // 裸格式
 	}
 )
 

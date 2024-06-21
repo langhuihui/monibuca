@@ -1,21 +1,20 @@
 global:
-  loglevel: debug
+  loglevel: trace
   enableauth: true
   tcp:
     listenaddr: :50051
-  # publish:
+  publish:
+    pubaudio: false
+#    ringsize: 20-250
+#    buffertime: 10s
   #   speed: 1
 console:
   secret: de2c0bb9fd47684adc07a426e139239b
 logrotate:
   level: debug
-webrtc:
-  publish:
-    pubaudio: false
 rtmp:
   chunksize: 2048
   publish:
-    pubaudio: false
     # idletimeout: 10s
     # closedelaytimeout: 4s
   subscribe:
