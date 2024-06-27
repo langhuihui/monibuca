@@ -1,7 +1,9 @@
 package pkg
 
 import (
+	"encoding/binary"
 	"fmt"
+	"io"
 	"time"
 
 	"m7s.live/m7s/v5/pkg/codec"
@@ -12,6 +14,13 @@ type AnnexB struct {
 	PTS time.Duration
 	DTS time.Duration
 	util.RecyclableMemory
+}
+
+func (a *AnnexB) Dump(t byte, w io.Writer) {
+	m := a.Borrow(4 + a.Size)
+	binary.BigEndian.PutUint32(m, uint32(a.Size))
+	a.CopyTo(m[4:])
+	w.Write(m)
 }
 
 // DecodeConfig implements pkg.IAVFrame.

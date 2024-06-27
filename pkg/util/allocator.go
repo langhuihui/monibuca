@@ -164,9 +164,18 @@ func (a *Allocator) Init(size int) {
 	a.offsetTree = root
 }
 
+func (a *Allocator) Find(size int) (offset int) {
+	block := a.findAvailableBlock(size)
+	if block == nil {
+		return -1
+	}
+	offset = block.Start
+	return
+}
+
 func (a *Allocator) Allocate(size int) (offset int) {
 	//a.history = append(a.history, History{Malloc: true, Size: size})
-	block := a.findAvailableBlock(a.sizeTree, size)
+	block := a.findAvailableBlock(size)
 	if block == nil {
 		return -1
 	}
@@ -182,8 +191,8 @@ func (a *Allocator) Allocate(size int) (offset int) {
 	return
 }
 
-func (a *Allocator) findAvailableBlock(block *Block, size int) *Block {
-	var lastAvailableBlock *Block
+func (a *Allocator) findAvailableBlock(size int) (lastAvailableBlock *Block) {
+	block := a.sizeTree
 	for block != nil {
 		if bSize := block.End - block.Start; bSize == size {
 			return block
@@ -194,7 +203,7 @@ func (a *Allocator) findAvailableBlock(block *Block, size int) *Block {
 			block = tree.right
 		}
 	}
-	return lastAvailableBlock
+	return
 }
 
 func (a *Allocator) getBlock(start, end int) *Block {

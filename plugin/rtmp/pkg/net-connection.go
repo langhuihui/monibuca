@@ -127,7 +127,7 @@ func (conn *NetConnection) readChunk() (msg *Chunk, err error) {
 	if err != nil {
 		return nil, errors.New("get chunk stream id error :" + err.Error())
 	}
-	// println("ChunkStreamID:", ChunkStreamID, "ChunkType:", ChunkType)
+	//println("ChunkStreamID:", ChunkStreamID, "ChunkType:", ChunkType)
 	chunk, ok := conn.incommingChunks[ChunkStreamID]
 
 	if ChunkType != 3 && ok && chunk.bufLen > 0 {

@@ -13,7 +13,7 @@ import (
 type (
 	Track struct {
 		*slog.Logger
-		Ready       *util.Promise[struct{}]
+		ready       *util.Promise[struct{}]
 		FrameType   reflect.Type
 		bytesIn     int
 		frameCount  int
@@ -56,7 +56,7 @@ func NewAVTrack(args ...any) (t *AVTrack) {
 			t.RingWriter.SLogger = t.Logger
 		}
 	}
-	t.Ready = util.NewPromise(struct{}{})
+	t.ready = util.NewPromise(struct{}{})
 	t.Info("create")
 	return
 }
@@ -75,6 +75,21 @@ func (t *Track) AddBytesIn(n int) {
 		t.frameCount = 0
 		t.lastBPSTime = time.Now()
 	}
+}
+
+func (t *Track) Ready(err error) {
+	if !t.IsReady() {
+		t.ready.Fulfill(err)
+	}
+}
+
+func (t *Track) IsReady() bool {
+	return !t.ready.IsPending()
+}
+
+func (t *Track) WaitReady() error {
+	_, err := t.ready.Await()
+	return err
 }
 
 func (t *Track) Trace(msg string, fields ...any) {

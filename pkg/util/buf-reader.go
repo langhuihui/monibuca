@@ -2,6 +2,8 @@ package util
 
 import (
 	"io"
+	"net/textproto"
+	"strings"
 )
 
 const defaultBufSize = 1 << 14
@@ -34,6 +36,10 @@ func (r *BufReader) Recycle() {
 	r.Allocator.Recycle()
 }
 
+func (r *BufReader) Buffered() int {
+	return r.buf.Length
+}
+
 func (r *BufReader) Peek(n int) (buf []byte, err error) {
 	defer func(snap MemoryReader) {
 		l := r.buf.Length + n
@@ -52,19 +58,14 @@ func (r *BufReader) Peek(n int) (buf []byte, err error) {
 }
 
 func (r *BufReader) eat() error {
-	buf := r.Allocator.Malloc(r.BufLen)
-	if n, err := r.reader.Read(buf); err != nil {
-		r.Allocator.Free(buf)
+	buf, err := r.Allocator.Read(r.reader, r.BufLen)
+	if err != nil {
 		return err
-	} else {
-		if n < r.BufLen {
-			r.Allocator.Free(buf[n:])
-			buf = buf[:n]
-		}
-		r.buf.Buffers = append(r.buf.Buffers, buf)
-		r.buf.Size += n
-		r.buf.Length += n
 	}
+	n := len(buf)
+	r.buf.Buffers = append(r.buf.Buffers, buf)
+	r.buf.Size += n
+	r.buf.Length += n
 	return nil
 }
 
@@ -139,12 +140,14 @@ func (r *BufReader) ReadNto(n int, to []byte) (err error) {
 		l += ll
 	})
 }
+
 func (r *BufReader) ReadString(n int) (s string, err error) {
 	err = r.ReadRange(n, func(buf []byte) {
 		s += string(buf)
 	})
 	return
 }
+
 func (r *BufReader) ReadBytes(n int) (mem Memory, err error) {
 	err = r.ReadRange(n, func(buf []byte) {
 		mem.Buffers = append(mem.Buffers, buf)
@@ -155,4 +158,46 @@ func (r *BufReader) ReadBytes(n int) (mem Memory, err error) {
 
 func (r *BufReader) recycleFront() {
 	r.buf.ClipFront(r.Allocator.Free)
+}
+
+func (r *BufReader) ReadLine() (line string, err error) {
+	var lastb, curb byte
+	snap, i := r.buf, 0
+	for {
+		if curb, err = r.ReadByte(); err != nil {
+			return "", err
+		} else {
+			i++
+			if l := r.buf.Length; curb == '\n' {
+				snap.Length = l + i
+				r.buf = snap
+				err = r.ReadRange(i, func(buf []byte) {
+					line = line + string(buf)
+				})
+				if lastb == '\r' {
+					line = line[:i-2]
+				} else {
+					line = line[:i-1]
+				}
+				return
+			}
+			lastb = curb
+		}
+	}
+}
+
+func (r *BufReader) ReadMIMEHeader() (textproto.MIMEHeader, error) {
+	result := make(textproto.MIMEHeader)
+	for {
+		l, err := r.ReadLine()
+		if err != nil {
+			return nil, err
+		}
+		if l == "" {
+			break
+		}
+		key, value, _ := strings.Cut(l, ":")
+		result.Add(key, strings.Trim(value, " "))
+	}
+	return result, nil
 }

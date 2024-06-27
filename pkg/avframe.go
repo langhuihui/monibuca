@@ -1,6 +1,7 @@
 package pkg
 
 import (
+	"io"
 	"net"
 	"sync"
 	"time"
@@ -38,6 +39,7 @@ type (
 		GetSize() int
 		Recycle()
 		String() string
+		Dump(byte, io.Writer)
 	}
 
 	Nalu = [][]byte

@@ -25,6 +25,30 @@ func (f FourCC) String() string {
 	return string(f[:])
 }
 
+func (f FourCC) Name() string {
+	switch f {
+	case FourCC_H264:
+		return "H264"
+	case FourCC_H265:
+		return "H265"
+	case FourCC_AV1:
+		return "AV1"
+	case FourCC_VP9:
+		return "VP9"
+	case FourCC_VP8:
+		return "VP8"
+	case FourCC_MP4A:
+		return "AAC"
+	case FourCC_OPUS:
+		return "OPUS"
+	case FourCC_ALAW:
+		return "PCMA"
+	case FourCC_ULAW:
+		return "PCMU"
+	}
+	return ""
+}
+
 func (f FourCC) Uint32() uint32 {
 	return binary.BigEndian.Uint32(f[:])
 }

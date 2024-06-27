@@ -3,6 +3,7 @@ package util
 import (
 	"container/list"
 	"fmt"
+	"io"
 	"slices"
 	"sync"
 	"unsafe"
@@ -63,6 +64,13 @@ func (ma *MemoryAllocator) Recycle() {
 	lock.Unlock()
 }
 
+func (ma *MemoryAllocator) Find(size int) (memory []byte) {
+	if offset := ma.allocator.Find(size); offset != -1 {
+		memory = ma.memory[offset : offset+size]
+	}
+	return
+}
+
 func (ma *MemoryAllocator) Malloc(size int) (memory []byte) {
 	if offset := ma.allocator.Allocate(size); offset != -1 {
 		memory = ma.memory[offset : offset+size]
@@ -78,10 +86,10 @@ func (ma *MemoryAllocator) free(start, size int) (ret bool) {
 	return true
 }
 
-func (ma *MemoryAllocator) Free(mem []byte) bool {
-	start := int(int64(uintptr(unsafe.Pointer(&mem[0]))) - ma.start)
-	return ma.free(start, len(mem))
-}
+//func (ma *MemoryAllocator) Free(mem []byte) bool {
+//	start := int(int64(uintptr(unsafe.Pointer(&mem[0]))) - ma.start)
+//	return ma.free(start, len(mem))
+//}
 
 func (ma *MemoryAllocator) GetBlocks() (blocks []*Block) {
 	return ma.allocator.GetBlocks()
@@ -139,9 +147,34 @@ func (sma *ScalableMemoryAllocator) Recycle() {
 	}
 }
 
-func (sma *ScalableMemoryAllocator) Malloc(size int) (memory []byte) {
+// Borrow = Malloc + Free = Find, must use the memory at once
+func (sma *ScalableMemoryAllocator) Borrow(size int) (memory []byte) {
 	if sma == nil || size > MaxBlockSize {
 		return
+	}
+	defer sma.addMallocCount(size)
+	var child *MemoryAllocator
+	for _, child = range sma.children {
+		if memory = child.Find(size); memory != nil {
+			return
+		}
+	}
+	for sma.childSize < MaxBlockSize {
+		sma.childSize = sma.childSize << 1
+		if sma.childSize >= size {
+			break
+		}
+	}
+	child = GetMemoryAllocator(sma.childSize)
+	sma.size += child.Size
+	memory = child.Find(size)
+	sma.children = append(sma.children, child)
+	return
+}
+
+func (sma *ScalableMemoryAllocator) Malloc(size int) (memory []byte) {
+	if sma == nil || size > MaxBlockSize {
+		return make([]byte, size)
 	}
 	if EnableCheckSize {
 		defer sma.checkSize()
@@ -168,6 +201,27 @@ func (sma *ScalableMemoryAllocator) Malloc(size int) (memory []byte) {
 
 func (sma *ScalableMemoryAllocator) GetScalableMemoryAllocator() *ScalableMemoryAllocator {
 	return sma
+}
+
+func (sma *ScalableMemoryAllocator) Read(reader io.Reader, n int) (mem []byte, err error) {
+	mem = sma.Malloc(n)
+	meml := n
+	if n, err = reader.Read(mem); err == nil {
+		if n < meml {
+			sma.Free(mem[n:])
+			mem = mem[:n]
+		}
+	} else {
+		sma.Free(mem)
+	}
+	return
+}
+
+func (sma *ScalableMemoryAllocator) FreeRest(mem *[]byte, keep int) {
+	if keep < len(*mem) {
+		sma.Free((*mem)[keep:])
+		*mem = (*mem)[:keep]
+	}
 }
 
 func (sma *ScalableMemoryAllocator) Free(mem []byte) bool {

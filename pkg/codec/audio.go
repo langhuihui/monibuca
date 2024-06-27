@@ -11,6 +11,10 @@ type (
 	OPUSCtx AudioCtx
 	AACCtx  struct {
 		AudioCtx
+		Asc []byte
+	}
+	IAACCtx interface {
+		GetAACCtx() *AACCtx
 	}
 )
 
@@ -24,6 +28,10 @@ func (ctx *AudioCtx) GetChannels() int {
 
 func (ctx *AudioCtx) GetSampleSize() int {
 	return ctx.SampleSize
+}
+
+func (ctx *AACCtx) GetAACCtx() *AACCtx {
+	return ctx
 }
 
 func (*PCMUCtx) FourCC() FourCC {

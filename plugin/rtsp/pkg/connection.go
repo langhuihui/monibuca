@@ -1,15 +1,15 @@
 package rtsp
 
 import (
-	"bufio"
 	"github.com/AlexxIT/go2rtc/pkg/core"
-	"github.com/AlexxIT/go2rtc/pkg/tcp"
 	"log/slog"
 	"m7s.live/m7s/v5/pkg/util"
 	"net"
 	"net/url"
+	"runtime"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -18,17 +18,15 @@ const Timeout = time.Second * 5
 func NewNetConnection(conn net.Conn, logger *slog.Logger) *NetConnection {
 	defer logger.Info("new connection")
 	return &NetConnection{
-		conn:       conn,
-		Logger:     logger,
-		BufReader:  util.NewBufReader(conn),
-		textReader: bufio.NewReader(conn),
+		conn:      conn,
+		Logger:    logger,
+		BufReader: util.NewBufReader(conn),
 	}
 }
 
 type NetConnection struct {
 	*slog.Logger
 	*util.BufReader
-	textReader  *bufio.Reader
 	Backchannel bool
 	Media       string
 	PacketSize  uint16
@@ -42,18 +40,27 @@ type NetConnection struct {
 
 	// internal
 
-	auth      *tcp.Auth
+	auth      *util.Auth
 	conn      net.Conn
 	keepalive int
-	mode      core.Mode
 	sequence  int
 	Session   string
 	sdp       string
 	uri       string
+	writing   atomic.Bool
+	state     State
+	stateMu   sync.Mutex
+	SDP       string
+}
 
-	state   State
-	stateMu sync.Mutex
-	SDP     string
+func (c *NetConnection) StartWrite() {
+	for !c.writing.CompareAndSwap(false, true) {
+		runtime.Gosched()
+	}
+}
+
+func (c *NetConnection) StopWrite() {
+	c.writing.Store(false)
 }
 
 func (c *NetConnection) Destroy() {
@@ -98,7 +105,7 @@ const (
 	StatePlay
 )
 
-func (c *NetConnection) WriteRequest(req *tcp.Request) error {
+func (c *NetConnection) WriteRequest(req *util.Request) error {
 	if req.Proto == "" {
 		req.Proto = ProtoRTSP
 	}
@@ -130,11 +137,11 @@ func (c *NetConnection) WriteRequest(req *tcp.Request) error {
 	return req.Write(c.conn)
 }
 
-func (c *NetConnection) ReadRequest() (req *tcp.Request, err error) {
+func (c *NetConnection) ReadRequest() (req *util.Request, err error) {
 	if err = c.conn.SetReadDeadline(time.Now().Add(Timeout)); err != nil {
 		return
 	}
-	req, err = tcp.ReadRequest(c.textReader)
+	req, err = util.ReadRequest(c.BufReader)
 	if err != nil {
 		return
 	}
@@ -142,7 +149,7 @@ func (c *NetConnection) ReadRequest() (req *tcp.Request, err error) {
 	return
 }
 
-func (c *NetConnection) WriteResponse(res *tcp.Response) error {
+func (c *NetConnection) WriteResponse(res *util.Response) error {
 	if res.Proto == "" {
 		res.Proto = ProtoRTSP
 	}
@@ -182,9 +189,16 @@ func (c *NetConnection) WriteResponse(res *tcp.Response) error {
 	return res.Write(c.conn)
 }
 
-func (c *NetConnection) ReadResponse() (*tcp.Response, error) {
+func (c *NetConnection) ReadResponse() (*util.Response, error) {
 	if err := c.conn.SetReadDeadline(time.Now().Add(Timeout)); err != nil {
 		return nil, err
 	}
-	return tcp.ReadResponse(c.textReader)
+	return util.ReadResponse(c.BufReader)
+}
+
+func (c *NetConnection) Write(chunk []byte) (int, error) {
+	if err := c.conn.SetWriteDeadline(time.Now().Add(Timeout)); err != nil {
+		return 0, err
+	}
+	return c.conn.Write(chunk)
 }

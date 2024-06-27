@@ -58,7 +58,7 @@ func (s *Server) api_Stream_AnnexB_(rw http.ResponseWriter, r *http.Request) {
 		http.Error(rw, pkg.ErrNotFound.Error(), http.StatusNotFound)
 		return
 	}
-	_, err := publisher.VideoTrack.Ready.Await()
+	err := publisher.VideoTrack.WaitReady()
 	if err != nil {
 		http.Error(rw, err.Error(), http.StatusInternalServerError)
 		return

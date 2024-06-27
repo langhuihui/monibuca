@@ -44,6 +44,12 @@ var (
 	spropReg                = regexp.MustCompile(`sprop-parameter-sets=(.+),([^;]+)(;|$)`)
 )
 
+const (
+	startBit = 1 << 7
+	endBit   = 1 << 6
+	MTUSize  = 1460
+)
+
 func (r *RTPVideo) Parse(t *AVTrack) (isIDR, isSeq bool, raw any, err error) {
 	switch r.MimeType {
 	case webrtc.MimeTypeH264:
@@ -149,7 +155,7 @@ func (h265 *RTPH265Ctx) GetInfo() string {
 
 func (h264 *RTPH264Ctx) CreateFrame(from *AVFrame) (frame IAVFrame, err error) {
 	var r RTPVideo
-	r.ScalableMemoryAllocator = from.Wraps[0].GetScalableMemoryAllocator()
+	//r.ScalableMemoryAllocator = from.Wraps[0].GetScalableMemoryAllocator()
 	nalus := from.Raw.(Nalus)
 	nalutype := nalus.H264Type()
 	var lastPacket *rtp.Packet
@@ -161,7 +167,7 @@ func (h264 *RTPH264Ctx) CreateFrame(from *AVFrame) (frame IAVFrame, err error) {
 				SequenceNumber: h264.SequenceNumber,
 				Timestamp:      uint32(nalus.PTS),
 				SSRC:           h264.SSRC,
-				PayloadType:    96,
+				PayloadType:    uint8(h264.PayloadType),
 			},
 			Payload: payload,
 		}
@@ -172,21 +178,18 @@ func (h264 *RTPH264Ctx) CreateFrame(from *AVFrame) (frame IAVFrame, err error) {
 	}
 	for _, nalu := range nalus.Nalus {
 		reader := util.NewReadableBuffersFromBytes(nalu...)
-		if startIndex := len(r.Packets); reader.Length > 1460 {
+		if startIndex := len(r.Packets); reader.Length > MTUSize {
 			//fu-a
 			for reader.Length > 0 {
-				mem := r.NextN(1460)
+				mem := r.Malloc(MTUSize)
 				n := reader.ReadBytesTo(mem[1:])
 				mem[0] = codec.NALU_FUA.Or(mem[1] & 0x60)
-				if n < 1459 {
-					r.Free(mem[n+1:])
-					mem = mem[:n+1]
-				}
-				r.UpdateBuffer(-1, mem)
+				r.FreeRest(&mem, n+1)
+				r.AddRecycleBytes(mem)
 				r.Packets = append(r.Packets, createPacket(mem))
 			}
-			r.Packets[startIndex].Payload[1] |= 1 << 7 // set start bit
-			lastPacket.Payload[1] |= 1 << 6            // set end bit
+			r.Packets[startIndex].Payload[1] |= startBit
+			lastPacket.Payload[1] |= endBit
 		} else {
 			mem := r.NextN(reader.Length)
 			reader.ReadBytesTo(mem)

@@ -1,5 +1,5 @@
 global:
-  loglevel: trace
+  loglevel: debug
   enableauth: true
   tcp:
     listenaddr: :50051
@@ -12,8 +12,12 @@ console:
   secret: de2c0bb9fd47684adc07a426e139239b
 logrotate:
   level: debug
+rtsp:
+  subscribe:
+    subaudio: false
 rtmp:
-  chunksize: 2048
+  tcp:
+    listenaddr: :11935
   publish:
     # idletimeout: 10s
     # closedelaytimeout: 4s

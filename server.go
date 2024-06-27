@@ -410,7 +410,7 @@ func (s *Server) OnPublish(publisher *Publisher) error {
 	publisher.ID = s.pidG
 	publisher.Logger = p.With("streamPath", publisher.StreamPath, "pubID", publisher.ID)
 	publisher.TimeoutTimer = time.NewTimer(p.config.PublishTimeout)
-	publisher.Info("publish")
+	publisher.Start()
 	if waiting, ok := s.Waiting.Get(publisher.StreamPath); ok {
 		publisher.TakeOver(waiting)
 		s.Waiting.Remove(waiting)

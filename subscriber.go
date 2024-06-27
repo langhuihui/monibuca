@@ -69,11 +69,11 @@ func (ps *PubSubBase) Init(p *Plugin, streamPath string, conf any, options ...an
 		for key, value := range ps.Args {
 			if strings.HasSuffix(key, "ArgName") {
 				targetArgName := strings.TrimSuffix(key, "ArgName")
-				cc[targetArgName] = ps.Args.Get(value[0])[0]
+				cc[strings.ToLower(targetArgName)] = ps.Args.Get(value[0])[0]
 				ignores[value[0]] = struct{}{}
 				delete(cc, value[0])
 			} else if _, ok := ignores[key]; !ok {
-				cc[key] = value[0]
+				cc[strings.ToLower(key)] = value[0]
 			}
 		}
 		c.ParseModifyFile(cc)
@@ -118,7 +118,7 @@ func PlayBlock[A any, V any](s *Subscriber, onAudio func(A) error, onVideo func(
 			}
 		}
 		if at != nil {
-			if _, err := at.Ready.Await(); err != nil {
+			if err := at.WaitReady(); err != nil {
 				return
 			}
 			ar = NewAVRingReader(at)
@@ -142,7 +142,7 @@ func PlayBlock[A any, V any](s *Subscriber, onAudio func(A) error, onVideo func(
 			}
 		}
 		if vt != nil {
-			if _, err := vt.Ready.Await(); err != nil {
+			if err := vt.WaitReady(); err != nil {
 				return
 			}
 			vr = NewAVRingReader(vt)

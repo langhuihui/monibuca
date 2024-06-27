@@ -337,6 +337,9 @@ func (p *Plugin) Subscribe(streamPath string, options ...any) (subscriber *Subsc
 		}
 	}
 	subscriber.Init(p, streamPath, &subscriber.Subscribe, options...)
+	if subscriber.Subscribe.BufferTime > 0 {
+		subscriber.Subscribe.SubMode = SUBMODE_BUFFER
+	}
 	_, err = p.server.Call(subscriber)
 	return
 }

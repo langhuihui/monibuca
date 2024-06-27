@@ -1,7 +1,11 @@
 package rtp
 
 import (
+	"encoding/base64"
+	"encoding/binary"
+	"encoding/hex"
 	"fmt"
+	"io"
 	"time"
 	"unsafe"
 
@@ -16,6 +20,21 @@ type RTPData struct {
 	*webrtc.RTPCodecParameters
 	Packets []*rtp.Packet
 	util.RecyclableMemory
+}
+
+func (r *RTPData) Dump(t byte, w io.Writer) {
+	m := r.Borrow(3 + len(r.Packets)*2 + r.GetSize())
+	m[0] = t
+	binary.BigEndian.PutUint16(m[1:], uint16(len(r.Packets)))
+	offset := 3
+	for _, p := range r.Packets {
+		size := p.MarshalSize()
+		binary.BigEndian.PutUint16(m[offset:], uint16(size))
+		offset += 2
+		p.MarshalTo(m[offset:])
+		offset += size
+	}
+	w.Write(m)
 }
 
 func (r *RTPData) String() (s string) {
@@ -59,16 +78,16 @@ type (
 		codec.AACCtx
 	}
 	IRTPCtx interface {
-		GetRTPCodecCapability() webrtc.RTPCodecCapability
+		GetRTPCodecParameter() webrtc.RTPCodecParameters
 	}
 )
 
 func (r *RTPCtx) GetInfo() string {
-	return r.GetRTPCodecCapability().SDPFmtpLine
+	return r.GetRTPCodecParameter().SDPFmtpLine
 }
 
-func (r *RTPCtx) GetRTPCodecCapability() webrtc.RTPCodecCapability {
-	return r.RTPCodecCapability
+func (r *RTPCtx) GetRTPCodecParameter() webrtc.RTPCodecParameters {
+	return r.RTPCodecParameters
 }
 
 func (r *RTPCtx) GetSequenceFrame() IAVFrame {
@@ -84,7 +103,7 @@ func (r *RTPData) DecodeConfig(t *AVTrack, from ICodecCtx) (err error) {
 		ctx.MimeType = webrtc.MimeTypeH264
 		ctx.ClockRate = 90000
 		spsInfo := ctx.SPSInfo
-		ctx.SDPFmtpLine = fmt.Sprintf("profile-level-id=%02x%02x%02x;level-asymmetry-allowed=1;packetization-mode=1", spsInfo.ProfileIdc, spsInfo.ConstraintSetFlag, spsInfo.LevelIdc)
+		ctx.SDPFmtpLine = fmt.Sprintf("sprop-parameter-sets=%s,%s;profile-level-id=%02x%02x%02x;level-asymmetry-allowed=1;packetization-mode=1", base64.StdEncoding.EncodeToString(ctx.SPS[0]), base64.StdEncoding.EncodeToString(ctx.PPS[0]), spsInfo.ProfileIdc, spsInfo.ConstraintSetFlag, spsInfo.LevelIdc)
 		ctx.SSRC = uint32(uintptr(unsafe.Pointer(&ctx)))
 		t.ICodecCtx = &ctx
 	case codec.IH265Ctx:
@@ -92,8 +111,18 @@ func (r *RTPData) DecodeConfig(t *AVTrack, from ICodecCtx) (err error) {
 		ctx.H265Ctx = *c.GetH265Ctx()
 		ctx.PayloadType = 98
 		ctx.MimeType = webrtc.MimeTypeH265
+		ctx.SDPFmtpLine = fmt.Sprintf("profile-id=1;sprop-sps=%s;sprop-pps=%s;sprop-vps=%s", base64.StdEncoding.EncodeToString(ctx.SPS[0]), base64.StdEncoding.EncodeToString(ctx.PPS[0]), base64.StdEncoding.EncodeToString(ctx.VPS[0]))
 		ctx.ClockRate = 90000
 		ctx.SSRC = uint32(uintptr(unsafe.Pointer(&ctx)))
+		t.ICodecCtx = &ctx
+	case codec.IAACCtx:
+		var ctx RTPAACCtx
+		ctx.SSRC = uint32(uintptr(unsafe.Pointer(&ctx)))
+		ctx.AACCtx = *c.GetAACCtx()
+		ctx.MimeType = "audio/MPEG4-GENERIC"
+		ctx.SDPFmtpLine = fmt.Sprintf("profile-level-id=1;mode=AAC-hbr;sizelength=13;indexlength=3;indexdeltalength=3; config=%s", hex.EncodeToString(ctx.AACCtx.Asc))
+		ctx.PayloadType = 97
+		ctx.ClockRate = uint32(ctx.SampleRate)
 		t.ICodecCtx = &ctx
 	}
 	return

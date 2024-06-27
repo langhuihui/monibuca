@@ -1,6 +1,8 @@
 package m7s
 
 import (
+	"os"
+	"path/filepath"
 	"reflect"
 	"slices"
 	"sync"
@@ -76,6 +78,7 @@ type Publisher struct {
 	GOP         int
 	baseTs      time.Duration
 	lastTs      time.Duration
+	dumpFile    *os.File
 }
 
 func (p *Publisher) SubscriberRange(yield func(sub *Subscriber) bool) {
@@ -129,6 +132,9 @@ func (p *Publisher) RemoveSubscriber(subscriber *Subscriber) {
 	defer p.Unlock()
 	p.Subscribers.Remove(subscriber)
 	p.Info("subscriber -1", "count", p.Subscribers.Length)
+	if p.Plugin == nil {
+		return
+	}
 	if subscriber.BufferTime == p.BufferTime && p.Subscribers.Length > 0 {
 		p.BufferTime = slices.MaxFunc(p.Subscribers.Items, func(a, b *Subscriber) int {
 			return int(a.BufferTime - b.BufferTime)
@@ -175,6 +181,15 @@ func (p *Publisher) AddSubscriber(subscriber *Subscriber) {
 	}
 }
 
+func (p *Publisher) Start() {
+	p.Info("publish")
+	if p.Dump {
+		f := filepath.Join("./dump", p.StreamPath)
+		os.MkdirAll(filepath.Dir(f), 0666)
+		p.dumpFile, _ = os.OpenFile(filepath.Join("./dump", p.StreamPath), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+	}
+}
+
 func (p *Publisher) writeAV(t *AVTrack, data IAVFrame) {
 	frame := &t.Value
 	frame.Wraps = append(frame.Wraps, data)
@@ -199,6 +214,9 @@ func (p *Publisher) WriteVideo(data IAVFrame) (err error) {
 			data.Recycle()
 		}
 	}()
+	if p.dumpFile != nil {
+		data.Dump(1, p.dumpFile)
+	}
 	if !p.PubVideo || p.IsStopped() {
 		return ErrMuted
 	}
@@ -230,17 +248,20 @@ func (p *Publisher) WriteVideo(data IAVFrame) (err error) {
 		idr = t.IDRingList.Back().Value
 	}
 	if t.Value.IDR {
-		if t.Ready.IsPending() {
+		if !t.IsReady() {
 			p.Info("ready")
-			t.Ready.Fulfill(nil)
+			t.Ready(nil)
 		} else if idr != nil {
 			p.GOP = int(t.Value.Sequence - idr.Value.Sequence)
 		} else {
 			p.GOP = 0
 		}
+		if p.AudioTrack.Length > 0 {
+			p.AudioTrack.PushIDR()
+		}
 	}
 	p.writeAV(t, data)
-	if p.VideoTrack.Length > 1 && !p.VideoTrack.AVTrack.Ready.IsPending() {
+	if p.VideoTrack.Length > 1 && p.VideoTrack.IsReady() {
 		if t.Value.Raw == nil {
 			t.Value.Raw, err = t.Value.Wraps[0].ToRaw(t.ICodecCtx)
 			if err != nil {
@@ -256,21 +277,22 @@ func (p *Publisher) WriteVideo(data IAVFrame) (err error) {
 					track.Error("DecodeConfig", "err", err)
 					return
 				}
-				for rf := idr; rf != t.Ring; rf = rf.Next() {
-					if i == 0 && rf.Value.Raw == nil {
-						rf.Value.Raw, err = rf.Value.Wraps[0].ToRaw(t.ICodecCtx)
-						if err != nil {
-							t.Error("to raw", "err", err)
-							return err
+				if t.IDRingList.Len() > 0 {
+					for rf := t.IDRingList.Front().Value; rf != t.Ring; rf = rf.Next() {
+						if i == 0 && rf.Value.Raw == nil {
+							rf.Value.Raw, err = rf.Value.Wraps[0].ToRaw(t.ICodecCtx)
+							if err != nil {
+								t.Error("to raw", "err", err)
+								return err
+							}
 						}
+						if toFrame, err = track.CreateFrame(&rf.Value); err != nil {
+							track.Error("from raw", "err", err)
+							return
+						}
+						rf.Value.Wraps = append(rf.Value.Wraps, toFrame)
 					}
-					if toFrame, err = track.CreateFrame(&rf.Value); err != nil {
-						track.Error("from raw", "err", err)
-						return
-					}
-					rf.Value.Wraps = append(rf.Value.Wraps, toFrame)
 				}
-				defer track.Ready.Fulfill(err)
 			}
 			if toFrame, err = track.CreateFrame(&t.Value); err != nil {
 				track.Error("from raw", "err", err)
@@ -280,6 +302,9 @@ func (p *Publisher) WriteVideo(data IAVFrame) (err error) {
 				toFrame.DecodeConfig(track, t.ICodecCtx)
 			}
 			t.Value.Wraps = append(t.Value.Wraps, toFrame)
+			if track.ICodecCtx != nil {
+				track.Ready(err)
+			}
 		}
 	}
 	t.Step()
@@ -293,6 +318,9 @@ func (p *Publisher) WriteAudio(data IAVFrame) (err error) {
 			data.Recycle()
 		}
 	}()
+	if p.dumpFile != nil {
+		data.Dump(0, p.dumpFile)
+	}
 	if !p.PubAudio || p.IsStopped() {
 		return ErrMuted
 	}
@@ -309,14 +337,60 @@ func (p *Publisher) WriteAudio(data IAVFrame) (err error) {
 		}
 		p.Unlock()
 	}
-	_, _, _, err = data.Parse(t)
+	oldCodecCtx := t.ICodecCtx
+	_, _, t.Value.Raw, err = data.Parse(t)
+	codecCtxChanged := oldCodecCtx != t.ICodecCtx
 	if t.ICodecCtx == nil {
 		return ErrUnsupportCodec
 	}
-	if t.Ready.IsPending() {
-		t.Ready.Fulfill(err)
-	}
+	t.Ready(err)
 	p.writeAV(t, data)
+	if p.AudioTrack.Length > 1 && p.AudioTrack.IsReady() {
+		if t.Value.Raw == nil {
+			t.Value.Raw, err = t.Value.Wraps[0].ToRaw(t.ICodecCtx)
+			if err != nil {
+				t.Error("to raw", "err", err)
+				return err
+			}
+		}
+		var toFrame IAVFrame
+		for i, track := range p.AudioTrack.Items[1:] {
+			if track.ICodecCtx == nil {
+				err = (reflect.New(track.FrameType.Elem()).Interface().(IAVFrame)).DecodeConfig(track, t.ICodecCtx)
+				if err != nil {
+					track.Error("DecodeConfig", "err", err)
+					return
+				}
+				if idr := p.AudioTrack.GetOldestIDR(); idr != nil {
+					for rf := idr; rf != t.Ring; rf = rf.Next() {
+						if i == 0 && rf.Value.Raw == nil {
+							rf.Value.Raw, err = rf.Value.Wraps[0].ToRaw(t.ICodecCtx)
+							if err != nil {
+								t.Error("to raw", "err", err)
+								return err
+							}
+						}
+						if toFrame, err = track.CreateFrame(&rf.Value); err != nil {
+							track.Error("from raw", "err", err)
+							return
+						}
+						rf.Value.Wraps = append(rf.Value.Wraps, toFrame)
+					}
+				}
+			}
+			if toFrame, err = track.CreateFrame(&t.Value); err != nil {
+				track.Error("from raw", "err", err)
+				return
+			}
+			if codecCtxChanged {
+				toFrame.DecodeConfig(track, t.ICodecCtx)
+			}
+			t.Value.Wraps = append(t.Value.Wraps, toFrame)
+			if track.ICodecCtx != nil {
+				track.Ready(err)
+			}
+		}
+	}
 	t.Step()
 	p.AudioTrack.speedControl(p.Publish.Speed, p.lastTs)
 	return
@@ -365,6 +439,9 @@ func (p *Publisher) GetVideoTrack(dataType reflect.Type) (t *AVTrack) {
 func (p *Publisher) Dispose(err error) {
 	p.Lock()
 	defer p.Unlock()
+	if p.dumpFile != nil {
+		p.dumpFile.Close()
+	}
 	if p.State == PublisherStateDisposed {
 		return
 	}

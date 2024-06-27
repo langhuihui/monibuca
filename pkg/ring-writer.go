@@ -16,6 +16,7 @@ type RingWriter struct {
 	SizeRange   util.Range[int]
 	pool        *util.Ring[AVFrame]
 	poolSize    int
+	reduceVol   int
 	Size        int
 	LastValue   *AVFrame
 	SLogger     *slog.Logger
@@ -94,7 +95,19 @@ func (rb *RingWriter) Dispose() {
 func (rb *RingWriter) GetIDR() *util.Ring[AVFrame] {
 	rb.RLock()
 	defer rb.RUnlock()
-	return rb.IDRingList.Back().Value
+	if latest := rb.IDRingList.Back(); latest != nil {
+		return latest.Value
+	}
+	return nil
+}
+
+func (rb *RingWriter) GetOldestIDR() *util.Ring[AVFrame] {
+	rb.RLock()
+	defer rb.RUnlock()
+	if latest := rb.IDRingList.Front(); latest != nil {
+		return latest.Value
+	}
+	return nil
 }
 
 func (rb *RingWriter) GetHistoryIDR(bufTime time.Duration) *util.Ring[AVFrame] {
@@ -116,14 +129,18 @@ func (rb *RingWriter) CurrentBufferTime() time.Duration {
 	return rb.BufferRange[1]
 }
 
+func (rb *RingWriter) PushIDR() {
+	rb.Lock()
+	rb.IDRingList.PushBack(rb.Ring)
+	rb.Unlock()
+}
+
 func (rb *RingWriter) Step() (normal bool) {
 	isIDR := rb.Value.IDR
 	next := rb.Next()
 	if isIDR {
-		rb.SLogger.Debug("add idr")
-		rb.Lock()
-		rb.IDRingList.PushBack(rb.Ring)
-		rb.Unlock()
+		rb.SLogger.Log(nil, TraceLevel, "add idr")
+		rb.PushIDR()
 	}
 	if rb.IDRingList.Len() > 0 {
 		oldIDR := rb.IDRingList.Front()
@@ -136,23 +153,31 @@ func (rb *RingWriter) Step() (normal bool) {
 			}
 		} else if next == oldIDR.Value {
 			if nextOld := oldIDR.Next(); nextOld != nil && rb.durationFrom(nextOld.Value) > rb.BufferRange[0] {
-				rb.SLogger.Debug("remove old idr")
+				rb.SLogger.Log(nil, TraceLevel, "remove old idr")
 				rb.Lock()
 				rb.IDRingList.Remove(oldIDR)
 				rb.Unlock()
 			} else {
-				rb.SLogger.Debug("not enough buffer")
+				rb.SLogger.Log(nil, TraceLevel, "not enough buffer")
 				rb.glow(5)
 				next = rb.Next()
 			}
 		} else if rb.BufferRange[1] > rb.BufferRange[0] {
 			for tmpP, reduceCount := rb.Next(), 0; reduceCount < 5; reduceCount++ {
 				if tmpP == oldIDR.Value {
+					rb.reduceVol = 0
 					break
 				}
-				if tmpP = tmpP.Next(); reduceCount == 4 && rb.Size > rb.SizeRange[0] {
-					rb.reduce(5)
-					next = rb.Next()
+				if tmpP = tmpP.Next(); reduceCount == 4 {
+					if rb.Size > rb.SizeRange[0]+5 {
+						if rb.reduceVol++; rb.reduceVol > 50 {
+							rb.reduce(5)
+							next = rb.Next()
+							rb.reduceVol = 0
+						}
+					} else {
+						rb.reduceVol = 0
+					}
 				}
 			}
 		}

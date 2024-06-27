@@ -3,8 +3,8 @@ package plugin_rtsp
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"github.com/AlexxIT/go2rtc/pkg/core"
-	"github.com/AlexxIT/go2rtc/pkg/tcp"
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v4"
@@ -13,6 +13,8 @@ import (
 	mrtp "m7s.live/m7s/v5/plugin/rtp/pkg"
 	. "m7s.live/m7s/v5/plugin/rtsp/pkg"
 	"net"
+	"net/http"
+	"reflect"
 	"runtime/debug"
 	"strconv"
 	"strings"
@@ -31,6 +33,7 @@ type RTSPPlugin struct {
 func (p *RTSPPlugin) OnTCPConnect(conn *net.TCPConn) {
 	logger := p.Logger.With("remote", conn.RemoteAddr().String())
 	var receiver *Receiver
+	var sender *Sender
 	var err error
 	nc := NewNetConnection(conn, logger)
 	defer func() {
@@ -43,7 +46,7 @@ func (p *RTSPPlugin) OnTCPConnect(conn *net.TCPConn) {
 			receiver.Dispose(err)
 		}
 	}()
-	var req *tcp.Request
+	var req *util.Request
 	var timeout time.Duration
 	var sendMode bool
 	mem := util.NewScalableMemoryAllocator(1 << 12)
@@ -77,7 +80,7 @@ func (p *RTSPPlugin) OnTCPConnect(conn *net.TCPConn) {
 		// Sender: OPTIONS > ANNOUNCE > SETUP... > RECORD > TEARDOWN
 		switch req.Method {
 		case MethodOptions:
-			res := &tcp.Response{
+			res := &util.Response{
 				Header: map[string][]string{
 					"Public": {"OPTIONS, SETUP, TEARDOWN, DESCRIBE, PLAY, PAUSE, ANNOUNCE, RECORD"},
 				},
@@ -99,13 +102,11 @@ func (p *RTSPPlugin) OnTCPConnect(conn *net.TCPConn) {
 				return
 			}
 
-			receiver = &Receiver{
-				NetConnection: nc,
-			}
-
+			receiver = &Receiver{}
+			receiver.NetConnection = nc
 			if receiver.Publisher, err = p.Publish(strings.TrimPrefix(nc.URL.Path, "/")); err != nil {
 				receiver = nil
-				err = nc.WriteResponse(&tcp.Response{
+				err = nc.WriteResponse(&util.Response{
 					StatusCode: 500, Status: err.Error(),
 				})
 				return
@@ -141,7 +142,7 @@ func (p *RTSPPlugin) OnTCPConnect(conn *net.TCPConn) {
 
 			timeout = time.Second * 15
 
-			res := &tcp.Response{Request: req}
+			res := &util.Response{Request: req}
 			if err = nc.WriteResponse(res); err != nil {
 				return
 			}
@@ -150,33 +151,73 @@ func (p *RTSPPlugin) OnTCPConnect(conn *net.TCPConn) {
 			sendMode = true
 			timeout = time.Second * 60
 
-			//if c.Senders == nil {
-			//	res := &tcp.Response{
-			//		Status:  "404 Not Found",
-			//		Request: req,
-			//	}
-			//	return c.WriteResponse(res)
-			//}
-
-			res := &tcp.Response{
+			var subscriber *m7s.Subscriber
+			subscriber, err = p.Subscribe(strings.TrimPrefix(nc.URL.Path, "/"), conn)
+			if err != nil {
+				res := &util.Response{
+					StatusCode: http.StatusBadRequest,
+					Status:     err.Error(),
+					Request:    req,
+				}
+				_ = nc.WriteResponse(res)
+				return
+			}
+			res := &util.Response{
 				Header: map[string][]string{
 					"Content-Type": {"application/sdp"},
 				},
 				Request: req,
 			}
-
+			sender = &Sender{
+				Subscriber: subscriber,
+			}
+			sender.NetConnection = nc
 			// convert tracks to real output medias
 			var medias []*core.Media
+			if subscriber.SubAudio && subscriber.Publisher.PubAudio {
+				audioTrack := subscriber.Publisher.GetAudioTrack(reflect.TypeOf((*mrtp.RTPAudio)(nil)))
+				if err = audioTrack.WaitReady(); err != nil {
+					return
+				}
+				parameter := audioTrack.ICodecCtx.(mrtp.IRTPCtx).GetRTPCodecParameter()
+				media := &core.Media{
+					Kind:      "audio",
+					Direction: core.DirectionRecvonly,
+					Codecs: []*core.Codec{{
+						Name:        parameter.MimeType[6:],
+						ClockRate:   parameter.ClockRate,
+						Channels:    parameter.Channels,
+						FmtpLine:    parameter.SDPFmtpLine,
+						PayloadType: uint8(parameter.PayloadType),
+					}},
+					ID: fmt.Sprintf("trackID=%d", len(medias)),
+				}
+				medias = append(medias, media)
+				sender.AudioChannelID = 0
+			}
 
-			//for i, track := range c.Senders {
-			//	media := &core.Media{
-			//		Kind:      core.GetKind(track.Codec.Name),
-			//		Direction: core.DirectionRecvonly,
-			//		Codecs:    []*core.Codec{track.Codec},
-			//		ID:        "trackID=" + strconv.Itoa(i),
-			//	}
-			//	medias = append(medias, media)
-			//}
+			if subscriber.SubVideo && subscriber.Publisher.PubVideo {
+				videoTrack := subscriber.Publisher.GetVideoTrack(reflect.TypeOf((*mrtp.RTPVideo)(nil)))
+				if err = videoTrack.WaitReady(); err != nil {
+					return
+				}
+				parameter := videoTrack.ICodecCtx.(mrtp.IRTPCtx).GetRTPCodecParameter()
+				c := core.Codec{
+					Name:        parameter.MimeType[6:],
+					ClockRate:   parameter.ClockRate,
+					Channels:    parameter.Channels,
+					FmtpLine:    parameter.SDPFmtpLine,
+					PayloadType: uint8(parameter.PayloadType),
+				}
+				media := &core.Media{
+					Kind:      "video",
+					Direction: core.DirectionRecvonly,
+					Codecs:    []*core.Codec{&c},
+					ID:        fmt.Sprintf("trackID=%d", len(medias)),
+				}
+				sender.VideoChannelID = byte(len(medias)) << 1
+				medias = append(medias, media)
+			}
 
 			res.Body, err = core.MarshalSDP(nc.SessionName, medias)
 			if err != nil {
@@ -192,7 +233,7 @@ func (p *RTSPPlugin) OnTCPConnect(conn *net.TCPConn) {
 		case MethodSetup:
 			tr := req.Header.Get("Transport")
 
-			res := &tcp.Response{
+			res := &util.Response{
 				Header:  map[string][]string{},
 				Request: req,
 			}
@@ -202,14 +243,12 @@ func (p *RTSPPlugin) OnTCPConnect(conn *net.TCPConn) {
 				nc.Session = core.RandString(8, 10)
 
 				if sendMode {
-					//if i := reqTrackID(req); i >= 0 && i < len(c.Senders) {
-					//	// mark sender as SETUP
-					//	c.Senders[i].Media.ID = MethodSetup
-					//	tr = fmt.Sprintf("RTP/AVP/TCP;unicast;interleaved=%d-%d", i*2, i*2+1)
-					//	res.Header.Set("Transport", tr)
-					//} else {
-					//	res.Status = "400 Bad Request"
-					//}
+					if i := reqTrackID(req); i >= 0 {
+						tr = fmt.Sprintf("RTP/AVP/TCP;unicast;interleaved=%d-%d", i*2, i*2+1)
+						res.Header.Set("Transport", tr)
+					} else {
+						res.Status = "400 Bad Request"
+					}
 				} else {
 					res.Header.Set("Transport", tr[:len(transport)+3])
 				}
@@ -222,23 +261,45 @@ func (p *RTSPPlugin) OnTCPConnect(conn *net.TCPConn) {
 			}
 
 		case MethodRecord, MethodPlay:
+			res := &util.Response{Request: req}
+			err = nc.WriteResponse(res)
+			var audioFrame *mrtp.RTPAudio
+			var videoFrame *mrtp.RTPVideo
 			if sendMode {
-				// stop unconfigured senders
-				//for _, track := range c.Senders {
-				//	if track.Media.ID != MethodSetup {
-				//		track.Close()
-				//	}
-				//}
+				go func() {
+					mem := util.NewScalableMemoryAllocator(1 << 11)
+					sendRTP := func(pack *mrtp.RTPData, channel byte) (err error) {
+						nc.StartWrite()
+						defer nc.StopWrite()
+						for _, packet := range pack.Packets {
+							size := packet.MarshalSize()
+							chunk := mem.Borrow(size + 4)
+							chunk[0], chunk[1], chunk[2], chunk[3] = '$', channel, byte(size>>8), byte(size)
+							if _, err = packet.MarshalTo(chunk[4:]); err != nil {
+								return
+							}
+							if _, err = nc.Write(chunk); err != nil {
+								return
+							}
+						}
+						return
+					}
+					m7s.PlayBlock(sender.Subscriber, func(audio *mrtp.RTPAudio) error {
+						return sendRTP(&audio.RTPData, sender.AudioChannelID)
+					}, func(video *mrtp.RTPVideo) error {
+						return sendRTP(&video.RTPData, sender.VideoChannelID)
+					})
+					mem.Recycle()
+				}()
+			} else {
+				audioFrame = &mrtp.RTPAudio{}
+				audioFrame.ScalableMemoryAllocator = mem
+				audioFrame.RTPCodecParameters = receiver.AudioCodecParameters
+				videoFrame = &mrtp.RTPVideo{}
+				videoFrame.ScalableMemoryAllocator = mem
+				videoFrame.RTPCodecParameters = receiver.VideoCodecParameters
 			}
 
-			res := &tcp.Response{Request: req}
-			err = nc.WriteResponse(res)
-			audioFrame := &mrtp.RTPAudio{}
-			audioFrame.ScalableMemoryAllocator = mem
-			audioFrame.RTPCodecParameters = receiver.AudioCodecParameters
-			videoFrame := &mrtp.RTPVideo{}
-			videoFrame.ScalableMemoryAllocator = mem
-			videoFrame.RTPCodecParameters = receiver.VideoCodecParameters
 			for err == nil {
 				ts := time.Now()
 
@@ -250,8 +311,8 @@ func (p *RTSPPlugin) OnTCPConnect(conn *net.TCPConn) {
 				// 1. RTP interleaved: `$` + 1B channel number + 2B size
 				// 2. RTSP response:   RTSP/1.0 200 OK
 				// 3. RTSP request:    OPTIONS ...
-				magic, err = nc.Peek(4)
-				if err != nil {
+
+				if magic, err = nc.Peek(4); err != nil {
 					return
 				}
 
@@ -259,10 +320,11 @@ func (p *RTSPPlugin) OnTCPConnect(conn *net.TCPConn) {
 				var size int
 				var buf []byte
 				if magic[0] != '$' {
-					logger.Warn("not magic")
-					switch string(magic) {
+					magicWord := string(magic)
+					logger.Warn("not magic", "magic", magicWord)
+					switch magicWord {
 					case "RTSP":
-						var res *tcp.Response
+						var res *util.Response
 						if res, err = nc.ReadResponse(); err != nil {
 							return
 						}
@@ -272,15 +334,21 @@ func (p *RTSPPlugin) OnTCPConnect(conn *net.TCPConn) {
 						continue
 
 					case "OPTI", "TEAR", "DESC", "SETU", "PLAY", "PAUS", "RECO", "ANNO", "GET_", "SET_":
-						var req *tcp.Request
+						var req *util.Request
 						if req, err = nc.ReadRequest(); err != nil {
 							return
 						}
 
 						if req.Method == MethodOptions {
-							res := &tcp.Response{Request: req}
+							res := &util.Response{Request: req}
+							if sendMode {
+								nc.StartWrite()
+							}
 							if err = nc.WriteResponse(res); err != nil {
 								return
+							}
+							if sendMode {
+								nc.StopWrite()
 							}
 						}
 						continue
@@ -320,6 +388,19 @@ func (p *RTSPPlugin) OnTCPConnect(conn *net.TCPConn) {
 						//		return fmt.Errorf("RTSP wrong input")
 						//	}
 						//}
+						for err = nc.Skip(1); err == nil; {
+							if magic[0], err = nc.ReadByte(); magic[0] == '*' {
+								channelID, err = nc.ReadByte()
+								magic[2], err = nc.ReadByte()
+								magic[3], err = nc.ReadByte()
+								size = int(binary.BigEndian.Uint16(magic[2:]))
+								buf = mem.Malloc(size)
+								if err = nc.ReadNto(size, buf); err != nil {
+									return
+								}
+								break
+							}
+						}
 					}
 				} else {
 					// hope that the odd channels are always RTCP
@@ -408,7 +489,7 @@ func (p *RTSPPlugin) OnTCPConnect(conn *net.TCPConn) {
 			return
 
 		case MethodTeardown:
-			res := &tcp.Response{Request: req}
+			res := &util.Response{Request: req}
 			_ = nc.WriteResponse(res)
 			return
 
@@ -418,7 +499,7 @@ func (p *RTSPPlugin) OnTCPConnect(conn *net.TCPConn) {
 	}
 }
 
-func reqTrackID(req *tcp.Request) int {
+func reqTrackID(req *util.Request) int {
 	var s string
 	if req.URL.RawQuery != "" {
 		s = req.URL.RawQuery
