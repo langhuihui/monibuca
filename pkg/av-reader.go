@@ -126,6 +126,12 @@ func (r *AVRingReader) ReadFrame(conf *config.Subscribe) (err error) {
 		if err = r.readFrame(conf.SubMode); err != nil {
 			return
 		}
+		if conf.SubMode != SUBMODE_REAL {
+			// 防止过快消费
+			if fast := r.Value.Timestamp - r.FirstTs - time.Since(r.startTime); fast > 0 && fast < time.Second {
+				time.Sleep(fast)
+			}
+		}
 	}
 	r.AbsTime = uint32((r.Value.Timestamp - r.SkipTs).Milliseconds())
 	if r.AbsTime == 0 {

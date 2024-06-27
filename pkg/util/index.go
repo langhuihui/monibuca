@@ -2,8 +2,10 @@ package util
 
 import (
 	"log"
+	"math/rand"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 func Conditoinal[T any](cond bool, t, f T) T {
@@ -19,11 +21,15 @@ func Bit1(b byte, index int) bool {
 	return b&(1<<(7-index)) != 0
 }
 
-func LenOfBuffers(b [][]byte) (n int) {
-	for _, bb := range b {
-		n += len(bb)
+const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+
+func RandomString(length int) string {
+	seededRand := rand.New(rand.NewSource(time.Now().UnixNano()))
+	b := make([]byte, length)
+	for i := range b {
+		b[i] = charset[seededRand.Intn(len(charset))]
 	}
-	return
+	return string(b)
 }
 
 func initFatalLog() *os.File {

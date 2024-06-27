@@ -81,7 +81,7 @@ func (a *Annexb264Ctx) CreateFrame(frame *AVFrame) (IAVFrame, error) {
 		if i > 0 {
 			annexb.Append(codec.NALU_Delimiter1)
 		}
-		annexb.Append(nalu...)
+		annexb.Append(nalu.Buffers...)
 	}
 	return &annexb, nil
 }

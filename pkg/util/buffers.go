@@ -18,10 +18,6 @@ type MemoryReader struct {
 	offset1 int
 }
 
-func NewMemoryFromBytes(b ...[]byte) *Memory {
-	return NewMemory(b)
-}
-
 func NewReadableBuffersFromBytes(b ...[]byte) *MemoryReader {
 	buf := NewMemory(b)
 	return &MemoryReader{Memory: buf, Length: buf.Size}
@@ -55,6 +51,12 @@ func (m *Memory) CopyTo(buf []byte) {
 		copy(buf, b)
 		buf = buf[l:]
 	}
+}
+
+func (m *Memory) ToBytes() []byte {
+	buf := make([]byte, m.Size)
+	m.CopyTo(buf)
+	return buf
 }
 
 func (m *Memory) Append(b ...[]byte) {
@@ -96,6 +98,9 @@ func (r *MemoryReader) MoveToEnd() {
 }
 
 func (r *MemoryReader) ReadBytesTo(buf []byte) (actual int) {
+	if r.Length == 0 {
+		return 0
+	}
 	n := len(buf)
 	curBuf := r.GetCurrent()
 	curBufLen := len(curBuf)

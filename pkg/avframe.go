@@ -42,12 +42,10 @@ type (
 		Dump(byte, io.Writer)
 	}
 
-	Nalu = [][]byte
-
 	Nalus struct {
 		PTS   time.Duration
 		DTS   time.Duration
-		Nalus []Nalu
+		Nalus []util.Memory
 	}
 	AVFrame struct {
 		DataFrame
@@ -97,15 +95,15 @@ func (df *DataFrame) Ready() {
 }
 
 func (nalus *Nalus) H264Type() codec.H264NALUType {
-	return codec.ParseH264NALUType(nalus.Nalus[0][0][0])
+	return codec.ParseH264NALUType(nalus.Nalus[0].Buffers[0][0])
 }
 
 func (nalus *Nalus) H265Type() codec.H265NALUType {
-	return codec.ParseH265NALUType(nalus.Nalus[0][0][0])
+	return codec.ParseH265NALUType(nalus.Nalus[0].Buffers[0][0])
 }
 
-func (nalus *Nalus) Append(bytes ...[]byte) {
-	nalus.Nalus = append(nalus.Nalus, bytes)
+func (nalus *Nalus) Append(bytes []byte) {
+	nalus.Nalus = append(nalus.Nalus, util.Memory{Buffers: net.Buffers{bytes}, Size: len(bytes)})
 }
 
 func (nalus *Nalus) ParseAVCC(reader *util.MemoryReader, naluSizeLen int) error {
@@ -114,9 +112,7 @@ func (nalus *Nalus) ParseAVCC(reader *util.MemoryReader, naluSizeLen int) error 
 		if err != nil {
 			return err
 		}
-		reader.RangeN(l, func(nalu []byte) {
-			nalus.Append(nalu)
-		})
+		reader.RangeN(l, nalus.Append)
 	}
 	return nil
 }

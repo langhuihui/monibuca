@@ -239,9 +239,9 @@ func createH26xFrame(from *AVFrame, codecID VideoCodecID) (frame IAVFrame, err e
 	util.PutBE(head[2:5], (nalus.PTS-nalus.DTS)/90) // cts
 	for _, nalu := range nalus.Nalus {
 		naluLenM := rtmpVideo.NextN(4)
-		naluLen := uint32(util.LenOfBuffers(nalu))
+		naluLen := uint32(nalu.Size)
 		binary.BigEndian.PutUint32(naluLenM, naluLen)
-		rtmpVideo.Append(nalu...)
+		rtmpVideo.Append(nalu.Buffers...)
 	}
 	frame = &rtmpVideo
 	return
