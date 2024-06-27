@@ -2,11 +2,9 @@ module monibuca
 
 go 1.21
 
-toolchain go1.21.8
-
 require (
 	go.uber.org/zap v1.27.0
-	m7s.live/engine/v4 v4.15.2-0.20240618012344-72922ce539a7
+	m7s.live/engine/v4 v4.15.2-0.20240627104035-863a6ce78aef
 	m7s.live/plugin/debug/v4 v4.0.3
 	m7s.live/plugin/fmp4/v4 v4.0.6
 	m7s.live/plugin/gb28181/v4 v4.4.5-0.20240521112210-a207352fe6e4
