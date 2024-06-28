@@ -32,6 +32,7 @@ type Config struct {
 
 var durationType = reflect.TypeOf(time.Duration(0))
 var regexpType = reflect.TypeOf(Regexp{})
+var regexpYaml = regexp.MustCompile(`^(.+: )"(.+)"$`)
 
 func (config *Config) Range(f func(key string, value Config)) {
 	if m, ok := config.GetValue().(map[string]Config); ok {
@@ -325,7 +326,15 @@ func (config *Config) assign(k string, v any) (target reflect.Value) {
 			},
 		})
 		tmpValue := reflect.New(tmpStruct)
-		yaml.Unmarshal([]byte(fmt.Sprintf("%s: %v", k, v)), tmpValue.Interface())
+		if v != nil {
+			var out []byte
+			if vv, ok := v.(string); ok {
+				out = []byte(fmt.Sprintf("%s: %s", k, vv))
+			} else {
+				out, _ = yaml.Marshal(map[string]any{k: v})
+			}
+			_ = yaml.Unmarshal(out, tmpValue.Interface())
+		}
 		target = tmpValue.Elem().Field(0)
 	}
 	return

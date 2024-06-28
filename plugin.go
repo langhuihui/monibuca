@@ -2,6 +2,7 @@ package m7s
 
 import (
 	"context"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -40,14 +41,14 @@ func (plugin *PluginMeta) Init(s *Server, userConfig map[string]any) {
 	p.server = s
 	p.Logger = s.Logger.With("plugin", plugin.Name)
 	p.Context, p.CancelCauseFunc = context.WithCancelCause(s.Context)
-	if os.Getenv(strings.ToUpper(plugin.Name)+"_ENABLE") == "false" {
+	upperName := strings.ToUpper(plugin.Name)
+	if os.Getenv(upperName+"_ENABLE") == "false" {
 		p.Disabled = true
 		p.Warn("disabled by env")
 		return
 	}
-	p.Config.Parse(p.GetCommonConf())
-	p.Config.Parse(instance, strings.ToUpper(plugin.Name))
-
+	p.Config.Parse(p.GetCommonConf(), upperName)
+	p.Config.Parse(instance, upperName)
 	for _, fname := range MergeConfigs {
 		if name := strings.ToLower(fname); p.Config.Has(name) {
 			p.Config.Get(name).ParseGlobal(s.Config.Get(name))
@@ -63,6 +64,12 @@ func (plugin *PluginMeta) Init(s *Server, userConfig map[string]any) {
 	}
 	p.Config.ParseUserFile(userConfig)
 	finalConfig, _ := yaml.Marshal(p.Config.GetMap())
+	var lv slog.LevelVar
+	_ = lv.UnmarshalText([]byte(p.config.LogLevel))
+	if p.config.LogLevel == "trace" {
+		lv.Set(TraceLevel)
+	}
+	p.Logger.Handler().(*MultiLogHandler).SetLevel(lv.Level())
 	p.Debug("config", "detail", string(finalConfig))
 	if s.DisableAll {
 		p.Disabled = true
@@ -274,7 +281,7 @@ func (p *Plugin) OnTCPConnect(conn *net.TCPConn) {
 
 func (p *Plugin) Publish(streamPath string, options ...any) (publisher *Publisher, err error) {
 	publisher = &Publisher{Publish: p.config.Publish}
-	if p.server.EnableAuth {
+	if p.config.EnableAuth {
 		if onAuthPub, ok := p.server.OnAuthPubs[p.Meta.Name]; ok {
 			authPromise := util.NewPromise(publisher)
 			onAuthPub(authPromise)
@@ -320,7 +327,7 @@ func (p *Plugin) Pull(streamPath string, url string, options ...any) (puller *Pu
 
 func (p *Plugin) Subscribe(streamPath string, options ...any) (subscriber *Subscriber, err error) {
 	subscriber = &Subscriber{Subscribe: p.config.Subscribe}
-	if p.server.EnableAuth {
+	if p.config.EnableAuth {
 		if onAuthSub, ok := p.server.OnAuthSubs[p.Meta.Name]; ok {
 			authPromise := util.NewPromise(subscriber)
 			onAuthSub(authPromise)

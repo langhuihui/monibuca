@@ -9,8 +9,9 @@ import (
 var _ slog.Handler = (*MultiLogHandler)(nil)
 
 type MultiLogHandler struct {
-	handlers []slog.Handler
-	level    *slog.Level
+	handlers    []slog.Handler
+	parentLevel *slog.Level
+	level       *slog.Level
 }
 
 func (m *MultiLogHandler) Add(h ...slog.Handler) {
@@ -33,7 +34,10 @@ func (m *MultiLogHandler) SetLevel(level slog.Level) {
 
 // Enabled implements slog.Handler.
 func (m *MultiLogHandler) Enabled(_ context.Context, l slog.Level) bool {
-	return l >= *m.level
+	if m.level != nil {
+		return l >= *m.level
+	}
+	return l >= *m.parentLevel
 }
 
 // Handle implements slog.Handler.
@@ -49,8 +53,11 @@ func (m *MultiLogHandler) Handle(ctx context.Context, rec slog.Record) error {
 // WithAttrs implements slog.Handler.
 func (m *MultiLogHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 	result := &MultiLogHandler{
-		handlers: make([]slog.Handler, len(m.handlers)),
-		level:    m.level,
+		handlers:    make([]slog.Handler, len(m.handlers)),
+		parentLevel: m.parentLevel,
+	}
+	if m.level != nil {
+		result.parentLevel = m.level
 	}
 	for i, h := range m.handlers {
 		result.handlers[i] = h.WithAttrs(attrs)
@@ -61,8 +68,11 @@ func (m *MultiLogHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 // WithGroup implements slog.Handler.
 func (m *MultiLogHandler) WithGroup(name string) slog.Handler {
 	result := &MultiLogHandler{
-		handlers: make([]slog.Handler, len(m.handlers)),
-		level:    m.level,
+		handlers:    make([]slog.Handler, len(m.handlers)),
+		parentLevel: m.parentLevel,
+	}
+	if m.level != nil {
+		result.parentLevel = m.level
 	}
 	for i, h := range m.handlers {
 		result.handlers[i] = h.WithGroup(name)

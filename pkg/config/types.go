@@ -24,6 +24,7 @@ type PushConfig interface {
 }
 
 type Publish struct {
+	MaxCount          int             `default:"0" desc:"最大发布者数量"` // 最大发布者数量
 	PubAudio          bool            `default:"true" desc:"是否发布音频"`
 	PubVideo          bool            `default:"true" desc:"是否发布视频"`
 	KickExist         bool            `desc:"是否踢掉已经存在的发布者"`                 // 是否踢掉已经存在的发布者
@@ -44,6 +45,7 @@ func (c *Publish) GetPublishConfig() *Publish {
 }
 
 type Subscribe struct {
+	MaxCount        int           `default:"0" desc:"最大订阅者数量"` // 最大订阅者数量
 	SubAudio        bool          `default:"true" desc:"是否订阅音频"`
 	SubVideo        bool          `default:"true" desc:"是否订阅视频"`
 	BufferTime      time.Duration `desc:"缓冲时长,从缓冲时长的关键帧开始播放"`
@@ -162,10 +164,8 @@ type Console struct {
 }
 
 type Engine struct {
-	EnableSubEvent      bool          `default:"true" desc:"启用订阅事件,禁用可以提高性能"`                            //启用订阅事件,禁用可以提高性能
-	EnableAuth          bool          `default:"true" desc:"启用鉴权"`                                       //启用鉴权
-	LogLang             string        `default:"zh" desc:"日志语言" enum:"zh:中文,en:英文"`                      //日志语言
-	LogLevel            string        `default:"info" enum:"trace:跟踪,debug:调试,info:信息,warn:警告,error:错误"` //日志级别
+	EnableSubEvent      bool          `default:"true" desc:"启用订阅事件,禁用可以提高性能"`       //启用订阅事件,禁用可以提高性能
+	LogLang             string        `default:"zh" desc:"日志语言" enum:"zh:中文,en:英文"` //日志语言
 	SettingDir          string        `default:".m7s" desc:""`
 	EventBusSize        int           `default:"10" desc:"事件总线大小"`      //事件总线大小
 	PulseInterval       time.Duration `default:"5s" desc:"心跳事件间隔"`      //心跳事件间隔
@@ -174,7 +174,9 @@ type Engine struct {
 }
 
 type Common struct {
-	PublicIP string
+	PublicIP   string
+	LogLevel   string `default:"info" enum:"trace:跟踪,debug:调试,info:信息,warn:警告,error:错误"` //日志级别
+	EnableAuth bool   `desc:"启用鉴权"`                                                      //启用鉴权
 	Publish
 	Subscribe
 	HTTP

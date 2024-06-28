@@ -1,0 +1,20 @@
+global:
+  tcp:
+    listenaddr: :50051
+  http:
+    listenaddr: :8081
+    listenaddrtls: :8555
+rtsp:
+  loglevel: trace
+  tcp:
+    listenaddr:
+  push:
+    pushlist:
+      live/test: rtsp://localhost/live/test
+hdl:
+
+  publish:
+    pubaudio: false
+  pull:
+    pullonstart:
+      live/test: /Users/dexter/Movies/jb-demo.flv

@@ -23,6 +23,8 @@ const (
 	PublisherStateDisposed
 )
 
+const threshold = 100 * time.Millisecond
+
 type SpeedControl struct {
 	speed          float64
 	beginTime      time.Time
@@ -43,7 +45,7 @@ func (s *SpeedControl) speedControl(speed float64, ts time.Duration) {
 		}
 		should := time.Duration(float64(ts) / speed)
 		s.Delta = should - elapsed
-		if s.Delta > time.Second {
+		if s.Delta > threshold {
 			time.Sleep(s.Delta)
 		}
 	}

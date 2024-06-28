@@ -27,7 +27,7 @@ import (
 
 var (
 	Version       = "v5.0.0"
-	MergeConfigs  = []string{"Publish", "Subscribe", "HTTP", "PublicIP"}
+	MergeConfigs  = []string{"Publish", "Subscribe", "HTTP", "PublicIP", "LogLevel", "EnableAuth"}
 	ExecPath      = os.Args[0]
 	ExecDir       = filepath.Dir(ExecPath)
 	serverIndexG  atomic.Uint32
@@ -145,14 +145,14 @@ func (s *Server) run(ctx context.Context, conf any) (err error) {
 			s.Error("parsing yml error:", err)
 		}
 	}
-	s.Config.Parse(&s.config)
+	s.Config.Parse(&s.config, "GLOBAL")
 	s.Config.Parse(&s.Engine, "GLOBAL")
 	if cg != nil {
 		s.Config.ParseUserFile(cg["global"])
 	}
 	var lv slog.LevelVar
-	lv.UnmarshalText([]byte(s.LogLevel))
-	if s.LogLevel == "trace" {
+	lv.UnmarshalText([]byte(s.config.LogLevel))
+	if s.config.LogLevel == "trace" {
 		lv.Set(TraceLevel)
 	}
 	s.LogHandler.SetLevel(lv.Level())

@@ -89,7 +89,7 @@ type Subscriber struct {
 	VideoReader *AVRingReader
 }
 
-func PlayBlock[A any, V any](s *Subscriber, onAudio func(A) error, onVideo func(V) error) {
+func PlayBlock[A any, V any](s *Subscriber, onAudio func(A) error, onVideo func(V) error) (err error) {
 	var ar, vr *AVRingReader
 	var a1, v1 reflect.Type
 	var at, vt *AVTrack
@@ -218,7 +218,6 @@ func PlayBlock[A any, V any](s *Subscriber, onAudio func(A) error, onVideo func(
 			prePublisher = s.Publisher
 		}
 	}
-	var err error
 	for err == nil {
 		err = s.Err()
 		if vr != nil {
@@ -311,4 +310,5 @@ func PlayBlock[A any, V any](s *Subscriber, onAudio func(A) error, onVideo func(
 		checkPublisherChange()
 		runtime.Gosched()
 	}
+	return
 }

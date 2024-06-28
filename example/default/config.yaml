@@ -16,8 +16,8 @@ rtsp:
   subscribe:
     subaudio: false
 rtmp:
-  tcp:
-    listenaddr: :11935
+#  tcp:
+#    listenaddr: :11935
   publish:
     # idletimeout: 10s
     # closedelaytimeout: 4s

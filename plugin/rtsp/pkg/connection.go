@@ -1,8 +1,9 @@
 package rtsp
 
 import (
-	"github.com/AlexxIT/go2rtc/pkg/core"
+	"encoding/binary"
 	"log/slog"
+	"m7s.live/m7s/v5"
 	"m7s.live/m7s/v5/pkg/util"
 	"net"
 	"net/url"
@@ -18,25 +19,26 @@ const Timeout = time.Second * 5
 func NewNetConnection(conn net.Conn, logger *slog.Logger) *NetConnection {
 	defer logger.Info("new connection")
 	return &NetConnection{
-		conn:      conn,
-		Logger:    logger,
-		BufReader: util.NewBufReader(conn),
+		conn:            conn,
+		Logger:          logger,
+		BufReader:       util.NewBufReader(conn),
+		MemoryAllocator: util.NewScalableMemoryAllocator(1 << 12),
+		UserAgent:       "monibuca" + m7s.Version,
 	}
 }
 
 type NetConnection struct {
 	*slog.Logger
 	*util.BufReader
-	Backchannel bool
-	Media       string
-	PacketSize  uint16
-	SessionName string
-	Timeout     int
-	Transport   string // custom transport support, ex. RTSP over WebSocket
-
-	Medias    []*core.Media
-	UserAgent string
-	URL       *url.URL
+	Backchannel     bool
+	Media           string
+	PacketSize      uint16
+	SessionName     string
+	Timeout         int
+	Transport       string // custom transport support, ex. RTSP over WebSocket
+	MemoryAllocator *util.ScalableMemoryAllocator
+	UserAgent       string
+	URL             *url.URL
 
 	// internal
 
@@ -66,6 +68,7 @@ func (c *NetConnection) StopWrite() {
 func (c *NetConnection) Destroy() {
 	c.conn.Close()
 	c.BufReader.Recycle()
+	c.MemoryAllocator.Recycle()
 	c.Info("destroy connection")
 }
 
@@ -105,7 +108,7 @@ const (
 	StatePlay
 )
 
-func (c *NetConnection) WriteRequest(req *util.Request) error {
+func (c *NetConnection) WriteRequest(req *util.Request) (err error) {
 	if req.Proto == "" {
 		req.Proto = ProtoRTSP
 	}
@@ -130,11 +133,13 @@ func (c *NetConnection) WriteRequest(req *util.Request) error {
 		req.Header.Set("Content-Length", val)
 	}
 
-	if err := c.conn.SetWriteDeadline(time.Now().Add(Timeout)); err != nil {
+	if err = c.conn.SetWriteDeadline(time.Now().Add(Timeout)); err != nil {
 		return err
 	}
-
-	return req.Write(c.conn)
+	reqStr := req.String()
+	c.Debug("->", "req", reqStr)
+	_, err = c.conn.Write([]byte(reqStr))
+	return
 }
 
 func (c *NetConnection) ReadRequest() (req *util.Request, err error) {
@@ -145,11 +150,11 @@ func (c *NetConnection) ReadRequest() (req *util.Request, err error) {
 	if err != nil {
 		return
 	}
-	c.Debug(req.String())
+	c.Debug("<-", "req", req.String())
 	return
 }
 
-func (c *NetConnection) WriteResponse(res *util.Response) error {
+func (c *NetConnection) WriteResponse(res *util.Response) (err error) {
 	if res.Proto == "" {
 		res.Proto = ProtoRTSP
 	}
@@ -182,18 +187,151 @@ func (c *NetConnection) WriteResponse(res *util.Response) error {
 		res.Header.Set("Content-Length", val)
 	}
 
-	if err := c.conn.SetWriteDeadline(time.Now().Add(Timeout)); err != nil {
+	if err = c.conn.SetWriteDeadline(time.Now().Add(Timeout)); err != nil {
 		return err
 	}
-	c.Debug(res.String())
-	return res.Write(c.conn)
+	resStr := res.String()
+	c.Debug("->", "res", resStr)
+	_, err = c.conn.Write([]byte(resStr))
+	return
 }
 
-func (c *NetConnection) ReadResponse() (*util.Response, error) {
+func (c *NetConnection) ReadResponse() (res *util.Response, err error) {
 	if err := c.conn.SetReadDeadline(time.Now().Add(Timeout)); err != nil {
 		return nil, err
 	}
-	return util.ReadResponse(c.BufReader)
+	res, err = util.ReadResponse(c.BufReader)
+	if err == nil {
+		c.Debug("<-", "res", res.String())
+	}
+	return
+}
+
+func (c *NetConnection) Receive(sendMode bool) (channelID byte, buf []byte, err error) {
+	ts := time.Now()
+	if err = c.conn.SetReadDeadline(ts.Add(util.Conditoinal(sendMode, time.Second*60, time.Second*15))); err != nil {
+		return
+	}
+	var magic []byte
+	// we can read:
+	// 1. RTP interleaved: `$` + 1B channel number + 2B size
+	// 2. RTSP response:   RTSP/1.0 200 OK
+	// 3. RTSP request:    OPTIONS ...
+
+	if magic, err = c.Peek(4); err != nil {
+		return
+	}
+
+	var size int
+	if magic[0] != '$' {
+		magicWord := string(magic)
+		c.Warn("not magic", "magic", magicWord)
+		switch magicWord {
+		case "RTSP":
+			var res *util.Response
+			if res, err = c.ReadResponse(); err != nil {
+				return
+			}
+			c.Warn(string(res.Body))
+			// for playing backchannel only after OK response on play
+
+			return
+
+		case "OPTI", "TEAR", "DESC", "SETU", "PLAY", "PAUS", "RECO", "ANNO", "GET_", "SET_":
+			var req *util.Request
+			if req, err = c.ReadRequest(); err != nil {
+				return
+			}
+
+			if req.Method == MethodOptions {
+				res := &util.Response{Request: req}
+				if sendMode {
+					c.StartWrite()
+				}
+				if err = c.WriteResponse(res); err != nil {
+					return
+				}
+				if sendMode {
+					c.StopWrite()
+				}
+			}
+			return
+
+		default:
+			c.Error("wrong input")
+			//c.Fire("RTSP wrong input")
+			//
+			//for i := 0; ; i++ {
+			//	// search next start symbol
+			//	if _, err = c.reader.ReadBytes('$'); err != nil {
+			//		return err
+			//	}
+			//
+			//	if channelID, err = c.reader.ReadByte(); err != nil {
+			//		return err
+			//	}
+			//
+			//	// TODO: better check maximum good channel ID
+			//	if channelID >= 20 {
+			//		continue
+			//	}
+			//
+			//	buf4 = make([]byte, 2)
+			//	if _, err = io.ReadFull(c.reader, buf4); err != nil {
+			//		return err
+			//	}
+			//
+			//	// check if size good for RTP
+			//	size = binary.BigEndian.Uint16(buf4)
+			//	if size <= 1500 {
+			//		break
+			//	}
+			//
+			//	// 10 tries to find good packet
+			//	if i >= 10 {
+			//		return fmt.Errorf("RTSP wrong input")
+			//	}
+			//}
+			for err = c.Skip(1); err == nil; {
+				if magic[0], err = c.ReadByte(); magic[0] == '*' {
+					channelID, err = c.ReadByte()
+					magic[2], err = c.ReadByte()
+					magic[3], err = c.ReadByte()
+					size = int(binary.BigEndian.Uint16(magic[2:]))
+					buf = c.MemoryAllocator.Malloc(size)
+					if err = c.ReadNto(size, buf); err != nil {
+						return
+					}
+					break
+				}
+			}
+		}
+	} else {
+		// hope that the odd channels are always RTCP
+
+		channelID = magic[1]
+
+		// get data size
+		size = int(binary.BigEndian.Uint16(magic[2:]))
+		// skip 4 bytes from c.reader.Peek
+		if err = c.Skip(4); err != nil {
+			return
+		}
+		buf = c.MemoryAllocator.Malloc(size)
+		if err = c.ReadNto(size, buf); err != nil {
+			return
+		}
+	}
+
+	//if keepaliveDT != 0 && ts.After(keepaliveTS) {
+	//	req := &tcp.Request{Method: MethodOptions, URL: c.URL}
+	//	if err = c.WriteRequest(req); err != nil {
+	//		return
+	//	}
+	//
+	//	keepaliveTS = ts.Add(keepaliveDT)
+	//}
+	return
 }
 
 func (c *NetConnection) Write(chunk []byte) (int, error) {

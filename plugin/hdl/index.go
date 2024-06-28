@@ -17,6 +17,9 @@ type HDLPlugin struct {
 	m7s.Plugin
 }
 
+const defaultConfig m7s.DefaultYaml = `publish:
+  speed: 1`
+
 func (p *HDLPlugin) OnInit() error {
 	for streamPath, url := range p.GetCommonConf().PullOnStart {
 		go p.Pull(streamPath, url, NewHDLPuller())
@@ -24,7 +27,7 @@ func (p *HDLPlugin) OnInit() error {
 	return nil
 }
 
-var _ = m7s.InstallPlugin[HDLPlugin]()
+var _ = m7s.InstallPlugin[HDLPlugin](defaultConfig)
 
 func (p *HDLPlugin) WriteFlvHeader(sub *m7s.Subscriber) (flv net.Buffers) {
 	at, vt := &sub.Publisher.AudioTrack, &sub.Publisher.VideoTrack

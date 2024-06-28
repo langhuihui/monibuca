@@ -214,9 +214,29 @@ func (avcc *RTMPVideo) ToRaw(codecCtx ICodecCtx) (any, error) {
 			if err = reader.Skip(3); err != nil {
 				return nil, err
 			}
-			// if _, err = avcc.DecodeConfig(nil); err != nil {
-			// 	return nil, err
-			// }
+			var nalus Nalus
+			if codecCtx.FourCC() == codec.FourCC_H265 {
+				var ctx = codecCtx.(*H265Ctx)
+				var spsM util.Memory
+				spsM.Append(ctx.SPS[0])
+				var ppsM util.Memory
+				ppsM.Append(ctx.PPS[0])
+				var vpsM util.Memory
+				vpsM.Append(ctx.VPS[0])
+				nalus.PTS = time.Duration(avcc.Timestamp) * 90
+				nalus.DTS = time.Duration(avcc.Timestamp) * 90
+				nalus.Nalus = append(nalus.Nalus, spsM, ppsM, vpsM)
+			} else {
+				var ctx = codecCtx.(*H264Ctx)
+				var spsM util.Memory
+				spsM.Append(ctx.SPS[0])
+				var ppsM util.Memory
+				ppsM.Append(ctx.PPS[0])
+				nalus.PTS = time.Duration(avcc.Timestamp) * 90
+				nalus.DTS = time.Duration(avcc.Timestamp) * 90
+				nalus.Nalus = append(nalus.Nalus, spsM, ppsM)
+			}
+			return nalus, nil
 		} else {
 			if codecCtx.FourCC() == codec.FourCC_H265 {
 				return avcc.parseH265(codecCtx.(*H265Ctx), reader)

@@ -1,24 +1,17 @@
 package plugin_rtsp
 
 import (
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"github.com/AlexxIT/go2rtc/pkg/core"
-	"github.com/pion/rtcp"
-	"github.com/pion/rtp"
-	"github.com/pion/webrtc/v4"
 	"m7s.live/m7s/v5"
 	"m7s.live/m7s/v5/pkg/util"
-	mrtp "m7s.live/m7s/v5/plugin/rtp/pkg"
 	. "m7s.live/m7s/v5/plugin/rtsp/pkg"
 	"net"
 	"net/http"
-	"reflect"
 	"runtime/debug"
 	"strconv"
 	"strings"
-	"time"
 )
 
 const defaultConfig = m7s.DefaultYaml(`tcp:
@@ -28,6 +21,23 @@ var _ = m7s.InstallPlugin[RTSPPlugin](defaultConfig)
 
 type RTSPPlugin struct {
 	m7s.Plugin
+}
+
+func (p *RTSPPlugin) OnInit() error {
+	for streamPath, url := range p.GetCommonConf().PullOnStart {
+		go p.Pull(streamPath, url, &Client{})
+	}
+	return nil
+}
+
+func (p *RTSPPlugin) OnPull(puller *m7s.Puller) {
+	p.OnPublish(&puller.Publisher)
+}
+
+func (p *RTSPPlugin) OnPublish(puber *m7s.Publisher) {
+	if remoteURL, ok := p.GetCommonConf().PushList[puber.StreamPath]; ok {
+		go p.Push(puber.StreamPath, remoteURL, &Client{})
+	}
 }
 
 func (p *RTSPPlugin) OnTCPConnect(conn *net.TCPConn) {
@@ -47,10 +57,7 @@ func (p *RTSPPlugin) OnTCPConnect(conn *net.TCPConn) {
 		}
 	}()
 	var req *util.Request
-	var timeout time.Duration
 	var sendMode bool
-	mem := util.NewScalableMemoryAllocator(1 << 12)
-	defer mem.Recycle()
 	for {
 		req, err = nc.ReadRequest()
 		if err != nil {
@@ -97,8 +104,8 @@ func (p *RTSPPlugin) OnTCPConnect(conn *net.TCPConn) {
 			}
 
 			nc.SDP = string(req.Body) // for info
-
-			if nc.Medias, err = UnmarshalSDP(req.Body); err != nil {
+			var medias []*core.Media
+			if medias, err = UnmarshalSDP(req.Body); err != nil {
 				return
 			}
 
@@ -111,37 +118,9 @@ func (p *RTSPPlugin) OnTCPConnect(conn *net.TCPConn) {
 				})
 				return
 			}
-
-			for i, media := range nc.Medias {
-				if codec := media.Codecs[0]; codec.IsAudio() {
-					receiver.AudioCodecParameters = &webrtc.RTPCodecParameters{
-						RTPCodecCapability: webrtc.RTPCodecCapability{
-							MimeType:     "audio/" + codec.Name,
-							ClockRate:    codec.ClockRate,
-							Channels:     codec.Channels,
-							SDPFmtpLine:  codec.FmtpLine,
-							RTCPFeedback: nil,
-						},
-						PayloadType: webrtc.PayloadType(codec.PayloadType),
-					}
-					receiver.AudioChannelID = byte(i) << 1
-				} else if codec.IsVideo() {
-					receiver.VideoChannelID = byte(i) << 1
-					receiver.VideoCodecParameters = &webrtc.RTPCodecParameters{
-						RTPCodecCapability: webrtc.RTPCodecCapability{
-							MimeType:     "video/" + codec.Name,
-							ClockRate:    codec.ClockRate,
-							Channels:     codec.Channels,
-							SDPFmtpLine:  codec.FmtpLine,
-							RTCPFeedback: nil,
-						},
-						PayloadType: webrtc.PayloadType(codec.PayloadType),
-					}
-				}
+			if err = receiver.SetMedia(medias); err != nil {
+				return
 			}
-
-			timeout = time.Second * 15
-
 			res := &util.Response{Request: req}
 			if err = nc.WriteResponse(res); err != nil {
 				return
@@ -149,7 +128,6 @@ func (p *RTSPPlugin) OnTCPConnect(conn *net.TCPConn) {
 
 		case MethodDescribe:
 			sendMode = true
-			timeout = time.Second * 60
 
 			var subscriber *m7s.Subscriber
 			subscriber, err = p.Subscribe(strings.TrimPrefix(nc.URL.Path, "/"), conn)
@@ -174,53 +152,10 @@ func (p *RTSPPlugin) OnTCPConnect(conn *net.TCPConn) {
 			sender.NetConnection = nc
 			// convert tracks to real output medias
 			var medias []*core.Media
-			if subscriber.SubAudio && subscriber.Publisher.PubAudio {
-				audioTrack := subscriber.Publisher.GetAudioTrack(reflect.TypeOf((*mrtp.RTPAudio)(nil)))
-				if err = audioTrack.WaitReady(); err != nil {
-					return
-				}
-				parameter := audioTrack.ICodecCtx.(mrtp.IRTPCtx).GetRTPCodecParameter()
-				media := &core.Media{
-					Kind:      "audio",
-					Direction: core.DirectionRecvonly,
-					Codecs: []*core.Codec{{
-						Name:        parameter.MimeType[6:],
-						ClockRate:   parameter.ClockRate,
-						Channels:    parameter.Channels,
-						FmtpLine:    parameter.SDPFmtpLine,
-						PayloadType: uint8(parameter.PayloadType),
-					}},
-					ID: fmt.Sprintf("trackID=%d", len(medias)),
-				}
-				medias = append(medias, media)
-				sender.AudioChannelID = 0
+			if medias, err = sender.GetMedia(); err != nil {
+				return
 			}
-
-			if subscriber.SubVideo && subscriber.Publisher.PubVideo {
-				videoTrack := subscriber.Publisher.GetVideoTrack(reflect.TypeOf((*mrtp.RTPVideo)(nil)))
-				if err = videoTrack.WaitReady(); err != nil {
-					return
-				}
-				parameter := videoTrack.ICodecCtx.(mrtp.IRTPCtx).GetRTPCodecParameter()
-				c := core.Codec{
-					Name:        parameter.MimeType[6:],
-					ClockRate:   parameter.ClockRate,
-					Channels:    parameter.Channels,
-					FmtpLine:    parameter.SDPFmtpLine,
-					PayloadType: uint8(parameter.PayloadType),
-				}
-				media := &core.Media{
-					Kind:      "video",
-					Direction: core.DirectionRecvonly,
-					Codecs:    []*core.Codec{&c},
-					ID:        fmt.Sprintf("trackID=%d", len(medias)),
-				}
-				sender.VideoChannelID = byte(len(medias)) << 1
-				medias = append(medias, media)
-			}
-
-			res.Body, err = core.MarshalSDP(nc.SessionName, medias)
-			if err != nil {
+			if res.Body, err = core.MarshalSDP(nc.SessionName, medias); err != nil {
 				return
 			}
 
@@ -260,234 +195,20 @@ func (p *RTSPPlugin) OnTCPConnect(conn *net.TCPConn) {
 				return
 			}
 
-		case MethodRecord, MethodPlay:
+		case MethodRecord:
 			res := &util.Response{Request: req}
-			err = nc.WriteResponse(res)
-			var audioFrame *mrtp.RTPAudio
-			var videoFrame *mrtp.RTPVideo
-			if sendMode {
-				go func() {
-					mem := util.NewScalableMemoryAllocator(1 << 11)
-					sendRTP := func(pack *mrtp.RTPData, channel byte) (err error) {
-						nc.StartWrite()
-						defer nc.StopWrite()
-						for _, packet := range pack.Packets {
-							size := packet.MarshalSize()
-							chunk := mem.Borrow(size + 4)
-							chunk[0], chunk[1], chunk[2], chunk[3] = '$', channel, byte(size>>8), byte(size)
-							if _, err = packet.MarshalTo(chunk[4:]); err != nil {
-								return
-							}
-							if _, err = nc.Write(chunk); err != nil {
-								return
-							}
-						}
-						return
-					}
-					m7s.PlayBlock(sender.Subscriber, func(audio *mrtp.RTPAudio) error {
-						return sendRTP(&audio.RTPData, sender.AudioChannelID)
-					}, func(video *mrtp.RTPVideo) error {
-						return sendRTP(&video.RTPData, sender.VideoChannelID)
-					})
-					mem.Recycle()
-				}()
-			} else {
-				audioFrame = &mrtp.RTPAudio{}
-				audioFrame.ScalableMemoryAllocator = mem
-				audioFrame.RTPCodecParameters = receiver.AudioCodecParameters
-				videoFrame = &mrtp.RTPVideo{}
-				videoFrame.ScalableMemoryAllocator = mem
-				videoFrame.RTPCodecParameters = receiver.VideoCodecParameters
+			if err = nc.WriteResponse(res); err != nil {
+				return
 			}
-
-			for err == nil {
-				ts := time.Now()
-
-				if err = conn.SetReadDeadline(ts.Add(timeout)); err != nil {
-					return
-				}
-				var magic []byte
-				// we can read:
-				// 1. RTP interleaved: `$` + 1B channel number + 2B size
-				// 2. RTSP response:   RTSP/1.0 200 OK
-				// 3. RTSP request:    OPTIONS ...
-
-				if magic, err = nc.Peek(4); err != nil {
-					return
-				}
-
-				var channelID byte
-				var size int
-				var buf []byte
-				if magic[0] != '$' {
-					magicWord := string(magic)
-					logger.Warn("not magic", "magic", magicWord)
-					switch magicWord {
-					case "RTSP":
-						var res *util.Response
-						if res, err = nc.ReadResponse(); err != nil {
-							return
-						}
-						logger.Warn(string(res.Body))
-						// for playing backchannel only after OK response on play
-
-						continue
-
-					case "OPTI", "TEAR", "DESC", "SETU", "PLAY", "PAUS", "RECO", "ANNO", "GET_", "SET_":
-						var req *util.Request
-						if req, err = nc.ReadRequest(); err != nil {
-							return
-						}
-
-						if req.Method == MethodOptions {
-							res := &util.Response{Request: req}
-							if sendMode {
-								nc.StartWrite()
-							}
-							if err = nc.WriteResponse(res); err != nil {
-								return
-							}
-							if sendMode {
-								nc.StopWrite()
-							}
-						}
-						continue
-
-					default:
-						logger.Error("wrong input")
-						//c.Fire("RTSP wrong input")
-						//
-						//for i := 0; ; i++ {
-						//	// search next start symbol
-						//	if _, err = c.reader.ReadBytes('$'); err != nil {
-						//		return err
-						//	}
-						//
-						//	if channelID, err = c.reader.ReadByte(); err != nil {
-						//		return err
-						//	}
-						//
-						//	// TODO: better check maximum good channel ID
-						//	if channelID >= 20 {
-						//		continue
-						//	}
-						//
-						//	buf4 = make([]byte, 2)
-						//	if _, err = io.ReadFull(c.reader, buf4); err != nil {
-						//		return err
-						//	}
-						//
-						//	// check if size good for RTP
-						//	size = binary.BigEndian.Uint16(buf4)
-						//	if size <= 1500 {
-						//		break
-						//	}
-						//
-						//	// 10 tries to find good packet
-						//	if i >= 10 {
-						//		return fmt.Errorf("RTSP wrong input")
-						//	}
-						//}
-						for err = nc.Skip(1); err == nil; {
-							if magic[0], err = nc.ReadByte(); magic[0] == '*' {
-								channelID, err = nc.ReadByte()
-								magic[2], err = nc.ReadByte()
-								magic[3], err = nc.ReadByte()
-								size = int(binary.BigEndian.Uint16(magic[2:]))
-								buf = mem.Malloc(size)
-								if err = nc.ReadNto(size, buf); err != nil {
-									return
-								}
-								break
-							}
-						}
-					}
-				} else {
-					// hope that the odd channels are always RTCP
-
-					channelID = magic[1]
-
-					// get data size
-					size = int(binary.BigEndian.Uint16(magic[2:]))
-					// skip 4 bytes from c.reader.Peek
-					if err = nc.Skip(4); err != nil {
-						return
-					}
-					buf = mem.Malloc(size)
-					if err = nc.ReadNto(size, buf); err != nil {
-						return
-					}
-				}
-
-				if channelID&1 == 0 {
-					switch channelID {
-					case receiver.AudioChannelID:
-						if !receiver.PubAudio {
-							continue
-						}
-						packet := &rtp.Packet{}
-						if err = packet.Unmarshal(buf); err != nil {
-							return
-						}
-						if len(audioFrame.Packets) == 0 || packet.Timestamp == audioFrame.Packets[0].Timestamp {
-							audioFrame.AddRecycleBytes(buf)
-							audioFrame.Packets = append(audioFrame.Packets, packet)
-						} else {
-							err = receiver.WriteAudio(audioFrame)
-							audioFrame = &mrtp.RTPAudio{}
-							audioFrame.AddRecycleBytes(buf)
-							audioFrame.Packets = []*rtp.Packet{packet}
-							audioFrame.RTPCodecParameters = receiver.VideoCodecParameters
-							audioFrame.ScalableMemoryAllocator = mem
-						}
-					case receiver.VideoChannelID:
-						if !receiver.PubVideo {
-							continue
-						}
-						packet := &rtp.Packet{}
-						if err = packet.Unmarshal(buf); err != nil {
-							return
-						}
-						if len(videoFrame.Packets) == 0 || packet.Timestamp == videoFrame.Packets[0].Timestamp {
-							videoFrame.AddRecycleBytes(buf)
-							videoFrame.Packets = append(videoFrame.Packets, packet)
-						} else {
-							// t := time.Now()
-							err = receiver.WriteVideo(videoFrame)
-							// fmt.Println("write video", time.Since(t))
-							videoFrame = &mrtp.RTPVideo{}
-							videoFrame.AddRecycleBytes(buf)
-							videoFrame.Packets = []*rtp.Packet{packet}
-							videoFrame.RTPCodecParameters = receiver.VideoCodecParameters
-							videoFrame.ScalableMemoryAllocator = mem
-						}
-					default:
-
-					}
-				} else {
-					msg := &RTCP{Channel: channelID}
-					mem.Free(buf)
-					if err = msg.Header.Unmarshal(buf); err != nil {
-						return
-					}
-					if msg.Packets, err = rtcp.Unmarshal(buf); err != nil {
-						return
-					}
-					logger.Debug("rtcp", "type", msg.Header.Type, "length", msg.Header.Length)
-					// TODO: rtcp msg
-				}
-
-				//if keepaliveDT != 0 && ts.After(keepaliveTS) {
-				//	req := &tcp.Request{Method: MethodOptions, URL: c.URL}
-				//	if err = c.WriteRequest(req); err != nil {
-				//		return
-				//	}
-				//
-				//	keepaliveTS = ts.Add(keepaliveDT)
-				//}
-			}
+			err = receiver.Receive()
 			return
-
+		case MethodPlay:
+			res := &util.Response{Request: req}
+			if err = nc.WriteResponse(res); err != nil {
+				return
+			}
+			err = sender.Send()
+			return
 		case MethodTeardown:
 			res := &util.Response{Request: req}
 			_ = nc.WriteResponse(res)

@@ -23,7 +23,7 @@ type HDLPuller struct {
 
 func NewHDLPuller() *HDLPuller {
 	return &HDLPuller{
-		ScalableMemoryAllocator: util.NewScalableMemoryAllocator(1024),
+		ScalableMemoryAllocator: util.NewScalableMemoryAllocator(1 << 10),
 	}
 }
 
@@ -118,7 +118,7 @@ func (puller *HDLPuller) Pull(p *m7s.Puller) (err error) {
 		}
 		puller.absTS = offsetTs + (timestamp - startTs)
 		frame.Timestamp = puller.absTS
-		// fmt.Println(t, offsetTs, timestamp, startTs, puller.absTS)
+		//fmt.Println(t, offsetTs, timestamp, startTs, puller.absTS)
 		switch t {
 		case FLV_TAG_TYPE_AUDIO:
 			p.WriteAudio(frame.WrapAudio())
