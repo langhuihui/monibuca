@@ -241,6 +241,17 @@ func (r *MemoryReader) ReadBE(n int) (num int, err error) {
 	return
 }
 
+func (r *MemoryReader) Range(yield func([]byte)) {
+	if yield != nil {
+		for r.Length > 0 {
+			yield(r.GetCurrent())
+			r.skipBuf()
+		}
+	} else {
+		r.MoveToEnd()
+	}
+}
+
 func (r *MemoryReader) RangeN(n int, yield func([]byte)) {
 	for good := yield != nil; r.Length > 0 && n > 0; r.skipBuf() {
 		curBuf := r.GetCurrent()

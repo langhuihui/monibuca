@@ -13,8 +13,8 @@ import (
 
 type Stream struct {
 	*NetConnection
-	AudioChannelID byte
-	VideoChannelID byte
+	AudioChannelID int
+	VideoChannelID int
 }
 type Sender struct {
 	*m7s.Subscriber
@@ -36,7 +36,7 @@ func (ns *Stream) Close() error {
 }
 
 func (s *Sender) GetMedia() (medias []*core.Media, err error) {
-	if s.SubAudio && s.Publisher.PubAudio {
+	if s.SubAudio && s.Publisher.PubAudio && s.Publisher.HasAudioTrack() {
 		audioTrack := s.Publisher.GetAudioTrack(reflect.TypeOf((*mrtp.RTPAudio)(nil)))
 		if err = audioTrack.WaitReady(); err != nil {
 			return
@@ -54,11 +54,11 @@ func (s *Sender) GetMedia() (medias []*core.Media, err error) {
 			}},
 			ID: fmt.Sprintf("trackID=%d", len(medias)),
 		}
+		s.AudioChannelID = len(medias) << 1
 		medias = append(medias, media)
-		s.AudioChannelID = 0
 	}
 
-	if s.SubVideo && s.Publisher.PubVideo {
+	if s.SubVideo && s.Publisher.PubVideo && s.Publisher.HasVideoTrack() {
 		videoTrack := s.Publisher.GetVideoTrack(reflect.TypeOf((*mrtp.RTPVideo)(nil)))
 		if err = videoTrack.WaitReady(); err != nil {
 			return
@@ -77,41 +77,52 @@ func (s *Sender) GetMedia() (medias []*core.Media, err error) {
 			Codecs:    []*core.Codec{&c},
 			ID:        fmt.Sprintf("trackID=%d", len(medias)),
 		}
-		s.VideoChannelID = byte(len(medias)) << 1
+		s.VideoChannelID = len(medias) << 1
 		medias = append(medias, media)
 	}
 	return
 }
 
-func (s *Sender) Send() error {
-	sendRTP := func(pack *mrtp.RTPData, channel byte) (err error) {
-		s.StartWrite()
-		defer s.StopWrite()
-		for _, packet := range pack.Packets {
-			size := packet.MarshalSize()
-			chunk := s.MemoryAllocator.Borrow(size + 4)
-			chunk[0], chunk[1], chunk[2], chunk[3] = '$', channel, byte(size>>8), byte(size)
-			if _, err = packet.MarshalTo(chunk[4:]); err != nil {
-				return
-			}
-			if _, err = s.Write(chunk); err != nil {
-				return
-			}
+func (s *Sender) sendRTP(pack *mrtp.RTPData, channel int) (err error) {
+	s.StartWrite()
+	defer s.StopWrite()
+	for _, packet := range pack.Packets {
+		size := packet.MarshalSize()
+		chunk := s.MemoryAllocator.Borrow(size + 4)
+		chunk[0], chunk[1], chunk[2], chunk[3] = '$', byte(channel), byte(size>>8), byte(size)
+		if _, err = packet.MarshalTo(chunk[4:]); err != nil {
+			return
 		}
-		return
+		if _, err = s.Write(chunk); err != nil {
+			return
+		}
 	}
-	go func(err error) {
-		for err == nil {
-			_, _, err = s.NetConnection.Receive(true)
-		}
-	}(nil)
+	return
+}
+
+func (s *Sender) send() error {
 	return m7s.PlayBlock(s.Subscriber, func(audio *mrtp.RTPAudio) error {
-		return sendRTP(&audio.RTPData, s.AudioChannelID)
+		return s.sendRTP(&audio.RTPData, s.AudioChannelID)
 	}, func(video *mrtp.RTPVideo) error {
-		return sendRTP(&video.RTPData, s.VideoChannelID)
+		return s.sendRTP(&video.RTPData, s.VideoChannelID)
 	})
 }
+
+func (s *Sender) receive() {
+	var err error
+	for err == nil {
+		_, _, err = s.NetConnection.Receive(true)
+	}
+}
+
+func (s *Sender) Send() (err error) {
+	go s.receive()
+	return s.send()
+}
+
 func (r *Receiver) SetMedia(medias []*core.Media) (err error) {
+	r.AudioChannelID = -1
+	r.VideoChannelID = -1
 	for i, media := range medias {
 		if codec := media.Codecs[0]; codec.IsAudio() {
 			r.AudioCodecParameters = &webrtc.RTPCodecParameters{
@@ -124,9 +135,9 @@ func (r *Receiver) SetMedia(medias []*core.Media) (err error) {
 				},
 				PayloadType: webrtc.PayloadType(codec.PayloadType),
 			}
-			r.AudioChannelID = byte(i) << 1
+			r.AudioChannelID = i << 1
 		} else if codec.IsVideo() {
-			r.VideoChannelID = byte(i) << 1
+			r.VideoChannelID = i << 1
 			r.VideoCodecParameters = &webrtc.RTPCodecParameters{
 				RTPCodecCapability: webrtc.RTPCodecCapability{
 					MimeType:     "video/" + codec.Name,
@@ -160,7 +171,7 @@ func (r *Receiver) Receive() (err error) {
 			continue
 		}
 		if channelID&1 == 0 {
-			switch channelID {
+			switch int(channelID) {
 			case r.AudioChannelID:
 				if !r.PubAudio {
 					continue

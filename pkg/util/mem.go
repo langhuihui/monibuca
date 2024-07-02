@@ -218,9 +218,9 @@ func (sma *ScalableMemoryAllocator) Read(reader io.Reader, n int) (mem []byte, e
 }
 
 func (sma *ScalableMemoryAllocator) FreeRest(mem *[]byte, keep int) {
-	if keep < len(*mem) {
-		sma.Free((*mem)[keep:])
-		*mem = (*mem)[:keep]
+	if m := *mem; keep < len(m) {
+		sma.Free(m[keep:])
+		*mem = m[:keep]
 	}
 }
 

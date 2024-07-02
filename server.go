@@ -150,12 +150,7 @@ func (s *Server) run(ctx context.Context, conf any) (err error) {
 	if cg != nil {
 		s.Config.ParseUserFile(cg["global"])
 	}
-	var lv slog.LevelVar
-	lv.UnmarshalText([]byte(s.config.LogLevel))
-	if s.config.LogLevel == "trace" {
-		lv.Set(TraceLevel)
-	}
-	s.LogHandler.SetLevel(lv.Level())
+	s.LogHandler.SetLevel(ParseLevel(s.config.LogLevel))
 	s.registerHandler(map[string]http.HandlerFunc{
 		"/api/config/json/{name}":             s.api_Config_JSON_,
 		"/api/stream/annexb/{streamPath...}":  s.api_Stream_AnnexB_,

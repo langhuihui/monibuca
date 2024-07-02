@@ -123,10 +123,7 @@ func (r *BufReader) ReadRange(n int, yield func([]byte)) (err error) {
 				return
 			}
 			n -= r.buf.Length
-			if yield != nil {
-				r.buf.Range(yield)
-			}
-			r.buf.MoveToEnd()
+			r.buf.Range(yield)
 		}
 	}
 	return

@@ -1,0 +1,12 @@
+global:
+  tcp:
+    listenaddr: :50051
+  http:
+    listenaddr: :8081
+    listenaddrtls: :8555
+rtsp:
+  tcp:
+    listenaddr: :8554
+  pull:
+    pullonstart:
+      live/test: rtsp://localhost/live/test

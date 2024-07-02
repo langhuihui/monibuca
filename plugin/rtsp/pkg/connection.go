@@ -319,6 +319,7 @@ func (c *NetConnection) Receive(sendMode bool) (channelID byte, buf []byte, err 
 		}
 		buf = c.MemoryAllocator.Malloc(size)
 		if err = c.ReadNto(size, buf); err != nil {
+			c.MemoryAllocator.Free(buf)
 			return
 		}
 	}

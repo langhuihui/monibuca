@@ -182,7 +182,7 @@ func (s *Server) GetSubscribers(ctx context.Context, req *pb.SubscribersRequest)
 }
 func (s *Server) AudioTrackSnap(ctx context.Context, req *pb.StreamSnapRequest) (res *pb.TrackSnapShotResponse, err error) {
 	s.Call(func() {
-		if pub, ok := s.Streams.Get(req.StreamPath); ok && !pub.AudioTrack.IsEmpty() {
+		if pub, ok := s.Streams.Get(req.StreamPath); ok && pub.HasAudioTrack() {
 			res = &pb.TrackSnapShotResponse{}
 			for _, memlist := range pub.AudioTrack.Allocator.GetChildren() {
 				var list []*pb.MemoryBlock
@@ -260,7 +260,7 @@ func (s *Server) api_VideoTrack_SSE(rw http.ResponseWriter, r *http.Request) {
 
 func (s *Server) VideoTrackSnap(ctx context.Context, req *pb.StreamSnapRequest) (res *pb.TrackSnapShotResponse, err error) {
 	s.Call(func() {
-		if pub, ok := s.Streams.Get(req.StreamPath); ok && !pub.VideoTrack.IsEmpty() {
+		if pub, ok := s.Streams.Get(req.StreamPath); ok && pub.HasVideoTrack() {
 			res = &pb.TrackSnapShotResponse{}
 			for _, memlist := range pub.VideoTrack.Allocator.GetChildren() {
 				var list []*pb.MemoryBlock

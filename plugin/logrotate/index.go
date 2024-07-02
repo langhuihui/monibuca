@@ -27,13 +27,8 @@ type LogRotatePlugin struct {
 var _ = m7s.InstallPlugin[LogRotatePlugin](&pb.Logrotate_ServiceDesc, pb.RegisterLogrotateHandler)
 
 func (config *LogRotatePlugin) OnInit() (err error) {
-	var lv slog.LevelVar
-	lv.UnmarshalText([]byte(config.Level))
-	if config.Level == "trace" {
-		lv.Set(pkg.TraceLevel)
-	}
 	builder := func(w io.Writer, opts *slog.HandlerOptions) slog.Handler {
-		return console.NewHandler(w, &console.HandlerOptions{NoColor: true, Level: lv.Level(),TimeFormat: "2006-01-02 15:04:05.000"})
+		return console.NewHandler(w, &console.HandlerOptions{NoColor: true, Level: pkg.ParseLevel(config.Level), TimeFormat: "2006-01-02 15:04:05.000"})
 	}
 	config.handler, err = rotoslog.NewHandler(rotoslog.LogHandlerBuilder(builder), rotoslog.LogDir(config.Path), rotoslog.MaxFileSize(config.Size), rotoslog.DateTimeLayout(config.Formatter), rotoslog.MaxRotatedFiles(config.MaxFiles))
 	if err == nil {

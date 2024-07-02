@@ -8,6 +8,16 @@ import (
 
 var _ slog.Handler = (*MultiLogHandler)(nil)
 
+func ParseLevel(level string) slog.Level {
+	var lv slog.LevelVar
+	if level == "trace" {
+		lv.Set(TraceLevel)
+	} else {
+		lv.UnmarshalText([]byte(level))
+	}
+	return lv.Level()
+}
+
 type MultiLogHandler struct {
 	handlers    []slog.Handler
 	parentLevel *slog.Level

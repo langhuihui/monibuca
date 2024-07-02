@@ -2,7 +2,6 @@ package m7s
 
 import (
 	"context"
-	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -64,12 +63,7 @@ func (plugin *PluginMeta) Init(s *Server, userConfig map[string]any) {
 	}
 	p.Config.ParseUserFile(userConfig)
 	finalConfig, _ := yaml.Marshal(p.Config.GetMap())
-	var lv slog.LevelVar
-	_ = lv.UnmarshalText([]byte(p.config.LogLevel))
-	if p.config.LogLevel == "trace" {
-		lv.Set(TraceLevel)
-	}
-	p.Logger.Handler().(*MultiLogHandler).SetLevel(lv.Level())
+	p.Logger.Handler().(*MultiLogHandler).SetLevel(ParseLevel(p.config.LogLevel))
 	p.Debug("config", "detail", string(finalConfig))
 	if s.DisableAll {
 		p.Disabled = true
