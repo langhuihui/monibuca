@@ -24,13 +24,8 @@ func (a *AnnexB) Dump(t byte, w io.Writer) {
 }
 
 // DecodeConfig implements pkg.IAVFrame.
-func (a *AnnexB) DecodeConfig(t *AVTrack, ctx ICodecCtx) error {
-	switch c := ctx.(type) {
-	case codec.IH264Ctx:
-		var annexb264 Annexb264Ctx
-		annexb264.H264Ctx = *c.GetH264Ctx()
-		t.ICodecCtx = &annexb264
-	}
+func (a *AnnexB) ConvertCtx(ctx codec.ICodecCtx, t *AVTrack) error {
+	t.ICodecCtx = ctx.GetBase()
 	return nil
 }
 
@@ -42,9 +37,12 @@ func (a *AnnexB) GetSize() int {
 func (a *AnnexB) GetTimestamp() time.Duration {
 	return a.DTS * time.Millisecond / 90
 }
+func (a *AnnexB) GetCTS() time.Duration {
+	return (a.PTS - a.DTS) * time.Millisecond / 90
+}
 
 // Parse implements pkg.IAVFrame.
-func (a *AnnexB) Parse(t *AVTrack) (isIDR bool, isSeq bool, raw any, err error) {
+func (a *AnnexB) Parse(t *AVTrack) (err error) {
 	panic("unimplemented")
 }
 
@@ -53,35 +51,25 @@ func (a *AnnexB) String() string {
 	return fmt.Sprintf("%d %d", a.DTS, a.Memory.Size)
 }
 
-// ToRaw implements pkg.IAVFrame.
-func (a *AnnexB) ToRaw(ctx ICodecCtx) (any, error) {
-	// var nalus Nalus
-	// nalus.PTS = a.PTS
-	// nalus.DTS = a.DTS
+// Demux implements pkg.IAVFrame.
+func (a *AnnexB) Demux(ctx codec.ICodecCtx) (any, error) {
 	panic("unimplemented")
 }
 
-type Annexb264Ctx struct {
-	codec.H264Ctx
-}
-
-type Annexb265Ctx struct {
-	codec.H265Ctx
-}
-
-func (a *Annexb264Ctx) CreateFrame(frame *AVFrame) (IAVFrame, error) {
-	var annexb AnnexB
-	// annexb.RecyclableBuffers.ScalableMemoryAllocator = frame.Wraps[0].GetScalableMemoryAllocator()
-	annexb.Append(codec.NALU_Delimiter2)
+func (a *AnnexB) Mux(codecCtx codec.ICodecCtx, frame *AVFrame) {
+	a.AppendOne(codec.NALU_Delimiter2)
 	if frame.IDR {
-		annexb.Append(a.SPS[0], codec.NALU_Delimiter2, a.PPS[0], codec.NALU_Delimiter2)
-	}
-	var nalus = frame.Raw.(Nalus)
-	for i, nalu := range nalus.Nalus {
-		if i > 0 {
-			annexb.Append(codec.NALU_Delimiter1)
+		switch ctx := codecCtx.(type) {
+		case *codec.H264Ctx:
+			a.Append(ctx.SPS[0], codec.NALU_Delimiter2, ctx.PPS[0], codec.NALU_Delimiter2)
+		case *codec.H265Ctx:
+			a.Append(ctx.SPS[0], codec.NALU_Delimiter2, ctx.PPS[0], codec.NALU_Delimiter2, ctx.VPS[0], codec.NALU_Delimiter2)
 		}
-		annexb.Append(nalu.Buffers...)
 	}
-	return &annexb, nil
+	for i, nalu := range frame.Raw.(Nalus) {
+		if i > 0 {
+			a.AppendOne(codec.NALU_Delimiter1)
+		}
+		a.Append(nalu.Buffers...)
+	}
 }

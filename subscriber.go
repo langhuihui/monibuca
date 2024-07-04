@@ -17,6 +17,8 @@ import (
 	"m7s.live/m7s/v5/pkg/util"
 )
 
+var AVFrameType = reflect.TypeOf((*AVFrame)(nil))
+
 type Owner struct {
 	Conn     net.Conn
 	File     *os.File
@@ -89,11 +91,62 @@ type Subscriber struct {
 	VideoReader *AVRingReader
 }
 
+func (s *Subscriber) createAudioReader(dataType reflect.Type, startAudioTs time.Duration) (awi int) {
+	if s.Publisher == nil || dataType == nil {
+		return
+	}
+	var at *AVTrack
+	if dataType == AVFrameType {
+		at = s.Publisher.AudioTrack.AVTrack
+		awi = -1
+	} else {
+		at = s.Publisher.GetAudioTrack(dataType)
+		if at != nil {
+			awi = at.WrapIndex
+		}
+	}
+	if at != nil {
+		if err := at.WaitReady(); err != nil {
+			return
+		}
+		ar := NewAVRingReader(at)
+		s.AudioReader = ar
+		ar.StartTs = startAudioTs
+		ar.Logger = s.Logger.With("reader", dataType.String())
+		ar.Info("start read")
+	}
+	return
+}
+
+func (s *Subscriber) createVideoReader(dataType reflect.Type, startVideoTs time.Duration) (vwi int) {
+	if s.Publisher == nil || dataType == nil {
+		return
+	}
+	var vt *AVTrack
+	if dataType == AVFrameType {
+		vt = s.Publisher.VideoTrack.AVTrack
+		vwi = -1
+	} else {
+		vt = s.Publisher.GetVideoTrack(dataType)
+		if vt != nil {
+			vwi = vt.WrapIndex
+		}
+	}
+	if vt != nil {
+		if err := vt.WaitReady(); err != nil {
+			return
+		}
+		vr := NewAVRingReader(vt)
+		vr.StartTs = startVideoTs
+		s.VideoReader = vr
+		vr.Logger = s.Logger.With("reader", dataType.String())
+		vr.Info("start read")
+	}
+	return
+}
+
 func PlayBlock[A any, V any](s *Subscriber, onAudio func(A) error, onVideo func(V) error) (err error) {
-	var ar, vr *AVRingReader
 	var a1, v1 reflect.Type
-	var at, vt *AVTrack
-	var awi, vwi int
 	var startAudioTs, startVideoTs time.Duration
 	var initState = 0
 	prePublisher := s.Publisher
@@ -104,62 +157,14 @@ func PlayBlock[A any, V any](s *Subscriber, onAudio func(A) error, onVideo func(
 	if s.SubVideo {
 		v1 = reflect.TypeOf(onVideo).In(0)
 	}
-	createAudioReader := func() {
-		if s.Publisher == nil || a1 == nil {
-			return
-		}
-		if a1 == reflect.TypeOf(audioFrame) {
-			at = s.Publisher.AudioTrack.AVTrack
-			awi = -1
-		} else {
-			at = s.Publisher.GetAudioTrack(a1)
-			if at != nil {
-				awi = at.WrapIndex
-			}
-		}
-		if at != nil {
-			if err := at.WaitReady(); err != nil {
-				return
-			}
-			ar = NewAVRingReader(at)
-			s.AudioReader = ar
-			ar.StartTs = startAudioTs
-			ar.Logger = s.Logger.With("reader", a1.String())
-			ar.Info("start read")
-		}
-	}
-	createVideoReader := func() {
-		if s.Publisher == nil || v1 == nil {
-			return
-		}
-		if v1 == reflect.TypeOf(videoFrame) {
-			vt = s.Publisher.VideoTrack.AVTrack
-			vwi = -1
-		} else {
-			vt = s.Publisher.GetVideoTrack(v1)
-			if vt != nil {
-				vwi = vt.WrapIndex
-			}
-		}
-		if vt != nil {
-			if err := vt.WaitReady(); err != nil {
-				return
-			}
-			vr = NewAVRingReader(vt)
-			vr.StartTs = startVideoTs
-			s.VideoReader = vr
-			vr.Logger = s.Logger.With("reader", v1.String())
-			vr.Info("start read")
-		}
-	}
-	createAudioReader()
-	createVideoReader()
+	awi := s.createAudioReader(a1, startAudioTs)
+	vwi := s.createVideoReader(v1, startVideoTs)
 	defer func() {
-		if ar != nil {
-			ar.StopRead()
+		if s.AudioReader != nil {
+			s.AudioReader.StopRead()
 		}
-		if vr != nil {
-			vr.StopRead()
+		if s.VideoReader != nil {
+			s.VideoReader.StopRead()
 		}
 	}()
 	sendAudioFrame := func() (err error) {
@@ -170,7 +175,7 @@ func PlayBlock[A any, V any](s *Subscriber, onAudio func(A) error, onVideo func(
 				}
 				err = onAudio(audioFrame.Wraps[awi].(A))
 			} else {
-				ar.StopRead()
+				s.AudioReader.StopRead()
 			}
 		} else {
 			err = onAudio(any(audioFrame).(A))
@@ -189,7 +194,7 @@ func PlayBlock[A any, V any](s *Subscriber, onAudio func(A) error, onVideo func(
 				}
 				err = onVideo(videoFrame.Wraps[vwi].(V))
 			} else {
-				vr.StopRead()
+				s.VideoReader.StopRead()
 			}
 		} else {
 			err = onVideo(any(videoFrame).(V))
@@ -203,23 +208,24 @@ func PlayBlock[A any, V any](s *Subscriber, onAudio func(A) error, onVideo func(
 	checkPublisherChange := func() {
 		if prePublisher != s.Publisher {
 			s.Info("publisher changed", "prePublisher", prePublisher.ID, "publisher", s.Publisher.ID)
-			if ar != nil {
-				startAudioTs = time.Duration(ar.AbsTime) * time.Millisecond
-				ar.StopRead()
-				ar = nil
+			if s.AudioReader != nil {
+				startAudioTs = time.Duration(s.AudioReader.AbsTime) * time.Millisecond
+				s.AudioReader.StopRead()
+				s.AudioReader = nil
 			}
-			if vr != nil {
-				startVideoTs = time.Duration(vr.AbsTime) * time.Millisecond
-				vr.StopRead()
-				vr = nil
+			if s.VideoReader != nil {
+				startVideoTs = time.Duration(s.VideoReader.AbsTime) * time.Millisecond
+				s.VideoReader.StopRead()
+				s.VideoReader = nil
 			}
-			createAudioReader()
-			createVideoReader()
+			awi = s.createAudioReader(a1, startAudioTs)
+			vwi = s.createVideoReader(v1, startVideoTs)
 			prePublisher = s.Publisher
 		}
 	}
 	for err == nil {
 		err = s.Err()
+		ar, vr := s.AudioReader, s.VideoReader
 		if vr != nil {
 			for err == nil {
 				err = vr.ReadFrame(&s.Subscribe)
@@ -260,7 +266,7 @@ func PlayBlock[A any, V any](s *Subscriber, onAudio func(A) error, onVideo func(
 				}
 			}
 		} else {
-			createVideoReader()
+			vwi = s.createVideoReader(v1, startVideoTs)
 		}
 		// 正常模式下或者纯音频模式下，音频开始播放
 		if ar != nil {
@@ -305,7 +311,7 @@ func PlayBlock[A any, V any](s *Subscriber, onAudio func(A) error, onVideo func(
 				}
 			}
 		} else {
-			createAudioReader()
+			awi = s.createAudioReader(a1, startAudioTs)
 		}
 		checkPublisherChange()
 		runtime.Gosched()

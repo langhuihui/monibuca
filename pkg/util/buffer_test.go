@@ -24,7 +24,7 @@ func TestReadBytesTo(t *testing.T) {
 		s := RandomString(100)
 		t.Logf("s:%s", s)
 		var m Memory
-		m.Append([]byte(s))
+		m.AppendOne([]byte(s))
 		r := m.NewReader()
 		seededRand := rand.New(rand.NewSource(time.Now().UnixNano()))
 		var total []byte

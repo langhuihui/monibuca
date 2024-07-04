@@ -1,6 +1,7 @@
 package util
 
 import (
+	"fmt"
 	"gopkg.in/yaml.v3"
 	"strconv"
 	"strings"
@@ -21,8 +22,20 @@ func (r *Range[T]) Valid() bool {
 	return r.Size() >= 0
 }
 
-func (r *Range[T]) UnmarshalYAML(value *yaml.Node) error {
-	ss := strings.Split(value.Value, "-")
+func (r *Range[T]) Resolve(s string) error {
+	ss := strings.Split(s, "-")
+	if len(ss) == 0 {
+		return fmt.Errorf("invalid range: %s", s)
+	}
+	if len(ss) == 1 {
+		i64, err := strconv.ParseInt(s, 10, 0)
+		r[0] = T(i64)
+		if err != nil {
+			return err
+		}
+		r[1] = r[0]
+		return nil
+	}
 	i64, err := strconv.ParseInt(ss[0], 10, 0)
 	if err != nil {
 		return err
@@ -34,4 +47,8 @@ func (r *Range[T]) UnmarshalYAML(value *yaml.Node) error {
 	}
 	r[1] = T(i64)
 	return nil
+}
+
+func (r *Range[T]) UnmarshalYAML(value *yaml.Node) error {
+	return r.Resolve(value.Value)
 }

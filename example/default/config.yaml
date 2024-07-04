@@ -3,8 +3,6 @@ global:
   enableauth: true
   tcp:
     listenaddr: :50051
-  publish:
-    pubaudio: false
 #    ringsize: 20-250
 #    buffertime: 10s
   #   speed: 1
@@ -13,8 +11,6 @@ console:
 logrotate:
   level: debug
 rtsp:
-  subscribe:
-    subaudio: false
 rtmp:
 #  tcp:
 #    listenaddr: :11935

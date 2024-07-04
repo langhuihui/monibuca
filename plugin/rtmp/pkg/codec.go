@@ -47,12 +47,7 @@ type (
 		InitialPresentationDelayPresent  byte
 		InitialPresentationDelayMinusOne byte
 	}
-	PCMACtx struct {
-		codec.PCMACtx
-	}
-	PCMUCtx struct {
-		codec.PCMUCtx
-	}
+
 	AACCtx struct {
 		codec.AACCtx
 		AudioSpecificConfig
@@ -217,7 +212,7 @@ func (ctx *H264Ctx) Unmarshal(b *util.MemoryReader) (err error) {
 		if err1 != nil {
 			return err1
 		}
-		spsbytes, err2 := b.ReadBytes(spslen)
+		spsbytes, err2 := b.ReadBytes(int(spslen))
 		if err2 != nil {
 			return err2
 		}
@@ -239,7 +234,7 @@ func (ctx *H264Ctx) Unmarshal(b *util.MemoryReader) (err error) {
 		if err1 != nil {
 			return err1
 		}
-		ppsbytes, err2 := b.ReadBytes(ppslen)
+		ppsbytes, err2 := b.ReadBytes(int(ppslen))
 		if err2 != nil {
 			return err2
 		}
@@ -292,7 +287,7 @@ func (ctx *H265Ctx) Unmarshal(b *util.MemoryReader) (err error) {
 		if err != nil {
 			return ErrHevc
 		}
-		vps, err := b.ReadBytes(vpslen)
+		vps, err := b.ReadBytes(int(vpslen))
 		if err != nil {
 			return ErrHevc
 		}
@@ -311,7 +306,7 @@ func (ctx *H265Ctx) Unmarshal(b *util.MemoryReader) (err error) {
 		if err != nil {
 			return ErrHevc
 		}
-		sps, err := b.ReadBytes(spslen)
+		sps, err := b.ReadBytes(int(spslen))
 		if err != nil {
 			return ErrHevc
 		}
@@ -334,7 +329,7 @@ func (ctx *H265Ctx) Unmarshal(b *util.MemoryReader) (err error) {
 		if err != nil {
 			return ErrHevc
 		}
-		pps, err := b.ReadBytes(ppslen)
+		pps, err := b.ReadBytes(int(ppslen))
 		if err != nil {
 			return ErrHevc
 		}
@@ -763,14 +758,6 @@ func (p *AV1Ctx) Unmarshal(data *util.MemoryReader) (err error) {
 		p.ConfigOBUs, err = data.ReadBytes(data.Length)
 	}
 	return nil
-}
-
-func (PCMACtx) GetInfo() string {
-	return "pcma"
-}
-
-func (PCMUCtx) GetInfo() string {
-	return "pcmu"
 }
 
 func (ctx *AACCtx) GetInfo() string {

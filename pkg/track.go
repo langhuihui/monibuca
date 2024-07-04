@@ -3,6 +3,7 @@ package pkg
 import (
 	"context"
 	"log/slog"
+	"m7s.live/m7s/v5/pkg/codec"
 	"m7s.live/m7s/v5/pkg/config"
 	"reflect"
 	"time"
@@ -29,7 +30,7 @@ type (
 	AVTrack struct {
 		Track
 		*RingWriter
-		ICodecCtx
+		codec.ICodecCtx
 		Allocator     *util.ScalableMemoryAllocator
 		SequenceFrame IAVFrame
 		WrapIndex     int
@@ -42,7 +43,7 @@ func NewAVTrack(args ...any) (t *AVTrack) {
 		switch v := arg.(type) {
 		case IAVFrame:
 			t.FrameType = reflect.TypeOf(v)
-			t.Allocator = v.GetScalableMemoryAllocator()
+			t.Allocator = v.GetAllocator()
 		case reflect.Type:
 			t.FrameType = v
 		case *slog.Logger:

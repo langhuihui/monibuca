@@ -30,9 +30,10 @@ type Config struct {
 	tag      reflect.StructTag
 }
 
-var durationType = reflect.TypeOf(time.Duration(0))
-var regexpType = reflect.TypeOf(Regexp{})
-var regexpYaml = regexp.MustCompile(`^(.+: )"(.+)"$`)
+var (
+	durationType = reflect.TypeOf(time.Duration(0))
+	regexpType   = reflect.TypeOf(Regexp{})
+)
 
 func (config *Config) Range(f func(key string, value Config)) {
 	if m, ok := config.GetValue().(map[string]Config); ok {
@@ -261,8 +262,7 @@ func (config *Config) valueWithoutModify() any {
 }
 
 func equal(vwm, v any) bool {
-	ft := reflect.TypeOf(vwm)
-	switch ft {
+	switch ft := reflect.TypeOf(vwm); ft {
 	case regexpType:
 		return vwm.(Regexp).String() == v.(Regexp).String()
 	default:

@@ -4,7 +4,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"regexp"
+	"strings"
 	"time"
 
 	"github.com/pion/rtp"
@@ -36,11 +36,10 @@ type (
 )
 
 var (
-	_        IAVFrame       = (*RTPVideo)(nil)
-	_        IVideoCodecCtx = (*RTPH264Ctx)(nil)
-	_        IVideoCodecCtx = (*RTPH265Ctx)(nil)
-	_        IVideoCodecCtx = (*RTPAV1Ctx)(nil)
-	spropReg                = regexp.MustCompile(`sprop-parameter-sets=(.+),([^;]+)(;|$)`)
+	_ IAVFrame       = (*RTPVideo)(nil)
+	_ IVideoCodecCtx = (*RTPH264Ctx)(nil)
+	_ IVideoCodecCtx = (*RTPH265Ctx)(nil)
+	_ IVideoCodecCtx = (*RTPAV1Ctx)(nil)
 )
 
 const (
@@ -49,7 +48,7 @@ const (
 	MTUSize  = 1460
 )
 
-func (r *RTPVideo) Parse(t *AVTrack) (isIDR, isSeq bool, raw any, err error) {
+func (r *RTPVideo) Parse(t *AVTrack) (err error) {
 	switch r.MimeType {
 	case webrtc.MimeTypeH264:
 		var ctx *RTPH264Ctx
@@ -57,47 +56,42 @@ func (r *RTPVideo) Parse(t *AVTrack) (isIDR, isSeq bool, raw any, err error) {
 			ctx = t.ICodecCtx.(*RTPH264Ctx)
 		} else {
 			ctx = &RTPH264Ctx{}
+			ctx.parseFmtpLine(r.RTPCodecParameters)
 			//packetization-mode=1; sprop-parameter-sets=J2QAKaxWgHgCJ+WagICAgQ==,KO48sA==; profile-level-id=640029
-			ctx.RTPCodecParameters = *r.RTPCodecParameters
-			if match := spropReg.FindStringSubmatch(ctx.SDPFmtpLine); len(match) > 2 {
-				if sps, err := base64.StdEncoding.DecodeString(match[1]); err == nil {
-					ctx.SPS = [][]byte{sps}
-				}
-				if pps, err := base64.StdEncoding.DecodeString(match[2]); err == nil {
-					ctx.PPS = [][]byte{pps}
+			if sprop, ok := ctx.Fmtp["sprop-parameter-sets"]; ok {
+				if sprops := strings.Split(sprop, ","); len(sprops) == 2 {
+					if sps, err := base64.StdEncoding.DecodeString(sprops[0]); err == nil {
+						ctx.SPS = [][]byte{sps}
+					}
+					if pps, err := base64.StdEncoding.DecodeString(sprops[1]); err == nil {
+						ctx.PPS = [][]byte{pps}
+					}
 				}
 			}
 			t.ICodecCtx = ctx
 		}
-		raw, err = r.ToRaw(ctx)
-		if err != nil {
+		if t.Value.Raw, err = r.Demux(ctx); err != nil {
 			return
 		}
-		nalus := raw.(Nalus)
-		for _, nalu := range nalus.Nalus {
+		for _, nalu := range t.Value.Raw.(Nalus) {
 			switch codec.ParseH264NALUType(nalu.Buffers[0][0]) {
 			case codec.NALU_SPS:
-				ctx = &RTPH264Ctx{}
 				ctx.SPS = [][]byte{nalu.ToBytes()}
 				if err = ctx.SPSInfo.Unmarshal(ctx.SPS[0]); err != nil {
 					return
 				}
-				ctx.RTPCodecParameters = *r.RTPCodecParameters
-				t.ICodecCtx = ctx
 			case codec.NALU_PPS:
 				ctx.PPS = [][]byte{nalu.ToBytes()}
 			case codec.NALU_IDR_Picture:
-				isIDR = true
+				t.Value.IDR = true
 			}
 		}
 	case webrtc.MimeTypeVP9:
 		// var ctx RTPVP9Ctx
-		// ctx.FourCC = codec.FourCC_VP9
 		// ctx.RTPCodecParameters = *r.RTPCodecParameters
 		// codecCtx = &ctx
 	case webrtc.MimeTypeAV1:
 		// var ctx RTPAV1Ctx
-		// ctx.FourCC = codec.FourCC_AV1
 		// ctx.RTPCodecParameters = *r.RTPCodecParameters
 		// codecCtx = &ctx
 	case webrtc.MimeTypeH265:
@@ -106,15 +100,13 @@ func (r *RTPVideo) Parse(t *AVTrack) (isIDR, isSeq bool, raw any, err error) {
 			ctx = t.ICodecCtx.(*RTPH265Ctx)
 		} else {
 			ctx = &RTPH265Ctx{}
-			ctx.RTPCodecParameters = *r.RTPCodecParameters
+			ctx.parseFmtpLine(r.RTPCodecParameters)
 			t.ICodecCtx = ctx
 		}
-		raw, err = r.ToRaw(ctx)
-		if err != nil {
+		if t.Value.Raw, err = r.Demux(ctx); err != nil {
 			return
 		}
-		nalus := raw.(Nalus)
-		for _, nalu := range nalus.Nalus {
+		for _, nalu := range t.Value.Raw.(Nalus) {
 			switch codec.ParseH265NALUType(nalu.Buffers[0][0]) {
 			case codec.NAL_UNIT_SPS:
 				ctx = &RTPH265Ctx{}
@@ -132,13 +124,9 @@ func (r *RTPVideo) Parse(t *AVTrack) (isIDR, isSeq bool, raw any, err error) {
 				codec.NAL_UNIT_CODED_SLICE_IDR,
 				codec.NAL_UNIT_CODED_SLICE_IDR_N_LP,
 				codec.NAL_UNIT_CODED_SLICE_CRA:
-				isIDR = true
+				t.Value.IDR = true
 			}
 		}
-	case "audio/MPEG4-GENERIC", "audio/AAC":
-		var ctx RTPAACCtx
-		ctx.RTPCodecParameters = *r.RTPCodecParameters
-		t.ICodecCtx = &ctx
 	default:
 		err = ErrUnsupportCodec
 	}
@@ -153,65 +141,57 @@ func (h265 *RTPH265Ctx) GetInfo() string {
 	return h265.SDPFmtpLine
 }
 
-func (h264 *RTPH264Ctx) CreateFrame(from *AVFrame) (frame IAVFrame, err error) {
-	var r RTPVideo
-	r.RTPCodecParameters = &h264.RTPCodecParameters
-	if len(from.Wraps) > 0 {
-		r.ScalableMemoryAllocator = from.Wraps[0].GetScalableMemoryAllocator()
-	}
-	nalus := from.Raw.(Nalus)
-	var lastPacket *rtp.Packet
-	createPacket := func(payload []byte) *rtp.Packet {
-		h264.SequenceNumber++
-		lastPacket = &rtp.Packet{
-			Header: rtp.Header{
-				Version:        2,
-				SequenceNumber: h264.SequenceNumber,
-				Timestamp:      uint32(nalus.PTS),
-				SSRC:           h264.SSRC,
-				PayloadType:    uint8(h264.PayloadType),
-			},
-			Payload: payload,
-		}
-		return lastPacket
-	}
-	if nalus.H264Type() == codec.NALU_IDR_Picture && len(h264.SPS) > 0 && len(h264.PPS) > 0 {
-		r.Packets = append(r.Packets, createPacket(h264.SPS[0]), createPacket(h264.PPS[0]))
-	}
-	for _, nalu := range nalus.Nalus {
-		if reader := nalu.NewReader(); reader.Length > MTUSize {
-			//fu-a
-			mem := r.Malloc(MTUSize)
-			n := reader.ReadBytesTo(mem[1:])
-			fuaHead := codec.NALU_FUA.Or(mem[1] & 0x60)
-			mem[0] = fuaHead
-			naluType := mem[1] & 0x1f
-			mem[1] = naluType | startBit
-			r.FreeRest(&mem, n+1)
-			r.AddRecycleBytes(mem)
-			r.Packets = append(r.Packets, createPacket(mem))
-			for reader.Length > 0 {
-				mem = r.Malloc(MTUSize)
-				n = reader.ReadBytesTo(mem[2:])
-				mem[0] = fuaHead
-				mem[1] = naluType
-				r.FreeRest(&mem, n+2)
-				r.AddRecycleBytes(mem)
-				r.Packets = append(r.Packets, createPacket(mem))
-			}
-			lastPacket.Payload[1] |= endBit
-		} else {
-			mem := r.NextN(reader.Length)
-			reader.ReadBytesTo(mem)
-			r.Packets = append(r.Packets, createPacket(mem))
-		}
-	}
-	frame = &r
-	lastPacket.Header.Marker = true
-	return
+func (av1 *RTPAV1Ctx) GetInfo() string {
+	return av1.SDPFmtpLine
 }
 
-func (r *RTPVideo) ToRaw(ictx ICodecCtx) (any, error) {
+func (r *RTPVideo) GetCTS() time.Duration {
+	return 0
+}
+
+func (r *RTPVideo) Mux(codecCtx codec.ICodecCtx, from *AVFrame) {
+	pts := uint32((from.Timestamp + from.CTS) * 90 / time.Millisecond)
+	switch c := codecCtx.(type) {
+	case *RTPH264Ctx:
+		ctx := &c.RTPCtx
+		r.RTPCodecParameters = &ctx.RTPCodecParameters
+		var lastPacket *rtp.Packet
+		if from.IDR && len(c.SPS) > 0 && len(c.PPS) > 0 {
+			r.Append(ctx, pts, c.SPS[0])
+			r.Append(ctx, pts, c.PPS[0])
+		}
+		for _, nalu := range from.Raw.(Nalus) {
+			if reader := nalu.NewReader(); reader.Length > MTUSize {
+				payloadLen := MTUSize
+				if reader.Length+1 < payloadLen {
+					payloadLen = reader.Length + 1
+				}
+				//fu-a
+				mem := r.NextN(payloadLen)
+				reader.ReadBytesTo(mem[1:])
+				fuaHead, naluType := codec.NALU_FUA.Or(mem[1]&0x60), mem[1]&0x1f
+				mem[0], mem[1] = fuaHead, naluType|startBit
+				lastPacket = r.Append(ctx, pts, mem)
+				for payloadLen = MTUSize; reader.Length > 0; lastPacket = r.Append(ctx, pts, mem) {
+					if reader.Length+2 < payloadLen {
+						payloadLen = reader.Length + 2
+					}
+					mem = r.NextN(payloadLen)
+					reader.ReadBytesTo(mem[2:])
+					mem[0], mem[1] = fuaHead, naluType
+				}
+				lastPacket.Payload[1] |= endBit
+			} else {
+				mem := r.NextN(reader.Length)
+				reader.ReadBytesTo(mem)
+				lastPacket = r.Append(ctx, pts, mem)
+			}
+		}
+		lastPacket.Header.Marker = true
+	}
+}
+
+func (r *RTPVideo) Demux(ictx codec.ICodecCtx) (any, error) {
 	switch ictx.(type) {
 	case *RTPH264Ctx:
 		var nalus Nalus
@@ -219,17 +199,14 @@ func (r *RTPVideo) ToRaw(ictx ICodecCtx) (any, error) {
 		var naluType codec.H264NALUType
 		gotNalu := func() {
 			if nalu.Size > 0 {
-				nalus.Nalus = append(nalus.Nalus, nalu)
+				nalus = append(nalus, nalu)
 				nalu = util.Memory{}
 			}
 		}
 		for _, packet := range r.Packets {
-			nalus.PTS = time.Duration(packet.Timestamp)
-			// TODO: B-frame
-			nalus.DTS = nalus.PTS
 			b0 := packet.Payload[0]
 			if t := codec.ParseH264NALUType(b0); t < 24 {
-				nalu.Append(packet.Payload)
+				nalu.AppendOne(packet.Payload)
 				gotNalu()
 			} else {
 				offset := t.Offset()
@@ -240,7 +217,7 @@ func (r *RTPVideo) ToRaw(ictx ICodecCtx) (any, error) {
 					}
 					for buffer := util.Buffer(packet.Payload[offset:]); buffer.CanRead(); {
 						if nextSize := int(buffer.ReadUint16()); buffer.Len() >= nextSize {
-							nalu.Append(buffer.ReadN(nextSize))
+							nalu.AppendOne(buffer.ReadN(nextSize))
 							gotNalu()
 						} else {
 							return nil, fmt.Errorf("invalid nalu size %d", nextSize)
@@ -250,10 +227,10 @@ func (r *RTPVideo) ToRaw(ictx ICodecCtx) (any, error) {
 					b1 := packet.Payload[1]
 					if util.Bit1(b1, 0) {
 						naluType.Parse(b1)
-						nalu.Append([]byte{naluType.Or(b0 & 0x60)})
+						nalu.AppendOne([]byte{naluType.Or(b0 & 0x60)})
 					}
 					if nalu.Size > 0 {
-						nalu.Append(packet.Payload[offset:])
+						nalu.AppendOne(packet.Payload[offset:])
 					} else {
 						return nil, errors.New("fu have no start")
 					}

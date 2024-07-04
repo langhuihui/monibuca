@@ -19,16 +19,18 @@ type MemoryReader struct {
 }
 
 func NewReadableBuffersFromBytes(b ...[]byte) *MemoryReader {
-	buf := NewMemory(b)
+	buf := &Memory{Buffers: b}
+	for _, level0 := range b {
+		buf.Size += len(level0)
+	}
 	return &MemoryReader{Memory: buf, Length: buf.Size}
 }
 
-func NewMemory(buffers net.Buffers) *Memory {
-	ret := &Memory{Buffers: buffers}
-	for _, level0 := range buffers {
-		ret.Size += len(level0)
+func NewMemory(buf []byte) Memory {
+	return Memory{
+		Buffers: net.Buffers{buf},
+		Size:    len(buf),
 	}
-	return ret
 }
 
 func (m *Memory) UpdateBuffer(index int, buf []byte) {
@@ -42,7 +44,7 @@ func (m *Memory) UpdateBuffer(index int, buf []byte) {
 func (m *Memory) CopyFrom(b *Memory) {
 	buf := make([]byte, b.Size)
 	b.CopyTo(buf)
-	m.Append(buf)
+	m.AppendOne(buf)
 }
 
 func (m *Memory) CopyTo(buf []byte) {
@@ -57,6 +59,11 @@ func (m *Memory) ToBytes() []byte {
 	buf := make([]byte, m.Size)
 	m.CopyTo(buf)
 	return buf
+}
+
+func (m *Memory) AppendOne(b []byte) {
+	m.Buffers = append(m.Buffers, b)
+	m.Size += len(b)
 }
 
 func (m *Memory) Append(b ...[]byte) {
@@ -230,13 +237,13 @@ func (r *MemoryReader) ReadBytes(n int) ([]byte, error) {
 	return b[:actual], nil
 }
 
-func (r *MemoryReader) ReadBE(n int) (num int, err error) {
+func (r *MemoryReader) ReadBE(n int) (num uint32, err error) {
 	for i := range n {
 		b, err := r.ReadByte()
 		if err != nil {
-			return -1, err
+			return 0, err
 		}
-		num += int(b) << ((n - i - 1) << 3)
+		num += uint32(b) << ((n - i - 1) << 3)
 	}
 	return
 }

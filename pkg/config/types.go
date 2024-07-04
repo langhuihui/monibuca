@@ -156,23 +156,6 @@ func (p *Push) CheckPush(streamPath string) string {
 	return url
 }
 
-type Console struct {
-	Server        string `default:"console.monibuca.com:44944" desc:"远程控制台地址"` //远程控制台地址
-	Secret        string `desc:"远程控制台密钥"`                                      //远程控制台密钥
-	PublicAddr    string `desc:"远程控制台公网地址"`                                    //公网地址，提供远程控制台访问的地址，不配置的话使用自动识别的地址
-	PublicAddrTLS string `desc:"远程控制台公网TLS地址"`
-}
-
-type Engine struct {
-	EnableSubEvent      bool          `default:"true" desc:"启用订阅事件,禁用可以提高性能"`       //启用订阅事件,禁用可以提高性能
-	LogLang             string        `default:"zh" desc:"日志语言" enum:"zh:中文,en:英文"` //日志语言
-	SettingDir          string        `default:".m7s" desc:""`
-	EventBusSize        int           `default:"10" desc:"事件总线大小"`      //事件总线大小
-	PulseInterval       time.Duration `default:"5s" desc:"心跳事件间隔"`      //心跳事件间隔
-	DisableAll          bool          `default:"false" desc:"禁用所有插件"`   //禁用所有插件
-	RTPReorderBufferLen int           `default:"50" desc:"RTP重排序缓冲区长度"` //RTP重排序缓冲区长度
-}
-
 type Common struct {
 	PublicIP   string
 	LogLevel   string `default:"info" enum:"trace:跟踪,debug:调试,info:信息,warn:警告,error:错误"` //日志级别

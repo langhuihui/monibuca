@@ -146,10 +146,7 @@ func (r *BufReader) ReadString(n int) (s string, err error) {
 }
 
 func (r *BufReader) ReadBytes(n int) (mem Memory, err error) {
-	err = r.ReadRange(n, func(buf []byte) {
-		mem.Buffers = append(mem.Buffers, buf)
-	})
-	mem.Size = n
+	err = r.ReadRange(n, mem.AppendOne)
 	return
 }
 

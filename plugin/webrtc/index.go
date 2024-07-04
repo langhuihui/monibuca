@@ -349,7 +349,7 @@ func (conf *WebRTCPlugin) Play_(w http.ResponseWriter, r *http.Request) {
 				} else {
 					var rtpCtx mrtp.RTPData
 					var tmpAVTrack AVTrack
-					err = rtpCtx.DecodeConfig(&tmpAVTrack, vt.ICodecCtx)
+					err = rtpCtx.ConvertCtx(vt.ICodecCtx, &tmpAVTrack)
 					if err == nil {
 						rcc = tmpAVTrack.ICodecCtx.(mrtp.IRTPCtx).GetRTPCodecParameter()
 					} else {

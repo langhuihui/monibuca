@@ -12,7 +12,6 @@ rtsp:
     pushlist:
       live/test: rtsp://localhost/live/test
 hdl:
-
   publish:
     pubaudio: false
   pull:

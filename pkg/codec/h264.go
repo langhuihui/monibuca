@@ -106,9 +106,6 @@ func SplitH264(payload []byte) (nalus [][]byte) {
 }
 
 type (
-	IH264Ctx interface {
-		GetH264Ctx() *H264Ctx
-	}
 	H264Ctx struct {
 		SPSInfo
 		SPS [][]byte
@@ -132,6 +129,6 @@ func (h264 *H264Ctx) GetHeight() int {
 	return int(h264.Height)
 }
 
-func (h264 *H264Ctx) GetH264Ctx() *H264Ctx {
+func (h264 *H264Ctx) GetBase() ICodecCtx {
 	return h264
 }

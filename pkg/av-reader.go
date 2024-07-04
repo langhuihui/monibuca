@@ -3,6 +3,7 @@ package pkg
 import (
 	"context"
 	"log/slog"
+	"m7s.live/m7s/v5/pkg/codec"
 	"m7s.live/m7s/v5/pkg/config"
 	"time"
 )
@@ -27,7 +28,7 @@ type AVRingReader struct {
 	FirstTs      time.Duration
 	SkipTs       time.Duration //ms
 	beforeJump   time.Duration
-	LastCodecCtx ICodecCtx
+	LastCodecCtx codec.ICodecCtx
 	startTime    time.Time
 	AbsTime      uint32
 	Delay        uint32
@@ -143,11 +144,11 @@ func (r *AVRingReader) ReadFrame(conf *config.Subscribe) (err error) {
 }
 
 // func (r *AVRingReader) GetPTS32() uint32 {
-// 	return uint32((r.Value.Raw.PTS - r.SkipTs*90/time.Millisecond))
+// 	return uint32((r.Value.Raw.Timestamp - r.SkipTs*90/time.Millisecond))
 // }
 
 // func (r *AVRingReader) GetDTS32() uint32 {
-// 	return uint32((r.Value.DTS - r.SkipTs*90/time.Millisecond))
+// 	return uint32((r.Value.CTS - r.SkipTs*90/time.Millisecond))
 // }
 
 func (r *AVRingReader) ResetAbsTime() {

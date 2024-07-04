@@ -21,7 +21,6 @@ import (
 	"gopkg.in/yaml.v3"
 	"m7s.live/m7s/v5/pb"
 	. "m7s.live/m7s/v5/pkg"
-	"m7s.live/m7s/v5/pkg/config"
 	"m7s.live/m7s/v5/pkg/util"
 )
 
@@ -40,10 +39,18 @@ var (
 	defaultLogHandler = console.NewHandler(os.Stdout, &console.HandlerOptions{TimeFormat: "15:04:05.000000"})
 )
 
+type ServerConfig struct {
+	EnableSubEvent bool          `default:"true" desc:"启用订阅事件,禁用可以提高性能"` //启用订阅事件,禁用可以提高性能
+	SettingDir     string        `default:".m7s" desc:""`
+	EventBusSize   int           `default:"10" desc:"事件总线大小"`    //事件总线大小
+	PulseInterval  time.Duration `default:"5s" desc:"心跳事件间隔"`    //心跳事件间隔
+	DisableAll     bool          `default:"false" desc:"禁用所有插件"` //禁用所有插件
+}
+
 type Server struct {
 	pb.UnimplementedGlobalServer
 	Plugin
-	config.Engine
+	ServerConfig
 	ID              int
 	eventChan       chan any
 	Plugins         util.Collection[string, *Plugin]
@@ -146,7 +153,7 @@ func (s *Server) run(ctx context.Context, conf any) (err error) {
 		}
 	}
 	s.Config.Parse(&s.config, "GLOBAL")
-	s.Config.Parse(&s.Engine, "GLOBAL")
+	s.Config.Parse(&s.ServerConfig, "GLOBAL")
 	if cg != nil {
 		s.Config.ParseUserFile(cg["global"])
 	}

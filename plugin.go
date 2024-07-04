@@ -304,18 +304,18 @@ func (p *Plugin) Pull(streamPath string, url string, options ...any) (puller *Pu
 	puller.Publish = p.config.Publish
 	puller.PublishTimeout = 0
 	puller.StreamPath = streamPath
+	var pullHandler PullHandler
 	for _, option := range options {
 		switch v := option.(type) {
 		case PullHandler:
-			defer func() {
-				if err == nil {
-					puller.Start(v)
-				}
-			}()
+			pullHandler = v
 		}
 	}
 	puller.Init(p, streamPath, &puller.Publish, options...)
 	_, err = p.server.Call(puller)
+	if err == nil && pullHandler != nil {
+		err = puller.Start(pullHandler)
+	}
 	return
 }
 

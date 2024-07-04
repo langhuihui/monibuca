@@ -192,6 +192,7 @@ func (p *Publisher) writeAV(t *AVTrack, data IAVFrame) {
 	frame := &t.Value
 	frame.Wraps = append(frame.Wraps, data)
 	ts := data.GetTimestamp()
+	frame.CTS = data.GetCTS()
 	if p.lastTs == 0 {
 		p.baseTs -= ts
 	}
@@ -232,7 +233,7 @@ func (p *Publisher) WriteVideo(data IAVFrame) (err error) {
 		p.Unlock()
 	}
 	oldCodecCtx := t.ICodecCtx
-	t.Value.IDR, _, t.Value.Raw, err = data.Parse(t)
+	err = data.Parse(t)
 	codecCtxChanged := oldCodecCtx != t.ICodecCtx
 	if err != nil {
 		p.Error("parse", "err", err)
@@ -261,16 +262,16 @@ func (p *Publisher) WriteVideo(data IAVFrame) (err error) {
 	p.writeAV(t, data)
 	if p.VideoTrack.Length > 1 && p.VideoTrack.IsReady() {
 		if t.Value.Raw == nil {
-			t.Value.Raw, err = t.Value.Wraps[0].ToRaw(t.ICodecCtx)
-			if err != nil {
+			if err = t.Value.Demux(t.ICodecCtx); err != nil {
 				t.Error("to raw", "err", err)
 				return err
 			}
 		}
-		var toFrame IAVFrame
 		for i, track := range p.VideoTrack.Items[1:] {
+			toType := track.FrameType.Elem()
+			toFrame := reflect.New(toType).Interface().(IAVFrame)
 			if track.ICodecCtx == nil {
-				err = (reflect.New(track.FrameType.Elem()).Interface().(IAVFrame)).DecodeConfig(track, t.ICodecCtx)
+				err = toFrame.ConvertCtx(t.ICodecCtx, track)
 				if err != nil {
 					track.Error("DecodeConfig", "err", err)
 					return
@@ -278,26 +279,22 @@ func (p *Publisher) WriteVideo(data IAVFrame) (err error) {
 				if t.IDRingList.Len() > 0 {
 					for rf := t.IDRingList.Front().Value; rf != t.Ring; rf = rf.Next() {
 						if i == 0 && rf.Value.Raw == nil {
-							rf.Value.Raw, err = rf.Value.Wraps[0].ToRaw(t.ICodecCtx)
-							if err != nil {
+							if err = rf.Value.Demux(t.ICodecCtx); err != nil {
 								t.Error("to raw", "err", err)
 								return err
 							}
 						}
-						if toFrame, err = track.CreateFrame(&rf.Value); err != nil {
-							track.Error("from raw", "err", err)
-							return
-						}
+						toFrame := reflect.New(toType).Interface().(IAVFrame)
+						toFrame.SetAllocator(data.GetAllocator())
+						toFrame.Mux(track.ICodecCtx, &rf.Value)
 						rf.Value.Wraps = append(rf.Value.Wraps, toFrame)
 					}
 				}
 			}
-			if toFrame, err = track.CreateFrame(&t.Value); err != nil {
-				track.Error("from raw", "err", err)
-				return
-			}
+			toFrame.SetAllocator(data.GetAllocator())
+			toFrame.Mux(track.ICodecCtx, &t.Value)
 			if codecCtxChanged {
-				toFrame.DecodeConfig(track, t.ICodecCtx)
+				err = toFrame.ConvertCtx(t.ICodecCtx, track)
 			}
 			t.Value.Wraps = append(t.Value.Wraps, toFrame)
 			if track.ICodecCtx != nil {
@@ -336,7 +333,7 @@ func (p *Publisher) WriteAudio(data IAVFrame) (err error) {
 		p.Unlock()
 	}
 	oldCodecCtx := t.ICodecCtx
-	_, _, t.Value.Raw, err = data.Parse(t)
+	err = data.Parse(t)
 	codecCtxChanged := oldCodecCtx != t.ICodecCtx
 	if t.ICodecCtx == nil {
 		return ErrUnsupportCodec
@@ -345,16 +342,16 @@ func (p *Publisher) WriteAudio(data IAVFrame) (err error) {
 	p.writeAV(t, data)
 	if p.AudioTrack.Length > 1 && p.AudioTrack.IsReady() {
 		if t.Value.Raw == nil {
-			t.Value.Raw, err = t.Value.Wraps[0].ToRaw(t.ICodecCtx)
-			if err != nil {
+			if err = t.Value.Demux(t.ICodecCtx); err != nil {
 				t.Error("to raw", "err", err)
 				return err
 			}
 		}
-		var toFrame IAVFrame
 		for i, track := range p.AudioTrack.Items[1:] {
+			toType := track.FrameType.Elem()
+			toFrame := reflect.New(toType).Interface().(IAVFrame)
 			if track.ICodecCtx == nil {
-				err = (reflect.New(track.FrameType.Elem()).Interface().(IAVFrame)).DecodeConfig(track, t.ICodecCtx)
+				err = toFrame.ConvertCtx(t.ICodecCtx, track)
 				if err != nil {
 					track.Error("DecodeConfig", "err", err)
 					return
@@ -362,26 +359,22 @@ func (p *Publisher) WriteAudio(data IAVFrame) (err error) {
 				if idr := p.AudioTrack.GetOldestIDR(); idr != nil {
 					for rf := idr; rf != t.Ring; rf = rf.Next() {
 						if i == 0 && rf.Value.Raw == nil {
-							rf.Value.Raw, err = rf.Value.Wraps[0].ToRaw(t.ICodecCtx)
-							if err != nil {
+							if err = rf.Value.Demux(t.ICodecCtx); err != nil {
 								t.Error("to raw", "err", err)
 								return err
 							}
 						}
-						if toFrame, err = track.CreateFrame(&rf.Value); err != nil {
-							track.Error("from raw", "err", err)
-							return
-						}
+						toFrame := reflect.New(toType).Interface().(IAVFrame)
+						toFrame.SetAllocator(data.GetAllocator())
+						toFrame.Mux(track.ICodecCtx, &rf.Value)
 						rf.Value.Wraps = append(rf.Value.Wraps, toFrame)
 					}
 				}
 			}
-			if toFrame, err = track.CreateFrame(&t.Value); err != nil {
-				track.Error("from raw", "err", err)
-				return
-			}
+			toFrame.SetAllocator(data.GetAllocator())
+			toFrame.Mux(track.ICodecCtx, &t.Value)
 			if codecCtxChanged {
-				toFrame.DecodeConfig(track, t.ICodecCtx)
+				err = toFrame.ConvertCtx(t.ICodecCtx, track)
 			}
 			t.Value.Wraps = append(t.Value.Wraps, toFrame)
 			if track.ICodecCtx != nil {

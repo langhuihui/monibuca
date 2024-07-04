@@ -51,6 +51,10 @@ func (avcc *RTMPData) GetTimestamp() time.Duration {
 	return time.Duration(avcc.Timestamp) * time.Millisecond
 }
 
+func (avcc *RTMPData) GetCTS() time.Duration {
+	return 0
+}
+
 func (avcc *RTMPData) WrapAudio() *RTMPAudio {
 	return &RTMPAudio{RTMPData: *avcc}
 }

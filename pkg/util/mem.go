@@ -199,7 +199,7 @@ func (sma *ScalableMemoryAllocator) Malloc(size int) (memory []byte) {
 	return
 }
 
-func (sma *ScalableMemoryAllocator) GetScalableMemoryAllocator() *ScalableMemoryAllocator {
+func (sma *ScalableMemoryAllocator) GetAllocator() *ScalableMemoryAllocator {
 	return sma
 }
 
@@ -253,6 +253,10 @@ type RecyclableMemory struct {
 	RecycleIndexes []int
 }
 
+func (r *RecyclableMemory) SetAllocator(allocator *ScalableMemoryAllocator) {
+	r.ScalableMemoryAllocator = allocator
+}
+
 func (r *RecyclableMemory) NextN(size int) (memory []byte) {
 	memory = r.ScalableMemoryAllocator.Malloc(size)
 	if memory == nil {
@@ -260,7 +264,7 @@ func (r *RecyclableMemory) NextN(size int) (memory []byte) {
 	} else if r.RecycleIndexes != nil {
 		r.RecycleIndexes = append(r.RecycleIndexes, r.Count())
 	}
-	r.Append(memory)
+	r.AppendOne(memory)
 	return
 }
 
@@ -268,7 +272,7 @@ func (r *RecyclableMemory) AddRecycleBytes(b []byte) {
 	if r.RecycleIndexes != nil {
 		r.RecycleIndexes = append(r.RecycleIndexes, r.Count())
 	}
-	r.Append(b)
+	r.AppendOne(b)
 }
 
 func (r *RecyclableMemory) RemoveRecycleBytes(index int) (buf []byte) {

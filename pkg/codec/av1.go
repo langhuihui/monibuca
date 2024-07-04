@@ -13,15 +13,16 @@ const (
 )
 
 type (
-	IAV1Ctx interface {
-		GetAV1Ctx() *AV1Ctx
-	}
 	AV1Ctx struct {
 		ConfigOBUs []byte
 	}
 )
 
-func (ctx *AV1Ctx) GetAV1Ctx() *AV1Ctx {
+func (ctx *AV1Ctx) GetInfo() string {
+	return "AV1"
+}
+
+func (ctx *AV1Ctx) GetBase() ICodecCtx {
 	return ctx
 }
 
