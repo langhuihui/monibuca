@@ -9,6 +9,7 @@ import (
 const TraceLevel = slog.Level(-8)
 
 type Unit struct {
+	ID                      int
 	StartTime               time.Time
 	*slog.Logger            `json:"-" yaml:"-"`
 	context.Context         `json:"-" yaml:"-"`

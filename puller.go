@@ -35,7 +35,7 @@ type Puller struct {
 func (p *Puller) Start(handler PullHandler) (err error) {
 	badPuller := true
 	var startTime time.Time
-	for p.Info("start pull"); p.Client.reconnect(p.RePull); p.Warn("restart pull") {
+	for p.Info("start pull", "url", p.Client.RemoteURL); p.Client.reconnect(p.RePull); p.Warn("restart pull") {
 		if time.Since(startTime) < 5*time.Second {
 			time.Sleep(5 * time.Second)
 		}

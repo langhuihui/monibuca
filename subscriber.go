@@ -28,7 +28,6 @@ type Owner struct {
 
 type PubSubBase struct {
 	Unit
-	ID int
 	Owner
 	Plugin       *Plugin
 	StreamPath   string

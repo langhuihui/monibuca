@@ -1,0 +1,70 @@
+syntax = "proto3";
+import "google/api/annotations.proto";
+import "google/protobuf/empty.proto";
+import "global.proto";
+package stress;
+option go_package="m7s.live/m7s/v5/plugin/stress/pb";
+
+service api {
+  rpc PushRTMP (PushRequest) returns (m7s.SuccessResponse) {
+    option (google.api.http) = {
+      post: "/stress/api/push/rtmp/{pushCount}"
+      body: "*"
+    };
+  }
+  rpc PushRTSP (PushRequest) returns (m7s.SuccessResponse) {
+    option (google.api.http) = {
+      post: "/stress/api/push/rtsp/{pushCount}"
+      body: "*"
+    };
+  }
+  rpc PullRTMP (PullRequest) returns (m7s.SuccessResponse) {
+    option (google.api.http) = {
+      post: "/stress/api/pull/rtmp/{pullCount}"
+      body: "*"
+    };
+  }
+  rpc PullRTSP (PullRequest) returns (m7s.SuccessResponse) {
+    option (google.api.http) = {
+      post: "/stress/api/pull/rtsp/{pullCount}"
+      body: "*"
+    };
+  }
+  rpc PullHDL (PullRequest) returns (m7s.SuccessResponse) {
+    option (google.api.http) = {
+      post: "/stress/api/pull/hdl/{pullCount}"
+      body: "*"
+    };
+  }
+  rpc GetCount (google.protobuf.Empty) returns (CountResponse) {
+    option (google.api.http) = {
+      get: "/stress/api/count"
+    };
+  }
+  rpc StopPush (google.protobuf.Empty) returns (m7s.SuccessResponse) {
+    option (google.api.http) = {
+      post: "/stress/api/stop/push"
+    };
+  }
+  rpc StopPull (google.protobuf.Empty) returns (m7s.SuccessResponse) {
+    option (google.api.http) = {
+      post: "/stress/api/stop/pull"
+    };
+  }
+}
+
+message CountResponse {
+  uint32 pushCount = 1;
+  uint32 pullCount = 2;
+
+}
+message PushRequest {
+  string streamPath = 1;
+  string remoteHost = 2;
+  int32  pushCount = 3;
+}
+
+message PullRequest {
+  string remoteURL = 1;
+  int32  pullCount = 2;
+}

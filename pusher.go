@@ -26,7 +26,7 @@ func (p *Pusher) GetKey() string {
 func (p *Pusher) Start(handler PushHandler) (err error) {
 	badPuller := true
 	var startTime time.Time
-	for p.Info("start push"); p.Client.reconnect(p.RePush); p.Warn("restart push") {
+	for p.Info("start push", "url", p.Client.RemoteURL); p.Client.reconnect(p.RePush); p.Warn("restart push") {
 		if time.Since(startTime) < 5*time.Second {
 			time.Sleep(5 * time.Second)
 		}

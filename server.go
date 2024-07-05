@@ -51,39 +51,27 @@ type Server struct {
 	pb.UnimplementedGlobalServer
 	Plugin
 	ServerConfig
-	ID              int
-	eventChan       chan any
-	Plugins         util.Collection[string, *Plugin]
-	Streams         util.Collection[string, *Publisher]
-	Pulls           util.Collection[string, *Puller]
-	Pushs           util.Collection[string, *Pusher]
-	Waiting         util.Collection[string, *Publisher]
-	Subscribers     util.Collection[int, *Subscriber]
-	LogHandler      MultiLogHandler
-	pidG            int
-	sidG            int
-	apiList         []string
-	grpcServer      *grpc.Server
-	grpcClientConn  *grpc.ClientConn
-	lastSummaryTime time.Time
-	lastSummary     *pb.SummaryResponse
-	OnAuthPubs      map[string]func(p *util.Promise[*Publisher])
-	OnAuthSubs      map[string]func(p *util.Promise[*Subscriber])
+	eventChan        chan any
+	Plugins          util.Collection[string, *Plugin]
+	Streams, Waiting util.Collection[string, *Publisher]
+	Pulls            util.Collection[string, *Puller]
+	Pushs            util.Collection[string, *Pusher]
+	Subscribers      util.Collection[int, *Subscriber]
+	LogHandler       MultiLogHandler
+	pidG, sidG       int
+	apiList          []string
+	grpcServer       *grpc.Server
+	grpcClientConn   *grpc.ClientConn
+	lastSummaryTime  time.Time
+	lastSummary      *pb.SummaryResponse
+	OnAuthPubs       map[string]func(p *util.Promise[*Publisher])
+	OnAuthSubs       map[string]func(p *util.Promise[*Subscriber])
 }
 
 func NewServer() (s *Server) {
-	s = &Server{
-		ID:        int(serverIndexG.Add(1)),
-		eventChan: make(chan any, 10),
-	}
-	s.config.HTTP.ListenAddrTLS = ":8443"
-	s.config.HTTP.ListenAddr = ":8080"
-	s.handler = s
-	s.server = s
+	s = &Server{}
+	s.ID = int(serverIndexG.Add(1))
 	s.Meta = &serverMeta
-	s.LogHandler.Add(defaultLogHandler)
-	s.LogHandler.SetLevel(slog.LevelInfo)
-	s.Logger = slog.New(&s.LogHandler).With("server", s.ID)
 	s.OnAuthPubs = make(map[string]func(p *util.Promise[*Publisher]))
 	s.OnAuthSubs = make(map[string]func(p *util.Promise[*Subscriber]))
 	Servers[s.ID] = s
@@ -96,35 +84,28 @@ func Run(ctx context.Context, conf any) error {
 
 type rawconfig = map[string]map[string]any
 
-func (s *Server) reset() {
-	server := Server{
-		ID:        s.ID,
-		eventChan: make(chan any, 10),
-	}
-	server.Logger = s.Logger
-	server.handler = s.handler
-	server.server = s.server
-	server.Meta = s.Meta
-	server.config.HTTP.ListenAddrTLS = ":8443"
-	server.config.HTTP.ListenAddr = ":8080"
-	server.LogHandler = MultiLogHandler{}
-	server.LogHandler.SetLevel(slog.LevelInfo)
-	server.LogHandler.Add(defaultLogHandler)
-	server.OnAuthPubs = s.OnAuthPubs
-	server.OnAuthSubs = s.OnAuthSubs
-	// server.Logger = slog.New(&server.LogHandler).With("server", s.ID)
-	*s = server
-}
-
 func (s *Server) Run(ctx context.Context, conf any) (err error) {
 	s.StartTime = time.Now()
 	for err = s.run(ctx, conf); err == ErrRestart; err = s.run(ctx, conf) {
-		s.reset()
+		var server Server
+		server.ID = s.ID
+		server.Meta = s.Meta
+		server.OnAuthPubs = s.OnAuthPubs
+		server.OnAuthSubs = s.OnAuthSubs
+		*s = server
 	}
 	return
 }
 
 func (s *Server) run(ctx context.Context, conf any) (err error) {
+	s.server = s
+	s.handler = s
+	s.config.HTTP.ListenAddrTLS = ":8443"
+	s.config.HTTP.ListenAddr = ":8080"
+	s.LogHandler.SetLevel(slog.LevelInfo)
+	s.LogHandler.Add(defaultLogHandler)
+	s.Logger = slog.New(&s.LogHandler).With("server", s.ID)
+
 	httpConf, tcpConf := &s.config.HTTP, &s.config.TCP
 	mux := runtime.NewServeMux(runtime.WithMarshalerOption("text/plain", &pb.TextPlain{}), runtime.WithRoutingErrorHandler(runtime.RoutingErrorHandlerFunc(func(_ context.Context, _ *runtime.ServeMux, _ runtime.Marshaler, w http.ResponseWriter, r *http.Request, _ int) {
 		httpConf.GetHttpMux().ServeHTTP(w, r)
@@ -157,6 +138,7 @@ func (s *Server) run(ctx context.Context, conf any) (err error) {
 	if cg != nil {
 		s.Config.ParseUserFile(cg["global"])
 	}
+	s.eventChan = make(chan any, s.EventBusSize)
 	s.LogHandler.SetLevel(ParseLevel(s.config.LogLevel))
 	s.registerHandler(map[string]http.HandlerFunc{
 		"/api/config/json/{name}":             s.api_Config_JSON_,
@@ -250,6 +232,7 @@ func (s *Server) doneEventLoop(input chan DoneChan, output chan int) {
 	}
 }
 
+// eventLoop powerful grateful graceful beautiful
 func (s *Server) eventLoop() {
 	pulse := time.NewTicker(s.PulseInterval)
 	defer pulse.Stop()

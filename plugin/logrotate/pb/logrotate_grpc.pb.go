@@ -19,122 +19,122 @@ import (
 // Requires gRPC-Go v1.32.0 or later.
 const _ = grpc.SupportPackageIsVersion7
 
-// LogrotateClient is the client API for Logrotate service.
+// ApiClient is the client API for Api service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-type LogrotateClient interface {
+type ApiClient interface {
 	List(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*ResponseFileInfo, error)
 	Get(ctx context.Context, in *RequestFileInfo, opts ...grpc.CallOption) (*ResponseOpen, error)
 }
 
-type logrotateClient struct {
+type apiClient struct {
 	cc grpc.ClientConnInterface
 }
 
-func NewLogrotateClient(cc grpc.ClientConnInterface) LogrotateClient {
-	return &logrotateClient{cc}
+func NewApiClient(cc grpc.ClientConnInterface) ApiClient {
+	return &apiClient{cc}
 }
 
-func (c *logrotateClient) List(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*ResponseFileInfo, error) {
+func (c *apiClient) List(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*ResponseFileInfo, error) {
 	out := new(ResponseFileInfo)
-	err := c.cc.Invoke(ctx, "/m7s.logrotate/List", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/logrotate.api/List", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *logrotateClient) Get(ctx context.Context, in *RequestFileInfo, opts ...grpc.CallOption) (*ResponseOpen, error) {
+func (c *apiClient) Get(ctx context.Context, in *RequestFileInfo, opts ...grpc.CallOption) (*ResponseOpen, error) {
 	out := new(ResponseOpen)
-	err := c.cc.Invoke(ctx, "/m7s.logrotate/Get", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/logrotate.api/Get", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-// LogrotateServer is the server API for Logrotate service.
-// All implementations must embed UnimplementedLogrotateServer
+// ApiServer is the server API for Api service.
+// All implementations must embed UnimplementedApiServer
 // for forward compatibility
-type LogrotateServer interface {
+type ApiServer interface {
 	List(context.Context, *emptypb.Empty) (*ResponseFileInfo, error)
 	Get(context.Context, *RequestFileInfo) (*ResponseOpen, error)
-	mustEmbedUnimplementedLogrotateServer()
+	mustEmbedUnimplementedApiServer()
 }
 
-// UnimplementedLogrotateServer must be embedded to have forward compatible implementations.
-type UnimplementedLogrotateServer struct {
+// UnimplementedApiServer must be embedded to have forward compatible implementations.
+type UnimplementedApiServer struct {
 }
 
-func (UnimplementedLogrotateServer) List(context.Context, *emptypb.Empty) (*ResponseFileInfo, error) {
+func (UnimplementedApiServer) List(context.Context, *emptypb.Empty) (*ResponseFileInfo, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method List not implemented")
 }
-func (UnimplementedLogrotateServer) Get(context.Context, *RequestFileInfo) (*ResponseOpen, error) {
+func (UnimplementedApiServer) Get(context.Context, *RequestFileInfo) (*ResponseOpen, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Get not implemented")
 }
-func (UnimplementedLogrotateServer) mustEmbedUnimplementedLogrotateServer() {}
+func (UnimplementedApiServer) mustEmbedUnimplementedApiServer() {}
 
-// UnsafeLogrotateServer may be embedded to opt out of forward compatibility for this service.
-// Use of this interface is not recommended, as added methods to LogrotateServer will
+// UnsafeApiServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to ApiServer will
 // result in compilation errors.
-type UnsafeLogrotateServer interface {
-	mustEmbedUnimplementedLogrotateServer()
+type UnsafeApiServer interface {
+	mustEmbedUnimplementedApiServer()
 }
 
-func RegisterLogrotateServer(s grpc.ServiceRegistrar, srv LogrotateServer) {
-	s.RegisterService(&Logrotate_ServiceDesc, srv)
+func RegisterApiServer(s grpc.ServiceRegistrar, srv ApiServer) {
+	s.RegisterService(&Api_ServiceDesc, srv)
 }
 
-func _Logrotate_List_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Api_List_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(emptypb.Empty)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(LogrotateServer).List(ctx, in)
+		return srv.(ApiServer).List(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/m7s.logrotate/List",
+		FullMethod: "/logrotate.api/List",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(LogrotateServer).List(ctx, req.(*emptypb.Empty))
+		return srv.(ApiServer).List(ctx, req.(*emptypb.Empty))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Logrotate_Get_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Api_Get_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RequestFileInfo)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(LogrotateServer).Get(ctx, in)
+		return srv.(ApiServer).Get(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/m7s.logrotate/Get",
+		FullMethod: "/logrotate.api/Get",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(LogrotateServer).Get(ctx, req.(*RequestFileInfo))
+		return srv.(ApiServer).Get(ctx, req.(*RequestFileInfo))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-// Logrotate_ServiceDesc is the grpc.ServiceDesc for Logrotate service.
+// Api_ServiceDesc is the grpc.ServiceDesc for Api service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
-var Logrotate_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "m7s.logrotate",
-	HandlerType: (*LogrotateServer)(nil),
+var Api_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "logrotate.api",
+	HandlerType: (*ApiServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
 			MethodName: "List",
-			Handler:    _Logrotate_List_Handler,
+			Handler:    _Api_List_Handler,
 		},
 		{
 			MethodName: "Get",
-			Handler:    _Logrotate_Get_Handler,
+			Handler:    _Api_Get_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

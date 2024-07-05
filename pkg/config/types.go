@@ -49,13 +49,13 @@ type Subscribe struct {
 	SubAudio        bool          `default:"true" desc:"是否订阅音频"`
 	SubVideo        bool          `default:"true" desc:"是否订阅视频"`
 	BufferTime      time.Duration `desc:"缓冲时长,从缓冲时长的关键帧开始播放"`
-	SubMode         int           `desc:"订阅模式" enum:"0:实时模式,1:首屏后不进行追赶"`    // 0，实时模式：追赶发布者进度，在播放首屏后等待发布者的下一个关键帧，然后跳到该帧。1、首屏后不进行追赶。2、从缓冲最大的关键帧开始播放，也不追赶，需要发布者配置缓存长度
-	SyncMode        int           `desc:"同步模式" enum:"0:采用时间戳同步,1:采用写入时间同步"` // 0，采用时间戳同步，1，采用写入时间同步
-	IFrameOnly      bool          `desc:"只要关键帧"`                            // 只要关键帧
-	WaitTimeout     time.Duration `default:"10s" desc:"等待流超时时间"`            // 等待流超时
-	WriteBufferSize int           `desc:"写缓冲大小"`                            // 写缓冲大小
-	Key             string        `desc:"订阅鉴权key"`                          // 订阅鉴权key
-	Internal        bool          `default:"false" desc:"是否内部订阅"`           // 是否内部订阅
+	SubMode         int           `desc:"订阅模式" enum:"0:实时模式,1:首屏后不进行追赶"`                // 0，实时模式：追赶发布者进度，在播放首屏后等待发布者的下一个关键帧，然后跳到该帧。1、首屏后不进行追赶。2、从缓冲最大的关键帧开始播放，也不追赶，需要发布者配置缓存长度
+	SyncMode        int           `default:"1" desc:"同步模式" enum:"0:采用时间戳同步,1:采用写入时间同步"` // 0，采用时间戳同步，1，采用写入时间同步
+	IFrameOnly      bool          `desc:"只要关键帧"`                                        // 只要关键帧
+	WaitTimeout     time.Duration `default:"10s" desc:"等待流超时时间"`                        // 等待流超时
+	WriteBufferSize int           `desc:"写缓冲大小"`                                        // 写缓冲大小
+	Key             string        `desc:"订阅鉴权key"`                                      // 订阅鉴权key
+	Internal        bool          `default:"false" desc:"是否内部订阅"`                       // 是否内部订阅
 }
 
 func (c *Subscribe) GetSubscribeConfig() *Subscribe {

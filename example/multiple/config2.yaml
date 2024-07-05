@@ -1,22 +1,16 @@
 global:
   loglevel: debug
-  http:
-    listenaddr: :8081
-    listenaddrtls: :8555
   tcp:
-    listenaddr: :50052
-  disableall: true
+    listenaddr: :50051
 console:
-  enable: true
   secret: 00aea3af031f134d6307618b05ec4899
 rtmp:
-  enable: true
-  chunksize: 2048
-  tcp:
-    listenaddr: 
-  subscribe:
-    # submode: 1
-    subaudio: false
+  enable: false
+rtsp:
+  enable: false
+webrtc:
+  enable: false
+hdl:
   pull:
     pullonstart:
-      live/pull: rtmp://localhost/live/test
+      live/test: /Users/dexter/Movies/jb-demo.flv

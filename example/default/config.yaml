@@ -1,5 +1,5 @@
 global:
-  loglevel: debug
+#  loglevel: debug
   enableauth: true
   tcp:
     listenaddr: :50051

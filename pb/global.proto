@@ -243,7 +243,8 @@ message VideoTrackInfo {
 }
 
 message SuccessResponse {
-  bool success = 1;
+  int32 code = 1;
+  string msg = 2;
 }
 
 message RequestWithId {

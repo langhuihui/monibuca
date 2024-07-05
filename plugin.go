@@ -2,6 +2,7 @@ package m7s
 
 import (
 	"context"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -89,10 +90,11 @@ func (plugin *PluginMeta) Init(s *Server, userConfig map[string]any) {
 	if plugin.ServiceDesc != nil && s.grpcServer != nil {
 		s.grpcServer.RegisterService(plugin.ServiceDesc, instance)
 		if plugin.RegisterGRPCHandler != nil {
-			err = plugin.RegisterGRPCHandler(p.Context, s.config.HTTP.GetGRPCMux(), s.grpcClientConn)
-			if err != nil {
+			if err = plugin.RegisterGRPCHandler(p.Context, s.config.HTTP.GetGRPCMux(), s.grpcClientConn); err != nil {
 				p.Error("init", "error", err)
 				p.Stop(err)
+			} else {
+				p.Info("grpc handler registered")
 			}
 		}
 	}
@@ -417,7 +419,14 @@ func (p *Plugin) handle(pattern string, handler http.Handler) {
 	p.server.apiList = append(p.server.apiList, pattern)
 }
 
+func (p *Plugin) AddLogHandler(handler slog.Handler) {
+	p.server.LogHandler.Add(handler)
+}
+
 func (p *Plugin) PostToServer(event any) {
+	if p.server.eventChan == nil {
+		panic("eventChan is nil")
+	}
 	p.server.PostMessage(event)
 }
 

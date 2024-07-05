@@ -13,7 +13,7 @@ import (
 )
 
 type LogRotatePlugin struct {
-	pb.UnimplementedLogrotateServer
+	pb.UnimplementedApiServer
 	m7s.Plugin
 	Path      string `default:"./logs" desc:"日志文件存放目录"`
 	Size      uint64 `default:"1048576" desc:"日志文件大小，单位：字节"`
@@ -24,7 +24,7 @@ type LogRotatePlugin struct {
 	handler   slog.Handler
 }
 
-var _ = m7s.InstallPlugin[LogRotatePlugin](&pb.Logrotate_ServiceDesc, pb.RegisterLogrotateHandler)
+var _ = m7s.InstallPlugin[LogRotatePlugin](&pb.Api_ServiceDesc, pb.RegisterApiHandler)
 
 func (config *LogRotatePlugin) OnInit() (err error) {
 	builder := func(w io.Writer, opts *slog.HandlerOptions) slog.Handler {
@@ -32,7 +32,7 @@ func (config *LogRotatePlugin) OnInit() (err error) {
 	}
 	config.handler, err = rotoslog.NewHandler(rotoslog.LogHandlerBuilder(builder), rotoslog.LogDir(config.Path), rotoslog.MaxFileSize(config.Size), rotoslog.DateTimeLayout(config.Formatter), rotoslog.MaxRotatedFiles(config.MaxFiles))
 	if err == nil {
-		config.PostToServer(config.handler)
+		config.AddLogHandler(config.handler)
 	}
 	return
 }

@@ -156,6 +156,10 @@ func (cfg *ConsolePlugin) ReceiveRequest(s quic.Stream, conn quic.Connection) er
 				}
 				h.ServeHTTP(&writer, req) //建立websocket连接,握手
 			} else {
+				method := req.Header.Get("M7s-Method")
+				if method == "POST" {
+					req.Method = "POST"
+				}
 				h.ServeHTTP(wr, req)
 			}
 		}

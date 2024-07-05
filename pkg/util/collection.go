@@ -91,7 +91,7 @@ func (c *Collection[K, T]) Get(key K) (item T, ok bool) {
 		item, ok = c.m[key]
 		return item, ok
 	}
-	for _, item := range c.Items {
+	for _, item = range c.Items {
 		if item.GetKey() == key {
 			return item, true
 		}
@@ -101,4 +101,14 @@ func (c *Collection[K, T]) Get(key K) (item T, ok bool) {
 
 func (c *Collection[K, T]) GetKey() K {
 	return c.Items[0].GetKey()
+}
+
+func (c *Collection[K, T]) Clear() {
+	if c.L != nil {
+		c.L.Lock()
+		defer c.L.Unlock()
+	}
+	c.Items = nil
+	c.m = nil
+	c.Length = 0
 }

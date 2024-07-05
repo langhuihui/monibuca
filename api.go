@@ -331,9 +331,7 @@ func (s *Server) ChangeSubscribe(ctx context.Context, req *pb.ChangeSubscribeReq
 		}
 		err = pkg.ErrNotFound
 	})
-	return &pb.SuccessResponse{
-		Success: err == nil,
-	}, err
+	return &pb.SuccessResponse{}, err
 }
 
 func (s *Server) StopSubscribe(ctx context.Context, req *pb.RequestWithId) (res *pb.SuccessResponse, err error) {
@@ -344,9 +342,7 @@ func (s *Server) StopSubscribe(ctx context.Context, req *pb.RequestWithId) (res 
 			err = pkg.ErrNotFound
 		}
 	})
-	return &pb.SuccessResponse{
-		Success: err == nil,
-	}, err
+	return &pb.SuccessResponse{}, err
 }
 
 // /api/stream/list

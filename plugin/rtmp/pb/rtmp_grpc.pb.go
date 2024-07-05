@@ -11,6 +11,7 @@ import (
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
+	pb "m7s.live/m7s/v5/pb"
 )
 
 // This is a compile-time assertion to ensure that this generated file
@@ -22,7 +23,7 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type RtmpClient interface {
-	PushOut(ctx context.Context, in *PushRequest, opts ...grpc.CallOption) (*PushResponse, error)
+	PushOut(ctx context.Context, in *PushRequest, opts ...grpc.CallOption) (*pb.SuccessResponse, error)
 }
 
 type rtmpClient struct {
@@ -33,8 +34,8 @@ func NewRtmpClient(cc grpc.ClientConnInterface) RtmpClient {
 	return &rtmpClient{cc}
 }
 
-func (c *rtmpClient) PushOut(ctx context.Context, in *PushRequest, opts ...grpc.CallOption) (*PushResponse, error) {
-	out := new(PushResponse)
+func (c *rtmpClient) PushOut(ctx context.Context, in *PushRequest, opts ...grpc.CallOption) (*pb.SuccessResponse, error) {
+	out := new(pb.SuccessResponse)
 	err := c.cc.Invoke(ctx, "/m7s.rtmp/PushOut", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -46,7 +47,7 @@ func (c *rtmpClient) PushOut(ctx context.Context, in *PushRequest, opts ...grpc.
 // All implementations must embed UnimplementedRtmpServer
 // for forward compatibility
 type RtmpServer interface {
-	PushOut(context.Context, *PushRequest) (*PushResponse, error)
+	PushOut(context.Context, *PushRequest) (*pb.SuccessResponse, error)
 	mustEmbedUnimplementedRtmpServer()
 }
 
@@ -54,7 +55,7 @@ type RtmpServer interface {
 type UnimplementedRtmpServer struct {
 }
 
-func (UnimplementedRtmpServer) PushOut(context.Context, *PushRequest) (*PushResponse, error) {
+func (UnimplementedRtmpServer) PushOut(context.Context, *PushRequest) (*pb.SuccessResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PushOut not implemented")
 }
 func (UnimplementedRtmpServer) mustEmbedUnimplementedRtmpServer() {}

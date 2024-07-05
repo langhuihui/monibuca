@@ -1,14 +1,9 @@
 global:
   # loglevel: debug
+  http:
+    listenaddr: :8081
+    listenaddrtls: :8555
   tcp:
-    listenaddr: :50051
+    listenaddr: :50052
 console:
   secret: de2c0bb9fd47684adc07a426e139239b
-webrtc:
-  publish:
-    pubaudio: false
-rtmp:
-  chunksize: 2048
-  subscribe:
-    # submode: 1
-    subaudio: false

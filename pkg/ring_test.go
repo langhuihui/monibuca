@@ -2,12 +2,14 @@ package pkg
 
 import (
 	"context"
+	"log/slog"
 	"testing"
 	"time"
 )
 
 func TestRing(t *testing.T) {
-	w := NewRingWriter(10)
+	w := NewRingWriter([2]int{10, 10})
+	w.SLogger = slog.Default()
 	ctx, _ := context.WithTimeout(context.Background(), time.Second*5)
 	go t.Run("writer", func(t *testing.T) {
 		for i := 0; ctx.Err() == nil; i++ {
@@ -59,14 +61,18 @@ func TestRing(t *testing.T) {
 	})
 }
 func TestRingWriter_Resize(t *testing.T) {
-	w := NewRingWriter(10)
-	w.Resize(5)
-	w.Resize(-5)
-	w.Resize(5)
-	w.Resize(-5)
+	t.Run("resize", func(t *testing.T) {
+		w := NewRingWriter([2]int{10, 20})
+		w.SLogger = slog.Default()
+		w.Resize(5)
+		w.Resize(-5)
+		w.Resize(5)
+		w.Resize(-5)
+	})
 }
 func BenchmarkRing(b *testing.B) {
-	w := NewRingWriter(10)
+	w := NewRingWriter([2]int{10, 10})
+	w.SLogger = slog.Default()
 	ctx, _ := context.WithTimeout(context.Background(), time.Second*5)
 	go func() {
 		for i := 0; ctx.Err() == nil; i++ {
