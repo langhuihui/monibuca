@@ -4,31 +4,30 @@ go 1.21
 
 require (
 	go.uber.org/zap v1.27.0
-	m7s.live/engine/v4 v4.15.2-0.20240627104035-863a6ce78aef
+	m7s.live/engine/v4 v4.15.2
 	m7s.live/plugin/debug/v4 v4.0.3
 	m7s.live/plugin/fmp4/v4 v4.0.6
-	m7s.live/plugin/gb28181/v4 v4.4.5-0.20240521112210-a207352fe6e4
-	m7s.live/plugin/hdl/v4 v4.1.11-0.20240313041408-780dcc14aa1b
-	m7s.live/plugin/hls/v4 v4.3.9-0.20240313063851-81841202e6ab
+	m7s.live/plugin/gb28181/v4 v4.4.5
+	m7s.live/plugin/hdl/v4 v4.1.11
+	m7s.live/plugin/hls/v4 v4.3.9
 	m7s.live/plugin/hook/v4 v4.0.3
 	m7s.live/plugin/jessica/v4 v4.2.1
 	m7s.live/plugin/logrotate/v4 v4.0.6
 	m7s.live/plugin/monitor/v4 v4.0.5
-	m7s.live/plugin/preview/v4 v4.1.5-0.20240313053841-3228fb004004
-	m7s.live/plugin/record/v4 v4.4.7-0.20240520050010-6a749d194324
-	m7s.live/plugin/room/v4 v4.1.1-0.20240402112256-da53fe368413
-	m7s.live/plugin/rtmp/v4 v4.3.1-0.20240521012445-8df3cf16e26b
-	m7s.live/plugin/rtsp/v4 v4.3.5-0.20240228010654-14ef344d0848
+	m7s.live/plugin/preview/v4 v4.1.5
+	m7s.live/plugin/record/v4 v4.4.7
+	m7s.live/plugin/room/v4 v4.1.1
+	m7s.live/plugin/rtmp/v4 v4.3.1
+	m7s.live/plugin/rtsp/v4 v4.3.5
 	m7s.live/plugin/snap/v4 v4.0.8
-	m7s.live/plugin/webrtc/v4 v4.2.6-0.20240228010952-272f6e1bc8bd
-	m7s.live/plugin/webtransport/v4 v4.0.11-0.20240315020839-41e8fdf847bc
+	m7s.live/plugin/webrtc/v4 v4.2.6
+	m7s.live/plugin/webtransport/v4 v4.0.11
 )
 
 require (
 	github.com/Eyevinn/mp4ff v0.42.0 // indirect
 	github.com/bluenviron/gortsplib/v4 v4.8.0 // indirect
 	github.com/bluenviron/mediacommon v1.9.2 // indirect
-	github.com/cnotch/ipchub v1.1.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/deepch/vdk v0.0.27 // indirect
 	github.com/denisbrodbeck/machineid v1.0.1 // indirect
@@ -54,7 +53,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.16.0 // indirect
 	github.com/pion/datachannel v1.5.5 // indirect
 	github.com/pion/dtls/v2 v2.2.10 // indirect
-	github.com/pion/ice/v3 v3.0.3 // indirect
+	github.com/pion/ice/v2 v2.3.13 // indirect
 	github.com/pion/interceptor v0.1.25 // indirect
 	github.com/pion/logging v0.2.2 // indirect
 	github.com/pion/mdns v0.0.12 // indirect
@@ -63,13 +62,11 @@ require (
 	github.com/pion/rtp v1.8.3 // indirect
 	github.com/pion/sctp v1.8.12 // indirect
 	github.com/pion/sdp/v3 v3.0.8 // indirect
-	github.com/pion/srtp/v3 v3.0.1 // indirect
-	github.com/pion/stun/v2 v2.0.0 // indirect
+	github.com/pion/srtp/v2 v2.0.18 // indirect
+	github.com/pion/stun v0.6.1 // indirect
 	github.com/pion/transport/v2 v2.2.4 // indirect
-	github.com/pion/transport/v3 v3.0.1 // indirect
-	github.com/pion/turn/v3 v3.0.1 // indirect
+	github.com/pion/turn/v2 v2.1.3 // indirect
 	github.com/pion/webrtc/v3 v3.2.29 // indirect
-	github.com/pion/webrtc/v4 v4.0.0-beta.13 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/power-devops/perfstat v0.0.0-20240221224432-82ca36839d55 // indirect
@@ -100,6 +97,6 @@ require (
 	golang.org/x/text v0.14.0 // indirect
 	golang.org/x/tools v0.19.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	m7s.live/plugin/ps/v4 v4.1.5-0.20240228014109-36ba11968b92 // indirect
+	m7s.live/plugin/ps/v4 v4.1.5 // indirect
 
 )
