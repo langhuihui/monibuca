@@ -80,7 +80,7 @@ func (s *Server) api_Stream_AnnexB_(rw http.ResponseWriter, r *http.Request) {
 	var annexb pkg.AnnexB
 	var t pkg.AVTrack
 
-	err = annexb.ConvertCtx(publisher.VideoTrack.ICodecCtx, &t)
+	t.ICodecCtx, t.SequenceFrame, err = annexb.ConvertCtx(publisher.VideoTrack.ICodecCtx)
 	if t.ICodecCtx == nil {
 		http.Error(rw, "unsupported codec", http.StatusInternalServerError)
 		return
@@ -123,8 +123,8 @@ func (s *Server) getStreamInfo(pub *Publisher) (res *pb.StreamInfoResponse, err 
 				Delta: pub.VideoTrack.Delta.String(),
 				Gop:   uint32(pub.GOP),
 			}
-			res.VideoTrack.Width = uint32(t.ICodecCtx.(pkg.IVideoCodecCtx).GetWidth())
-			res.VideoTrack.Height = uint32(t.ICodecCtx.(pkg.IVideoCodecCtx).GetHeight())
+			res.VideoTrack.Width = uint32(t.ICodecCtx.(pkg.IVideoCodecCtx).Width())
+			res.VideoTrack.Height = uint32(t.ICodecCtx.(pkg.IVideoCodecCtx).Height())
 		}
 	}
 	return

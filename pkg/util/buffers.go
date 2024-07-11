@@ -90,6 +90,10 @@ func (m *Memory) NewReader() *MemoryReader {
 	return &reader
 }
 
+func (r *MemoryReader) Offset() int {
+	return r.Size - r.Length
+}
+
 func (r *MemoryReader) Pop() []byte {
 	panic("ReadableBuffers Pop not allowed")
 }

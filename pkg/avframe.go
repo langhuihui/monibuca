@@ -20,8 +20,8 @@ type (
 	}
 	IVideoCodecCtx interface {
 		codec.ICodecCtx
-		GetWidth() int
-		GetHeight() int
+		Width() int
+		Height() int
 	}
 	IDataFrame interface {
 	}
@@ -29,10 +29,10 @@ type (
 	IAVFrame interface {
 		GetAllocator() *util.ScalableMemoryAllocator
 		SetAllocator(*util.ScalableMemoryAllocator)
-		Parse(*AVTrack) error                       // get codec info, idr
-		ConvertCtx(codec.ICodecCtx, *AVTrack) error // convert codec from source stream
-		Demux(codec.ICodecCtx) (any, error)         // demux to raw format
-		Mux(codec.ICodecCtx, *AVFrame)              // mux from raw format
+		Parse(*AVTrack) error                                          // get codec info, idr
+		ConvertCtx(codec.ICodecCtx) (codec.ICodecCtx, IAVFrame, error) // convert codec from source stream
+		Demux(codec.ICodecCtx) (any, error)                            // demux to raw format
+		Mux(codec.ICodecCtx, *AVFrame)                                 // mux from raw format
 		GetTimestamp() time.Duration
 		GetCTS() time.Duration
 		GetSize() int
@@ -66,6 +66,10 @@ type (
 )
 
 var _ IAVFrame = (*AnnexB)(nil)
+
+func (frame *AVFrame) Clone() {
+
+}
 
 func (frame *AVFrame) Reset() {
 	frame.Timestamp = 0

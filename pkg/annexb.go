@@ -17,16 +17,15 @@ type AnnexB struct {
 }
 
 func (a *AnnexB) Dump(t byte, w io.Writer) {
-	m := a.Borrow(4 + a.Size)
+	m := a.GetAllocator().Borrow(4 + a.Size)
 	binary.BigEndian.PutUint32(m, uint32(a.Size))
 	a.CopyTo(m[4:])
 	w.Write(m)
 }
 
 // DecodeConfig implements pkg.IAVFrame.
-func (a *AnnexB) ConvertCtx(ctx codec.ICodecCtx, t *AVTrack) error {
-	t.ICodecCtx = ctx.GetBase()
-	return nil
+func (a *AnnexB) ConvertCtx(ctx codec.ICodecCtx) (codec.ICodecCtx, IAVFrame, error) {
+	return ctx.GetBase(), nil, nil
 }
 
 // GetSize implements pkg.IAVFrame.
@@ -61,9 +60,9 @@ func (a *AnnexB) Mux(codecCtx codec.ICodecCtx, frame *AVFrame) {
 	if frame.IDR {
 		switch ctx := codecCtx.(type) {
 		case *codec.H264Ctx:
-			a.Append(ctx.SPS[0], codec.NALU_Delimiter2, ctx.PPS[0], codec.NALU_Delimiter2)
+			a.Append(ctx.SPS(), codec.NALU_Delimiter2, ctx.PPS(), codec.NALU_Delimiter2)
 		case *codec.H265Ctx:
-			a.Append(ctx.SPS[0], codec.NALU_Delimiter2, ctx.PPS[0], codec.NALU_Delimiter2, ctx.VPS[0], codec.NALU_Delimiter2)
+			a.Append(ctx.SPS(), codec.NALU_Delimiter2, ctx.PPS(), codec.NALU_Delimiter2, ctx.VPS(), codec.NALU_Delimiter2)
 		}
 	}
 	for i, nalu := range frame.Raw.(Nalus) {

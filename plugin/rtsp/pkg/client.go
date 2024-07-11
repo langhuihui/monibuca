@@ -4,8 +4,6 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"github.com/AlexxIT/go2rtc/pkg/core"
-	"github.com/AlexxIT/go2rtc/pkg/tcp"
 	"m7s.live/m7s/v5"
 	"m7s.live/m7s/v5/pkg/util"
 	"net"
@@ -17,6 +15,14 @@ import (
 
 type Client struct {
 	Stream
+}
+
+func NewPushHandler() m7s.PushHandler {
+	return &Client{}
+}
+
+func NewPullHandler() m7s.PullHandler {
+	return &Client{}
 }
 
 func (c *Client) Connect(p *m7s.Client) (err error) {
@@ -69,7 +75,7 @@ func (c *Client) Pull(p *m7s.Puller) (err error) {
 		}
 		p.Dispose(err)
 	}()
-	var media []*core.Media
+	var media []*Media
 	if media, err = c.Describe(); err != nil {
 		return
 	}
@@ -86,7 +92,7 @@ func (c *Client) Pull(p *m7s.Puller) (err error) {
 func (c *Client) Push(p *m7s.Pusher) (err error) {
 	defer c.Close()
 	sender := &Sender{Subscriber: &p.Subscriber, Stream: c.Stream}
-	var medias []*core.Media
+	var medias []*Media
 	medias, err = sender.GetMedia()
 	err = c.Announce(medias)
 	if err != nil {
@@ -122,12 +128,12 @@ func (c *Client) Do(req *util.Request) (*util.Response, error) {
 
 	if res.StatusCode == http.StatusUnauthorized {
 		switch c.auth.Method {
-		case tcp.AuthNone:
+		case util.AuthNone:
 			if c.auth.ReadNone(res) {
 				return c.Do(req)
 			}
 			return nil, errors.New("user/pass not provided")
-		case tcp.AuthUnknown:
+		case util.AuthUnknown:
 			if c.auth.Read(res) {
 				return c.Do(req)
 			}
@@ -161,7 +167,7 @@ func (c *Client) Options() error {
 	return nil
 }
 
-func (c *Client) Describe() (medias []*core.Media, err error) {
+func (c *Client) Describe() (medias []*Media, err error) {
 	// 5.3 Back channel connection
 	// https://www.onvif.org/specs/stream/ONVIF-Streaming-Spec.pdf
 	req := &util.Request{
@@ -201,7 +207,7 @@ func (c *Client) Describe() (medias []*core.Media, err error) {
 		return
 	}
 	if c.Media != "" {
-		clone := make([]*core.Media, 0, len(medias))
+		clone := make([]*Media, 0, len(medias))
 		for _, media := range medias {
 			if strings.Contains(c.Media, media.Kind) {
 				clone = append(clone, media)
@@ -213,7 +219,7 @@ func (c *Client) Describe() (medias []*core.Media, err error) {
 	return
 }
 
-func (c *Client) Announce(medias []*core.Media) (err error) {
+func (c *Client) Announce(medias []*Media) (err error) {
 	req := &util.Request{
 		Method: MethodAnnounce,
 		URL:    c.URL,
@@ -222,7 +228,7 @@ func (c *Client) Announce(medias []*core.Media) (err error) {
 		},
 	}
 
-	req.Body, err = core.MarshalSDP(c.SessionName, medias)
+	req.Body, err = MarshalSDP(c.SessionName, medias)
 	if err != nil {
 		return err
 	}
@@ -232,7 +238,7 @@ func (c *Client) Announce(medias []*core.Media) (err error) {
 	return
 }
 
-func (c *Client) SetupMedia(media *core.Media, index int) (byte, error) {
+func (c *Client) SetupMedia(media *Media, index int) (byte, error) {
 	var transport string
 	transport = fmt.Sprintf(
 		// i   - RTP (data channel)
@@ -308,7 +314,7 @@ func (c *Client) SetupMedia(media *core.Media, index int) (byte, error) {
 		}
 	}
 
-	channel := core.Between(transport, "interleaved=", "-")
+	channel := Between(transport, "interleaved=", "-")
 	i, err := strconv.Atoi(channel)
 	if err != nil {
 		return 0, err

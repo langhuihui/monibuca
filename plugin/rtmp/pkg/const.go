@@ -24,7 +24,7 @@ type RTMPData struct {
 }
 
 func (avcc *RTMPData) Dump(t byte, w io.Writer) {
-	m := avcc.Borrow(9 + avcc.Size)
+	m := avcc.GetAllocator().Borrow(9 + avcc.Size)
 	m[0] = t
 	binary.BigEndian.PutUint32(m[1:], uint32(4+avcc.Size))
 	binary.BigEndian.PutUint32(m[5:], avcc.Timestamp)

@@ -13,67 +13,60 @@ import (
 	"m7s.live/m7s/v5/plugin/stress/pb"
 )
 
-func (r *StressPlugin) PushRTMP(ctx context.Context, req *pb.PushRequest) (res *gpb.SuccessResponse, err error) {
-	l := r.pushers.Length
-	for i := range req.PushCount {
-		pusher, err := r.Push(req.StreamPath, fmt.Sprintf("rtmp://%s/stress/%d", req.RemoteHost, int(i)+l))
-		if err != nil {
-			return nil, err
+func (r *StressPlugin) pull(count int, format, url string, newFunc func() m7s.PullHandler) error {
+	if i := r.pullers.Length; count > i {
+		for j := i; j < count; j++ {
+			puller, err := r.Pull(fmt.Sprintf("stress/%d", j), fmt.Sprintf(format, url))
+			if err != nil {
+				return err
+			}
+			go r.startPull(puller, newFunc())
 		}
-		go r.startPush(pusher, &rtmp.Client{})
+	} else if count < i {
+		for j := i; j > count; j-- {
+			r.pullers.Items[j-1].Stop(pkg.ErrStopFromAPI)
+			r.pullers.Remove(r.pullers.Items[j-1])
+		}
 	}
-	return &gpb.SuccessResponse{}, nil
+	return nil
+}
+
+func (r *StressPlugin) push(count int, streamPath, format, remoteHost string, newFunc func() m7s.PushHandler) (err error) {
+	if i := r.pushers.Length; count > i {
+		for j := i; j < count; j++ {
+			pusher, err := r.Push(streamPath, fmt.Sprintf(format, remoteHost, j))
+			if err != nil {
+				return err
+			}
+			go r.startPush(pusher, newFunc())
+		}
+	} else if count < i {
+		for j := i; j > count; j-- {
+			r.pushers.Items[j-1].Stop(pkg.ErrStopFromAPI)
+			r.pushers.Remove(r.pushers.Items[j-1])
+		}
+	}
+	return nil
+}
+
+func (r *StressPlugin) PushRTMP(ctx context.Context, req *pb.PushRequest) (res *gpb.SuccessResponse, err error) {
+	return &gpb.SuccessResponse{}, r.push(int(req.PushCount), req.StreamPath, "rtmp://%s/stress/%d", req.RemoteHost, rtmp.NewPushHandler)
 }
 
 func (r *StressPlugin) PushRTSP(ctx context.Context, req *pb.PushRequest) (res *gpb.SuccessResponse, err error) {
-	l := r.pushers.Length
-	for i := range req.PushCount {
-		pusher, err := r.Push(req.StreamPath, fmt.Sprintf("rtsp://%s/stress/%d", req.RemoteHost, int(i)+l))
-		if err != nil {
-			return nil, err
-		}
-		go r.startPush(pusher, &rtsp.Client{})
-	}
-	return &gpb.SuccessResponse{}, nil
+	return &gpb.SuccessResponse{}, r.push(int(req.PushCount), req.StreamPath, "rtsp://%s/stress/%d", req.RemoteHost, rtsp.NewPushHandler)
 }
 
 func (r *StressPlugin) PullRTMP(ctx context.Context, req *pb.PullRequest) (res *gpb.SuccessResponse, err error) {
-	i := r.pullers.Length
-	for range req.PullCount {
-		puller, err := r.Pull(fmt.Sprintf("stress/%d", i), fmt.Sprintf("rtmp://%s", req.RemoteURL))
-		if err != nil {
-			return nil, err
-		}
-		go r.startPull(puller, &rtmp.Client{})
-		i++
-	}
-	return &gpb.SuccessResponse{}, nil
+	return &gpb.SuccessResponse{}, r.pull(int(req.PullCount), "rtmp://%s", req.RemoteURL, rtmp.NewPullHandler)
 }
 
 func (r *StressPlugin) PullRTSP(ctx context.Context, req *pb.PullRequest) (res *gpb.SuccessResponse, err error) {
-	i := r.pullers.Length
-	for range req.PullCount {
-		puller, err := r.Pull(fmt.Sprintf("stress/%d", i), fmt.Sprintf("rtsp://%s", req.RemoteURL))
-		if err != nil {
-			return nil, err
-		}
-		go r.startPull(puller, &rtsp.Client{})
-		i++
-	}
-	return &gpb.SuccessResponse{}, nil
+	return &gpb.SuccessResponse{}, r.pull(int(req.PullCount), "rtsp://%s", req.RemoteURL, rtsp.NewPullHandler)
 }
 
 func (r *StressPlugin) PullHDL(ctx context.Context, req *pb.PullRequest) (res *gpb.SuccessResponse, err error) {
-	i := r.pullers.Length
-	for range req.PullCount {
-		puller, err := r.Pull(fmt.Sprintf("stress/%d", i), fmt.Sprintf("http://%s", req.RemoteURL))
-		if err != nil {
-			return nil, err
-		}
-		go r.startPull(puller, hdl.NewHDLPuller())
-		i++
-	}
-	return &gpb.SuccessResponse{}, nil
+	return &gpb.SuccessResponse{}, r.pull(int(req.PullCount), "http://%s", req.RemoteURL, hdl.NewPullHandler)
 }
 
 func (r *StressPlugin) startPush(pusher *m7s.Pusher, handler m7s.PushHandler) {

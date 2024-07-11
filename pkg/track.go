@@ -78,8 +78,29 @@ func (t *Track) AddBytesIn(n int) {
 	}
 }
 
+func (t *AVTrack) Ready(err error) {
+	if !t.IsReady() {
+		if err != nil {
+			t.Error("ready", "err", err)
+		} else {
+			switch ctx := t.ICodecCtx.(type) {
+			case IVideoCodecCtx:
+				t.Info("ready", "info", t.ICodecCtx.GetInfo(), "width", ctx.Width(), "height", ctx.Height())
+			case IAudioCodecCtx:
+				t.Info("ready", "info", t.ICodecCtx.GetInfo(), "channels", ctx.GetChannels(), "sample_rate", ctx.GetSampleRate())
+			}
+		}
+		t.ready.Fulfill(err)
+	}
+}
+
 func (t *Track) Ready(err error) {
 	if !t.IsReady() {
+		if err != nil {
+			t.Error("ready", "err", err)
+		} else {
+			t.Info("ready")
+		}
 		t.ready.Fulfill(err)
 	}
 }

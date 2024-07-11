@@ -26,11 +26,11 @@ func (ctx *AV1Ctx) GetBase() ICodecCtx {
 	return ctx
 }
 
-func (ctx *AV1Ctx) GetWidth() int {
+func (ctx *AV1Ctx) Width() int {
 	return 0
 }
 
-func (ctx *AV1Ctx) GetHeight() int {
+func (ctx *AV1Ctx) Height() int {
 	return 0
 }
 

@@ -3,6 +3,7 @@ package codec
 import (
 	"bytes"
 	"fmt"
+	"github.com/deepch/vdk/codec/h264parser"
 )
 
 // Start Code + NAL Unit -> NALU Header + NALU Body
@@ -107,9 +108,7 @@ func SplitH264(payload []byte) (nalus [][]byte) {
 
 type (
 	H264Ctx struct {
-		SPSInfo
-		SPS [][]byte
-		PPS [][]byte
+		h264parser.CodecData
 	}
 )
 
@@ -118,15 +117,7 @@ func (*H264Ctx) FourCC() FourCC {
 }
 
 func (ctx *H264Ctx) GetInfo() string {
-	return fmt.Sprintf("sps: % 02X,pps: % 02X", ctx.SPS[0], ctx.PPS[0])
-}
-
-func (h264 *H264Ctx) GetWidth() int {
-	return int(h264.Width)
-}
-
-func (h264 *H264Ctx) GetHeight() int {
-	return int(h264.Height)
+	return fmt.Sprintf("fps: %d, resolution: %s", ctx.FPS(), ctx.Resolution())
 }
 
 func (h264 *H264Ctx) GetBase() ICodecCtx {

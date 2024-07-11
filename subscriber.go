@@ -144,17 +144,31 @@ func (s *Subscriber) createVideoReader(dataType reflect.Type, startVideoTs time.
 	return
 }
 
+type SubscribeHandler[A any, V any] struct {
+	OnAudio      func(A) error
+	OnVideo      func(V) error
+	ProcessAudio chan func(*AVFrame)
+	ProcessVideo chan func(*AVFrame)
+}
+
 func PlayBlock[A any, V any](s *Subscriber, onAudio func(A) error, onVideo func(V) error) (err error) {
+	var handler SubscribeHandler[A, V]
+	handler.OnAudio = onAudio
+	handler.OnVideo = onVideo
+	return PlayBlock0(s, handler)
+}
+
+func PlayBlock0[A any, V any](s *Subscriber, handler SubscribeHandler[A, V]) (err error) {
 	var a1, v1 reflect.Type
 	var startAudioTs, startVideoTs time.Duration
 	var initState = 0
 	prePublisher := s.Publisher
 	var audioFrame, videoFrame *AVFrame
 	if s.SubAudio {
-		a1 = reflect.TypeOf(onAudio).In(0)
+		a1 = reflect.TypeOf(handler.OnAudio).In(0)
 	}
 	if s.SubVideo {
-		v1 = reflect.TypeOf(onVideo).In(0)
+		v1 = reflect.TypeOf(handler.OnVideo).In(0)
 	}
 	awi := s.createAudioReader(a1, startAudioTs)
 	vwi := s.createVideoReader(v1, startVideoTs)
@@ -172,15 +186,20 @@ func PlayBlock[A any, V any](s *Subscriber, onAudio func(A) error, onVideo func(
 				if s.Enabled(s, TraceLevel) {
 					s.Trace("send audio frame", "seq", audioFrame.Sequence)
 				}
-				err = onAudio(audioFrame.Wraps[awi].(A))
+				err = handler.OnAudio(audioFrame.Wraps[awi].(A))
 			} else {
 				s.AudioReader.StopRead()
 			}
 		} else {
-			err = onAudio(any(audioFrame).(A))
+			err = handler.OnAudio(any(audioFrame).(A))
 		}
 		if err != nil && !errors.Is(err, ErrInterrupt) {
 			s.Stop(err)
+		}
+		if handler.ProcessAudio != nil {
+			if f, ok := <-handler.ProcessAudio; ok {
+				f(audioFrame)
+			}
 		}
 		audioFrame = nil
 		return
@@ -191,15 +210,20 @@ func PlayBlock[A any, V any](s *Subscriber, onAudio func(A) error, onVideo func(
 				if s.Enabled(s, TraceLevel) {
 					s.Trace("send video frame", "seq", videoFrame.Sequence, "data", videoFrame.Wraps[vwi].String(), "size", videoFrame.Wraps[vwi].GetSize())
 				}
-				err = onVideo(videoFrame.Wraps[vwi].(V))
+				err = handler.OnVideo(videoFrame.Wraps[vwi].(V))
 			} else {
 				s.VideoReader.StopRead()
 			}
 		} else {
-			err = onVideo(any(videoFrame).(V))
+			err = handler.OnVideo(any(videoFrame).(V))
 		}
 		if err != nil && !errors.Is(err, ErrInterrupt) {
 			s.Stop(err)
+		}
+		if handler.ProcessVideo != nil {
+			if f, ok := <-handler.ProcessVideo; ok {
+				f(videoFrame)
+			}
 		}
 		videoFrame = nil
 		return
@@ -242,7 +266,7 @@ func PlayBlock[A any, V any](s *Subscriber, onAudio func(A) error, onVideo func(
 					vr.LastCodecCtx = vr.Track.ICodecCtx
 					if seqFrame := vr.Track.SequenceFrame; seqFrame != nil {
 						s.Debug("video codec changed", "data", seqFrame.String())
-						err = onVideo(seqFrame.(V))
+						err = handler.OnVideo(seqFrame.(V))
 					}
 				}
 				if ar != nil {
@@ -294,7 +318,7 @@ func PlayBlock[A any, V any](s *Subscriber, onAudio func(A) error, onVideo func(
 				if ar.DecConfChanged() {
 					ar.LastCodecCtx = ar.Track.ICodecCtx
 					if seqFrame := ar.Track.SequenceFrame; seqFrame != nil {
-						err = onAudio(seqFrame.(A))
+						err = handler.OnAudio(seqFrame.(A))
 					}
 				}
 				if vr != nil && videoFrame != nil {

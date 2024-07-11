@@ -16,12 +16,12 @@ const (
 )
 
 var (
-	memoryPool      [BuddySize]byte
-	buddy           = NewBuddy(BuddySize >> MinPowerOf2)
-	lock            sync.Mutex
-	poolStart            = int64(uintptr(unsafe.Pointer(&memoryPool[0])))
-	blockPool            = list.New()
-	EnableCheckSize bool = false
+	memoryPool [BuddySize]byte
+	buddy      = NewBuddy(BuddySize >> MinPowerOf2)
+	lock       sync.Mutex
+	poolStart  = int64(uintptr(unsafe.Pointer(&memoryPool[0])))
+	blockPool  = list.New()
+	//EnableCheckSize bool = false
 )
 
 type MemoryAllocator struct {
@@ -176,9 +176,9 @@ func (sma *ScalableMemoryAllocator) Malloc(size int) (memory []byte) {
 	if sma == nil || size > MaxBlockSize {
 		return make([]byte, size)
 	}
-	if EnableCheckSize {
-		defer sma.checkSize()
-	}
+	//if EnableCheckSize {
+	//	defer sma.checkSize()
+	//}
 	defer sma.addMallocCount(size)
 	var child *MemoryAllocator
 	for _, child = range sma.children {
@@ -228,9 +228,9 @@ func (sma *ScalableMemoryAllocator) Free(mem []byte) bool {
 	if sma == nil {
 		return false
 	}
-	if EnableCheckSize {
-		defer sma.checkSize()
-	}
+	//if EnableCheckSize {
+	//	defer sma.checkSize()
+	//}
 	ptr := int64(uintptr(unsafe.Pointer(&mem[0])))
 	size := len(mem)
 	for i, child := range sma.children {
@@ -247,57 +247,16 @@ func (sma *ScalableMemoryAllocator) Free(mem []byte) bool {
 	return false
 }
 
-type RecyclableMemory struct {
-	*ScalableMemoryAllocator
-	Memory
-	RecycleIndexes []int
-}
-
-func (r *RecyclableMemory) SetAllocator(allocator *ScalableMemoryAllocator) {
-	r.ScalableMemoryAllocator = allocator
-}
-
-func (r *RecyclableMemory) NextN(size int) (memory []byte) {
-	memory = r.ScalableMemoryAllocator.Malloc(size)
-	if memory == nil {
-		memory = make([]byte, size)
-	} else if r.RecycleIndexes != nil {
-		r.RecycleIndexes = append(r.RecycleIndexes, r.Count())
-	}
-	r.AppendOne(memory)
-	return
-}
-
-func (r *RecyclableMemory) AddRecycleBytes(b []byte) {
-	if r.RecycleIndexes != nil {
-		r.RecycleIndexes = append(r.RecycleIndexes, r.Count())
-	}
-	r.AppendOne(b)
-}
-
-func (r *RecyclableMemory) RemoveRecycleBytes(index int) (buf []byte) {
-	if index < 0 {
-		index = r.Count() + index
-	}
-	buf = r.Buffers[index]
-	if r.RecycleIndexes != nil {
-		i := slices.Index(r.RecycleIndexes, index)
-		r.RecycleIndexes = slices.Delete(r.RecycleIndexes, i, i+1)
-	}
-	r.Buffers = slices.Delete(r.Buffers, index, index+1)
-	r.Size -= len(buf)
-	return
-}
-
-func (r *RecyclableMemory) Recycle() {
-	if r.RecycleIndexes != nil {
-		for _, index := range r.RecycleIndexes {
-			r.Free(r.Buffers[index])
-		}
-		r.RecycleIndexes = r.RecycleIndexes[:0]
-	} else {
-		for _, buf := range r.Buffers {
-			r.Free(buf)
-		}
-	}
-}
+//func (r *RecyclableMemory) RemoveRecycleBytes(index int) (buf []byte) {
+//	if index < 0 {
+//		index = r.Count() + index
+//	}
+//	buf = r.Buffers[index]
+//	if r.recycleIndexes != nil {
+//		i := slices.Index(r.recycleIndexes, index)
+//		r.recycleIndexes = slices.Delete(r.recycleIndexes, i, i+1)
+//	}
+//	r.Buffers = slices.Delete(r.Buffers, index, index+1)
+//	r.Size -= len(buf)
+//	return
+//}

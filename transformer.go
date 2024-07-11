@@ -1,6 +1,8 @@
 package m7s
 
-import "m7s.live/m7s/v5/pkg"
+import (
+	"m7s.live/m7s/v5/pkg"
+)
 
 type Transformer struct {
 	*Publisher

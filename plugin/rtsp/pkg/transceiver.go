@@ -2,7 +2,6 @@ package rtsp
 
 import (
 	"fmt"
-	"github.com/AlexxIT/go2rtc/pkg/core"
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v4"
@@ -35,17 +34,17 @@ func (ns *Stream) Close() error {
 	return nil
 }
 
-func (s *Sender) GetMedia() (medias []*core.Media, err error) {
+func (s *Sender) GetMedia() (medias []*Media, err error) {
 	if s.SubAudio && s.Publisher.PubAudio && s.Publisher.HasAudioTrack() {
 		audioTrack := s.Publisher.GetAudioTrack(reflect.TypeOf((*mrtp.RTPAudio)(nil)))
 		if err = audioTrack.WaitReady(); err != nil {
 			return
 		}
 		parameter := audioTrack.ICodecCtx.(mrtp.IRTPCtx).GetRTPCodecParameter()
-		media := &core.Media{
+		media := &Media{
 			Kind:      "audio",
-			Direction: core.DirectionRecvonly,
-			Codecs: []*core.Codec{{
+			Direction: DirectionRecvonly,
+			Codecs: []*Codec{{
 				Name:        parameter.MimeType[6:],
 				ClockRate:   parameter.ClockRate,
 				Channels:    parameter.Channels,
@@ -64,17 +63,17 @@ func (s *Sender) GetMedia() (medias []*core.Media, err error) {
 			return
 		}
 		parameter := videoTrack.ICodecCtx.(mrtp.IRTPCtx).GetRTPCodecParameter()
-		c := core.Codec{
+		c := Codec{
 			Name:        parameter.MimeType[6:],
 			ClockRate:   parameter.ClockRate,
 			Channels:    parameter.Channels,
 			FmtpLine:    parameter.SDPFmtpLine,
 			PayloadType: uint8(parameter.PayloadType),
 		}
-		media := &core.Media{
+		media := &Media{
 			Kind:      "video",
-			Direction: core.DirectionRecvonly,
-			Codecs:    []*core.Codec{&c},
+			Direction: DirectionRecvonly,
+			Codecs:    []*Codec{&c},
 			ID:        fmt.Sprintf("trackID=%d", len(medias)),
 		}
 		s.VideoChannelID = len(medias) << 1
@@ -120,7 +119,7 @@ func (s *Sender) Send() (err error) {
 	return s.send()
 }
 
-func (r *Receiver) SetMedia(medias []*core.Media) (err error) {
+func (r *Receiver) SetMedia(medias []*Media) (err error) {
 	r.AudioChannelID = -1
 	r.VideoChannelID = -1
 	for i, media := range medias {
@@ -156,9 +155,9 @@ func (r *Receiver) SetMedia(medias []*core.Media) (err error) {
 }
 func (r *Receiver) Receive() (err error) {
 	audioFrame, videoFrame := &mrtp.RTPAudio{}, &mrtp.RTPVideo{}
-	audioFrame.ScalableMemoryAllocator = r.MemoryAllocator
+	audioFrame.SetAllocator(r.MemoryAllocator)
 	audioFrame.RTPCodecParameters = r.AudioCodecParameters
-	videoFrame.ScalableMemoryAllocator = r.MemoryAllocator
+	videoFrame.SetAllocator(r.MemoryAllocator)
 	videoFrame.RTPCodecParameters = r.VideoCodecParameters
 	var channelID byte
 	var buf []byte
@@ -189,7 +188,7 @@ func (r *Receiver) Receive() (err error) {
 					audioFrame.AddRecycleBytes(buf)
 					audioFrame.Packets = []*rtp.Packet{packet}
 					audioFrame.RTPCodecParameters = r.VideoCodecParameters
-					audioFrame.ScalableMemoryAllocator = r.MemoryAllocator
+					audioFrame.SetAllocator(r.MemoryAllocator)
 				}
 			case r.VideoChannelID:
 				if !r.PubVideo {
@@ -210,7 +209,7 @@ func (r *Receiver) Receive() (err error) {
 					videoFrame.AddRecycleBytes(buf)
 					videoFrame.Packets = []*rtp.Packet{packet}
 					videoFrame.RTPCodecParameters = r.VideoCodecParameters
-					videoFrame.ScalableMemoryAllocator = r.MemoryAllocator
+					videoFrame.SetAllocator(r.MemoryAllocator)
 				}
 			default:
 

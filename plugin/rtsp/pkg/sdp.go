@@ -2,7 +2,6 @@ package rtsp
 
 import (
 	"bytes"
-	"github.com/AlexxIT/go2rtc/pkg/core"
 	"io"
 	"net/url"
 	"regexp"
@@ -24,7 +23,7 @@ o=- 0 0 IN IP4 0.0.0.0
 s=-
 t=0 0`
 
-func UnmarshalSDP(rawSDP []byte) ([]*core.Media, error) {
+func UnmarshalSDP(rawSDP []byte) ([]*Media, error) {
 	sd := &sdp.SessionDescription{}
 	if err := sd.Unmarshal(rawSDP); err != nil {
 		// fix multiple `s=` https://github.com/AlexxIT/WebRTC/issues/417
@@ -53,21 +52,21 @@ func UnmarshalSDP(rawSDP []byte) ([]*core.Media, error) {
 		}
 	}
 
-	var medias []*core.Media
+	var medias []*Media
 
 	for _, md := range sd.MediaDescriptions {
-		media := core.UnmarshalMedia(md)
+		media := UnmarshalMedia(md)
 
 		// Check buggy SDP with fmtp for H264 on another track
 		// https://github.com/AlexxIT/WebRTC/issues/419
 		for _, codec := range media.Codecs {
-			if codec.Name == core.CodecH264 && codec.FmtpLine == "" {
+			if codec.Name == CodecH264 && codec.FmtpLine == "" {
 				codec.FmtpLine = findFmtpLine(codec.PayloadType, sd.MediaDescriptions)
 			}
 		}
 
 		if media.Direction == "" {
-			media.Direction = core.DirectionRecvonly
+			media.Direction = DirectionRecvonly
 		}
 
 		medias = append(medias, media)
@@ -79,7 +78,7 @@ func UnmarshalSDP(rawSDP []byte) ([]*core.Media, error) {
 func findFmtpLine(payloadType uint8, descriptions []*sdp.MediaDescription) string {
 	s := strconv.Itoa(int(payloadType))
 	for _, md := range descriptions {
-		codec := core.UnmarshalCodec(md, s)
+		codec := UnmarshalCodec(md, s)
 		if codec.FmtpLine != "" {
 			return codec.FmtpLine
 		}

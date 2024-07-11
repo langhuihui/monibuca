@@ -186,19 +186,19 @@ func (conf *WebRTCPlugin) Push_(w http.ResponseWriter, r *http.Request) {
 			defer mem.Recycle()
 			frame := &mrtp.RTPAudio{}
 			frame.RTPCodecParameters = &codecP
-			frame.ScalableMemoryAllocator = mem
+			frame.SetAllocator(mem)
 			for {
 				var packet rtp.Packet
-				buf := frame.Malloc(mrtp.MTUSize)
+				buf := mem.Malloc(mrtp.MTUSize)
 				if n, _, err = track.Read(buf); err == nil {
-					frame.FreeRest(&buf, n)
+					mem.FreeRest(&buf, n)
 					err = packet.Unmarshal(buf)
 				}
 				if err != nil {
 					return
 				}
 				if len(packet.Payload) == 0 {
-					frame.Free(buf)
+					mem.Free(buf)
 					continue
 				}
 				if len(frame.Packets) == 0 || packet.Timestamp == frame.Packets[0].Timestamp {
@@ -210,7 +210,7 @@ func (conf *WebRTCPlugin) Push_(w http.ResponseWriter, r *http.Request) {
 					frame.AddRecycleBytes(buf)
 					frame.Packets = []*rtp.Packet{&packet}
 					frame.RTPCodecParameters = &codecP
-					frame.ScalableMemoryAllocator = mem
+					frame.SetAllocator(mem)
 				}
 			}
 		} else {
@@ -222,7 +222,7 @@ func (conf *WebRTCPlugin) Push_(w http.ResponseWriter, r *http.Request) {
 			defer mem.Recycle()
 			frame := &mrtp.RTPVideo{}
 			frame.RTPCodecParameters = &codecP
-			frame.ScalableMemoryAllocator = mem
+			frame.SetAllocator(mem)
 			for {
 				if time.Since(lastPLISent) > conf.PLI {
 					if rtcpErr := conn.WriteRTCP([]rtcp.Packet{&rtcp.PictureLossIndication{MediaSSRC: uint32(track.SSRC())}}); rtcpErr != nil {
@@ -232,16 +232,16 @@ func (conf *WebRTCPlugin) Push_(w http.ResponseWriter, r *http.Request) {
 					lastPLISent = time.Now()
 				}
 				var packet rtp.Packet
-				buf := frame.Malloc(mrtp.MTUSize)
+				buf := mem.Malloc(mrtp.MTUSize)
 				if n, _, err = track.Read(buf); err == nil {
-					frame.FreeRest(&buf, n)
+					mem.FreeRest(&buf, n)
 					err = packet.Unmarshal(buf)
 				}
 				if err != nil {
 					return
 				}
 				if len(packet.Payload) == 0 {
-					frame.Free(buf)
+					mem.Free(buf)
 					continue
 				}
 				if len(frame.Packets) == 0 || packet.Timestamp == frame.Packets[0].Timestamp {
@@ -255,7 +255,7 @@ func (conf *WebRTCPlugin) Push_(w http.ResponseWriter, r *http.Request) {
 					frame.AddRecycleBytes(buf)
 					frame.Packets = []*rtp.Packet{&packet}
 					frame.RTPCodecParameters = &codecP
-					frame.ScalableMemoryAllocator = mem
+					frame.SetAllocator(mem)
 				}
 			}
 		}
@@ -349,7 +349,7 @@ func (conf *WebRTCPlugin) Play_(w http.ResponseWriter, r *http.Request) {
 				} else {
 					var rtpCtx mrtp.RTPData
 					var tmpAVTrack AVTrack
-					err = rtpCtx.ConvertCtx(vt.ICodecCtx, &tmpAVTrack)
+					tmpAVTrack.ICodecCtx, tmpAVTrack.SequenceFrame, err = rtpCtx.ConvertCtx(vt.ICodecCtx)
 					if err == nil {
 						rcc = tmpAVTrack.ICodecCtx.(mrtp.IRTPCtx).GetRTPCodecParameter()
 					} else {

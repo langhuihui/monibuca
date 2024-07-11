@@ -1,8 +1,8 @@
 package rtmp
 
 import (
-	"context"
 	"encoding/binary"
+	"github.com/deepch/vdk/codec/h265parser"
 	"io"
 	"time"
 
@@ -43,14 +43,15 @@ func (avcc *RTMPVideo) Parse(t *AVTrack) (err error) {
 		cloneFrame.CopyFrom(&avcc.Memory)
 		switch fourCC {
 		case codec.FourCC_H264:
-			var ctx H264Ctx
-			if err = ctx.Unmarshal(reader); err == nil {
+			var ctx codec.H264Ctx
+			if _, err = ctx.RecordInfo.Unmarshal(cloneFrame.Buffers[0][reader.Offset():]); err == nil {
 				t.SequenceFrame = &cloneFrame
 				t.ICodecCtx = &ctx
 			}
 		case codec.FourCC_H265:
 			var ctx H265Ctx
-			if err = ctx.Unmarshal(reader); err == nil {
+			if _, err = ctx.RecordInfo.Unmarshal(cloneFrame.Buffers[0][reader.Offset():]); err == nil {
+				ctx.RecordInfo.LengthSizeMinusOne = 3 // Unmarshal wrong LengthSizeMinusOne
 				t.SequenceFrame = &cloneFrame
 				t.ICodecCtx = &ctx
 			}
@@ -110,65 +111,56 @@ func (avcc *RTMPVideo) Parse(t *AVTrack) (err error) {
 	return
 }
 
-func (avcc *RTMPVideo) ConvertCtx(from codec.ICodecCtx, t *AVTrack) (err error) {
+func (avcc *RTMPVideo) ConvertCtx(from codec.ICodecCtx) (to codec.ICodecCtx, seq IAVFrame, err error) {
+	var b util.Buffer
+	var enhanced = true //TODO
 	switch fourCC := from.FourCC(); fourCC {
 	case codec.FourCC_H264:
 		h264ctx := from.GetBase().(*codec.H264Ctx)
-		var ctx H264Ctx
-		ctx.H264Ctx = *h264ctx
-		lenSPS := len(h264ctx.SPS[0])
-		lenPPS := len(h264ctx.PPS[0])
-		var b util.Buffer
-		if lenSPS > 3 {
-			b.Write(RTMP_AVC_HEAD[:6])
-			b.Write(h264ctx.SPS[0][1:4])
-			b.Write(RTMP_AVC_HEAD[9:10])
-		} else {
-			b.Write(RTMP_AVC_HEAD)
-		}
-		b.WriteByte(0xE1)
-		b.WriteUint16(uint16(lenSPS))
-		b.Write(h264ctx.SPS[0])
-		b.WriteByte(0x01)
-		b.WriteUint16(uint16(lenPPS))
-		b.Write(h264ctx.PPS[0])
-		t.ICodecCtx = &ctx
+		b = make(util.Buffer, h264ctx.RecordInfo.Len()+4)
+		b[0] = 0x17
+		h264ctx.RecordInfo.Marshal(b[4:])
 		var seqFrame RTMPData
 		seqFrame.AppendOne(b)
-		t.SequenceFrame = seqFrame.WrapVideo()
-		if t.Enabled(context.TODO(), TraceLevel) {
-			c := t.FourCC().String()
-			size := seqFrame.GetSize()
-			data := seqFrame.String()
-			t.Trace("decConfig", "codec", c, "size", size, "data", data)
-		}
+		//if t.Enabled(context.TODO(), TraceLevel) {
+		//	c := t.FourCC().String()
+		//	size := seqFrame.GetSize()
+		//	data := seqFrame.String()
+		//	t.Trace("decConfig", "codec", c, "size", size, "data", data)
+		//}
+		return h264ctx, seqFrame.WrapVideo(), err
 	case codec.FourCC_H265:
-		// TODO: H265
+		h265ctx := from.GetBase().(*codec.H265Ctx)
+		b = make(util.Buffer, h265ctx.RecordInfo.Len()+5)
+		if enhanced {
+			b[0] = 0b1001_0000 | byte(PacketTypeSequenceStart)
+			copy(b[1:], codec.FourCC_H265[:])
+		} else {
+			b[0], b[1], b[2], b[3], b[4] = 0x1C, 0, 0, 0, 0
+		}
+		h265ctx.RecordInfo.Marshal(b[5:], h265parser.SPSInfo{})
+		var ctx H265Ctx
+		ctx.Enhanced = enhanced
+		ctx.H265Ctx = *h265ctx
+		var seqFrame RTMPData
+		seqFrame.AppendOne(b)
+		return &ctx, seqFrame.WrapVideo(), err
+	case codec.FourCC_AV1:
 	}
 	return
 }
 
-func (avcc *RTMPVideo) parseH264(ctx *H264Ctx, reader *util.MemoryReader) (any, error) {
-	cts, err := reader.ReadBE(3)
-	if err != nil {
-		return nil, err
-	}
-	avcc.CTS = cts
+func (avcc *RTMPVideo) parseH264(ctx *codec.H264Ctx, reader *util.MemoryReader) (any, error) {
 	var nalus Nalus
-	if err := nalus.ParseAVCC(reader, ctx.NalulenSize); err != nil {
+	if err := nalus.ParseAVCC(reader, int(ctx.RecordInfo.LengthSizeMinusOne)+1); err != nil {
 		return nalus, err
 	}
 	return nalus, nil
 }
 
 func (avcc *RTMPVideo) parseH265(ctx *H265Ctx, reader *util.MemoryReader) (any, error) {
-	cts, err := reader.ReadBE(3)
-	if err != nil {
-		return nil, err
-	}
-	avcc.CTS = cts
 	var nalus Nalus
-	if err := nalus.ParseAVCC(reader, ctx.NalulenSize); err != nil {
+	if err := nalus.ParseAVCC(reader, int(ctx.RecordInfo.LengthSizeMinusOne)+1); err != nil {
 		return nalus, err
 	}
 	return nalus, nil
@@ -200,48 +192,66 @@ func (avcc *RTMPVideo) Demux(codecCtx codec.ICodecCtx) (any, error) {
 		}
 		switch packetType {
 		case PacketTypeSequenceStart:
-			// if _, err = avcc.DecodeConfig(nil); err != nil {
-			// 	return nil, err
-			// }
+			// see Parse()
 			return nil, nil
 		case PacketTypeCodedFrames:
-			if codecCtx.FourCC() == codec.FourCC_H265 {
-				return avcc.parseH265(codecCtx.(*H265Ctx), reader)
-			} else {
+			switch ctx := codecCtx.(type) {
+			case *H265Ctx:
+				if avcc.CTS, err = reader.ReadBE(3); err != nil {
+					return nil, err
+				}
+				return avcc.parseH265(ctx, reader)
+			case *AV1Ctx:
 				return avcc.parseAV1(reader)
 			}
-		case PacketTypeCodedFramesX:
+		case PacketTypeCodedFramesX: // no cts
+			return avcc.parseH265(codecCtx.(*H265Ctx), reader)
 		}
 	} else {
 		b0, err = reader.ReadByte() //sequence frame flag
 		if err != nil {
 			return nil, err
 		}
-		if b0 == 0 {
-			if err = reader.Skip(3); err != nil {
-				return nil, err
-			}
-			var nalus Nalus
-			if codecCtx.FourCC() == codec.FourCC_H265 {
-				var ctx = codecCtx.(*H265Ctx)
-				nalus.Append(ctx.SPS[0])
-				nalus.Append(ctx.PPS[0])
-				nalus.Append(ctx.VPS[0])
+		if avcc.CTS, err = reader.ReadBE(3); err != nil {
+			return nil, err
+		}
+		var nalus Nalus
+		switch ctx := codecCtx.(type) {
+		case *H265Ctx:
+			if b0 == 0 {
+				nalus.Append(ctx.VPS())
+				nalus.Append(ctx.SPS())
+				nalus.Append(ctx.PPS())
 			} else {
-				var ctx = codecCtx.(*H264Ctx)
-				nalus.Append(ctx.SPS[0])
-				nalus.Append(ctx.PPS[0])
+				return avcc.parseH265(ctx, reader)
 			}
-			return nalus, nil
-		} else {
-			if codecCtx.FourCC() == codec.FourCC_H265 {
-				return avcc.parseH265(codecCtx.(*H265Ctx), reader)
+
+		case *codec.H264Ctx:
+			if b0 == 0 {
+				nalus.Append(ctx.SPS())
+				nalus.Append(ctx.PPS())
 			} else {
-				return avcc.parseH264(codecCtx.(*H264Ctx), reader)
+				return avcc.parseH264(ctx, reader)
 			}
 		}
+		return nalus, nil
 	}
 	return nil, nil
+}
+
+func (avcc *RTMPVideo) muxOld26x(codecID VideoCodecID, from *AVFrame) {
+	nalus := from.Raw.(Nalus)
+	avcc.InitRecycleIndexes(len(nalus)) // Recycle partial data
+	head := avcc.NextN(5)
+	head[0] = util.Conditoinal[byte](from.IDR, 0x10, 0x20) | byte(codecID)
+	head[1] = 1
+	util.PutBE(head[2:5], from.CTS/time.Millisecond) // cts
+	for _, nalu := range nalus {
+		naluLenM := avcc.NextN(4)
+		naluLen := uint32(nalu.Size)
+		binary.BigEndian.PutUint32(naluLenM, naluLen)
+		avcc.Append(nalu.Buffers...)
+	}
 }
 
 func (avcc *RTMPVideo) Mux(codecCtx codec.ICodecCtx, from *AVFrame) {
@@ -249,18 +259,28 @@ func (avcc *RTMPVideo) Mux(codecCtx codec.ICodecCtx, from *AVFrame) {
 	switch ctx := codecCtx.(type) {
 	case *AV1Ctx:
 		panic(ctx)
-	default:
-		nalus := from.Raw.(Nalus)
-		avcc.RecycleIndexes = make([]int, 0, len(nalus)) // Recycle partial data
-		head := avcc.NextN(5)
-		head[0] = util.Conditoinal[byte](from.IDR, 0x10, 0x20) | byte(ParseVideoCodec(codecCtx.FourCC()))
-		head[1] = 1
-		util.PutBE(head[2:5], from.CTS/time.Millisecond) // cts
-		for _, nalu := range nalus {
-			naluLenM := avcc.NextN(4)
-			naluLen := uint32(nalu.Size)
-			binary.BigEndian.PutUint32(naluLenM, naluLen)
-			avcc.Append(nalu.Buffers...)
+	case *codec.H264Ctx:
+		avcc.muxOld26x(CodecID_H264, from)
+	case *H265Ctx:
+		if ctx.Enhanced {
+			nalus := from.Raw.(Nalus)
+			avcc.InitRecycleIndexes(len(nalus)) // Recycle partial data
+			head := avcc.NextN(8)
+			if from.IDR {
+				head[0] = 0b1001_0000 | byte(PacketTypeCodedFrames)
+			} else {
+				head[0] = 0b1010_0000 | byte(PacketTypeCodedFrames)
+			}
+			copy(head[1:], codec.FourCC_H265[:])
+			util.PutBE(head[5:8], from.CTS/time.Millisecond) // cts
+			for _, nalu := range nalus {
+				naluLenM := avcc.NextN(4)
+				naluLen := uint32(nalu.Size)
+				binary.BigEndian.PutUint32(naluLenM, naluLen)
+				avcc.Append(nalu.Buffers...)
+			}
+		} else {
+			avcc.muxOld26x(CodecID_H265, from)
 		}
 	}
 }

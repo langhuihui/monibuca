@@ -5,9 +5,12 @@ go 1.22
 toolchain go1.22.1
 
 require (
-	github.com/AlexxIT/go2rtc v1.9.4
+	github.com/asavie/xdp v0.3.3
+	github.com/cilium/ebpf v0.15.0
 	github.com/cnotch/ipchub v1.1.0
+	github.com/deepch/vdk v0.0.27
 	github.com/emiago/sipgo v0.22.0
+	github.com/google/gopacket v1.1.19
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.19.1
 	github.com/pion/interceptor v0.1.29
 	github.com/pion/rtcp v1.2.14
@@ -16,6 +19,7 @@ require (
 	github.com/polarsignals/frostdb v0.0.0-20240613134636-1d823f7d7299
 	github.com/q191201771/naza v0.30.48
 	github.com/quic-go/quic-go v0.43.1
+	github.com/vishvananda/netlink v1.1.0
 	google.golang.org/genproto/googleapis/api v0.0.0-20240318140521-94a12d6c2237
 	google.golang.org/grpc v1.64.0
 	google.golang.org/protobuf v1.33.0
@@ -100,6 +104,7 @@ require (
 	github.com/thanos-io/objstore v0.0.0-20240512204237-71ef2d0cf7c4 // indirect
 	github.com/tklauser/go-sysconf v0.3.12 // indirect
 	github.com/tklauser/numcpus v0.6.1 // indirect
+	github.com/vishvananda/netns v0.0.0-20191106174202-0a2b9b5464df // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	github.com/zeebo/xxh3 v1.0.2 // indirect
 	go.etcd.io/bbolt v1.3.6 // indirect
@@ -116,7 +121,7 @@ require (
 	github.com/bluenviron/mediacommon v1.9.2
 	github.com/chromedp/chromedp v0.9.5
 	github.com/go-task/slim-sprig v0.0.0-20230315185526-52ccab3ef572 // indirect
-	github.com/google/pprof v0.0.0-20210407192527-94a9f03dee38 // indirect
+	github.com/google/pprof v0.0.0-20230309165930-d61513b1440d // indirect
 	github.com/gorilla/websocket v1.5.1
 	github.com/onsi/ginkgo/v2 v2.9.5 // indirect
 	github.com/phsym/console-slog v0.3.1
@@ -126,8 +131,8 @@ require (
 	golang.org/x/crypto v0.24.0 // indirect
 	golang.org/x/exp v0.0.0-20240531132922-fd00a4e0eefc // indirect
 	golang.org/x/mod v0.18.0 // indirect
-	golang.org/x/net v0.26.0
-	golang.org/x/sys v0.21.0 // indirect
+	golang.org/x/net v0.26.0 // indirect
+	golang.org/x/sys v0.21.0
 	golang.org/x/tools v0.22.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1
 )

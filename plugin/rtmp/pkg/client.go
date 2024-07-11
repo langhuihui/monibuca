@@ -16,6 +16,14 @@ type Client struct {
 	ServerInfo map[string]any
 }
 
+func NewPushHandler() m7s.PushHandler {
+	return &Client{}
+}
+
+func NewPullHandler() m7s.PullHandler {
+	return &Client{}
+}
+
 func (client *Client) Connect(p *m7s.Client) (err error) {
 	chunkSize := 4096
 	addr := p.RemoteURL

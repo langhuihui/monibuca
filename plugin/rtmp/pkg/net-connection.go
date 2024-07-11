@@ -74,7 +74,7 @@ func NewNetConnection(conn net.Conn, logger *slog.Logger) (ret *NetConnection) {
 		tmpBuf:          make(util.Buffer, 4),
 		chunkHeaderBuf:  make(util.Buffer, 0, 20),
 	}
-	ret.mediaDataPool.ScalableMemoryAllocator = util.NewScalableMemoryAllocator(1 << util.MinPowerOf2)
+	ret.mediaDataPool.SetAllocator(util.NewScalableMemoryAllocator(1 << util.MinPowerOf2))
 	ret.Info("new connection")
 	return
 }
@@ -154,9 +154,8 @@ func (conn *NetConnection) readChunk() (msg *Chunk, err error) {
 	}
 	conn.readSeqNum += uint32(bufSize)
 	if chunk.bufLen == 0 {
-		chunk.AVData.RecyclableMemory = util.RecyclableMemory{
-			ScalableMemoryAllocator: conn.mediaDataPool.ScalableMemoryAllocator,
-		}
+		chunk.AVData.RecyclableMemory = util.RecyclableMemory{}
+		chunk.AVData.SetAllocator(conn.mediaDataPool.GetAllocator())
 		chunk.AVData.NextN(msgLen)
 	}
 	buffer := chunk.AVData.Buffers[0]

@@ -96,6 +96,9 @@ func (cfg *ConsolePlugin) connect() (conn quic.Connection, err error) {
 }
 
 func (cfg *ConsolePlugin) OnInit() error {
+	if cfg.Secret == "" {
+		return nil
+	}
 	conn, err := cfg.connect()
 	if err != nil {
 		return err

@@ -102,6 +102,7 @@ func (s *Server) run(ctx context.Context, conf any) (err error) {
 	s.handler = s
 	s.config.HTTP.ListenAddrTLS = ":8443"
 	s.config.HTTP.ListenAddr = ":8080"
+	s.config.TCP.ListenAddr = ":50051"
 	s.LogHandler.SetLevel(slog.LevelInfo)
 	s.LogHandler.Add(defaultLogHandler)
 	s.Logger = slog.New(&s.LogHandler).With("server", s.ID)

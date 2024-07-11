@@ -271,7 +271,6 @@ func (amf *AMF) Marshal(v any) []byte {
 			for i := 0; i < size; i++ {
 				amf.Marshal(v.Index(i).Interface())
 			}
-			amf.Write(END_OBJ)
 		case reflect.Ptr:
 			vv := reflect.Indirect(v)
 			if vv.Kind() == reflect.Struct {

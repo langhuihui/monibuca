@@ -3,7 +3,6 @@ package plugin_rtsp
 import (
 	"errors"
 	"fmt"
-	"github.com/AlexxIT/go2rtc/pkg/core"
 	"m7s.live/m7s/v5"
 	"m7s.live/m7s/v5/pkg/util"
 	. "m7s.live/m7s/v5/plugin/rtsp/pkg"
@@ -104,7 +103,7 @@ func (p *RTSPPlugin) OnTCPConnect(conn *net.TCPConn) {
 			}
 
 			nc.SDP = string(req.Body) // for info
-			var medias []*core.Media
+			var medias []*Media
 			if medias, err = UnmarshalSDP(req.Body); err != nil {
 				return
 			}
@@ -151,11 +150,11 @@ func (p *RTSPPlugin) OnTCPConnect(conn *net.TCPConn) {
 			}
 			sender.NetConnection = nc
 			// convert tracks to real output medias
-			var medias []*core.Media
+			var medias []*Media
 			if medias, err = sender.GetMedia(); err != nil {
 				return
 			}
-			if res.Body, err = core.MarshalSDP(nc.SessionName, medias); err != nil {
+			if res.Body, err = MarshalSDP(nc.SessionName, medias); err != nil {
 				return
 			}
 
@@ -175,7 +174,8 @@ func (p *RTSPPlugin) OnTCPConnect(conn *net.TCPConn) {
 
 			const transport = "RTP/AVP/TCP;unicast;interleaved="
 			if strings.HasPrefix(tr, transport) {
-				nc.Session = core.RandString(8, 10)
+
+				nc.Session = util.RandomString(10)
 
 				if sendMode {
 					if i := reqTrackID(req); i >= 0 {

@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"github.com/bluenviron/mediacommon/pkg/bits"
+	"github.com/deepch/vdk/codec/aacparser"
 	"io"
 	"regexp"
 	"strings"
@@ -28,7 +29,7 @@ type RTPData struct {
 }
 
 func (r *RTPData) Dump(t byte, w io.Writer) {
-	m := r.Borrow(3 + len(r.Packets)*2 + r.GetSize())
+	m := r.GetAllocator().Borrow(3 + len(r.Packets)*2 + r.GetSize())
 	m[0] = t
 	binary.BigEndian.PutUint16(m[1:], uint16(len(r.Packets)))
 	offset := 3
@@ -112,13 +113,14 @@ func (r *RTPCtx) parseFmtpLine(cp *webrtc.RTPCodecParameters) {
 func (r *RTPCtx) GetInfo() string {
 	return r.GetRTPCodecParameter().SDPFmtpLine
 }
-
+func (r *RTPAACCtx) GetInfo() string {
+	return r.AACCtx.GetInfo()
+}
+func (r *RTPOPUSCtx) GetInfo() string {
+	return r.OPUSCtx.GetInfo()
+}
 func (r *RTPCtx) GetRTPCodecParameter() webrtc.RTPCodecParameters {
 	return r.RTPCodecParameters
-}
-
-func (r *RTPCtx) GetSequenceFrame() IAVFrame {
-	return nil
 }
 
 func (r *RTPData) Append(ctx *RTPCtx, ts uint32, payload []byte) (lastPacket *rtp.Packet) {
@@ -137,7 +139,7 @@ func (r *RTPData) Append(ctx *RTPCtx, ts uint32, payload []byte) (lastPacket *rt
 	return
 }
 
-func (r *RTPData) ConvertCtx(from codec.ICodecCtx, t *AVTrack) (err error) {
+func (r *RTPData) ConvertCtx(from codec.ICodecCtx) (to codec.ICodecCtx, seq IAVFrame, err error) {
 	switch from.FourCC() {
 	case codec.FourCC_H264:
 		var ctx RTPH264Ctx
@@ -146,31 +148,31 @@ func (r *RTPData) ConvertCtx(from codec.ICodecCtx, t *AVTrack) (err error) {
 		ctx.MimeType = webrtc.MimeTypeH264
 		ctx.ClockRate = 90000
 		spsInfo := ctx.SPSInfo
-		ctx.SDPFmtpLine = fmt.Sprintf("sprop-parameter-sets=%s,%s;profile-level-id=%02x%02x%02x;level-asymmetry-allowed=1;packetization-mode=1", base64.StdEncoding.EncodeToString(ctx.SPS[0]), base64.StdEncoding.EncodeToString(ctx.PPS[0]), spsInfo.ProfileIdc, spsInfo.ConstraintSetFlag, spsInfo.LevelIdc)
+		ctx.SDPFmtpLine = fmt.Sprintf("sprop-parameter-sets=%s,%s;profile-level-id=%02x%02x%02x;level-asymmetry-allowed=1;packetization-mode=1", base64.StdEncoding.EncodeToString(ctx.SPS()), base64.StdEncoding.EncodeToString(ctx.PPS()), spsInfo.ProfileIdc, spsInfo.ConstraintSetFlag, spsInfo.LevelIdc)
 		ctx.SSRC = uint32(uintptr(unsafe.Pointer(&ctx)))
-		t.ICodecCtx = &ctx
+		to = &ctx
 	case codec.FourCC_H265:
 		var ctx RTPH265Ctx
 		ctx.H265Ctx = *from.GetBase().(*codec.H265Ctx)
 		ctx.PayloadType = 98
 		ctx.MimeType = webrtc.MimeTypeH265
-		ctx.SDPFmtpLine = fmt.Sprintf("profile-id=1;sprop-sps=%s;sprop-pps=%s;sprop-vps=%s", base64.StdEncoding.EncodeToString(ctx.SPS[0]), base64.StdEncoding.EncodeToString(ctx.PPS[0]), base64.StdEncoding.EncodeToString(ctx.VPS[0]))
+		ctx.SDPFmtpLine = fmt.Sprintf("profile-id=1;sprop-sps=%s;sprop-pps=%s;sprop-vps=%s", base64.StdEncoding.EncodeToString(ctx.SPS()), base64.StdEncoding.EncodeToString(ctx.PPS()), base64.StdEncoding.EncodeToString(ctx.VPS()))
 		ctx.ClockRate = 90000
 		ctx.SSRC = uint32(uintptr(unsafe.Pointer(&ctx)))
-		t.ICodecCtx = &ctx
+		to = &ctx
 	case codec.FourCC_MP4A:
 		var ctx RTPAACCtx
 		ctx.SSRC = uint32(uintptr(unsafe.Pointer(&ctx)))
 		ctx.AACCtx = *from.GetBase().(*codec.AACCtx)
 		ctx.MimeType = "audio/MPEG4-GENERIC"
-		ctx.SDPFmtpLine = fmt.Sprintf("profile-level-id=1;mode=AAC-hbr;sizelength=13;indexlength=3;indexdeltalength=3;config=%s", hex.EncodeToString(ctx.AACCtx.Asc))
+		ctx.SDPFmtpLine = fmt.Sprintf("profile-level-id=1;mode=AAC-hbr;sizelength=13;indexlength=3;indexdeltalength=3;config=%s", hex.EncodeToString(ctx.AACCtx.ConfigBytes))
 		ctx.IndexLength = 3
 		ctx.IndexDeltaLength = 3
 		ctx.SizeLength = 13
-		ctx.RTPCtx.Channels = uint16(ctx.AACCtx.Channels)
+		ctx.RTPCtx.Channels = uint16(ctx.AACCtx.GetChannels())
 		ctx.PayloadType = 97
-		ctx.ClockRate = uint32(ctx.SampleRate)
-		t.ICodecCtx = &ctx
+		ctx.ClockRate = uint32(ctx.CodecData.SampleRate())
+		to = &ctx
 	case codec.FourCC_ALAW:
 		var ctx RTPPCMACtx
 		ctx.SSRC = uint32(uintptr(unsafe.Pointer(&ctx)))
@@ -178,7 +180,7 @@ func (r *RTPData) ConvertCtx(from codec.ICodecCtx, t *AVTrack) (err error) {
 		ctx.MimeType = webrtc.MimeTypePCMA
 		ctx.PayloadType = 8
 		ctx.ClockRate = uint32(ctx.SampleRate)
-		t.ICodecCtx = &ctx
+		to = &ctx
 	case codec.FourCC_ULAW:
 		var ctx RTPPCMUCtx
 		ctx.SSRC = uint32(uintptr(unsafe.Pointer(&ctx)))
@@ -186,15 +188,15 @@ func (r *RTPData) ConvertCtx(from codec.ICodecCtx, t *AVTrack) (err error) {
 		ctx.MimeType = webrtc.MimeTypePCMU
 		ctx.PayloadType = 0
 		ctx.ClockRate = uint32(ctx.SampleRate)
-		t.ICodecCtx = &ctx
+		to = &ctx
 	case codec.FourCC_OPUS:
 		var ctx RTPOPUSCtx
 		ctx.SSRC = uint32(uintptr(unsafe.Pointer(&ctx)))
 		ctx.OPUSCtx = *from.GetBase().(*codec.OPUSCtx)
 		ctx.MimeType = webrtc.MimeTypeOpus
 		ctx.PayloadType = 111
-		ctx.ClockRate = uint32(ctx.SampleRate)
-		t.ICodecCtx = &ctx
+		ctx.ClockRate = uint32(ctx.CodecData.SampleRate())
+		to = &ctx
 	}
 	return
 }
@@ -228,10 +230,10 @@ func (r *RTPAudio) Parse(t *AVTrack) (err error) {
 			ctx.IndexDeltaLength = 3
 			ctx.SizeLength = 13
 			if conf, ok := ctx.Fmtp["config"]; ok {
-				if ctx.AACCtx.Asc, err = hex.DecodeString(conf); err == nil {
-					ctx.SampleRate = int(r.ClockRate)
-					ctx.Channels = int(r.Channels)
-					ctx.SampleSize = 16
+				if ctx.AACCtx.ConfigBytes, err = hex.DecodeString(conf); err == nil {
+					if ctx.CodecData, err = aacparser.NewCodecDataFromMPEG4AudioConfigBytes(ctx.AACCtx.ConfigBytes); err != nil {
+						return
+					}
 				}
 			}
 			t.ICodecCtx = ctx

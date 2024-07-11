@@ -2,6 +2,8 @@ package codec
 
 import (
 	"fmt"
+	"github.com/deepch/vdk/codec/aacparser"
+	"github.com/deepch/vdk/codec/opusparser"
 )
 
 type (
@@ -17,11 +19,10 @@ type (
 		AudioCtx
 	}
 	OPUSCtx struct {
-		AudioCtx
+		opusparser.CodecData
 	}
 	AACCtx struct {
-		AudioCtx
-		Asc []byte
+		aacparser.CodecData
 	}
 )
 
@@ -41,10 +42,21 @@ func (ctx *AudioCtx) GetInfo() string {
 	return fmt.Sprintf("sample rate: %d, channels: %d, sample size: %d", ctx.SampleRate, ctx.Channels, ctx.SampleSize)
 }
 
+func (ctx *AACCtx) GetChannels() int {
+	return ctx.ChannelLayout().Count()
+}
+func (ctx *AACCtx) GetSampleSize() int {
+	return 16
+}
+func (ctx *AACCtx) GetSampleRate() int {
+	return ctx.SampleRate()
+}
 func (ctx *AACCtx) GetBase() ICodecCtx {
 	return ctx
 }
-
+func (ctx *AACCtx) GetInfo() string {
+	return fmt.Sprintf("sample rate: %d, channels: %d, object type: %d", ctx.SampleRate(), ctx.GetChannels(), ctx.Config.ObjectType)
+}
 func (*PCMUCtx) FourCC() FourCC {
 	return FourCC_ULAW
 }
@@ -71,4 +83,16 @@ func (*OPUSCtx) FourCC() FourCC {
 
 func (ctx *OPUSCtx) GetBase() ICodecCtx {
 	return ctx
+}
+func (ctx *OPUSCtx) GetChannels() int {
+	return ctx.ChannelLayout().Count()
+}
+func (ctx *OPUSCtx) GetSampleSize() int {
+	return 16
+}
+func (ctx *OPUSCtx) GetSampleRate() int {
+	return ctx.SampleRate()
+}
+func (ctx *OPUSCtx) GetInfo() string {
+	return fmt.Sprintf("sample rate: %d, channels: %d", ctx.SampleRate(), ctx.ChannelLayout().Count())
 }

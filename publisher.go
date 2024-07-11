@@ -248,7 +248,6 @@ func (p *Publisher) WriteVideo(data IAVFrame) (err error) {
 	}
 	if t.Value.IDR {
 		if !t.IsReady() {
-			p.Info("ready")
 			t.Ready(nil)
 		} else if idr != nil {
 			p.GOP = int(t.Value.Sequence - idr.Value.Sequence)
@@ -271,8 +270,7 @@ func (p *Publisher) WriteVideo(data IAVFrame) (err error) {
 			toType := track.FrameType.Elem()
 			toFrame := reflect.New(toType).Interface().(IAVFrame)
 			if track.ICodecCtx == nil {
-				err = toFrame.ConvertCtx(t.ICodecCtx, track)
-				if err != nil {
+				if track.ICodecCtx, track.SequenceFrame, err = toFrame.ConvertCtx(t.ICodecCtx); err != nil {
 					track.Error("DecodeConfig", "err", err)
 					return
 				}
@@ -294,7 +292,7 @@ func (p *Publisher) WriteVideo(data IAVFrame) (err error) {
 			toFrame.SetAllocator(data.GetAllocator())
 			toFrame.Mux(track.ICodecCtx, &t.Value)
 			if codecCtxChanged {
-				err = toFrame.ConvertCtx(t.ICodecCtx, track)
+				track.ICodecCtx, track.SequenceFrame, err = toFrame.ConvertCtx(t.ICodecCtx)
 			}
 			t.Value.Wraps = append(t.Value.Wraps, toFrame)
 			if track.ICodecCtx != nil {
@@ -351,8 +349,7 @@ func (p *Publisher) WriteAudio(data IAVFrame) (err error) {
 			toType := track.FrameType.Elem()
 			toFrame := reflect.New(toType).Interface().(IAVFrame)
 			if track.ICodecCtx == nil {
-				err = toFrame.ConvertCtx(t.ICodecCtx, track)
-				if err != nil {
+				if track.ICodecCtx, track.SequenceFrame, err = toFrame.ConvertCtx(t.ICodecCtx); err != nil {
 					track.Error("DecodeConfig", "err", err)
 					return
 				}
@@ -374,7 +371,7 @@ func (p *Publisher) WriteAudio(data IAVFrame) (err error) {
 			toFrame.SetAllocator(data.GetAllocator())
 			toFrame.Mux(track.ICodecCtx, &t.Value)
 			if codecCtxChanged {
-				err = toFrame.ConvertCtx(t.ICodecCtx, track)
+				track.ICodecCtx, track.SequenceFrame, err = toFrame.ConvertCtx(t.ICodecCtx)
 			}
 			t.Value.Wraps = append(t.Value.Wraps, toFrame)
 			if track.ICodecCtx != nil {

@@ -27,6 +27,10 @@ func NewHDLPuller() *HDLPuller {
 	}
 }
 
+func NewPullHandler() m7s.PullHandler {
+	return NewHDLPuller()
+}
+
 func (puller *HDLPuller) Connect(p *m7s.Client) (err error) {
 	if strings.HasPrefix(p.RemoteURL, "http") {
 		var res *http.Response
@@ -108,7 +112,7 @@ func (puller *HDLPuller) Pull(p *m7s.Puller) (err error) {
 		var frame rtmp.RTMPData
 		switch ds := int(dataSize); t {
 		case FLV_TAG_TYPE_AUDIO, FLV_TAG_TYPE_VIDEO:
-			frame.ScalableMemoryAllocator = puller.ScalableMemoryAllocator
+			frame.SetAllocator(puller.ScalableMemoryAllocator)
 			err = puller.ReadNto(ds, frame.NextN(ds))
 		default:
 			err = puller.Skip(ds)

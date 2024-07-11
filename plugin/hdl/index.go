@@ -59,8 +59,8 @@ func (p *HDLPlugin) WriteFlvHeader(sub *m7s.Subscriber) (flv net.Buffers) {
 		flags |= 1
 		metaData["videocodecid"] = int(rtmp.ParseVideoCodec(vt.FourCC()))
 		ctx := vt.ICodecCtx.(IVideoCodecCtx)
-		metaData["width"] = ctx.GetWidth()
-		metaData["height"] = ctx.GetHeight()
+		metaData["width"] = ctx.Width()
+		metaData["height"] = ctx.Height()
 	}
 	var data = amf.Marshal(metaData)
 	var b [15]byte
