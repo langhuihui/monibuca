@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/pion/rtp"
-	"github.com/pion/webrtc/v4"
+	"github.com/pion/webrtc/v3"
 	. "m7s.live/m7s/v5/pkg"
 	"m7s.live/m7s/v5/pkg/codec"
 	"m7s.live/m7s/v5/pkg/util"

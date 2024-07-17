@@ -7,7 +7,6 @@ toolchain go1.22.1
 require (
 	github.com/asavie/xdp v0.3.3
 	github.com/cilium/ebpf v0.15.0
-	github.com/cnotch/ipchub v1.1.0
 	github.com/deepch/vdk v0.0.27
 	github.com/emiago/sipgo v0.22.0
 	github.com/google/gopacket v1.1.19
@@ -16,8 +15,8 @@ require (
 	github.com/pion/rtcp v1.2.14
 	github.com/pion/rtp v1.8.6
 	github.com/pion/sdp/v3 v3.0.9
+	github.com/pion/webrtc/v3 v3.2.12
 	github.com/polarsignals/frostdb v0.0.0-20240613134636-1d823f7d7299
-	github.com/q191201771/naza v0.30.48
 	github.com/quic-go/quic-go v0.43.1
 	github.com/vishvananda/netlink v1.1.0
 	google.golang.org/genproto/googleapis/api v0.0.0-20240318140521-94a12d6c2237
@@ -76,18 +75,24 @@ require (
 	github.com/pierrec/lz4/v4 v4.1.21 // indirect
 	github.com/pion/datachannel v1.5.6 // indirect
 	github.com/pion/dtls/v2 v2.2.11 // indirect
+	github.com/pion/ice/v2 v2.3.9 // indirect
 	github.com/pion/ice/v3 v3.0.7 // indirect
 	github.com/pion/logging v0.2.2 // indirect
+	github.com/pion/mdns v0.0.12 // indirect
 	github.com/pion/mdns/v2 v2.0.7 // indirect
 	github.com/pion/randutil v0.1.0 // indirect
 	github.com/pion/sctp v1.8.16 // indirect
+	github.com/pion/srtp/v2 v2.0.15 // indirect
 	github.com/pion/srtp/v3 v3.0.1 // indirect
+	github.com/pion/stun v0.6.1 // indirect
 	github.com/pion/stun/v2 v2.0.0 // indirect
 	github.com/pion/transport/v2 v2.2.5 // indirect
 	github.com/pion/transport/v3 v3.0.2 // indirect
+	github.com/pion/turn/v2 v2.1.2 // indirect
 	github.com/pion/turn/v3 v3.0.3 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/planetscale/vtprotobuf v0.6.0 // indirect
+	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/polarsignals/iceberg-go v0.0.0-20240502213135-2ee70b71e76b // indirect
 	github.com/polarsignals/wal v0.0.0-20240514152147-1cd4b81c9b88 // indirect
 	github.com/power-devops/perfstat v0.0.0-20210106213030-5aafc221ea8c // indirect
@@ -101,6 +106,7 @@ require (
 	github.com/satori/go.uuid v1.2.1-0.20181028125025-b2ce2384e17b // indirect
 	github.com/segmentio/encoding v0.3.6 // indirect
 	github.com/shoenig/go-m1cpu v0.1.6 // indirect
+	github.com/stretchr/testify v1.9.0 // indirect
 	github.com/thanos-io/objstore v0.0.0-20240512204237-71ef2d0cf7c4 // indirect
 	github.com/tklauser/go-sysconf v0.3.12 // indirect
 	github.com/tklauser/numcpus v0.6.1 // indirect
@@ -125,7 +131,6 @@ require (
 	github.com/gorilla/websocket v1.5.1
 	github.com/onsi/ginkgo/v2 v2.9.5 // indirect
 	github.com/phsym/console-slog v0.3.1
-	github.com/pion/webrtc/v4 v4.0.0-beta.13
 	github.com/shirou/gopsutil/v3 v3.24.3
 	go.uber.org/mock v0.4.0 // indirect
 	golang.org/x/crypto v0.24.0 // indirect

@@ -1,7 +1,7 @@
 package webrtc
 
 import (
-	. "github.com/pion/webrtc/v4"
+	. "github.com/pion/webrtc/v3"
 )
 
 type Connection struct {
@@ -27,4 +27,3 @@ func (IO *Connection) GetAnswer() (string, error) {
 	<-gatherComplete
 	return IO.LocalDescription().SDP, nil
 }
-
