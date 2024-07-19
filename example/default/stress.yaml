@@ -1,0 +1,23 @@
+global:
+  #  loglevel: debug
+  http:
+    listenaddr: :8081
+    listenaddrtls: :8555
+  tcp:
+    listenaddr: :50052
+console:
+  secret: 00aea3af031f134d6307618b05ec4899
+logrotate:
+  enable: false
+webrtc:
+  enable: false
+rtsp:
+  tcp:
+    autolisten: false
+rtmp:
+  tcp:
+    autolisten: false
+hdl:
+ pull:
+   pullonstart:
+     live/test: /Users/dexter/Movies/002.flv

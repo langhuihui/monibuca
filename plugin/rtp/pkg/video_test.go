@@ -8,7 +8,7 @@ import (
 )
 
 func TestRTPH264Ctx_CreateFrame(t *testing.T) {
-	var ctx = &RTPH264Ctx{
+	var ctx = &H264Ctx{
 		RTPCtx: RTPCtx{
 			RTPCodecParameters: webrtc.RTPCodecParameters{
 				PayloadType: 96,
@@ -25,7 +25,7 @@ func TestRTPH264Ctx_CreateFrame(t *testing.T) {
 	var mem util.Memory
 	mem.Append([]byte(randStr))
 	avFrame.Raw = []util.Memory{mem}
-	frame := new(RTPVideo)
+	frame := new(Video)
 	frame.Mux(ctx, avFrame)
 	var track = &pkg.AVTrack{}
 	err := frame.Parse(track)

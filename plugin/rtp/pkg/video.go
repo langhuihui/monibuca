@@ -18,32 +18,38 @@ import (
 )
 
 type (
-	RTPH264Ctx struct {
+	H26xCtx struct {
 		RTPCtx
+		dtsEst *util.DTSEstimator
+	}
+	H264Ctx struct {
+		H26xCtx
 		codec.H264Ctx
 	}
-	RTPH265Ctx struct {
-		RTPCtx
+	H265Ctx struct {
+		H26xCtx
 		codec.H265Ctx
 		DONL bool
 	}
-	RTPAV1Ctx struct {
+	AV1Ctx struct {
 		RTPCtx
 		codec.AV1Ctx
 	}
-	RTPVP9Ctx struct {
+	VP9Ctx struct {
 		RTPCtx
 	}
-	RTPVideo struct {
+	Video struct {
 		RTPData
+		CTS time.Duration
+		DTS time.Duration
 	}
 )
 
 var (
-	_ IAVFrame       = (*RTPVideo)(nil)
-	_ IVideoCodecCtx = (*RTPH264Ctx)(nil)
-	_ IVideoCodecCtx = (*RTPH265Ctx)(nil)
-	_ IVideoCodecCtx = (*RTPAV1Ctx)(nil)
+	_ IAVFrame       = (*Video)(nil)
+	_ IVideoCodecCtx = (*H264Ctx)(nil)
+	_ IVideoCodecCtx = (*H265Ctx)(nil)
+	_ IVideoCodecCtx = (*AV1Ctx)(nil)
 )
 
 const (
@@ -54,14 +60,15 @@ const (
 	MTUSize      = 1460
 )
 
-func (r *RTPVideo) Parse(t *AVTrack) (err error) {
+func (r *Video) Parse(t *AVTrack) (err error) {
 	switch r.MimeType {
 	case webrtc.MimeTypeH264:
-		var ctx *RTPH264Ctx
+		var ctx *H264Ctx
 		if t.ICodecCtx != nil {
-			ctx = t.ICodecCtx.(*RTPH264Ctx)
+			ctx = t.ICodecCtx.(*H264Ctx)
 		} else {
-			ctx = &RTPH264Ctx{}
+			ctx = &H264Ctx{}
+			ctx.dtsEst = util.NewDTSEstimator()
 			ctx.parseFmtpLine(r.RTPCodecParameters)
 			var sps, pps []byte
 			//packetization-mode=1; sprop-parameter-sets=J2QAKaxWgHgCJ+WagICAgQ==,KO48sA==; profile-level-id=640029
@@ -83,6 +90,10 @@ func (r *RTPVideo) Parse(t *AVTrack) (err error) {
 		if t.Value.Raw, err = r.Demux(ctx); err != nil {
 			return
 		}
+		pts := r.Packets[0].Timestamp
+		dts := ctx.dtsEst.Feed(pts)
+		r.DTS = time.Duration(dts) * time.Millisecond / 90
+		r.CTS = time.Duration(pts-dts) * time.Millisecond / 90
 		for _, nalu := range t.Value.Raw.(Nalus) {
 			switch codec.ParseH264NALUType(nalu.Buffers[0][0]) {
 			case h264parser.NALU_SPS:
@@ -96,20 +107,14 @@ func (r *RTPVideo) Parse(t *AVTrack) (err error) {
 				t.Value.IDR = true
 			}
 		}
-	case webrtc.MimeTypeVP9:
-		// var ctx RTPVP9Ctx
-		// ctx.RTPCodecParameters = *r.RTPCodecParameters
-		// codecCtx = &ctx
-	case webrtc.MimeTypeAV1:
-		// var ctx RTPAV1Ctx
-		// ctx.RTPCodecParameters = *r.RTPCodecParameters
-		// codecCtx = &ctx
+
 	case webrtc.MimeTypeH265:
-		var ctx *RTPH265Ctx
+		var ctx *H265Ctx
 		if t.ICodecCtx != nil {
-			ctx = t.ICodecCtx.(*RTPH265Ctx)
+			ctx = t.ICodecCtx.(*H265Ctx)
 		} else {
-			ctx = &RTPH265Ctx{}
+			ctx = &H265Ctx{}
+			ctx.dtsEst = util.NewDTSEstimator()
 			ctx.parseFmtpLine(r.RTPCodecParameters)
 			var vps, sps, pps []byte
 			if sprop_sps, ok := ctx.Fmtp["sprop-sps"]; ok {
@@ -140,10 +145,14 @@ func (r *RTPVideo) Parse(t *AVTrack) (err error) {
 		if t.Value.Raw, err = r.Demux(ctx); err != nil {
 			return
 		}
+		pts := r.Packets[0].Timestamp
+		dts := ctx.dtsEst.Feed(pts)
+		r.DTS = time.Duration(dts) * time.Millisecond / 90
+		r.CTS = time.Duration(pts-dts) * time.Millisecond / 90
 		for _, nalu := range t.Value.Raw.(Nalus) {
 			switch codec.ParseH265NALUType(nalu.Buffers[0][0]) {
 			case h265parser.NAL_UNIT_VPS:
-				ctx = &RTPH265Ctx{}
+				ctx = &H265Ctx{}
 				ctx.RecordInfo.VPS = [][]byte{nalu.ToBytes()}
 				ctx.RTPCodecParameters = *r.RTPCodecParameters
 				t.ICodecCtx = ctx
@@ -163,32 +172,44 @@ func (r *RTPVideo) Parse(t *AVTrack) (err error) {
 				t.Value.IDR = true
 			}
 		}
+	case webrtc.MimeTypeVP9:
+		// var ctx RTPVP9Ctx
+		// ctx.RTPCodecParameters = *r.RTPCodecParameters
+		// codecCtx = &ctx
+	case webrtc.MimeTypeAV1:
+		var ctx AV1Ctx
+		ctx.RTPCodecParameters = *r.RTPCodecParameters
+		t.ICodecCtx = &ctx
 	default:
 		err = ErrUnsupportCodec
 	}
 	return
 }
 
-func (h264 *RTPH264Ctx) GetInfo() string {
+func (h264 *H264Ctx) GetInfo() string {
 	return h264.SDPFmtpLine
 }
 
-func (h265 *RTPH265Ctx) GetInfo() string {
+func (h265 *H265Ctx) GetInfo() string {
 	return h265.SDPFmtpLine
 }
 
-func (av1 *RTPAV1Ctx) GetInfo() string {
+func (av1 *AV1Ctx) GetInfo() string {
 	return av1.SDPFmtpLine
 }
 
-func (r *RTPVideo) GetCTS() time.Duration {
-	return 0
+func (r *Video) GetTimestamp() time.Duration {
+	return r.DTS
 }
 
-func (r *RTPVideo) Mux(codecCtx codec.ICodecCtx, from *AVFrame) {
+func (r *Video) GetCTS() time.Duration {
+	return r.CTS
+}
+
+func (r *Video) Mux(codecCtx codec.ICodecCtx, from *AVFrame) {
 	pts := uint32((from.Timestamp + from.CTS) * 90 / time.Millisecond)
 	switch c := codecCtx.(type) {
-	case *RTPH264Ctx:
+	case *H264Ctx:
 		ctx := &c.RTPCtx
 		r.RTPCodecParameters = &ctx.RTPCodecParameters
 		var lastPacket *rtp.Packet
@@ -224,7 +245,7 @@ func (r *RTPVideo) Mux(codecCtx codec.ICodecCtx, from *AVFrame) {
 			}
 		}
 		lastPacket.Header.Marker = true
-	case *RTPH265Ctx:
+	case *H265Ctx:
 		ctx := &c.RTPCtx
 		r.RTPCodecParameters = &ctx.RTPCodecParameters
 		var lastPacket *rtp.Packet
@@ -269,9 +290,9 @@ func (r *RTPVideo) Mux(codecCtx codec.ICodecCtx, from *AVFrame) {
 	}
 }
 
-func (r *RTPVideo) Demux(ictx codec.ICodecCtx) (any, error) {
+func (r *Video) Demux(ictx codec.ICodecCtx) (any, error) {
 	switch c := ictx.(type) {
-	case *RTPH264Ctx:
+	case *H264Ctx:
 		var nalus Nalus
 		var nalu util.Memory
 		var naluType codec.H264NALUType
@@ -321,7 +342,7 @@ func (r *RTPVideo) Demux(ictx codec.ICodecCtx) (any, error) {
 			}
 		}
 		return nalus, nil
-	case *RTPH265Ctx:
+	case *H265Ctx:
 		var nalus Nalus
 		var nalu util.Memory
 		gotNalu := func() {

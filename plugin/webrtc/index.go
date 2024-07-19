@@ -220,7 +220,7 @@ func (conf *WebRTCPlugin) Push_(w http.ResponseWriter, r *http.Request) {
 			var lastPLISent time.Time
 			mem := util.NewScalableMemoryAllocator(1 << 12)
 			defer mem.Recycle()
-			frame := &mrtp.RTPVideo{}
+			frame := &mrtp.Video{}
 			frame.RTPCodecParameters = &codecP
 			frame.SetAllocator(mem)
 			for {
@@ -251,7 +251,7 @@ func (conf *WebRTCPlugin) Push_(w http.ResponseWriter, r *http.Request) {
 					// t := time.Now()
 					err = publisher.WriteVideo(frame)
 					// fmt.Println("write video", time.Since(t))
-					frame = &mrtp.RTPVideo{}
+					frame = &mrtp.Video{}
 					frame.AddRecycleBytes(buf)
 					frame.Packets = []*rtp.Packet{&packet}
 					frame.RTPCodecParameters = &codecP
@@ -431,7 +431,7 @@ func (conf *WebRTCPlugin) Play_(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			return
-		}, func(frame *mrtp.RTPVideo) error {
+		}, func(frame *mrtp.Video) error {
 			for _, p := range frame.Packets {
 				if err := videoTLSRTP.WriteRTP(p); err != nil {
 					return err

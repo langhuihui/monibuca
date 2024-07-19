@@ -8,7 +8,6 @@ import (
 	"github.com/bluenviron/mediacommon/pkg/bits"
 	"github.com/deepch/vdk/codec/aacparser"
 	"io"
-	"regexp"
 	"strings"
 	"time"
 	"unsafe"
@@ -19,8 +18,6 @@ import (
 	"m7s.live/m7s/v5/pkg/codec"
 	"m7s.live/m7s/v5/pkg/util"
 )
-
-var configRegexp = regexp.MustCompile(`config=(.+),([^;]+)(;|$)`)
 
 type RTPData struct {
 	*webrtc.RTPCodecParameters
@@ -72,19 +69,19 @@ type (
 		SequenceNumber uint16
 		SSRC           uint32
 	}
-	RTPPCMACtx struct {
+	PCMACtx struct {
 		RTPCtx
 		codec.PCMACtx
 	}
-	RTPPCMUCtx struct {
+	PCMUCtx struct {
 		RTPCtx
 		codec.PCMUCtx
 	}
-	RTPOPUSCtx struct {
+	OPUSCtx struct {
 		RTPCtx
 		codec.OPUSCtx
 	}
-	RTPAACCtx struct {
+	AACCtx struct {
 		RTPCtx
 		codec.AACCtx
 		SizeLength       int // 通常为13
@@ -113,10 +110,10 @@ func (r *RTPCtx) parseFmtpLine(cp *webrtc.RTPCodecParameters) {
 func (r *RTPCtx) GetInfo() string {
 	return r.GetRTPCodecParameter().SDPFmtpLine
 }
-func (r *RTPAACCtx) GetInfo() string {
+func (r *AACCtx) GetInfo() string {
 	return r.AACCtx.GetInfo()
 }
-func (r *RTPOPUSCtx) GetInfo() string {
+func (r *OPUSCtx) GetInfo() string {
 	return r.OPUSCtx.GetInfo()
 }
 func (r *RTPCtx) GetRTPCodecParameter() webrtc.RTPCodecParameters {
@@ -142,7 +139,7 @@ func (r *RTPData) Append(ctx *RTPCtx, ts uint32, payload []byte) (lastPacket *rt
 func (r *RTPData) ConvertCtx(from codec.ICodecCtx) (to codec.ICodecCtx, seq IAVFrame, err error) {
 	switch from.FourCC() {
 	case codec.FourCC_H264:
-		var ctx RTPH264Ctx
+		var ctx H264Ctx
 		ctx.H264Ctx = *from.GetBase().(*codec.H264Ctx)
 		ctx.PayloadType = 96
 		ctx.MimeType = webrtc.MimeTypeH264
@@ -152,7 +149,7 @@ func (r *RTPData) ConvertCtx(from codec.ICodecCtx) (to codec.ICodecCtx, seq IAVF
 		ctx.SSRC = uint32(uintptr(unsafe.Pointer(&ctx)))
 		to = &ctx
 	case codec.FourCC_H265:
-		var ctx RTPH265Ctx
+		var ctx H265Ctx
 		ctx.H265Ctx = *from.GetBase().(*codec.H265Ctx)
 		ctx.PayloadType = 98
 		ctx.MimeType = webrtc.MimeTypeH265
@@ -161,7 +158,7 @@ func (r *RTPData) ConvertCtx(from codec.ICodecCtx) (to codec.ICodecCtx, seq IAVF
 		ctx.SSRC = uint32(uintptr(unsafe.Pointer(&ctx)))
 		to = &ctx
 	case codec.FourCC_MP4A:
-		var ctx RTPAACCtx
+		var ctx AACCtx
 		ctx.SSRC = uint32(uintptr(unsafe.Pointer(&ctx)))
 		ctx.AACCtx = *from.GetBase().(*codec.AACCtx)
 		ctx.MimeType = "audio/MPEG4-GENERIC"
@@ -174,7 +171,7 @@ func (r *RTPData) ConvertCtx(from codec.ICodecCtx) (to codec.ICodecCtx, seq IAVF
 		ctx.ClockRate = uint32(ctx.CodecData.SampleRate())
 		to = &ctx
 	case codec.FourCC_ALAW:
-		var ctx RTPPCMACtx
+		var ctx PCMACtx
 		ctx.SSRC = uint32(uintptr(unsafe.Pointer(&ctx)))
 		ctx.PCMACtx = *from.GetBase().(*codec.PCMACtx)
 		ctx.MimeType = webrtc.MimeTypePCMA
@@ -182,7 +179,7 @@ func (r *RTPData) ConvertCtx(from codec.ICodecCtx) (to codec.ICodecCtx, seq IAVF
 		ctx.ClockRate = uint32(ctx.SampleRate)
 		to = &ctx
 	case codec.FourCC_ULAW:
-		var ctx RTPPCMUCtx
+		var ctx PCMUCtx
 		ctx.SSRC = uint32(uintptr(unsafe.Pointer(&ctx)))
 		ctx.PCMUCtx = *from.GetBase().(*codec.PCMUCtx)
 		ctx.MimeType = webrtc.MimeTypePCMU
@@ -190,7 +187,7 @@ func (r *RTPData) ConvertCtx(from codec.ICodecCtx) (to codec.ICodecCtx, seq IAVF
 		ctx.ClockRate = uint32(ctx.SampleRate)
 		to = &ctx
 	case codec.FourCC_OPUS:
-		var ctx RTPOPUSCtx
+		var ctx OPUSCtx
 		ctx.SSRC = uint32(uintptr(unsafe.Pointer(&ctx)))
 		ctx.OPUSCtx = *from.GetBase().(*codec.OPUSCtx)
 		ctx.MimeType = webrtc.MimeTypeOpus
@@ -208,23 +205,23 @@ type RTPAudio struct {
 func (r *RTPAudio) Parse(t *AVTrack) (err error) {
 	switch r.MimeType {
 	case webrtc.MimeTypeOpus:
-		var ctx RTPOPUSCtx
+		var ctx OPUSCtx
 		ctx.parseFmtpLine(r.RTPCodecParameters)
 		t.ICodecCtx = &ctx
 	case webrtc.MimeTypePCMA:
-		var ctx RTPPCMACtx
+		var ctx PCMACtx
 		ctx.parseFmtpLine(r.RTPCodecParameters)
 		t.ICodecCtx = &ctx
 	case webrtc.MimeTypePCMU:
-		var ctx RTPPCMUCtx
+		var ctx PCMUCtx
 		ctx.parseFmtpLine(r.RTPCodecParameters)
 		t.ICodecCtx = &ctx
 	case "audio/MPEG4-GENERIC":
-		var ctx *RTPAACCtx
+		var ctx *AACCtx
 		if t.ICodecCtx != nil {
-			ctx = t.ICodecCtx.(*RTPAACCtx)
+			ctx = t.ICodecCtx.(*AACCtx)
 		} else {
-			ctx = &RTPAACCtx{}
+			ctx = &AACCtx{}
 			ctx.parseFmtpLine(r.RTPCodecParameters)
 			ctx.IndexLength = 3
 			ctx.IndexDeltaLength = 3
@@ -245,7 +242,7 @@ func (r *RTPAudio) Parse(t *AVTrack) (err error) {
 func (r *RTPAudio) Demux(codexCtx codec.ICodecCtx) (any, error) {
 	var data AudioData
 	switch codexCtx.(type) {
-	case *RTPAACCtx:
+	case *AACCtx:
 		var fragments util.Memory
 		for _, packet := range r.Packets {
 			if len(packet.Payload) < 2 {
@@ -255,7 +252,7 @@ func (r *RTPAudio) Demux(codexCtx codec.ICodecCtx) (any, error) {
 			if auHeaderLen == 0 {
 				data.AppendOne(packet.Payload)
 			} else {
-				dataLens, err := r.readAUHeaders(codexCtx.(*RTPAACCtx), packet.Payload[2:], auHeaderLen)
+				dataLens, err := r.readAUHeaders(codexCtx.(*AACCtx), packet.Payload[2:], auHeaderLen)
 				if err != nil {
 					return nil, err
 				}
@@ -310,7 +307,7 @@ func (r *RTPAudio) Mux(codexCtx codec.ICodecCtx, from *AVFrame) {
 	var ctx *RTPCtx
 	var lastPacket *rtp.Packet
 	switch c := codexCtx.(type) {
-	case *RTPAACCtx:
+	case *AACCtx:
 		ctx = &c.RTPCtx
 		pts := uint32(from.Timestamp * time.Duration(ctx.ClockRate) / time.Second)
 		//AU_HEADER_LENGTH,因为单位是bit, 除以8就是auHeader的字节长度；又因为单个auheader字节长度2字节，所以再除以2就是auheader的个数。
@@ -327,9 +324,9 @@ func (r *RTPAudio) Mux(codexCtx codec.ICodecCtx, from *AVFrame) {
 		}
 		lastPacket.Header.Marker = true
 		return
-	case *RTPPCMACtx:
+	case *PCMACtx:
 		ctx = &c.RTPCtx
-	case *RTPPCMUCtx:
+	case *PCMUCtx:
 		ctx = &c.RTPCtx
 	}
 	pts := uint32(from.Timestamp * time.Duration(ctx.ClockRate) / time.Second)
@@ -351,7 +348,7 @@ func (r *RTPAudio) Mux(codexCtx codec.ICodecCtx, from *AVFrame) {
 	lastPacket.Header.Marker = true
 }
 
-func (r *RTPAudio) readAUHeaders(ctx *RTPAACCtx, buf []byte, headersLen int) ([]uint64, error) {
+func (r *RTPAudio) readAUHeaders(ctx *AACCtx, buf []byte, headersLen int) ([]uint64, error) {
 	firstRead := false
 
 	count := 0

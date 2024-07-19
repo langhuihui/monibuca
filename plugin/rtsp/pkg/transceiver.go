@@ -58,7 +58,7 @@ func (s *Sender) GetMedia() (medias []*Media, err error) {
 	}
 
 	if s.SubVideo && s.Publisher.PubVideo && s.Publisher.HasVideoTrack() {
-		videoTrack := s.Publisher.GetVideoTrack(reflect.TypeOf((*mrtp.RTPVideo)(nil)))
+		videoTrack := s.Publisher.GetVideoTrack(reflect.TypeOf((*mrtp.Video)(nil)))
 		if err = videoTrack.WaitReady(); err != nil {
 			return
 		}
@@ -102,7 +102,7 @@ func (s *Sender) sendRTP(pack *mrtp.RTPData, channel int) (err error) {
 func (s *Sender) send() error {
 	return m7s.PlayBlock(s.Subscriber, func(audio *mrtp.RTPAudio) error {
 		return s.sendRTP(&audio.RTPData, s.AudioChannelID)
-	}, func(video *mrtp.RTPVideo) error {
+	}, func(video *mrtp.Video) error {
 		return s.sendRTP(&video.RTPData, s.VideoChannelID)
 	})
 }
@@ -153,8 +153,9 @@ func (r *Receiver) SetMedia(medias []*Media) (err error) {
 	}
 	return
 }
+
 func (r *Receiver) Receive() (err error) {
-	audioFrame, videoFrame := &mrtp.RTPAudio{}, &mrtp.RTPVideo{}
+	audioFrame, videoFrame := &mrtp.RTPAudio{}, &mrtp.Video{}
 	audioFrame.SetAllocator(r.MemoryAllocator)
 	audioFrame.RTPCodecParameters = r.AudioCodecParameters
 	videoFrame.SetAllocator(r.MemoryAllocator)
@@ -205,7 +206,7 @@ func (r *Receiver) Receive() (err error) {
 					// t := time.Now()
 					err = r.WriteVideo(videoFrame)
 					// fmt.Println("write video", time.Since(t))
-					videoFrame = &mrtp.RTPVideo{}
+					videoFrame = &mrtp.Video{}
 					videoFrame.AddRecycleBytes(buf)
 					videoFrame.Packets = []*rtp.Packet{packet}
 					videoFrame.RTPCodecParameters = r.VideoCodecParameters

@@ -38,7 +38,7 @@ func (plugin *PluginMeta) Init(s *Server, userConfig map[string]any) {
 	p := reflect.ValueOf(instance).Elem().FieldByName("Plugin").Addr().Interface().(*Plugin)
 	p.handler = instance
 	p.Meta = plugin
-	p.server = s
+	p.Server = s
 	p.Logger = s.Logger.With("plugin", plugin.Name)
 	p.Context, p.CancelCauseFunc = context.WithCancelCause(s.Context)
 	upperName := strings.ToUpper(plugin.Name)
@@ -158,7 +158,7 @@ type Plugin struct {
 	config   config.Common
 	config.Config
 	handler IPlugin
-	server  *Server
+	Server  *Server
 }
 
 func (Plugin) nothing() {
@@ -170,7 +170,7 @@ func (p *Plugin) GetKey() string {
 }
 
 func (p *Plugin) GetGlobalCommonConf() *config.Common {
-	return p.server.GetCommonConf()
+	return p.Server.GetCommonConf()
 }
 
 func (p *Plugin) GetCommonConf() *config.Common {
@@ -178,7 +178,7 @@ func (p *Plugin) GetCommonConf() *config.Common {
 }
 
 func (p *Plugin) settingPath() string {
-	return filepath.Join(p.server.SettingDir, strings.ToLower(p.Meta.Name)+".yaml")
+	return filepath.Join(p.Server.SettingDir, strings.ToLower(p.Meta.Name)+".yaml")
 }
 
 func (p *Plugin) assign() {
@@ -209,13 +209,13 @@ func (p *Plugin) Stop(err error) {
 
 func (p *Plugin) Start() {
 	httpConf := &p.config.HTTP
-	if httpConf.ListenAddrTLS != "" && (httpConf.ListenAddrTLS != p.server.config.HTTP.ListenAddrTLS) {
+	if httpConf.ListenAddrTLS != "" && (httpConf.ListenAddrTLS != p.Server.config.HTTP.ListenAddrTLS) {
 		p.Info("https listen at ", "addr", httpConf.ListenAddrTLS)
 		go func() {
 			p.Stop(httpConf.ListenTLS())
 		}()
 	}
-	if httpConf.ListenAddr != "" && (httpConf.ListenAddr != p.server.config.HTTP.ListenAddr) {
+	if httpConf.ListenAddr != "" && (httpConf.ListenAddr != p.Server.config.HTTP.ListenAddr) {
 		p.Info("http listen at ", "addr", httpConf.ListenAddr)
 		go func() {
 			p.Stop(httpConf.Listen())
@@ -278,7 +278,7 @@ func (p *Plugin) OnTCPConnect(conn *net.TCPConn) {
 func (p *Plugin) Publish(streamPath string, options ...any) (publisher *Publisher, err error) {
 	publisher = &Publisher{Publish: p.config.Publish}
 	if p.config.EnableAuth {
-		if onAuthPub, ok := p.server.OnAuthPubs[p.Meta.Name]; ok {
+		if onAuthPub, ok := p.Server.OnAuthPubs[p.Meta.Name]; ok {
 			authPromise := util.NewPromise(publisher)
 			onAuthPub(authPromise)
 			if _, err = authPromise.Await(); err != nil {
@@ -294,7 +294,7 @@ func (p *Plugin) Publish(streamPath string, options ...any) (publisher *Publishe
 		}
 	}
 	publisher.Init(p, streamPath, &publisher.Publish, options...)
-	_, err = p.server.Call(publisher)
+	_, err = p.Server.Call(publisher)
 	return
 }
 
@@ -314,7 +314,7 @@ func (p *Plugin) Pull(streamPath string, url string, options ...any) (puller *Pu
 		}
 	}
 	puller.Init(p, streamPath, &puller.Publish, options...)
-	_, err = p.server.Call(puller)
+	_, err = p.Server.Call(puller)
 	if err == nil && pullHandler != nil {
 		err = puller.Start(pullHandler)
 	}
@@ -324,7 +324,7 @@ func (p *Plugin) Pull(streamPath string, url string, options ...any) (puller *Pu
 func (p *Plugin) Subscribe(streamPath string, options ...any) (subscriber *Subscriber, err error) {
 	subscriber = &Subscriber{Subscribe: p.config.Subscribe}
 	if p.config.EnableAuth {
-		if onAuthSub, ok := p.server.OnAuthSubs[p.Meta.Name]; ok {
+		if onAuthSub, ok := p.Server.OnAuthSubs[p.Meta.Name]; ok {
 			authPromise := util.NewPromise(subscriber)
 			onAuthSub(authPromise)
 			if _, err = authPromise.Await(); err != nil {
@@ -343,7 +343,7 @@ func (p *Plugin) Subscribe(streamPath string, options ...any) (subscriber *Subsc
 	if subscriber.Subscribe.BufferTime > 0 {
 		subscriber.Subscribe.SubMode = SUBMODE_BUFFER
 	}
-	_, err = p.server.Call(subscriber)
+	_, err = p.Server.Call(subscriber)
 	return
 }
 
@@ -388,7 +388,7 @@ func (p *Plugin) Push(streamPath string, url string, options ...any) (pusher *Pu
 		}
 	}
 	pusher.Init(p, streamPath, &pusher.Subscribe, options...)
-	_, err = p.server.Call(pusher)
+	_, err = p.Server.Call(pusher)
 	return
 }
 
@@ -411,27 +411,27 @@ func (p *Plugin) handle(pattern string, handler http.Handler) {
 	}
 	handler = p.logHandler(handler)
 	p.config.HTTP.Handle(pattern, handler, last)
-	if p.server != p.handler {
+	if p.Server != p.handler {
 		pattern = "/" + strings.ToLower(p.Meta.Name) + pattern
-		p.Debug("http handle added to server", "pattern", pattern)
-		p.server.config.HTTP.Handle(pattern, handler, last)
+		p.Debug("http handle added to Server", "pattern", pattern)
+		p.Server.config.HTTP.Handle(pattern, handler, last)
 	}
-	p.server.apiList = append(p.server.apiList, pattern)
+	p.Server.apiList = append(p.Server.apiList, pattern)
 }
 
 func (p *Plugin) AddLogHandler(handler slog.Handler) {
-	p.server.LogHandler.Add(handler)
+	p.Server.LogHandler.Add(handler)
 }
 
 func (p *Plugin) PostToServer(event any) {
-	if p.server.eventChan == nil {
+	if p.Server.eventChan == nil {
 		panic("eventChan is nil")
 	}
-	p.server.PostMessage(event)
+	p.Server.PostMessage(event)
 }
 
 func (p *Plugin) SaveConfig() (err error) {
-	_, err = p.server.Call(func() error {
+	_, err = p.Server.Call(func() error {
 		if p.Modify == nil {
 			os.Remove(p.settingPath())
 			return nil

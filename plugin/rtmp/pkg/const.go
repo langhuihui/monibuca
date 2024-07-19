@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	PacketTypeSequenceStart = iota
+	PacketTypeSequenceStart byte = iota
 	PacketTypeCodedFrames
 	PacketTypeSequenceEnd
 	PacketTypeCodedFramesX

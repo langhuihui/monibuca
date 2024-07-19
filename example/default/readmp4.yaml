@@ -1,0 +1,6 @@
+global:
+  loglevel: trace
+mp4:
+  pull:
+    pullonstart:
+      live/test: /Users/dexter/Movies/test.mp4

@@ -9,6 +9,8 @@ import (
 	_ "m7s.live/m7s/v5/plugin/debug"
 	_ "m7s.live/m7s/v5/plugin/hdl"
 	_ "m7s.live/m7s/v5/plugin/logrotate"
+	_ "m7s.live/m7s/v5/plugin/mp4"
+	_ "m7s.live/m7s/v5/plugin/preview"
 	_ "m7s.live/m7s/v5/plugin/rtmp"
 	_ "m7s.live/m7s/v5/plugin/rtsp"
 	_ "m7s.live/m7s/v5/plugin/stress"

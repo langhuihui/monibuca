@@ -1,11 +1,6 @@
 global:
   loglevel: trace
-  tcp:
-    listenaddr: :50051
 hdl:
-  publish:
-    pubaudio: false
-    # speed: 2
   pull:
     pullonstart:
       live/test: /Users/dexter/Movies/jb-demo.flv

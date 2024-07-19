@@ -1,6 +1,7 @@
 package m7s
 
 import (
+	"math"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -23,7 +24,7 @@ const (
 	PublisherStateDisposed
 )
 
-const threshold = 100 * time.Millisecond
+const threshold = 10 * time.Millisecond
 
 type SpeedControl struct {
 	speed          float64
@@ -199,6 +200,13 @@ func (p *Publisher) writeAV(t *AVTrack, data IAVFrame) {
 	frame.Timestamp = max(1, p.baseTs+ts)
 	bytesIn := frame.Wraps[0].GetSize()
 	t.AddBytesIn(bytesIn)
+	if t.FPS > 0 {
+		frameDur := float64(time.Second) / float64(t.FPS)
+		if math.Abs(float64(frame.Timestamp-p.lastTs)) > 5*frameDur { //时间戳突变
+			frame.Timestamp = p.lastTs + time.Duration(frameDur)
+			p.baseTs = frame.Timestamp - ts
+		}
+	}
 	p.lastTs = frame.Timestamp
 	if p.Enabled(p, TraceLevel) {
 		codec := t.FourCC().String()

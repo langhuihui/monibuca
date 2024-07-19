@@ -98,14 +98,14 @@ func (s *Server) Run(ctx context.Context, conf any) (err error) {
 }
 
 func (s *Server) run(ctx context.Context, conf any) (err error) {
-	s.server = s
+	s.Server = s
 	s.handler = s
 	s.config.HTTP.ListenAddrTLS = ":8443"
 	s.config.HTTP.ListenAddr = ":8080"
 	s.config.TCP.ListenAddr = ":50051"
 	s.LogHandler.SetLevel(slog.LevelInfo)
 	s.LogHandler.Add(defaultLogHandler)
-	s.Logger = slog.New(&s.LogHandler).With("server", s.ID)
+	s.Logger = slog.New(&s.LogHandler).With("Server", s.ID)
 
 	httpConf, tcpConf := &s.config.HTTP, &s.config.TCP
 	mux := runtime.NewServeMux(runtime.WithMarshalerOption("text/plain", &pb.TextPlain{}), runtime.WithRoutingErrorHandler(runtime.RoutingErrorHandlerFunc(func(_ context.Context, _ *runtime.ServeMux, _ runtime.Marshaler, w http.ResponseWriter, r *http.Request, _ int) {
