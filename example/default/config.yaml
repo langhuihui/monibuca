@@ -1,8 +1,8 @@
 global:
-#  loglevel: debug
-  enableauth: true
-  tcp:
-    listenaddr: :50051
+#  loglevel: trace
+#  enableauth: true
+#  tcp:
+#    listenaddr: :50051
 #    ringsize: 20-250
 #    buffertime: 10s
   #   speed: 1

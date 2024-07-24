@@ -2,7 +2,9 @@ package m7s
 
 import (
 	"context"
+	"gorm.io/gorm"
 	"log/slog"
+	"m7s.live/m7s/v5/pkg/db"
 	"net"
 	"net/http"
 	"os"
@@ -81,7 +83,20 @@ func (plugin *PluginMeta) Init(s *Server, userConfig map[string]any) {
 		p.assign()
 	}
 	p.Info("init", "version", plugin.Version)
-	err := instance.OnInit()
+	var err error
+	if p.config.DSN == s.GetCommonConf().DSN {
+		p.DB = s.DB
+	} else if p.config.DSN != "" {
+		if factory, ok := db.Factory[p.config.DBType]; ok {
+			s.DB, err = gorm.Open(factory(p.config.DSN), &gorm.Config{})
+			if err != nil {
+				s.Error("failed to connect database", "error", err, "dsn", s.config.DSN, "type", s.config.DBType)
+				p.Disabled = true
+				return
+			}
+		}
+	}
+	err = instance.OnInit()
 	if err != nil {
 		p.Error("init", "error", err)
 		p.Stop(err)
@@ -109,6 +124,22 @@ type iPlugin interface {
 type IPlugin interface {
 	OnInit() error
 	OnEvent(any)
+}
+
+type IRegisterHandler interface {
+	RegisterHandler() map[string]http.HandlerFunc
+}
+
+type IPullerPlugin interface {
+	NewPullHandler() PullHandler
+}
+
+type IPusherPlugin interface {
+	NewPushHandler() PushHandler
+}
+
+type IRecorderPlugin interface {
+	NewRecordHandler() RecordHandler
 }
 
 type ITCPPlugin interface {
@@ -159,6 +190,7 @@ type Plugin struct {
 	config.Config
 	handler IPlugin
 	Server  *Server
+	DB      *gorm.DB
 }
 
 func (Plugin) nothing() {
@@ -193,9 +225,7 @@ func (p *Plugin) assign() {
 		p.Config.ParseModifyFile(modifyConfig)
 	}
 	var handlerMap map[string]http.HandlerFunc
-	if v, ok := p.handler.(interface {
-		RegisterHandler() map[string]http.HandlerFunc
-	}); ok {
+	if v, ok := p.handler.(IRegisterHandler); ok {
 		handlerMap = v.RegisterHandler()
 	}
 	p.registerHandler(handlerMap)
@@ -314,9 +344,47 @@ func (p *Plugin) Pull(streamPath string, url string, options ...any) (puller *Pu
 		}
 	}
 	puller.Init(p, streamPath, &puller.Publish, options...)
-	_, err = p.Server.Call(puller)
-	if err == nil && pullHandler != nil {
+	if _, err = p.Server.Call(puller); err != nil {
+		return
+	}
+	if v, ok := p.handler.(IPullerPlugin); pullHandler == nil && ok {
+		pullHandler = v.NewPullHandler()
+	}
+	if pullHandler != nil {
 		err = puller.Start(pullHandler)
+	}
+	return
+}
+
+func (p *Plugin) Record(streamPath string, filePath string, options ...any) (recorder *Recorder, err error) {
+	recorder = &Recorder{
+		Record: p.config.Record,
+	}
+	if err = os.MkdirAll(filepath.Dir(filePath), 0755); err != nil {
+		return
+	}
+	recorder.StreamPath = streamPath
+	recorder.Subscribe = p.config.Subscribe
+	if recorder.File, err = os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666); err != nil {
+		return
+	}
+	defer func() {
+		err = recorder.File.Close()
+		if info, err := recorder.File.Stat(); err == nil && info.Size() == 0 {
+			os.Remove(recorder.File.Name())
+		}
+	}()
+	recorder.Init(p, streamPath, &recorder.Subscribe, options...)
+	if _, err = p.Server.Call(recorder); err != nil {
+		return
+	}
+	recorder.Publisher.WaitTrack()
+	var recordHandler RecordHandler
+	if v, ok := p.handler.(IRecorderPlugin); recordHandler == nil && ok {
+		recordHandler = v.NewRecordHandler()
+	}
+	if recordHandler != nil {
+		err = recorder.Start(recordHandler)
 	}
 	return
 }
@@ -344,6 +412,7 @@ func (p *Plugin) Subscribe(streamPath string, options ...any) (subscriber *Subsc
 		subscriber.Subscribe.SubMode = SUBMODE_BUFFER
 	}
 	_, err = p.Server.Call(subscriber)
+	subscriber.Publisher.WaitTrack()
 	return
 }
 
@@ -377,18 +446,24 @@ func (p *Plugin) Push(streamPath string, url string, options ...any) (pusher *Pu
 	pusher.Client.RemoteURL = url
 	pusher.Subscribe = p.config.Subscribe
 	pusher.StreamPath = streamPath
+	var pushHandler PushHandler
 	for _, option := range options {
 		switch v := option.(type) {
 		case PushHandler:
-			defer func() {
-				if err == nil {
-					pusher.Start(v)
-				}
-			}()
+			pushHandler = v
 		}
 	}
 	pusher.Init(p, streamPath, &pusher.Subscribe, options...)
-	_, err = p.Server.Call(pusher)
+	if _, err = p.Server.Call(pusher); err != nil {
+		return
+	}
+	pusher.Publisher.WaitTrack()
+	if v, ok := p.handler.(IPusherPlugin); pushHandler == nil && ok {
+		pushHandler = v.NewPushHandler()
+	}
+	if pushHandler != nil {
+		err = pusher.Start(pushHandler)
+	}
 	return
 }
 

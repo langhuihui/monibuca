@@ -220,6 +220,15 @@ func (r *MemoryReader) Skip(n int) error {
 	return nil
 }
 
+func (r *MemoryReader) Unread(n int) {
+	r.Length += n
+	r.offset1 -= n
+	for r.offset1 < 0 {
+		r.offset0--
+		r.offset1 += len(r.Memory.Buffers[r.offset0])
+	}
+}
+
 func (r *MemoryReader) forward(n int) {
 	r.Length -= n
 	r.offset1 += n

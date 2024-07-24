@@ -1,10 +1,8 @@
 package box
 
 import (
-	"errors"
-	"io"
-
 	"github.com/yapingcat/gomedia/go-codec"
+	"io"
 )
 
 type sampleCache struct {
@@ -275,68 +273,19 @@ func (track *mp4track) makeEmptyStblTable() {
 	track.stbltable.stss = &movstss{}
 }
 
-func (track *mp4track) writeSample(sample []byte, pts, dts uint64) (err error) {
-	switch track.cid {
-	case MP4_CODEC_H264:
-		err = track.writeH264(sample, pts, dts)
-	case MP4_CODEC_H265:
-		err = track.writeH265(sample, pts, dts)
-	case MP4_CODEC_AAC:
-		err = track.writeAAC(sample, pts, dts)
-	case MP4_CODEC_G711A, MP4_CODEC_G711U:
-		err = track.writeG711(sample, pts, dts)
-	case MP4_CODEC_MP2, MP4_CODEC_MP3:
-		err = track.writeMP3(sample, pts, dts)
-	case MP4_CODEC_OPUS:
-		err = track.writeOPUS(sample, pts, dts)
-	}
-	return err
-}
-
-func (track *mp4track) writeH264(h264 []byte, pts, dts uint64) (err error) {
-	h264extra, ok := track.extra.(*h264ExtraData)
-	if !ok {
-		panic("must init h264ExtraData first")
-	}
-	codec.SplitFrameWithStartCode(h264, func(nalu []byte) bool {
-		nalu_type := codec.H264NaluType(nalu)
-		switch nalu_type {
-		case codec.H264_NAL_SPS:
-			spsid := codec.GetSPSIdWithStartCode(nalu)
-			for _, sps := range h264extra.spss {
-				if spsid == codec.GetSPSIdWithStartCode(sps) {
-					return true
-				}
-			}
-			tmp := make([]byte, len(nalu))
-			copy(tmp, nalu)
-			h264extra.spss = append(h264extra.spss, tmp)
-			if track.width == 0 || track.height == 0 {
-				width, height := codec.GetH264Resolution(h264extra.spss[0])
-				if track.width == 0 {
-					track.width = width
-				}
-				if track.height == 0 {
-					track.height = height
-				}
-			}
-		case codec.H264_NAL_PPS:
-			ppsid := codec.GetPPSIdWithStartCode(nalu)
-			for _, pps := range h264extra.ppss {
-				if ppsid == codec.GetPPSIdWithStartCode(pps) {
-					return true
-				}
-			}
-			tmp := make([]byte, len(nalu))
-			copy(tmp, nalu)
-			h264extra.ppss = append(h264extra.ppss, tmp)
-		}
+func (track *mp4track) writeH264(nalus [][]byte, pts, dts uint64) (err error) {
+	//h264extra, ok := track.extra.(*h264ExtraData)
+	//if !ok {
+	//	panic("must init h264ExtraData first")
+	//}
+	for _, nalu := range nalus {
+		nalu_type := codec.H264_NAL_TYPE(nalu[0] & 0x1F)
 		//aud/sps/pps/sei 为帧间隔
 		//通过first_slice_in_mb来判断，改nalu是否为一帧的开头
 		if track.lastSample.hasVcl && isH264NewAccessUnit(nalu) {
 			var currentOffset int64
 			if currentOffset, err = track.writer.Seek(0, io.SeekCurrent); err != nil {
-				return false
+				return
 			}
 			entry := sampleEntry{
 				pts:                    track.lastSample.pts,
@@ -348,7 +297,7 @@ func (track *mp4track) writeH264(h264 []byte, pts, dts uint64) (err error) {
 			}
 			n := 0
 			if n, err = track.writer.Write(track.lastSample.cache); err != nil {
-				return false
+				return
 			}
 			entry.size = uint64(n)
 			track.addSampleEntry(entry)
@@ -364,41 +313,22 @@ func (track *mp4track) writeH264(h264 []byte, pts, dts uint64) (err error) {
 				track.lastSample.isKey = true
 			}
 		}
-		track.lastSample.cache = append(track.lastSample.cache, codec.ConvertAnnexBToAVCC(nalu)...)
-		return true
-	})
+		track.lastSample.cache = append(track.lastSample.cache, nalu...)
+	}
 	return
 }
 
-func (track *mp4track) writeH265(h265 []byte, pts, dts uint64) (err error) {
-	h265extra, ok := track.extra.(*h265ExtraData)
-	if !ok {
-		panic("must init h265ExtraData first")
-	}
-	codec.SplitFrameWithStartCode(h265, func(nalu []byte) bool {
-		nalu_type := codec.H265NaluType(nalu)
-		switch nalu_type {
-		case codec.H265_NAL_SPS:
-			h265extra.hvccExtra.UpdateSPS(nalu)
-			if track.width == 0 || track.height == 0 {
-				width, height := codec.GetH265Resolution(nalu)
-				if track.width == 0 {
-					track.width = width
-				}
-				if track.height == 0 {
-					track.height = height
-				}
-			}
-		case codec.H265_NAL_PPS:
-			h265extra.hvccExtra.UpdatePPS(nalu)
-		case codec.H265_NAL_VPS:
-			h265extra.hvccExtra.UpdateVPS(nalu)
-		}
-
+func (track *mp4track) writeH265(nalus [][]byte, pts, dts uint64) (err error) {
+	//h265extra, ok := track.extra.(*h265ExtraData)
+	//if !ok {
+	//	panic("must init h265ExtraData first")
+	//}
+	for _, nalu := range nalus {
+		nalu_type := codec.H265_NAL_TYPE((nalu[0] >> 1) & 0x3F)
 		if track.lastSample.hasVcl && isH265NewAccessUnit(nalu) {
 			var currentOffset int64
 			if currentOffset, err = track.writer.Seek(0, io.SeekCurrent); err != nil {
-				return false
+				return
 			}
 			entry := sampleEntry{
 				pts:                    track.lastSample.pts,
@@ -410,7 +340,7 @@ func (track *mp4track) writeH265(h265 []byte, pts, dts uint64) (err error) {
 			}
 			n := 0
 			if n, err = track.writer.Write(track.lastSample.cache); err != nil {
-				return false
+				return
 			}
 			entry.size = uint64(n)
 			track.addSampleEntry(entry)
@@ -426,60 +356,32 @@ func (track *mp4track) writeH265(h265 []byte, pts, dts uint64) (err error) {
 				track.lastSample.isKey = true
 			}
 		}
-		track.lastSample.cache = append(track.lastSample.cache, codec.ConvertAnnexBToAVCC(nalu)...)
-		return true
-	})
+		track.lastSample.cache = append(track.lastSample.cache, nalu...)
+	}
+
 	return
 }
 
 func (track *mp4track) writeAAC(aacframes []byte, pts, dts uint64) (err error) {
-	aacextra, ok := track.extra.(*aacExtraData)
-	if !ok {
-		return errors.New("must init aacExtraData first")
-	}
-	if aacextra.asc == nil || len(aacextra.asc) <= 0 {
-		asc, err := codec.ConvertADTSToASC(aacframes)
-		if err != nil {
-			return err
-		}
-		aacextra.asc = asc.Encode()
-
-		if track.chanelCount == 0 {
-			track.chanelCount = asc.Channel_configuration
-		}
-		if track.sampleRate == 0 {
-			track.sampleRate = uint32(codec.AACSampleIdxToSample(int(asc.Sample_freq_index)))
-		}
-		if track.sampleBits == 0 {
-			// aac has no fixed bit depth, so we just set it to the default of 16
-			// see AudioSampleEntry (stsd-box) and https://superuser.com/a/1173507
-			track.sampleBits = 16
-		}
-	}
-
 	var currentOffset int64
 	if currentOffset, err = track.writer.Seek(0, io.SeekCurrent); err != nil {
 		return
 	}
-	//某些情况下，aacframes 可能由多个aac帧组成需要分帧，否则quicktime 貌似播放有问题
-	codec.SplitAACFrame(aacframes, func(aac []byte) {
-		entry := sampleEntry{
-			pts:                    pts,
-			dts:                    dts,
-			size:                   0,
-			SampleDescriptionIndex: 1,
-			offset:                 uint64(currentOffset),
-		}
-		n := 0
-		n, err = track.writer.Write(aac[7:])
-		if err != nil {
-			return
-		}
-		currentOffset += int64(n)
-		entry.size = uint64(n)
-		track.addSampleEntry(entry)
-	})
-
+	entry := sampleEntry{
+		pts:                    pts,
+		dts:                    dts,
+		size:                   0,
+		SampleDescriptionIndex: 1,
+		offset:                 uint64(currentOffset),
+	}
+	n := 0
+	n, err = track.writer.Write(aacframes)
+	if err != nil {
+		return
+	}
+	currentOffset += int64(n)
+	entry.size = uint64(n)
+	track.addSampleEntry(entry)
 	return
 }
 

@@ -1,10 +1,8 @@
 package box
 
 import (
-	"encoding/binary"
 	"errors"
 	"github.com/deepch/vdk/codec/h264parser"
-	"github.com/yapingcat/gomedia/go-codec"
 	"io"
 	"m7s.live/m7s/v5/pkg/util"
 )
@@ -494,115 +492,4 @@ func (demuxer *MovDemuxer) buildSampleList() {
 			}
 		}
 	}
-}
-
-func (demuxer *MovDemuxer) processH264(avcc []byte, extra *h264ExtraData) []byte {
-	idr := false
-	vcl := false
-	spspps := false
-	h264 := avcc
-	for len(h264) > 0 {
-		nalusize := binary.BigEndian.Uint32(h264)
-		codec.CovertAVCCToAnnexB(h264)
-		nalType := codec.H264NaluType(h264)
-		switch {
-		case nalType == codec.H264_NAL_PPS:
-			fallthrough
-		case nalType == codec.H264_NAL_SPS:
-			spspps = true
-		case nalType == codec.H264_NAL_I_SLICE:
-			idr = true
-			fallthrough
-		case nalType >= codec.H264_NAL_P_SLICE && nalType <= codec.H264_NAL_SLICE_C:
-			vcl = true
-		}
-		h264 = h264[4+nalusize:]
-	}
-
-	if !vcl {
-		if !spspps {
-			return avcc
-		} else {
-			demuxer.mp4out = append(demuxer.mp4out, avcc...)
-		}
-		return nil
-	}
-
-	if spspps {
-		demuxer.mp4out = demuxer.mp4out[:0]
-		return avcc
-	}
-	if !idr {
-		return avcc
-	}
-	if len(demuxer.mp4out) > 0 {
-		out := make([]byte, len(demuxer.mp4out)+len(avcc))
-		copy(out, demuxer.mp4out)
-		copy(out[len(demuxer.mp4out):], avcc)
-		demuxer.mp4out = demuxer.mp4out[:0]
-		return out
-	}
-
-	out := make([]byte, 0)
-	for _, sps := range extra.spss {
-		out = append(out, sps...)
-	}
-	for _, pps := range extra.ppss {
-		out = append(out, pps...)
-	}
-	out = append(out, avcc...)
-	return out
-}
-
-func (demuxer *MovDemuxer) processH265(hvcc []byte, extra *h265ExtraData) []byte {
-	idr := false
-	vcl := false
-	spsppsvps := false
-	h265 := hvcc
-	for len(h265) > 0 {
-		nalusize := binary.BigEndian.Uint32(h265)
-		codec.CovertAVCCToAnnexB(h265)
-		nalType := codec.H265NaluType(h265)
-		switch {
-		case nalType == codec.H265_NAL_VPS:
-			fallthrough
-		case nalType == codec.H265_NAL_PPS:
-			fallthrough
-		case nalType == codec.H265_NAL_SPS:
-			spsppsvps = true
-		case nalType >= codec.H265_NAL_SLICE_BLA_W_LP && nalType <= codec.H265_NAL_SLICE_CRA:
-			idr = true
-			fallthrough
-		case nalType >= codec.H265_NAL_Slice_TRAIL_N && nalType <= codec.H265_NAL_SLICE_RASL_R:
-			vcl = true
-		}
-		h265 = h265[4+nalusize:]
-	}
-	if !vcl {
-		if !spsppsvps {
-			return hvcc
-		} else {
-			demuxer.mp4out = append(demuxer.mp4out, hvcc...)
-		}
-		return nil
-	}
-
-	if spsppsvps {
-		demuxer.mp4out = demuxer.mp4out[:0]
-		return hvcc
-	}
-	if !idr {
-		return hvcc
-	}
-	if len(demuxer.mp4out) > 0 {
-		out := make([]byte, len(demuxer.mp4out)+len(hvcc))
-		copy(out, demuxer.mp4out)
-		copy(out[len(demuxer.mp4out):], hvcc)
-		demuxer.mp4out = demuxer.mp4out[:0]
-		return out
-	}
-
-	out := extra.hvccExtra.ToNalus()
-	out = append(out, hvcc...)
-	return out
 }

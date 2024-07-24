@@ -25,10 +25,6 @@ func NewMP4Puller() *MP4Puller {
 	}
 }
 
-func NewPullHandler() m7s.PullHandler {
-	return NewMP4Puller()
-}
-
 func (puller *MP4Puller) Connect(p *m7s.Client) (err error) {
 	if strings.HasPrefix(p.RemoteURL, "http") {
 		var res *http.Response

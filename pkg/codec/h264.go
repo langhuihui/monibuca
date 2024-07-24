@@ -1,7 +1,6 @@
 package codec
 
 import (
-	"bytes"
 	"fmt"
 	"github.com/deepch/vdk/codec/h264parser"
 )
@@ -87,8 +86,8 @@ const (
 
 var (
 	NALU_AUD_BYTE   = []byte{0x00, 0x00, 0x00, 0x01, 0x09, 0xF0}
-	NALU_Delimiter1 = []byte{0x00, 0x00, 0x01}
-	NALU_Delimiter2 = []byte{0x00, 0x00, 0x00, 0x01}
+	NALU_Delimiter1 = [3]byte{0x00, 0x00, 0x01}
+	NALU_Delimiter2 = [4]byte{0x00, 0x00, 0x00, 0x01}
 )
 
 // H.264/AVC视频编码标准中,整个系统框架被分为了两个层面:视频编码层面(VCL)和网络抽象层面(NAL)
@@ -96,15 +95,15 @@ var (
 // raw byte sequence payload (RBSP) 原始字节序列载荷
 
 // SplitH264 以0x00000001分割H264裸数据
-func SplitH264(payload []byte) (nalus [][]byte) {
-	for _, v := range bytes.SplitN(payload, NALU_Delimiter2, -1) {
-		if len(v) == 0 {
-			continue
-		}
-		nalus = append(nalus, bytes.SplitN(v, NALU_Delimiter1, -1)...)
-	}
-	return
-}
+//func SplitH264(payload []byte) (nalus [][]byte) {
+//	for _, v := range bytes.SplitN(payload, NALU_Delimiter2, -1) {
+//		if len(v) == 0 {
+//			continue
+//		}
+//		nalus = append(nalus, bytes.SplitN(v, NALU_Delimiter1, -1)...)
+//	}
+//	return
+//}
 
 type (
 	H264Ctx struct {

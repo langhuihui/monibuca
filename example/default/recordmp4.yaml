@@ -1,0 +1,7 @@
+global:
+  loglevel: debug
+mp4:
+  record:
+    enableregexp: true
+    recordlist:
+      .+: record/$0.mp4

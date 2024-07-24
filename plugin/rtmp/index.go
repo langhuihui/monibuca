@@ -24,19 +24,17 @@ var _ = m7s.InstallPlugin[RTMPPlugin](m7s.DefaultYaml(`tcp:
 
 func (p *RTMPPlugin) OnInit() error {
 	for streamPath, url := range p.GetCommonConf().PullOnStart {
-		go p.Pull(streamPath, url, &Client{})
+		go p.Pull(streamPath, url)
 	}
 	return nil
 }
 
-func (p *RTMPPlugin) OnPull(puller *m7s.Puller) {
-	p.OnPublish(&puller.Publisher)
+func (p *RTMPPlugin) NewPullHandler() m7s.PullHandler {
+	return &Client{}
 }
 
-func (p *RTMPPlugin) OnPublish(puber *m7s.Publisher) {
-	if remoteURL, ok := p.GetCommonConf().PushList[puber.StreamPath]; ok {
-		go p.Push(puber.StreamPath, remoteURL, &Client{})
-	}
+func (p *RTMPPlugin) NewPushHandler() m7s.PushHandler {
+	return &Client{}
 }
 
 func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {

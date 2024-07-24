@@ -88,14 +88,13 @@ func getCodecIdByObjectType(objType uint8) MP4_CODEC_TYPE {
 }
 
 func isH264NewAccessUnit(nalu []byte) bool {
-	nalu_type := codec.H264NaluType(nalu)
-	switch nalu_type {
+	switch codec.H264_NAL_TYPE(nalu[0] & 0x1F) {
 	case codec.H264_NAL_AUD, codec.H264_NAL_SPS,
 		codec.H264_NAL_PPS, codec.H264_NAL_SEI:
 		return true
 	case codec.H264_NAL_I_SLICE, codec.H264_NAL_P_SLICE,
 		codec.H264_NAL_SLICE_A, codec.H264_NAL_SLICE_B, codec.H264_NAL_SLICE_C:
-		firstMbInSlice := codec.GetH264FirstMbInSlice(nalu)
+		firstMbInSlice := GetH264FirstMbInSlice(nalu)
 		if firstMbInSlice == 0 {
 			return true
 		}
@@ -104,8 +103,7 @@ func isH264NewAccessUnit(nalu []byte) bool {
 }
 
 func isH265NewAccessUnit(nalu []byte) bool {
-	nalu_type := codec.H265NaluType(nalu)
-	switch nalu_type {
+	switch codec.H265_NAL_TYPE((nalu[0] >> 1) & 0x3F) {
 	case codec.H265_NAL_AUD, codec.H265_NAL_SPS,
 		codec.H265_NAL_PPS, codec.H265_NAL_SEI, codec.H265_NAL_VPS:
 		return true
@@ -117,10 +115,24 @@ func isH265NewAccessUnit(nalu []byte) bool {
 		codec.H265_NAL_SLICE_BLA_W_LP, codec.H265_NAL_SLICE_BLA_W_RADL,
 		codec.H265_NAL_SLICE_BLA_N_LP, codec.H265_NAL_SLICE_IDR_W_RADL,
 		codec.H265_NAL_SLICE_IDR_N_LP, codec.H265_NAL_SLICE_CRA:
-		firstMbInSlice := codec.GetH265FirstMbInSlice(nalu)
+		firstMbInSlice := GetH265FirstMbInSlice(nalu)
 		if firstMbInSlice == 0 {
 			return true
 		}
 	}
 	return false
+}
+
+func GetH264FirstMbInSlice(nalu []byte) uint64 {
+	bs := codec.NewBitStream(nalu[1:])
+	sliceHdr := &codec.SliceHeader{}
+	sliceHdr.Decode(bs)
+	return sliceHdr.First_mb_in_slice
+}
+
+func GetH265FirstMbInSlice(nalu []byte) uint64 {
+	bs := codec.NewBitStream(nalu[2:])
+	sliceHdr := &codec.SliceHeader{}
+	sliceHdr.Decode(bs)
+	return sliceHdr.First_mb_in_slice
 }

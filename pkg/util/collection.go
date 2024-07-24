@@ -63,11 +63,11 @@ func (c *Collection[K, T]) Range(f func(T) bool) {
 	}
 }
 
-func (c *Collection[K, T]) Remove(item T) {
-	c.RemoveByKey(item.GetKey())
+func (c *Collection[K, T]) Remove(item T) bool {
+	return c.RemoveByKey(item.GetKey())
 }
 
-func (c *Collection[K, T]) RemoveByKey(key K) {
+func (c *Collection[K, T]) RemoveByKey(key K) bool {
 	if c.L != nil {
 		c.L.Lock()
 		defer c.L.Unlock()
@@ -77,9 +77,10 @@ func (c *Collection[K, T]) RemoveByKey(key K) {
 		if c.Items[i].GetKey() == key {
 			c.Items = slices.Delete(c.Items, i, i+1)
 			c.Length--
-			break
+			return true
 		}
 	}
+	return false
 }
 
 func (c *Collection[K, T]) Get(key K) (item T, ok bool) {

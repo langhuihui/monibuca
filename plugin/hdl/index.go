@@ -22,12 +22,12 @@ const defaultConfig m7s.DefaultYaml = `publish:
 
 func (p *HDLPlugin) OnInit() error {
 	for streamPath, url := range p.GetCommonConf().PullOnStart {
-		go p.Pull(streamPath, url, NewHDLPuller())
+		go p.Pull(streamPath, url)
 	}
 	return nil
 }
 
-var _ = m7s.InstallPlugin[HDLPlugin](defaultConfig)
+var _ = m7s.InstallPlugin[HDLPlugin](defaultConfig, NewPullHandler)
 
 func (p *HDLPlugin) WriteFlvHeader(sub *m7s.Subscriber) (flv net.Buffers) {
 	at, vt := &sub.Publisher.AudioTrack, &sub.Publisher.VideoTrack

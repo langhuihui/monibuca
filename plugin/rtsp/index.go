@@ -22,21 +22,19 @@ type RTSPPlugin struct {
 	m7s.Plugin
 }
 
+func (p *RTSPPlugin) NewPullHandler() m7s.PullHandler {
+	return &Client{}
+}
+
+func (p *RTSPPlugin) NewPushHandler() m7s.PushHandler {
+	return &Client{}
+}
+
 func (p *RTSPPlugin) OnInit() error {
 	for streamPath, url := range p.GetCommonConf().PullOnStart {
-		go p.Pull(streamPath, url, &Client{})
+		go p.Pull(streamPath, url)
 	}
 	return nil
-}
-
-func (p *RTSPPlugin) OnPull(puller *m7s.Puller) {
-	p.OnPublish(&puller.Publisher)
-}
-
-func (p *RTSPPlugin) OnPublish(puber *m7s.Publisher) {
-	if remoteURL, ok := p.GetCommonConf().PushList[puber.StreamPath]; ok {
-		go p.Push(puber.StreamPath, remoteURL, &Client{})
-	}
 }
 
 func (p *RTSPPlugin) OnTCPConnect(conn *net.TCPConn) {

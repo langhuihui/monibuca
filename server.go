@@ -3,7 +3,17 @@ package m7s
 import (
 	"context"
 	"fmt"
+	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
+	"github.com/phsym/console-slog"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+	"gopkg.in/yaml.v3"
+	"gorm.io/gorm"
 	"log/slog"
+	"m7s.live/m7s/v5/pb"
+	. "m7s.live/m7s/v5/pkg"
+	"m7s.live/m7s/v5/pkg/db"
+	"m7s.live/m7s/v5/pkg/util"
 	"net"
 	"net/http"
 	"os"
@@ -13,20 +23,11 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
-
-	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
-	"github.com/phsym/console-slog"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
-	"gopkg.in/yaml.v3"
-	"m7s.live/m7s/v5/pb"
-	. "m7s.live/m7s/v5/pkg"
-	"m7s.live/m7s/v5/pkg/util"
 )
 
 var (
 	Version       = "v5.0.0"
-	MergeConfigs  = []string{"Publish", "Subscribe", "HTTP", "PublicIP", "LogLevel", "EnableAuth"}
+	MergeConfigs  = []string{"Publish", "Subscribe", "HTTP", "PublicIP", "LogLevel", "EnableAuth", "DB"}
 	ExecPath      = os.Args[0]
 	ExecDir       = filepath.Dir(ExecPath)
 	serverIndexG  atomic.Uint32
@@ -56,6 +57,7 @@ type Server struct {
 	Streams, Waiting util.Collection[string, *Publisher]
 	Pulls            util.Collection[string, *Puller]
 	Pushs            util.Collection[string, *Pusher]
+	Records          util.Collection[string, *Recorder]
 	Subscribers      util.Collection[int, *Subscriber]
 	LogHandler       MultiLogHandler
 	pidG, sidG       int
@@ -92,6 +94,7 @@ func (s *Server) Run(ctx context.Context, conf any) (err error) {
 		server.Meta = s.Meta
 		server.OnAuthPubs = s.OnAuthPubs
 		server.OnAuthSubs = s.OnAuthSubs
+		server.DB = s.DB
 		*s = server
 	}
 	return
@@ -146,7 +149,15 @@ func (s *Server) run(ctx context.Context, conf any) (err error) {
 		"/api/stream/annexb/{streamPath...}":  s.api_Stream_AnnexB_,
 		"/api/videotrack/sse/{streamPath...}": s.api_VideoTrack_SSE,
 	})
-
+	if s.config.DSN != "" {
+		if factory, ok := db.Factory[s.config.DBType]; ok {
+			s.DB, err = gorm.Open(factory(s.config.DSN), &gorm.Config{})
+			if err != nil {
+				s.Error("failed to connect database", "error", err, "dsn", s.config.DSN, "type", s.config.DBType)
+				return
+			}
+		}
+	}
 	if httpConf.ListenAddrTLS != "" {
 		s.Info("https listen at ", "addr", httpConf.ListenAddrTLS)
 		go func(addr string) {
@@ -303,7 +314,7 @@ func (s *Server) eventLoop() {
 					}
 					event = v.Value
 				case *Puller:
-					if _, ok := s.Pulls.Get(vv.StreamPath); ok {
+					if _, ok := s.Pulls.Get(vv.GetKey()); ok {
 						v.Fulfill(ErrStreamExist)
 						continue
 					} else {
@@ -317,7 +328,7 @@ func (s *Server) eventLoop() {
 						event = v.Value
 					}
 				case *Pusher:
-					if _, ok := s.Pushs.Get(vv.StreamPath); ok {
+					if _, ok := s.Pushs.Get(vv.GetKey()); ok {
 						v.Fulfill(ErrStreamExist)
 						continue
 					} else {
@@ -328,6 +339,20 @@ func (s *Server) eventLoop() {
 						}
 						subChan <- vv.Done()
 						s.Pushs.Add(vv)
+						event = v.Value
+					}
+				case *Recorder:
+					if _, ok := s.Records.Get(vv.GetKey()); ok {
+						v.Fulfill(ErrStreamExist)
+						continue
+					} else {
+						err := s.OnSubscribe(&vv.Subscriber)
+						v.Fulfill(err)
+						if err != nil {
+							continue
+						}
+						subChan <- vv.Done()
+						s.Records.Add(vv)
 						event = v.Value
 					}
 				}
@@ -401,6 +426,21 @@ func (s *Server) OnPublish(publisher *Publisher) error {
 		publisher.TakeOver(waiting)
 		s.Waiting.Remove(waiting)
 	}
+	for plugin := range s.Plugins.Range {
+		if plugin.Disabled {
+			continue
+		}
+		if remoteURL := plugin.GetCommonConf().CheckPush(publisher.StreamPath); remoteURL != "" {
+			if _, ok := plugin.handler.(IPusherPlugin); ok {
+				go plugin.Push(publisher.StreamPath, remoteURL)
+			}
+		}
+		if filePath := plugin.GetCommonConf().CheckRecord(publisher.StreamPath); filePath != "" {
+			if _, ok := plugin.handler.(IRecorderPlugin); ok {
+				go plugin.Record(publisher.StreamPath, filePath)
+			}
+		}
+	}
 	return nil
 }
 
@@ -428,6 +468,16 @@ func (s *Server) OnSubscribe(subscriber *Subscriber) error {
 		publisher.AddSubscriber(subscriber)
 	} else {
 		s.createWait(subscriber.StreamPath).AddSubscriber(subscriber)
+		for plugin := range s.Plugins.Range {
+			if plugin.Disabled {
+				continue
+			}
+			if remoteURL := plugin.GetCommonConf().Pull.CheckPullOnSub(subscriber.StreamPath); remoteURL != "" {
+				if _, ok := plugin.handler.(IPullerPlugin); ok {
+					go plugin.Pull(subscriber.StreamPath, remoteURL)
+				}
+			}
+		}
 	}
 	return nil
 }

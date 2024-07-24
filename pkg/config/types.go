@@ -156,6 +156,33 @@ func (p *Push) CheckPush(streamPath string) string {
 	return url
 }
 
+type Record struct {
+	EnableRegexp bool `desc:"是否启用正则表达式"` // 是否启用正则表达式
+	RecordList   map[string]string
+}
+
+func (p *Record) GetRecordConfig() *Record {
+	return p
+}
+
+func (p *Record) CheckRecord(streamPath string) string {
+	url, ok := p.RecordList[streamPath]
+	if !ok && p.EnableRegexp {
+		for k, url := range p.RecordList {
+			if r, err := regexp.Compile(k); err == nil {
+				if group := r.FindStringSubmatch(streamPath); group != nil {
+					for i, value := range group {
+						url = strings.Replace(url, fmt.Sprintf("$%d", i), value, -1)
+					}
+					return url
+				}
+			}
+			return ""
+		}
+	}
+	return url
+}
+
 type Common struct {
 	PublicIP   string
 	LogLevel   string `default:"info" enum:"trace:跟踪,debug:调试,info:信息,warn:警告,error:错误"` //日志级别
@@ -168,6 +195,8 @@ type Common struct {
 	UDP
 	Pull
 	Push
+	Record
+	DB
 }
 
 type ICommonConf interface {

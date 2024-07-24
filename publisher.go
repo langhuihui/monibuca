@@ -59,7 +59,7 @@ type AVTracks struct {
 }
 
 func (t *AVTracks) CreateSubTrack(dataType reflect.Type) (track *AVTrack) {
-	track = NewAVTrack(dataType, t.AVTrack)
+	track = NewAVTrack(dataType, t.AVTrack, util.NewPromise(struct{}{}))
 	track.WrapIndex = t.Length
 	t.Add(track)
 	return
@@ -69,15 +69,14 @@ type Publisher struct {
 	PubSubBase
 	sync.RWMutex `json:"-" yaml:"-"`
 	config.Publish
-	State       PublisherState
-	VideoTrack  AVTracks
-	AudioTrack  AVTracks
-	DataTrack   *DataTrack
-	Subscribers util.Collection[int, *Subscriber] `json:"-" yaml:"-"`
-	GOP         int
-	baseTs      time.Duration
-	lastTs      time.Duration
-	dumpFile    *os.File
+	State                  PublisherState
+	AudioTrack, VideoTrack AVTracks
+	audioReady, videoReady *util.Promise[struct{}]
+	DataTrack              *DataTrack
+	Subscribers            util.Collection[int, *Subscriber] `json:"-" yaml:"-"`
+	GOP                    int
+	baseTs, lastTs         time.Duration
+	dumpFile               *os.File
 }
 
 func (p *Publisher) SubscriberRange(yield func(sub *Subscriber) bool) {
@@ -182,6 +181,8 @@ func (p *Publisher) AddSubscriber(subscriber *Subscriber) {
 
 func (p *Publisher) Start() {
 	p.Info("publish")
+	p.audioReady = util.NewPromiseWithTimeout(struct{}{}, time.Second*5)
+	p.videoReady = util.NewPromiseWithTimeout(struct{}{}, time.Second*5)
 	if p.Dump {
 		f := filepath.Join("./dump", p.StreamPath)
 		os.MkdirAll(filepath.Dir(f), 0666)
@@ -229,7 +230,7 @@ func (p *Publisher) WriteVideo(data IAVFrame) (err error) {
 	}
 	t := p.VideoTrack.AVTrack
 	if t == nil {
-		t = NewAVTrack(data, p.Logger.With("track", "video"), &p.Publish)
+		t = NewAVTrack(data, p.Logger.With("track", "video"), &p.Publish, p.videoReady)
 		p.Lock()
 		p.VideoTrack.AVTrack = t
 		p.VideoTrack.Add(t)
@@ -327,7 +328,7 @@ func (p *Publisher) WriteAudio(data IAVFrame) (err error) {
 	}
 	t := p.AudioTrack.AVTrack
 	if t == nil {
-		t = NewAVTrack(data, p.Logger.With("track", "audio"), &p.Publish)
+		t = NewAVTrack(data, p.Logger.With("track", "audio"), &p.Publish, p.audioReady)
 		p.Lock()
 		p.AudioTrack.AVTrack = t
 		p.AudioTrack.Add(t)
@@ -472,4 +473,14 @@ func (p *Publisher) TakeOver(old *Publisher) {
 		old.Dispose(nil)
 	}
 	old.Subscribers = util.Collection[int, *Subscriber]{}
+}
+
+func (p *Publisher) WaitTrack() (err error) {
+	if p.PubVideo {
+		_, err = p.videoReady.Await()
+	}
+	if p.PubAudio {
+		_, err = p.audioReady.Await()
+	}
+	return
 }

@@ -161,9 +161,29 @@ func (muxer *Movmuxer) addTrack(cid MP4_CODEC_TYPE, options ...TrackOption) uint
 	return track.trackId
 }
 
-func (muxer *Movmuxer) Write(track uint32, data []byte, pts uint64, dts uint64) error {
+func (muxer *Movmuxer) WriteAudio(track uint32, sample []byte, dts uint64) (err error) {
 	mp4track := muxer.tracks[track]
-	err := mp4track.writeSample(data, pts, dts)
+	switch mp4track.cid {
+	case MP4_CODEC_AAC:
+		err = mp4track.writeAAC(sample, dts, dts)
+	case MP4_CODEC_G711A, MP4_CODEC_G711U:
+		err = mp4track.writeG711(sample, dts, dts)
+	case MP4_CODEC_MP2, MP4_CODEC_MP3:
+		err = mp4track.writeMP3(sample, dts, dts)
+	case MP4_CODEC_OPUS:
+		err = mp4track.writeOPUS(sample, dts, dts)
+	}
+	return err
+}
+
+func (muxer *Movmuxer) WriteVideo(track uint32, nalus [][]byte, pts uint64, dts uint64) (err error) {
+	mp4track := muxer.tracks[track]
+	switch mp4track.cid {
+	case MP4_CODEC_H264:
+		err = mp4track.writeH264(nalus, pts, dts)
+	case MP4_CODEC_H265:
+		err = mp4track.writeH265(nalus, pts, dts)
+	}
 	if err != nil {
 		return err
 	}
@@ -171,11 +191,6 @@ func (muxer *Movmuxer) Write(track uint32, data []byte, pts uint64, dts uint64) 
 	if !muxer.movFlag.isFragment() && !muxer.movFlag.isDash() {
 		return err
 	}
-
-	if isAudio(mp4track.cid) {
-		return nil
-	}
-
 	// isCustion := muxer.movFlag.has(MP4_FLAG_CUSTOM)
 	isKeyFrag := muxer.movFlag.has(MP4_FLAG_KEYFRAME)
 	if isKeyFrag {
@@ -194,13 +209,11 @@ func (muxer *Movmuxer) Write(track uint32, data []byte, pts uint64, dts uint64) 
 }
 
 func (muxer *Movmuxer) WriteTrailer() (err error) {
-
 	for _, track := range muxer.tracks {
 		if err = track.flush(); err != nil {
 			return
 		}
 	}
-
 	switch {
 	case muxer.movFlag.isDash():
 	case muxer.movFlag.isFragment():

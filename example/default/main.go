@@ -7,6 +7,7 @@ import (
 	"m7s.live/m7s/v5"
 	_ "m7s.live/m7s/v5/plugin/console"
 	_ "m7s.live/m7s/v5/plugin/debug"
+	_ "m7s.live/m7s/v5/plugin/gb28181"
 	_ "m7s.live/m7s/v5/plugin/hdl"
 	_ "m7s.live/m7s/v5/plugin/logrotate"
 	_ "m7s.live/m7s/v5/plugin/mp4"

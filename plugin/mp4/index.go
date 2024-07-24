@@ -74,12 +74,20 @@ const defaultConfig m7s.DefaultYaml = `publish:
 
 func (p *MP4Plugin) OnInit() error {
 	for streamPath, url := range p.GetCommonConf().PullOnStart {
-		go p.Pull(streamPath, url, pkg.NewMP4Puller())
+		go p.Pull(streamPath, url)
 	}
 	return nil
 }
 
 var _ = m7s.InstallPlugin[MP4Plugin](defaultConfig)
+
+func (p *MP4Plugin) NewPullHandler() m7s.PullHandler {
+	return pkg.NewMP4Puller()
+}
+
+func (p *MP4Plugin) NewRecordHandler() m7s.RecordHandler {
+	return pkg.NewMP4Recorder()
+}
 
 func (p *MP4Plugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	streamPath := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/"), ".mp4")

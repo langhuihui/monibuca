@@ -55,9 +55,11 @@ func NewAVTrack(args ...any) (t *AVTrack) {
 			t.RingWriter = NewRingWriter(v.RingSize)
 			t.BufferRange[0] = v.BufferTime
 			t.RingWriter.SLogger = t.Logger
+		case *util.Promise[struct{}]:
+			t.ready = v
 		}
 	}
-	t.ready = util.NewPromise(struct{}{})
+	//t.ready = util.NewPromise(struct{}{})
 	t.Info("create")
 	return
 }

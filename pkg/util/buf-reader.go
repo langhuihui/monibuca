@@ -9,29 +9,56 @@ import (
 const defaultBufSize = 1 << 14
 
 type BufReader struct {
-	reader    io.Reader
 	Allocator *ScalableMemoryAllocator
 	buf       MemoryReader
 	BufLen    int
+	feedData  func() error
 }
 
 func NewBufReaderWithBufLen(reader io.Reader, bufLen int) (r *BufReader) {
 	r = &BufReader{
-		reader:    reader,
 		Allocator: NewScalableMemoryAllocator(bufLen),
 		BufLen:    bufLen,
+		feedData: func() error {
+			buf, err := r.Allocator.Read(reader, r.BufLen)
+			if err != nil {
+				return err
+			}
+			n := len(buf)
+			r.buf.Buffers = append(r.buf.Buffers, buf)
+			r.buf.Size += n
+			r.buf.Length += n
+			return nil
+		},
 	}
 	r.buf.Memory = &Memory{}
 	//fmt.Println("NewBufReaderWithBufLen", uintptr(unsafe.Pointer(r.allocator)))
 	return
 }
-
+func NewBufReaderChan(feedChan chan []byte) (r *BufReader) {
+	r = &BufReader{
+		Allocator: NewScalableMemoryAllocator(defaultBufSize),
+		BufLen:    defaultBufSize,
+		feedData: func() error {
+			data, ok := <-feedChan
+			if !ok {
+				return io.EOF
+			}
+			n := len(data)
+			r.buf.Buffers = append(r.buf.Buffers, data)
+			r.buf.Size += n
+			r.buf.Length += n
+			return nil
+		},
+	}
+	r.buf.Memory = &Memory{}
+	return
+}
 func NewBufReader(reader io.Reader) (r *BufReader) {
 	return NewBufReaderWithBufLen(reader, defaultBufSize)
 }
 
 func (r *BufReader) Recycle() {
-	r.reader = nil
 	r.buf = MemoryReader{}
 	r.Allocator.Recycle()
 }
@@ -57,21 +84,9 @@ func (r *BufReader) Peek(n int) (buf []byte, err error) {
 	return
 }
 
-func (r *BufReader) eat() error {
-	buf, err := r.Allocator.Read(r.reader, r.BufLen)
-	if err != nil {
-		return err
-	}
-	n := len(buf)
-	r.buf.Buffers = append(r.buf.Buffers, buf)
-	r.buf.Size += n
-	r.buf.Length += n
-	return nil
-}
-
 func (r *BufReader) ReadByte() (b byte, err error) {
 	for r.buf.Length == 0 {
-		if err = r.eat(); err != nil {
+		if err = r.feedData(); err != nil {
 			return
 		}
 	}
@@ -116,7 +131,7 @@ func (r *BufReader) Skip(n int) (err error) {
 }
 
 func (r *BufReader) ReadRange(n int, yield func([]byte)) (err error) {
-	for r.recycleFront(); n > 0 && err == nil; err = r.eat() {
+	for r.recycleFront(); n > 0 && err == nil; err = r.feedData() {
 		if r.buf.Length > 0 {
 			if r.buf.Length >= n {
 				r.buf.RangeN(n, yield)

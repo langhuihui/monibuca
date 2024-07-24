@@ -12,11 +12,13 @@ const (
 	READSTATE_INIT = iota
 	READSTATE_FIRST
 	READSTATE_NORMAL
+	READSTATE_WAITKEY
 )
 const (
 	SUBMODE_REAL = iota
 	SUBMODE_NOJUMP
 	SUBMODE_BUFFER
+	SUBMODE_WAITKEY
 )
 
 type AVRingReader struct {
@@ -94,6 +96,13 @@ func (r *AVRingReader) ReadFrame(conf *config.Subscribe) (err error) {
 				startRing = idr
 			}
 			r.State = READSTATE_NORMAL
+		case SUBMODE_WAITKEY:
+			startRing = r.Track.Ring
+			if startRing == r.Track.GetIDR() {
+				r.State = READSTATE_NORMAL
+			} else {
+				r.State = READSTATE_WAITKEY
+			}
 		}
 		if err = r.StartRead(startRing); err != nil {
 			return
@@ -131,6 +140,18 @@ func (r *AVRingReader) ReadFrame(conf *config.Subscribe) (err error) {
 			// 防止过快消费
 			if fast := r.Value.Timestamp - r.FirstTs - time.Since(r.startTime); fast > 0 && fast < time.Second {
 				time.Sleep(fast)
+			}
+		}
+	case READSTATE_WAITKEY:
+		r.Info("wait key frame", "seq", r.Value.Sequence)
+		for {
+			if err = r.readFrame(conf.SubMode); err != nil {
+				return
+			}
+			if r.Value.IDR {
+				r.Info("key frame read", "seq", r.Value.Sequence)
+				r.State = READSTATE_NORMAL
+				break
 			}
 		}
 	}
