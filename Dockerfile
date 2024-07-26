@@ -8,7 +8,7 @@ LABEL stage=gobuilder
 ENV CGO_ENABLE 0
 ENV GOOS linux 
 ENV GOARCH amd64
-ENV GOPROXY https://goproxy.cn,direct 
+#ENV GOPROXY https://goproxy.cn,direct
 ENV HOME /monibuca 
 
 COPY . /monibuca
