@@ -1,4 +1,4 @@
-package hdl
+package flv
 
 const (
 	// FLV Tag Type

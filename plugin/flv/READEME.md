@@ -1,6 +1,6 @@
-# HDL Plugin
+# FLV Plugin
 
-The main function of the HDL plugin is to provide access to the HTTP-FLV protocol.
+The main function of the FLV plugin is to provide access to the HTTP-FLV protocol.
 
 HTTP-FLV protocol (HDL: Http Dynamic Live) is a dynamic streaming media live broadcast protocol, which implements the function of live broadcast of FLV format video on the ordinary HTTP protocol. The meaning of its name can be mainly divided into three parts:
 
@@ -17,14 +17,14 @@ https://github.com/Monibuca/plugin-hdl
 ## Plugin Introduction
 ```go
 import (
-    _ "m7s.live/plugin/hdl/v4"
+    _ "m7s.live/plugin/flv/v4"
 )
 ```
 
 ## Default Plugin Configuration
 
 ```yaml
-hdl:
+flv:
   pull: # Format: https://m7s.live/guide/config.html#%E6%8F%92%E4%BB%B6%E9%85%8D%E7%BD%AE
 ```
 
@@ -35,12 +35,12 @@ hdl:
 If the live/test stream already exists in M7S, then HTTP-FLV protocol can be used for playback. If the listening port is not configured, then the global HTTP port is used (default 8080).
 
 ```bash
-ffplay http://localhost:8080/hdl/live/test.flv
+ffplay http://localhost:8080/flv/live/test.flv
 ```
 
 ### M7S Pull HTTP-FLV Streams from Remote
 
 The available API is:
-`/hdl/api/pull?target=[HTTP-FLV address]&streamPath=[stream identifier]&save=[0|1|2]`
+`/flv/api/pull?target=[HTTP-FLV address]&streamPath=[stream identifier]&save=[0|1|2]`
 - save meaning: 0 - do not save 1 - save to pullonstart 2 - save to pullonsub
 - HTTP-FLV address needs to be urlencoded to prevent special characters from affecting parsing

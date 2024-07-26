@@ -32,7 +32,7 @@ service api {
   }
   rpc PullHDL (PullRequest) returns (m7s.SuccessResponse) {
     option (google.api.http) = {
-      post: "/stress/api/pull/hdl/{pullCount}"
+      post: "/stress/api/pull/flv/{pullCount}"
       body: "*"
     };
   }

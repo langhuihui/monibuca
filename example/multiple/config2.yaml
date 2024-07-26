@@ -10,7 +10,7 @@ rtsp:
   enable: false
 webrtc:
   enable: false
-hdl:
+flv:
   pull:
     pullonstart:
       live/test: /Users/dexter/Movies/jb-demo.flv

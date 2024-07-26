@@ -1,4 +1,4 @@
-package hdl
+package flv
 
 import (
 	"errors"
@@ -13,7 +13,7 @@ import (
 	rtmp "m7s.live/m7s/v5/plugin/rtmp/pkg"
 )
 
-type HDLPuller struct {
+type FLVPuller struct {
 	*util.BufReader
 	*util.ScalableMemoryAllocator
 	hasAudio bool
@@ -21,17 +21,17 @@ type HDLPuller struct {
 	absTS    uint32 //绝对时间戳
 }
 
-func NewHDLPuller() *HDLPuller {
-	return &HDLPuller{
+func NewFLVPuller() *FLVPuller {
+	return &FLVPuller{
 		ScalableMemoryAllocator: util.NewScalableMemoryAllocator(1 << 10),
 	}
 }
 
 func NewPullHandler() m7s.PullHandler {
-	return NewHDLPuller()
+	return NewFLVPuller()
 }
 
-func (puller *HDLPuller) Connect(p *m7s.Client) (err error) {
+func (puller *FLVPuller) Connect(p *m7s.Client) (err error) {
 	if strings.HasPrefix(p.RemoteURL, "http") {
 		var res *http.Response
 		client := http.DefaultClient
@@ -76,7 +76,7 @@ func (puller *HDLPuller) Connect(p *m7s.Client) (err error) {
 	return
 }
 
-func (puller *HDLPuller) Pull(p *m7s.Puller) (err error) {
+func (puller *FLVPuller) Pull(p *m7s.Puller) (err error) {
 	var startTs uint32
 	pubConf := p.GetPublishConfig()
 	if !puller.hasAudio {

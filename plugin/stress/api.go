@@ -7,7 +7,7 @@ import (
 	"m7s.live/m7s/v5"
 	gpb "m7s.live/m7s/v5/pb"
 	"m7s.live/m7s/v5/pkg"
-	hdl "m7s.live/m7s/v5/plugin/hdl/pkg"
+	hdl "m7s.live/m7s/v5/plugin/flv/pkg"
 	rtmp "m7s.live/m7s/v5/plugin/rtmp/pkg"
 	rtsp "m7s.live/m7s/v5/plugin/rtsp/pkg"
 	"m7s.live/m7s/v5/plugin/stress/pb"

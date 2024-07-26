@@ -252,6 +252,7 @@ func (p *Plugin) Start() {
 		}()
 	}
 	tcpConf := &p.config.TCP
+
 	tcphandler, ok := p.handler.(ITCPPlugin)
 	if !ok {
 		tcphandler = p
@@ -276,6 +277,24 @@ func (p *Plugin) Start() {
 				p.Stop(err)
 			}
 		}()
+	}
+	udpConf := &p.config.UDP
+
+	udpHandler, ok := p.handler.(IUDPPlugin)
+	if !ok {
+		udpHandler = p
+	}
+
+	if udpConf.ListenAddr != "" && udpConf.AutoListen {
+		p.Info("listen udp", "addr", udpConf.ListenAddr)
+		go func() {
+			err := udpConf.Listen(udpHandler.OnUDPConnect)
+			if err != nil {
+				p.Error("listen udp", "addr", udpConf.ListenAddr, "error", err)
+				p.Stop(err)
+			}
+		}()
+
 	}
 }
 
@@ -302,6 +321,10 @@ func (p *Plugin) OnEvent(event any) {
 }
 
 func (p *Plugin) OnTCPConnect(conn *net.TCPConn) {
+	p.handler.OnEvent(conn)
+}
+
+func (p *Plugin) OnUDPConnect(conn *net.UDPConn) {
 	p.handler.OnEvent(conn)
 }
 

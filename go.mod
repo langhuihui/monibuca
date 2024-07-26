@@ -13,6 +13,7 @@ require (
 	github.com/glebarez/sqlite v1.11.0
 	github.com/google/gopacket v1.1.19
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.19.1
+	github.com/husanpao/ip v0.0.0-20220711082147-73160bb611a8
 	github.com/icholy/digest v0.1.22
 	github.com/pion/interceptor v0.1.29
 	github.com/pion/rtcp v1.2.14

@@ -11,7 +11,7 @@ rtsp:
   push:
     pushlist:
       live/test: rtsp://localhost/live/test
-hdl:
+flv:
   publish:
     pubaudio: false
   pull:

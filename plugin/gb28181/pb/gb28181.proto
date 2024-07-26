@@ -1,0 +1,56 @@
+syntax = "proto3";
+import "google/api/annotations.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+//import "global.proto";
+package gb28181;
+option go_package="m7s.live/m7s/v5/plugin/gb28181/pb";
+
+service api {
+  rpc List (google.protobuf.Empty) returns (ResponseList) {
+    option (google.api.http) = {
+      get: "/gb28181/api/list"
+    };
+  }
+}
+
+message Channel {
+  string DeviceID      =1;
+  string ParentID     =2;
+  string  Name        =3;
+  string Manufacturer =4;
+  string Model =5;
+  string  Owner =6;
+  string CivilCode = 7;
+      string Address = 8;
+  int32 Port = 9;
+  int32 Parental = 10;
+  int32 SafetyWay = 11;
+  int32  RegisterWay = 12;
+  int32 Secrecy     =13;
+ string Status       =14;
+  google.protobuf.Timestamp gpsTime=15;
+  string Longitude = 16;
+  string Latitude = 17;
+}
+
+message Device {
+  string id = 1;
+  string name = 2;
+  string manufacturer = 3;
+  string model = 4;
+  string owner = 5;
+  google.protobuf.Timestamp gpsTime=6;
+  string longitude = 7;
+  string latitude = 8;
+  string status = 9;
+  google.protobuf.Timestamp registerTime=10;
+  google.protobuf.Timestamp updateTime=11;
+  repeated Channel channels = 12;
+}
+
+message ResponseList {
+  int32 code = 1;
+  string message = 2;
+  repeated Device data = 3;
+}

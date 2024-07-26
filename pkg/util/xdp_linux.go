@@ -1,3 +1,5 @@
+//go:build enable_xdp
+
 package util
 
 import (

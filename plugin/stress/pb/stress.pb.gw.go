@@ -500,7 +500,7 @@ func RegisterApiHandlerServer(ctx context.Context, mux *runtime.ServeMux, server
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/stress.Api/PullHDL", runtime.WithHTTPPathPattern("/stress/api/pull/hdl/{pullCount}"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/stress.Api/PullHDL", runtime.WithHTTPPathPattern("/stress/api/pull/flv/{pullCount}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -727,7 +727,7 @@ func RegisterApiHandlerClient(ctx context.Context, mux *runtime.ServeMux, client
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/stress.Api/PullHDL", runtime.WithHTTPPathPattern("/stress/api/pull/hdl/{pullCount}"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/stress.Api/PullHDL", runtime.WithHTTPPathPattern("/stress/api/pull/flv/{pullCount}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -821,7 +821,7 @@ var (
 
 	pattern_Api_PullRTSP_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"stress", "api", "pull", "rtsp", "pullCount"}, ""))
 
-	pattern_Api_PullHDL_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"stress", "api", "pull", "hdl", "pullCount"}, ""))
+	pattern_Api_PullHDL_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"stress", "api", "pull", "flv", "pullCount"}, ""))
 
 	pattern_Api_GetCount_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"stress", "api", "count"}, ""))
 

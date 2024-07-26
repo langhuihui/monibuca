@@ -3,10 +3,11 @@ package config
 import (
 	"testing"
 )
+
 // TestModify 测试动态修改配置文件，比较值是否修改，修改后是否有Modify属性
 func TestModify(t *testing.T) {
 	t.Run(t.Name(), func(t *testing.T) {
-		var defaultValue struct{
+		var defaultValue struct {
 			Subscribe
 		}
 		defaultValue.SubAudio = false
@@ -34,8 +35,8 @@ func TestModify(t *testing.T) {
 // TestGlobal 测试全局配置
 func TestGlobal(t *testing.T) {
 	t.Run(t.Name(), func(t *testing.T) {
-		var defaultValue struct{
-			 Publish
+		var defaultValue struct {
+			Publish
 		}
 		var globalValue struct {
 			Publish

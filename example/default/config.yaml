@@ -23,7 +23,15 @@ rtmp:
   pull:
     pullonsub:
       live/pull: rtmp://localhost/live/test
-# hdl:
+# flv:
 #   pull:
 #     pullonstart:
 #       live/test: /Users/dexter/Movies/jb-demo.flv
+gb28181:
+    sip:
+        listenaddr:
+          - udp::5060
+    pull:
+      enableregexp: true
+      pullonsub:
+        .* : $0

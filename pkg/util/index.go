@@ -32,6 +32,15 @@ func RandomString(length int) string {
 	return string(b)
 }
 
+func RandomNumString(length int) string {
+	seededRand := rand.New(rand.NewSource(time.Now().UnixNano()))
+	b := make([]byte, length)
+	for i := range b {
+		b[i] = "0123456789"[seededRand.Intn(10)]
+	}
+	return string(b)
+}
+
 func initFatalLog() *os.File {
 	fatal_log_dir := "./fatal"
 	if _fatal_log := os.Getenv("M7S_FATAL_LOG"); _fatal_log != "" {

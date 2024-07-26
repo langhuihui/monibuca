@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
+	myip "github.com/husanpao/ip"
 	"github.com/phsym/console-slog"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -37,6 +38,7 @@ var (
 		Version: Version,
 	}
 	Servers           = make([]*Server, 10)
+	Routes            = map[string]string{}
 	defaultLogHandler = console.NewHandler(os.Stdout, &console.HandlerOptions{TimeFormat: "15:04:05.000000"})
 )
 
@@ -85,6 +87,16 @@ func Run(ctx context.Context, conf any) error {
 }
 
 type rawconfig = map[string]map[string]any
+
+func init() {
+	for k, v := range myip.LocalAndInternalIPs() {
+		Routes[k] = v
+		if lastdot := strings.LastIndex(k, "."); lastdot >= 0 {
+			Routes[k[0:lastdot]] = k
+		}
+	}
+	slog.Info("init", "routes", Routes)
+}
 
 func (s *Server) Run(ctx context.Context, conf any) (err error) {
 	s.StartTime = time.Now()

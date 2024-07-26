@@ -12,7 +12,7 @@ rtmp:
   push:
     pushlist:
       live/test: rtmp://localhost/live/test
-hdl:
+flv:
   pull:
     pullonstart:
       live/test: /Users/dexter/Movies/jb-demo.flv

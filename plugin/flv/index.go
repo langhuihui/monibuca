@@ -1,4 +1,4 @@
-package plugin_hdl
+package plugin_flv
 
 import (
 	"encoding/binary"
@@ -9,27 +9,27 @@ import (
 
 	"m7s.live/m7s/v5"
 	. "m7s.live/m7s/v5/pkg"
-	. "m7s.live/m7s/v5/plugin/hdl/pkg"
+	. "m7s.live/m7s/v5/plugin/flv/pkg"
 	rtmp "m7s.live/m7s/v5/plugin/rtmp/pkg"
 )
 
-type HDLPlugin struct {
+type FLVPlugin struct {
 	m7s.Plugin
 }
 
 const defaultConfig m7s.DefaultYaml = `publish:
   speed: 1`
 
-func (p *HDLPlugin) OnInit() error {
+func (p *FLVPlugin) OnInit() error {
 	for streamPath, url := range p.GetCommonConf().PullOnStart {
 		go p.Pull(streamPath, url)
 	}
 	return nil
 }
 
-var _ = m7s.InstallPlugin[HDLPlugin](defaultConfig, NewPullHandler)
+var _ = m7s.InstallPlugin[FLVPlugin](defaultConfig, NewPullHandler)
 
-func (p *HDLPlugin) WriteFlvHeader(sub *m7s.Subscriber) (flv net.Buffers) {
+func (p *FLVPlugin) WriteFlvHeader(sub *m7s.Subscriber) (flv net.Buffers) {
 	at, vt := &sub.Publisher.AudioTrack, &sub.Publisher.VideoTrack
 	hasAudio, hasVideo := at.AVTrack != nil && sub.SubAudio, vt.AVTrack != nil && sub.SubVideo
 	var amf rtmp.AMF
@@ -70,7 +70,7 @@ func (p *HDLPlugin) WriteFlvHeader(sub *m7s.Subscriber) (flv net.Buffers) {
 	return
 }
 
-func (p *HDLPlugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (p *FLVPlugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	streamPath := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/"), ".flv")
 	if r.URL.RawQuery != "" {
 		streamPath += "?" + r.URL.RawQuery

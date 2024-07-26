@@ -2,7 +2,7 @@ global:
   loglevel: info
   tcp:
     listenaddr: :50050
-hdl:
+flv:
   publish:
     pubaudio: false
   pull:

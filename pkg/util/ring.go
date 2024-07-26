@@ -5,7 +5,6 @@ package util
 // serves as reference to the entire ring. Empty rings are represented
 // as nil Ring pointers. The zero value for a Ring is a one-element
 // ring with a nil Value.
-//
 type Ring[T any] struct {
 	next, prev *Ring[T]
 	Value      T // for use by client; untouched by this library
@@ -35,7 +34,6 @@ func (r *Ring[T]) Prev() *Ring[T] {
 
 // Move moves n % r.Len() elements backward (n < 0) or forward (n >= 0)
 // in the ring and returns that ring element. r must not be empty.
-//
 func (r *Ring[T]) Move(n int) *Ring[T] {
 	if r.next == nil {
 		return r.init()
@@ -84,7 +82,6 @@ func NewRing[T any](n int) *Ring[T] {
 // them creates a single ring with the elements of s inserted
 // after r. The result points to the element following the
 // last element of s after insertion.
-//
 func (r *Ring[T]) Link(s *Ring[T]) *Ring[T] {
 	n := r.Next()
 	if s != nil {
@@ -102,7 +99,6 @@ func (r *Ring[T]) Link(s *Ring[T]) *Ring[T] {
 // Unlink removes n % r.Len() elements from the ring r, starting
 // at r.Next(). If n % r.Len() == 0, r remains unchanged.
 // The result is the removed subring. r must not be empty.
-//
 func (r *Ring[T]) Unlink(n int) *Ring[T] {
 	if n <= 0 {
 		return nil
@@ -112,7 +108,6 @@ func (r *Ring[T]) Unlink(n int) *Ring[T] {
 
 // Len computes the number of elements in ring r.
 // It executes in time proportional to the number of elements.
-//
 func (r *Ring[T]) Len() int {
 	n := 0
 	if r != nil {
@@ -134,4 +129,3 @@ func (r *Ring[T]) Do(f func(*T)) {
 		}
 	}
 }
-

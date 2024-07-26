@@ -1,14 +1,61 @@
 package plugin_gb28181
 
 import (
+	"context"
+	"google.golang.org/protobuf/types/known/emptypb"
+	"google.golang.org/protobuf/types/known/timestamppb"
 	"m7s.live/m7s/v5"
 	"m7s.live/m7s/v5/pkg/util"
+	"m7s.live/m7s/v5/plugin/gb28181/pb"
 	gb28181 "m7s.live/m7s/v5/plugin/gb28181/pkg"
 	"net/http"
 	"os"
 	"strings"
 	"time"
 )
+
+func (gb *GB28181Plugin) List(context.Context, *emptypb.Empty) (ret *pb.ResponseList, err error) {
+	ret = &pb.ResponseList{}
+	for d := range gb.devices.Range {
+		var channels []*pb.Channel
+		for c := range d.channels.Range {
+			channels = append(channels, &pb.Channel{
+				DeviceID:     c.DeviceID,
+				ParentID:     c.ParentID,
+				Name:         c.Name,
+				Manufacturer: c.Manufacturer,
+				Model:        c.Model,
+				Owner:        c.Owner,
+				CivilCode:    c.CivilCode,
+				Address:      c.Address,
+				Port:         int32(c.Port),
+				Parental:     int32(c.Parental),
+				SafetyWay:    int32(c.SafetyWay),
+				RegisterWay:  int32(c.RegisterWay),
+				Secrecy:      int32(c.Secrecy),
+				Status:       string(c.Status),
+				Longitude:    c.Longitude,
+				Latitude:     c.Latitude,
+				GpsTime:      timestamppb.New(c.GpsTime),
+			})
+		}
+		ret.Data = append(ret.Data, &pb.Device{
+			Id:           d.ID,
+			Name:         d.Name,
+			Manufacturer: d.Manufacturer,
+			Model:        d.Model,
+			Owner:        d.Owner,
+			Status:       string(d.Status),
+			Longitude:    d.Longitude,
+			Latitude:     d.Latitude,
+			GpsTime:      timestamppb.New(d.GpsTime),
+			RegisterTime: timestamppb.New(d.RegisterTime),
+			UpdateTime:   timestamppb.New(d.UpdateTime),
+			Channels:     channels,
+		})
+	}
+	return
+}
 
 func (gb *GB28181Plugin) replayPS(pub *m7s.Publisher, f *os.File) {
 	defer f.Close()
@@ -28,11 +75,7 @@ func (gb *GB28181Plugin) replayPS(pub *m7s.Publisher, f *os.File) {
 		if err != nil {
 			return
 		}
-		err = receiver.Unmarshal(payload)
-		if err != nil {
-			return
-		}
-		receiver.FeedChan <- receiver.Payload
+		err = receiver.ReadRTP(payload)
 	}
 }
 
