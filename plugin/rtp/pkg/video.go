@@ -77,7 +77,7 @@ func (r *Video) Parse(t *AVTrack) (err error) {
 					if sps, err = base64.StdEncoding.DecodeString(sprops[0]); err != nil {
 						return
 					}
-					if pps, err = base64.StdEncoding.DecodeString(sprops[1]); err == nil {
+					if pps, err = base64.StdEncoding.DecodeString(sprops[1]); err != nil {
 						return
 					}
 				}

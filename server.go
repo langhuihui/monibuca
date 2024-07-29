@@ -91,11 +91,11 @@ type rawconfig = map[string]map[string]any
 func init() {
 	for k, v := range myip.LocalAndInternalIPs() {
 		Routes[k] = v
+		fmt.Println(k, v)
 		if lastdot := strings.LastIndex(k, "."); lastdot >= 0 {
 			Routes[k[0:lastdot]] = k
 		}
 	}
-	slog.Info("init", "routes", Routes)
 }
 
 func (s *Server) Run(ctx context.Context, conf any) (err error) {

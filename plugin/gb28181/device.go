@@ -51,6 +51,7 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 	if d.Status == DeviceRecoverStatus {
 		d.Status = DeviceOnlineStatus
 	}
+	d.Debug("OnMessage", "cmdType", msg.CmdType, "body", string(req.Body()))
 	switch msg.CmdType {
 	case "Keepalive":
 		d.LastKeepaliveAt = time.Now()
@@ -95,13 +96,13 @@ func (d *Device) eventLoop(gb *GB28181Plugin) {
 	if err != nil {
 		d.Error("catalog", "err", err)
 	} else {
-		d.Debug("catalog", "response", response)
+		d.Debug("catalog", "response", response.Short())
 	}
 	response, err = d.queryDeviceInfo(send)
 	if err != nil {
 		d.Error("deviceInfo", "err", err)
 	} else {
-		d.Debug("deviceInfo", "response", response)
+		d.Debug("deviceInfo", "response", response.Short())
 	}
 	subTick := time.NewTicker(time.Second * 3600)
 	defer subTick.Stop()
@@ -114,13 +115,13 @@ func (d *Device) eventLoop(gb *GB28181Plugin) {
 			if err != nil {
 				d.Error("subCatalog", "err", err)
 			} else {
-				d.Debug("subCatalog", "response", response)
+				d.Debug("subCatalog", "response", response.Short())
 			}
 			response, err = d.subscribePosition(int(gb.Position.Interval/time.Second), send)
 			if err != nil {
 				d.Error("subPosition", "err", err)
 			} else {
-				d.Debug("subPosition", "response", response)
+				d.Debug("subPosition", "response", response.Short())
 			}
 		case <-catalogTick.C:
 			if time.Since(d.LastKeepaliveAt) > time.Second*3600 {
@@ -131,7 +132,7 @@ func (d *Device) eventLoop(gb *GB28181Plugin) {
 			if err != nil {
 				d.Error("catalog", "err", err)
 			} else {
-				d.Debug("catalog", "response", response)
+				d.Debug("catalog", "response", response.Short())
 			}
 		case event, ok := <-d.eventChan:
 			if !ok {

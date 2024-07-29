@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/emiago/sipgo"
 	"github.com/emiago/sipgo/sip"
-	myip "github.com/husanpao/ip"
 	"github.com/icholy/digest"
 	"github.com/pion/rtp"
 	"github.com/rs/zerolog"
@@ -55,7 +54,7 @@ type GB28181Plugin struct {
 	tcpPorts  chan uint16
 }
 
-var _ = m7s.InstallPlugin[GB28181Plugin](pb.RegisterApiHandler, pb.Api_ServiceDesc)
+var _ = m7s.InstallPlugin[GB28181Plugin](pb.RegisterApiHandler, &pb.Api_ServiceDesc)
 
 func init() {
 	sip.SIPDebug = true
@@ -67,6 +66,7 @@ func (gb *GB28181Plugin) OnInit() (err error) {
 	gb.server, _ = sipgo.NewServer(gb.ua, sipgo.WithServerLogger(logger))   // Creating server handle for ua
 	gb.server.OnRegister(gb.OnRegister)
 	gb.server.OnMessage(gb.OnMessage)
+	gb.server.OnBye(gb.OnBye)
 	gb.devices.L = new(sync.RWMutex)
 
 	if gb.MediaPort.Valid() {
@@ -177,8 +177,8 @@ func (gb *GB28181Plugin) OnRegister(req *sip.Request, tx sip.ServerTransaction) 
 			err = tx.Respond(sip.NewResponseFromRequest(req, sip.StatusUnauthorized, "Unathorized", nil))
 			return
 		}
-		err = tx.Respond(sip.NewResponseFromRequest(req, sip.StatusOK, "OK", nil))
 	}
+	err = tx.Respond(sip.NewResponseFromRequest(req, sip.StatusOK, "OK", nil))
 	if isUnregister {
 		if d, ok := gb.devices.Get(id); ok {
 			close(d.eventChan)
@@ -233,16 +233,7 @@ func (gb *GB28181Plugin) StoreDevice(id string, req *sip.Request) (d *Device) {
 	from := req.From()
 	source := req.Source()
 	servIp := req.Recipient.Host
-	mediaIP := myip.InternalIPv4()
-	var ok bool
-	//如果用户配置过则使用配置的
-	if publicIP := gb.GetCommonConf().PublicIP; publicIP != "" {
-		mediaIP = publicIP
-	} else if publicIP, ok = m7s.Routes[servIp]; ok { //根据网卡ip获取对应的公网ip
-		mediaIP = publicIP
-	} else if publicIP, ok = m7s.Routes[mediaIP]; ok {
-		mediaIP = publicIP
-	}
+	mediaIP := gb.GetPublicIP(servIp)
 	//如果相等，则服务器是内网通道.海康摄像头不支持...自动获取
 	//if strings.LastIndex(deviceIp, ".") != -1 && strings.LastIndex(servIp, ".") != -1 {
 	//	if servIp[0:strings.LastIndex(servIp, ".")] == deviceIp[0:strings.LastIndex(deviceIp, ".")] || mediaIP == "" {
@@ -307,5 +298,14 @@ func (gb *GB28181Plugin) OnTCPConnect(conn *net.TCPConn) {
 	})
 	if theDialog != nil {
 		close(theDialog.FeedChan)
+	}
+}
+
+func (gb *GB28181Plugin) OnBye(req *sip.Request, tx sip.ServerTransaction) {
+	if dialog, ok := gb.dialogs.Find(func(d *Dialog) bool {
+		return d.GetCallID() == req.CallID().Value()
+	}); ok {
+		gb.Warn("OnBye", "dialog", dialog.GetCallID())
+		dialog.Bye()
 	}
 }

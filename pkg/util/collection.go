@@ -100,6 +100,19 @@ func (c *Collection[K, T]) Get(key K) (item T, ok bool) {
 	return
 }
 
+func (c *Collection[K, T]) Find(f func(T) bool) (item T, ok bool) {
+	if c.L != nil {
+		c.L.RLock()
+		defer c.L.RUnlock()
+	}
+	for _, item = range c.Items {
+		if f(item) {
+			return item, true
+		}
+	}
+	return
+}
+
 func (c *Collection[K, T]) GetKey() K {
 	return c.Items[0].GetKey()
 }

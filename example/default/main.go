@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"flag"
-
 	"m7s.live/m7s/v5"
 	_ "m7s.live/m7s/v5/plugin/console"
 	_ "m7s.live/m7s/v5/plugin/debug"

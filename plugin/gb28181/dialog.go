@@ -1,6 +1,7 @@
 package plugin_gb28181
 
 import (
+	"errors"
 	"fmt"
 	"github.com/emiago/sipgo"
 	"github.com/emiago/sipgo/sip"
@@ -17,6 +18,10 @@ type Dialog struct {
 	gb28181.InviteOptions
 	gb      *GB28181Plugin
 	session *sipgo.DialogClientSession
+}
+
+func (d *Dialog) GetCallID() string {
+	return d.session.InviteRequest.CallID().Value()
 }
 
 func (d *Dialog) Connect(p *m7s.Client) (err error) {
@@ -80,9 +85,9 @@ func (d *Dialog) Pull(p *m7s.Puller) (err error) {
 	if err != nil {
 		return
 	}
-	inviteResponseBody := d.session.InviteResponse.Body()
-	d.gb.Info("InviteResponse: %s", inviteResponseBody)
-	ds := strings.Split(string(inviteResponseBody), "\r\n")
+	inviteResponseBody := string(d.session.InviteResponse.Body())
+	d.Info("inviteResponse", "body", inviteResponseBody)
+	ds := strings.Split(inviteResponseBody, "\r\n")
 	for _, l := range ds {
 		if ls := strings.Split(l, "="); len(ls) > 1 {
 			if ls[0] == "y" && len(ls[1]) > 0 {
@@ -111,4 +116,11 @@ func (d *Dialog) Pull(p *m7s.Puller) (err error) {
 
 func (d *Dialog) GetKey() uint32 {
 	return d.SSRC
+}
+
+func (d *Dialog) Bye() {
+	if d.Receiver != nil && d.Receiver.Publisher != nil {
+		d.Receiver.Publisher.Stop(errors.New("bye"))
+	}
+	d.session.Close()
 }

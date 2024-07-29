@@ -2,6 +2,7 @@ package m7s
 
 import (
 	"context"
+	myip "github.com/husanpao/ip"
 	"gorm.io/gorm"
 	"log/slog"
 	"m7s.live/m7s/v5/pkg/db"
@@ -207,6 +208,20 @@ func (p *Plugin) GetGlobalCommonConf() *config.Common {
 
 func (p *Plugin) GetCommonConf() *config.Common {
 	return &p.config
+}
+
+func (p *Plugin) GetPublicIP(netcardIP string) string {
+	if p.config.PublicIP != "" {
+		return p.config.PublicIP
+	}
+	if publicIP, ok := Routes[netcardIP]; ok { //根据网卡ip获取对应的公网ip
+		return publicIP
+	}
+	localIp := myip.InternalIPv4()
+	if publicIP, ok := Routes[localIp]; ok {
+		return publicIP
+	}
+	return localIp
 }
 
 func (p *Plugin) settingPath() string {

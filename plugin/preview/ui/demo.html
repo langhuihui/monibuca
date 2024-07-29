@@ -117,7 +117,7 @@
       <div class="input">
         <span>协议切换:</span>
         <select id="protocol">
-          <option value="hdl">hdl(http-flv)</option>
+          <option value="flv">http-flv</option>
           <option value="ws-flv">ws-flv</option>
           <option value="ws-raw">jessica(ws-raw)</option>
           <option value="ws-h265">ws-h265</option>
@@ -351,17 +351,17 @@
 
     const query = new URLSearchParams(location.search);
     const isHttps = location.protocol.startsWith("https");
-    const type = query.get('type') || 'hdl';
+    const type = query.get('type') || 'flv';
     $protocol.value = type;
     let pluginName = type;
     let ext = "." + type;
     switch (type) {
-      case 'hdl':
+      case 'flv':
         ext = '.flv';
         break;
       case 'ws-flv':
         ext = '.flv';
-        pluginName = 'jessica';
+        pluginName = 'flv';
         break;
       case 'ws-raw':
         ext = "";

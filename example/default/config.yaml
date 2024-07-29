@@ -1,5 +1,5 @@
 global:
-#  loglevel: trace
+  loglevel: trace
 #  enableauth: true
 #  tcp:
 #    listenaddr: :50051
@@ -22,7 +22,7 @@ rtmp:
     # subaudio: false
   pull:
     pullonsub:
-      live/pull: rtmp://localhost/live/test
+#      live/pull: rtmp://localhost/live/test
 # flv:
 #   pull:
 #     pullonstart:

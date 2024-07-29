@@ -22,13 +22,13 @@ message Channel {
   string Model =5;
   string  Owner =6;
   string CivilCode = 7;
-      string Address = 8;
+  string Address = 8;
   int32 Port = 9;
   int32 Parental = 10;
   int32 SafetyWay = 11;
   int32  RegisterWay = 12;
   int32 Secrecy     =13;
- string Status       =14;
+  string Status       =14;
   google.protobuf.Timestamp gpsTime=15;
   string Longitude = 16;
   string Latitude = 17;
