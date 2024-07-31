@@ -1,7 +1,6 @@
 package plugin_gb28181
 
 import (
-	"crypto/tls"
 	"fmt"
 	"github.com/emiago/sipgo"
 	"github.com/emiago/sipgo/sip"
@@ -61,9 +60,9 @@ func init() {
 }
 func (gb *GB28181Plugin) OnInit() (err error) {
 	logger := zerolog.New(os.Stdout)
-	gb.ua, err = sipgo.NewUA(sipgo.WithUserAgent("monibuca" + m7s.Version)) // Build user agent
-	gb.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(logger))   // Creating client handle for ua
-	gb.server, _ = sipgo.NewServer(gb.ua, sipgo.WithServerLogger(logger))   // Creating server handle for ua
+	gb.ua, err = sipgo.NewUA(sipgo.WithUserAgent("M7S/" + m7s.Version))   // Build user agent
+	gb.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(logger)) // Creating client handle for ua
+	gb.server, _ = sipgo.NewServer(gb.ua, sipgo.WithServerLogger(logger)) // Creating server handle for ua
 	gb.server.OnRegister(gb.OnRegister)
 	gb.server.OnMessage(gb.OnMessage)
 	gb.server.OnBye(gb.OnBye)
@@ -82,17 +81,14 @@ func (gb *GB28181Plugin) OnInit() (err error) {
 		netWork, addr, _ := strings.Cut(addr, ":")
 		go gb.server.ListenAndServe(gb, netWork, addr)
 	}
-	keyPair, _ := tls.X509KeyPair(config.LocalCert, config.LocalKey)
-	if gb.Sip.CertFile != "" || gb.Sip.KeyFile != "" {
-		keyPair, err = tls.LoadX509KeyPair(gb.Sip.CertFile, gb.Sip.KeyFile)
-	}
-	if err == nil {
-		tslConfig := &tls.Config{
-			Certificates: []tls.Certificate{keyPair},
-		}
-		for _, addr := range gb.Sip.ListenTLSAddr {
-			netWork, addr, _ := strings.Cut(addr, ":")
-			go gb.server.ListenAndServeTLS(gb, netWork, addr, tslConfig)
+	if len(gb.Sip.ListenTLSAddr) > 0 {
+		if tslConfig, err := config.GetTLSConfig(gb.Sip.CertFile, gb.Sip.KeyFile); err == nil {
+			for _, addr := range gb.Sip.ListenTLSAddr {
+				netWork, addr, _ := strings.Cut(addr, ":")
+				go gb.server.ListenAndServeTLS(gb, netWork, addr, tslConfig)
+			}
+		} else {
+			return err
 		}
 	}
 	return
@@ -202,13 +198,10 @@ func (gb *GB28181Plugin) OnMessage(req *sip.Request, tx sip.ServerTransaction) {
 	if d, ok := gb.devices.Get(id); ok {
 		d.UpdateTime = time.Now()
 		temp := &gb28181.Message{}
-		err := gb28181.DecodeGB2312(temp, req.Body())
+		err := gb28181.DecodeXML(temp, req.Body())
 		if err != nil {
-			err = gb28181.DecodeGbk(temp, req.Body())
-			if err != nil {
-				gb.Error("OnMessage", "error", err.Error())
-				return
-			}
+			gb.Error("OnMessage", "error", err.Error())
+			return
 		}
 		err = d.onMessage(req, tx, temp)
 	}
@@ -232,8 +225,10 @@ func (gb *GB28181Plugin) RecoverDevice(d *Device, req *sip.Request) {
 func (gb *GB28181Plugin) StoreDevice(id string, req *sip.Request) (d *Device) {
 	from := req.From()
 	source := req.Source()
-	servIp := req.Recipient.Host
-	mediaIP := gb.GetPublicIP(servIp)
+	desc := req.Destination()
+	serverHostName := strings.Split(desc, ":")
+	servIp := serverHostName[0]
+	publicIP := gb.GetPublicIP(servIp)
 	//如果相等，则服务器是内网通道.海康摄像头不支持...自动获取
 	//if strings.LastIndex(deviceIp, ".") != -1 && strings.LastIndex(servIp, ".") != -1 {
 	//	if servIp[0:strings.LastIndex(servIp, ".")] == deviceIp[0:strings.LastIndex(deviceIp, ".")] || mediaIP == "" {
@@ -242,6 +237,7 @@ func (gb *GB28181Plugin) StoreDevice(id string, req *sip.Request) (d *Device) {
 	//}
 	hostname := strings.Split(source, ":")
 	port, _ := strconv.Atoi(hostname[1])
+	serverPort, _ := strconv.Atoi(serverHostName[1])
 	d = &Device{
 		ID:           id,
 		RegisterTime: time.Now(),
@@ -254,15 +250,27 @@ func (gb *GB28181Plugin) StoreDevice(id string, req *sip.Request) (d *Device) {
 		},
 		Transport: req.Transport(),
 		Logger:    gb.Logger.With("id", id),
-		mediaIp:   mediaIP,
+		mediaIp:   publicIP,
 		eventChan: make(chan any, 10),
+		contactHDR: sip.ContactHeader{
+			Address: sip.Uri{
+				User: gb.Serial,
+				Host: publicIP,
+				Port: serverPort,
+			},
+		},
+		fromHDR: sip.FromHeader{
+			Address: sip.Uri{
+				User: gb.Serial,
+				Host: gb.Realm,
+			},
+			Params: sip.NewParams(),
+		},
 	}
-	contactHDR := sip.ContactHeader{
-		Address: req.Recipient,
-	}
-	d.dialogClient = sipgo.NewDialogClient(gb.client, contactHDR)
+	d.fromHDR.Params.Add("tag", sip.GenerateTagN(16))
+	d.dialogClient = sipgo.NewDialogClient(gb.client, d.contactHDR)
 	d.channels.L = new(sync.RWMutex)
-	d.Info("StoreDevice", "source", source, "servIp", servIp, "mediaIP", mediaIP, "recipient", req.Recipient)
+	d.Info("StoreDevice", "source", source, "desc", desc, "servIp", servIp, "publicIP", publicIP, "recipient", req.Recipient)
 	gb.devices.Add(d)
 	if gb.DB != nil {
 		//TODO

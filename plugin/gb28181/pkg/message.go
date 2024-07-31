@@ -7,7 +7,9 @@ import (
 	"golang.org/x/net/html/charset"
 	"golang.org/x/text/encoding/simplifiedchinese"
 	"golang.org/x/text/transform"
+	"io"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -20,8 +22,7 @@ const (
 </Query>
 `
 	// RecordInfoXML 获取录像文件列表xml样式
-	RecordInfoXML = `<?xml version="1.0"?>
-<Query>
+	RecordInfoXML = `<?xml version="1.0"?><Query>
 <CmdType>RecordInfo</CmdType>
 <SN>%d</SN>
 <DeviceID>%s</DeviceID>
@@ -32,27 +33,26 @@ const (
 </Query>
 `
 	// DeviceInfoXML 查询设备详情xml样式
-	DeviceInfoXML = `<?xml version="1.0"?>
-<Query>
+	DeviceInfoXML = `<?xml version="1.0"?><Query>
 <CmdType>DeviceInfo</CmdType>
 <SN>%d</SN>
 <DeviceID>%s</DeviceID>
 </Query>
 `
 	// DevicePositionXML 订阅设备位置
-	DevicePositionXML = `<?xml version="1.0"?>
-<Query>
+	DevicePositionXML = `<?xml version="1.0"?><Query>
 <CmdType>MobilePosition</CmdType>
 <SN>%d</SN>
 <DeviceID>%s</DeviceID>
 <Interval>%d</Interval>
-</Query>`
-	AlarmResponseXML = `<?xml version="1.0"?>
-<Response>
+</Query>
+`
+	AlarmResponseXML = `<?xml version="1.0"?><Response>
 <CmdType>Alarm</CmdType>
 <SN>17430</SN>
 <DeviceID>%s</DeviceID>
-</Response>`
+</Response>
+`
 	ChannelOnStatus  ChannelStatus = "ON"
 	ChannelOffStatus ChannelStatus = "OFF"
 )
@@ -68,28 +68,34 @@ func intTotime(t int64) time.Time {
 	return time.Now()
 }
 
+func toGB2312(s string) []byte {
+	reader := transform.NewReader(strings.NewReader(s), simplifiedchinese.GBK.NewEncoder())
+	d, _ := io.ReadAll(reader)
+	return d
+}
+
 // BuildDeviceInfoXML 获取设备详情指令
-func BuildDeviceInfoXML(sn int, id string) string {
-	return fmt.Sprintf(DeviceInfoXML, sn, id)
+func BuildDeviceInfoXML(sn int, id string) []byte {
+	return toGB2312(fmt.Sprintf(DeviceInfoXML, sn, id))
 }
 
 // BuildCatalogXML 获取NVR下设备列表指令
-func BuildCatalogXML(sn int, id string) string {
-	return fmt.Sprintf(CatalogXML, sn, id)
+func BuildCatalogXML(sn int, id string) []byte {
+	return toGB2312(fmt.Sprintf(CatalogXML, sn, id))
 }
 
 // BuildRecordInfoXML 获取录像文件列表指令
-func BuildRecordInfoXML(sn int, id string, start, end int64) string {
-	return fmt.Sprintf(RecordInfoXML, sn, id, intTotime(start).Format("2006-01-02T15:04:05"), intTotime(end).Format("2006-01-02T15:04:05"))
+func BuildRecordInfoXML(sn int, id string, start, end int64) []byte {
+	return toGB2312(fmt.Sprintf(RecordInfoXML, sn, id, intTotime(start).Format("2006-01-02T15:04:05"), intTotime(end).Format("2006-01-02T15:04:05")))
 }
 
 // BuildDevicePositionXML 订阅设备位置
-func BuildDevicePositionXML(sn int, id string, interval int) string {
-	return fmt.Sprintf(DevicePositionXML, sn, id, interval)
+func BuildDevicePositionXML(sn int, id string, interval int) []byte {
+	return toGB2312(fmt.Sprintf(DevicePositionXML, sn, id, interval))
 }
 
-func BuildAlarmResponseXML(id string) string {
-	return fmt.Sprintf(AlarmResponseXML, id)
+func BuildAlarmResponseXML(id string) []byte {
+	return toGB2312(fmt.Sprintf(AlarmResponseXML, id))
 }
 
 type (
@@ -135,14 +141,14 @@ type (
 	}
 )
 
-func DecodeGB2312(v any, body []byte) error {
+func DecodeXML(v any, body []byte) error {
 	decoder := xml.NewDecoder(bytes.NewReader(body))
 	decoder.CharsetReader = charset.NewReaderLabel
-	return decoder.Decode(v)
-}
-
-func DecodeGbk(v any, body []byte) error {
-	decoder := xml.NewDecoder(transform.NewReader(bytes.NewReader(body), simplifiedchinese.GBK.NewDecoder()))
-	decoder.CharsetReader = charset.NewReaderLabel
-	return decoder.Decode(v)
+	err := decoder.Decode(v)
+	if err != nil {
+		decoder = xml.NewDecoder(transform.NewReader(bytes.NewReader(body), simplifiedchinese.GBK.NewDecoder()))
+		decoder.CharsetReader = charset.NewReaderLabel
+		return decoder.Decode(v)
+	}
+	return nil
 }

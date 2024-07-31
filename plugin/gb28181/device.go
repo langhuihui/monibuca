@@ -4,6 +4,7 @@ import (
 	"github.com/emiago/sipgo"
 	"github.com/emiago/sipgo/sip"
 	"log/slog"
+	"m7s.live/m7s/v5"
 	"m7s.live/m7s/v5/pkg/util"
 	gb28181 "m7s.live/m7s/v5/plugin/gb28181/pkg"
 	"net/http"
@@ -40,6 +41,8 @@ type Device struct {
 	*slog.Logger
 	eventChan    chan any
 	dialogClient *sipgo.DialogClient
+	contactHDR   sip.ContactHeader
+	fromHDR      sip.FromHeader
 }
 
 func (d *Device) GetKey() string {
@@ -84,6 +87,7 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 
 func (d *Device) eventLoop(gb *GB28181Plugin) {
 	send := func(req *sip.Request) (*sip.Response, error) {
+		d.Debug("send", "req", req.String())
 		return gb.client.Do(gb, req)
 	}
 	defer func() {
@@ -96,13 +100,13 @@ func (d *Device) eventLoop(gb *GB28181Plugin) {
 	if err != nil {
 		d.Error("catalog", "err", err)
 	} else {
-		d.Debug("catalog", "response", response.Short())
+		d.Debug("catalog", "response", response.String())
 	}
 	response, err = d.queryDeviceInfo(send)
 	if err != nil {
 		d.Error("deviceInfo", "err", err)
 	} else {
-		d.Debug("deviceInfo", "response", response.Short())
+		d.Debug("deviceInfo", "response", response.String())
 	}
 	subTick := time.NewTicker(time.Second * 3600)
 	defer subTick.Stop()
@@ -115,13 +119,13 @@ func (d *Device) eventLoop(gb *GB28181Plugin) {
 			if err != nil {
 				d.Error("subCatalog", "err", err)
 			} else {
-				d.Debug("subCatalog", "response", response.Short())
+				d.Debug("subCatalog", "response", response.String())
 			}
 			response, err = d.subscribePosition(int(gb.Position.Interval/time.Second), send)
 			if err != nil {
 				d.Error("subPosition", "err", err)
 			} else {
-				d.Debug("subPosition", "response", response.Short())
+				d.Debug("subPosition", "response", response.String())
 			}
 		case <-catalogTick.C:
 			if time.Since(d.LastKeepaliveAt) > time.Second*3600 {
@@ -132,7 +136,7 @@ func (d *Device) eventLoop(gb *GB28181Plugin) {
 			if err != nil {
 				d.Error("catalog", "err", err)
 			} else {
-				d.Debug("catalog", "response", response.Short())
+				d.Debug("catalog", "response", response.String())
 			}
 		case event, ok := <-d.eventChan:
 			if !ok {
@@ -166,36 +170,43 @@ func (d *Device) eventLoop(gb *GB28181Plugin) {
 
 func (d *Device) createRequest(Method sip.RequestMethod) (req *sip.Request) {
 	req = sip.NewRequest(Method, d.Recipient)
+	req.AppendHeader(&d.fromHDR)
 	contentType := sip.ContentTypeHeader("Application/MANSCDP+xml")
+	req.AppendHeader(sip.NewHeader("User-Agent", "M7S/"+m7s.Version))
 	req.AppendHeader(&contentType)
+	req.AppendHeader(&d.contactHDR)
 	return
 }
 
 func (d *Device) catalog(send func(*sip.Request) (*sip.Response, error)) (*sip.Response, error) {
+	d.SN++
 	request := d.createRequest(sip.MESSAGE)
 	//d.subscriber.Timeout = time.Now().Add(time.Second * time.Duration(expires))
 	request.AppendHeader(sip.NewHeader("Expires", "3600"))
-	request.SetBody([]byte(gb28181.BuildCatalogXML(d.SN, d.ID)))
+	request.SetBody(gb28181.BuildCatalogXML(d.SN, d.ID))
 	return send(request)
 }
 
 func (d *Device) subscribeCatalog(send func(*sip.Request) (*sip.Response, error)) (*sip.Response, error) {
+	d.SN++
 	request := d.createRequest(sip.SUBSCRIBE)
 	request.AppendHeader(sip.NewHeader("Expires", "3600"))
-	request.SetBody([]byte(gb28181.BuildCatalogXML(d.SN, d.ID)))
+	request.SetBody(gb28181.BuildCatalogXML(d.SN, d.ID))
 	return send(request)
 }
 
 func (d *Device) queryDeviceInfo(send func(*sip.Request) (*sip.Response, error)) (*sip.Response, error) {
+	d.SN++
 	request := d.createRequest(sip.MESSAGE)
-	request.SetBody([]byte(gb28181.BuildDeviceInfoXML(d.SN, d.ID)))
+	request.SetBody(gb28181.BuildDeviceInfoXML(d.SN, d.ID))
 	return send(request)
 }
 
 func (d *Device) subscribePosition(interval int, send func(*sip.Request) (*sip.Response, error)) (*sip.Response, error) {
+	d.SN++
 	request := d.createRequest(sip.SUBSCRIBE)
 	request.AppendHeader(sip.NewHeader("Expires", "3600"))
-	request.SetBody([]byte(gb28181.BuildDevicePositionXML(d.SN, d.ID, interval)))
+	request.SetBody(gb28181.BuildDevicePositionXML(d.SN, d.ID, interval))
 	return send(request)
 }
 

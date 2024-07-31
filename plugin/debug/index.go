@@ -1,20 +1,26 @@
 package plugin_debug
 
 import (
+	"github.com/go-delve/delve/pkg/config"
+	"github.com/go-delve/delve/service/debugger"
 	"io"
 	"net/http"
 	"net/http/pprof"
+	"os"
 	"strings"
 	"time"
 
+	myproc "github.com/cloudwego/goref/pkg/proc"
 	"m7s.live/m7s/v5"
 )
 
 var _ = m7s.InstallPlugin[DebugPlugin]()
+var conf, _ = config.LoadConfig()
 
 type DebugPlugin struct {
 	m7s.Plugin
 	ChartPeriod time.Duration `default:"1s" desc:"图表更新周期"`
+	Grfout      string        `default:"grf.out" desc:"grf输出文件"`
 }
 
 type WriteToFile struct {
@@ -65,4 +71,26 @@ func (p *DebugPlugin) Charts_data(w http.ResponseWriter, r *http.Request) {
 
 func (p *DebugPlugin) Charts_datafeed(w http.ResponseWriter, r *http.Request) {
 	s.dataFeedHandler(w, r)
+}
+
+func (p *DebugPlugin) Grf(w http.ResponseWriter, r *http.Request) {
+	dConf := debugger.Config{
+		AttachPid:             os.Getpid(),
+		Backend:               "default",
+		CoreFile:              "",
+		DebugInfoDirectories:  conf.DebugInfoDirectories,
+		AttachWaitFor:         "",
+		AttachWaitForInterval: 1,
+		AttachWaitForDuration: 0,
+	}
+	dbg, err := debugger.New(&dConf, nil)
+	defer dbg.Detach(false)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if err = myproc.ObjectReference(dbg.Target(), p.Grfout); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+	w.Write([]byte("ok"))
 }

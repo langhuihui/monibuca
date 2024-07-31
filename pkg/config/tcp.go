@@ -14,6 +14,21 @@ var LocalCert []byte
 //go:embed local.monibuca.com.key
 var LocalKey []byte
 
+func GetTLSConfig(certFile, keyFile string) (tslConfig *tls.Config, err error) {
+	var keyPair tls.Certificate
+	if certFile != "" || keyFile != "" {
+		keyPair, err = tls.LoadX509KeyPair(certFile, keyFile)
+	} else {
+		keyPair, err = tls.X509KeyPair(LocalCert, LocalKey)
+	}
+	if err == nil {
+		tslConfig = &tls.Config{
+			Certificates: []tls.Certificate{keyPair},
+		}
+	}
+	return
+}
+
 type TCP struct {
 	ListenAddr    string `desc:"监听地址，格式为ip:port，ip 可省略默认监听所有网卡"`
 	ListenAddrTLS string `desc:"监听地址，格式为ip:port，ip 可省略默认监听所有网卡"`
@@ -51,14 +66,8 @@ func (tcp *TCP) Listen(handler func(*net.TCPConn)) (err error) {
 }
 
 func (tcp *TCP) ListenTLS(handler func(*net.TCPConn)) (err error) {
-	keyPair, _ := tls.X509KeyPair(LocalCert, LocalKey)
-	if tcp.CertFile != "" || tcp.KeyFile != "" {
-		keyPair, err = tls.LoadX509KeyPair(tcp.CertFile, tcp.KeyFile)
-	}
-	if err == nil {
-		tcp.listenerTls, err = tls.Listen("tcp", tcp.ListenAddrTLS, &tls.Config{
-			Certificates: []tls.Certificate{keyPair},
-		})
+	if tlsConfig, err := GetTLSConfig(tcp.CertFile, tcp.KeyFile); err == nil {
+		tcp.listenerTls, err = tls.Listen("tcp", tcp.ListenAddrTLS, tlsConfig)
 		if err == nil {
 			count := tcp.ListenNum
 			if count == 0 {
@@ -68,6 +77,8 @@ func (tcp *TCP) ListenTLS(handler func(*net.TCPConn)) (err error) {
 				go tcp.listen(tcp.listenerTls, handler)
 			}
 		}
+	} else {
+		return err
 	}
 	return
 }
