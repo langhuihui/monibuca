@@ -3,12 +3,13 @@ package plugin_rtmp
 import (
 	"errors"
 	"io"
-	"net"
-	"runtime/debug"
-
 	"m7s.live/m7s/v5"
 	"m7s.live/m7s/v5/plugin/rtmp/pb"
 	. "m7s.live/m7s/v5/plugin/rtmp/pkg"
+	"maps"
+	"net"
+	"runtime/debug"
+	"slices"
 )
 
 type RTMPPlugin struct {
@@ -31,6 +32,10 @@ func (p *RTMPPlugin) OnInit() error {
 
 func (p *RTMPPlugin) NewPullHandler() m7s.PullHandler {
 	return &Client{}
+}
+
+func (p *RTMPPlugin) GetPullableList() []string {
+	return slices.Collect(maps.Keys(p.GetCommonConf().PullOnSub))
 }
 
 func (p *RTMPPlugin) NewPushHandler() m7s.PushHandler {

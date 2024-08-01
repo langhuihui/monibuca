@@ -133,6 +133,7 @@ type IRegisterHandler interface {
 
 type IPullerPlugin interface {
 	NewPullHandler() PullHandler
+	GetPullableList() []string
 }
 
 type IPusherPlugin interface {
@@ -208,6 +209,10 @@ func (p *Plugin) GetGlobalCommonConf() *config.Common {
 
 func (p *Plugin) GetCommonConf() *config.Common {
 	return &p.config
+}
+
+func (p *Plugin) GetHandler() IPlugin {
+	return p.handler
 }
 
 func (p *Plugin) GetPublicIP(netcardIP string) string {
@@ -403,7 +408,7 @@ func (p *Plugin) Record(streamPath string, filePath string, options ...any) (rec
 	}
 	recorder.StreamPath = streamPath
 	recorder.Subscribe = p.config.Subscribe
-	if recorder.File, err = os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666); err != nil {
+	if recorder.File, err = os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666); err != nil {
 		return
 	}
 	defer func() {

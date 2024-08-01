@@ -17,6 +17,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -204,6 +205,8 @@ func (gb *GB28181Plugin) OnMessage(req *sip.Request, tx sip.ServerTransaction) {
 			return
 		}
 		err = d.onMessage(req, tx, temp)
+	} else {
+		_ = tx.Respond(sip.NewResponseFromRequest(req, sip.StatusNotFound, "Not Found", nil))
 	}
 }
 
@@ -283,6 +286,16 @@ func (gb *GB28181Plugin) NewPullHandler() m7s.PullHandler {
 	return &Dialog{
 		gb: gb,
 	}
+}
+
+func (gb *GB28181Plugin) GetPullableList() []string {
+	return slices.Collect(func(yield func(string) bool) {
+		for d := range gb.devices.Range {
+			for c := range d.channels.Range {
+				yield(fmt.Sprintf("%s/%s", d.ID, c.DeviceID))
+			}
+		}
+	})
 }
 
 func (gb *GB28181Plugin) OnTCPConnect(conn *net.TCPConn) {

@@ -28,11 +28,10 @@ func (p *PreviewPlugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 			s += "<h2>pull stream on subscribe 订阅时才会触发拉流的流</h2>"
 			for plugin := range p.Server.Plugins.Range {
-				pullconf := plugin.GetCommonConf().GetPullConfig()
-				if pullconf.PullOnSub != nil {
+				if pullPlugin, ok := plugin.GetHandler().(m7s.IPullerPlugin); ok {
 					s += fmt.Sprintf("<h3>%s</h3>", plugin.Meta.Name)
-					for streamPath, url := range pullconf.PullOnSub {
-						s += fmt.Sprintf("<a href='%s'>%s</a> <-- %s<br>", streamPath, streamPath, url)
+					for _, streamPath := range pullPlugin.GetPullableList() {
+						s += fmt.Sprintf("<a href='%s'>%s</a><br>", streamPath, streamPath)
 					}
 				}
 			}

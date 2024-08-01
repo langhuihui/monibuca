@@ -76,8 +76,9 @@ func (d *Dialog) Pull(p *m7s.Puller) (err error) {
 		"y=" + ssrc,
 	}
 	contentTypeHeader := sip.ContentTypeHeader("application/sdp")
+	fromHeader := d.Channel.Device.fromHDR
 	subjectHeader := sip.NewHeader("Subject", fmt.Sprintf("%s:%s,%s:0", d.DeviceID, ssrc, d.gb.Serial))
-	d.session, err = d.Channel.Device.dialogClient.Invite(d.gb, d.Channel.Device.Recipient, []byte(strings.Join(sdpInfo, "\r\n")+"\r\n"), &contentTypeHeader, subjectHeader)
+	d.session, err = d.Channel.Device.dialogClient.Invite(d.gb, d.Channel.Device.Recipient, []byte(strings.Join(sdpInfo, "\r\n")+"\r\n"), &contentTypeHeader, subjectHeader, &fromHeader)
 	if err != nil {
 		return
 	}

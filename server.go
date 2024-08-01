@@ -123,9 +123,9 @@ func (s *Server) run(ctx context.Context, conf any) (err error) {
 	s.Logger = slog.New(&s.LogHandler).With("Server", s.ID)
 
 	httpConf, tcpConf := &s.config.HTTP, &s.config.TCP
-	mux := runtime.NewServeMux(runtime.WithMarshalerOption("text/plain", &pb.TextPlain{}), runtime.WithRoutingErrorHandler(runtime.RoutingErrorHandlerFunc(func(_ context.Context, _ *runtime.ServeMux, _ runtime.Marshaler, w http.ResponseWriter, r *http.Request, _ int) {
+	mux := runtime.NewServeMux(runtime.WithMarshalerOption("text/plain", &pb.TextPlain{}), runtime.WithRoutingErrorHandler(func(_ context.Context, _ *runtime.ServeMux, _ runtime.Marshaler, w http.ResponseWriter, r *http.Request, _ int) {
 		httpConf.GetHttpMux().ServeHTTP(w, r)
-	})))
+	}))
 	httpConf.SetMux(mux)
 	s.Context, s.CancelCauseFunc = context.WithCancelCause(ctx)
 	s.Info("start")

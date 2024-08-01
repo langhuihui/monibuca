@@ -37,6 +37,7 @@ func (r *Recorder) Record(recorder *m7s.Recorder) (err error) {
 			r.videoId = r.AddVideoTrack(box.MP4_CODEC_H265, box.WithExtraData(ctx.Record))
 		}
 	}
+	r.Subscriber = &recorder.Subscriber
 	return m7s.PlayBlock(&recorder.Subscriber, func(audio *pkg.RawAudio) error {
 		return r.WriteAudio(r.audioId, audio.ToBytes(), uint64(audio.Timestamp/time.Millisecond))
 	}, func(video *pkg.H26xFrame) error {
@@ -49,13 +50,13 @@ func (r *Recorder) Record(recorder *m7s.Recorder) (err error) {
 }
 
 func (r *Recorder) Close() {
-	defer func() {
-		if err := recover(); err != nil {
-			r.Error("close", "err", err)
-		} else {
-			r.Info("close")
-		}
-	}()
+	//defer func() {
+	//	if err := recover(); err != nil {
+	//		r.Error("close", "err", err)
+	//	} else {
+	//		r.Info("close")
+	//	}
+	//}()
 	err := r.WriteTrailer()
 	if err != nil {
 		r.Error("write trailer", "err", err)

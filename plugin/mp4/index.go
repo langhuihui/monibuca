@@ -9,8 +9,10 @@ import (
 	"m7s.live/m7s/v5/pkg/util"
 	pkg "m7s.live/m7s/v5/plugin/mp4/pkg"
 	rtmp "m7s.live/m7s/v5/plugin/rtmp/pkg"
+	"maps"
 	"net"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 )
@@ -83,6 +85,10 @@ var _ = m7s.InstallPlugin[MP4Plugin](defaultConfig)
 
 func (p *MP4Plugin) NewPullHandler() m7s.PullHandler {
 	return pkg.NewMP4Puller()
+}
+
+func (p *MP4Plugin) GetPullableList() []string {
+	return slices.Collect(maps.Keys(p.GetCommonConf().PullOnSub))
 }
 
 func (p *MP4Plugin) NewRecordHandler() m7s.RecordHandler {

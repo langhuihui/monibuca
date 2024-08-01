@@ -86,28 +86,28 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 }
 
 func (d *Device) eventLoop(gb *GB28181Plugin) {
-	send := func(req *sip.Request) (*sip.Response, error) {
-		d.Debug("send", "req", req.String())
-		return gb.client.Do(gb, req)
-	}
+	//send := func(req *sip.Request) (*sip.Response, error) {
+	//	d.Debug("send", "req", req.String())
+	//	return gb.client.Do(gb, req)
+	//}
 	defer func() {
 		d.Status = DeviceOfflineStatus
 		if gb.devices.RemoveByKey(d.ID) {
-			d.Info("Unregister")
+			d.Info("unregister")
 		}
 	}()
-	response, err := d.catalog(send)
-	if err != nil {
-		d.Error("catalog", "err", err)
-	} else {
-		d.Debug("catalog", "response", response.String())
-	}
-	response, err = d.queryDeviceInfo(send)
-	if err != nil {
-		d.Error("deviceInfo", "err", err)
-	} else {
-		d.Debug("deviceInfo", "response", response.String())
-	}
+	//response, err := d.catalog(send)
+	//if err != nil {
+	//	d.Error("catalog", "err", err)
+	//} else {
+	//	d.Debug("catalog", "response", response.String())
+	//}
+	//response, err = d.queryDeviceInfo(send)
+	//if err != nil {
+	//	d.Error("deviceInfo", "err", err)
+	//} else {
+	//	d.Debug("deviceInfo", "response", response.String())
+	//}
 	subTick := time.NewTicker(time.Second * 3600)
 	defer subTick.Stop()
 	catalogTick := time.NewTicker(time.Second * 60)
@@ -115,29 +115,29 @@ func (d *Device) eventLoop(gb *GB28181Plugin) {
 	for {
 		select {
 		case <-subTick.C:
-			response, err = d.subscribeCatalog(send)
-			if err != nil {
-				d.Error("subCatalog", "err", err)
-			} else {
-				d.Debug("subCatalog", "response", response.String())
-			}
-			response, err = d.subscribePosition(int(gb.Position.Interval/time.Second), send)
-			if err != nil {
-				d.Error("subPosition", "err", err)
-			} else {
-				d.Debug("subPosition", "response", response.String())
-			}
+			//response, err = d.subscribeCatalog(send)
+			//if err != nil {
+			//	d.Error("subCatalog", "err", err)
+			//} else {
+			//	d.Debug("subCatalog", "response", response.String())
+			//}
+			//response, err = d.subscribePosition(int(gb.Position.Interval/time.Second), send)
+			//if err != nil {
+			//	d.Error("subPosition", "err", err)
+			//} else {
+			//	d.Debug("subPosition", "response", response.String())
+			//}
 		case <-catalogTick.C:
-			if time.Since(d.LastKeepaliveAt) > time.Second*3600 {
-				d.Error("keepalive timeout")
-				return
-			}
-			response, err = d.catalog(send)
-			if err != nil {
-				d.Error("catalog", "err", err)
-			} else {
-				d.Debug("catalog", "response", response.String())
-			}
+			//if time.Since(d.LastKeepaliveAt) > time.Second*3600 {
+			//	d.Error("keepalive timeout", "lastKeepaliveAt", d.LastKeepaliveAt)
+			//	return
+			//}
+			//response, err = d.catalog(send)
+			//if err != nil {
+			//	d.Error("catalog", "err", err)
+			//} else {
+			//	d.Debug("catalog", "response", response.String())
+			//}
 		case event, ok := <-d.eventChan:
 			if !ok {
 				return

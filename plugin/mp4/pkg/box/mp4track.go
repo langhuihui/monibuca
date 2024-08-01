@@ -1,6 +1,7 @@
 package box
 
 import (
+	"encoding/binary"
 	"github.com/yapingcat/gomedia/go-codec"
 	"io"
 )
@@ -313,7 +314,10 @@ func (track *mp4track) writeH264(nalus [][]byte, pts, dts uint64) (err error) {
 				track.lastSample.isKey = true
 			}
 		}
-		track.lastSample.cache = append(track.lastSample.cache, nalu...)
+		naluLen := uint32(len(nalu))
+		var lenBytes [4]byte
+		binary.BigEndian.PutUint32(lenBytes[:], naluLen)
+		track.lastSample.cache = append(append(track.lastSample.cache, lenBytes[:]...), nalu...)
 	}
 	return
 }
@@ -356,7 +360,10 @@ func (track *mp4track) writeH265(nalus [][]byte, pts, dts uint64) (err error) {
 				track.lastSample.isKey = true
 			}
 		}
-		track.lastSample.cache = append(track.lastSample.cache, nalu...)
+		naluLen := uint32(len(nalu))
+		var lenBytes [4]byte
+		binary.BigEndian.PutUint32(lenBytes[:], naluLen)
+		track.lastSample.cache = append(append(track.lastSample.cache, lenBytes[:]...), nalu...)
 	}
 
 	return

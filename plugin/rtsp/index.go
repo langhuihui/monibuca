@@ -6,9 +6,11 @@ import (
 	"m7s.live/m7s/v5"
 	"m7s.live/m7s/v5/pkg/util"
 	. "m7s.live/m7s/v5/plugin/rtsp/pkg"
+	"maps"
 	"net"
 	"net/http"
 	"runtime/debug"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -24,6 +26,10 @@ type RTSPPlugin struct {
 
 func (p *RTSPPlugin) NewPullHandler() m7s.PullHandler {
 	return &Client{}
+}
+
+func (p *RTSPPlugin) GetPullableList() []string {
+	return slices.Collect(maps.Keys(p.GetCommonConf().PullOnSub))
 }
 
 func (p *RTSPPlugin) NewPushHandler() m7s.PushHandler {

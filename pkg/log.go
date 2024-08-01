@@ -19,13 +19,17 @@ func ParseLevel(level string) slog.Level {
 }
 
 type MultiLogHandler struct {
-	handlers    []slog.Handler
-	parentLevel *slog.Level
-	level       *slog.Level
+	handlers     []slog.Handler
+	attrChildren map[*MultiLogHandler][]slog.Attr
+	parentLevel  *slog.Level
+	level        *slog.Level
 }
 
-func (m *MultiLogHandler) Add(h ...slog.Handler) {
-	m.handlers = append(m.handlers, h...)
+func (m *MultiLogHandler) Add(h slog.Handler) {
+	m.handlers = append(m.handlers, h)
+	for child, attrs := range m.attrChildren {
+		child.Add(h.WithAttrs(attrs))
+	}
 }
 
 func (m *MultiLogHandler) Remove(h slog.Handler) {
@@ -66,6 +70,10 @@ func (m *MultiLogHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 		handlers:    make([]slog.Handler, len(m.handlers)),
 		parentLevel: m.parentLevel,
 	}
+	if m.attrChildren == nil {
+		m.attrChildren = make(map[*MultiLogHandler][]slog.Attr)
+	}
+	m.attrChildren[result] = attrs
 	if m.level != nil {
 		result.parentLevel = m.level
 	}
