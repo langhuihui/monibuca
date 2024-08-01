@@ -7,7 +7,7 @@ require (
 	m7s.live/engine/v4 v4.15.3-0.20240726031118-172ebf3ad151
 	m7s.live/plugin/debug/v4 v4.0.3
 	m7s.live/plugin/fmp4/v4 v4.0.6
-	m7s.live/plugin/gb28181/v4 v4.4.6-0.20240723071507-edffd7d4702e
+	m7s.live/plugin/gb28181/v4 v4.4.6-0.20240730020729-78e16b4746c9
 	m7s.live/plugin/hdl/v4 v4.1.11
 	m7s.live/plugin/hls/v4 v4.3.9
 	m7s.live/plugin/hook/v4 v4.0.3
@@ -15,7 +15,7 @@ require (
 	m7s.live/plugin/logrotate/v4 v4.0.6
 	m7s.live/plugin/monitor/v4 v4.0.5
 	m7s.live/plugin/preview/v4 v4.1.5
-	m7s.live/plugin/record/v4 v4.4.8-0.20240726031118-0157e27a6b7e
+	m7s.live/plugin/record/v4 v4.4.8-0.20240726083222-cbdc649240a6
 	m7s.live/plugin/room/v4 v4.1.1
 	m7s.live/plugin/rtmp/v4 v4.3.1
 	m7s.live/plugin/rtsp/v4 v4.3.5
@@ -97,6 +97,6 @@ require (
 	golang.org/x/text v0.14.0 // indirect
 	golang.org/x/tools v0.19.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	m7s.live/plugin/ps/v4 v4.1.6-0.20240726031118-2bf90bb262e7 // indirect
+	m7s.live/plugin/ps/v4 v4.1.6-0.20240801064700-6bc9100fbc96 // indirect
 
 )
