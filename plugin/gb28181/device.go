@@ -1,11 +1,10 @@
 package plugin_gb28181
 
 import (
-	"fmt"
 	"github.com/emiago/sipgo"
 	"github.com/emiago/sipgo/sip"
-	"log/slog"
 	"m7s.live/m7s/v5"
+	"m7s.live/m7s/v5/pkg"
 	"m7s.live/m7s/v5/pkg/util"
 	gb28181 "m7s.live/m7s/v5/plugin/gb28181/pkg"
 	"net/http"
@@ -24,26 +23,26 @@ const (
 )
 
 type Device struct {
-	ID                       string
-	Name                     string
-	Manufacturer             string
-	Model                    string
-	Owner                    string
-	RegisterTime, UpdateTime time.Time
-	LastKeepaliveAt          time.Time
-	Status                   DeviceStatus
-	SN                       int
-	Recipient                sip.Uri
-	Transport                string
-	channels                 util.Collection[string, *Channel]
-	mediaIp                  string
-	GpsTime                  time.Time //gps时间
-	Longitude, Latitude      string    //经度,纬度
-	*slog.Logger
-	eventChan    chan any
-	dialogClient *sipgo.DialogClient
-	contactHDR   sip.ContactHeader
-	fromHDR      sip.FromHeader
+	pkg.Unit[string]
+	Name                string
+	Manufacturer        string
+	Model               string
+	Owner               string
+	UpdateTime          time.Time
+	LastKeepaliveAt     time.Time
+	Status              DeviceStatus
+	SN                  int
+	Recipient           sip.Uri
+	Transport           string
+	channels            util.Collection[string, *Channel]
+	mediaIp             string
+	GpsTime             time.Time //gps时间
+	Longitude, Latitude string    //经度,纬度
+	eventChan           chan any
+	client              *sipgo.Client
+	dialogClient        *sipgo.DialogClient
+	contactHDR          sip.ContactHeader
+	fromHDR             sip.FromHeader
 }
 
 func (d *Device) GetKey() string {
@@ -86,24 +85,25 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 	return
 }
 
+func (d *Device) send(req *sip.Request) (*sip.Response, error) {
+	d.SN++
+	d.Debug("send", "req", req.String())
+	return d.client.Do(d, req)
+}
+
 func (d *Device) eventLoop(gb *GB28181Plugin) {
-	send := func(req *sip.Request) (*sip.Response, error) {
-		d.Debug("send", "req", req.String())
-		return gb.client.Do(gb, req)
-	}
 	defer func() {
 		d.Status = DeviceOfflineStatus
 		if gb.devices.RemoveByKey(d.ID) {
-			d.Info("unregister")
 		}
 	}()
-	response, err := d.catalog(send)
+	response, err := d.catalog()
 	if err != nil {
 		d.Error("catalog", "err", err)
 	} else {
 		d.Debug("catalog", "response", response.String())
 	}
-	response, err = d.queryDeviceInfo(send)
+	response, err = d.queryDeviceInfo()
 	if err != nil {
 		d.Error("deviceInfo", "err", err)
 	} else {
@@ -115,14 +115,15 @@ func (d *Device) eventLoop(gb *GB28181Plugin) {
 	defer catalogTick.Stop()
 	for {
 		select {
+		case <-d.Done():
 		case <-subTick.C:
-			response, err = d.subscribeCatalog(send)
+			response, err = d.subscribeCatalog()
 			if err != nil {
 				d.Error("subCatalog", "err", err)
 			} else {
 				d.Debug("subCatalog", "response", response.String())
 			}
-			response, err = d.subscribePosition(int(gb.Position.Interval/time.Second), send)
+			response, err = d.subscribePosition(int(gb.Position.Interval / time.Second))
 			if err != nil {
 				d.Error("subPosition", "err", err)
 			} else {
@@ -133,16 +134,13 @@ func (d *Device) eventLoop(gb *GB28181Plugin) {
 				d.Error("keepalive timeout", "lastKeepaliveAt", d.LastKeepaliveAt)
 				return
 			}
-			response, err = d.catalog(send)
+			response, err = d.catalog()
 			if err != nil {
 				d.Error("catalog", "err", err)
 			} else {
 				d.Debug("catalog", "response", response.String())
 			}
-		case event, ok := <-d.eventChan:
-			if !ok {
-				return
-			}
+		case event := <-d.eventChan:
 			switch v := event.(type) {
 			case []gb28181.ChannelInfo:
 				for _, c := range v {
@@ -176,51 +174,35 @@ func (d *Device) createRequest(Method sip.RequestMethod) (req *sip.Request) {
 	req.AppendHeader(sip.NewHeader("User-Agent", "M7S/"+m7s.Version))
 	req.AppendHeader(&contentType)
 	req.AppendHeader(&d.contactHDR)
-	var viaHdr = sip.ViaHeader{
-		Transport:       d.Transport,
-		ProtocolName:    "SIP",
-		ProtocolVersion: "2.0",
-		Host:            d.contactHDR.Address.Host,
-		Port:            d.contactHDR.Address.Port,
-		Params:          sip.NewParams(),
-	}
-	viaHdr.Params.Add("branch", sip.GenerateBranchN(16))
-	viaHdr.Params.Add("rport", fmt.Sprintf("%d", d.contactHDR.Address.Port))
-	viaHdr.Params.Add("received", d.contactHDR.Address.Host)
-	req.AppendHeader(&viaHdr)
 	return
 }
 
-func (d *Device) catalog(send func(*sip.Request) (*sip.Response, error)) (*sip.Response, error) {
-	d.SN++
+func (d *Device) catalog() (*sip.Response, error) {
 	request := d.createRequest(sip.MESSAGE)
 	//d.subscriber.Timeout = time.Now().Add(time.Second * time.Duration(expires))
 	request.AppendHeader(sip.NewHeader("Expires", "3600"))
 	request.SetBody(gb28181.BuildCatalogXML(d.SN, d.ID))
-	return send(request)
+	return d.send(request)
 }
 
-func (d *Device) subscribeCatalog(send func(*sip.Request) (*sip.Response, error)) (*sip.Response, error) {
-	d.SN++
+func (d *Device) subscribeCatalog() (*sip.Response, error) {
 	request := d.createRequest(sip.SUBSCRIBE)
 	request.AppendHeader(sip.NewHeader("Expires", "3600"))
 	request.SetBody(gb28181.BuildCatalogXML(d.SN, d.ID))
-	return send(request)
+	return d.send(request)
 }
 
-func (d *Device) queryDeviceInfo(send func(*sip.Request) (*sip.Response, error)) (*sip.Response, error) {
-	d.SN++
+func (d *Device) queryDeviceInfo() (*sip.Response, error) {
 	request := d.createRequest(sip.MESSAGE)
 	request.SetBody(gb28181.BuildDeviceInfoXML(d.SN, d.ID))
-	return send(request)
+	return d.send(request)
 }
 
-func (d *Device) subscribePosition(interval int, send func(*sip.Request) (*sip.Response, error)) (*sip.Response, error) {
-	d.SN++
+func (d *Device) subscribePosition(interval int) (*sip.Response, error) {
 	request := d.createRequest(sip.SUBSCRIBE)
 	request.AppendHeader(sip.NewHeader("Expires", "3600"))
 	request.SetBody(gb28181.BuildDevicePositionXML(d.SN, d.ID, interval))
-	return send(request)
+	return d.send(request)
 }
 
 func (d *Device) addOrUpdateChannel(c gb28181.ChannelInfo) {

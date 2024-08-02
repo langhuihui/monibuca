@@ -8,27 +8,27 @@ import (
 
 const TraceLevel = slog.Level(-8)
 
-type Unit struct {
-	ID                      int
-	StartTime               time.Time
-	*slog.Logger            `json:"-" yaml:"-"`
-	context.Context         `json:"-" yaml:"-"`
-	context.CancelCauseFunc `json:"-" yaml:"-"`
+type Unit[T any] struct {
+	ID        T
+	StartTime time.Time
+	*slog.Logger
+	context.Context
+	context.CancelCauseFunc
 }
 
-func (unit *Unit) Trace(msg string, fields ...any) {
+func (unit *Unit[T]) Trace(msg string, fields ...any) {
 	unit.Log(unit.Context, TraceLevel, msg, fields...)
 }
 
-func (unit *Unit) IsStopped() bool {
+func (unit *Unit[T]) IsStopped() bool {
 	return unit.StopReason() != nil
 }
 
-func (unit *Unit) StopReason() error {
+func (unit *Unit[T]) StopReason() error {
 	return context.Cause(unit.Context)
 }
 
-func (unit *Unit) Stop(err error) {
+func (unit *Unit[T]) Stop(err error) {
 	unit.Info("stop", "reason", err.Error())
 	unit.CancelCauseFunc(err)
 }

@@ -49,7 +49,7 @@ func (gb *GB28181Plugin) List(context.Context, *emptypb.Empty) (ret *pb.Response
 			Longitude:    d.Longitude,
 			Latitude:     d.Latitude,
 			GpsTime:      timestamppb.New(d.GpsTime),
-			RegisterTime: timestamppb.New(d.RegisterTime),
+			RegisterTime: timestamppb.New(d.StartTime),
 			UpdateTime:   timestamppb.New(d.UpdateTime),
 			Channels:     channels,
 		})

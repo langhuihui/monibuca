@@ -92,7 +92,7 @@ func (p *MP4Plugin) GetPullableList() []string {
 }
 
 func (p *MP4Plugin) NewRecordHandler() m7s.RecordHandler {
-	return pkg.NewMP4Recorder()
+	return &pkg.Recorder{}
 }
 
 func (p *MP4Plugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {

@@ -186,7 +186,7 @@ func InstallPlugin[C iPlugin](options ...any) error {
 }
 
 type Plugin struct {
-	Unit
+	Unit[int]
 	Disabled bool
 	Meta     *PluginMeta
 	config   config.Common

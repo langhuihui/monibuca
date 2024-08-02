@@ -1,12 +1,20 @@
 package util
 
 import (
+	"io"
 	"log"
 	"math/rand"
 	"os"
 	"path/filepath"
 	"time"
 )
+
+type ReadWriteSeekCloser interface {
+	io.Reader
+	io.Writer
+	io.Seeker
+	io.Closer
+}
 
 func Conditoinal[T any](cond bool, t, f T) T {
 	if cond {

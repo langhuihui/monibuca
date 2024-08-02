@@ -1,6 +1,8 @@
 package plugin_gb28181
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"github.com/emiago/sipgo"
 	"github.com/emiago/sipgo/sip"
@@ -9,6 +11,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"m7s.live/m7s/v5"
+	"m7s.live/m7s/v5/pkg"
 	"m7s.live/m7s/v5/pkg/config"
 	"m7s.live/m7s/v5/pkg/util"
 	"m7s.live/m7s/v5/plugin/gb28181/pb"
@@ -48,7 +51,6 @@ type GB28181Plugin struct {
 	Position  PositionConfig
 	ua        *sipgo.UserAgent
 	server    *sipgo.Server
-	client    *sipgo.Client
 	devices   util.Collection[string, *Device]
 	dialogs   util.Collection[uint32, *Dialog]
 	tcpPorts  chan uint16
@@ -61,8 +63,8 @@ func init() {
 }
 func (gb *GB28181Plugin) OnInit() (err error) {
 	logger := zerolog.New(os.Stdout)
-	gb.ua, err = sipgo.NewUA(sipgo.WithUserAgent("M7S/" + m7s.Version))   // Build user agent
-	gb.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(logger)) // Creating client handle for ua
+	gb.ua, err = sipgo.NewUA(sipgo.WithUserAgent("M7S/" + m7s.Version)) // Build user agent
+	// Creating client handle for ua
 	gb.server, _ = sipgo.NewServer(gb.ua, sipgo.WithServerLogger(logger)) // Creating server handle for ua
 	gb.server.OnRegister(gb.OnRegister)
 	gb.server.OnMessage(gb.OnMessage)
@@ -178,7 +180,7 @@ func (gb *GB28181Plugin) OnRegister(req *sip.Request, tx sip.ServerTransaction) 
 	err = tx.Respond(sip.NewResponseFromRequest(req, sip.StatusOK, "OK", nil))
 	if isUnregister {
 		if d, ok := gb.devices.Get(id); ok {
-			close(d.eventChan)
+			d.Stop(errors.New("unregister"))
 		}
 	} else {
 		if d, ok := gb.devices.Get(id); ok {
@@ -220,7 +222,7 @@ func (gb *GB28181Plugin) RecoverDevice(d *Device, req *sip.Request) {
 		Port: port,
 		User: from.Address.User,
 	}
-	d.RegisterTime = time.Now()
+	d.StartTime = time.Now()
 	d.Status = DeviceRecoverStatus
 	d.UpdateTime = time.Now()
 }
@@ -241,17 +243,20 @@ func (gb *GB28181Plugin) StoreDevice(id string, req *sip.Request) (d *Device) {
 	port, _ := strconv.Atoi(portStr)
 	serverPort, _ := strconv.Atoi(sPortStr)
 	d = &Device{
-		ID:           id,
-		RegisterTime: time.Now(),
-		UpdateTime:   time.Now(),
-		Status:       DeviceRegisterStatus,
+		Unit: pkg.Unit[string]{
+			ID:        id,
+			StartTime: time.Now(),
+			Logger:    gb.Logger.With("id", id),
+		},
+		UpdateTime: time.Now(),
+		Status:     DeviceRegisterStatus,
 		Recipient: sip.Uri{
 			Host: hostname,
 			Port: port,
 			User: from.Address.User,
 		},
 		Transport: req.Transport(),
-		Logger:    gb.Logger.With("id", id),
+
 		mediaIp:   publicIP,
 		eventChan: make(chan any, 10),
 		contactHDR: sip.ContactHeader{
@@ -269,8 +274,10 @@ func (gb *GB28181Plugin) StoreDevice(id string, req *sip.Request) (d *Device) {
 			Params: sip.NewParams(),
 		},
 	}
+	d.Context, d.CancelCauseFunc = context.WithCancelCause(gb.Context)
 	d.fromHDR.Params.Add("tag", sip.GenerateTagN(16))
-	d.dialogClient = sipgo.NewDialogClient(gb.client, d.contactHDR)
+	d.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(publicIP))
+	d.dialogClient = sipgo.NewDialogClient(d.client, d.contactHDR)
 	d.channels.L = new(sync.RWMutex)
 	d.Info("StoreDevice", "source", source, "desc", desc, "servIp", servIp, "publicIP", publicIP, "recipient", req.Recipient)
 	gb.devices.Add(d)

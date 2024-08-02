@@ -64,7 +64,3 @@ func (r *Recorder) Close() {
 		r.Info("write trailer")
 	}
 }
-
-func NewMP4Recorder() *Recorder {
-	return &Recorder{}
-}

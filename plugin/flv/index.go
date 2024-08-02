@@ -29,6 +29,10 @@ func (p *FLVPlugin) OnInit() error {
 
 var _ = m7s.InstallPlugin[FLVPlugin](defaultConfig, NewPullHandler)
 
+func (p *FLVPlugin) NewRecordHandler() m7s.RecordHandler {
+	return &Recorder{}
+}
+
 func (p *FLVPlugin) WriteFlvHeader(sub *m7s.Subscriber) (flv net.Buffers) {
 	at, vt := &sub.Publisher.AudioTrack, &sub.Publisher.VideoTrack
 	hasAudio, hasVideo := at.AVTrack != nil && sub.SubAudio, vt.AVTrack != nil && sub.SubVideo
@@ -64,7 +68,7 @@ func (p *FLVPlugin) WriteFlvHeader(sub *m7s.Subscriber) (flv net.Buffers) {
 	}
 	var data = amf.Marshal(metaData)
 	var b [15]byte
-	WriteFLVTag(FLV_TAG_TYPE_SCRIPT, 0, uint32(len(data)), b[:])
+	WriteFLVTagHead(FLV_TAG_TYPE_SCRIPT, 0, uint32(len(data)), b[:])
 	flv = append(flv, []byte{'F', 'L', 'V', 0x01, flags, 0, 0, 0, 9, 0, 0, 0, 0}, b[:11], data, b[11:])
 	binary.BigEndian.PutUint32(b[11:], uint32(len(data))+11)
 	return
@@ -108,7 +112,7 @@ func (p *FLVPlugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	copy(b[:4], flv[3])
 	gotFlvTag(flv[:3])
 	rtmpData2FlvTag := func(t byte, data *rtmp.RTMPData) error {
-		WriteFLVTag(t, data.Timestamp, uint32(data.Size), b[4:])
+		WriteFLVTagHead(t, data.Timestamp, uint32(data.Size), b[4:])
 		defer binary.BigEndian.PutUint32(b[:4], uint32(data.Size)+11)
 		return gotFlvTag(append(net.Buffers{b[:]}, data.Memory.Buffers...))
 	}
