@@ -10,15 +10,10 @@ import (
 	"github.com/VictoriaMetrics/VictoriaMetrics/app/vlstorage"
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/buildinfo"
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/envflag"
-	"github.com/VictoriaMetrics/VictoriaMetrics/lib/fs"
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/httpserver"
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/logger"
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/logstorage"
-	"github.com/VictoriaMetrics/VictoriaMetrics/lib/procutil"
-	"os"
-
 	slogcommon "github.com/samber/slog-common"
-	"log"
 	"log/slog"
 	"net/http"
 	"sync"
@@ -126,15 +121,6 @@ func init() {
 	vlstorage.Init()
 	vlselect.Init()
 	vlinsert.Init()
-	go func() {
-		sig := procutil.WaitForSigterm()
-		log.Println("received signal %s", sig)
-		vlinsert.Stop()
-		vlselect.Stop()
-		vlstorage.Stop()
-		fs.MustStopDirRemover()
-		os.Exit(0)
-	}()
 }
 
 func NewVmLogHandler(opts *slog.HandlerOptions, converter Converter) (*VmLogHandler, error) {

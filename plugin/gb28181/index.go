@@ -213,10 +213,10 @@ func (gb *GB28181Plugin) OnMessage(req *sip.Request, tx sip.ServerTransaction) {
 func (gb *GB28181Plugin) RecoverDevice(d *Device, req *sip.Request) {
 	from := req.From()
 	source := req.Source()
-	hostname := strings.Split(source, ":")
-	port, _ := strconv.Atoi(hostname[1])
+	hostname, portStr, _ := net.SplitHostPort(source)
+	port, _ := strconv.Atoi(portStr)
 	d.Recipient = sip.Uri{
-		Host: hostname[0],
+		Host: hostname,
 		Port: port,
 		User: from.Address.User,
 	}
@@ -229,8 +229,7 @@ func (gb *GB28181Plugin) StoreDevice(id string, req *sip.Request) (d *Device) {
 	from := req.From()
 	source := req.Source()
 	desc := req.Destination()
-	serverHostName := strings.Split(desc, ":")
-	servIp := serverHostName[0]
+	servIp, sPortStr, _ := net.SplitHostPort(desc)
 	publicIP := gb.GetPublicIP(servIp)
 	//如果相等，则服务器是内网通道.海康摄像头不支持...自动获取
 	//if strings.LastIndex(deviceIp, ".") != -1 && strings.LastIndex(servIp, ".") != -1 {
@@ -238,16 +237,16 @@ func (gb *GB28181Plugin) StoreDevice(id string, req *sip.Request) (d *Device) {
 	//		mediaIP = servIp
 	//	}
 	//}
-	hostname := strings.Split(source, ":")
-	port, _ := strconv.Atoi(hostname[1])
-	serverPort, _ := strconv.Atoi(serverHostName[1])
+	hostname, portStr, _ := net.SplitHostPort(source)
+	port, _ := strconv.Atoi(portStr)
+	serverPort, _ := strconv.Atoi(sPortStr)
 	d = &Device{
 		ID:           id,
 		RegisterTime: time.Now(),
 		UpdateTime:   time.Now(),
 		Status:       DeviceRegisterStatus,
 		Recipient: sip.Uri{
-			Host: hostname[0],
+			Host: hostname,
 			Port: port,
 			User: from.Address.User,
 		},

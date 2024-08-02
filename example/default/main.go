@@ -14,6 +14,7 @@ import (
 	_ "m7s.live/m7s/v5/plugin/rtmp"
 	_ "m7s.live/m7s/v5/plugin/rtsp"
 	_ "m7s.live/m7s/v5/plugin/stress"
+	_ "m7s.live/m7s/v5/plugin/vmlog"
 	_ "m7s.live/m7s/v5/plugin/webrtc"
 )
 

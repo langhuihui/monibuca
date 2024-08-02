@@ -108,7 +108,7 @@ func (amf *AMF) readKey() (string, error) {
 	return string(amf.ReadN(l)), nil
 }
 
-func (amf *AMF) readProperty(m map[string]any) (obj any, err error) {
+func (amf *AMF) readProperty(m map[string]any) (obj map[string]any, err error) {
 	var k string
 	var v any
 	if k, err = amf.readKey(); err == nil {
@@ -144,20 +144,18 @@ func (amf *AMF) Unmarshal() (obj any, err error) {
 	case AMF0_STRING:
 		obj, err = amf.readKey()
 	case AMF0_OBJECT:
-		m := make(map[string]any)
-		for err == nil && obj == nil {
-			obj, err = amf.readProperty(m)
+		for m := make(map[string]any); err == nil && obj == nil; obj, err = amf.readProperty(m) {
 		}
 	case AMF0_NULL:
 		return nil, nil
 	case AMF0_UNDEFINED:
 		return Undefined, nil
 	case AMF0_ECMA_ARRAY:
-		size := amf.ReadUint32()
-		m := make(EcmaArray)
-		for i := uint32(0); i < size && err == nil && obj == nil; i++ {
-			obj, err = amf.readProperty(m)
+		_ = amf.ReadUint32() // size
+		var result map[string]any
+		for m := make(map[string]any); err == nil && result == nil; result, err = amf.readProperty(m) {
 		}
+		obj = EcmaArray(result)
 	case AMF0_END_OBJECT:
 		return ObjectEnd, nil
 	case AMF0_STRICT_ARRAY:

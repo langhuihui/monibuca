@@ -125,6 +125,7 @@ type iPlugin interface {
 type IPlugin interface {
 	OnInit() error
 	OnEvent(any)
+	OnExit()
 }
 
 type IRegisterHandler interface {
@@ -320,6 +321,10 @@ func (p *Plugin) Start() {
 
 func (p *Plugin) OnInit() error {
 	return nil
+}
+
+func (p *Plugin) OnExit() {
+
 }
 
 func (p *Plugin) onEvent(event any) {

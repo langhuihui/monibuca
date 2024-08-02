@@ -18,11 +18,13 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"reflect"
 	"slices"
 	"strings"
 	"sync/atomic"
+	"syscall"
 	"time"
 )
 
@@ -268,8 +270,18 @@ func (s *Server) eventLoop() {
 	defer close(subChan)
 	go s.doneEventLoop(pubChan, pubDoneChan)
 	go s.doneEventLoop(subChan, subDoneChan)
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(signalChan)
 	for {
 		select {
+		case <-signalChan:
+			for plugin := range s.Plugins.Range {
+				if plugin.Disabled {
+					continue
+				}
+				plugin.handler.OnExit()
+			}
 		case <-s.Done():
 			return
 		case <-pulse.C:
