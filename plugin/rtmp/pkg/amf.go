@@ -144,8 +144,10 @@ func (amf *AMF) Unmarshal() (obj any, err error) {
 	case AMF0_STRING:
 		obj, err = amf.readKey()
 	case AMF0_OBJECT:
-		for m := make(map[string]any); err == nil && obj == nil; obj, err = amf.readProperty(m) {
+		var result map[string]any
+		for m := make(map[string]any); err == nil && result == nil; result, err = amf.readProperty(m) {
 		}
+		obj = result
 	case AMF0_NULL:
 		return nil, nil
 	case AMF0_UNDEFINED:
