@@ -159,7 +159,8 @@ func (p *Push) CheckPush(streamPath string) string {
 type Record struct {
 	EnableRegexp bool `desc:"是否启用正则表达式"` // 是否启用正则表达式
 	RecordList   map[string]string
-	Fragment     time.Duration `desc:"分片时长"` // 分片时长
+	Fragment     time.Duration `desc:"分片时长"`   // 分片时长
+	Append       bool          `desc:"是否追加录制"` // 是否追加录制
 }
 
 func (p *Record) GetRecordConfig() *Record {

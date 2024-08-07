@@ -1,6 +1,7 @@
 package m7s
 
 import (
+	"context"
 	"math"
 	"os"
 	"path/filepath"
@@ -59,21 +60,22 @@ type AVTracks struct {
 }
 
 func (t *AVTracks) CreateSubTrack(dataType reflect.Type) (track *AVTrack) {
-	track = NewAVTrack(dataType, t.AVTrack, util.NewPromise(struct{}{}))
+	track = NewAVTrack(dataType, t.AVTrack, util.NewPromise(context.TODO()))
 	track.WrapIndex = t.Length
 	t.Add(track)
 	return
 }
 
+// createPublisher -> Start -> WriteAudio/WriteVideo -> Dispose
 type Publisher struct {
 	PubSubBase
-	sync.RWMutex `json:"-" yaml:"-"`
+	sync.RWMutex
 	config.Publish
 	State                  PublisherState
 	AudioTrack, VideoTrack AVTracks
-	audioReady, videoReady *util.Promise[struct{}]
+	audioReady, videoReady *util.Promise
 	DataTrack              *DataTrack
-	Subscribers            util.Collection[int, *Subscriber] `json:"-" yaml:"-"`
+	Subscribers            SubscriberCollection
 	GOP                    int
 	baseTs, lastTs         time.Duration
 	dumpFile               *os.File
@@ -85,6 +87,70 @@ func (p *Publisher) SubscriberRange(yield func(sub *Subscriber) bool) {
 
 func (p *Publisher) GetKey() string {
 	return p.StreamPath
+}
+
+func createPublisher(p *Plugin, streamPath string, options ...any) (publisher *Publisher) {
+	publisher = &Publisher{Publish: p.config.Publish}
+	publisher.ID = p.Server.streamTM.GetID()
+	publisher.Executor = publisher
+	publisher.Plugin = p
+	publisher.TimeoutTimer = time.NewTimer(p.config.PublishTimeout)
+	var opt = []any{p.Logger.With("streamPath", streamPath, "pId", publisher.ID)}
+	for _, option := range options {
+		switch v := option.(type) {
+		case func(*config.Publish):
+			v(&publisher.Publish)
+		default:
+			opt = append(opt, option)
+		}
+	}
+	publisher.Init(streamPath, &publisher.Publish, opt...)
+	return
+}
+
+func (p *Publisher) Start() (err error) {
+	s := p.Plugin.Server
+	if oldPublisher, ok := s.Streams.Get(p.StreamPath); ok {
+		if p.KickExist {
+			p.Warn("kick")
+			oldPublisher.Stop(ErrKick)
+			p.TakeOver(oldPublisher)
+		} else {
+			return ErrStreamExist
+		}
+	}
+	s.Streams.Set(p)
+	p.Info("publish")
+	p.audioReady = util.NewPromiseWithTimeout(p, time.Second*5)
+	p.videoReady = util.NewPromiseWithTimeout(p, time.Second*5)
+	if p.Dump {
+		f := filepath.Join("./dump", p.StreamPath)
+		os.MkdirAll(filepath.Dir(f), 0666)
+		p.dumpFile, _ = os.OpenFile(filepath.Join("./dump", p.StreamPath), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+	}
+	if waiting, ok := s.Waiting.Get(p.StreamPath); ok {
+		p.TakeOver(waiting)
+		s.Waiting.Remove(waiting)
+	}
+	for plugin := range s.Plugins.Range {
+		if plugin.Disabled {
+			continue
+		}
+		if remoteURL := plugin.GetCommonConf().CheckPush(p.StreamPath); remoteURL != "" {
+			if _, ok := plugin.handler.(IPusherPlugin); ok {
+				go plugin.Push(p.StreamPath, remoteURL)
+			}
+		}
+		if filePath := plugin.GetCommonConf().CheckRecord(p.StreamPath); filePath != "" {
+			if _, ok := plugin.handler.(IRecorderPlugin); ok {
+				go plugin.Record(p.StreamPath, filePath)
+			}
+		}
+		//if h, ok := plugin.handler.(IOnPublishPlugin); ok {
+		//	h.OnPublish(publisher)
+		//}
+	}
+	return
 }
 
 func (p *Publisher) timeout() (err error) {
@@ -179,17 +245,6 @@ func (p *Publisher) AddSubscriber(subscriber *Subscriber) {
 	}
 }
 
-func (p *Publisher) Start() {
-	p.Info("publish")
-	p.audioReady = util.NewPromiseWithTimeout(struct{}{}, time.Second*5)
-	p.videoReady = util.NewPromiseWithTimeout(struct{}{}, time.Second*5)
-	if p.Dump {
-		f := filepath.Join("./dump", p.StreamPath)
-		os.MkdirAll(filepath.Dir(f), 0666)
-		p.dumpFile, _ = os.OpenFile(filepath.Join("./dump", p.StreamPath), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
-	}
-}
-
 func (p *Publisher) writeAV(t *AVTrack, data IAVFrame) {
 	frame := &t.Value
 	frame.Wraps = append(frame.Wraps, data)
@@ -222,6 +277,9 @@ func (p *Publisher) WriteVideo(data IAVFrame) (err error) {
 			data.Recycle()
 		}
 	}()
+	if err = p.Err(); err != nil {
+		return
+	}
 	if p.dumpFile != nil {
 		data.Dump(1, p.dumpFile)
 	}
@@ -320,6 +378,9 @@ func (p *Publisher) WriteAudio(data IAVFrame) (err error) {
 			data.Recycle()
 		}
 	}()
+	if err = p.Err(); err != nil {
+		return
+	}
 	if p.dumpFile != nil {
 		data.Dump(0, p.dumpFile)
 	}
@@ -394,6 +455,9 @@ func (p *Publisher) WriteAudio(data IAVFrame) (err error) {
 }
 
 func (p *Publisher) WriteData(data IDataFrame) (err error) {
+	if err = p.Err(); err != nil {
+		return
+	}
 	if p.DataTrack == nil {
 		p.DataTrack = &DataTrack{}
 		p.DataTrack.Logger = p.Logger.With("track", "data")
@@ -441,26 +505,35 @@ func (p *Publisher) HasVideoTrack() bool {
 	return p.VideoTrack.Length > 0
 }
 
-func (p *Publisher) Dispose(err error) {
+func (p *Publisher) Dispose() {
+	s := p.Plugin.Server
+	s.Streams.Remove(p)
+	if p.Subscribers.Length > 0 {
+		s.Waiting.Add(p)
+	}
+	p.Info("unpublish", "remain", s.Streams.Length, "reason", p.StopReason())
+	for subscriber := range p.SubscriberRange {
+		waitCloseTimeout := p.WaitCloseTimeout
+		if waitCloseTimeout == 0 {
+			waitCloseTimeout = subscriber.WaitTimeout
+		}
+		subscriber.TimeoutTimer.Reset(waitCloseTimeout)
+	}
 	p.Lock()
 	defer p.Unlock()
 	if p.dumpFile != nil {
 		p.dumpFile.Close()
 	}
 	if p.State == PublisherStateDisposed {
-		return
+		panic("disposed")
 	}
-	if p.IsStopped() {
-		if p.HasAudioTrack() {
-			p.AudioTrack.Dispose()
-		}
-		if p.HasVideoTrack() {
-			p.VideoTrack.Dispose()
-		}
-		p.State = PublisherStateDisposed
-		return
+	if p.HasAudioTrack() {
+		p.AudioTrack.Dispose()
 	}
-	p.Stop(err)
+	if p.HasVideoTrack() {
+		p.VideoTrack.Dispose()
+	}
+	p.State = PublisherStateDisposed
 }
 
 func (p *Publisher) TakeOver(old *Publisher) {
@@ -469,18 +542,16 @@ func (p *Publisher) TakeOver(old *Publisher) {
 	for subscriber := range old.SubscriberRange {
 		p.AddSubscriber(subscriber)
 	}
-	if old.Plugin != nil {
-		old.Dispose(nil)
-	}
-	old.Subscribers = util.Collection[int, *Subscriber]{}
+	old.Stop(ErrKick)
+	old.Subscribers = SubscriberCollection{}
 }
 
 func (p *Publisher) WaitTrack() (err error) {
 	if p.PubVideo {
-		_, err = p.videoReady.Await()
+		err = p.videoReady.Await()
 	}
 	if p.PubAudio {
-		_, err = p.audioReady.Await()
+		err = p.audioReady.Await()
 	}
 	return
 }

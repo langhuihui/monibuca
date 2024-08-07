@@ -131,7 +131,7 @@ func (s *Server) getStreamInfo(pub *Publisher) (res *pb.StreamInfoResponse, err 
 }
 
 func (s *Server) StreamInfo(ctx context.Context, req *pb.StreamSnapRequest) (res *pb.StreamInfoResponse, err error) {
-	s.Call(func() {
+	s.streamTM.Call(func() {
 		if pub, ok := s.Streams.Get(req.StreamPath); ok {
 			res, err = s.getStreamInfo(pub)
 		} else {
@@ -141,7 +141,7 @@ func (s *Server) StreamInfo(ctx context.Context, req *pb.StreamSnapRequest) (res
 	return
 }
 func (s *Server) GetSubscribers(ctx context.Context, req *pb.SubscribersRequest) (res *pb.SubscribersResponse, err error) {
-	s.Call(func() {
+	s.streamTM.Call(func() {
 		var subscribers []*pb.SubscriberSnapShot
 		for subscriber := range s.Subscribers.Range {
 			meta, _ := json.Marshal(subscriber.MetaData)
@@ -176,7 +176,7 @@ func (s *Server) GetSubscribers(ctx context.Context, req *pb.SubscribersRequest)
 	return
 }
 func (s *Server) AudioTrackSnap(ctx context.Context, req *pb.StreamSnapRequest) (res *pb.TrackSnapShotResponse, err error) {
-	s.Call(func() {
+	s.streamTM.Call(func() {
 		if pub, ok := s.Streams.Get(req.StreamPath); ok && pub.HasAudioTrack() {
 			res = &pb.TrackSnapShotResponse{}
 			for _, memlist := range pub.AudioTrack.Allocator.GetChildren() {
@@ -254,7 +254,7 @@ func (s *Server) api_VideoTrack_SSE(rw http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) VideoTrackSnap(ctx context.Context, req *pb.StreamSnapRequest) (res *pb.TrackSnapShotResponse, err error) {
-	s.Call(func() {
+	s.streamTM.Call(func() {
 		if pub, ok := s.Streams.Get(req.StreamPath); ok && pub.HasVideoTrack() {
 			res = &pb.TrackSnapShotResponse{}
 			for _, memlist := range pub.VideoTrack.Allocator.GetChildren() {
@@ -304,15 +304,15 @@ func (s *Server) VideoTrackSnap(ctx context.Context, req *pb.StreamSnapRequest) 
 }
 
 func (s *Server) Restart(ctx context.Context, req *pb.RequestWithId) (res *emptypb.Empty, err error) {
-	if Servers[req.Id] != nil {
-		Servers[req.Id].Stop(pkg.ErrRestart)
+	if s, ok := Servers.Get(req.Id); ok {
+		s.Stop(pkg.ErrRestart)
 	}
 	return empty, err
 }
 
 func (s *Server) Shutdown(ctx context.Context, req *pb.RequestWithId) (res *emptypb.Empty, err error) {
-	if Servers[req.Id] != nil {
-		Servers[req.Id].Stop(pkg.ErrStopFromAPI)
+	if s, ok := Servers.Get(req.Id); ok {
+		s.Stop(pkg.ErrStopFromAPI)
 	} else {
 		return nil, pkg.ErrNotFound
 	}
@@ -320,8 +320,8 @@ func (s *Server) Shutdown(ctx context.Context, req *pb.RequestWithId) (res *empt
 }
 
 func (s *Server) ChangeSubscribe(ctx context.Context, req *pb.ChangeSubscribeRequest) (res *pb.SuccessResponse, err error) {
-	s.Call(func() {
-		if subscriber, ok := s.Subscribers.Get(int(req.Id)); ok {
+	s.streamTM.Call(func() {
+		if subscriber, ok := s.Subscribers.Get(req.Id); ok {
 			if pub, ok := s.Streams.Get(req.StreamPath); ok {
 				subscriber.Publisher.RemoveSubscriber(subscriber)
 				subscriber.StreamPath = req.StreamPath
@@ -335,8 +335,8 @@ func (s *Server) ChangeSubscribe(ctx context.Context, req *pb.ChangeSubscribeReq
 }
 
 func (s *Server) StopSubscribe(ctx context.Context, req *pb.RequestWithId) (res *pb.SuccessResponse, err error) {
-	s.Call(func() {
-		if subscriber, ok := s.Subscribers.Get(int(req.Id)); ok {
+	s.streamTM.Call(func() {
+		if subscriber, ok := s.Subscribers.Get(req.Id); ok {
 			subscriber.Stop(errors.New("stop by api"))
 		} else {
 			err = pkg.ErrNotFound
@@ -347,7 +347,7 @@ func (s *Server) StopSubscribe(ctx context.Context, req *pb.RequestWithId) (res 
 
 // /api/stream/list
 func (s *Server) StreamList(_ context.Context, req *pb.StreamListRequest) (res *pb.StreamListResponse, err error) {
-	s.Call(func() {
+	s.streamTM.Call(func() {
 		var streams []*pb.StreamInfoResponse
 		for publisher := range s.Streams.Range {
 			info, err := s.getStreamInfo(publisher)
@@ -362,7 +362,7 @@ func (s *Server) StreamList(_ context.Context, req *pb.StreamListRequest) (res *
 }
 
 func (s *Server) WaitList(context.Context, *emptypb.Empty) (res *pb.StreamWaitListResponse, err error) {
-	s.Call(func() {
+	s.streamTM.Call(func() {
 		res = &pb.StreamWaitListResponse{
 			List: make(map[string]int32),
 		}
@@ -381,53 +381,51 @@ func (s *Server) Api_Summary_SSE(rw http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) Summary(context.Context, *emptypb.Empty) (res *pb.SummaryResponse, err error) {
-	s.Call(func() {
-		dur := time.Since(s.lastSummaryTime)
-		if dur < time.Second {
-			res = s.lastSummary
-			return
+	dur := time.Since(s.lastSummaryTime)
+	if dur < time.Second {
+		res = s.lastSummary
+		return
+	}
+	v, _ := mem.VirtualMemory()
+	d, _ := disk.Usage("/")
+	nv, _ := IOCounters(true)
+	res = &pb.SummaryResponse{
+		Memory: &pb.Usage{
+			Total: v.Total >> 20,
+			Free:  v.Available >> 20,
+			Used:  v.Used >> 20,
+			Usage: float32(v.UsedPercent),
+		},
+		HardDisk: &pb.Usage{
+			Total: d.Total >> 30,
+			Free:  d.Free >> 30,
+			Used:  d.Used >> 30,
+			Usage: float32(d.UsedPercent),
+		},
+	}
+	if cc, _ := cpu.Percent(time.Second, false); len(cc) > 0 {
+		res.CpuUsage = float32(cc[0])
+	}
+	netWorks := []*pb.NetWorkInfo{}
+	for i, n := range nv {
+		info := &pb.NetWorkInfo{
+			Name:    n.Name,
+			Receive: n.BytesRecv,
+			Sent:    n.BytesSent,
 		}
-		v, _ := mem.VirtualMemory()
-		d, _ := disk.Usage("/")
-		nv, _ := IOCounters(true)
-		res = &pb.SummaryResponse{
-			Memory: &pb.Usage{
-				Total: v.Total >> 20,
-				Free:  v.Available >> 20,
-				Used:  v.Used >> 20,
-				Usage: float32(v.UsedPercent),
-			},
-			HardDisk: &pb.Usage{
-				Total: d.Total >> 30,
-				Free:  d.Free >> 30,
-				Used:  d.Used >> 30,
-				Usage: float32(d.UsedPercent),
-			},
+		if s.lastSummary != nil && len(s.lastSummary.NetWork) > i {
+			info.ReceiveSpeed = (n.BytesRecv - s.lastSummary.NetWork[i].Receive) / uint64(dur.Seconds())
+			info.SentSpeed = (n.BytesSent - s.lastSummary.NetWork[i].Sent) / uint64(dur.Seconds())
 		}
-		if cc, _ := cpu.Percent(time.Second, false); len(cc) > 0 {
-			res.CpuUsage = float32(cc[0])
-		}
-		netWorks := []*pb.NetWorkInfo{}
-		for i, n := range nv {
-			info := &pb.NetWorkInfo{
-				Name:    n.Name,
-				Receive: n.BytesRecv,
-				Sent:    n.BytesSent,
-			}
-			if s.lastSummary != nil && len(s.lastSummary.NetWork) > i {
-				info.ReceiveSpeed = (n.BytesRecv - s.lastSummary.NetWork[i].Receive) / uint64(dur.Seconds())
-				info.SentSpeed = (n.BytesSent - s.lastSummary.NetWork[i].Sent) / uint64(dur.Seconds())
-			}
-			netWorks = append(netWorks, info)
-		}
-		res.StreamCount = int32(s.Streams.Length)
-		res.PullCount = int32(s.Pulls.Length)
-		res.PushCount = int32(s.Pushs.Length)
-		res.SubscribeCount = int32(s.Subscribers.Length)
-		res.NetWork = netWorks
-		s.lastSummary = res
-		s.lastSummaryTime = time.Now()
-	})
+		netWorks = append(netWorks, info)
+	}
+	res.StreamCount = int32(s.Streams.Length)
+	res.PullCount = int32(s.Pulls.Length)
+	res.PushCount = int32(s.Pushs.Length)
+	res.SubscribeCount = int32(s.Subscribers.Length)
+	res.NetWork = netWorks
+	s.lastSummary = res
+	s.lastSummaryTime = time.Now()
 	return
 }
 

@@ -14,6 +14,7 @@ import (
 
 type RTMPPlugin struct {
 	pb.UnimplementedRtmpServer
+	Client
 	m7s.Plugin
 	ChunkSize int `default:"1024"`
 	KeepAlive bool
@@ -30,16 +31,8 @@ func (p *RTMPPlugin) OnInit() error {
 	return nil
 }
 
-func (p *RTMPPlugin) NewPullHandler() m7s.PullHandler {
-	return &Client{}
-}
-
 func (p *RTMPPlugin) GetPullableList() []string {
 	return slices.Collect(maps.Keys(p.GetCommonConf().PullOnSub))
-}
-
-func (p *RTMPPlugin) NewPushHandler() m7s.PushHandler {
-	return &Client{}
 }
 
 func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
@@ -55,7 +48,7 @@ func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
 		}
 		if len(receivers) > 0 {
 			for _, receiver := range receivers {
-				receiver.Dispose(err)
+				receiver.Stop(err)
 			}
 		}
 	}()
@@ -165,7 +158,7 @@ func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
 							StreamID:      cmd.StreamId,
 						},
 					}
-					receiver.Publisher, err = p.Publish(nc.AppName+"/"+cmd.PublishingName, conn, connectInfo)
+					receiver.Publisher, err = p.Publish(nc.AppName+"/"+cmd.PublishingName, receiver, connectInfo)
 					if err != nil {
 						delete(receivers, cmd.StreamId)
 						err = receiver.Response(cmd.TransactionId, NetStream_Publish_BadName, Level_Error)
@@ -185,7 +178,7 @@ func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
 					}
 					var suber *m7s.Subscriber
 					// sender.ID = fmt.Sprintf("%s|%d", conn.RemoteAddr().String(), sender.StreamID)
-					suber, err = p.Subscribe(streamPath, conn, connectInfo)
+					suber, err = p.Subscribe(streamPath, &ns, connectInfo)
 					if err != nil {
 						err = ns.Response(cmd.TransactionId, NetStream_Play_Failed, Level_Error)
 					} else {

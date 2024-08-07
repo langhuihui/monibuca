@@ -10,28 +10,16 @@ import (
 	"reflect"
 )
 
-type Stream struct {
-	*NetConnection
-	AudioChannelID int
-	VideoChannelID int
-}
 type Sender struct {
 	*m7s.Subscriber
-	Stream
+	*Stream
 }
 
 type Receiver struct {
 	*m7s.Publisher
-	Stream
+	*Stream
 	AudioCodecParameters *webrtc.RTPCodecParameters
 	VideoCodecParameters *webrtc.RTPCodecParameters
-}
-
-func (ns *Stream) Close() error {
-	if ns.NetConnection != nil {
-		ns.NetConnection.Destroy()
-	}
-	return nil
 }
 
 func (s *Sender) GetMedia() (medias []*Media, err error) {
@@ -163,6 +151,7 @@ func (r *Receiver) Receive() (err error) {
 	var channelID byte
 	var buf []byte
 	for err == nil {
+
 		channelID, buf, err = r.NetConnection.Receive(false)
 		if err != nil {
 			return
@@ -184,7 +173,9 @@ func (r *Receiver) Receive() (err error) {
 					audioFrame.AddRecycleBytes(buf)
 					audioFrame.Packets = append(audioFrame.Packets, packet)
 				} else {
-					err = r.WriteAudio(audioFrame)
+					if err = r.WriteAudio(audioFrame); err != nil {
+						return
+					}
 					audioFrame = &mrtp.RTPAudio{}
 					audioFrame.AddRecycleBytes(buf)
 					audioFrame.Packets = []*rtp.Packet{packet}
@@ -204,7 +195,9 @@ func (r *Receiver) Receive() (err error) {
 					videoFrame.Packets = append(videoFrame.Packets, packet)
 				} else {
 					// t := time.Now()
-					err = r.WriteVideo(videoFrame)
+					if err = r.WriteVideo(videoFrame); err != nil {
+						return
+					}
 					// fmt.Println("write video", time.Since(t))
 					videoFrame = &mrtp.Video{}
 					videoFrame.AddRecycleBytes(buf)

@@ -2,9 +2,14 @@ package m7s
 
 import (
 	"context"
+	gatewayRuntime "github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	myip "github.com/husanpao/ip"
+	"google.golang.org/grpc"
+	"gopkg.in/yaml.v3"
 	"gorm.io/gorm"
 	"log/slog"
+	. "m7s.live/m7s/v5/pkg"
+	"m7s.live/m7s/v5/pkg/config"
 	"m7s.live/m7s/v5/pkg/db"
 	"net"
 	"net/http"
@@ -13,13 +18,6 @@ import (
 	"reflect"
 	"runtime"
 	"strings"
-
-	gatewayRuntime "github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
-	"google.golang.org/grpc"
-	"gopkg.in/yaml.v3"
-	. "m7s.live/m7s/v5/pkg"
-	"m7s.live/m7s/v5/pkg/config"
-	"m7s.live/m7s/v5/pkg/util"
 )
 
 type DefaultYaml string
@@ -33,17 +31,17 @@ type PluginMeta struct {
 	RegisterGRPCHandler func(context.Context, *gatewayRuntime.ServeMux, *grpc.ClientConn) error
 }
 
-func (plugin *PluginMeta) Init(s *Server, userConfig map[string]any) {
+func (plugin *PluginMeta) Init(s *Server, userConfig map[string]any) (p *Plugin) {
 	instance, ok := reflect.New(plugin.Type).Interface().(IPlugin)
 	if !ok {
 		panic("plugin must implement IPlugin")
 	}
-	p := reflect.ValueOf(instance).Elem().FieldByName("Plugin").Addr().Interface().(*Plugin)
+	p = reflect.ValueOf(instance).Elem().FieldByName("Plugin").Addr().Interface().(*Plugin)
 	p.handler = instance
 	p.Meta = plugin
+	p.Executor = instance
 	p.Server = s
-	p.Logger = s.Logger.With("plugin", plugin.Name)
-	p.Context, p.CancelCauseFunc = context.WithCancelCause(s.Context)
+	p.Task.Init(s.Context, s.Logger.With("plugin", plugin.Name))
 	upperName := strings.ToUpper(plugin.Name)
 	if os.Getenv(upperName+"_ENABLE") == "false" {
 		p.Disabled = true
@@ -93,29 +91,12 @@ func (plugin *PluginMeta) Init(s *Server, userConfig map[string]any) {
 			if err != nil {
 				s.Error("failed to connect database", "error", err, "dsn", s.config.DSN, "type", s.config.DBType)
 				p.Disabled = true
+				p.Stop(err)
 				return
 			}
 		}
 	}
-	err = instance.OnInit()
-	if err != nil {
-		p.Error("init", "error", err)
-		p.Stop(err)
-		return
-	}
-	if plugin.ServiceDesc != nil && s.grpcServer != nil {
-		s.grpcServer.RegisterService(plugin.ServiceDesc, instance)
-		if plugin.RegisterGRPCHandler != nil {
-			if err = plugin.RegisterGRPCHandler(p.Context, s.config.HTTP.GetGRPCMux(), s.grpcClientConn); err != nil {
-				p.Error("init", "error", err)
-				p.Stop(err)
-			} else {
-				p.Info("grpc handler registered")
-			}
-		}
-	}
-	s.Plugins.Add(p)
-	p.Start()
+	return
 }
 
 type iPlugin interface {
@@ -123,8 +104,8 @@ type iPlugin interface {
 }
 
 type IPlugin interface {
+	TaskExecutor
 	OnInit() error
-	OnEvent(any)
 	OnExit()
 }
 
@@ -133,16 +114,16 @@ type IRegisterHandler interface {
 }
 
 type IPullerPlugin interface {
-	NewPullHandler() PullHandler
+	DoPull(*PullContext) error
 	GetPullableList() []string
 }
 
 type IPusherPlugin interface {
-	NewPushHandler() PushHandler
+	DoPush(*PushContext) error
 }
 
 type IRecorderPlugin interface {
-	NewRecordHandler() RecordHandler
+	DoRecord(*RecordContext) error
 }
 
 type ITCPPlugin interface {
@@ -186,7 +167,7 @@ func InstallPlugin[C iPlugin](options ...any) error {
 }
 
 type Plugin struct {
-	Unit[int]
+	Task
 	Disabled bool
 	Meta     *PluginMeta
 	config   config.Common
@@ -252,13 +233,36 @@ func (p *Plugin) assign() {
 	p.registerHandler(handlerMap)
 }
 
-func (p *Plugin) Stop(err error) {
-	p.Unit.Stop(err)
+func (p *Plugin) Start() (err error) {
+	s := p.Server
+	err = p.handler.OnInit()
+	if err != nil {
+		p.Error("init", "error", err)
+		return
+	}
+	if p.Meta.ServiceDesc != nil && s.grpcServer != nil {
+		s.grpcServer.RegisterService(p.Meta.ServiceDesc, p.handler)
+		if p.Meta.RegisterGRPCHandler != nil {
+			if err = p.Meta.RegisterGRPCHandler(p.Context, s.config.HTTP.GetGRPCMux(), s.grpcClientConn); err != nil {
+				p.Error("init", "error", err)
+				return
+			} else {
+				p.Info("grpc handler registered")
+			}
+		}
+	}
+	s.Plugins.Add(p)
+	p.listen()
+	return
+}
+
+func (p *Plugin) Dispose() {
+	p.Server.Plugins.Remove(p)
 	p.config.HTTP.StopListen()
 	p.config.TCP.StopListen()
 }
 
-func (p *Plugin) Start() {
+func (p *Plugin) listen() {
 	httpConf := &p.config.HTTP
 	if httpConf.ListenAddrTLS != "" && (httpConf.ListenAddrTLS != p.Server.config.HTTP.ListenAddrTLS) {
 		p.Info("https listen at ", "addr", httpConf.ListenAddrTLS)
@@ -272,50 +276,44 @@ func (p *Plugin) Start() {
 			p.Stop(httpConf.Listen())
 		}()
 	}
-	tcpConf := &p.config.TCP
 
-	tcphandler, ok := p.handler.(ITCPPlugin)
-	if !ok {
-		tcphandler = p
+	if tcphandler, ok := p.handler.(ITCPPlugin); ok {
+		tcpConf := &p.config.TCP
+		if tcpConf.ListenAddr != "" && tcpConf.AutoListen {
+			p.Info("listen tcp", "addr", tcpConf.ListenAddr)
+			go func() {
+				err := tcpConf.Listen(tcphandler.OnTCPConnect)
+				if err != nil {
+					p.Error("listen tcp", "addr", tcpConf.ListenAddr, "error", err)
+					p.Stop(err)
+				}
+			}()
+		}
+		if tcpConf.ListenAddrTLS != "" && tcpConf.AutoListen {
+			p.Info("listen tcp tls", "addr", tcpConf.ListenAddrTLS)
+			go func() {
+				err := tcpConf.ListenTLS(tcphandler.OnTCPConnect)
+				if err != nil {
+					p.Error("listen tcp tls", "addr", tcpConf.ListenAddrTLS, "error", err)
+					p.Stop(err)
+				}
+			}()
+		}
 	}
 
-	if tcpConf.ListenAddr != "" && tcpConf.AutoListen {
-		p.Info("listen tcp", "addr", tcpConf.ListenAddr)
-		go func() {
-			err := tcpConf.Listen(tcphandler.OnTCPConnect)
-			if err != nil {
-				p.Error("listen tcp", "addr", tcpConf.ListenAddr, "error", err)
-				p.Stop(err)
-			}
-		}()
-	}
-	if tcpConf.ListenAddrTLS != "" && tcpConf.AutoListen {
-		p.Info("listen tcp tls", "addr", tcpConf.ListenAddrTLS)
-		go func() {
-			err := tcpConf.ListenTLS(tcphandler.OnTCPConnect)
-			if err != nil {
-				p.Error("listen tcp tls", "addr", tcpConf.ListenAddrTLS, "error", err)
-				p.Stop(err)
-			}
-		}()
-	}
-	udpConf := &p.config.UDP
+	if udpHandler, ok := p.handler.(IUDPPlugin); ok {
+		udpConf := &p.config.UDP
+		if udpConf.ListenAddr != "" && udpConf.AutoListen {
+			p.Info("listen udp", "addr", udpConf.ListenAddr)
+			go func() {
+				err := udpConf.Listen(udpHandler.OnUDPConnect)
+				if err != nil {
+					p.Error("listen udp", "addr", udpConf.ListenAddr, "error", err)
+					p.Stop(err)
+				}
+			}()
 
-	udpHandler, ok := p.handler.(IUDPPlugin)
-	if !ok {
-		udpHandler = p
-	}
-
-	if udpConf.ListenAddr != "" && udpConf.AutoListen {
-		p.Info("listen udp", "addr", udpConf.ListenAddr)
-		go func() {
-			err := udpConf.Listen(udpHandler.OnUDPConnect)
-			if err != nil {
-				p.Error("listen udp", "addr", udpConf.ListenAddr, "error", err)
-				p.Stop(err)
-			}
-		}()
-
+		}
 	}
 }
 
@@ -327,140 +325,76 @@ func (p *Plugin) OnExit() {
 
 }
 
-func (p *Plugin) onEvent(event any) {
-	switch v := event.(type) {
-	case *Publisher:
-		if h, ok := p.handler.(interface{ OnPublish(*Publisher) }); ok {
-			h.OnPublish(v)
-		}
-	case *Puller:
-		if h, ok := p.handler.(interface{ OnPull(*Puller) }); ok {
-			h.OnPull(v)
-		}
-	}
-	p.handler.OnEvent(event)
-}
-
-func (p *Plugin) OnEvent(event any) {
-
-}
-
-func (p *Plugin) OnTCPConnect(conn *net.TCPConn) {
-	p.handler.OnEvent(conn)
-}
-
-func (p *Plugin) OnUDPConnect(conn *net.UDPConn) {
-	p.handler.OnEvent(conn)
-}
-
 func (p *Plugin) Publish(streamPath string, options ...any) (publisher *Publisher, err error) {
-	publisher = &Publisher{Publish: p.config.Publish}
+	publisher = createPublisher(p, streamPath, options...)
 	if p.config.EnableAuth {
 		if onAuthPub, ok := p.Server.OnAuthPubs[p.Meta.Name]; ok {
-			authPromise := util.NewPromise(publisher)
-			onAuthPub(authPromise)
-			if _, err = authPromise.Await(); err != nil {
+			if err = onAuthPub(publisher).Await(); err != nil {
 				p.Warn("auth failed", "error", err)
 				return
 			}
 		}
 	}
-	for _, option := range options {
-		switch v := option.(type) {
-		case func(*config.Publish):
-			v(&publisher.Publish)
-		}
-	}
-	publisher.Init(p, streamPath, &publisher.Publish, options...)
-	_, err = p.Server.Call(publisher)
-	return
-}
-
-func (p *Plugin) Pull(streamPath string, url string, options ...any) (puller *Puller, err error) {
-	puller = &Puller{Pull: p.config.Pull}
-	puller.Client.Proxy = p.config.Pull.Proxy
-	puller.Client.RemoteURL = url
-	puller.Client.PubSubBase = &puller.PubSubBase
-	puller.Publish = p.config.Publish
-	puller.PublishTimeout = 0
-	puller.StreamPath = streamPath
-	var pullHandler PullHandler
-	for _, option := range options {
-		switch v := option.(type) {
-		case PullHandler:
-			pullHandler = v
-		}
-	}
-	puller.Init(p, streamPath, &puller.Publish, options...)
-	if _, err = p.Server.Call(puller); err != nil {
-		return
-	}
-	if v, ok := p.handler.(IPullerPlugin); pullHandler == nil && ok {
-		pullHandler = v.NewPullHandler()
-	}
-	if pullHandler != nil {
-		err = puller.Start(pullHandler)
-	}
-	return
-}
-
-func (p *Plugin) Record(streamPath string, filePath string, options ...any) (recorder *Recorder, err error) {
-	recorder = &Recorder{
-		Record: p.config.Record,
-	}
-	if err = os.MkdirAll(filepath.Dir(filePath), 0755); err != nil {
-		return
-	}
-	recorder.StreamPath = streamPath
-	recorder.Subscribe = p.config.Subscribe
-	if recorder.File, err = os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666); err != nil {
-		return
-	}
-	defer func() {
-		err = recorder.File.Close()
-		if info, err := recorder.File.Stat(); err == nil && info.Size() == 0 {
-			os.Remove(recorder.File.Name())
-		}
-	}()
-	recorder.Init(p, streamPath, &recorder.Subscribe, options...)
-	if _, err = p.Server.Call(recorder); err != nil {
-		return
-	}
-	recorder.Publisher.WaitTrack()
-	var recordHandler RecordHandler
-	if v, ok := p.handler.(IRecorderPlugin); recordHandler == nil && ok {
-		recordHandler = v.NewRecordHandler()
-	}
-	if recordHandler != nil {
-		err = recorder.Start(recordHandler)
-	}
+	err = p.Server.streamTM.Start(&publisher.Task)
 	return
 }
 
 func (p *Plugin) Subscribe(streamPath string, options ...any) (subscriber *Subscriber, err error) {
-	subscriber = &Subscriber{Subscribe: p.config.Subscribe}
+	subscriber = createSubscriber(p, streamPath, options...)
 	if p.config.EnableAuth {
 		if onAuthSub, ok := p.Server.OnAuthSubs[p.Meta.Name]; ok {
-			authPromise := util.NewPromise(subscriber)
-			onAuthSub(authPromise)
-			if _, err = authPromise.Await(); err != nil {
+			if err = onAuthSub(subscriber).Await(); err != nil {
 				p.Warn("auth failed", "error", err)
 				return
 			}
 		}
 	}
-	for _, option := range options {
-		switch v := option.(type) {
-		case func(*config.Subscribe):
-			v(&subscriber.Subscribe)
-		}
+	err = p.Server.streamTM.Start(&subscriber.Task)
+	err = subscriber.Publisher.WaitTrack()
+	return
+}
+
+func (p *Plugin) Pull(streamPath string, url string, options ...any) (puller *PullContext, err error) {
+	puller = createPullContext(p, streamPath, url, options...)
+	if err = p.Server.pullTM.Start(&puller.Task); err != nil {
+		return
 	}
-	subscriber.Init(p, streamPath, &subscriber.Subscribe, options...)
-	if subscriber.Subscribe.BufferTime > 0 {
-		subscriber.Subscribe.SubMode = SUBMODE_BUFFER
+	if pullPlugin, ok := p.handler.(IPullerPlugin); ok {
+		puller.Run(pullPlugin.DoPull)
 	}
-	_, err = p.Server.Call(subscriber)
-	subscriber.Publisher.WaitTrack()
+	return
+}
+
+func (p *Plugin) Push(streamPath string, url string, options ...any) (pusher *PushContext, err error) {
+	pusher = createPushContext(p, streamPath, url, options...)
+	if err = p.Server.pushTM.Start(&pusher.Task); err != nil {
+		return
+	}
+	if pushPlugin, ok := p.handler.(IPusherPlugin); ok {
+		pusher.Run(pushPlugin.DoPush)
+	}
+	return
+}
+
+func (p *Plugin) Record(streamPath string, filePath string, options ...any) (recorder *RecordContext, err error) {
+	recorder = createRecoder(p, streamPath, filePath, options...)
+	dir := filePath
+	if filepath.Ext(filePath) != "" {
+		dir = filepath.Dir(filePath)
+	}
+	if err = os.MkdirAll(dir, 0755); err != nil {
+		return
+	}
+	recorder.Subscriber, err = p.Subscribe(streamPath, p.config.Subscribe)
+	if err != nil {
+		return
+	}
+	if err = p.Server.recordTM.Start(&recorder.Task); err != nil {
+		return
+	}
+	if recordPlugin, ok := p.handler.(IRecorderPlugin); ok {
+		recorder.Run(recordPlugin.DoRecord)
+	}
 	return
 }
 
@@ -485,34 +419,6 @@ func (p *Plugin) registerHandler(handlers map[string]http.HandlerFunc) {
 	if rootHandler, ok := p.handler.(http.Handler); ok {
 		p.handle("/", rootHandler)
 	}
-}
-
-func (p *Plugin) Push(streamPath string, url string, options ...any) (pusher *Pusher, err error) {
-	pusher = &Pusher{Push: p.config.Push}
-	pusher.Client.PubSubBase = &pusher.PubSubBase
-	pusher.Client.Proxy = p.config.Push.Proxy
-	pusher.Client.RemoteURL = url
-	pusher.Subscribe = p.config.Subscribe
-	pusher.StreamPath = streamPath
-	var pushHandler PushHandler
-	for _, option := range options {
-		switch v := option.(type) {
-		case PushHandler:
-			pushHandler = v
-		}
-	}
-	pusher.Init(p, streamPath, &pusher.Subscribe, options...)
-	if _, err = p.Server.Call(pusher); err != nil {
-		return
-	}
-	pusher.Publisher.WaitTrack()
-	if v, ok := p.handler.(IPusherPlugin); pushHandler == nil && ok {
-		pushHandler = v.NewPushHandler()
-	}
-	if pushHandler != nil {
-		err = pusher.Start(pushHandler)
-	}
-	return
 }
 
 func (p *Plugin) logHandler(handler http.Handler) http.Handler {
@@ -546,28 +452,21 @@ func (p *Plugin) AddLogHandler(handler slog.Handler) {
 	p.Server.LogHandler.Add(handler)
 }
 
-func (p *Plugin) PostToServer(event any) {
-	if p.Server.eventChan == nil {
-		panic("eventChan is nil")
-	}
-	p.Server.PostMessage(event)
-}
-
 func (p *Plugin) SaveConfig() (err error) {
-	_, err = p.Server.Call(func() error {
+	p.Server.pluginTM.Call(func() {
 		if p.Modify == nil {
 			os.Remove(p.settingPath())
-			return nil
+			return
 		}
-		file, err := os.OpenFile(p.settingPath(), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
-		if err == nil {
-			defer file.Close()
-			err = yaml.NewEncoder(file).Encode(p.Modify)
+		var file *os.File
+		if file, err = os.OpenFile(p.settingPath(), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666); err != nil {
+			return
 		}
-		if err == nil {
-			p.Info("config saved")
-		}
-		return err
+		defer file.Close()
+		err = yaml.NewEncoder(file).Encode(p.Modify)
 	})
+	if err == nil {
+		p.Info("config saved")
+	}
 	return
 }

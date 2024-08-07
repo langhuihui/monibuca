@@ -14,22 +14,12 @@ import (
 	"strings"
 )
 
-type MP4Puller struct {
-	*util.ScalableMemoryAllocator
-	*box.MovDemuxer
-}
-
-func NewMP4Puller() *MP4Puller {
-	return &MP4Puller{
-		ScalableMemoryAllocator: util.NewScalableMemoryAllocator(1 << 10),
-	}
-}
-
-func (puller *MP4Puller) Connect(p *m7s.Client) (err error) {
-	if strings.HasPrefix(p.RemoteURL, "http") {
+func PullMP4(ctx *m7s.PullContext) (err error) {
+	var demuxer *box.MovDemuxer
+	if strings.HasPrefix(ctx.RemoteURL, "http") {
 		var res *http.Response
 		client := http.DefaultClient
-		if proxyConf := p.Proxy; proxyConf != "" {
+		if proxyConf := ctx.ConnectProxy; proxyConf != "" {
 			proxy, err := url.Parse(proxyConf)
 			if err != nil {
 				return err
@@ -37,68 +27,66 @@ func (puller *MP4Puller) Connect(p *m7s.Client) (err error) {
 			transport := &http.Transport{Proxy: http.ProxyURL(proxy)}
 			client = &http.Client{Transport: transport}
 		}
-		if res, err = client.Get(p.RemoteURL); err == nil {
+		if res, err = client.Get(ctx.RemoteURL); err == nil {
 			if res.StatusCode != http.StatusOK {
 				return io.EOF
 			}
-			p.Closer = res.Body
-
+			defer res.Body.Close()
 			content, err := io.ReadAll(res.Body)
 			if err != nil {
 				return err
 			}
-			puller.MovDemuxer = box.CreateMp4Demuxer(strings.NewReader(string(content)))
+			demuxer = box.CreateMp4Demuxer(strings.NewReader(string(content)))
 		}
 	} else {
 		var res *os.File
-		if res, err = os.Open(p.RemoteURL); err == nil {
-			p.Closer = res
+		if res, err = os.Open(ctx.RemoteURL); err == nil {
+			defer res.Close()
 		}
-		puller.MovDemuxer = box.CreateMp4Demuxer(res)
+		demuxer = box.CreateMp4Demuxer(res)
 	}
-	return
-}
 
-func (puller *MP4Puller) Pull(p *m7s.Puller) (err error) {
 	var tracks []box.TrackInfo
-	if tracks, err = puller.ReadHead(); err != nil {
+	if tracks, err = demuxer.ReadHead(); err != nil {
 		return
 	}
+	publisher := ctx.Publisher
 	for _, track := range tracks {
 		switch track.Cid {
 		case box.MP4_CODEC_H264:
 			var sequece rtmp.RTMPVideo
 			sequece.Append([]byte{0x17, 0x00, 0x00, 0x00, 0x00}, track.ExtraData)
-			p.WriteVideo(&sequece)
+			err = publisher.WriteVideo(&sequece)
 		case box.MP4_CODEC_H265:
 			var sequece rtmp.RTMPVideo
 			sequece.Append([]byte{0b1001_0000 | rtmp.PacketTypeSequenceStart}, codec.FourCC_H265[:], track.ExtraData)
-			p.WriteVideo(&sequece)
+			err = publisher.WriteVideo(&sequece)
 		case box.MP4_CODEC_AAC:
 			var sequence rtmp.RTMPAudio
 			sequence.Append([]byte{0xaf, 0x00}, track.ExtraData)
-			p.WriteAudio(&sequence)
+			err = publisher.WriteAudio(&sequence)
 		}
 	}
+	allocator := util.NewScalableMemoryAllocator(1 << 10)
 	for {
-		pkg, err := puller.ReadPacket(puller.ScalableMemoryAllocator)
+		pkg, err := demuxer.ReadPacket(allocator)
 		if err != nil {
-			p.Error("Error reading MP4 packet", "err", err)
+			ctx.Error("Error reading MP4 packet", "err", err)
 			return err
 		}
 		switch track := tracks[pkg.TrackId-1]; track.Cid {
 		case box.MP4_CODEC_H264:
 			var videoFrame rtmp.RTMPVideo
-			videoFrame.SetAllocator(puller.ScalableMemoryAllocator)
+			videoFrame.SetAllocator(allocator)
 			videoFrame.CTS = uint32(pkg.Pts - pkg.Dts)
 			videoFrame.Timestamp = uint32(pkg.Dts)
 			keyFrame := codec.H264NALUType(pkg.Data[5]&0x1F) == codec.NALU_IDR_Picture
 			videoFrame.AppendOne([]byte{util.Conditoinal[byte](keyFrame, 0x17, 0x27), 0x01, byte(videoFrame.CTS >> 24), byte(videoFrame.CTS >> 8), byte(videoFrame.CTS)})
 			videoFrame.AddRecycleBytes(pkg.Data)
-			p.WriteVideo(&videoFrame)
+			err = publisher.WriteVideo(&videoFrame)
 		case box.MP4_CODEC_H265:
 			var videoFrame rtmp.RTMPVideo
-			videoFrame.SetAllocator(puller.ScalableMemoryAllocator)
+			videoFrame.SetAllocator(allocator)
 			videoFrame.CTS = uint32(pkg.Pts - pkg.Dts)
 			videoFrame.Timestamp = uint32(pkg.Dts)
 			var head []byte
@@ -122,14 +110,14 @@ func (puller *MP4Puller) Pull(p *m7s.Puller) (err error) {
 			}
 			copy(head[1:], codec.FourCC_H265[:])
 			videoFrame.AddRecycleBytes(pkg.Data)
-			p.WriteVideo(&videoFrame)
+			err = publisher.WriteVideo(&videoFrame)
 		case box.MP4_CODEC_AAC:
 			var audioFrame rtmp.RTMPAudio
-			audioFrame.SetAllocator(puller.ScalableMemoryAllocator)
+			audioFrame.SetAllocator(allocator)
 			audioFrame.Timestamp = uint32(pkg.Dts)
 			audioFrame.AppendOne([]byte{0xaf, 0x01})
 			audioFrame.AddRecycleBytes(pkg.Data)
-			p.WriteAudio(&audioFrame)
+			err = publisher.WriteAudio(&audioFrame)
 		}
 	}
 }

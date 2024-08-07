@@ -63,9 +63,9 @@ func (ns *NetStream) BeginPlay(tid uint64) (err error) {
 	return
 }
 
-func (ns *NetStream) Close() error {
-	if ns.NetConnection != nil {
+func (ns *NetStream) disconnect() {
+	if ns != nil && ns.NetConnection != nil {
 		ns.NetConnection.Destroy()
 	}
-	return nil
+	return
 }

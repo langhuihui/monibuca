@@ -27,10 +27,14 @@ func (p *FLVPlugin) OnInit() error {
 	return nil
 }
 
-var _ = m7s.InstallPlugin[FLVPlugin](defaultConfig, NewPullHandler)
+var _ = m7s.InstallPlugin[FLVPlugin](defaultConfig)
 
-func (p *FLVPlugin) NewRecordHandler() m7s.RecordHandler {
-	return &Recorder{}
+func (p *FLVPlugin) DoPull(pull *m7s.PullContext) error {
+	return PullFLV(pull)
+}
+
+func (p *FLVPlugin) DoRecord(ctx *m7s.RecordContext) error {
+	return RecordFlv(ctx)
 }
 
 func (p *FLVPlugin) WriteFlvHeader(sub *m7s.Subscriber) (flv net.Buffers) {
@@ -95,7 +99,6 @@ func (p *FLVPlugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if hijacker, ok := w.(http.Hijacker); ok && wto > 0 {
 		conn, _, _ := hijacker.Hijack()
 		conn.SetWriteDeadline(time.Now().Add(wto))
-		sub.Closer = conn
 		gotFlvTag = func(flv net.Buffers) (err error) {
 			conn.SetWriteDeadline(time.Now().Add(wto))
 			_, err = flv.WriteTo(conn)

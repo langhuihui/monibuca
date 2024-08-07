@@ -1,5 +1,7 @@
 global:
   loglevel: trace
+  http:
+    listenaddr: :8082
 #  enableauth: true
 #  tcp:
 #    listenaddr: :50051

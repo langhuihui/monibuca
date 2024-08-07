@@ -3,10 +3,8 @@ package m7s
 import (
 	"context"
 	"errors"
-	"io"
-	"net"
+	"log/slog"
 	"net/url"
-	"os"
 	"reflect"
 	"runtime"
 	"strings"
@@ -19,46 +17,29 @@ import (
 
 var AVFrameType = reflect.TypeOf((*AVFrame)(nil))
 
-type Owner struct {
-	Conn     net.Conn
-	File     *os.File
-	MetaData any
-	io.Closer
-}
-
 type PubSubBase struct {
-	Unit[int]
-	Owner
+	Task
 	Plugin       *Plugin
 	StreamPath   string
 	Args         url.Values
 	TimeoutTimer *time.Timer
+	MetaData     any
 }
 
-func (p *PubSubBase) GetKey() int {
-	return p.ID
-}
-
-func (ps *PubSubBase) Init(p *Plugin, streamPath string, conf any, options ...any) {
-	ps.Plugin = p
-	ctx := p.Context
+func (ps *PubSubBase) Init(streamPath string, conf any, options ...any) {
+	ctx := ps.Plugin.Context
+	var logger *slog.Logger
 	for _, option := range options {
 		switch v := option.(type) {
+		case *slog.Logger:
+			logger = v
 		case context.Context:
 			ctx = v
-		case net.Conn:
-			ps.Conn = v
-			ps.Closer = v
-		case *os.File:
-			ps.File = v
-			ps.Closer = v
-		case io.Closer:
-			ps.Closer = v
 		default:
 			ps.MetaData = v
 		}
 	}
-	ps.Context, ps.CancelCauseFunc = context.WithCancelCause(ctx)
+	ps.Task.Init(ctx, logger)
 	if u, err := url.Parse(streamPath); err == nil {
 		ps.StreamPath, ps.Args = u.Path, u.Query()
 	}
@@ -80,7 +61,10 @@ func (ps *PubSubBase) Init(p *Plugin, streamPath string, conf any, options ...an
 		c.ParseModifyFile(cc)
 	}
 	ps.StartTime = time.Now()
+
 }
+
+type SubscriberCollection = util.Collection[uint32, *Subscriber]
 
 type Subscriber struct {
 	PubSubBase
@@ -88,6 +72,57 @@ type Subscriber struct {
 	Publisher   *Publisher
 	AudioReader *AVRingReader
 	VideoReader *AVRingReader
+}
+
+func createSubscriber(p *Plugin, streamPath string, options ...any) *Subscriber {
+	subscriber := &Subscriber{Subscribe: p.config.Subscribe}
+	subscriber.ID = p.Server.streamTM.GetID()
+	subscriber.Plugin = p
+	subscriber.Executor = subscriber
+	subscriber.TimeoutTimer = time.NewTimer(subscriber.WaitTimeout)
+	var opt = []any{p.Logger.With("streamPath", streamPath, "sId", subscriber.ID)}
+	for _, option := range options {
+		switch v := option.(type) {
+		case func(*config.Subscribe):
+			v(&subscriber.Subscribe)
+		default:
+			opt = append(opt, option)
+		}
+	}
+	subscriber.Init(streamPath, &subscriber.Subscribe, opt...)
+	if subscriber.Subscribe.BufferTime > 0 {
+		subscriber.Subscribe.SubMode = SUBMODE_BUFFER
+	}
+	return subscriber
+}
+
+func (s *Subscriber) Start() (err error) {
+	server := s.Plugin.Server
+	server.Subscribers.Add(s)
+	s.Info("subscribe")
+	if publisher, ok := server.Streams.Get(s.StreamPath); ok {
+		publisher.AddSubscriber(s)
+	} else if publisher, ok = server.Waiting.Get(s.StreamPath); ok {
+		publisher.AddSubscriber(s)
+	} else {
+		server.createWait(s.StreamPath).AddSubscriber(s)
+		for plugin := range server.Plugins.Range {
+			if remoteURL := plugin.GetCommonConf().Pull.CheckPullOnSub(s.StreamPath); remoteURL != "" {
+				if _, ok := plugin.handler.(IPullerPlugin); ok {
+					go plugin.Pull(s.StreamPath, remoteURL)
+				}
+			}
+		}
+	}
+	return
+}
+
+func (s *Subscriber) Dispose() {
+	s.Plugin.Server.Subscribers.Remove(s)
+	s.Info("unsubscribe", "reason", s.StopReason())
+	if s.Publisher != nil {
+		s.Publisher.RemoveSubscriber(s)
+	}
 }
 
 func (s *Subscriber) createAudioReader(dataType reflect.Type, startAudioTs time.Duration) (awi int) {
@@ -173,6 +208,7 @@ func PlayBlock0[A any, V any](s *Subscriber, handler SubscribeHandler[A, V]) (er
 	awi := s.createAudioReader(a1, startAudioTs)
 	vwi := s.createVideoReader(v1, startVideoTs)
 	defer func() {
+		s.Stop(err)
 		if s.AudioReader != nil {
 			s.AudioReader.StopRead()
 		}

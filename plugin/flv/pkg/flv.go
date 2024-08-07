@@ -1,8 +1,10 @@
 package flv
 
 import (
+	"bufio"
 	"io"
 	"m7s.live/m7s/v5/pkg/util"
+	rtmp "m7s.live/m7s/v5/plugin/rtmp/pkg"
 	"net"
 )
 
@@ -12,6 +14,8 @@ const (
 	FLV_TAG_TYPE_VIDEO  = 0x09
 	FLV_TAG_TYPE_SCRIPT = 0x12
 )
+
+var FLVHead = []byte{'F', 'L', 'V', 0x01, 0x05, 0, 0, 0, 9, 0, 0, 0, 0}
 
 func AVCC2FLV(t byte, ts uint32, avcc ...[]byte) (flv net.Buffers) {
 	b := util.Buffer(make([]byte, 0, 15))
@@ -30,8 +34,33 @@ func WriteFLVTagHead(t uint8, ts, dataSize uint32, b []byte) {
 	b[4], b[5], b[6], b[7] = byte(ts>>16), byte(ts>>8), byte(ts), byte(ts>>24)
 }
 
-func WriteFLVTag(w io.Writer, t byte, timestamp uint32, payload []byte) (err error) {
-	buffers := AVCC2FLV(t, timestamp, payload)
+func WriteFLVTag(w io.Writer, t byte, timestamp uint32, payload ...[]byte) (err error) {
+	buffers := AVCC2FLV(t, timestamp, payload...)
 	_, err = buffers.WriteTo(w)
+	return
+}
+
+func ReadMetaData(reader io.Reader) (metaData rtmp.EcmaArray, err error) {
+	r := bufio.NewReader(reader)
+	_, err = r.Discard(13)
+	tagHead := make(util.Buffer, 11)
+	_, err = io.ReadFull(r, tagHead)
+	if err != nil {
+		return
+	}
+	tmp := tagHead
+	t := tmp.ReadByte()
+	dataLen := tmp.ReadUint24()
+	_, err = r.Discard(4)
+	if t == FLV_TAG_TYPE_SCRIPT {
+		data := make([]byte, dataLen+4)
+		_, err = io.ReadFull(reader, data)
+		amf := &rtmp.AMF{
+			Buffer: util.Buffer(data[1+2+len("onMetaData") : len(data)-4]),
+		}
+		var obj any
+		obj, err = amf.Unmarshal()
+		metaData = obj.(rtmp.EcmaArray)
+	}
 	return
 }

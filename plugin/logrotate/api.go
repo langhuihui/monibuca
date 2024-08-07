@@ -54,6 +54,6 @@ func (h *LogRotatePlugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (l *LogRotatePlugin) API_tail(w http.ResponseWriter, r *http.Request) {
 	writer := util.NewSSE(w, r.Context())
 	h := console.NewHandler(writer, &console.HandlerOptions{NoColor: true})
-	l.PostToServer(h)
+	l.Server.AddLogHandler(h)
 	<-r.Context().Done()
 }

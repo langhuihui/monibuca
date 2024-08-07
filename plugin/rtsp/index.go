@@ -22,18 +22,11 @@ var _ = m7s.InstallPlugin[RTSPPlugin](defaultConfig)
 
 type RTSPPlugin struct {
 	m7s.Plugin
-}
-
-func (p *RTSPPlugin) NewPullHandler() m7s.PullHandler {
-	return &Client{}
+	Client
 }
 
 func (p *RTSPPlugin) GetPullableList() []string {
 	return slices.Collect(maps.Keys(p.GetCommonConf().PullOnSub))
-}
-
-func (p *RTSPPlugin) NewPushHandler() m7s.PushHandler {
-	return &Client{}
 }
 
 func (p *RTSPPlugin) OnInit() error {
@@ -56,7 +49,7 @@ func (p *RTSPPlugin) OnTCPConnect(conn *net.TCPConn) {
 			logger.Error(err.Error(), "stack", string(debug.Stack()))
 		}
 		if receiver != nil {
-			receiver.Dispose(err)
+			receiver.Stop(err)
 		}
 	}()
 	var req *util.Request
@@ -114,7 +107,7 @@ func (p *RTSPPlugin) OnTCPConnect(conn *net.TCPConn) {
 
 			receiver = &Receiver{}
 			receiver.NetConnection = nc
-			if receiver.Publisher, err = p.Publish(strings.TrimPrefix(nc.URL.Path, "/")); err != nil {
+			if receiver.Publisher, err = p.Publish(strings.TrimPrefix(nc.URL.Path, "/"), receiver); err != nil {
 				receiver = nil
 				err = nc.WriteResponse(&util.Response{
 					StatusCode: 500, Status: err.Error(),
@@ -131,9 +124,9 @@ func (p *RTSPPlugin) OnTCPConnect(conn *net.TCPConn) {
 
 		case MethodDescribe:
 			sendMode = true
-
-			var subscriber *m7s.Subscriber
-			subscriber, err = p.Subscribe(strings.TrimPrefix(nc.URL.Path, "/"), conn)
+			sender = &Sender{}
+			sender.NetConnection = nc
+			sender.Subscriber, err = p.Subscribe(strings.TrimPrefix(nc.URL.Path, "/"), sender)
 			if err != nil {
 				res := &util.Response{
 					StatusCode: http.StatusBadRequest,
@@ -149,10 +142,6 @@ func (p *RTSPPlugin) OnTCPConnect(conn *net.TCPConn) {
 				},
 				Request: req,
 			}
-			sender = &Sender{
-				Subscriber: subscriber,
-			}
-			sender.NetConnection = nc
 			// convert tracks to real output medias
 			var medias []*Media
 			if medias, err = sender.GetMedia(); err != nil {

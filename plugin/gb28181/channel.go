@@ -10,7 +10,8 @@ import (
 
 type RecordRequest struct {
 	SN, SumNum int
-	*util.Promise[[]gb28181.Record]
+	Response   []gb28181.Record
+	*util.Promise
 }
 
 func (r *RecordRequest) GetKey() int {

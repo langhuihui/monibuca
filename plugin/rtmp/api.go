@@ -4,10 +4,13 @@ import (
 	"context"
 	gpb "m7s.live/m7s/v5/pb"
 	"m7s.live/m7s/v5/plugin/rtmp/pb"
-	rtmp "m7s.live/m7s/v5/plugin/rtmp/pkg"
 )
 
 func (r *RTMPPlugin) PushOut(ctx context.Context, req *pb.PushRequest) (res *gpb.SuccessResponse, err error) {
-	go r.Push(req.StreamPath, req.RemoteURL, &rtmp.Client{})
-	return &gpb.SuccessResponse{}, nil
+	if pushContext, err := r.Push(req.StreamPath, req.RemoteURL); err != nil {
+		return nil, err
+	} else {
+		go pushContext.Run(r.DoPush)
+	}
+	return &gpb.SuccessResponse{}, err
 }

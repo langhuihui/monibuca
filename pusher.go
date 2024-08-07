@@ -1,57 +1,85 @@
 package m7s
 
 import (
-	"io"
+	"context"
+	"m7s.live/m7s/v5/pkg"
 	"time"
 
 	"m7s.live/m7s/v5/pkg/config"
 )
 
-type PushHandler interface {
-	Connect(*Client) error
-	// Disconnect()
-	Push(*Pusher) error
+type Pusher = func(*PushContext) error
+
+func createPushContext(p *Plugin, streamPath string, url string, options ...any) (pushCtx *PushContext) {
+	pushCtx = &PushContext{Push: p.config.Push}
+	pushCtx.ID = p.Server.pushTM.GetID()
+	pushCtx.Plugin = p
+	pushCtx.Executor = pushCtx
+	pushCtx.RemoteURL = url
+	pushCtx.StreamPath = streamPath
+	pushCtx.ConnectProxy = p.config.Push.Proxy
+	pushCtx.SubscribeOptions = []any{p.config.Subscribe}
+	var ctx = p.Context
+	for _, option := range options {
+		switch v := option.(type) {
+		case context.Context:
+			ctx = v
+		default:
+			pushCtx.SubscribeOptions = append(pushCtx.SubscribeOptions, option)
+		}
+	}
+	pushCtx.Init(ctx, p.Logger.With("pushURL", url, "streamPath", streamPath))
+	pushCtx.SubscribeOptions = append(pushCtx.SubscribeOptions, pushCtx.Context)
+	return
 }
 
-type Pusher struct {
-	Client Client
-	Subscriber
+type PushContext struct {
+	Connection
+	Subscriber       *Subscriber
+	SubscribeOptions []any
 	config.Push
 }
 
-func (p *Pusher) GetKey() string {
-	return p.Client.RemoteURL
+func (p *PushContext) GetKey() string {
+	return p.RemoteURL
 }
 
-func (p *Pusher) Start(handler PushHandler) (err error) {
-	badPuller := true
-	var startTime time.Time
-	for p.Info("start push", "url", p.Client.RemoteURL); p.Client.reconnect(p.RePush); p.Warn("restart push") {
-		if time.Since(startTime) < 5*time.Second {
+func (p *PushContext) Run(pusher Pusher) {
+	p.StartTime = time.Now()
+	defer p.Info("stop push")
+	var err error
+	for p.Info("start push", "url", p.Connection.RemoteURL); p.Connection.reconnect(p.RePush); p.Warn("restart push") {
+		if p.Subscriber != nil && time.Since(p.Subscriber.StartTime) < 5*time.Second {
 			time.Sleep(5 * time.Second)
 		}
-		startTime = time.Now()
-		if err = handler.Connect(&p.Client); err != nil {
-			if err == io.EOF {
-				p.Info("push complete")
-				return
-			}
-			p.Error("push connect", "error", err)
-			if badPuller {
-				return
-			}
-		} else {
-			badPuller = false
-			p.Client.ReConnectCount = 0
-			if err = handler.Push(p); err != nil && !p.IsStopped() {
-				p.Error("push interrupt", "error", err)
-			}
+		if p.Subscriber, err = p.Plugin.Subscribe(p.StreamPath, p.SubscribeOptions...); err != nil {
+			p.Error("push subscribe failed", "error", err)
+			break
 		}
+		err = pusher(p)
+		p.Subscriber.Stop(err)
 		if p.IsStopped() {
-			p.Info("stop push")
 			return
+		} else {
+			p.Error("push interrupt", "error", err)
 		}
-		// handler.Disconnect()
 	}
-	return nil
+	if err == nil {
+		err = pkg.ErrRetryRunOut
+	}
+	p.Stop(err)
+	return
+}
+
+func (p *PushContext) Start() (err error) {
+	s := p.Plugin.Server
+	if _, ok := s.Pushs.Get(p.GetKey()); ok {
+		return pkg.ErrPushRemoteURLExist
+	}
+	s.Pushs.Add(p)
+	return
+}
+
+func (p *PushContext) Dispose() {
+	p.Plugin.Server.Pushs.Remove(p)
 }

@@ -24,7 +24,8 @@ func (d *Dialog) GetCallID() string {
 	return d.session.InviteRequest.CallID().Value()
 }
 
-func (d *Dialog) Connect(p *m7s.Client) (err error) {
+func (d *Dialog) Pull(p *m7s.PullContext) (err error) {
+
 	sss := strings.Split(p.RemoteURL, "/")
 	deviceId, channelId := sss[0], sss[1]
 	if len(sss) == 2 {
@@ -41,11 +42,8 @@ func (d *Dialog) Connect(p *m7s.Client) (err error) {
 		var recordRange util.Range[int]
 		err = recordRange.Resolve(sss[2])
 	}
-	return
-}
 
-func (d *Dialog) Pull(p *m7s.Puller) (err error) {
-	d.Receiver = gb28181.NewReceiver(&p.Publisher)
+	d.Receiver = gb28181.NewReceiver(p.Publisher)
 	ssrc := d.CreateSSRC(d.gb.Serial)
 	d.gb.dialogs.Set(d)
 	defer d.gb.dialogs.Remove(d)

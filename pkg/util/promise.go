@@ -6,21 +6,21 @@ import (
 	"time"
 )
 
-type Promise[T any] struct {
+type Promise struct {
 	context.Context
 	context.CancelCauseFunc
-	Value T
 	timer *time.Timer
 }
 
-func NewPromise[T any](v T) *Promise[T] {
-	p := &Promise[T]{Value: v}
-	p.Context, p.CancelCauseFunc = context.WithCancelCause(context.Background())
+func NewPromise(ctx context.Context) *Promise {
+	p := &Promise{}
+	p.Context, p.CancelCauseFunc = context.WithCancelCause(ctx)
 	return p
 }
-func NewPromiseWithTimeout[T any](v T, timeout time.Duration) *Promise[T] {
-	p := &Promise[T]{Value: v}
-	p.Context, p.CancelCauseFunc = context.WithCancelCause(context.Background())
+
+func NewPromiseWithTimeout(ctx context.Context, timeout time.Duration) *Promise {
+	p := &Promise{}
+	p.Context, p.CancelCauseFunc = context.WithCancelCause(ctx)
 	p.timer = time.AfterFunc(timeout, func() {
 		p.CancelCauseFunc(ErrTimeout)
 	})
@@ -30,27 +30,30 @@ func NewPromiseWithTimeout[T any](v T, timeout time.Duration) *Promise[T] {
 var ErrResolve = errors.New("promise resolved")
 var ErrTimeout = errors.New("promise timeout")
 
-func (p *Promise[T]) Resolve(v T) {
-	p.Value = v
-	p.CancelCauseFunc(ErrResolve)
+func (p *Promise) Resolve() {
+	p.Fulfill(nil)
 }
 
-func (p *Promise[T]) Await() (T, error) {
+func (p *Promise) Reject(err error) {
+	p.Fulfill(err)
+}
+
+func (p *Promise) Await() (err error) {
 	<-p.Done()
-	err := context.Cause(p.Context)
+	err = context.Cause(p.Context)
 	if errors.Is(err, ErrResolve) {
 		err = nil
 	}
-	return p.Value, err
+	return
 }
 
-func (p *Promise[T]) Fulfill(err error) {
+func (p *Promise) Fulfill(err error) {
 	if p.timer != nil {
 		p.timer.Stop()
 	}
 	p.CancelCauseFunc(Conditoinal(err == nil, ErrResolve, err))
 }
 
-func (p *Promise[T]) IsPending() bool {
+func (p *Promise) IsPending() bool {
 	return context.Cause(p.Context) == nil
 }

@@ -3,6 +3,7 @@ package plugin_gb28181
 import (
 	"github.com/emiago/sipgo"
 	"github.com/emiago/sipgo/sip"
+	"log/slog"
 	"m7s.live/m7s/v5"
 	"m7s.live/m7s/v5/pkg"
 	"m7s.live/m7s/v5/pkg/util"
@@ -23,7 +24,8 @@ const (
 )
 
 type Device struct {
-	pkg.Unit[string]
+	pkg.Task
+	ID                  string
 	Name                string
 	Manufacturer        string
 	Model               string
@@ -43,6 +45,7 @@ type Device struct {
 	dialogClient        *sipgo.DialogClient
 	contactHDR          sip.ContactHeader
 	fromHDR             sip.FromHeader
+	*slog.Logger
 }
 
 func (d *Device) GetKey() string {
@@ -63,7 +66,8 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 	case "RecordInfo":
 		if channel, ok := d.channels.Get(msg.DeviceID); ok {
 			if req, ok := channel.RecordReqs.Get(msg.SN); ok {
-				req.Resolve(msg.RecordList)
+				req.Response = msg.RecordList
+				req.Resolve()
 			}
 		}
 	case "DeviceInfo":

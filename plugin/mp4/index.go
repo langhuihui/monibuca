@@ -83,16 +83,16 @@ func (p *MP4Plugin) OnInit() error {
 
 var _ = m7s.InstallPlugin[MP4Plugin](defaultConfig)
 
-func (p *MP4Plugin) NewPullHandler() m7s.PullHandler {
-	return pkg.NewMP4Puller()
+func (p *MP4Plugin) DoPull(ctx *m7s.PullContext) error {
+	return pkg.PullMP4(ctx)
 }
 
 func (p *MP4Plugin) GetPullableList() []string {
 	return slices.Collect(maps.Keys(p.GetCommonConf().PullOnSub))
 }
 
-func (p *MP4Plugin) NewRecordHandler() m7s.RecordHandler {
-	return &pkg.Recorder{}
+func (p *MP4Plugin) DoRecord(ctx *m7s.RecordContext) error {
+	return pkg.RecordMP4(ctx)
 }
 
 func (p *MP4Plugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -179,10 +179,8 @@ func (p *MP4Plugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if hijacker, ok := w.(http.Hijacker); ok && ctx.wto > 0 {
-		sub.Conn, _, _ = hijacker.Hijack()
-		sub.Closer = sub.Conn
-		ctx.Writer = sub.Conn
-		ctx.conn = sub.Conn
+		ctx.conn, _, _ = hijacker.Hijack()
+		ctx.Writer = ctx.conn
 	} else {
 		ctx.Writer = w
 		w.(http.Flusher).Flush()

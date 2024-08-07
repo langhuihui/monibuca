@@ -10,8 +10,8 @@ import (
 type StressPlugin struct {
 	pb.UnimplementedApiServer
 	m7s.Plugin
-	pushers util.Collection[string, *m7s.Pusher]
-	pullers util.Collection[string, *m7s.Puller]
+	pushers util.Collection[string, *m7s.PushContext]
+	pullers util.Collection[string, *m7s.PullContext]
 }
 
 var _ = m7s.InstallPlugin[StressPlugin](&pb.Api_ServiceDesc, pb.RegisterApiHandler)

@@ -1,7 +1,6 @@
 package plugin_gb28181
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"github.com/emiago/sipgo"
@@ -11,7 +10,6 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"m7s.live/m7s/v5"
-	"m7s.live/m7s/v5/pkg"
 	"m7s.live/m7s/v5/pkg/config"
 	"m7s.live/m7s/v5/pkg/util"
 	"m7s.live/m7s/v5/plugin/gb28181/pb"
@@ -243,11 +241,7 @@ func (gb *GB28181Plugin) StoreDevice(id string, req *sip.Request) (d *Device) {
 	port, _ := strconv.Atoi(portStr)
 	serverPort, _ := strconv.Atoi(sPortStr)
 	d = &Device{
-		Unit: pkg.Unit[string]{
-			ID:        id,
-			StartTime: time.Now(),
-			Logger:    gb.Logger.With("id", id),
-		},
+		ID:         id,
 		UpdateTime: time.Now(),
 		Status:     DeviceRegisterStatus,
 		Recipient: sip.Uri{
@@ -274,7 +268,7 @@ func (gb *GB28181Plugin) StoreDevice(id string, req *sip.Request) (d *Device) {
 			Params: sip.NewParams(),
 		},
 	}
-	d.Context, d.CancelCauseFunc = context.WithCancelCause(gb.Context)
+	d.Init(gb.Context, gb.Logger.With("id", id))
 	d.fromHDR.Params.Add("tag", sip.GenerateTagN(16))
 	d.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(publicIP))
 	d.dialogClient = sipgo.NewDialogClient(d.client, d.contactHDR)
@@ -288,10 +282,11 @@ func (gb *GB28181Plugin) StoreDevice(id string, req *sip.Request) (d *Device) {
 	return
 }
 
-func (gb *GB28181Plugin) NewPullHandler() m7s.PullHandler {
-	return &Dialog{
+func (gb *GB28181Plugin) DoPull(ctx *m7s.PullContext) error {
+	dialog := Dialog{
 		gb: gb,
 	}
+	return dialog.Pull(ctx)
 }
 
 func (gb *GB28181Plugin) GetPullableList() []string {

@@ -14,7 +14,7 @@ import (
 type (
 	Track struct {
 		*slog.Logger
-		ready       *util.Promise[struct{}]
+		ready       *util.Promise
 		FrameType   reflect.Type
 		bytesIn     int
 		frameCount  int
@@ -55,7 +55,7 @@ func NewAVTrack(args ...any) (t *AVTrack) {
 			t.RingWriter = NewRingWriter(v.RingSize)
 			t.BufferRange[0] = v.BufferTime
 			t.RingWriter.SLogger = t.Logger
-		case *util.Promise[struct{}]:
+		case *util.Promise:
 			t.ready = v
 		}
 	}
@@ -112,8 +112,7 @@ func (t *Track) IsReady() bool {
 }
 
 func (t *Track) WaitReady() error {
-	_, err := t.ready.Await()
-	return err
+	return t.ready.Await()
 }
 
 func (t *Track) Trace(msg string, fields ...any) {
