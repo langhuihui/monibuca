@@ -11,6 +11,7 @@ import (
 	. "m7s.live/m7s/v5/pkg"
 	"m7s.live/m7s/v5/pkg/config"
 	"m7s.live/m7s/v5/pkg/db"
+	"m7s.live/m7s/v5/pkg/util"
 	"net"
 	"net/http"
 	"os"
@@ -22,6 +23,10 @@ import (
 
 type DefaultYaml string
 
+type OnExitHandler func()
+type AuthPublisher = func(*Publisher) *util.Promise
+type AuthSubscriber = func(*Subscriber) *util.Promise
+
 type PluginMeta struct {
 	Name                string
 	Version             string //插件版本
@@ -32,6 +37,9 @@ type PluginMeta struct {
 	Puller              Puller
 	Pusher              Pusher
 	Recorder            Recorder
+	OnExit              OnExitHandler
+	OnAuthPub           AuthPublisher
+	OnAuthSub           AuthSubscriber
 }
 
 func (plugin *PluginMeta) Init(s *Server, userConfig map[string]any) (p *Plugin) {
@@ -108,7 +116,6 @@ type iPlugin interface {
 type IPlugin interface {
 	TaskExecutor
 	OnInit() error
-	OnExit()
 }
 
 type IRegisterHandler interface {
@@ -129,6 +136,7 @@ type IUDPPlugin interface {
 
 var plugins []PluginMeta
 
+// InstallPlugin 安装插件
 func InstallPlugin[C iPlugin](options ...any) error {
 	var c *C
 	t := reflect.TypeOf(c).Elem()
@@ -147,6 +155,8 @@ func InstallPlugin[C iPlugin](options ...any) error {
 	}
 	for _, option := range options {
 		switch v := option.(type) {
+		case OnExitHandler:
+			meta.OnExit = v
 		case DefaultYaml:
 			meta.defaultYaml = v
 		case Puller:
@@ -155,6 +165,10 @@ func InstallPlugin[C iPlugin](options ...any) error {
 			meta.Pusher = v
 		case Recorder:
 			meta.Recorder = v
+		case AuthPublisher:
+			meta.OnAuthPub = v
+		case AuthSubscriber:
+			meta.OnAuthSub = v
 		case *grpc.ServiceDesc:
 			meta.ServiceDesc = v
 		case func(context.Context, *gatewayRuntime.ServeMux, *grpc.ClientConn) error:
@@ -327,7 +341,11 @@ func (p *Plugin) OnExit() {
 func (p *Plugin) Publish(streamPath string, options ...any) (publisher *Publisher, err error) {
 	publisher = createPublisher(p, streamPath, options...)
 	if p.config.EnableAuth {
-		if onAuthPub, ok := p.Server.OnAuthPubs[p.Meta.Name]; ok {
+		onAuthPub := p.Meta.OnAuthPub
+		if onAuthPub == nil {
+			onAuthPub = p.Server.Meta.OnAuthPub
+		}
+		if onAuthPub != nil {
 			if err = onAuthPub(publisher).Await(); err != nil {
 				p.Warn("auth failed", "error", err)
 				return
@@ -341,7 +359,11 @@ func (p *Plugin) Publish(streamPath string, options ...any) (publisher *Publishe
 func (p *Plugin) Subscribe(streamPath string, options ...any) (subscriber *Subscriber, err error) {
 	subscriber = createSubscriber(p, streamPath, options...)
 	if p.config.EnableAuth {
-		if onAuthSub, ok := p.Server.OnAuthSubs[p.Meta.Name]; ok {
+		onAuthSub := p.Meta.OnAuthSub
+		if onAuthSub == nil {
+			onAuthSub = p.Server.Meta.OnAuthSub
+		}
+		if onAuthSub != nil {
 			if err = onAuthSub(subscriber).Await(); err != nil {
 				p.Warn("auth failed", "error", err)
 				return

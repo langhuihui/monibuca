@@ -21,7 +21,6 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
-	"sync/atomic"
 	"syscall"
 	"time"
 )
@@ -37,7 +36,7 @@ var (
 		Version: Version,
 	}
 	Servers           util.Collection[uint32, *Server]
-	serverIdG         atomic.Uint32
+	serverTM          = NewTaskManager()
 	Routes            = map[string]string{}
 	defaultLogHandler = console.NewHandler(os.Stdout, &console.HandlerOptions{TimeFormat: "15:04:05.000000"})
 )
@@ -68,21 +67,14 @@ type Server struct {
 	tcplis                                       net.Listener
 	lastSummaryTime                              time.Time
 	lastSummary                                  *pb.SummaryResponse
-	OnAuthPubs                                   map[string]func(*Publisher) *util.Promise
-	OnAuthSubs                                   map[string]func(*Subscriber) *util.Promise
 	pluginTM, streamTM, pullTM, pushTM, recordTM *TaskManager
-	runOption                                    struct {
-		ctx  context.Context
-		conf any
-	}
+	conf                                         any
 }
 
 func NewServer() (s *Server) {
 	s = &Server{}
-	s.ID = serverIdG.Add(1)
+	s.ID = serverTM.GetID()
 	s.Meta = &serverMeta
-	s.OnAuthPubs = make(map[string]func(*Publisher) *util.Promise)
-	s.OnAuthSubs = make(map[string]func(*Subscriber) *util.Promise)
 	return
 }
 
@@ -93,6 +85,15 @@ func Run(ctx context.Context, conf any) error {
 type rawconfig = map[string]map[string]any
 
 func init() {
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+	go serverTM.Run(signalChan, func(os.Signal) {
+		for _, meta := range plugins {
+			if meta.OnExit != nil {
+				meta.OnExit()
+			}
+		}
+	})
 	for k, v := range myip.LocalAndInternalIPs() {
 		Routes[k] = v
 		fmt.Println(k, v)
@@ -106,7 +107,8 @@ func (s *Server) GetKey() uint32 {
 	return s.ID
 }
 
-func (s *Server) Start() (err error) {
+func (s *Server) Init(ctx context.Context, conf any) {
+	s.conf = conf
 	s.Server = s
 	s.handler = s
 	s.config.HTTP.ListenAddrTLS = ":8443"
@@ -114,9 +116,10 @@ func (s *Server) Start() (err error) {
 	s.config.TCP.ListenAddr = ":50051"
 	s.LogHandler.SetLevel(slog.LevelInfo)
 	s.LogHandler.Add(defaultLogHandler)
-	s.Task.Init(s.runOption.ctx, slog.New(&s.LogHandler).With("Server", s.ID))
-	s.StartTime = time.Now()
-	s.Info("start", "ctx", s.runOption.ctx, "conf", s.runOption.conf)
+	s.Task.Init(ctx, slog.New(&s.LogHandler).With("Server", s.ID))
+}
+
+func (s *Server) Start() (err error) {
 	httpConf, tcpConf := &s.config.HTTP, &s.config.TCP
 	mux := runtime.NewServeMux(runtime.WithMarshalerOption("text/plain", &pb.TextPlain{}), runtime.WithRoutingErrorHandler(func(_ context.Context, _ *runtime.ServeMux, _ runtime.Marshaler, w http.ResponseWriter, r *http.Request, _ int) {
 		httpConf.GetHttpMux().ServeHTTP(w, r)
@@ -124,7 +127,7 @@ func (s *Server) Start() (err error) {
 	httpConf.SetMux(mux)
 	var cg rawconfig
 	var configYaml []byte
-	switch v := s.runOption.conf.(type) {
+	switch v := s.conf.(type) {
 	case string:
 		if _, err = os.Stat(v); err != nil {
 			v = filepath.Join(ExecDir, v)
@@ -201,14 +204,7 @@ func (s *Server) Start() (err error) {
 			return
 		}
 	}
-	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
-	s.pluginTM = NewTaskManager()
-	go s.pluginTM.Run(signalChan, func(os.Signal) {
-		for plugin := range s.Plugins.Range {
-			plugin.handler.OnExit()
-		}
-	})
+	s.pluginTM = StartTaskManager()
 	for _, plugin := range plugins {
 		if p := plugin.Init(s, cg[strings.ToLower(plugin.Name)]); !p.Disabled {
 			s.pluginTM.Start(&p.Task)
@@ -223,11 +219,7 @@ func (s *Server) Start() (err error) {
 			}
 		}(tcpConf.ListenAddr)
 	}
-	s.streamTM = NewTaskManager()
-	s.pullTM = NewTaskManager()
-	s.pushTM = NewTaskManager()
-	s.recordTM = NewTaskManager()
-	go s.streamTM.Run(time.NewTicker(s.PulseInterval).C, func(time.Time) {
+	s.streamTM = StartTaskManager(time.NewTicker(s.PulseInterval).C, func(time.Time) {
 		for publisher := range s.Streams.Range {
 			if err := publisher.checkTimeout(); err != nil {
 				publisher.Stop(err)
@@ -250,9 +242,9 @@ func (s *Server) Start() (err error) {
 			}
 		}
 	})
-	go s.pullTM.Run()
-	go s.pushTM.Run()
-	go s.recordTM.Run()
+	s.pullTM = StartTaskManager()
+	s.pushTM = StartTaskManager()
+	s.recordTM = StartTaskManager()
 	Servers.Add(s)
 	return
 }
@@ -272,26 +264,21 @@ func (s *Server) Dispose() {
 	s.pushTM.ShutDown(err)
 	s.recordTM.ShutDown(err)
 	s.pluginTM.ShutDown(err)
-	s.Warn("Server is done", "reason", err)
 }
 
 func (s *Server) Run(ctx context.Context, conf any) (err error) {
 	for {
-		s.runOption.ctx = ctx
-		s.runOption.conf = conf
-		if err = s.Start(); err != nil {
+		s.Init(ctx, conf)
+		if err = serverTM.Start(s); err != nil {
 			return
 		}
 		<-s.Done()
-		s.Dispose()
 		if err = context.Cause(s); err != ErrRestart {
 			return
 		}
 		var server Server
 		server.ID = s.ID
 		server.Meta = s.Meta
-		server.OnAuthPubs = s.OnAuthPubs
-		server.OnAuthSubs = s.OnAuthSubs
 		server.DB = s.DB
 		*s = server
 	}
@@ -319,18 +306,3 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "%s\n", api)
 	}
 }
-
-//func (s *Server) Call(arg any) (result any, err error) {
-//	promise := util.NewPromise(arg)
-//	s.eventChan <- promise
-//	<-promise.Done()
-//	result = promise.Value
-//	if err = context.Cause(promise.Context); err == util.ErrResolve {
-//		err = nil
-//	}
-//	return
-//}
-//
-//func (s *Server) PostMessage(msg any) {
-//	s.eventChan <- msg
-//}

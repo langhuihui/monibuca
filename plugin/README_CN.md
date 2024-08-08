@@ -58,7 +58,7 @@ var _ = m7s.InstallPlugin[MyPlugin](defaultConfig)
 ```go
 func (config *MyPlugin) OnInit() (err error) {
     for streamPath, url := range p.GetCommonConf().PullOnStart {
-        go p.Pull(streamPath, url, &Client{})
+        go p.Pull(streamPath, url)
     }
     return
 }
@@ -73,23 +73,7 @@ func (config *MyPlugin) OnTCPConnect(conn *net.TCPConn) {
 }
 ```
 当配置了 tcp 监听端口后，收到 tcp 连接请求时，会调用此回调。
-### 接受 Puller 信号回调
-这个回调代表有人发起了一个 pull 行为（从远端拉流）
-```go
-func (config *MyPlugin) OnPull(puller *m7s.Puller) {
-    config.OnPublish(&puller.Publisher)
-}
-```
-这里可以调用 OnPublish，相当于转换成了有人发布了一个流。因为拉流进来就一定会发布流。
-### 接受 Publisher 信号回调
-这个回调代表有人发起了一个 publish 行为
-```go
-func (config *MyPlugin) OnPublish(publisher *m7s.Publisher) {
-    if remoteURL, ok := p.GetCommonConf().PushList[puber.StreamPath]; ok {
-        go p.Push(puber.StreamPath, remoteURL, &Client{})
-    }
-}
-```
+
 示例代码中根据配置文件中的`PushList`，将发布的流推送到远端。
 ## 4. 实现gRPC服务
 实现 gRPC 可以自动生成对应的 restFul 接口，方便调用。
@@ -190,7 +174,7 @@ func (config *MyPlugin)  API_test1(rw http.ResponseWriter, r *http.Request) {
 
 ```go
 
-publisher, err = p.Publish(streamPath, conn, connectInfo)
+publisher, err = p.Publish(streamPath, connectInfo)
 ```
 后面两个入参是可选的
 
@@ -233,7 +217,7 @@ IAVFrame interface {
 ### 6. 订阅流
 ```go
 var suber *m7s.Subscriber
-suber, err = p.Subscribe(streamPath, conn, connectInfo)
+suber, err = p.Subscribe(streamPath, connectInfo)
 go m7s.PlayBlock(suber, handleAudio, handleVideo)
 ```
 这里需要注意的是 handleAudio, handleVideo 是处理音视频数据的回调函数，需要自己实现。

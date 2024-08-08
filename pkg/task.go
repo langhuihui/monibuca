@@ -63,9 +63,9 @@ func (task *Task) Begin() (err error) {
 	return
 }
 
-func (task *Task) dispose() {
+func (task *Task) dispose(reason error) {
 	if task.Logger != nil {
-		task.Debug("stop", "reason", task.StopReason())
+		task.Debug("stop", "reason", reason)
 	}
 	for _, executor := range slices.Backward(task.exeStack) {
 		executor.Dispose()
@@ -96,8 +96,7 @@ func (task *Task) Stop(err error) {
 }
 
 func (task *Task) With(child getTask, args ...any) {
-	childTask := child.GetTask()
-	childTask.Init(task.Context, task.Logger.With(args...))
+	child.GetTask().Init(task.Context, task.Logger.With(args...))
 }
 
 func (task *Task) Init(ctx context.Context, logger *slog.Logger, executor ...TaskExecutor) {
@@ -133,9 +132,9 @@ func NewTaskManager() *TaskManager {
 	}
 }
 
-func StartTaskManager() *TaskManager {
+func StartTaskManager(extra ...any) *TaskManager {
 	tm := NewTaskManager()
-	go tm.Run()
+	go tm.Run(extra...)
 	return tm
 }
 
@@ -172,8 +171,8 @@ func (t *TaskManager) Run(extra ...any) {
 		callbacks = append(callbacks, reflect.ValueOf(extra[i*2+1]))
 	}
 	defer func() {
-		for _, t := range t.Tasks {
-			t.dispose()
+		for _, task := range t.Tasks {
+			task.dispose(t.stopReason)
 		}
 		t.Tasks = nil
 		cases = nil
@@ -202,7 +201,7 @@ func (t *TaskManager) Run(extra ...any) {
 		} else {
 			taskIndex := chosen - extraLen - 1
 			task := t.Tasks[taskIndex]
-			task.dispose()
+			task.dispose(task.StopReason())
 			t.Tasks = slices.Delete(t.Tasks, taskIndex, taskIndex+1)
 			cases = slices.Delete(cases, chosen, chosen+1)
 		}
