@@ -11,8 +11,6 @@ import (
 	"m7s.live/m7s/v5"
 )
 
-type Client struct{}
-
 func createClient(c *m7s.Connection) (*NetStream, error) {
 	chunkSize := 4096
 	addr := c.RemoteURL
@@ -44,10 +42,11 @@ func createClient(c *m7s.Connection) (*NetStream, error) {
 		return nil, err
 	}
 	ns := &NetStream{}
-	ns.NetConnection = NewNetConnection(conn, c.Logger)
+	ns.NetConnection = NewNetConnection(conn)
+	c.With(ns)
 	defer func() {
 		if err != nil {
-			ns.disconnect()
+			ns.Dispose()
 		}
 	}()
 	if err = ns.ClientHandshake(); err != nil {
@@ -100,17 +99,12 @@ func createClient(c *m7s.Connection) (*NetStream, error) {
 	return ns, nil
 }
 
-func (Client) DoPull(p *m7s.PullContext) (err error) {
+func Pull(p *m7s.PullContext) (err error) {
 	var connection *NetStream
 	if connection, err = createClient(&p.Connection); err != nil {
 		return
 	}
-	defer func() {
-		connection.disconnect()
-		if p := recover(); p != nil {
-			err = p.(error)
-		}
-	}()
+	defer connection.Dispose()
 	err = connection.SendMessage(RTMP_MSG_AMF0_COMMAND, &CommandMessage{"createStream", 2})
 	var msg *Chunk
 	for err == nil {
@@ -122,9 +116,13 @@ func (Client) DoPull(p *m7s.PullContext) (err error) {
 		}
 		switch msg.MessageTypeID {
 		case RTMP_MSG_AUDIO:
-			err = p.Publisher.WriteAudio(msg.AVData.WrapAudio())
+			if p.Publisher.PubAudio {
+				err = p.Publisher.WriteAudio(msg.AVData.WrapAudio())
+			}
 		case RTMP_MSG_VIDEO:
-			err = p.Publisher.WriteVideo(msg.AVData.WrapVideo())
+			if p.Publisher.PubVideo {
+				err = p.Publisher.WriteVideo(msg.AVData.WrapVideo())
+			}
 		case RTMP_MSG_AMF0_COMMAND:
 			cmd := msg.MsgData.(Commander).GetCommand()
 			switch cmd.CommandName {
@@ -159,12 +157,12 @@ func (Client) DoPull(p *m7s.PullContext) (err error) {
 	return
 }
 
-func (Client) DoPush(p *m7s.PushContext) (err error) {
+func Push(p *m7s.PushContext) (err error) {
 	var connection *NetStream
 	if connection, err = createClient(&p.Connection); err != nil {
 		return
 	}
-	defer connection.disconnect()
+	defer connection.Dispose()
 	err = connection.SendMessage(RTMP_MSG_AMF0_COMMAND, &CommandMessage{"createStream", 2})
 	var msg *Chunk
 	for err == nil {

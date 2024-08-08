@@ -18,11 +18,10 @@ import (
 const defaultConfig = m7s.DefaultYaml(`tcp:
   listenaddr: :554`)
 
-var _ = m7s.InstallPlugin[RTSPPlugin](defaultConfig)
+var _ = m7s.InstallPlugin[RTSPPlugin](defaultConfig, Pull, Push)
 
 type RTSPPlugin struct {
 	m7s.Plugin
-	Client
 }
 
 func (p *RTSPPlugin) GetPullableList() []string {
@@ -31,7 +30,7 @@ func (p *RTSPPlugin) GetPullableList() []string {
 
 func (p *RTSPPlugin) OnInit() error {
 	for streamPath, url := range p.GetCommonConf().PullOnStart {
-		go p.Pull(streamPath, url)
+		go p.PullBlock(streamPath, url)
 	}
 	return nil
 }

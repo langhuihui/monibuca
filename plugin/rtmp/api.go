@@ -7,10 +7,6 @@ import (
 )
 
 func (r *RTMPPlugin) PushOut(ctx context.Context, req *pb.PushRequest) (res *gpb.SuccessResponse, err error) {
-	if pushContext, err := r.Push(req.StreamPath, req.RemoteURL); err != nil {
-		return nil, err
-	} else {
-		go pushContext.Run(r.DoPush)
-	}
+	_, err = r.Push(req.StreamPath, req.RemoteURL)
 	return &gpb.SuccessResponse{}, err
 }

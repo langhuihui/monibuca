@@ -29,6 +29,9 @@ type PluginMeta struct {
 	defaultYaml         DefaultYaml //默认配置
 	ServiceDesc         *grpc.ServiceDesc
 	RegisterGRPCHandler func(context.Context, *gatewayRuntime.ServeMux, *grpc.ClientConn) error
+	Puller              Puller
+	Pusher              Pusher
+	Recorder            Recorder
 }
 
 func (plugin *PluginMeta) Init(s *Server, userConfig map[string]any) (p *Plugin) {
@@ -39,9 +42,8 @@ func (plugin *PluginMeta) Init(s *Server, userConfig map[string]any) (p *Plugin)
 	p = reflect.ValueOf(instance).Elem().FieldByName("Plugin").Addr().Interface().(*Plugin)
 	p.handler = instance
 	p.Meta = plugin
-	p.Executor = instance
 	p.Server = s
-	p.Task.Init(s.Context, s.Logger.With("plugin", plugin.Name))
+	p.Task.Init(s.Context, s.Logger.With("plugin", plugin.Name), instance)
 	upperName := strings.ToUpper(plugin.Name)
 	if os.Getenv(upperName+"_ENABLE") == "false" {
 		p.Disabled = true
@@ -81,7 +83,7 @@ func (plugin *PluginMeta) Init(s *Server, userConfig map[string]any) (p *Plugin)
 	} else {
 		p.assign()
 	}
-	p.Info("init", "version", plugin.Version)
+	p.Info("init", "ctx", p.Context, "version", plugin.Version)
 	var err error
 	if p.config.DSN == s.GetCommonConf().DSN {
 		p.DB = s.DB
@@ -114,16 +116,7 @@ type IRegisterHandler interface {
 }
 
 type IPullerPlugin interface {
-	DoPull(*PullContext) error
 	GetPullableList() []string
-}
-
-type IPusherPlugin interface {
-	DoPush(*PushContext) error
-}
-
-type IRecorderPlugin interface {
-	DoRecord(*RecordContext) error
 }
 
 type ITCPPlugin interface {
@@ -156,6 +149,12 @@ func InstallPlugin[C iPlugin](options ...any) error {
 		switch v := option.(type) {
 		case DefaultYaml:
 			meta.defaultYaml = v
+		case Puller:
+			meta.Puller = v
+		case Pusher:
+			meta.Pusher = v
+		case Recorder:
+			meta.Recorder = v
 		case *grpc.ServiceDesc:
 			meta.ServiceDesc = v
 		case func(context.Context, *gatewayRuntime.ServeMux, *grpc.ClientConn) error:
@@ -335,7 +334,7 @@ func (p *Plugin) Publish(streamPath string, options ...any) (publisher *Publishe
 			}
 		}
 	}
-	err = p.Server.streamTM.Start(&publisher.Task)
+	err = p.Server.streamTM.Start(publisher)
 	return
 }
 
@@ -349,35 +348,53 @@ func (p *Plugin) Subscribe(streamPath string, options ...any) (subscriber *Subsc
 			}
 		}
 	}
-	err = p.Server.streamTM.Start(&subscriber.Task)
+	err = p.Server.streamTM.Start(subscriber)
 	err = subscriber.Publisher.WaitTrack()
 	return
 }
 
-func (p *Plugin) Pull(streamPath string, url string, options ...any) (puller *PullContext, err error) {
-	puller = createPullContext(p, streamPath, url, options...)
-	if err = p.Server.pullTM.Start(&puller.Task); err != nil {
-		return
-	}
-	if pullPlugin, ok := p.handler.(IPullerPlugin); ok {
-		puller.Run(pullPlugin.DoPull)
+func (p *Plugin) pull(streamPath string, url string, options ...any) (ctx *PullContext, err error) {
+	ctx = createPullContext(p, streamPath, url, options...)
+	err = p.Server.pullTM.Start(ctx)
+	return
+}
+
+func (p *Plugin) Pull(streamPath string, url string, options ...any) (ctx *PullContext, err error) {
+	if ctx, err = p.pull(streamPath, url, options...); err == nil && p.Meta.Puller != nil {
+		go p.Meta.Puller(ctx)
 	}
 	return
 }
 
-func (p *Plugin) Push(streamPath string, url string, options ...any) (pusher *PushContext, err error) {
-	pusher = createPushContext(p, streamPath, url, options...)
-	if err = p.Server.pushTM.Start(&pusher.Task); err != nil {
-		return
-	}
-	if pushPlugin, ok := p.handler.(IPusherPlugin); ok {
-		pusher.Run(pushPlugin.DoPush)
+func (p *Plugin) PullBlock(streamPath string, url string, options ...any) (ctx *PullContext, err error) {
+	if ctx, err = p.pull(streamPath, url, options...); err == nil && p.Meta.Puller != nil {
+		err = p.Meta.Puller(ctx)
 	}
 	return
 }
 
-func (p *Plugin) Record(streamPath string, filePath string, options ...any) (recorder *RecordContext, err error) {
-	recorder = createRecoder(p, streamPath, filePath, options...)
+func (p *Plugin) push(streamPath string, url string, options ...any) (ctx *PushContext, err error) {
+	ctx = createPushContext(p, streamPath, url, options...)
+	err = p.Server.pushTM.Start(ctx)
+	return
+}
+
+func (p *Plugin) Push(streamPath string, url string, options ...any) (ctx *PushContext, err error) {
+	if ctx, err = p.push(streamPath, url, options...); err == nil && p.Meta.Pusher != nil {
+		go p.Meta.Pusher(ctx)
+	}
+	return
+}
+
+func (p *Plugin) PushBlock(streamPath string, url string, options ...any) (ctx *PushContext, err error) {
+	if ctx, err = p.push(streamPath, url, options...); err == nil && p.Meta.Pusher != nil {
+		err = p.Meta.Pusher(ctx)
+	}
+	return
+}
+
+func (p *Plugin) record(streamPath string, filePath string, options ...any) (ctx *RecordContext, err error) {
+	ctx = createRecoder(p, streamPath, filePath, options...)
 	dir := filePath
 	if filepath.Ext(filePath) != "" {
 		dir = filepath.Dir(filePath)
@@ -385,15 +402,24 @@ func (p *Plugin) Record(streamPath string, filePath string, options ...any) (rec
 	if err = os.MkdirAll(dir, 0755); err != nil {
 		return
 	}
-	recorder.Subscriber, err = p.Subscribe(streamPath, p.config.Subscribe)
+	ctx.Subscriber, err = p.Subscribe(streamPath, p.config.Subscribe)
 	if err != nil {
 		return
 	}
-	if err = p.Server.recordTM.Start(&recorder.Task); err != nil {
-		return
+	err = p.Server.recordTM.Start(ctx)
+	return
+}
+
+func (p *Plugin) Record(streamPath string, filePath string, options ...any) (ctx *RecordContext, err error) {
+	if ctx, err = p.record(streamPath, filePath, options...); err == nil && p.Meta.Recorder != nil {
+		go p.Meta.Recorder(ctx)
 	}
-	if recordPlugin, ok := p.handler.(IRecorderPlugin); ok {
-		recorder.Run(recordPlugin.DoRecord)
+	return
+}
+
+func (p *Plugin) RecordBlock(streamPath string, filePath string, options ...any) (ctx *RecordContext, err error) {
+	if ctx, err = p.record(streamPath, filePath, options...); err == nil && p.Meta.Recorder != nil {
+		err = p.Meta.Recorder(ctx)
 	}
 	return
 }

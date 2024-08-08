@@ -29,7 +29,6 @@ func createPullContext(p *Plugin, streamPath string, url string, options ...any)
 	pullCtx = &PullContext{Pull: p.config.Pull}
 	pullCtx.ID = p.Server.pullTM.GetID()
 	pullCtx.Plugin = p
-	pullCtx.Executor = pullCtx
 	pullCtx.ConnectProxy = p.config.Pull.Proxy
 	pullCtx.RemoteURL = url
 	publishConfig := p.config.Publish
@@ -44,7 +43,6 @@ func createPullContext(p *Plugin, streamPath string, url string, options ...any)
 		default:
 			pullCtx.PublishOptions = append(pullCtx.PublishOptions, option)
 		}
-
 	}
 	p.Init(ctx, p.Logger.With("pullURL", url, "streamPath", streamPath))
 	pullCtx.PublishOptions = append(pullCtx.PublishOptions, pullCtx.Context)
@@ -64,10 +62,12 @@ func (p *PullContext) GetKey() string {
 
 func (p *PullContext) Run(puller Puller) {
 	var err error
-	defer p.Info("stop pull")
-	for p.Info("start pull", "url", p.Connection.RemoteURL); p.Connection.reconnect(p.RePull); p.Warn("restart pull") {
-		if p.Publisher != nil && time.Since(p.Publisher.StartTime) < 5*time.Second {
-			time.Sleep(5 * time.Second)
+	for p.reconnect(p.RePull) {
+		if p.Publisher != nil {
+			if time.Since(p.Publisher.StartTime) < 5*time.Second {
+				time.Sleep(5 * time.Second)
+			}
+			p.Warn("retry", "count", p.ReConnectCount, "total", p.RePull)
 		}
 		if p.Publisher, err = p.Plugin.Publish(p.StreamPath, p.PublishOptions...); err != nil {
 			p.Error("pull publish failed", "error", err)
@@ -77,9 +77,8 @@ func (p *PullContext) Run(puller Puller) {
 		p.Publisher.Stop(err)
 		if p.IsStopped() {
 			return
-		} else {
-			p.Error("pull interrupt", "error", err)
 		}
+		p.Error("pull interrupt", "error", err)
 	}
 	if err == nil {
 		err = pkg.ErrRetryRunOut

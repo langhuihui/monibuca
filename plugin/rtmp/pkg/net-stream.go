@@ -62,10 +62,3 @@ func (ns *NetStream) BeginPlay(tid uint64) (err error) {
 	err = ns.Response(tid, NetStream_Play_Start, Level_Status)
 	return
 }
-
-func (ns *NetStream) disconnect() {
-	if ns != nil && ns.NetConnection != nil {
-		ns.NetConnection.Destroy()
-	}
-	return
-}

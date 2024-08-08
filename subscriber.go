@@ -29,8 +29,11 @@ type PubSubBase struct {
 func (ps *PubSubBase) Init(streamPath string, conf any, options ...any) {
 	ctx := ps.Plugin.Context
 	var logger *slog.Logger
+	var executor []TaskExecutor
 	for _, option := range options {
 		switch v := option.(type) {
+		case TaskExecutor:
+			executor = append(executor, v)
 		case *slog.Logger:
 			logger = v
 		case context.Context:
@@ -39,7 +42,7 @@ func (ps *PubSubBase) Init(streamPath string, conf any, options ...any) {
 			ps.MetaData = v
 		}
 	}
-	ps.Task.Init(ctx, logger)
+	ps.Task.Init(ctx, logger, executor...)
 	if u, err := url.Parse(streamPath); err == nil {
 		ps.StreamPath, ps.Args = u.Path, u.Query()
 	}
@@ -60,8 +63,6 @@ func (ps *PubSubBase) Init(streamPath string, conf any, options ...any) {
 		}
 		c.ParseModifyFile(cc)
 	}
-	ps.StartTime = time.Now()
-
 }
 
 type SubscriberCollection = util.Collection[uint32, *Subscriber]
@@ -78,9 +79,8 @@ func createSubscriber(p *Plugin, streamPath string, options ...any) *Subscriber 
 	subscriber := &Subscriber{Subscribe: p.config.Subscribe}
 	subscriber.ID = p.Server.streamTM.GetID()
 	subscriber.Plugin = p
-	subscriber.Executor = subscriber
 	subscriber.TimeoutTimer = time.NewTimer(subscriber.WaitTimeout)
-	var opt = []any{p.Logger.With("streamPath", streamPath, "sId", subscriber.ID)}
+	var opt = []any{subscriber, p.Logger.With("streamPath", streamPath, "sId", subscriber.ID)}
 	for _, option := range options {
 		switch v := option.(type) {
 		case func(*config.Subscribe):
@@ -108,8 +108,8 @@ func (s *Subscriber) Start() (err error) {
 		server.createWait(s.StreamPath).AddSubscriber(s)
 		for plugin := range server.Plugins.Range {
 			if remoteURL := plugin.GetCommonConf().Pull.CheckPullOnSub(s.StreamPath); remoteURL != "" {
-				if _, ok := plugin.handler.(IPullerPlugin); ok {
-					go plugin.Pull(s.StreamPath, remoteURL)
+				if plugin.Meta.Puller != nil {
+					go plugin.PullBlock(s.StreamPath, remoteURL, plugin.Meta.Puller)
 				}
 			}
 		}

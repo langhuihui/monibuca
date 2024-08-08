@@ -13,9 +13,23 @@ import (
 
 const TraceLevel = slog.Level(-8)
 
+type getTask interface{ GetTask() *Task }
 type TaskExecutor interface {
 	Start() error
 	Dispose()
+}
+
+type TempTaskExecutor struct {
+	StartFunc   func() error
+	DisposeFunc func()
+}
+
+func (t TempTaskExecutor) Start() error {
+	return t.StartFunc()
+}
+
+func (t TempTaskExecutor) Dispose() {
+	t.DisposeFunc()
 }
 
 type Task struct {
@@ -24,8 +38,9 @@ type Task struct {
 	*slog.Logger
 	context.Context
 	context.CancelCauseFunc
-	Executor TaskExecutor
-	started  *util.Promise
+	exeStack    []TaskExecutor
+	Description map[string]any
+	started     *util.Promise
 }
 
 func (task *Task) GetTask() *Task {
@@ -38,9 +53,23 @@ func (task *Task) GetKey() uint32 {
 
 func (task *Task) Begin() (err error) {
 	task.StartTime = time.Now()
-	err = task.Executor.Start()
+	for _, executor := range task.exeStack {
+		err = executor.Start()
+		if err != nil {
+			break
+		}
+	}
 	task.started.Fulfill(err)
 	return
+}
+
+func (task *Task) dispose() {
+	if task.Logger != nil {
+		task.Debug("stop", "reason", task.StopReason())
+	}
+	for _, executor := range slices.Backward(task.exeStack) {
+		executor.Dispose()
+	}
 }
 
 func (task *Task) WaitStarted() error {
@@ -66,8 +95,14 @@ func (task *Task) Stop(err error) {
 	}
 }
 
-func (task *Task) Init(ctx context.Context, logger *slog.Logger) {
+func (task *Task) With(child getTask, args ...any) {
+	childTask := child.GetTask()
+	childTask.Init(task.Context, task.Logger.With(args...))
+}
+
+func (task *Task) Init(ctx context.Context, logger *slog.Logger, executor ...TaskExecutor) {
 	task.Logger = logger
+	task.exeStack = executor
 	task.Context, task.CancelCauseFunc = context.WithCancelCause(ctx)
 	task.started = util.NewPromise(task.Context)
 }
@@ -98,20 +133,29 @@ func NewTaskManager() *TaskManager {
 	}
 }
 
-func (t *TaskManager) Add(task *Task) {
+func StartTaskManager() *TaskManager {
+	tm := NewTaskManager()
+	go tm.Run()
+	return tm
+}
+
+func (t *TaskManager) Add(getTask getTask) {
+	task := getTask.GetTask()
+	if v, ok := getTask.(TaskExecutor); len(task.exeStack) == 0 && ok {
+		task.exeStack = append(task.exeStack, v)
+	}
 	t.start <- task
 }
 
-func (t *TaskManager) Call(callback CallBackTaskExecutor) {
+func (t *TaskManager) Call(callback CallBackTaskExecutor) error {
 	var tmpTask Task
-	tmpTask.Init(context.TODO(), nil)
-	tmpTask.Executor = callback
-	_ = t.Start(&tmpTask)
+	tmpTask.Init(context.TODO(), nil, callback)
+	return t.Start(&tmpTask)
 }
 
-func (t *TaskManager) Start(task *Task) error {
-	t.start <- task
-	return task.WaitStarted()
+func (t *TaskManager) Start(getTask getTask) error {
+	t.Add(getTask)
+	return getTask.GetTask().WaitStarted()
 }
 
 func (t *TaskManager) GetID() uint32 {
@@ -128,14 +172,11 @@ func (t *TaskManager) Run(extra ...any) {
 		callbacks = append(callbacks, reflect.ValueOf(extra[i*2+1]))
 	}
 	defer func() {
-		cases = slices.Delete(cases, 0, 1+extraLen)
-		for len(cases) > 0 {
-			chosen, _, _ := reflect.Select(cases)
-			task := t.Tasks[chosen]
-			task.Executor.Dispose()
-			t.Tasks = slices.Delete(t.Tasks, chosen, chosen+1)
-			cases = slices.Delete(cases, chosen, chosen+1)
+		for _, t := range t.Tasks {
+			t.dispose()
 		}
+		t.Tasks = nil
+		cases = nil
 		t.shutdown.Fulfill(t.stopReason)
 	}()
 	for {
@@ -145,17 +186,23 @@ func (t *TaskManager) Run(extra ...any) {
 			}
 			task := rev.Interface().(*Task)
 			if err := task.Begin(); err == nil {
+				if task.Logger != nil {
+					task.Debug("start")
+				}
 				t.Tasks = append(t.Tasks, task)
 				cases = append(cases, reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(task.Done())})
 			} else {
+				if task.Logger != nil {
+					task.Warn("start failed", "error", err)
+				}
 				task.Stop(err)
 			}
 		} else if chosen <= extraLen {
 			callbacks[chosen-1].Call([]reflect.Value{rev})
 		} else {
-			taskIndex := chosen - 1 - extraLen
+			taskIndex := chosen - extraLen - 1
 			task := t.Tasks[taskIndex]
-			task.Executor.Dispose()
+			task.dispose()
 			t.Tasks = slices.Delete(t.Tasks, taskIndex, taskIndex+1)
 			cases = slices.Delete(cases, chosen, chosen+1)
 		}

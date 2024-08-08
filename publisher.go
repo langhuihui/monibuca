@@ -92,10 +92,9 @@ func (p *Publisher) GetKey() string {
 func createPublisher(p *Plugin, streamPath string, options ...any) (publisher *Publisher) {
 	publisher = &Publisher{Publish: p.config.Publish}
 	publisher.ID = p.Server.streamTM.GetID()
-	publisher.Executor = publisher
 	publisher.Plugin = p
 	publisher.TimeoutTimer = time.NewTimer(p.config.PublishTimeout)
-	var opt = []any{p.Logger.With("streamPath", streamPath, "pId", publisher.ID)}
+	var opt = []any{publisher, p.Logger.With("streamPath", streamPath, "pId", publisher.ID)}
 	for _, option := range options {
 		switch v := option.(type) {
 		case func(*config.Publish):
@@ -137,13 +136,13 @@ func (p *Publisher) Start() (err error) {
 			continue
 		}
 		if remoteURL := plugin.GetCommonConf().CheckPush(p.StreamPath); remoteURL != "" {
-			if _, ok := plugin.handler.(IPusherPlugin); ok {
-				go plugin.Push(p.StreamPath, remoteURL)
+			if plugin.Meta.Pusher != nil {
+				go plugin.PushBlock(p.StreamPath, remoteURL, plugin.Meta.Pusher)
 			}
 		}
 		if filePath := plugin.GetCommonConf().CheckRecord(p.StreamPath); filePath != "" {
-			if _, ok := plugin.handler.(IRecorderPlugin); ok {
-				go plugin.Record(p.StreamPath, filePath)
+			if plugin.Meta.Recorder != nil {
+				go plugin.RecordBlock(p.StreamPath, filePath, plugin.Meta.Recorder)
 			}
 		}
 		//if h, ok := plugin.handler.(IOnPublishPlugin); ok {
@@ -283,7 +282,7 @@ func (p *Publisher) WriteVideo(data IAVFrame) (err error) {
 	if p.dumpFile != nil {
 		data.Dump(1, p.dumpFile)
 	}
-	if !p.PubVideo || p.IsStopped() {
+	if !p.PubVideo {
 		return ErrMuted
 	}
 	t := p.VideoTrack.AVTrack
@@ -384,7 +383,7 @@ func (p *Publisher) WriteAudio(data IAVFrame) (err error) {
 	if p.dumpFile != nil {
 		data.Dump(0, p.dumpFile)
 	}
-	if !p.PubAudio || p.IsStopped() {
+	if !p.PubAudio {
 		return ErrMuted
 	}
 	t := p.AudioTrack.AVTrack

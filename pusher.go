@@ -14,7 +14,6 @@ func createPushContext(p *Plugin, streamPath string, url string, options ...any)
 	pushCtx = &PushContext{Push: p.config.Push}
 	pushCtx.ID = p.Server.pushTM.GetID()
 	pushCtx.Plugin = p
-	pushCtx.Executor = pushCtx
 	pushCtx.RemoteURL = url
 	pushCtx.StreamPath = streamPath
 	pushCtx.ConnectProxy = p.config.Push.Proxy
@@ -28,7 +27,7 @@ func createPushContext(p *Plugin, streamPath string, url string, options ...any)
 			pushCtx.SubscribeOptions = append(pushCtx.SubscribeOptions, option)
 		}
 	}
-	pushCtx.Init(ctx, p.Logger.With("pushURL", url, "streamPath", streamPath))
+	pushCtx.Init(ctx, p.Logger.With("pushURL", url, "streamPath", streamPath), pushCtx)
 	pushCtx.SubscribeOptions = append(pushCtx.SubscribeOptions, pushCtx.Context)
 	return
 }

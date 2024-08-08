@@ -19,11 +19,10 @@ import (
 
 type MediaContext struct {
 	io.Writer
-	conn      net.Conn
-	wto       time.Duration
-	seqNumber uint32
-	video     TrackContext
-	audio     TrackContext
+	conn         net.Conn
+	wto          time.Duration
+	seqNumber    uint32
+	audio, video TrackContext
 }
 
 func (m *MediaContext) Write(p []byte) (n int, err error) {
@@ -76,23 +75,15 @@ const defaultConfig m7s.DefaultYaml = `publish:
 
 func (p *MP4Plugin) OnInit() error {
 	for streamPath, url := range p.GetCommonConf().PullOnStart {
-		go p.Pull(streamPath, url)
+		go p.PullBlock(streamPath, url)
 	}
 	return nil
 }
 
-var _ = m7s.InstallPlugin[MP4Plugin](defaultConfig)
-
-func (p *MP4Plugin) DoPull(ctx *m7s.PullContext) error {
-	return pkg.PullMP4(ctx)
-}
+var _ = m7s.InstallPlugin[MP4Plugin](defaultConfig, pkg.PullMP4, pkg.RecordMP4)
 
 func (p *MP4Plugin) GetPullableList() []string {
 	return slices.Collect(maps.Keys(p.GetCommonConf().PullOnSub))
-}
-
-func (p *MP4Plugin) DoRecord(ctx *m7s.RecordContext) error {
-	return pkg.RecordMP4(ctx)
 }
 
 func (p *MP4Plugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {

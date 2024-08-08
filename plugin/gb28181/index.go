@@ -268,7 +268,7 @@ func (gb *GB28181Plugin) StoreDevice(id string, req *sip.Request) (d *Device) {
 			Params: sip.NewParams(),
 		},
 	}
-	d.Init(gb.Context, gb.Logger.With("id", id))
+	gb.With(d, "id", id)
 	d.fromHDR.Params.Add("tag", sip.GenerateTagN(16))
 	d.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(publicIP))
 	d.dialogClient = sipgo.NewDialogClient(d.client, d.contactHDR)

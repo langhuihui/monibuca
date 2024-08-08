@@ -9,8 +9,6 @@ import (
 	"strings"
 )
 
-type Client struct{}
-
 func createClient(p *m7s.Connection) (s *Stream, err error) {
 	addr := p.RemoteURL
 	var rtspURL *url.URL
@@ -53,7 +51,7 @@ func createClient(p *m7s.Connection) (s *Stream, err error) {
 	return
 }
 
-func (Client) DoPull(p *m7s.PullContext) (err error) {
+func Pull(p *m7s.PullContext) (err error) {
 	var s *Stream
 	if s, err = createClient(&p.Connection); err != nil {
 		return
@@ -79,7 +77,7 @@ func (Client) DoPull(p *m7s.PullContext) (err error) {
 	return receiver.Receive()
 }
 
-func (Client) DoPush(ctx *m7s.PushContext) (err error) {
+func Push(ctx *m7s.PushContext) (err error) {
 	var s *Stream
 	if s, err = createClient(&ctx.Connection); err != nil {
 		return

@@ -2,7 +2,7 @@ package rtmp
 
 import (
 	"errors"
-	"log/slog"
+	"m7s.live/m7s/v5/pkg"
 	"net"
 	"runtime"
 	"sync/atomic"
@@ -43,7 +43,7 @@ const (
 )
 
 type NetConnection struct {
-	*slog.Logger
+	pkg.Task
 	*util.BufReader
 	net.Conn
 	bandwidth       uint32
@@ -62,9 +62,8 @@ type NetConnection struct {
 	writing         atomic.Bool // false 可写，true 不可写
 }
 
-func NewNetConnection(conn net.Conn, logger *slog.Logger) (ret *NetConnection) {
+func NewNetConnection(conn net.Conn) (ret *NetConnection) {
 	ret = &NetConnection{
-		Logger:          logger,
 		Conn:            conn,
 		BufReader:       util.NewBufReader(conn),
 		WriteChunkSize:  RTMP_DEFAULT_CHUNK_SIZE,
@@ -75,15 +74,19 @@ func NewNetConnection(conn net.Conn, logger *slog.Logger) (ret *NetConnection) {
 		chunkHeaderBuf:  make(util.Buffer, 0, 20),
 	}
 	ret.mediaDataPool.SetAllocator(util.NewScalableMemoryAllocator(1 << util.MinPowerOf2))
-	ret.Info("new connection")
 	return
 }
-func (conn *NetConnection) Destroy() {
+
+func (conn *NetConnection) Start() error {
+	return nil
+}
+
+func (conn *NetConnection) Dispose() {
 	conn.Conn.Close()
 	conn.BufReader.Recycle()
 	conn.mediaDataPool.Recycle()
-	conn.Info("destroy connection")
 }
+
 func (conn *NetConnection) SendStreamID(eventType uint16, streamID uint32) (err error) {
 	return conn.SendMessage(RTMP_MSG_USER_CONTROL, &StreamIDMessage{UserControlMessage{EventType: eventType}, streamID})
 }

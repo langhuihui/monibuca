@@ -65,6 +65,7 @@ type Server struct {
 	apiList                                      []string
 	grpcServer                                   *grpc.Server
 	grpcClientConn                               *grpc.ClientConn
+	tcplis                                       net.Listener
 	lastSummaryTime                              time.Time
 	lastSummary                                  *pb.SummaryResponse
 	OnAuthPubs                                   map[string]func(*Publisher) *util.Promise
@@ -114,7 +115,8 @@ func (s *Server) Start() (err error) {
 	s.LogHandler.SetLevel(slog.LevelInfo)
 	s.LogHandler.Add(defaultLogHandler)
 	s.Task.Init(s.runOption.ctx, slog.New(&s.LogHandler).With("Server", s.ID))
-	s.Info("start")
+	s.StartTime = time.Now()
+	s.Info("start", "ctx", s.runOption.ctx, "conf", s.runOption.conf)
 	httpConf, tcpConf := &s.config.HTTP, &s.config.TCP
 	mux := runtime.NewServeMux(runtime.WithMarshalerOption("text/plain", &pb.TextPlain{}), runtime.WithRoutingErrorHandler(func(_ context.Context, _ *runtime.ServeMux, _ runtime.Marshaler, w http.ResponseWriter, r *http.Request, _ int) {
 		httpConf.GetHttpMux().ServeHTTP(w, r)
@@ -179,7 +181,6 @@ func (s *Server) Start() (err error) {
 			s.Info("http stop listen at ", "addr", addr)
 		}(httpConf.ListenAddr)
 	}
-	var tcplis net.Listener
 	if tcpConf.ListenAddr != "" {
 		var opts []grpc.ServerOption
 		s.grpcServer = grpc.NewServer(opts...)
@@ -190,37 +191,36 @@ func (s *Server) Start() (err error) {
 			s.Error("failed to dial", "error", err)
 			return
 		}
-		defer s.grpcClientConn.Close()
 		if err = pb.RegisterGlobalHandler(s.Context, mux, s.grpcClientConn); err != nil {
 			s.Error("register handler faild", "error", err)
 			return
 		}
-		tcplis, err = net.Listen("tcp", tcpConf.ListenAddr)
+		s.tcplis, err = net.Listen("tcp", tcpConf.ListenAddr)
 		if err != nil {
 			s.Error("failed to listen", "error", err)
 			return
 		}
-		defer tcplis.Close()
 	}
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	s.pluginTM = NewTaskManager()
-	go s.pluginTM.Run(signalChan, func() {
+	go s.pluginTM.Run(signalChan, func(os.Signal) {
 		for plugin := range s.Plugins.Range {
 			plugin.handler.OnExit()
 		}
 	})
 	for _, plugin := range plugins {
 		if p := plugin.Init(s, cg[strings.ToLower(plugin.Name)]); !p.Disabled {
-			s.pluginTM.Add(&p.Task)
+			s.pluginTM.Start(&p.Task)
 		}
 	}
-	if tcplis != nil {
+	if s.tcplis != nil {
 		go func(addr string) {
-			if err = s.grpcServer.Serve(tcplis); err != nil {
+			if err = s.grpcServer.Serve(s.tcplis); err != nil {
 				s.Stop(err)
+			} else {
+				s.Info("grpc stop listen at ", "addr", addr)
 			}
-			s.Info("grpc stop listen at ", "addr", addr)
 		}(tcpConf.ListenAddr)
 	}
 	s.streamTM = NewTaskManager()
@@ -263,6 +263,8 @@ func (s *Server) Call(callback func()) {
 
 func (s *Server) Dispose() {
 	Servers.Remove(s)
+	_ = s.tcplis.Close()
+	_ = s.grpcClientConn.Close()
 	s.config.HTTP.StopListen()
 	err := context.Cause(s)
 	s.streamTM.ShutDown(err)
