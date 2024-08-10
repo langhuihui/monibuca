@@ -3,6 +3,7 @@ package plugin_stress
 import (
 	"context"
 	"fmt"
+
 	"google.golang.org/protobuf/types/known/emptypb"
 	"m7s.live/m7s/v5"
 	gpb "m7s.live/m7s/v5/pb"
@@ -20,7 +21,13 @@ func (r *StressPlugin) pull(count int, format, url string, puller m7s.Puller) er
 			if err != nil {
 				return err
 			}
-			go r.startPull(ctx, puller)
+			ctx.AddCall(func(*pkg.Task) error {
+				r.pullers.AddUnique(ctx)
+				ctx.Do(puller)
+				return nil
+			}, func(*pkg.Task) {
+				r.pullers.Remove(ctx)
+			})
 		}
 	} else if count < i {
 		for j := i; j > count; j-- {
@@ -38,7 +45,13 @@ func (r *StressPlugin) push(count int, streamPath, format, remoteHost string, pu
 			if err != nil {
 				return err
 			}
-			go r.startPush(ctx, pusher)
+			ctx.AddCall(func(*pkg.Task) error {
+				r.pushers.AddUnique(ctx)
+				ctx.Do(pusher)
+				return nil
+			}, func(*pkg.Task) {
+				r.pushers.Remove(ctx)
+			})
 		}
 	} else if count < i {
 		for j := i; j > count; j-- {
@@ -67,18 +80,6 @@ func (r *StressPlugin) PullRTSP(ctx context.Context, req *pb.PullRequest) (res *
 
 func (r *StressPlugin) PullHDL(ctx context.Context, req *pb.PullRequest) (res *gpb.SuccessResponse, err error) {
 	return &gpb.SuccessResponse{}, r.pull(int(req.PullCount), "http://%s", req.RemoteURL, hdl.PullFLV)
-}
-
-func (r *StressPlugin) startPush(pusher *m7s.PushContext, handler m7s.Pusher) {
-	r.pushers.AddUnique(pusher)
-	pusher.Run(handler)
-	r.pushers.Remove(pusher)
-}
-
-func (r *StressPlugin) startPull(puller *m7s.PullContext, handler m7s.Puller) {
-	r.pullers.AddUnique(puller)
-	puller.Run(handler)
-	r.pullers.Remove(puller)
 }
 
 func (r *StressPlugin) StopPush(ctx context.Context, req *emptypb.Empty) (res *gpb.SuccessResponse, err error) {

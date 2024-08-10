@@ -2,16 +2,22 @@ package pkg
 
 import (
 	"context"
-	"io"
+	"errors"
 	"log/slog"
-	"m7s.live/m7s/v5/pkg/util"
 	"reflect"
 	"slices"
 	"sync/atomic"
 	"time"
+
+	"m7s.live/m7s/v5/pkg/util"
 )
 
 const TraceLevel = slog.Level(-8)
+
+var (
+	ErrAutoStop     = errors.New("auto stop")
+	ErrCallbackTask = errors.New("callback task")
+)
 
 type getTask interface{ GetTask() *Task }
 type TaskExecutor interface {
@@ -25,11 +31,16 @@ type TempTaskExecutor struct {
 }
 
 func (t TempTaskExecutor) Start() error {
+	if t.StartFunc == nil {
+		return nil
+	}
 	return t.StartFunc()
 }
 
 func (t TempTaskExecutor) Dispose() {
-	t.DisposeFunc()
+	if t.DisposeFunc != nil {
+		t.DisposeFunc()
+	}
 }
 
 type Task struct {
@@ -38,9 +49,10 @@ type Task struct {
 	*slog.Logger
 	context.Context
 	context.CancelCauseFunc
-	exeStack    []TaskExecutor
-	Description map[string]any
-	started     *util.Promise
+	exe               TaskExecutor
+	Description       map[string]any
+	startup, shutdown *util.Promise
+	parent            *MarcoTask
 }
 
 func (task *Task) GetTask() *Task {
@@ -51,29 +63,12 @@ func (task *Task) GetKey() uint32 {
 	return task.ID
 }
 
-func (task *Task) Begin() (err error) {
-	task.StartTime = time.Now()
-	for _, executor := range task.exeStack {
-		err = executor.Start()
-		if err != nil {
-			break
-		}
-	}
-	task.started.Fulfill(err)
-	return
-}
-
-func (task *Task) dispose(reason error) {
-	if task.Logger != nil {
-		task.Debug("stop", "reason", reason)
-	}
-	for _, executor := range slices.Backward(task.exeStack) {
-		executor.Dispose()
-	}
-}
-
 func (task *Task) WaitStarted() error {
-	return task.started.Await()
+	return task.startup.Await()
+}
+
+func (task *Task) WaitStopped() error {
+	return task.shutdown.Await()
 }
 
 func (task *Task) Trace(msg string, fields ...any) {
@@ -95,88 +90,154 @@ func (task *Task) Stop(err error) {
 	}
 }
 
-func (task *Task) With(child getTask, args ...any) {
-	child.GetTask().Init(task.Context, task.Logger.With(args...))
-}
-
-func (task *Task) Init(ctx context.Context, logger *slog.Logger, executor ...TaskExecutor) {
+func (task *Task) Init(ctx context.Context, logger *slog.Logger, executor TaskExecutor) {
 	task.Logger = logger
-	task.exeStack = executor
+	task.exe = executor
 	task.Context, task.CancelCauseFunc = context.WithCancelCause(ctx)
-	task.started = util.NewPromise(task.Context)
+	task.startup = util.NewPromise(task.Context)
+	task.shutdown = util.NewPromise(task.Context)
 }
 
-type CallBackTaskExecutor func()
+type CallBack func(*Task) error
 
-func (call CallBackTaskExecutor) Start() error {
-	call()
-	return io.EOF
+// MarcoTask include sub tasks
+type MarcoTask struct {
+	Task
+	KeepAlive      bool
+	exe            TaskExecutor
+	addSub         chan *Task
+	subTasks       []*Task
+	extraCases     []reflect.SelectCase
+	extraCallbacks []reflect.Value
+	idG            atomic.Uint32
 }
 
-func (call CallBackTaskExecutor) Dispose() {
-	// nothing to do, never called
-}
-
-type TaskManager struct {
-	shutdown   *util.Promise
-	stopReason error
-	start      chan *Task
-	Tasks      []*Task
-	idG        atomic.Uint32
-}
-
-func NewTaskManager() *TaskManager {
-	return &TaskManager{
-		shutdown: util.NewPromise(context.TODO()),
-		start:    make(chan *Task, 10),
+func (mt *MarcoTask) Init(ctx context.Context, logger *slog.Logger, executor TaskExecutor, extra ...any) {
+	mt.Task.Init(ctx, logger, mt)
+	mt.exe = executor
+	for i := range len(extra) / 2 {
+		mt.extraCases = append(mt.extraCases, reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(extra[i*2])})
+		mt.extraCallbacks = append(mt.extraCallbacks, reflect.ValueOf(extra[i*2+1]))
 	}
 }
 
-func StartTaskManager(extra ...any) *TaskManager {
-	tm := NewTaskManager()
-	go tm.Run(extra...)
-	return tm
+func (mt *MarcoTask) InitKeepAlive(ctx context.Context, logger *slog.Logger, executor TaskExecutor, extra ...any) {
+	mt.Init(ctx, logger, executor, extra...)
+	mt.KeepAlive = true
 }
 
-func (t *TaskManager) Add(getTask getTask) {
+func (mt *MarcoTask) Start() error {
+	if mt.exe != nil {
+		return mt.exe.Start()
+	}
+	return nil
+}
+
+func (mt *MarcoTask) AddTasks(getTasks ...getTask) {
+	for _, getTask := range getTasks {
+		mt.AddTask(getTask)
+	}
+}
+
+func (mt *MarcoTask) AddTask(getTask getTask) {
+	if mt.IsStopped() {
+		getTask.GetTask().startup.Reject(mt.StopReason())
+		return
+	}
+	if mt.addSub == nil {
+		mt.addSub = make(chan *Task, 10)
+		go mt.run()
+	}
 	task := getTask.GetTask()
-	if v, ok := getTask.(TaskExecutor); len(task.exeStack) == 0 && ok {
-		task.exeStack = append(task.exeStack, v)
+	if task.ID == 0 {
+		task.ID = mt.GetID()
 	}
-	t.start <- task
+	if task.parent == nil {
+		task.parent = mt
+		if v, ok := getTask.(TaskExecutor); ok {
+			task.exe = v
+		}
+	}
+	mt.addSub <- task
 }
 
-func (t *TaskManager) Call(callback CallBackTaskExecutor) error {
+func (mt *MarcoTask) Call(callback CallBack) {
+	task := mt.AddCall(callback, nil)
+	_ = task.WaitStarted()
+}
+
+func (mt *MarcoTask) AddCall(start CallBack, dispose func(*Task)) *Task {
 	var tmpTask Task
-	tmpTask.Init(context.TODO(), nil, callback)
-	return t.Start(&tmpTask)
+	var tmpExe TempTaskExecutor
+	if start != nil {
+		tmpExe.StartFunc = func() error {
+			err := start(&tmpTask)
+			if err == nil && dispose == nil {
+				err = ErrCallbackTask
+			}
+			return err
+		}
+	}
+	if dispose != nil {
+		tmpExe.DisposeFunc = func() {
+			dispose(&tmpTask)
+		}
+	}
+	tmpTask.Init(mt.Context, nil, tmpExe)
+	mt.AddTask(&tmpTask)
+	return &tmpTask
 }
 
-func (t *TaskManager) Start(getTask getTask) error {
-	t.Add(getTask)
+func (mt *MarcoTask) WaitTaskAdded(getTask getTask) error {
+	mt.AddTask(getTask)
 	return getTask.GetTask().WaitStarted()
 }
 
-func (t *TaskManager) GetID() uint32 {
-	return t.idG.Add(1)
+func (mt *MarcoTask) GetID() uint32 {
+	return mt.idG.Add(1)
 }
 
-// Run task Start and Dispose in this goroutine
-func (t *TaskManager) Run(extra ...any) {
-	cases := []reflect.SelectCase{{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(t.start)}}
-	extraLen := len(extra) / 2
-	var callbacks []reflect.Value
-	for i := range extraLen {
-		cases = append(cases, reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(extra[i*2])})
-		callbacks = append(callbacks, reflect.ValueOf(extra[i*2+1]))
-	}
-	defer func() {
-		for _, task := range t.Tasks {
-			task.dispose(t.stopReason)
+func (mt *MarcoTask) startSubTask(task *Task) (err error) {
+	if task.startup.IsPending() {
+		task.StartTime = time.Now()
+		err = task.exe.Start()
+		if task.Logger != nil {
+			task.Debug("start")
 		}
-		t.Tasks = nil
-		cases = nil
-		t.shutdown.Fulfill(t.stopReason)
+		task.startup.Fulfill(err)
+	}
+	return
+}
+
+func (mt *MarcoTask) disposeSubTask(task *Task, reason error) {
+	if task.parent != mt {
+		return
+	}
+	if task.Logger != nil {
+		task.Debug("dispose", "reason", reason)
+	}
+	task.exe.Dispose()
+	if m, ok := task.exe.(*MarcoTask); ok {
+		m.WaitStopped()
+	} else {
+		task.shutdown.Fulfill(reason)
+	}
+}
+
+func (mt *MarcoTask) run() {
+	extraLen := len(mt.extraCases)
+	cases := append([]reflect.SelectCase{{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(mt.addSub)}}, mt.extraCases...)
+	defer func() {
+		stopReason := mt.StopReason()
+		for _, task := range mt.subTasks {
+			task.Stop(stopReason)
+			mt.disposeSubTask(task, stopReason)
+		}
+		mt.subTasks = nil
+		mt.addSub = nil
+		mt.extraCases = nil
+		mt.extraCallbacks = nil
+		mt.shutdown.Fulfill(stopReason)
 	}()
 	for {
 		if chosen, rev, ok := reflect.Select(cases); chosen == 0 {
@@ -184,11 +245,8 @@ func (t *TaskManager) Run(extra ...any) {
 				return
 			}
 			task := rev.Interface().(*Task)
-			if err := task.Begin(); err == nil {
-				if task.Logger != nil {
-					task.Debug("start")
-				}
-				t.Tasks = append(t.Tasks, task)
+			if err := mt.startSubTask(task); err == nil {
+				mt.subTasks = append(mt.subTasks, task)
 				cases = append(cases, reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(task.Done())})
 			} else {
 				if task.Logger != nil {
@@ -197,53 +255,29 @@ func (t *TaskManager) Run(extra ...any) {
 				task.Stop(err)
 			}
 		} else if chosen <= extraLen {
-			callbacks[chosen-1].Call([]reflect.Value{rev})
+			mt.extraCallbacks[chosen-1].Call([]reflect.Value{rev})
 		} else {
 			taskIndex := chosen - extraLen - 1
-			task := t.Tasks[taskIndex]
-			task.dispose(task.StopReason())
-			t.Tasks = slices.Delete(t.Tasks, taskIndex, taskIndex+1)
+			task := mt.subTasks[taskIndex]
+			mt.disposeSubTask(task, task.StopReason())
+			mt.subTasks = slices.Delete(mt.subTasks, taskIndex, taskIndex+1)
 			cases = slices.Delete(cases, chosen, chosen+1)
+			if !mt.KeepAlive && len(mt.subTasks) == 0 {
+				mt.Stop(ErrAutoStop)
+			}
 		}
 	}
 }
 
-// Run task Start and Dispose in another goroutine
-//func (t *TaskManager) Run() {
-//	cases := []reflect.SelectCase{{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(t.Start)}}
-//	defer func() {
-//		cases = slices.Delete(cases, 0, 1)
-//		for len(cases) > 0 {
-//			chosen, _, _ := reflect.Select(cases)
-//			t.Done <- t.Tasks[chosen]
-//			t.Tasks = slices.Delete(t.Tasks, chosen, chosen+1)
-//			cases = slices.Delete(cases, chosen, chosen+1)
-//		}
-//		close(t.Done)
-//	}()
-//	for {
-//		if chosen, rev, ok := reflect.Select(cases); chosen == 0 {
-//			if !ok {
-//				return
-//			}
-//			task := rev.Interface().(*Task)
-//			t.Tasks = append(t.Tasks, task)
-//			cases = append(cases, reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(task.Done())})
-//		} else {
-//			t.Done <- t.Tasks[chosen-1]
-//			t.Tasks = slices.Delete(t.Tasks, chosen-1, chosen)
-//			cases = slices.Delete(cases, chosen, chosen+1)
-//		}
-//	}
-//}
-
 // ShutDown wait all task dispose
-func (t *TaskManager) ShutDown(err error) {
-	t.Stop(err)
-	_ = t.shutdown.Await()
+func (mt *MarcoTask) ShutDown(err error) {
+	mt.Stop(err)
+	_ = mt.shutdown.Await()
 }
 
-func (t *TaskManager) Stop(err error) {
-	t.stopReason = err
-	close(t.start)
+func (mt *MarcoTask) Dispose() {
+	if mt.exe != nil {
+		mt.exe.Dispose()
+	}
+	close(mt.addSub)
 }

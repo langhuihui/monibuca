@@ -23,26 +23,25 @@ type PubSubBase struct {
 	StreamPath   string
 	Args         url.Values
 	TimeoutTimer *time.Timer
-	MetaData     any
 }
 
 func (ps *PubSubBase) Init(streamPath string, conf any, options ...any) {
 	ctx := ps.Plugin.Context
 	var logger *slog.Logger
-	var executor []TaskExecutor
+	var executor TaskExecutor
 	for _, option := range options {
 		switch v := option.(type) {
 		case TaskExecutor:
-			executor = append(executor, v)
+			executor = v
 		case *slog.Logger:
 			logger = v
 		case context.Context:
 			ctx = v
-		default:
-			ps.MetaData = v
+		case map[string]any:
+			ps.Description = v
 		}
 	}
-	ps.Task.Init(ctx, logger, executor...)
+	ps.Task.Init(ctx, logger, executor)
 	if u, err := url.Parse(streamPath); err == nil {
 		ps.StreamPath, ps.Args = u.Path, u.Query()
 	}
@@ -77,7 +76,7 @@ type Subscriber struct {
 
 func createSubscriber(p *Plugin, streamPath string, options ...any) *Subscriber {
 	subscriber := &Subscriber{Subscribe: p.config.Subscribe}
-	subscriber.ID = p.Server.streamTM.GetID()
+	subscriber.ID = p.Server.streamTask.GetID()
 	subscriber.Plugin = p
 	subscriber.TimeoutTimer = time.NewTimer(subscriber.WaitTimeout)
 	var opt = []any{subscriber, p.Logger.With("streamPath", streamPath, "sId", subscriber.ID)}
@@ -109,7 +108,7 @@ func (s *Subscriber) Start() (err error) {
 		for plugin := range server.Plugins.Range {
 			if remoteURL := plugin.GetCommonConf().Pull.CheckPullOnSub(s.StreamPath); remoteURL != "" {
 				if plugin.Meta.Puller != nil {
-					go plugin.PullBlock(s.StreamPath, remoteURL, plugin.Meta.Puller)
+					plugin.Pull(s.StreamPath, remoteURL, plugin.Meta.Puller)
 				}
 			}
 		}

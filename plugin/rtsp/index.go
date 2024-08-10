@@ -3,9 +3,6 @@ package plugin_rtsp
 import (
 	"errors"
 	"fmt"
-	"m7s.live/m7s/v5"
-	"m7s.live/m7s/v5/pkg/util"
-	. "m7s.live/m7s/v5/plugin/rtsp/pkg"
 	"maps"
 	"net"
 	"net/http"
@@ -13,6 +10,10 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+
+	"m7s.live/m7s/v5"
+	"m7s.live/m7s/v5/pkg/util"
+	. "m7s.live/m7s/v5/plugin/rtsp/pkg"
 )
 
 const defaultConfig = m7s.DefaultYaml(`tcp:
@@ -30,7 +31,7 @@ func (p *RTSPPlugin) GetPullableList() []string {
 
 func (p *RTSPPlugin) OnInit() error {
 	for streamPath, url := range p.GetCommonConf().PullOnStart {
-		go p.PullBlock(streamPath, url)
+		 p.Pull(streamPath, url)
 	}
 	return nil
 }

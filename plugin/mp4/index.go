@@ -1,20 +1,21 @@
 package plugin_mp4
 
 import (
-	"github.com/Eyevinn/mp4ff/mp4"
 	"io"
-	"m7s.live/m7s/v5"
-	v5 "m7s.live/m7s/v5/pkg"
-	"m7s.live/m7s/v5/pkg/codec"
-	"m7s.live/m7s/v5/pkg/util"
-	pkg "m7s.live/m7s/v5/plugin/mp4/pkg"
-	rtmp "m7s.live/m7s/v5/plugin/rtmp/pkg"
 	"maps"
 	"net"
 	"net/http"
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/Eyevinn/mp4ff/mp4"
+	"m7s.live/m7s/v5"
+	v5 "m7s.live/m7s/v5/pkg"
+	"m7s.live/m7s/v5/pkg/codec"
+	"m7s.live/m7s/v5/pkg/util"
+	pkg "m7s.live/m7s/v5/plugin/mp4/pkg"
+	rtmp "m7s.live/m7s/v5/plugin/rtmp/pkg"
 )
 
 type MediaContext struct {
@@ -75,7 +76,7 @@ const defaultConfig m7s.DefaultYaml = `publish:
 
 func (p *MP4Plugin) OnInit() error {
 	for streamPath, url := range p.GetCommonConf().PullOnStart {
-		go p.PullBlock(streamPath, url)
+		p.Pull(streamPath, url)
 	}
 	return nil
 }

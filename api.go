@@ -90,7 +90,7 @@ func (s *Server) api_Stream_AnnexB_(rw http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) getStreamInfo(pub *Publisher) (res *pb.StreamInfoResponse, err error) {
-	tmp, _ := json.Marshal(pub.MetaData)
+	tmp, _ := json.Marshal(pub.Description)
 	res = &pb.StreamInfoResponse{
 		Meta:        string(tmp),
 		Path:        pub.StreamPath,
@@ -131,20 +131,21 @@ func (s *Server) getStreamInfo(pub *Publisher) (res *pb.StreamInfoResponse, err 
 }
 
 func (s *Server) StreamInfo(ctx context.Context, req *pb.StreamSnapRequest) (res *pb.StreamInfoResponse, err error) {
-	s.streamTM.Call(func() {
+	s.streamTask.Call(func(*pkg.Task) error {
 		if pub, ok := s.Streams.Get(req.StreamPath); ok {
 			res, err = s.getStreamInfo(pub)
 		} else {
 			err = pkg.ErrNotFound
 		}
+		return nil
 	})
 	return
 }
 func (s *Server) GetSubscribers(ctx context.Context, req *pb.SubscribersRequest) (res *pb.SubscribersResponse, err error) {
-	s.streamTM.Call(func() {
+	s.streamTask.Call(func(*pkg.Task) error {
 		var subscribers []*pb.SubscriberSnapShot
 		for subscriber := range s.Subscribers.Range {
-			meta, _ := json.Marshal(subscriber.MetaData)
+			meta, _ := json.Marshal(subscriber.Description)
 			snap := &pb.SubscriberSnapShot{
 				Id:        uint32(subscriber.ID),
 				StartTime: timestamppb.New(subscriber.StartTime),
@@ -172,11 +173,12 @@ func (s *Server) GetSubscribers(ctx context.Context, req *pb.SubscribersRequest)
 			List:  subscribers,
 			Total: int32(s.Subscribers.Length),
 		}
+		return nil
 	})
 	return
 }
 func (s *Server) AudioTrackSnap(ctx context.Context, req *pb.StreamSnapRequest) (res *pb.TrackSnapShotResponse, err error) {
-	s.streamTM.Call(func() {
+	s.streamTask.Call(func(*pkg.Task) error {
 		if pub, ok := s.Streams.Get(req.StreamPath); ok && pub.HasAudioTrack() {
 			res = &pb.TrackSnapShotResponse{}
 			for _, memlist := range pub.AudioTrack.Allocator.GetChildren() {
@@ -221,6 +223,7 @@ func (s *Server) AudioTrackSnap(ctx context.Context, req *pb.StreamSnapRequest) 
 		} else {
 			err = pkg.ErrNotFound
 		}
+		return nil
 	})
 	return
 }
@@ -254,7 +257,7 @@ func (s *Server) api_VideoTrack_SSE(rw http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) VideoTrackSnap(ctx context.Context, req *pb.StreamSnapRequest) (res *pb.TrackSnapShotResponse, err error) {
-	s.streamTM.Call(func() {
+	s.streamTask.Call(func(*pkg.Task) error {
 		if pub, ok := s.Streams.Get(req.StreamPath); ok && pub.HasVideoTrack() {
 			res = &pb.TrackSnapShotResponse{}
 			for _, memlist := range pub.VideoTrack.Allocator.GetChildren() {
@@ -299,6 +302,7 @@ func (s *Server) VideoTrackSnap(ctx context.Context, req *pb.StreamSnapRequest) 
 		} else {
 			err = pkg.ErrNotFound
 		}
+		return nil
 	})
 	return
 }
@@ -320,34 +324,36 @@ func (s *Server) Shutdown(ctx context.Context, req *pb.RequestWithId) (res *empt
 }
 
 func (s *Server) ChangeSubscribe(ctx context.Context, req *pb.ChangeSubscribeRequest) (res *pb.SuccessResponse, err error) {
-	s.streamTM.Call(func() {
+	s.streamTask.Call(func(*pkg.Task) error {
 		if subscriber, ok := s.Subscribers.Get(req.Id); ok {
 			if pub, ok := s.Streams.Get(req.StreamPath); ok {
 				subscriber.Publisher.RemoveSubscriber(subscriber)
 				subscriber.StreamPath = req.StreamPath
 				pub.AddSubscriber(subscriber)
-				return
+				return nil
 			}
 		}
 		err = pkg.ErrNotFound
+		return nil
 	})
 	return &pb.SuccessResponse{}, err
 }
 
 func (s *Server) StopSubscribe(ctx context.Context, req *pb.RequestWithId) (res *pb.SuccessResponse, err error) {
-	s.streamTM.Call(func() {
+	s.streamTask.Call(func(*pkg.Task) error {
 		if subscriber, ok := s.Subscribers.Get(req.Id); ok {
 			subscriber.Stop(errors.New("stop by api"))
 		} else {
 			err = pkg.ErrNotFound
 		}
+		return nil
 	})
 	return &pb.SuccessResponse{}, err
 }
 
 // /api/stream/list
 func (s *Server) StreamList(_ context.Context, req *pb.StreamListRequest) (res *pb.StreamListResponse, err error) {
-	s.streamTM.Call(func() {
+	s.streamTask.Call(func(*pkg.Task) error {
 		var streams []*pb.StreamInfoResponse
 		for publisher := range s.Streams.Range {
 			info, err := s.getStreamInfo(publisher)
@@ -357,18 +363,20 @@ func (s *Server) StreamList(_ context.Context, req *pb.StreamListRequest) (res *
 			streams = append(streams, info)
 		}
 		res = &pb.StreamListResponse{List: streams, Total: int32(s.Streams.Length), PageNum: req.PageNum, PageSize: req.PageSize}
+		return nil
 	})
 	return
 }
 
 func (s *Server) WaitList(context.Context, *emptypb.Empty) (res *pb.StreamWaitListResponse, err error) {
-	s.streamTM.Call(func() {
+	s.streamTask.Call(func(*pkg.Task) error {
 		res = &pb.StreamWaitListResponse{
 			List: make(map[string]int32),
 		}
 		for subs := range s.Waiting.Range {
 			res.List[subs.StreamPath] = int32(subs.Subscribers.Length)
 		}
+		return nil
 	})
 	return
 }

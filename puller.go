@@ -2,13 +2,14 @@ package m7s
 
 import (
 	"context"
+	"time"
+
 	"m7s.live/m7s/v5/pkg"
 	"m7s.live/m7s/v5/pkg/config"
-	"time"
 )
 
 type Connection struct {
-	pkg.Task
+	pkg.MarcoTask
 	Plugin         *Plugin
 	StreamPath     string // 对应本地流
 	RemoteURL      string // 远程服务器地址（用于推拉）
@@ -27,7 +28,6 @@ type Puller = func(*PullContext) error
 
 func createPullContext(p *Plugin, streamPath string, url string, options ...any) (pullCtx *PullContext) {
 	pullCtx = &PullContext{Pull: p.config.Pull}
-	pullCtx.ID = p.Server.pullTM.GetID()
 	pullCtx.Plugin = p
 	pullCtx.ConnectProxy = p.config.Pull.Proxy
 	pullCtx.RemoteURL = url
@@ -44,8 +44,9 @@ func createPullContext(p *Plugin, streamPath string, url string, options ...any)
 			pullCtx.PublishOptions = append(pullCtx.PublishOptions, option)
 		}
 	}
-	p.Init(ctx, p.Logger.With("pullURL", url, "streamPath", streamPath))
+	p.InitKeepAlive(ctx, p.Logger.With("pullURL", url, "streamPath", streamPath), pullCtx)
 	pullCtx.PublishOptions = append(pullCtx.PublishOptions, pullCtx.Context)
+	p.Server.pullTask.AddTask(pullCtx)
 	return
 }
 
@@ -60,30 +61,25 @@ func (p *PullContext) GetKey() string {
 	return p.StreamPath
 }
 
-func (p *PullContext) Run(puller Puller) {
-	var err error
-	for p.reconnect(p.RePull) {
-		if p.Publisher != nil {
-			if time.Since(p.Publisher.StartTime) < 5*time.Second {
+func (p *PullContext) Do(puller Puller) {
+	p.AddCall(func(tmpTask *pkg.Task) (err error) {
+		publishOptions := append([]any{tmpTask.Context}, p.PublishOptions...)
+		if p.Publisher, err = p.Plugin.Publish(p.StreamPath, publishOptions...); err != nil {
+			p.Error("pull publish failed", "error", err)
+			return
+		}
+		err = puller(p)
+		if p.reconnect(p.RePull) {
+			if time.Since(tmpTask.StartTime) < 5*time.Second {
 				time.Sleep(5 * time.Second)
 			}
 			p.Warn("retry", "count", p.ReConnectCount, "total", p.RePull)
+			p.Do(puller)
+		} else {
+			p.Stop(pkg.ErrRetryRunOut)
 		}
-		if p.Publisher, err = p.Plugin.Publish(p.StreamPath, p.PublishOptions...); err != nil {
-			p.Error("pull publish failed", "error", err)
-			break
-		}
-		err = puller(p)
-		p.Publisher.Stop(err)
-		if p.IsStopped() {
-			return
-		}
-		p.Error("pull interrupt", "error", err)
-	}
-	if err == nil {
-		err = pkg.ErrRetryRunOut
-	}
-	p.Stop(err)
+		return
+	}, nil)
 }
 
 func (p *PullContext) Start() (err error) {
@@ -92,6 +88,9 @@ func (p *PullContext) Start() (err error) {
 		return pkg.ErrStreamExist
 	}
 	s.Pulls.Add(p)
+	if p.Plugin.Meta.Puller != nil {
+		p.Do(p.Plugin.Meta.Puller)
+	}
 	return
 }
 

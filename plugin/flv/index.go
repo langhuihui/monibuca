@@ -22,7 +22,7 @@ const defaultConfig m7s.DefaultYaml = `publish:
 
 func (p *FLVPlugin) OnInit() error {
 	for streamPath, url := range p.GetCommonConf().PullOnStart {
-		go p.PullBlock(streamPath, url, PullFLV)
+		p.Pull(streamPath, url, PullFLV)
 	}
 	return nil
 }

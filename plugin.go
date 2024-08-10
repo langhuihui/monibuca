@@ -2,16 +2,7 @@ package m7s
 
 import (
 	"context"
-	gatewayRuntime "github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
-	myip "github.com/husanpao/ip"
-	"google.golang.org/grpc"
-	"gopkg.in/yaml.v3"
-	"gorm.io/gorm"
 	"log/slog"
-	. "m7s.live/m7s/v5/pkg"
-	"m7s.live/m7s/v5/pkg/config"
-	"m7s.live/m7s/v5/pkg/db"
-	"m7s.live/m7s/v5/pkg/util"
 	"net"
 	"net/http"
 	"os"
@@ -19,6 +10,16 @@ import (
 	"reflect"
 	"runtime"
 	"strings"
+
+	gatewayRuntime "github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
+	myip "github.com/husanpao/ip"
+	"google.golang.org/grpc"
+	"gopkg.in/yaml.v3"
+	"gorm.io/gorm"
+	. "m7s.live/m7s/v5/pkg"
+	"m7s.live/m7s/v5/pkg/config"
+	"m7s.live/m7s/v5/pkg/db"
+	"m7s.live/m7s/v5/pkg/util"
 )
 
 type DefaultYaml string
@@ -51,7 +52,7 @@ func (plugin *PluginMeta) Init(s *Server, userConfig map[string]any) (p *Plugin)
 	p.handler = instance
 	p.Meta = plugin
 	p.Server = s
-	p.Task.Init(s.Context, s.Logger.With("plugin", plugin.Name), instance)
+	p.MarcoTask.Init(s.Context, s.Logger.With("plugin", plugin.Name), instance)
 	upperName := strings.ToUpper(plugin.Name)
 	if os.Getenv(upperName+"_ENABLE") == "false" {
 		p.Disabled = true
@@ -180,7 +181,7 @@ func InstallPlugin[C iPlugin](options ...any) error {
 }
 
 type Plugin struct {
-	Task
+	MarcoTask
 	Disabled bool
 	Meta     *PluginMeta
 	config   config.Common
@@ -352,7 +353,7 @@ func (p *Plugin) Publish(streamPath string, options ...any) (publisher *Publishe
 			}
 		}
 	}
-	err = p.Server.streamTM.Start(publisher)
+	err = p.Server.streamTask.WaitTaskAdded(publisher)
 	return
 }
 
@@ -370,48 +371,20 @@ func (p *Plugin) Subscribe(streamPath string, options ...any) (subscriber *Subsc
 			}
 		}
 	}
-	err = p.Server.streamTM.Start(subscriber)
+	err = p.Server.streamTask.WaitTaskAdded(subscriber)
 	err = subscriber.Publisher.WaitTrack()
 	return
 }
 
-func (p *Plugin) pull(streamPath string, url string, options ...any) (ctx *PullContext, err error) {
-	ctx = createPullContext(p, streamPath, url, options...)
-	err = p.Server.pullTM.Start(ctx)
-	return
-}
-
 func (p *Plugin) Pull(streamPath string, url string, options ...any) (ctx *PullContext, err error) {
-	if ctx, err = p.pull(streamPath, url, options...); err == nil && p.Meta.Puller != nil {
-		go p.Meta.Puller(ctx)
-	}
-	return
-}
-
-func (p *Plugin) PullBlock(streamPath string, url string, options ...any) (ctx *PullContext, err error) {
-	if ctx, err = p.pull(streamPath, url, options...); err == nil && p.Meta.Puller != nil {
-		err = p.Meta.Puller(ctx)
-	}
-	return
-}
-
-func (p *Plugin) push(streamPath string, url string, options ...any) (ctx *PushContext, err error) {
-	ctx = createPushContext(p, streamPath, url, options...)
-	err = p.Server.pushTM.Start(ctx)
+	ctx = createPullContext(p, streamPath, url, options...)
+	err = p.Server.pullTask.WaitTaskAdded(ctx);
 	return
 }
 
 func (p *Plugin) Push(streamPath string, url string, options ...any) (ctx *PushContext, err error) {
-	if ctx, err = p.push(streamPath, url, options...); err == nil && p.Meta.Pusher != nil {
-		go p.Meta.Pusher(ctx)
-	}
-	return
-}
-
-func (p *Plugin) PushBlock(streamPath string, url string, options ...any) (ctx *PushContext, err error) {
-	if ctx, err = p.push(streamPath, url, options...); err == nil && p.Meta.Pusher != nil {
-		err = p.Meta.Pusher(ctx)
-	}
+	ctx = createPushContext(p, streamPath, url, options...)
+	err = p.Server.pushTask.WaitTaskAdded(ctx)
 	return
 }
 
@@ -428,7 +401,7 @@ func (p *Plugin) record(streamPath string, filePath string, options ...any) (ctx
 	if err != nil {
 		return
 	}
-	err = p.Server.recordTM.Start(ctx)
+	err = p.Server.recordTask.WaitTaskAdded(ctx)
 	return
 }
 
@@ -501,7 +474,7 @@ func (p *Plugin) AddLogHandler(handler slog.Handler) {
 }
 
 func (p *Plugin) SaveConfig() (err error) {
-	p.Server.pluginTM.Call(func() {
+	p.Server.Call(func(*Task) (err error) {
 		if p.Modify == nil {
 			os.Remove(p.settingPath())
 			return
@@ -512,6 +485,7 @@ func (p *Plugin) SaveConfig() (err error) {
 		}
 		defer file.Close()
 		err = yaml.NewEncoder(file).Encode(p.Modify)
+		return
 	})
 	if err == nil {
 		p.Info("config saved")

@@ -1,23 +1,21 @@
 package rtp
 
 import (
+	"testing"
+
 	"github.com/pion/webrtc/v3"
 	"m7s.live/m7s/v5/pkg"
 	"m7s.live/m7s/v5/pkg/util"
-	"testing"
 )
 
 func TestRTPH264Ctx_CreateFrame(t *testing.T) {
-	var ctx = &H264Ctx{
-		RTPCtx: RTPCtx{
-			RTPCodecParameters: webrtc.RTPCodecParameters{
-				PayloadType: 96,
-				RTPCodecCapability: webrtc.RTPCodecCapability{
-					MimeType:    webrtc.MimeTypeH264,
-					ClockRate:   90000,
-					SDPFmtpLine: "packetization-mode=1; sprop-parameter-sets=J2QAKaxWgHgCJ+WagICAgQ==,KO48sA==; profile-level-id=640029",
-				},
-			},
+	var ctx = &H264Ctx{}
+	ctx.RTPCodecParameters = webrtc.RTPCodecParameters{
+		PayloadType: 96,
+		RTPCodecCapability: webrtc.RTPCodecCapability{
+			MimeType:    webrtc.MimeTypeH264,
+			ClockRate:   90000,
+			SDPFmtpLine: "packetization-mode=1; sprop-parameter-sets=J2QAKaxWgHgCJ+WagICAgQ==,KO48sA==; profile-level-id=640029",
 		},
 	}
 	var randStr = util.RandomString(1500)

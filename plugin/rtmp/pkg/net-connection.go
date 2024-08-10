@@ -2,7 +2,6 @@ package rtmp
 
 import (
 	"errors"
-	"m7s.live/m7s/v5/pkg"
 	"net"
 	"runtime"
 	"sync/atomic"
@@ -43,23 +42,19 @@ const (
 )
 
 type NetConnection struct {
-	pkg.Task
 	*util.BufReader
 	net.Conn
-	bandwidth       uint32
-	readSeqNum      uint32 // 当前读的字节
-	writeSeqNum     uint32 // 当前写的字节
-	totalWrite      uint32 // 总共写了多少字节
-	totalRead       uint32 // 总共读了多少字节
-	WriteChunkSize  int
-	readChunkSize   int
-	incommingChunks map[uint32]*Chunk
-	ObjectEncoding  float64
-	AppName         string
-	tmpBuf          util.Buffer //用来接收/发送小数据，复用内存
-	chunkHeaderBuf  util.Buffer
-	mediaDataPool   util.RecyclableMemory
-	writing         atomic.Bool // false 可写，true 不可写
+	bandwidth                     uint32
+	readSeqNum, writeSeqNum       uint32 // 当前读的字节
+	totalRead, totalWrite         uint32 // 总共读写了多少字节
+	ReadChunkSize, WriteChunkSize int
+	incommingChunks               map[uint32]*Chunk
+	ObjectEncoding                float64
+	AppName                       string
+	tmpBuf                        util.Buffer //用来接收/发送小数据，复用内存
+	chunkHeaderBuf                util.Buffer
+	mediaDataPool                 util.RecyclableMemory
+	writing                       atomic.Bool // false 可写，true 不可写
 }
 
 func NewNetConnection(conn net.Conn) (ret *NetConnection) {
@@ -67,7 +62,7 @@ func NewNetConnection(conn net.Conn) (ret *NetConnection) {
 		Conn:            conn,
 		BufReader:       util.NewBufReader(conn),
 		WriteChunkSize:  RTMP_DEFAULT_CHUNK_SIZE,
-		readChunkSize:   RTMP_DEFAULT_CHUNK_SIZE,
+		ReadChunkSize:   RTMP_DEFAULT_CHUNK_SIZE,
 		incommingChunks: make(map[uint32]*Chunk),
 		bandwidth:       RTMP_MAX_CHUNK_SIZE << 3,
 		tmpBuf:          make(util.Buffer, 4),
@@ -150,10 +145,10 @@ func (conn *NetConnection) readChunk() (msg *Chunk, err error) {
 		return nil, nil
 	}
 	var bufSize = 0
-	if unRead := msgLen - chunk.bufLen; unRead < conn.readChunkSize {
+	if unRead := msgLen - chunk.bufLen; unRead < conn.ReadChunkSize {
 		bufSize = unRead
 	} else {
-		bufSize = conn.readChunkSize
+		bufSize = conn.ReadChunkSize
 	}
 	conn.readSeqNum += uint32(bufSize)
 	if chunk.bufLen == 0 {
@@ -275,8 +270,7 @@ func (conn *NetConnection) RecvMessage() (msg *Chunk, err error) {
 		if msg, err = conn.readChunk(); msg != nil && err == nil {
 			switch msg.MessageTypeID {
 			case RTMP_MSG_CHUNK_SIZE:
-				conn.readChunkSize = int(msg.MsgData.(Uint32Message))
-				conn.Info("msg read chunk size", "readChunkSize", conn.readChunkSize)
+				conn.ReadChunkSize = int(msg.MsgData.(Uint32Message))
 			case RTMP_MSG_ABORT:
 				delete(conn.incommingChunks, uint32(msg.MsgData.(Uint32Message)))
 			case RTMP_MSG_ACK, RTMP_MSG_EDGE:

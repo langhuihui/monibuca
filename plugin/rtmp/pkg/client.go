@@ -43,7 +43,6 @@ func createClient(c *m7s.Connection) (*NetStream, error) {
 	}
 	ns := &NetStream{}
 	ns.NetConnection = NewNetConnection(conn)
-	c.With(ns)
 	defer func() {
 		if err != nil {
 			ns.Dispose()

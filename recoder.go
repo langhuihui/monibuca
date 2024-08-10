@@ -15,7 +15,7 @@ func createRecoder(p *Plugin, streamPath string, filePath string, options ...any
 		Append:   p.config.Record.Append,
 		FilePath: filePath,
 	}
-	recorder.ID = p.Server.recordTM.GetID()
+	recorder.ID = p.Server.recordTask.GetID()
 	recorder.FilePath = filePath
 	recorder.SubscribeOptions = []any{p.config.Subscribe}
 	var ctx = p.Context

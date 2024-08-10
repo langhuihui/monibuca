@@ -3,3 +3,8 @@
 logs
 fatal
 .idea
+victoria-logs-data
+dump
+record
+bin
+.DS_Store

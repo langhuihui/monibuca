@@ -36,7 +36,7 @@ var (
 		Version: Version,
 	}
 	Servers           util.Collection[uint32, *Server]
-	serverTM          = NewTaskManager()
+	globalTask        MarcoTask
 	Routes            = map[string]string{}
 	defaultLogHandler = console.NewHandler(os.Stdout, &console.HandlerOptions{TimeFormat: "15:04:05.000000"})
 )
@@ -53,27 +53,26 @@ type Server struct {
 	pb.UnimplementedGlobalServer
 	Plugin
 	ServerConfig
-	//eventChan                          chan any
-	Plugins                                      util.Collection[string, *Plugin]
-	Streams, Waiting                             util.Collection[string, *Publisher]
-	Pulls                                        util.Collection[string, *PullContext]
-	Pushs                                        util.Collection[string, *PushContext]
-	Records                                      util.Collection[string, *RecordContext]
-	Subscribers                                  SubscriberCollection
-	LogHandler                                   MultiLogHandler
-	apiList                                      []string
-	grpcServer                                   *grpc.Server
-	grpcClientConn                               *grpc.ClientConn
-	tcplis                                       net.Listener
-	lastSummaryTime                              time.Time
-	lastSummary                                  *pb.SummaryResponse
-	pluginTM, streamTM, pullTM, pushTM, recordTM *TaskManager
-	conf                                         any
+	Plugins                                    util.Collection[string, *Plugin]
+	Streams, Waiting                           util.Collection[string, *Publisher]
+	Pulls                                      util.Collection[string, *PullContext]
+	Pushs                                      util.Collection[string, *PushContext]
+	Records                                    util.Collection[string, *RecordContext]
+	Subscribers                                SubscriberCollection
+	LogHandler                                 MultiLogHandler
+	apiList                                    []string
+	grpcServer                                 *grpc.Server
+	grpcClientConn                             *grpc.ClientConn
+	tcplis                                     net.Listener
+	lastSummaryTime                            time.Time
+	lastSummary                                *pb.SummaryResponse
+	streamTask, pullTask, pushTask, recordTask MarcoTask
+	conf                                       any
 }
 
 func NewServer() (s *Server) {
 	s = &Server{}
-	s.ID = serverTM.GetID()
+	s.ID = globalTask.GetID()
 	s.Meta = &serverMeta
 	return
 }
@@ -87,12 +86,16 @@ type rawconfig = map[string]map[string]any
 func init() {
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
-	go serverTM.Run(signalChan, func(os.Signal) {
+	globalTask.InitKeepAlive(context.Background(), nil, nil, signalChan, func(os.Signal) {
 		for _, meta := range plugins {
 			if meta.OnExit != nil {
 				meta.OnExit()
 			}
 		}
+		if serverMeta.OnExit != nil {
+			serverMeta.OnExit()
+		}
+		os.Exit(0)
 	})
 	for k, v := range myip.LocalAndInternalIPs() {
 		Routes[k] = v
@@ -116,7 +119,7 @@ func (s *Server) Init(ctx context.Context, conf any) {
 	s.config.TCP.ListenAddr = ":50051"
 	s.LogHandler.SetLevel(slog.LevelInfo)
 	s.LogHandler.Add(defaultLogHandler)
-	s.Task.Init(ctx, slog.New(&s.LogHandler).With("Server", s.ID))
+	s.MarcoTask.Init(ctx, slog.New(&s.LogHandler).With("Server", s.ID), s)
 }
 
 func (s *Server) Start() (err error) {
@@ -204,10 +207,9 @@ func (s *Server) Start() (err error) {
 			return
 		}
 	}
-	s.pluginTM = StartTaskManager()
 	for _, plugin := range plugins {
 		if p := plugin.Init(s, cg[strings.ToLower(plugin.Name)]); !p.Disabled {
-			s.pluginTM.Start(&p.Task)
+			s.WaitTaskAdded(p)
 		}
 	}
 	if s.tcplis != nil {
@@ -219,7 +221,7 @@ func (s *Server) Start() (err error) {
 			}
 		}(tcpConf.ListenAddr)
 	}
-	s.streamTM = StartTaskManager(time.NewTicker(s.PulseInterval).C, func(time.Time) {
+	s.streamTask.InitKeepAlive(s.Context, nil, nil, time.NewTicker(s.PulseInterval).C, func(time.Time) {
 		for publisher := range s.Streams.Range {
 			if err := publisher.checkTimeout(); err != nil {
 				publisher.Stop(err)
@@ -242,15 +244,16 @@ func (s *Server) Start() (err error) {
 			}
 		}
 	})
-	s.pullTM = StartTaskManager()
-	s.pushTM = StartTaskManager()
-	s.recordTM = StartTaskManager()
+	s.pullTask.InitKeepAlive(s.Context, nil, nil)
+	s.pushTask.InitKeepAlive(s.Context, nil, nil)
+	s.recordTask.InitKeepAlive(s.Context, nil, nil)
+	s.AddTasks(&s.streamTask, &s.pullTask, &s.pushTask, &s.recordTask)
 	Servers.Add(s)
 	return
 }
 
-func (s *Server) Call(callback func()) {
-	s.streamTM.Call(callback)
+func (s *Server) CallOnStreamTask(callback func(*Task) error) {
+	s.streamTask.Call(callback)
 }
 
 func (s *Server) Dispose() {
@@ -258,22 +261,15 @@ func (s *Server) Dispose() {
 	_ = s.tcplis.Close()
 	_ = s.grpcClientConn.Close()
 	s.config.HTTP.StopListen()
-	err := context.Cause(s)
-	s.streamTM.ShutDown(err)
-	s.pullTM.ShutDown(err)
-	s.pushTM.ShutDown(err)
-	s.recordTM.ShutDown(err)
-	s.pluginTM.ShutDown(err)
 }
 
 func (s *Server) Run(ctx context.Context, conf any) (err error) {
 	for {
 		s.Init(ctx, conf)
-		if err = serverTM.Start(s); err != nil {
+		if err = globalTask.WaitTaskAdded(s); err != nil {
 			return
 		}
-		<-s.Done()
-		if err = context.Cause(s); err != ErrRestart {
+		if err = s.WaitStopped(); err != ErrRestart {
 			return
 		}
 		var server Server

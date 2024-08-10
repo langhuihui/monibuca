@@ -91,7 +91,7 @@ func (p *Publisher) GetKey() string {
 
 func createPublisher(p *Plugin, streamPath string, options ...any) (publisher *Publisher) {
 	publisher = &Publisher{Publish: p.config.Publish}
-	publisher.ID = p.Server.streamTM.GetID()
+	publisher.ID = p.Server.streamTask.GetID()
 	publisher.Plugin = p
 	publisher.TimeoutTimer = time.NewTimer(p.config.PublishTimeout)
 	var opt = []any{publisher, p.Logger.With("streamPath", streamPath, "pId", publisher.ID)}
@@ -137,7 +137,7 @@ func (p *Publisher) Start() (err error) {
 		}
 		if remoteURL := plugin.GetCommonConf().CheckPush(p.StreamPath); remoteURL != "" {
 			if plugin.Meta.Pusher != nil {
-				go plugin.PushBlock(p.StreamPath, remoteURL, plugin.Meta.Pusher)
+				plugin.Push(p.StreamPath, remoteURL, plugin.Meta.Pusher)
 			}
 		}
 		if filePath := plugin.GetCommonConf().CheckRecord(p.StreamPath); filePath != "" {

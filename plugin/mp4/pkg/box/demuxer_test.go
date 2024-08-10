@@ -5,6 +5,8 @@ import (
 	"io"
 	"os"
 	"testing"
+
+	"m7s.live/m7s/v5/pkg/util"
 )
 
 func TestCreateMovDemuxer(t *testing.T) {
@@ -27,7 +29,7 @@ func TestCreateMovDemuxer(t *testing.T) {
 	mp4info := demuxer.GetMp4Info()
 	fmt.Printf("%+v\n", mp4info)
 	for {
-		pkg, err := demuxer.ReadPacket()
+		pkg, err := demuxer.ReadPacket(util.NewScalableMemoryAllocator(1 << 10))
 		if err != nil {
 			fmt.Println(err)
 			break
