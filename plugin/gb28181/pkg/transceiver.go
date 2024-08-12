@@ -136,7 +136,6 @@ func (p *Receiver) ReadRTP(rtp util.Buffer) (err error) {
 	if err = p.Unmarshal(rtp); err != nil {
 		return
 	}
-	p.FeedChan <- p.Packet.Payload
 	return
 }
 

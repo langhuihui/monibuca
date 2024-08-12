@@ -52,7 +52,7 @@ func (plugin *PluginMeta) Init(s *Server, userConfig map[string]any) (p *Plugin)
 	p.handler = instance
 	p.Meta = plugin
 	p.Server = s
-	p.MarcoTask.Init(s.Context, s.Logger.With("plugin", plugin.Name), instance)
+	p.Logger = s.Logger.With("plugin", plugin.Name)
 	upperName := strings.ToUpper(plugin.Name)
 	if os.Getenv(upperName+"_ENABLE") == "false" {
 		p.Disabled = true
@@ -102,11 +102,11 @@ func (plugin *PluginMeta) Init(s *Server, userConfig map[string]any) (p *Plugin)
 			if err != nil {
 				s.Error("failed to connect database", "error", err, "dsn", s.config.DSN, "type", s.config.DBType)
 				p.Disabled = true
-				p.Stop(err)
 				return
 			}
 		}
 	}
+	p.Description = map[string]any{"name": plugin.Name, "version": plugin.Version}
 	return
 }
 
@@ -115,7 +115,7 @@ type iPlugin interface {
 }
 
 type IPlugin interface {
-	TaskExecutor
+	ITask
 	OnInit() error
 }
 
@@ -181,7 +181,7 @@ func InstallPlugin[C iPlugin](options ...any) error {
 }
 
 type Plugin struct {
-	MarcoTask
+	MarcoLongTask
 	Disabled bool
 	Meta     *PluginMeta
 	config   config.Common
@@ -339,8 +339,8 @@ func (p *Plugin) OnExit() {
 
 }
 
-func (p *Plugin) Publish(streamPath string, options ...any) (publisher *Publisher, err error) {
-	publisher = createPublisher(p, streamPath, options...)
+func (p *Plugin) PublishWithConfig(ctx context.Context, streamPath string, conf config.Publish) (publisher *Publisher, err error) {
+	publisher = createPublisher(p, streamPath, conf)
 	if p.config.EnableAuth {
 		onAuthPub := p.Meta.OnAuthPub
 		if onAuthPub == nil {
@@ -353,12 +353,16 @@ func (p *Plugin) Publish(streamPath string, options ...any) (publisher *Publishe
 			}
 		}
 	}
-	err = p.Server.streamTask.WaitTaskAdded(publisher)
+	err = p.Server.streamTask.AddTaskWithContext(ctx, publisher).WaitStarted()
 	return
 }
 
-func (p *Plugin) Subscribe(streamPath string, options ...any) (subscriber *Subscriber, err error) {
-	subscriber = createSubscriber(p, streamPath, options...)
+func (p *Plugin) Publish(ctx context.Context, streamPath string) (publisher *Publisher, err error) {
+	return p.PublishWithConfig(ctx, streamPath, p.config.Publish)
+}
+
+func (p *Plugin) SubscribeWithConfig(ctx context.Context, streamPath string, conf config.Subscribe) (subscriber *Subscriber, err error) {
+	subscriber = createSubscriber(p, streamPath, conf)
 	if p.config.EnableAuth {
 		onAuthSub := p.Meta.OnAuthSub
 		if onAuthSub == nil {
@@ -371,51 +375,30 @@ func (p *Plugin) Subscribe(streamPath string, options ...any) (subscriber *Subsc
 			}
 		}
 	}
-	err = p.Server.streamTask.WaitTaskAdded(subscriber)
+	err = p.Server.streamTask.AddTaskWithContext(ctx, subscriber).WaitStarted()
 	err = subscriber.Publisher.WaitTrack()
 	return
 }
 
-func (p *Plugin) Pull(streamPath string, url string, options ...any) (ctx *PullContext, err error) {
-	ctx = createPullContext(p, streamPath, url, options...)
-	err = p.Server.pullTask.WaitTaskAdded(ctx);
+func (p *Plugin) Subscribe(ctx context.Context, streamPath string) (subscriber *Subscriber, err error) {
+	return p.SubscribeWithConfig(ctx, streamPath, p.config.Subscribe)
+}
+
+func (p *Plugin) Pull(streamPath string, url string) (ctx *PullContext, err error) {
+	ctx = createPullContext(p, streamPath, url)
+	err = p.Server.pullTask.AddTask(ctx).WaitStarted()
 	return
 }
 
-func (p *Plugin) Push(streamPath string, url string, options ...any) (ctx *PushContext, err error) {
-	ctx = createPushContext(p, streamPath, url, options...)
-	err = p.Server.pushTask.WaitTaskAdded(ctx)
+func (p *Plugin) Push(streamPath string, url string) (ctx *PushContext, err error) {
+	ctx = createPushContext(p, streamPath, url)
+	err = p.Server.pushTask.AddTask(ctx).WaitStarted()
 	return
 }
 
-func (p *Plugin) record(streamPath string, filePath string, options ...any) (ctx *RecordContext, err error) {
-	ctx = createRecoder(p, streamPath, filePath, options...)
-	dir := filePath
-	if filepath.Ext(filePath) != "" {
-		dir = filepath.Dir(filePath)
-	}
-	if err = os.MkdirAll(dir, 0755); err != nil {
-		return
-	}
-	ctx.Subscriber, err = p.Subscribe(streamPath, p.config.Subscribe)
-	if err != nil {
-		return
-	}
-	err = p.Server.recordTask.WaitTaskAdded(ctx)
-	return
-}
-
-func (p *Plugin) Record(streamPath string, filePath string, options ...any) (ctx *RecordContext, err error) {
-	if ctx, err = p.record(streamPath, filePath, options...); err == nil && p.Meta.Recorder != nil {
-		go p.Meta.Recorder(ctx)
-	}
-	return
-}
-
-func (p *Plugin) RecordBlock(streamPath string, filePath string, options ...any) (ctx *RecordContext, err error) {
-	if ctx, err = p.record(streamPath, filePath, options...); err == nil && p.Meta.Recorder != nil {
-		err = p.Meta.Recorder(ctx)
-	}
+func (p *Plugin) Record(streamPath string, filePath string) (ctx *RecordContext, err error) {
+	ctx = createRecoder(p, streamPath, filePath)
+	err = p.Server.recordTask.AddTask(ctx).WaitStarted()
 	return
 }
 

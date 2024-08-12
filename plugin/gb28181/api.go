@@ -76,6 +76,11 @@ func (gb *GB28181Plugin) replayPS(pub *m7s.Publisher, f *os.File) {
 			return
 		}
 		err = receiver.ReadRTP(payload)
+		select {
+		case receiver.FeedChan <- receiver.Packet.Payload:
+		case <-pub.Done():
+			return
+		}
 	}
 }
 
@@ -97,7 +102,7 @@ func (gb *GB28181Plugin) api_ps_replay(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		var pub *m7s.Publisher
-		if pub, err = gb.Publish(streamPath, f); err == nil {
+		if pub, err = gb.Publish(gb.Context, streamPath); err == nil {
 			go gb.replayPS(pub, f)
 			util.ReturnOK(w, r)
 		} else {

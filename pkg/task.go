@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"reflect"
 	"slices"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -17,45 +18,94 @@ const TraceLevel = slog.Level(-8)
 var (
 	ErrAutoStop     = errors.New("auto stop")
 	ErrCallbackTask = errors.New("callback task")
+	EmptyStart      = func() error { return nil }
+	EmptyDispose    = func() {}
 )
 
-type getTask interface{ GetTask() *Task }
-type TaskExecutor interface {
-	Start() error
-	Dispose()
-}
-
-type TempTaskExecutor struct {
-	StartFunc   func() error
-	DisposeFunc func()
-}
-
-func (t TempTaskExecutor) Start() error {
-	if t.StartFunc == nil {
-		return nil
+type (
+	ITask interface {
+		getTask() *Task
+		Stop(error)
+		StopReason() error
+		start(*MarcoTask) (reflect.Value, error)
+		dispose(*MarcoTask)
+		IsStopped() bool
 	}
-	return t.StartFunc()
+	IChannelTask interface {
+		tick(reflect.Value)
+	}
+	iMacroMask interface {
+		ITask
+		macroTask() *MarcoTask
+	}
+	TaskStarter interface {
+		Start() error
+	}
+	TaskDisposal interface {
+		Dispose()
+	}
+	Task struct {
+		ID        uint32
+		StartTime time.Time
+		*slog.Logger
+		context.Context
+		context.CancelCauseFunc
+		startHandler      func() error
+		disposeHandler    func()
+		Description       map[string]any
+		startup, shutdown *util.Promise
+		parent            *MarcoTask
+	}
+	ChannelTask struct {
+		stopReason error
+		channel    reflect.Value
+		callback   reflect.Value
+		stop       func(error)
+	}
+	RetryTask struct {
+		Task
+		MaxRetry      int
+		RetryCount    int
+		RetryInterval time.Duration
+	}
+	IRetryTask interface {
+		ITask
+		getRetryTask() *RetryTask
+	}
+)
+
+func (t *ChannelTask) getTask() *Task {
+	return nil
 }
 
-func (t TempTaskExecutor) Dispose() {
-	if t.DisposeFunc != nil {
-		t.DisposeFunc()
+func (t *ChannelTask) start(*MarcoTask) (reflect.Value, error) {
+	return t.channel, nil
+}
+
+func (t *ChannelTask) dispose(*MarcoTask) {
+
+}
+
+func (t *ChannelTask) Stop(err error) {
+	t.stopReason = err
+	if t.stop != nil {
+		t.stop(err)
 	}
 }
 
-type Task struct {
-	ID        uint32
-	StartTime time.Time
-	*slog.Logger
-	context.Context
-	context.CancelCauseFunc
-	exe               TaskExecutor
-	Description       map[string]any
-	startup, shutdown *util.Promise
-	parent            *MarcoTask
+func (t *ChannelTask) IsStopped() bool {
+	return t.stopReason != nil
 }
 
-func (task *Task) GetTask() *Task {
+func (t *ChannelTask) StopReason() error {
+	return t.stopReason
+}
+
+func (t *ChannelTask) tick(signal reflect.Value) {
+	t.callback.Call([]reflect.Value{signal})
+}
+
+func (task *Task) getTask() *Task {
 	return task
 }
 
@@ -85,14 +135,40 @@ func (task *Task) StopReason() error {
 
 func (task *Task) Stop(err error) {
 	if task.CancelCauseFunc != nil && !task.IsStopped() {
-		task.Info("stop", "reason", err.Error())
+		if task.Logger != nil {
+			task.Debug("task stop", "reason", err.Error(), "elapsed", time.Since(task.StartTime), "taskId", task.ID)
+		}
 		task.CancelCauseFunc(err)
 	}
 }
 
-func (task *Task) Init(ctx context.Context, logger *slog.Logger, executor TaskExecutor) {
-	task.Logger = logger
-	task.exe = executor
+func (task *Task) start(mt *MarcoTask) (signal reflect.Value, err error) {
+	if task.parent != mt {
+		return
+	}
+	task.StartTime = time.Now()
+	err = task.startHandler()
+	if task.Logger != nil {
+		task.Debug("task start", "taskId", task.ID)
+	}
+	task.startup.Fulfill(err)
+	signal = reflect.ValueOf(task.Done())
+	return
+}
+
+func (task *Task) dispose(mt *MarcoTask) {
+	if task.parent != mt {
+		return
+	}
+	reason := task.StopReason()
+	if task.Logger != nil {
+		task.Debug("task dispose", "reason", reason, "taskId", task.ID)
+	}
+	task.disposeHandler()
+	task.shutdown.Fulfill(reason)
+}
+
+func (task *Task) init(ctx context.Context) {
 	task.Context, task.CancelCauseFunc = context.WithCancelCause(ctx)
 	task.startup = util.NewPromise(task.Context)
 	task.shutdown = util.NewPromise(task.Context)
@@ -100,65 +176,78 @@ func (task *Task) Init(ctx context.Context, logger *slog.Logger, executor TaskEx
 
 type CallBack func(*Task) error
 
+type MarcoLongTask struct {
+	MarcoTask
+}
+
+func (task *MarcoLongTask) start(mt *MarcoTask) (signal reflect.Value, err error) {
+	task.keepAlive = true
+	return task.Task.start(mt)
+}
+
+func (r *RetryTask) getRetryTask() *RetryTask {
+	return r
+}
+
 // MarcoTask include sub tasks
 type MarcoTask struct {
 	Task
-	KeepAlive      bool
-	exe            TaskExecutor
-	addSub         chan *Task
-	subTasks       []*Task
-	extraCases     []reflect.SelectCase
-	extraCallbacks []reflect.Value
-	idG            atomic.Uint32
+	addSub    chan ITask
+	children  []ITask
+	idG       atomic.Uint32
+	lazyRun   sync.Once
+	keepAlive bool
 }
 
-func (mt *MarcoTask) Init(ctx context.Context, logger *slog.Logger, executor TaskExecutor, extra ...any) {
-	mt.Task.Init(ctx, logger, mt)
-	mt.exe = executor
-	for i := range len(extra) / 2 {
-		mt.extraCases = append(mt.extraCases, reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(extra[i*2])})
-		mt.extraCallbacks = append(mt.extraCallbacks, reflect.ValueOf(extra[i*2+1]))
-	}
+func (mt *MarcoTask) macroTask() *MarcoTask {
+	return mt
 }
 
-func (mt *MarcoTask) InitKeepAlive(ctx context.Context, logger *slog.Logger, executor TaskExecutor, extra ...any) {
-	mt.Init(ctx, logger, executor, extra...)
-	mt.KeepAlive = true
+func (mt *MarcoTask) lazyStart(t ITask) {
+	mt.lazyRun.Do(func() {
+		mt.addSub = make(chan ITask, 10)
+		go mt.run()
+	})
+	mt.addSub <- t
 }
 
-func (mt *MarcoTask) Start() error {
-	if mt.exe != nil {
-		return mt.exe.Start()
-	}
-	return nil
+func (mt *MarcoTask) AddTask(task ITask) *Task {
+	return mt.AddTaskWithContext(mt.Context, task)
 }
 
-func (mt *MarcoTask) AddTasks(getTasks ...getTask) {
-	for _, getTask := range getTasks {
-		mt.AddTask(getTask)
-	}
-}
-
-func (mt *MarcoTask) AddTask(getTask getTask) {
+func (mt *MarcoTask) AddTaskWithContext(ctx context.Context, t ITask) (task *Task) {
+	task = t.getTask()
+	task.init(ctx)
 	if mt.IsStopped() {
-		getTask.GetTask().startup.Reject(mt.StopReason())
+		task.startup.Reject(mt.StopReason())
 		return
 	}
-	if mt.addSub == nil {
-		mt.addSub = make(chan *Task, 10)
-		go mt.run()
-	}
-	task := getTask.GetTask()
 	if task.ID == 0 {
 		task.ID = mt.GetID()
 	}
 	if task.parent == nil {
-		task.parent = mt
-		if v, ok := getTask.(TaskExecutor); ok {
-			task.exe = v
+		s, d := EmptyStart, EmptyDispose
+		if v, ok := t.(TaskStarter); ok {
+			s = v.Start
 		}
+		if v, ok := t.(TaskDisposal); ok {
+			d = v.Dispose
+		}
+		task.parent = mt
+		if v, ok := t.(iMacroMask); ok {
+			m := v.macroTask()
+			task.disposeHandler = func() {
+				close(m.addSub)
+				_ = m.shutdown.Await()
+				d()
+			}
+		} else {
+			task.disposeHandler = d
+		}
+		task.startHandler = s
 	}
-	mt.addSub <- task
+	mt.lazyStart(t)
+	return
 }
 
 func (mt *MarcoTask) Call(callback CallBack) {
@@ -166,77 +255,55 @@ func (mt *MarcoTask) Call(callback CallBack) {
 	_ = task.WaitStarted()
 }
 
-func (mt *MarcoTask) AddCall(start CallBack, dispose func(*Task)) *Task {
-	var tmpTask Task
-	var tmpExe TempTaskExecutor
-	if start != nil {
-		tmpExe.StartFunc = func() error {
-			err := start(&tmpTask)
-			if err == nil && dispose == nil {
-				err = ErrCallbackTask
-			}
-			return err
-		}
+func (mt *MarcoTask) AddCall(start CallBack, dispose func()) *Task {
+	var task Task
+	task.init(mt.Context)
+	if mt.IsStopped() {
+		task.startup.Reject(mt.StopReason())
+		return &task
 	}
-	if dispose != nil {
-		tmpExe.DisposeFunc = func() {
-			dispose(&tmpTask)
-		}
+	if task.ID == 0 {
+		task.ID = mt.GetID()
 	}
-	tmpTask.Init(mt.Context, nil, tmpExe)
-	mt.AddTask(&tmpTask)
-	return &tmpTask
+	task.parent = mt
+	task.startHandler = func() error {
+		err := start(&task)
+		if err == nil && dispose == nil {
+			err = ErrCallbackTask
+		}
+		return err
+	}
+	if dispose == nil {
+		task.disposeHandler = EmptyDispose
+	} else {
+		task.disposeHandler = dispose
+	}
+	mt.lazyStart(&task)
+	return &task
 }
 
-func (mt *MarcoTask) WaitTaskAdded(getTask getTask) error {
-	mt.AddTask(getTask)
-	return getTask.GetTask().WaitStarted()
+func (mt *MarcoTask) AddChan(channel any, callback any, stop func(error)) {
+	var chanTask ChannelTask
+	chanTask.channel = reflect.ValueOf(channel)
+	chanTask.callback = reflect.ValueOf(callback)
+	chanTask.stop = stop
+	mt.lazyStart(&chanTask)
 }
 
 func (mt *MarcoTask) GetID() uint32 {
 	return mt.idG.Add(1)
 }
 
-func (mt *MarcoTask) startSubTask(task *Task) (err error) {
-	if task.startup.IsPending() {
-		task.StartTime = time.Now()
-		err = task.exe.Start()
-		if task.Logger != nil {
-			task.Debug("start")
-		}
-		task.startup.Fulfill(err)
-	}
-	return
-}
-
-func (mt *MarcoTask) disposeSubTask(task *Task, reason error) {
-	if task.parent != mt {
-		return
-	}
-	if task.Logger != nil {
-		task.Debug("dispose", "reason", reason)
-	}
-	task.exe.Dispose()
-	if m, ok := task.exe.(*MarcoTask); ok {
-		m.WaitStopped()
-	} else {
-		task.shutdown.Fulfill(reason)
-	}
-}
-
 func (mt *MarcoTask) run() {
-	extraLen := len(mt.extraCases)
-	cases := append([]reflect.SelectCase{{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(mt.addSub)}}, mt.extraCases...)
+	cases := []reflect.SelectCase{{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(mt.addSub)}}
 	defer func() {
 		stopReason := mt.StopReason()
-		for _, task := range mt.subTasks {
+		for _, task := range mt.children {
 			task.Stop(stopReason)
-			mt.disposeSubTask(task, stopReason)
+			task.dispose(mt)
 		}
-		mt.subTasks = nil
+		mt.children = nil
 		mt.addSub = nil
-		mt.extraCases = nil
-		mt.extraCallbacks = nil
 		mt.shutdown.Fulfill(stopReason)
 	}()
 	for {
@@ -244,40 +311,44 @@ func (mt *MarcoTask) run() {
 			if !ok {
 				return
 			}
-			task := rev.Interface().(*Task)
-			if err := mt.startSubTask(task); err == nil {
-				mt.subTasks = append(mt.subTasks, task)
-				cases = append(cases, reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(task.Done())})
-			} else {
-				if task.Logger != nil {
-					task.Warn("start failed", "error", err)
+			task := rev.Interface().(ITask)
+			for !mt.IsStopped() && !task.IsStopped() {
+				if signal, err := task.start(mt); err == nil {
+					mt.children = append(mt.children, task)
+					cases = append(cases, reflect.SelectCase{Dir: reflect.SelectRecv, Chan: signal})
+					break
+				} else if r, ok := task.(IRetryTask); ok {
+					if t := r.getRetryTask(); t.MaxRetry < 0 || t.RetryCount < t.MaxRetry {
+						t.RetryCount++
+						if delta := time.Since(t.StartTime); delta < t.RetryInterval {
+							time.Sleep(t.RetryInterval - delta)
+						}
+						if t.Logger != nil {
+							t.Warn("retry", "count", t.RetryCount, "total", t.MaxRetry)
+						}
+					} else {
+						task.Stop(ErrRetryRunOut)
+						break
+					}
+				} else {
+					task.Stop(err)
+					break
 				}
-				task.Stop(err)
 			}
-		} else if chosen <= extraLen {
-			mt.extraCallbacks[chosen-1].Call([]reflect.Value{rev})
 		} else {
-			taskIndex := chosen - extraLen - 1
-			task := mt.subTasks[taskIndex]
-			mt.disposeSubTask(task, task.StopReason())
-			mt.subTasks = slices.Delete(mt.subTasks, taskIndex, taskIndex+1)
-			cases = slices.Delete(cases, chosen, chosen+1)
-			if !mt.KeepAlive && len(mt.subTasks) == 0 {
-				mt.Stop(ErrAutoStop)
+			taskIndex := chosen - 1
+			task := mt.children[taskIndex]
+			if !ok {
+				task.dispose(mt)
+				mt.children = slices.Delete(mt.children, taskIndex, taskIndex+1)
+				cases = slices.Delete(cases, chosen, chosen+1)
+
+			} else if c, ok := task.(IChannelTask); ok {
+				c.tick(rev)
 			}
 		}
+		if !mt.keepAlive && len(mt.children) == 0 {
+			mt.Stop(ErrAutoStop)
+		}
 	}
-}
-
-// ShutDown wait all task dispose
-func (mt *MarcoTask) ShutDown(err error) {
-	mt.Stop(err)
-	_ = mt.shutdown.Await()
-}
-
-func (mt *MarcoTask) Dispose() {
-	if mt.exe != nil {
-		mt.exe.Dispose()
-	}
-	close(mt.addSub)
 }

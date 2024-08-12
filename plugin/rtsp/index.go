@@ -31,7 +31,7 @@ func (p *RTSPPlugin) GetPullableList() []string {
 
 func (p *RTSPPlugin) OnInit() error {
 	for streamPath, url := range p.GetCommonConf().PullOnStart {
-		 p.Pull(streamPath, url)
+		p.Pull(streamPath, url)
 	}
 	return nil
 }
@@ -41,7 +41,8 @@ func (p *RTSPPlugin) OnTCPConnect(conn *net.TCPConn) {
 	var receiver *Receiver
 	var sender *Sender
 	var err error
-	nc := NewNetConnection(conn, logger)
+	nc := NewNetConnection(conn)
+	nc.Logger = logger
 	defer func() {
 		nc.Destroy()
 		if p := recover(); p != nil {
@@ -107,7 +108,7 @@ func (p *RTSPPlugin) OnTCPConnect(conn *net.TCPConn) {
 
 			receiver = &Receiver{}
 			receiver.NetConnection = nc
-			if receiver.Publisher, err = p.Publish(strings.TrimPrefix(nc.URL.Path, "/"), receiver); err != nil {
+			if receiver.Publisher, err = p.Publish(nc, strings.TrimPrefix(nc.URL.Path, "/")); err != nil {
 				receiver = nil
 				err = nc.WriteResponse(&util.Response{
 					StatusCode: 500, Status: err.Error(),
@@ -126,7 +127,7 @@ func (p *RTSPPlugin) OnTCPConnect(conn *net.TCPConn) {
 			sendMode = true
 			sender = &Sender{}
 			sender.NetConnection = nc
-			sender.Subscriber, err = p.Subscribe(strings.TrimPrefix(nc.URL.Path, "/"), sender)
+			sender.Subscriber, err = p.Subscribe(nc, strings.TrimPrefix(nc.URL.Path, "/"))
 			if err != nil {
 				res := &util.Response{
 					StatusCode: http.StatusBadRequest,

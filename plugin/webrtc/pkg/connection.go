@@ -2,9 +2,11 @@ package webrtc
 
 import (
 	. "github.com/pion/webrtc/v3"
+	"m7s.live/m7s/v5/pkg"
 )
 
 type Connection struct {
+	pkg.MarcoTask
 	*PeerConnection
 	SDP string
 	// LocalSDP *sdp.SessionDescription
@@ -26,4 +28,10 @@ func (IO *Connection) GetAnswer() (string, error) {
 	}
 	<-gatherComplete
 	return IO.LocalDescription().SDP, nil
+}
+
+func (IO *Connection) Dispose() {
+	if IO.PeerConnection == nil {
+		IO.PeerConnection.Close()
+	}
 }

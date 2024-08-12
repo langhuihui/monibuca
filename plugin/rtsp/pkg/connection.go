@@ -2,9 +2,6 @@ package rtsp
 
 import (
 	"encoding/binary"
-	"log/slog"
-	"m7s.live/m7s/v5"
-	"m7s.live/m7s/v5/pkg/util"
 	"net"
 	"net/url"
 	"runtime"
@@ -12,15 +9,17 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"m7s.live/m7s/v5"
+	"m7s.live/m7s/v5/pkg"
+	"m7s.live/m7s/v5/pkg/util"
 )
 
 const Timeout = time.Second * 5
 
-func NewNetConnection(conn net.Conn, logger *slog.Logger) *NetConnection {
-	defer logger.Info("new connection")
+func NewNetConnection(conn net.Conn) *NetConnection {
 	return &NetConnection{
 		conn:            conn,
-		Logger:          logger,
 		BufReader:       util.NewBufReader(conn),
 		MemoryAllocator: util.NewScalableMemoryAllocator(1 << 12),
 		UserAgent:       "monibuca" + m7s.Version,
@@ -28,7 +27,7 @@ func NewNetConnection(conn net.Conn, logger *slog.Logger) *NetConnection {
 }
 
 type NetConnection struct {
-	*slog.Logger
+	pkg.MarcoTask
 	*util.BufReader
 	Backchannel     bool
 	Media           string

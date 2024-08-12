@@ -39,7 +39,8 @@ func createClient(p *m7s.Connection) (s *Stream, err error) {
 	if err != nil {
 		return
 	}
-	s = &Stream{NetConnection: NewNetConnection(conn, p.Logger)}
+	s = &Stream{NetConnection: NewNetConnection(conn)}
+	s.Logger = p.Logger
 	s.URL = rtspURL
 	s.auth = util.NewAuth(s.URL.User)
 	s.Backchannel = true

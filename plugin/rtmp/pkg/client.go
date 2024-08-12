@@ -82,7 +82,7 @@ func createClient(c *m7s.Connection) (*NetStream, error) {
 			cmd := msg.MsgData.(Commander).GetCommand()
 			switch cmd.CommandName {
 			case "_result":
-				c.MetaData = msg.MsgData.(*ResponseMessage).Properties
+				c.Description = msg.MsgData.(*ResponseMessage).Properties
 				response := msg.MsgData.(*ResponseMessage)
 				if response.Infomation["code"] == NetConnection_Connect_Success {
 

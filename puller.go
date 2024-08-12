@@ -1,21 +1,17 @@
 package m7s
 
 import (
-	"context"
-	"time"
-
 	"m7s.live/m7s/v5/pkg"
 	"m7s.live/m7s/v5/pkg/config"
 )
 
 type Connection struct {
-	pkg.MarcoTask
+	pkg.MarcoLongTask
 	Plugin         *Plugin
 	StreamPath     string // 对应本地流
 	RemoteURL      string // 远程服务器地址（用于推拉）
 	ReConnectCount int    //重连次数
 	ConnectProxy   string // 连接代理
-	MetaData       any
 }
 
 func (client *Connection) reconnect(count int) (ok bool) {
@@ -26,34 +22,25 @@ func (client *Connection) reconnect(count int) (ok bool) {
 
 type Puller = func(*PullContext) error
 
-func createPullContext(p *Plugin, streamPath string, url string, options ...any) (pullCtx *PullContext) {
-	pullCtx = &PullContext{Pull: p.config.Pull}
+func createPullContext(p *Plugin, streamPath string, url string) (pullCtx *PullContext) {
+	publishConfig := p.config.Publish
+	publishConfig.PublishTimeout = 0
+	pullCtx = &PullContext{
+		Pull:          p.config.Pull,
+		publishConfig: &publishConfig,
+	}
 	pullCtx.Plugin = p
 	pullCtx.ConnectProxy = p.config.Pull.Proxy
 	pullCtx.RemoteURL = url
-	publishConfig := p.config.Publish
-	publishConfig.PublishTimeout = 0
 	pullCtx.StreamPath = streamPath
-	pullCtx.PublishOptions = []any{publishConfig}
-	var ctx = p.Context
-	for _, option := range options {
-		switch v := option.(type) {
-		case context.Context:
-			ctx = v
-		default:
-			pullCtx.PublishOptions = append(pullCtx.PublishOptions, option)
-		}
-	}
-	p.InitKeepAlive(ctx, p.Logger.With("pullURL", url, "streamPath", streamPath), pullCtx)
-	pullCtx.PublishOptions = append(pullCtx.PublishOptions, pullCtx.Context)
-	p.Server.pullTask.AddTask(pullCtx)
+	pullCtx.Logger = p.Logger.With("pullURL", url, "streamPath", streamPath)
 	return
 }
 
 type PullContext struct {
 	Connection
-	Publisher      *Publisher
-	PublishOptions []any
+	Publisher     *Publisher
+	publishConfig *config.Publish
 	config.Pull
 }
 
@@ -61,25 +48,26 @@ func (p *PullContext) GetKey() string {
 	return p.StreamPath
 }
 
-func (p *PullContext) Do(puller Puller) {
-	p.AddCall(func(tmpTask *pkg.Task) (err error) {
-		publishOptions := append([]any{tmpTask.Context}, p.PublishOptions...)
-		if p.Publisher, err = p.Plugin.Publish(p.StreamPath, publishOptions...); err != nil {
-			p.Error("pull publish failed", "error", err)
-			return
-		}
-		err = puller(p)
-		if p.reconnect(p.RePull) {
-			if time.Since(tmpTask.StartTime) < 5*time.Second {
-				time.Sleep(5 * time.Second)
-			}
-			p.Warn("retry", "count", p.ReConnectCount, "total", p.RePull)
-			p.Do(puller)
-		} else {
-			p.Stop(pkg.ErrRetryRunOut)
-		}
+type PullSubTask struct {
+	pkg.RetryTask
+	ctx *PullContext
+	Puller
+}
+
+func (p *PullSubTask) Start() (err error) {
+	if p.ctx.Publisher, err = p.ctx.Plugin.PublishWithConfig(p.Context, p.ctx.StreamPath, *p.ctx.publishConfig); err != nil {
+		p.Error("pull publish failed", "error", err)
 		return
-	}, nil)
+	}
+	return p.Puller(p.ctx)
+}
+
+func (p *PullContext) Do(puller Puller) {
+	var subTask PullSubTask
+	subTask.ctx = p
+	subTask.Puller = puller
+	subTask.MaxRetry = p.RePull
+	p.AddTask(&subTask)
 }
 
 func (p *PullContext) Start() (err error) {

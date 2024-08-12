@@ -92,7 +92,7 @@ func (p *MP4Plugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.URL.RawQuery != "" {
 		streamPath += "?" + r.URL.RawQuery
 	}
-	sub, err := p.Subscribe(streamPath, r.Context())
+	sub, err := p.Subscribe(r.Context(), streamPath)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return

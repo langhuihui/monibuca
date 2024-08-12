@@ -6,6 +6,7 @@ import (
 	"runtime"
 	"sync/atomic"
 
+	"m7s.live/m7s/v5/pkg"
 	"m7s.live/m7s/v5/pkg/util"
 )
 
@@ -42,6 +43,7 @@ const (
 )
 
 type NetConnection struct {
+	pkg.MarcoTask
 	*util.BufReader
 	net.Conn
 	bandwidth                     uint32
@@ -70,10 +72,6 @@ func NewNetConnection(conn net.Conn) (ret *NetConnection) {
 	}
 	ret.mediaDataPool.SetAllocator(util.NewScalableMemoryAllocator(1 << util.MinPowerOf2))
 	return
-}
-
-func (conn *NetConnection) Start() error {
-	return nil
 }
 
 func (conn *NetConnection) Dispose() {

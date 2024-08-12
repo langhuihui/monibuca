@@ -8,7 +8,6 @@ import (
 	"slices"
 
 	"m7s.live/m7s/v5"
-	"m7s.live/m7s/v5/pkg"
 	"m7s.live/m7s/v5/plugin/rtmp/pb"
 	. "m7s.live/m7s/v5/plugin/rtmp/pkg"
 )
@@ -39,20 +38,18 @@ func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
 	receivers := make(map[uint32]*Receiver)
 	var err error
 	nc := NewNetConnection(conn)
-	var connTask pkg.MarcoTask
-	connTask.Init(p.Context, p.With("remote", conn.RemoteAddr().String()), nc)
-	p.AddTask(&connTask)
+	nc.Logger = p.With("remote", conn.RemoteAddr().String())
+	p.AddTask(nc).WaitStarted()
 	defer func() {
-		connTask.Stop(err)
+		nc.Stop(err)
 	}()
 	/* Handshake */
 	if err = nc.Handshake(p.C2); err != nil {
-		connTask.Error("handshake", "error", err)
+		nc.Error("handshake", "error", err)
 		return
 	}
 	var msg *Chunk
 	var gstreamid uint32
-	var connectInfo map[string]any
 	for err == nil {
 		if msg, err = nc.RecvMessage(); err == nil {
 			if msg.MessageLength <= 0 {
@@ -60,17 +57,17 @@ func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
 			}
 			switch msg.MessageTypeID {
 			case RTMP_MSG_CHUNK_SIZE:
-				connTask.Info("msg read chunk size", "readChunkSize", nc.ReadChunkSize)
+				nc.Info("msg read chunk size", "readChunkSize", nc.ReadChunkSize)
 			case RTMP_MSG_AMF0_COMMAND:
 				if msg.MsgData == nil {
 					err = errors.New("msg.MsgData is nil")
 					break
 				}
 				cmd := msg.MsgData.(Commander).GetCommand()
-				connTask.Debug("recv cmd", "commandName", cmd.CommandName, "streamID", msg.MessageStreamID)
+				nc.Debug("recv cmd", "commandName", cmd.CommandName, "streamID", msg.MessageStreamID)
 				switch cmd := msg.MsgData.(type) {
 				case *CallMessage: //connect
-					connectInfo = cmd.Object
+					nc.Description = cmd.Object
 					app := cmd.Object["app"]                       // 客户端要连接到的服务应用名
 					objectEncoding := cmd.Object["objectEncoding"] // AMF编码方法
 					switch v := objectEncoding.(type) {
@@ -80,16 +77,16 @@ func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
 						nc.ObjectEncoding = 0
 					}
 					nc.AppName = app.(string)
-					connTask.Info("connect", "appName", nc.AppName, "objectEncoding", nc.ObjectEncoding)
+					nc.Info("connect", "appName", nc.AppName, "objectEncoding", nc.ObjectEncoding)
 					err = nc.SendMessage(RTMP_MSG_ACK_SIZE, Uint32Message(512<<10))
 					if err != nil {
-						connTask.Error("sendMessage ack size", "error", err)
+						nc.Error("sendMessage ack size", "error", err)
 						return
 					}
 					nc.WriteChunkSize = p.ChunkSize
 					err = nc.SendMessage(RTMP_MSG_CHUNK_SIZE, Uint32Message(p.ChunkSize))
 					if err != nil {
-						connTask.Error("sendMessage chunk size", "error", err)
+						nc.Error("sendMessage chunk size", "error", err)
 						return
 					}
 					err = nc.SendMessage(RTMP_MSG_BANDWIDTH, &SetPeerBandwidthMessage{
@@ -97,12 +94,12 @@ func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
 						LimitType:                 byte(2),
 					})
 					if err != nil {
-						connTask.Error("sendMessage bandwidth", "error", err)
+						nc.Error("sendMessage bandwidth", "error", err)
 						return
 					}
 					err = nc.SendStreamID(RTMP_USER_STREAM_BEGIN, 0)
 					if err != nil {
-						connTask.Error("sendMessage stream begin", "error", err)
+						nc.Error("sendMessage stream begin", "error", err)
 						return
 					}
 					m := new(ResponseConnectMessage)
@@ -121,11 +118,11 @@ func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
 					}
 					err = nc.SendMessage(RTMP_MSG_AMF0_COMMAND, m)
 					if err != nil {
-						connTask.Error("sendMessage connect", "error", err)
+						nc.Error("sendMessage connect", "error", err)
 					}
 				case *CommandMessage: // "createStream"
 					gstreamid++
-					connTask.Info("createStream:", "streamId", gstreamid)
+					nc.Info("createStream:", "streamId", gstreamid)
 					nc.ResponseCreateStream(cmd.TransactionId, gstreamid)
 				case *CURDStreamMessage:
 					// if stream, ok := receivers[cmd.StreamId]; ok {
@@ -153,7 +150,8 @@ func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
 							StreamID:      cmd.StreamId,
 						},
 					}
-					receiver.Publisher, err = p.Publish(nc.AppName+"/"+cmd.PublishingName, connTask.Context, connectInfo)
+					receiver.Publisher, err = p.Publish(nc.Context, nc.AppName+"/"+cmd.PublishingName)
+					receiver.Publisher.Description = nc.Description
 					if err != nil {
 						delete(receivers, cmd.StreamId)
 						err = receiver.Response(cmd.TransactionId, NetStream_Publish_BadName, Level_Error)
@@ -162,9 +160,9 @@ func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
 						err = receiver.BeginPublish(cmd.TransactionId)
 					}
 					if err != nil {
-						connTask.Error("sendMessage publish", "error", err)
+						nc.Error("sendMessage publish", "error", err)
 					} else {
-						connTask.AddTask(receiver.Publisher)
+						nc.AddTask(receiver.Publisher)
 					}
 				case *PlayMessage:
 					streamPath := nc.AppName + "/" + cmd.StreamName
@@ -174,7 +172,8 @@ func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
 					}
 					var suber *m7s.Subscriber
 					// sender.ID = fmt.Sprintf("%s|%d", conn.RemoteAddr().String(), sender.StreamID)
-					suber, err = p.Subscribe(streamPath, connTask.Context, connectInfo)
+					suber, err = p.Subscribe(nc.Context, streamPath)
+					suber.Description = nc.Description
 					if err != nil {
 						err = ns.Response(cmd.TransactionId, NetStream_Play_Failed, Level_Error)
 					} else {
@@ -183,9 +182,9 @@ func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
 						go m7s.PlayBlock(suber, audio.HandleAudio, video.HandleVideo)
 					}
 					if err != nil {
-						connTask.Error("sendMessage play", "error", err)
+						nc.Error("sendMessage play", "error", err)
 					} else {
-						connTask.AddTask(suber)
+						nc.AddTask(suber)
 					}
 				}
 			case RTMP_MSG_AUDIO:
@@ -193,20 +192,20 @@ func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
 					err = r.WriteAudio(msg.AVData.WrapAudio())
 				} else {
 					msg.AVData.Recycle()
-					connTask.Warn("ReceiveAudio", "MessageStreamID", msg.MessageStreamID)
+					nc.Warn("ReceiveAudio", "MessageStreamID", msg.MessageStreamID)
 				}
 			case RTMP_MSG_VIDEO:
 				if r, ok := receivers[msg.MessageStreamID]; ok && r.PubVideo {
 					err = r.WriteVideo(msg.AVData.WrapVideo())
 				} else {
 					msg.AVData.Recycle()
-					connTask.Warn("ReceiveVideo", "MessageStreamID", msg.MessageStreamID)
+					nc.Warn("ReceiveVideo", "MessageStreamID", msg.MessageStreamID)
 				}
 			}
 		} else if err == io.EOF || errors.Is(err, io.ErrUnexpectedEOF) {
-			connTask.Info("rtmp client closed")
+			nc.Info("rtmp client closed")
 		} else {
-			connTask.Warn("ReadMessage", "error", err)
+			nc.Warn("ReadMessage", "error", err)
 		}
 	}
 }

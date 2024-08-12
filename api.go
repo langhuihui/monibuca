@@ -232,7 +232,7 @@ func (s *Server) api_VideoTrack_SSE(rw http.ResponseWriter, r *http.Request) {
 	if r.URL.RawQuery != "" {
 		streamPath += "?" + r.URL.RawQuery
 	}
-	suber, err := s.Subscribe(streamPath, rw, r.Context(), "api_VideoTrack_SSE")
+	suber, err := s.Subscribe(r.Context(), streamPath)
 	sse := util.NewSSE(rw, r.Context())
 	PlayBlock(suber, (func(frame *pkg.AVFrame) (err error))(nil), func(frame *pkg.AVFrame) (err error) {
 		var snap pb.TrackSnapShot

@@ -25,7 +25,7 @@ func (r *StressPlugin) pull(count int, format, url string, puller m7s.Puller) er
 				r.pullers.AddUnique(ctx)
 				ctx.Do(puller)
 				return nil
-			}, func(*pkg.Task) {
+			}, func() {
 				r.pullers.Remove(ctx)
 			})
 		}
@@ -49,7 +49,7 @@ func (r *StressPlugin) push(count int, streamPath, format, remoteHost string, pu
 				r.pushers.AddUnique(ctx)
 				ctx.Do(pusher)
 				return nil
-			}, func(*pkg.Task) {
+			}, func() {
 				r.pushers.Remove(ctx)
 			})
 		}

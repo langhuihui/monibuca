@@ -3,18 +3,7 @@ package m7s
 import (
 	"context"
 	"fmt"
-	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
-	myip "github.com/husanpao/ip"
-	"github.com/phsym/console-slog"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
-	"gopkg.in/yaml.v3"
-	"gorm.io/gorm"
 	"log/slog"
-	"m7s.live/m7s/v5/pb"
-	. "m7s.live/m7s/v5/pkg"
-	"m7s.live/m7s/v5/pkg/db"
-	"m7s.live/m7s/v5/pkg/util"
 	"net"
 	"net/http"
 	"os"
@@ -23,6 +12,18 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
+	myip "github.com/husanpao/ip"
+	"github.com/phsym/console-slog"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+	"gopkg.in/yaml.v3"
+	"gorm.io/gorm"
+	"m7s.live/m7s/v5/pb"
+	. "m7s.live/m7s/v5/pkg"
+	"m7s.live/m7s/v5/pkg/db"
+	"m7s.live/m7s/v5/pkg/util"
 )
 
 var (
@@ -66,7 +67,7 @@ type Server struct {
 	tcplis                                     net.Listener
 	lastSummaryTime                            time.Time
 	lastSummary                                *pb.SummaryResponse
-	streamTask, pullTask, pushTask, recordTask MarcoTask
+	streamTask, pullTask, pushTask, recordTask MarcoLongTask
 	conf                                       any
 }
 
@@ -86,7 +87,9 @@ type rawconfig = map[string]map[string]any
 func init() {
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
-	globalTask.InitKeepAlive(context.Background(), nil, nil, signalChan, func(os.Signal) {
+	globalTask.Context = context.Background()
+	globalTask.Description = map[string]any{"Name": "Global Task"}
+	globalTask.AddChan(signalChan, func(os.Signal) {
 		for _, meta := range plugins {
 			if meta.OnExit != nil {
 				meta.OnExit()
@@ -96,7 +99,7 @@ func init() {
 			serverMeta.OnExit()
 		}
 		os.Exit(0)
-	})
+	}, nil)
 	for k, v := range myip.LocalAndInternalIPs() {
 		Routes[k] = v
 		fmt.Println(k, v)
@@ -119,7 +122,7 @@ func (s *Server) Init(ctx context.Context, conf any) {
 	s.config.TCP.ListenAddr = ":50051"
 	s.LogHandler.SetLevel(slog.LevelInfo)
 	s.LogHandler.Add(defaultLogHandler)
-	s.MarcoTask.Init(ctx, slog.New(&s.LogHandler).With("Server", s.ID), s)
+	s.Logger = slog.New(&s.LogHandler).With("Server", s.ID)
 }
 
 func (s *Server) Start() (err error) {
@@ -207,11 +210,16 @@ func (s *Server) Start() (err error) {
 			return
 		}
 	}
+	s.AddTask(&s.streamTask)
+	s.AddTask(&s.pullTask)
+	s.AddTask(&s.pushTask)
+	s.AddTask(&s.recordTask)
 	for _, plugin := range plugins {
 		if p := plugin.Init(s, cg[strings.ToLower(plugin.Name)]); !p.Disabled {
-			s.WaitTaskAdded(p)
+			s.AddTask(p.handler).WaitStarted()
 		}
 	}
+
 	if s.tcplis != nil {
 		go func(addr string) {
 			if err = s.grpcServer.Serve(s.tcplis); err != nil {
@@ -221,7 +229,7 @@ func (s *Server) Start() (err error) {
 			}
 		}(tcpConf.ListenAddr)
 	}
-	s.streamTask.InitKeepAlive(s.Context, nil, nil, time.NewTicker(s.PulseInterval).C, func(time.Time) {
+	s.streamTask.AddChan(time.NewTicker(s.PulseInterval).C, func(time.Time) {
 		for publisher := range s.Streams.Range {
 			if err := publisher.checkTimeout(); err != nil {
 				publisher.Stop(err)
@@ -243,11 +251,7 @@ func (s *Server) Start() (err error) {
 				}
 			}
 		}
-	})
-	s.pullTask.InitKeepAlive(s.Context, nil, nil)
-	s.pushTask.InitKeepAlive(s.Context, nil, nil)
-	s.recordTask.InitKeepAlive(s.Context, nil, nil)
-	s.AddTasks(&s.streamTask, &s.pullTask, &s.pushTask, &s.recordTask)
+	}, nil)
 	Servers.Add(s)
 	return
 }
@@ -266,7 +270,8 @@ func (s *Server) Dispose() {
 func (s *Server) Run(ctx context.Context, conf any) (err error) {
 	for {
 		s.Init(ctx, conf)
-		if err = globalTask.WaitTaskAdded(s); err != nil {
+		globalTask.AddTask(s)
+		if err = s.WaitStarted(); err != nil {
 			return
 		}
 		if err = s.WaitStopped(); err != ErrRestart {

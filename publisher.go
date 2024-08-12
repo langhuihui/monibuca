@@ -89,21 +89,13 @@ func (p *Publisher) GetKey() string {
 	return p.StreamPath
 }
 
-func createPublisher(p *Plugin, streamPath string, options ...any) (publisher *Publisher) {
-	publisher = &Publisher{Publish: p.config.Publish}
+func createPublisher(p *Plugin, streamPath string, conf config.Publish) (publisher *Publisher) {
+	publisher = &Publisher{Publish: conf}
 	publisher.ID = p.Server.streamTask.GetID()
 	publisher.Plugin = p
 	publisher.TimeoutTimer = time.NewTimer(p.config.PublishTimeout)
-	var opt = []any{publisher, p.Logger.With("streamPath", streamPath, "pId", publisher.ID)}
-	for _, option := range options {
-		switch v := option.(type) {
-		case func(*config.Publish):
-			v(&publisher.Publish)
-		default:
-			opt = append(opt, option)
-		}
-	}
-	publisher.Init(streamPath, &publisher.Publish, opt...)
+	publisher.Logger = p.Logger.With("streamPath", streamPath, "pId", publisher.ID)
+	publisher.Init(streamPath, &publisher.Publish)
 	return
 }
 
@@ -137,12 +129,12 @@ func (p *Publisher) Start() (err error) {
 		}
 		if remoteURL := plugin.GetCommonConf().CheckPush(p.StreamPath); remoteURL != "" {
 			if plugin.Meta.Pusher != nil {
-				plugin.Push(p.StreamPath, remoteURL, plugin.Meta.Pusher)
+				plugin.Push(p.StreamPath, remoteURL)
 			}
 		}
 		if filePath := plugin.GetCommonConf().CheckRecord(p.StreamPath); filePath != "" {
 			if plugin.Meta.Recorder != nil {
-				go plugin.RecordBlock(p.StreamPath, filePath, plugin.Meta.Recorder)
+				plugin.Record(p.StreamPath, filePath)
 			}
 		}
 		//if h, ok := plugin.handler.(IOnPublishPlugin); ok {
