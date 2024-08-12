@@ -1,8 +1,6 @@
 package m7s
 
 import (
-	"time"
-
 	"m7s.live/m7s/v5/pkg"
 
 	"m7s.live/m7s/v5/pkg/config"
@@ -30,27 +28,23 @@ func (p *PushContext) GetKey() string {
 	return p.RemoteURL
 }
 
-func (p *PushContext) Do(pusher Pusher) {
-	p.AddCall(func(tmpTask *pkg.Task) (err error) {
-		if p.Subscriber != nil && time.Since(p.Subscriber.StartTime) < 5*time.Second {
-			time.Sleep(5 * time.Second)
-		}
-		if p.Subscriber, err = p.Plugin.Subscribe(tmpTask.Context, p.StreamPath); err != nil {
-			p.Error("push subscribe failed", "error", err)
-			return
-		}
-		err = pusher(p)
-		if p.Connection.reconnect(p.RePush) {
-			if time.Since(tmpTask.StartTime) < 5*time.Second {
-				time.Sleep(5 * time.Second)
-			}
-			p.Warn("retry", "count", p.ReConnectCount, "total", p.RePush)
-			p.Do(pusher)
-		} else {
-			p.Stop(pkg.ErrRetryRunOut)
-		}
+type PushSubTask struct {
+	pkg.RetryTask
+	ctx *PushContext
+	Pusher
+}
+
+func (p *PushSubTask) Start() (err error) {
+	p.MaxRetry = p.ctx.RePush
+	if p.ctx.Subscriber, err = p.ctx.Plugin.Subscribe(p.Context, p.ctx.StreamPath); err != nil {
+		p.Error("push subscribe failed", "error", err)
 		return
-	}, nil)
+	}
+	return p.Pusher(p.ctx)
+}
+
+func (p *PushContext) Do(pusher Pusher) {
+	p.AddTask(&PushSubTask{ctx: p, Pusher: pusher})
 }
 
 func (p *PushContext) Start() (err error) {

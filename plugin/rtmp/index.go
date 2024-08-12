@@ -3,6 +3,7 @@ package plugin_rtmp
 import (
 	"errors"
 	"io"
+	"m7s.live/m7s/v5/pkg"
 	"maps"
 	"net"
 	"slices"
@@ -162,7 +163,9 @@ func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
 					if err != nil {
 						nc.Error("sendMessage publish", "error", err)
 					} else {
-						nc.AddTask(receiver.Publisher)
+						receiver.Publisher.OnDispose(func() {
+							nc.Stop(receiver.StopReason())
+						})
 					}
 				case *PlayMessage:
 					streamPath := nc.AppName + "/" + cmd.StreamName
@@ -178,13 +181,13 @@ func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
 						err = ns.Response(cmd.TransactionId, NetStream_Play_Failed, Level_Error)
 					} else {
 						err = ns.BeginPlay(cmd.TransactionId)
-						audio, video := ns.CreateSender(false)
-						go m7s.PlayBlock(suber, audio.HandleAudio, video.HandleVideo)
+						nc.AddCall(func(task *pkg.Task) error {
+							audio, video := ns.CreateSender(false)
+							return m7s.PlayBlock(suber, audio.HandleAudio, video.HandleVideo)
+						}, nil)
 					}
 					if err != nil {
 						nc.Error("sendMessage play", "error", err)
-					} else {
-						nc.AddTask(suber)
 					}
 				}
 			case RTMP_MSG_AUDIO:

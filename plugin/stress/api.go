@@ -21,13 +21,11 @@ func (r *StressPlugin) pull(count int, format, url string, puller m7s.Puller) er
 			if err != nil {
 				return err
 			}
-			ctx.AddCall(func(*pkg.Task) error {
-				r.pullers.AddUnique(ctx)
-				ctx.Do(puller)
-				return nil
-			}, func() {
+			r.pullers.AddUnique(ctx)
+			ctx.OnDispose(func() {
 				r.pullers.Remove(ctx)
 			})
+			ctx.Do(puller)
 		}
 	} else if count < i {
 		for j := i; j > count; j-- {
@@ -45,13 +43,11 @@ func (r *StressPlugin) push(count int, streamPath, format, remoteHost string, pu
 			if err != nil {
 				return err
 			}
-			ctx.AddCall(func(*pkg.Task) error {
-				r.pushers.AddUnique(ctx)
-				ctx.Do(pusher)
-				return nil
-			}, func() {
+			r.pushers.AddUnique(ctx)
+			ctx.OnDispose(func() {
 				r.pushers.Remove(ctx)
 			})
+			ctx.Do(pusher)
 		}
 	} else if count < i {
 		for j := i; j > count; j-- {

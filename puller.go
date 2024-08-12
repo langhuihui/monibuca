@@ -6,7 +6,7 @@ import (
 )
 
 type Connection struct {
-	pkg.MarcoLongTask
+	pkg.MarcoTask
 	Plugin         *Plugin
 	StreamPath     string // 对应本地流
 	RemoteURL      string // 远程服务器地址（用于推拉）
@@ -55,19 +55,19 @@ type PullSubTask struct {
 }
 
 func (p *PullSubTask) Start() (err error) {
+	p.MaxRetry = p.ctx.RePull
 	if p.ctx.Publisher, err = p.ctx.Plugin.PublishWithConfig(p.Context, p.ctx.StreamPath, *p.ctx.publishConfig); err != nil {
 		p.Error("pull publish failed", "error", err)
 		return
 	}
+	p.ctx.Publisher.OnDispose(func() {
+		p.Stop(p.ctx.Publisher.StopReason())
+	})
 	return p.Puller(p.ctx)
 }
 
 func (p *PullContext) Do(puller Puller) {
-	var subTask PullSubTask
-	subTask.ctx = p
-	subTask.Puller = puller
-	subTask.MaxRetry = p.RePull
-	p.AddTask(&subTask)
+	p.AddTask(&PullSubTask{ctx: p, Puller: puller})
 }
 
 func (p *PullContext) Start() (err error) {

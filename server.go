@@ -37,7 +37,6 @@ var (
 		Version: Version,
 	}
 	Servers           util.Collection[uint32, *Server]
-	globalTask        MarcoTask
 	Routes            = map[string]string{}
 	defaultLogHandler = console.NewHandler(os.Stdout, &console.HandlerOptions{TimeFormat: "15:04:05.000000"})
 )
@@ -73,7 +72,7 @@ type Server struct {
 
 func NewServer() (s *Server) {
 	s = &Server{}
-	s.ID = globalTask.GetID()
+	s.ID = RootTask.GetID()
 	s.Meta = &serverMeta
 	return
 }
@@ -87,9 +86,7 @@ type rawconfig = map[string]map[string]any
 func init() {
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
-	globalTask.Context = context.Background()
-	globalTask.Description = map[string]any{"Name": "Global Task"}
-	globalTask.AddChan(signalChan, func(os.Signal) {
+	RootTask.AddChan(signalChan, func(os.Signal) {
 		for _, meta := range plugins {
 			if meta.OnExit != nil {
 				meta.OnExit()
@@ -99,7 +96,7 @@ func init() {
 			serverMeta.OnExit()
 		}
 		os.Exit(0)
-	}, nil)
+	})
 	for k, v := range myip.LocalAndInternalIPs() {
 		Routes[k] = v
 		fmt.Println(k, v)
@@ -251,7 +248,7 @@ func (s *Server) Start() (err error) {
 				}
 			}
 		}
-	}, nil)
+	})
 	Servers.Add(s)
 	return
 }
@@ -270,7 +267,7 @@ func (s *Server) Dispose() {
 func (s *Server) Run(ctx context.Context, conf any) (err error) {
 	for {
 		s.Init(ctx, conf)
-		globalTask.AddTask(s)
+		RootTask.AddTaskWithContext(ctx, s)
 		if err = s.WaitStarted(); err != nil {
 			return
 		}
