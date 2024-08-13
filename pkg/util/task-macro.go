@@ -1,9 +1,8 @@
-package pkg
+package util
 
 import (
 	"context"
 	"log/slog"
-	"m7s.live/m7s/v5/pkg/util"
 	"os"
 	"reflect"
 	"slices"
@@ -86,7 +85,7 @@ func (mt *MarcoTask) lazyStart(t ITask) {
 		task.disposeHandler = EmptyDispose
 	}
 	mt.lazyRun.Do(func() {
-		mt.shutdown = util.NewPromise(context.Background())
+		mt.shutdown = NewPromise(context.Background())
 		go mt.run()
 	})
 	mt.addSub <- t

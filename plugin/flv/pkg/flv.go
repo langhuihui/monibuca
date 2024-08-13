@@ -2,10 +2,10 @@ package flv
 
 import (
 	"bufio"
+	"encoding/binary"
 	"io"
 	"m7s.live/m7s/v5/pkg/util"
 	rtmp "m7s.live/m7s/v5/plugin/rtmp/pkg"
-	"net"
 )
 
 const (
@@ -17,16 +17,40 @@ const (
 
 var FLVHead = []byte{'F', 'L', 'V', 0x01, 0x05, 0, 0, 0, 9, 0, 0, 0, 0}
 
-func AVCC2FLV(t byte, ts uint32, avcc ...[]byte) (flv net.Buffers) {
-	b := util.Buffer(make([]byte, 0, 15))
-	b.WriteByte(t)
-	dataSize := util.SizeOfBuffers(avcc)
-	b.WriteUint24(uint32(dataSize))
-	b.WriteUint24(ts)
-	b.WriteByte(byte(ts >> 24))
-	b.WriteUint24(0)
-	return append(append(append(flv, b), avcc...), util.PutBE(b.Malloc(4), dataSize+11))
+type FlvWriter struct {
+	io.Writer
+	buf [15]byte
 }
+
+func NewFlvWriter(w io.Writer) *FlvWriter {
+	return &FlvWriter{Writer: w}
+}
+
+func (w *FlvWriter) WriteTag(t byte, ts, dataSize uint32, payload ...[]byte) (err error) {
+	WriteFLVTagHead(t, ts, dataSize, w.buf[:])
+	if _, err = w.Write(w.buf[:11]); err != nil {
+		return
+	}
+	for _, p := range payload {
+		if _, err = w.Write(p); err != nil {
+			return
+		}
+	}
+	binary.BigEndian.PutUint32(w.buf[11:], dataSize+11)
+	_, err = w.Write(w.buf[11:])
+	return
+}
+
+//func AVCC2FLV(t byte, ts uint32, avcc ...[]byte) (flv net.Buffers) {
+//	b := util.Buffer(make([]byte, 0, 15))
+//	b.WriteByte(t)
+//	dataSize := util.SizeOfBuffers(avcc)
+//	b.WriteUint24(uint32(dataSize))
+//	b.WriteUint24(ts)
+//	b.WriteByte(byte(ts >> 24))
+//	b.WriteUint24(0)
+//	return append(append(append(flv, b), avcc...), util.PutBE(b.Malloc(4), dataSize+11))
+//}
 
 func WriteFLVTagHead(t uint8, ts, dataSize uint32, b []byte) {
 	b[0] = t
@@ -34,11 +58,10 @@ func WriteFLVTagHead(t uint8, ts, dataSize uint32, b []byte) {
 	b[4], b[5], b[6], b[7] = byte(ts>>16), byte(ts>>8), byte(ts), byte(ts>>24)
 }
 
-func WriteFLVTag(w io.Writer, t byte, timestamp uint32, payload ...[]byte) (err error) {
-	buffers := AVCC2FLV(t, timestamp, payload...)
-	_, err = buffers.WriteTo(w)
-	return
-}
+//func WriteFLVTag(w io.Writer, t byte, timestamp uint32, payload ...[]byte) (n int64, err error) {
+//	buffers := AVCC2FLV(t, timestamp, payload...)
+//	return buffers.WriteTo(w)
+//}
 
 func ReadMetaData(reader io.Reader) (metaData rtmp.EcmaArray, err error) {
 	r := bufio.NewReader(reader)

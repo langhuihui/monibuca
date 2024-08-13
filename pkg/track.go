@@ -116,5 +116,5 @@ func (t *Track) WaitReady() error {
 }
 
 func (t *Track) Trace(msg string, fields ...any) {
-	t.Log(context.TODO(), TraceLevel, msg, fields...)
+	t.Log(context.TODO(), util.TraceLevel, msg, fields...)
 }

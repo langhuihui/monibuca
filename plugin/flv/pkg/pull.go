@@ -93,13 +93,9 @@ func PullFLV(p *m7s.PullContext) (err error) {
 			return err
 		}
 		var frame rtmp.RTMPData
-		switch ds := int(dataSize); t {
-		case FLV_TAG_TYPE_AUDIO, FLV_TAG_TYPE_VIDEO:
-			frame.SetAllocator(allocator)
-			err = reader.ReadNto(ds, frame.NextN(ds))
-		default:
-			err = reader.Skip(ds)
-		}
+		ds := int(dataSize)
+		frame.SetAllocator(allocator)
+		err = reader.ReadNto(ds, frame.NextN(ds))
 		if err != nil {
 			return err
 		}
@@ -112,7 +108,20 @@ func PullFLV(p *m7s.PullContext) (err error) {
 		case FLV_TAG_TYPE_VIDEO:
 			err = p.Publisher.WriteVideo(frame.WrapVideo())
 		case FLV_TAG_TYPE_SCRIPT:
-			p.Info("script")
+			r := frame.NewReader()
+			amf := &rtmp.AMF{
+				Buffer: util.Buffer(r.ToBytes()),
+			}
+			var obj any
+			obj, err = amf.Unmarshal()
+			name := obj
+			obj, err = amf.Unmarshal()
+			metaData := obj
+			frame.Recycle()
+			if err != nil {
+				return err
+			}
+			p.Info("script", name, metaData)
 		}
 	}
 	return

@@ -116,8 +116,9 @@ type iPlugin interface {
 }
 
 type IPlugin interface {
-	ITask
+	util.ITask
 	OnInit() error
+	OnStop()
 }
 
 type IRegisterHandler interface {
@@ -182,7 +183,7 @@ func InstallPlugin[C iPlugin](options ...any) error {
 }
 
 type Plugin struct {
-	MarcoLongTask
+	util.MarcoLongTask
 	Disabled bool
 	Meta     *PluginMeta
 	config   config.Common
@@ -250,16 +251,10 @@ func (p *Plugin) assign() {
 
 func (p *Plugin) Start() (err error) {
 	s := p.Server
-	err = p.handler.OnInit()
-	if err != nil {
-		p.Error("init", "error", err)
-		return
-	}
 	if p.Meta.ServiceDesc != nil && s.grpcServer != nil {
 		s.grpcServer.RegisterService(p.Meta.ServiceDesc, p.handler)
 		if p.Meta.RegisterGRPCHandler != nil {
 			if err = p.Meta.RegisterGRPCHandler(p.Context, s.config.HTTP.GetGRPCMux(), s.grpcClientConn); err != nil {
-				p.Error("init", "error", err)
 				return
 			} else {
 				p.Info("grpc handler registered")
@@ -267,17 +262,25 @@ func (p *Plugin) Start() (err error) {
 		}
 	}
 	s.Plugins.Add(p)
-	p.listen()
+	err = p.listen()
+	if err != nil {
+		return
+	}
+	err = p.handler.OnInit()
+	if err != nil {
+		return
+	}
 	return
 }
 
 func (p *Plugin) Dispose() {
-	p.Server.Plugins.Remove(p)
+	p.handler.OnStop()
 	p.config.HTTP.StopListen()
 	p.config.TCP.StopListen()
+	p.Server.Plugins.Remove(p)
 }
 
-func (p *Plugin) listen() {
+func (p *Plugin) listen() (err error) {
 	httpConf := &p.config.HTTP
 	if httpConf.ListenAddrTLS != "" && (httpConf.ListenAddrTLS != p.Server.config.HTTP.ListenAddrTLS) {
 		p.Info("https listen at ", "addr", httpConf.ListenAddrTLS)
@@ -292,44 +295,49 @@ func (p *Plugin) listen() {
 		}()
 	}
 
+	defer func() {
+		if err != nil {
+			p.config.HTTP.StopListen()
+		}
+	}()
+
 	if tcphandler, ok := p.handler.(ITCPPlugin); ok {
 		tcpConf := &p.config.TCP
 		if tcpConf.ListenAddr != "" && tcpConf.AutoListen {
 			p.Info("listen tcp", "addr", tcpConf.ListenAddr)
-			go func() {
-				err := tcpConf.Listen(tcphandler.OnTCPConnect)
-				if err != nil {
-					p.Error("listen tcp", "addr", tcpConf.ListenAddr, "error", err)
-					p.Stop(err)
-				}
-			}()
+			err = tcpConf.Listen(tcphandler.OnTCPConnect)
+			if err != nil {
+				p.Error("listen tcp", "addr", tcpConf.ListenAddr, "error", err)
+				return
+			}
 		}
 		if tcpConf.ListenAddrTLS != "" && tcpConf.AutoListen {
 			p.Info("listen tcp tls", "addr", tcpConf.ListenAddrTLS)
-			go func() {
-				err := tcpConf.ListenTLS(tcphandler.OnTCPConnect)
-				if err != nil {
-					p.Error("listen tcp tls", "addr", tcpConf.ListenAddrTLS, "error", err)
-					p.Stop(err)
-				}
-			}()
+			err = tcpConf.ListenTLS(tcphandler.OnTCPConnect)
+			if err != nil {
+				p.Error("listen tcp tls", "addr", tcpConf.ListenAddrTLS, "error", err)
+				return
+			}
 		}
+		defer func() {
+			if err != nil {
+				p.config.TCP.StopListen()
+			}
+		}()
 	}
 
 	if udpHandler, ok := p.handler.(IUDPPlugin); ok {
 		udpConf := &p.config.UDP
 		if udpConf.ListenAddr != "" && udpConf.AutoListen {
 			p.Info("listen udp", "addr", udpConf.ListenAddr)
-			go func() {
-				err := udpConf.Listen(udpHandler.OnUDPConnect)
-				if err != nil {
-					p.Error("listen udp", "addr", udpConf.ListenAddr, "error", err)
-					p.Stop(err)
-				}
-			}()
-
+			err = udpConf.Listen(udpHandler.OnUDPConnect)
+			if err != nil {
+				p.Error("listen udp", "addr", udpConf.ListenAddr, "error", err)
+				return
+			}
 		}
 	}
+	return
 }
 
 func (p *Plugin) OnInit() error {
@@ -337,6 +345,10 @@ func (p *Plugin) OnInit() error {
 }
 
 func (p *Plugin) OnExit() {
+
+}
+
+func (p *Plugin) OnStop() {
 
 }
 
@@ -458,7 +470,7 @@ func (p *Plugin) AddLogHandler(handler slog.Handler) {
 }
 
 func (p *Plugin) SaveConfig() (err error) {
-	p.Server.Call(func(*Task) (err error) {
+	p.Server.Call(func(*util.Task) (err error) {
 		if p.Modify == nil {
 			os.Remove(p.settingPath())
 			return

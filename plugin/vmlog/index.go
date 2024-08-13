@@ -6,6 +6,7 @@ import (
 	"github.com/VictoriaMetrics/VictoriaMetrics/app/vlselect"
 	"github.com/VictoriaMetrics/VictoriaMetrics/app/vlstorage"
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/fs"
+	"github.com/VictoriaMetrics/VictoriaMetrics/lib/logger"
 	"log/slog"
 	"m7s.live/m7s/v5"
 	"net/http"
@@ -26,7 +27,14 @@ type VmLogPlugin struct {
 
 var _ = m7s.InstallPlugin[VmLogPlugin]()
 
+func init() {
+	logger.Init()
+}
+
 func (config *VmLogPlugin) OnInit() (err error) {
+	vlstorage.Init()
+	vlselect.Init()
+	vlinsert.Init()
 	config.handler, err = NewVmLogHandler(nil, nil)
 	if err == nil {
 		config.AddLogHandler(config.handler)
@@ -34,12 +42,16 @@ func (config *VmLogPlugin) OnInit() (err error) {
 	return
 }
 
-func (config *VmLogPlugin) OnExit() {
+func (config *VmLogPlugin) OnStop() {
 	vlinsert.Stop()
 	vlselect.Stop()
 	vlstorage.Stop()
 	fs.MustStopDirRemover()
 	fmt.Print("VmLogPlugin OnClose")
+}
+
+func (config *VmLogPlugin) OnExit() {
+
 }
 
 func (config *VmLogPlugin) ServeHTTP(rw http.ResponseWriter, r *http.Request) {

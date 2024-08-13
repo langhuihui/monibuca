@@ -1,4 +1,4 @@
-package pkg
+package util
 
 import (
 	"context"
@@ -6,8 +6,6 @@ import (
 	"log/slog"
 	"reflect"
 	"time"
-
-	"m7s.live/m7s/v5/pkg/util"
 )
 
 const TraceLevel = slog.Level(-8)
@@ -50,7 +48,7 @@ type (
 		afterStartListeners, afterDisposeListeners []func()
 		disposeHandler                             func()
 		Description                                map[string]any
-		startup, shutdown                          *util.Promise
+		startup, shutdown                          *Promise
 		parent                                     *MarcoTask
 		parentCtx                                  context.Context
 	}
@@ -137,6 +135,6 @@ func (task *Task) dispose() {
 func (task *Task) init(ctx context.Context) {
 	task.parentCtx = ctx
 	task.Context, task.CancelCauseFunc = context.WithCancelCause(ctx)
-	task.startup = util.NewPromise(task.Context)
-	task.shutdown = util.NewPromise(context.Background())
+	task.startup = NewPromise(task.Context)
+	task.shutdown = NewPromise(context.Background())
 }

@@ -2,7 +2,7 @@ package rtmp
 
 import (
 	"m7s.live/m7s/v5"
-	"m7s.live/m7s/v5/pkg"
+	"m7s.live/m7s/v5/pkg/util"
 )
 
 type NetStream struct {
@@ -69,7 +69,7 @@ func (ns *NetStream) BeginPlay(tid uint64) (err error) {
 }
 
 func (ns *NetStream) Subscribe(suber *m7s.Subscriber) {
-	ns.AddCall(func(task *pkg.Task) error {
+	ns.AddCall(func(task *util.Task) error {
 		audio, video := ns.CreateSender(false)
 		return m7s.PlayBlock(suber, audio.HandleAudio, video.HandleVideo)
 	}, nil)

@@ -3,6 +3,6 @@ global:
 flv:
   record:
     enableregexp: true
-    fragment: 10s
+#    fragment: 10s
     recordlist:
-      .+: record/$0.flv
+      .+: record/$0

@@ -139,7 +139,7 @@ func (rb *RingWriter) Step() (normal bool) {
 	isIDR := rb.Value.IDR
 	next := rb.Next()
 	if isIDR {
-		rb.SLogger.Log(nil, TraceLevel, "add idr")
+		rb.SLogger.Log(nil, util.TraceLevel, "add idr")
 		rb.PushIDR()
 	}
 	if rb.IDRingList.Len() > 0 {
@@ -153,12 +153,12 @@ func (rb *RingWriter) Step() (normal bool) {
 			}
 		} else if next == oldIDR.Value {
 			if nextOld := oldIDR.Next(); nextOld != nil && rb.durationFrom(nextOld.Value) > rb.BufferRange[0] {
-				rb.SLogger.Log(nil, TraceLevel, "remove old idr")
+				rb.SLogger.Log(nil, util.TraceLevel, "remove old idr")
 				rb.Lock()
 				rb.IDRingList.Remove(oldIDR)
 				rb.Unlock()
 			} else {
-				rb.SLogger.Log(nil, TraceLevel, "not enough buffer")
+				rb.SLogger.Log(nil, util.TraceLevel, "not enough buffer")
 				rb.glow(5)
 				next = rb.Next()
 			}

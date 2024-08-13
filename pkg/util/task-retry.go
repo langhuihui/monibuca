@@ -1,10 +1,13 @@
-package pkg
+package util
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"time"
 )
+
+var ErrRetryRunOut = errors.New("retry run out")
 
 type RetryTask struct {
 	Task

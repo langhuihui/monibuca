@@ -3,10 +3,11 @@ package m7s
 import (
 	"m7s.live/m7s/v5/pkg"
 	"m7s.live/m7s/v5/pkg/config"
+	"m7s.live/m7s/v5/pkg/util"
 )
 
 type Connection struct {
-	pkg.MarcoTask
+	util.MarcoTask
 	Plugin       *Plugin
 	StreamPath   string // 对应本地流
 	RemoteURL    string // 远程服务器地址（用于推拉）
@@ -22,6 +23,7 @@ func createPullContext(p *Plugin, streamPath string, url string) (pullCtx *PullC
 		Pull:          p.config.Pull,
 		publishConfig: &publishConfig,
 	}
+	pullCtx.Name = "pull"
 	pullCtx.Plugin = p
 	pullCtx.ConnectProxy = p.config.Pull.Proxy
 	pullCtx.RemoteURL = url
@@ -42,7 +44,7 @@ func (p *PullContext) GetKey() string {
 }
 
 type PullSubTask struct {
-	pkg.RetryTask
+	util.RetryTask
 	ctx *PullContext
 	Puller
 }

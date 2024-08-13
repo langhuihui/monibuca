@@ -66,13 +66,13 @@ type Server struct {
 	tcplis                                     net.Listener
 	lastSummaryTime                            time.Time
 	lastSummary                                *pb.SummaryResponse
-	streamTask, pullTask, pushTask, recordTask MarcoLongTask
+	streamTask, pullTask, pushTask, recordTask util.MarcoLongTask
 	conf                                       any
 }
 
 func NewServer() (s *Server) {
 	s = &Server{}
-	s.ID = GetNextTaskID()
+	s.ID = util.GetNextTaskID()
 	s.Meta = &serverMeta
 	return
 }
@@ -86,7 +86,7 @@ type rawconfig = map[string]map[string]any
 func init() {
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
-	RootTask.AddChan(signalChan, func(os.Signal) {
+	util.RootTask.AddChan(signalChan, func(os.Signal) {
 		for _, meta := range plugins {
 			if meta.OnExit != nil {
 				meta.OnExit()
@@ -237,13 +237,13 @@ func (s *Server) Start() (err error) {
 			}
 		}
 		for publisher := range s.Waiting.Range {
-			// TODO: ?
-			//if publisher.Plugin != nil {
-			//	if err := publisher.checkTimeout(); err != nil {
-			//		publisher.Stop(err)
-			//		s.createWait(publisher.StreamPath)
-			//	}
-			//}
+			if publisher.Plugin != nil {
+				if err := publisher.checkTimeout(); err != nil {
+					if publisher.Plugin != nil {
+						s.createWait(publisher.StreamPath).TakeOver(publisher)
+					}
+				}
+			}
 			for sub := range publisher.SubscriberRange {
 				select {
 				case <-sub.TimeoutTimer.C:
@@ -258,7 +258,7 @@ func (s *Server) Start() (err error) {
 	return
 }
 
-func (s *Server) CallOnStreamTask(callback func(*Task) error) {
+func (s *Server) CallOnStreamTask(callback func(*util.Task) error) {
 	s.streamTask.Call(callback)
 }
 
@@ -272,7 +272,7 @@ func (s *Server) Dispose() {
 func (s *Server) Run(ctx context.Context, conf any) (err error) {
 	for {
 		s.Init(conf)
-		RootTask.AddTaskWithContext(ctx, s)
+		util.RootTask.AddTaskWithContext(ctx, s)
 		if err = s.WaitStarted(); err != nil {
 			return
 		}

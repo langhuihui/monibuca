@@ -11,6 +11,7 @@ var (
 	ErrPublishTimeout           = errors.New("publish timeout")
 	ErrPublishIdleTimeout       = errors.New("publish idle timeout")
 	ErrPublishDelayCloseTimeout = errors.New("publish delay close timeout")
+	ErrPublishWaitCloseTimeout  = errors.New("publish wait close timeout")
 	ErrPushRemoteURLExist       = errors.New("push remote url exist")
 	ErrSubscribeTimeout         = errors.New("subscribe timeout")
 	ErrRestart                  = errors.New("restart")
@@ -18,6 +19,6 @@ var (
 	ErrUnsupportCodec           = errors.New("unsupport codec")
 	ErrMuted                    = errors.New("muted")
 	ErrLost                     = errors.New("lost")
-	ErrRetryRunOut              = errors.New("retry run out")
-	ErrRecordSamePath           = errors.New("record same path")
+
+	ErrRecordSamePath = errors.New("record same path")
 )

@@ -1,6 +1,7 @@
 package m7s
 
 import (
+	"m7s.live/m7s/v5/pkg/util"
 	"os"
 	"path/filepath"
 	"time"
@@ -18,12 +19,13 @@ func createRecoder(p *Plugin, streamPath string, filePath string) (recorder *Rec
 		FilePath:   filePath,
 		StreamPath: streamPath,
 	}
+	recorder.Name = "record"
 	recorder.Logger = p.Logger.With("filePath", filePath, "streamPath", streamPath)
 	return
 }
 
 type RecordContext struct {
-	pkg.MarcoTask
+	util.MarcoTask
 	StreamPath string // 对应本地流
 	Plugin     *Plugin
 	Subscriber *Subscriber
@@ -37,9 +39,12 @@ func (p *RecordContext) GetKey() string {
 }
 
 func (p *RecordContext) Do(recorder Recorder) {
-	p.AddCall(func(tmpTask *pkg.Task) (err error) {
+	p.AddCall(func(tmpTask *util.Task) (err error) {
 		dir := p.FilePath
-		if filepath.Ext(p.FilePath) != "" {
+		if p.Fragment == 0 || p.Append {
+			if filepath.Ext(p.FilePath) == "" {
+				p.FilePath += ".flv"
+			}
 			dir = filepath.Dir(p.FilePath)
 		}
 		if err = os.MkdirAll(dir, 0755); err != nil {

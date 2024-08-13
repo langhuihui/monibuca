@@ -1,25 +1,29 @@
 package flv
 
 import (
+	"fmt"
 	"io"
 	"m7s.live/m7s/v5"
 	"m7s.live/m7s/v5/pkg"
 	"m7s.live/m7s/v5/pkg/util"
 	rtmp "m7s.live/m7s/v5/plugin/rtmp/pkg"
 	"os"
+	"path/filepath"
 	"slices"
 	"time"
 )
 
-var writeMetaTagQueueTask pkg.MarcoLongTask
+var writeMetaTagQueueTask util.MarcoLongTask
 
 func init() {
-	pkg.RootTask.AddTask(&writeMetaTagQueueTask)
+	writeMetaTagQueueTask.Name = "writeMetaTagQueue"
+	util.RootTask.AddTask(&writeMetaTagQueueTask)
 }
 
 type writeMetaTagTask struct {
-	pkg.Task
+	util.Task
 	file     *os.File
+	writer   *FlvWriter
 	flags    byte
 	metaData []byte
 }
@@ -46,7 +50,8 @@ func (task *writeMetaTagTask) Start() (err error) {
 			task.Error(err.Error())
 			return
 		}
-		err = WriteFLVTag(tempFile, FLV_TAG_TYPE_SCRIPT, 0, task.metaData)
+		task.writer = NewFlvWriter(tempFile)
+		err = task.writer.WriteTag(FLV_TAG_TYPE_SCRIPT, 0, uint32(len(task.metaData)), task.metaData)
 		_, err = task.file.Seek(13, io.SeekStart)
 		if err != nil {
 			task.Error("writeMetaData Seek failed", "err", err)
@@ -67,71 +72,78 @@ func (task *writeMetaTagTask) Start() (err error) {
 	}
 }
 
+func writeMetaTag(file *os.File, suber *m7s.Subscriber, filepositions []uint64, times []float64, duration *int64) {
+	ar, vr := suber.AudioReader, suber.VideoReader
+	hasAudio, hasVideo := ar != nil, vr != nil
+	var amf rtmp.AMF
+	metaData := rtmp.EcmaArray{
+		"MetaDataCreator": "m7s/" + m7s.Version,
+		"hasVideo":        hasVideo,
+		"hasAudio":        hasAudio,
+		"hasMatadata":     true,
+		"canSeekToEnd":    true,
+		"duration":        float64(*duration) / 1000,
+		"hasKeyFrames":    len(filepositions) > 0,
+		"filesize":        0,
+	}
+	var flags byte
+	if hasAudio {
+		ctx := ar.Track.ICodecCtx.GetBase().(pkg.IAudioCodecCtx)
+		flags |= (1 << 2)
+		metaData["audiocodecid"] = int(rtmp.ParseAudioCodec(ctx.FourCC()))
+		metaData["audiosamplerate"] = ctx.GetSampleRate()
+		metaData["audiosamplesize"] = ctx.GetSampleSize()
+		metaData["stereo"] = ctx.GetChannels() == 2
+	}
+	if hasVideo {
+		ctx := vr.Track.ICodecCtx.GetBase().(pkg.IVideoCodecCtx)
+		flags |= 1
+		metaData["videocodecid"] = int(rtmp.ParseVideoCodec(ctx.FourCC()))
+		metaData["width"] = ctx.Width()
+		metaData["height"] = ctx.Height()
+		metaData["framerate"] = vr.Track.FPS
+		metaData["videodatarate"] = vr.Track.BPS
+		metaData["keyframes"] = map[string]any{
+			"filepositions": filepositions,
+			"times":         times,
+		}
+	}
+	amf.Marshals("onMetaData", metaData)
+	offset := amf.Len() + 13 + 15
+	if keyframesCount := len(filepositions); keyframesCount > 0 {
+		metaData["filesize"] = uint64(offset) + filepositions[keyframesCount-1]
+		for i := range filepositions {
+			filepositions[i] += uint64(offset)
+		}
+		metaData["keyframes"] = map[string]any{
+			"filepositions": filepositions,
+			"times":         times,
+		}
+	}
+	amf.Reset()
+	marshals := amf.Marshals("onMetaData", metaData)
+	task := &writeMetaTagTask{
+		file:     file,
+		flags:    flags,
+		metaData: marshals,
+	}
+	task.Logger = suber.Logger.With("file", file.Name())
+	writeMetaTagQueueTask.AddTask(task)
+}
+
 func RecordFlv(ctx *m7s.RecordContext) (err error) {
 	var file *os.File
 	var filepositions []uint64
 	var times []float64
 	var offset int64
 	var duration int64
-	if file, err = os.OpenFile(ctx.FilePath, os.O_CREATE|os.O_RDWR|util.Conditoinal(ctx.Append, os.O_APPEND, os.O_TRUNC), 0666); err != nil {
-		return
-	}
 	suber := ctx.Subscriber
-	ar, vr := suber.AudioReader, suber.VideoReader
-	hasAudio, hasVideo := ar != nil, vr != nil
-	writeMetaTag := func(file *os.File, filepositions []uint64, times []float64) {
-		var amf rtmp.AMF
-		metaData := rtmp.EcmaArray{
-			"MetaDataCreator": "m7s/" + m7s.Version,
-			"hasVideo":        hasVideo,
-			"hasAudio":        hasAudio,
-			"hasMatadata":     true,
-			"canSeekToEnd":    true,
-			"duration":        float64(duration) / 1000,
-			"hasKeyFrames":    len(filepositions) > 0,
-			"filesize":        0,
+	noFragment := ctx.Fragment == 0 || ctx.Append
+	if noFragment {
+		if file, err = os.OpenFile(ctx.FilePath, os.O_CREATE|os.O_RDWR|util.Conditoinal(ctx.Append, os.O_APPEND, os.O_TRUNC), 0666); err != nil {
+			return
 		}
-		var flags byte
-		if hasAudio {
-			ctx := ar.Track.ICodecCtx.GetBase().(pkg.IAudioCodecCtx)
-			flags |= (1 << 2)
-			metaData["audiocodecid"] = int(rtmp.ParseAudioCodec(ctx.FourCC()))
-			metaData["audiosamplerate"] = ctx.GetSampleRate()
-			metaData["audiosamplesize"] = ctx.GetSampleSize()
-			metaData["stereo"] = ctx.GetChannels() == 2
-		}
-		if hasVideo {
-			ctx := vr.Track.ICodecCtx.GetBase().(pkg.IVideoCodecCtx)
-			flags |= 1
-			metaData["videocodecid"] = int(rtmp.ParseVideoCodec(ctx.FourCC()))
-			metaData["width"] = ctx.Width()
-			metaData["height"] = ctx.Height()
-			metaData["framerate"] = vr.Track.FPS
-			metaData["videodatarate"] = vr.Track.BPS
-			metaData["keyframes"] = map[string]any{
-				"filepositions": filepositions,
-				"times":         times,
-			}
-		}
-		amf.Marshals("onMetaData", metaData)
-		offset := amf.Len() + 13 + 15
-		if keyframesCount := len(filepositions); keyframesCount > 0 {
-			metaData["filesize"] = uint64(offset) + filepositions[keyframesCount-1]
-			for i := range filepositions {
-				filepositions[i] += uint64(offset)
-			}
-			metaData["keyframes"] = map[string]any{
-				"filepositions": filepositions,
-				"times":         times,
-			}
-		}
-		amf.Reset()
-		marshals := amf.Marshals("onMetaData", metaData)
-		writeMetaTagQueueTask.AddTask(&writeMetaTagTask{
-			file:     file,
-			flags:    flags,
-			metaData: marshals,
-		})
+		defer writeMetaTag(file, suber, filepositions, times, &duration)
 	}
 	if ctx.Append {
 		var metaData rtmp.EcmaArray
@@ -145,60 +157,67 @@ func RecordFlv(ctx *m7s.RecordContext) (err error) {
 		times = keyframes["times"].([]float64)
 		if _, err = file.Seek(-4, io.SeekEnd); err != nil {
 			ctx.Error("seek file failed", "err", err)
-			file.Write(FLVHead)
+			_, err = file.Write(FLVHead)
 		} else {
 			tmp := make(util.Buffer, 4)
 			tmp2 := tmp
-			file.Read(tmp)
+			_, err = file.Read(tmp)
 			tagSize := tmp.ReadUint32()
 			tmp = tmp2
-			file.Seek(int64(tagSize), io.SeekEnd)
-			file.Read(tmp2)
+			_, err = file.Seek(int64(tagSize), io.SeekEnd)
+			_, err = file.Read(tmp2)
 			ts := tmp2.ReadUint24() | (uint32(tmp[3]) << 24)
 			ctx.Info("append flv", "last tagSize", tagSize, "last ts", ts)
-			if hasVideo {
-				vr.StartTs = time.Duration(ts) * time.Millisecond
-			}
-			if hasAudio {
-				ar.StartTs = time.Duration(ts) * time.Millisecond
-			}
-			file.Seek(0, io.SeekEnd)
+			suber.StartAudioTS = time.Duration(ts) * time.Millisecond
+			suber.StartVideoTS = time.Duration(ts) * time.Millisecond
+			offset, err = file.Seek(0, io.SeekEnd)
 		}
-	} else {
+	} else if ctx.Fragment == 0 {
 		file.Write(FLVHead)
-	}
-	if ctx.Fragment == 0 {
-		defer writeMetaTag(file, filepositions, times)
-	}
-	checkFragment := func(absTime uint32) {
-		if ctx.Fragment == 0 {
+	} else {
+		if file, err = os.OpenFile(filepath.Join(ctx.FilePath, fmt.Sprintf("%d.flv", time.Now().Unix())), os.O_CREATE|os.O_RDWR, 0666); err != nil {
 			return
 		}
+		_, err = file.Write(FLVHead)
+	}
+	writer := NewFlvWriter(file)
+	checkFragment := func(absTime uint32) {
 		if duration = int64(absTime); time.Duration(duration)*time.Millisecond >= ctx.Fragment {
-			writeMetaTag(file, filepositions, times)
+			writeMetaTag(file, suber, filepositions, times, &duration)
 			filepositions = []uint64{0}
 			times = []float64{0}
 			offset = 0
-			if file, err = os.OpenFile(ctx.FilePath, os.O_CREATE|os.O_RDWR, 0666); err != nil {
+			if file, err = os.OpenFile(filepath.Join(ctx.FilePath, fmt.Sprintf("%d.flv", time.Now().Unix())), os.O_CREATE|os.O_RDWR, 0666); err != nil {
 				return
 			}
-			file.Write(FLVHead)
-			if vr != nil {
+			_, err = file.Write(FLVHead)
+			writer = NewFlvWriter(file)
+			if vr := suber.VideoReader; vr != nil {
 				vr.ResetAbsTime()
-				err = WriteFLVTag(file, FLV_TAG_TYPE_VIDEO, 0, vr.Track.SequenceFrame.(*rtmp.RTMPVideo).Buffers...)
+				seq := vr.Track.SequenceFrame.(*rtmp.RTMPVideo)
+				err = writer.WriteTag(FLV_TAG_TYPE_VIDEO, 0, uint32(seq.Size), seq.Buffers...)
+				offset = int64(seq.Size + 15)
 			}
 		}
 	}
+
 	return m7s.PlayBlock(ctx.Subscriber, func(audio *rtmp.RTMPAudio) (err error) {
-		if !hasVideo {
-			checkFragment(ar.AbsTime)
+		if suber.VideoReader == nil && !noFragment {
+			checkFragment(suber.AudioReader.AbsTime)
 		}
-		return WriteFLVTag(file, FLV_TAG_TYPE_AUDIO, vr.AbsTime, audio.Buffers...)
+		err = writer.WriteTag(FLV_TAG_TYPE_AUDIO, suber.AudioReader.AbsTime, uint32(audio.Size), audio.Buffers...)
+		offset += int64(audio.Size + 15)
+		return
 	}, func(video *rtmp.RTMPVideo) (err error) {
-		if vr.Value.IDR {
+		if suber.VideoReader.Value.IDR {
 			filepositions = append(filepositions, uint64(offset))
-			times = append(times, float64(vr.AbsTime)/1000)
+			times = append(times, float64(suber.VideoReader.AbsTime)/1000)
+			if !noFragment {
+				checkFragment(suber.VideoReader.AbsTime)
+			}
 		}
-		return WriteFLVTag(file, FLV_TAG_TYPE_VIDEO, vr.AbsTime, video.Buffers...)
+		err = writer.WriteTag(FLV_TAG_TYPE_VIDEO, suber.VideoReader.AbsTime, uint32(video.Size), video.Buffers...)
+		offset += int64(video.Size + 15)
+		return
 	})
 }

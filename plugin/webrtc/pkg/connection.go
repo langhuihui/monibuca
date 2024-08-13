@@ -2,11 +2,11 @@ package webrtc
 
 import (
 	. "github.com/pion/webrtc/v3"
-	"m7s.live/m7s/v5/pkg"
+	"m7s.live/m7s/v5/pkg/util"
 )
 
 type Connection struct {
-	pkg.MarcoTask
+	util.MarcoTask
 	*PeerConnection
 	SDP string
 	// LocalSDP *sdp.SessionDescription

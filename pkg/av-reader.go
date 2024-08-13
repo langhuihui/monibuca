@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"m7s.live/m7s/v5/pkg/codec"
 	"m7s.live/m7s/v5/pkg/config"
+	"m7s.live/m7s/v5/pkg/util"
 	"time"
 )
 
@@ -22,6 +23,7 @@ const (
 )
 
 type AVRingReader struct {
+	*slog.Logger
 	RingReader
 	Track        *AVTrack
 	State        byte
@@ -34,7 +36,6 @@ type AVRingReader struct {
 	startTime    time.Time
 	AbsTime      uint32
 	Delay        uint32
-	*slog.Logger
 }
 
 func (r *AVRingReader) DecConfChanged() bool {
@@ -160,7 +161,7 @@ func (r *AVRingReader) ReadFrame(conf *config.Subscribe) (err error) {
 		r.AbsTime = 1
 	}
 	r.Delay = uint32(r.Track.LastValue.Sequence - r.Value.Sequence)
-	r.Log(context.TODO(), TraceLevel, r.Track.FourCC().String(), "delay", r.Delay)
+	r.Log(context.TODO(), util.TraceLevel, r.Track.FourCC().String(), "delay", r.Delay)
 	return
 }
 

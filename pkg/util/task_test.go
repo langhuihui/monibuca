@@ -1,8 +1,9 @@
-package pkg
+package util
 
 import (
 	"context"
 	"log/slog"
+	"m7s.live/m7s/v5/pkg"
 	"os"
 	"testing"
 	"time"
@@ -33,7 +34,7 @@ type retryDemoTask struct {
 }
 
 func (task *retryDemoTask) Start() error {
-	return ErrRestart
+	return pkg.ErrRestart
 }
 
 func Test_RetryTask(t *testing.T) {

@@ -131,7 +131,7 @@ func (s *Server) getStreamInfo(pub *Publisher) (res *pb.StreamInfoResponse, err 
 }
 
 func (s *Server) StreamInfo(ctx context.Context, req *pb.StreamSnapRequest) (res *pb.StreamInfoResponse, err error) {
-	s.streamTask.Call(func(*pkg.Task) error {
+	s.streamTask.Call(func(*util.Task) error {
 		if pub, ok := s.Streams.Get(req.StreamPath); ok {
 			res, err = s.getStreamInfo(pub)
 		} else {
@@ -142,7 +142,7 @@ func (s *Server) StreamInfo(ctx context.Context, req *pb.StreamSnapRequest) (res
 	return
 }
 func (s *Server) GetSubscribers(ctx context.Context, req *pb.SubscribersRequest) (res *pb.SubscribersResponse, err error) {
-	s.streamTask.Call(func(*pkg.Task) error {
+	s.streamTask.Call(func(*util.Task) error {
 		var subscribers []*pb.SubscriberSnapShot
 		for subscriber := range s.Subscribers.Range {
 			meta, _ := json.Marshal(subscriber.Description)
@@ -178,7 +178,7 @@ func (s *Server) GetSubscribers(ctx context.Context, req *pb.SubscribersRequest)
 	return
 }
 func (s *Server) AudioTrackSnap(ctx context.Context, req *pb.StreamSnapRequest) (res *pb.TrackSnapShotResponse, err error) {
-	s.streamTask.Call(func(*pkg.Task) error {
+	s.streamTask.Call(func(*util.Task) error {
 		if pub, ok := s.Streams.Get(req.StreamPath); ok && pub.HasAudioTrack() {
 			res = &pb.TrackSnapShotResponse{}
 			for _, memlist := range pub.AudioTrack.Allocator.GetChildren() {
@@ -257,7 +257,7 @@ func (s *Server) api_VideoTrack_SSE(rw http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) VideoTrackSnap(ctx context.Context, req *pb.StreamSnapRequest) (res *pb.TrackSnapShotResponse, err error) {
-	s.streamTask.Call(func(*pkg.Task) error {
+	s.streamTask.Call(func(*util.Task) error {
 		if pub, ok := s.Streams.Get(req.StreamPath); ok && pub.HasVideoTrack() {
 			res = &pb.TrackSnapShotResponse{}
 			for _, memlist := range pub.VideoTrack.Allocator.GetChildren() {
@@ -324,7 +324,7 @@ func (s *Server) Shutdown(ctx context.Context, req *pb.RequestWithId) (res *empt
 }
 
 func (s *Server) ChangeSubscribe(ctx context.Context, req *pb.ChangeSubscribeRequest) (res *pb.SuccessResponse, err error) {
-	s.streamTask.Call(func(*pkg.Task) error {
+	s.streamTask.Call(func(*util.Task) error {
 		if subscriber, ok := s.Subscribers.Get(req.Id); ok {
 			if pub, ok := s.Streams.Get(req.StreamPath); ok {
 				subscriber.Publisher.RemoveSubscriber(subscriber)
@@ -340,7 +340,7 @@ func (s *Server) ChangeSubscribe(ctx context.Context, req *pb.ChangeSubscribeReq
 }
 
 func (s *Server) StopSubscribe(ctx context.Context, req *pb.RequestWithId) (res *pb.SuccessResponse, err error) {
-	s.streamTask.Call(func(*pkg.Task) error {
+	s.streamTask.Call(func(*util.Task) error {
 		if subscriber, ok := s.Subscribers.Get(req.Id); ok {
 			subscriber.Stop(errors.New("stop by api"))
 		} else {
@@ -353,7 +353,7 @@ func (s *Server) StopSubscribe(ctx context.Context, req *pb.RequestWithId) (res 
 
 // /api/stream/list
 func (s *Server) StreamList(_ context.Context, req *pb.StreamListRequest) (res *pb.StreamListResponse, err error) {
-	s.streamTask.Call(func(*pkg.Task) error {
+	s.streamTask.Call(func(*util.Task) error {
 		var streams []*pb.StreamInfoResponse
 		for publisher := range s.Streams.Range {
 			info, err := s.getStreamInfo(publisher)
@@ -369,7 +369,7 @@ func (s *Server) StreamList(_ context.Context, req *pb.StreamListRequest) (res *
 }
 
 func (s *Server) WaitList(context.Context, *emptypb.Empty) (res *pb.StreamWaitListResponse, err error) {
-	s.streamTask.Call(func(*pkg.Task) error {
+	s.streamTask.Call(func(*util.Task) error {
 		res = &pb.StreamWaitListResponse{
 			List: make(map[string]int32),
 		}

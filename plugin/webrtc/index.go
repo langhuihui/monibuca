@@ -16,7 +16,6 @@ import (
 	"github.com/pion/rtp"
 	. "github.com/pion/webrtc/v3"
 	"m7s.live/m7s/v5"
-	"m7s.live/m7s/v5/pkg"
 	. "m7s.live/m7s/v5/pkg"
 	"m7s.live/m7s/v5/pkg/codec"
 	"m7s.live/m7s/v5/pkg/util"
@@ -426,7 +425,7 @@ func (conf *WebRTCPlugin) Play_(w http.ResponseWriter, r *http.Request) {
 		if videoSender == nil {
 			suber.SubVideo = false
 		}
-		conn.AddCall(func(task *pkg.Task) error {
+		conn.AddCall(func(task *util.Task) error {
 			return m7s.PlayBlock(suber, func(frame *mrtp.RTPAudio) (err error) {
 				for _, p := range frame.Packets {
 					if err = audioTLSRTP.WriteRTP(p); err != nil {

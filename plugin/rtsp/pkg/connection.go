@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"m7s.live/m7s/v5"
-	"m7s.live/m7s/v5/pkg"
 	"m7s.live/m7s/v5/pkg/util"
 )
 
@@ -27,7 +26,7 @@ func NewNetConnection(conn net.Conn) *NetConnection {
 }
 
 type NetConnection struct {
-	pkg.MarcoTask
+	util.MarcoTask
 	*util.BufReader
 	Backchannel     bool
 	Media           string

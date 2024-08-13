@@ -91,7 +91,8 @@ func (p *Publisher) GetKey() string {
 
 func createPublisher(p *Plugin, streamPath string, conf config.Publish) (publisher *Publisher) {
 	publisher = &Publisher{Publish: conf}
-	publisher.ID = GetNextTaskID()
+	publisher.ID = util.GetNextTaskID()
+	publisher.Name = "publisher"
 	publisher.Plugin = p
 	publisher.TimeoutTimer = time.NewTimer(p.config.PublishTimeout)
 	publisher.Logger = p.Logger.With("streamPath", streamPath, "pId", publisher.ID)
@@ -104,8 +105,8 @@ func (p *Publisher) Start() (err error) {
 	if oldPublisher, ok := s.Streams.Get(p.StreamPath); ok {
 		if p.KickExist {
 			p.Warn("kick")
-			oldPublisher.Stop(ErrKick)
 			p.TakeOver(oldPublisher)
+			oldPublisher.Stop(ErrKick)
 		} else {
 			return ErrStreamExist
 		}
@@ -158,6 +159,10 @@ func (p *Publisher) timeout() (err error) {
 	case PublisherStateWaitSubscriber:
 		if p.Publish.DelayCloseTimeout > 0 {
 			err = ErrPublishDelayCloseTimeout
+		}
+	case PublisherStateDisposed:
+		if p.Publish.WaitCloseTimeout > 0 {
+			err = ErrPublishWaitCloseTimeout
 		}
 	}
 	return
@@ -255,7 +260,7 @@ func (p *Publisher) writeAV(t *AVTrack, data IAVFrame) {
 		}
 	}
 	p.lastTs = frame.Timestamp
-	if p.Enabled(p, TraceLevel) {
+	if p.Enabled(p, util.TraceLevel) {
 		codec := t.FourCC().String()
 		data := frame.Wraps[0].String()
 		p.Trace("write", "seq", frame.Sequence, "ts", uint32(frame.Timestamp/time.Millisecond), "codec", codec, "size", bytesIn, "data", data)
@@ -510,19 +515,8 @@ func (p *Publisher) Dispose() {
 		}
 		subscriber.TimeoutTimer.Reset(waitCloseTimeout)
 	}
-	p.Lock()
-	defer p.Unlock()
 	if p.dumpFile != nil {
 		p.dumpFile.Close()
-	}
-	if p.State == PublisherStateDisposed {
-		panic("disposed")
-	}
-	if p.HasAudioTrack() {
-		p.AudioTrack.Dispose()
-	}
-	if p.HasVideoTrack() {
-		p.VideoTrack.Dispose()
 	}
 	p.State = PublisherStateDisposed
 }
@@ -533,7 +527,12 @@ func (p *Publisher) TakeOver(old *Publisher) {
 	for subscriber := range old.SubscriberRange {
 		p.AddSubscriber(subscriber)
 	}
-	old.Stop(ErrKick)
+	if old.HasAudioTrack() {
+		old.AudioTrack.Dispose()
+	}
+	if old.HasVideoTrack() {
+		old.VideoTrack.Dispose()
+	}
 	old.Subscribers = SubscriberCollection{}
 }
 

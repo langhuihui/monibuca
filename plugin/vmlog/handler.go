@@ -8,8 +8,6 @@ import (
 	"github.com/VictoriaMetrics/VictoriaMetrics/app/vlinsert/insertutils"
 	"github.com/VictoriaMetrics/VictoriaMetrics/app/vlselect"
 	"github.com/VictoriaMetrics/VictoriaMetrics/app/vlstorage"
-	"github.com/VictoriaMetrics/VictoriaMetrics/lib/buildinfo"
-	"github.com/VictoriaMetrics/VictoriaMetrics/lib/envflag"
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/httpserver"
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/logger"
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/logstorage"
@@ -112,15 +110,6 @@ func (h *VmLogHandler) WithGroup(name string) slog.Handler {
 		groups:    append(append([]string(nil), h.groups...), name),
 		converter: h.converter,
 	}
-}
-
-func init() {
-	envflag.Parse()
-	buildinfo.Init()
-	logger.Init()
-	vlstorage.Init()
-	vlselect.Init()
-	vlinsert.Init()
 }
 
 func NewVmLogHandler(opts *slog.HandlerOptions, converter Converter) (*VmLogHandler, error) {

@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"reflect"
 	"runtime"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -16,7 +17,7 @@ import (
 var AVFrameType = reflect.TypeOf((*AVFrame)(nil))
 
 type PubSubBase struct {
-	Task
+	util.Task
 	Plugin       *Plugin
 	StreamPath   string
 	Args         url.Values
@@ -51,14 +52,15 @@ type SubscriberCollection = util.Collection[uint32, *Subscriber]
 type Subscriber struct {
 	PubSubBase
 	config.Subscribe
-	Publisher   *Publisher
-	AudioReader *AVRingReader
-	VideoReader *AVRingReader
+	Publisher                  *Publisher
+	AudioReader, VideoReader   *AVRingReader
+	StartAudioTS, StartVideoTS time.Duration
 }
 
 func createSubscriber(p *Plugin, streamPath string, conf config.Subscribe) *Subscriber {
 	subscriber := &Subscriber{Subscribe: conf}
-	subscriber.ID = GetNextTaskID()
+	subscriber.ID = util.GetNextTaskID()
+	subscriber.Name = "subscriber"
 	subscriber.Plugin = p
 	subscriber.TimeoutTimer = time.NewTimer(subscriber.WaitTimeout)
 	subscriber.Logger = p.Logger.With("streamPath", streamPath, "sId", subscriber.ID)
@@ -168,7 +170,7 @@ func PlayBlock[A any, V any](s *Subscriber, onAudio func(A) error, onVideo func(
 
 func PlayBlock0[A any, V any](s *Subscriber, handler SubscribeHandler[A, V]) (err error) {
 	var a1, v1 reflect.Type
-	var startAudioTs, startVideoTs time.Duration
+	startAudioTs, startVideoTs := s.StartAudioTS, s.StartVideoTS
 	var initState = 0
 	prePublisher := s.Publisher
 	var audioFrame, videoFrame *AVFrame
@@ -181,7 +183,12 @@ func PlayBlock0[A any, V any](s *Subscriber, handler SubscribeHandler[A, V]) (er
 	awi := s.createAudioReader(a1, startAudioTs)
 	vwi := s.createVideoReader(v1, startVideoTs)
 	defer func() {
-		s.Stop(err)
+		if err != nil {
+			s.Stop(err)
+		} else {
+			err = recover().(error)
+			s.Error(err.Error(), "stack", string(debug.Stack()))
+		}
 		if s.AudioReader != nil {
 			s.AudioReader.StopRead()
 		}
@@ -192,7 +199,7 @@ func PlayBlock0[A any, V any](s *Subscriber, handler SubscribeHandler[A, V]) (er
 	sendAudioFrame := func() (err error) {
 		if awi >= 0 {
 			if len(audioFrame.Wraps) > awi {
-				if s.Enabled(s, TraceLevel) {
+				if s.Enabled(s, util.TraceLevel) {
 					s.Trace("send audio frame", "seq", audioFrame.Sequence)
 				}
 				err = handler.OnAudio(audioFrame.Wraps[awi].(A))
@@ -216,7 +223,7 @@ func PlayBlock0[A any, V any](s *Subscriber, handler SubscribeHandler[A, V]) (er
 	sendVideoFrame := func() (err error) {
 		if vwi >= 0 {
 			if len(videoFrame.Wraps) > vwi {
-				if s.Enabled(s, TraceLevel) {
+				if s.Enabled(s, util.TraceLevel) {
 					s.Trace("send video frame", "seq", videoFrame.Sequence, "data", videoFrame.Wraps[vwi].String(), "size", videoFrame.Wraps[vwi].GetSize())
 				}
 				err = handler.OnVideo(videoFrame.Wraps[vwi].(V))
@@ -261,6 +268,9 @@ func PlayBlock0[A any, V any](s *Subscriber, handler SubscribeHandler[A, V]) (er
 		if vr != nil {
 			for err == nil {
 				err = vr.ReadFrame(&s.Subscribe)
+				if prePublisher != s.Publisher {
+					break
+				}
 				if err == nil {
 					videoFrame = &vr.Value
 					err = s.Err()
@@ -315,6 +325,9 @@ func PlayBlock0[A any, V any](s *Subscriber, handler SubscribeHandler[A, V]) (er
 					}
 				}
 				if err = ar.ReadFrame(&s.Subscribe); err == nil {
+					if prePublisher != s.Publisher {
+						break
+					}
 					audioFrame = &ar.Value
 					err = s.Err()
 				} else {
@@ -346,6 +359,7 @@ func PlayBlock0[A any, V any](s *Subscriber, handler SubscribeHandler[A, V]) (er
 			awi = s.createAudioReader(a1, startAudioTs)
 		}
 		checkPublisherChange()
+		// TODO: 优化 select
 		runtime.Gosched()
 	}
 	return
