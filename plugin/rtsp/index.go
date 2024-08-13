@@ -43,14 +43,12 @@ func (p *RTSPPlugin) OnTCPConnect(conn *net.TCPConn) {
 	var err error
 	nc := NewNetConnection(conn)
 	nc.Logger = logger
+	p.AddTask(nc).WaitStarted()
 	defer func() {
-		nc.Destroy()
+		nc.Stop(err)
 		if p := recover(); p != nil {
 			err = p.(error)
 			logger.Error(err.Error(), "stack", string(debug.Stack()))
-		}
-		if receiver != nil {
-			receiver.Stop(err)
 		}
 	}()
 	var req *util.Request
@@ -106,8 +104,9 @@ func (p *RTSPPlugin) OnTCPConnect(conn *net.TCPConn) {
 				return
 			}
 
-			receiver = &Receiver{}
-			receiver.NetConnection = nc
+			receiver = &Receiver{
+				Stream: &Stream{NetConnection: nc},
+			}
 			if receiver.Publisher, err = p.Publish(nc, strings.TrimPrefix(nc.URL.Path, "/")); err != nil {
 				receiver = nil
 				err = nc.WriteResponse(&util.Response{
@@ -122,11 +121,14 @@ func (p *RTSPPlugin) OnTCPConnect(conn *net.TCPConn) {
 			if err = nc.WriteResponse(res); err != nil {
 				return
 			}
-
+			receiver.Publisher.OnDispose(func() {
+				nc.Stop(receiver.Publisher.StopReason())
+			})
 		case MethodDescribe:
 			sendMode = true
-			sender = &Sender{}
-			sender.NetConnection = nc
+			sender = &Sender{
+				Stream: &Stream{NetConnection: nc},
+			}
 			sender.Subscriber, err = p.Subscribe(nc, strings.TrimPrefix(nc.URL.Path, "/"))
 			if err != nil {
 				res := &util.Response{

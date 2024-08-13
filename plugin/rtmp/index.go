@@ -3,7 +3,6 @@ package plugin_rtmp
 import (
 	"errors"
 	"io"
-	"m7s.live/m7s/v5/pkg"
 	"maps"
 	"net"
 	"slices"
@@ -36,7 +35,6 @@ func (p *RTMPPlugin) GetPullableList() []string {
 }
 
 func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
-	receivers := make(map[uint32]*Receiver)
 	var err error
 	nc := NewNetConnection(conn)
 	nc.Logger = p.With("remote", conn.RemoteAddr().String())
@@ -57,8 +55,6 @@ func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
 				continue
 			}
 			switch msg.MessageTypeID {
-			case RTMP_MSG_CHUNK_SIZE:
-				nc.Info("msg read chunk size", "readChunkSize", nc.ReadChunkSize)
 			case RTMP_MSG_AMF0_COMMAND:
 				if msg.MsgData == nil {
 					err = errors.New("msg.MsgData is nil")
@@ -145,26 +141,24 @@ func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
 					// }
 					// err = nc.SendMessage(RTMP_MSG_AMF0_COMMAND, m)
 				case *PublishMessage:
-					receiver := &Receiver{
-						NetStream: NetStream{
-							NetConnection: nc,
-							StreamID:      cmd.StreamId,
-						},
+					ns := NetStream{
+						NetConnection: nc,
+						StreamID:      cmd.StreamId,
 					}
-					receiver.Publisher, err = p.Publish(nc.Context, nc.AppName+"/"+cmd.PublishingName)
-					receiver.Publisher.Description = nc.Description
+					var publisher *m7s.Publisher
+					publisher, err = p.Publish(nc.Context, nc.AppName+"/"+cmd.PublishingName)
+					publisher.Description = nc.Description
 					if err != nil {
-						delete(receivers, cmd.StreamId)
-						err = receiver.Response(cmd.TransactionId, NetStream_Publish_BadName, Level_Error)
+						err = ns.Response(cmd.TransactionId, NetStream_Publish_BadName, Level_Error)
 					} else {
-						receivers[cmd.StreamId] = receiver
-						err = receiver.BeginPublish(cmd.TransactionId)
+						ns.Receivers[cmd.StreamId] = publisher
+						err = ns.BeginPublish(cmd.TransactionId)
 					}
 					if err != nil {
 						nc.Error("sendMessage publish", "error", err)
 					} else {
-						receiver.Publisher.OnDispose(func() {
-							nc.Stop(receiver.StopReason())
+						publisher.OnDispose(func() {
+							nc.Stop(publisher.StopReason())
 						})
 					}
 				case *PlayMessage:
@@ -181,28 +175,11 @@ func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
 						err = ns.Response(cmd.TransactionId, NetStream_Play_Failed, Level_Error)
 					} else {
 						err = ns.BeginPlay(cmd.TransactionId)
-						nc.AddCall(func(task *pkg.Task) error {
-							audio, video := ns.CreateSender(false)
-							return m7s.PlayBlock(suber, audio.HandleAudio, video.HandleVideo)
-						}, nil)
+						ns.Subscribe(suber)
 					}
 					if err != nil {
 						nc.Error("sendMessage play", "error", err)
 					}
-				}
-			case RTMP_MSG_AUDIO:
-				if r, ok := receivers[msg.MessageStreamID]; ok && r.PubAudio {
-					err = r.WriteAudio(msg.AVData.WrapAudio())
-				} else {
-					msg.AVData.Recycle()
-					nc.Warn("ReceiveAudio", "MessageStreamID", msg.MessageStreamID)
-				}
-			case RTMP_MSG_VIDEO:
-				if r, ok := receivers[msg.MessageStreamID]; ok && r.PubVideo {
-					err = r.WriteVideo(msg.AVData.WrapVideo())
-				} else {
-					msg.AVData.Recycle()
-					nc.Warn("ReceiveVideo", "MessageStreamID", msg.MessageStreamID)
 				}
 			}
 		} else if err == io.EOF || errors.Is(err, io.ErrUnexpectedEOF) {

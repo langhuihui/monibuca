@@ -1,5 +1,10 @@
 package rtmp
 
+import (
+	"m7s.live/m7s/v5"
+	"m7s.live/m7s/v5/pkg"
+)
+
 type NetStream struct {
 	*NetConnection
 	StreamID uint32
@@ -61,4 +66,11 @@ func (ns *NetStream) BeginPlay(tid uint64) (err error) {
 	}
 	err = ns.Response(tid, NetStream_Play_Start, Level_Status)
 	return
+}
+
+func (ns *NetStream) Subscribe(suber *m7s.Subscriber) {
+	ns.AddCall(func(task *pkg.Task) error {
+		audio, video := ns.CreateSender(false)
+		return m7s.PlayBlock(suber, audio.HandleAudio, video.HandleVideo)
+	}, nil)
 }

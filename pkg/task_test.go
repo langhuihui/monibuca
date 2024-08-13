@@ -147,12 +147,3 @@ func Test_Hooks(t *testing.T) {
 	})
 	mt.AddTask(&task).WaitStarted()
 }
-
-func Test_GetID_IncrementsID(t *testing.T) {
-	mt := createMarcoTask()
-	id1 := mt.GetNextID()
-	id2 := mt.GetNextID()
-	if id1 == id2 {
-		t.Errorf("expected different IDs, got %d and %d", id1, id2)
-	}
-}

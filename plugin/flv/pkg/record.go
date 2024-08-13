@@ -11,6 +11,62 @@ import (
 	"time"
 )
 
+var writeMetaTagQueueTask pkg.MarcoLongTask
+
+func init() {
+	pkg.RootTask.AddTask(&writeMetaTagQueueTask)
+}
+
+type writeMetaTagTask struct {
+	pkg.Task
+	file     *os.File
+	flags    byte
+	metaData []byte
+}
+
+func (task *writeMetaTagTask) Start() (err error) {
+	defer func() {
+		err = task.file.Close()
+		if info, err := task.file.Stat(); err == nil && info.Size() == 0 {
+			err = os.Remove(info.Name())
+		}
+	}()
+	var tempFile *os.File
+	if tempFile, err = os.CreateTemp("", "*.flv"); err != nil {
+		task.Error("create temp file failed", "err", err)
+		return
+	} else {
+		defer func() {
+			err = tempFile.Close()
+			err = os.Remove(tempFile.Name())
+			task.Info("writeMetaData success")
+		}()
+		_, err = tempFile.Write([]byte{'F', 'L', 'V', 0x01, task.flags, 0, 0, 0, 9, 0, 0, 0, 0})
+		if err != nil {
+			task.Error(err.Error())
+			return
+		}
+		err = WriteFLVTag(tempFile, FLV_TAG_TYPE_SCRIPT, 0, task.metaData)
+		_, err = task.file.Seek(13, io.SeekStart)
+		if err != nil {
+			task.Error("writeMetaData Seek failed", "err", err)
+			return
+		}
+		_, err = io.Copy(tempFile, task.file)
+		if err != nil {
+			task.Error("writeMetaData Copy failed", "err", err)
+			return
+		}
+		_, err = tempFile.Seek(0, io.SeekStart)
+		_, err = task.file.Seek(0, io.SeekStart)
+		_, err = io.Copy(task.file, tempFile)
+		if err != nil {
+			task.Error("writeMetaData Copy failed", "err", err)
+		}
+		return
+	}
+}
+
 func RecordFlv(ctx *m7s.RecordContext) (err error) {
 	var file *os.File
 	var filepositions []uint64
@@ -23,13 +79,7 @@ func RecordFlv(ctx *m7s.RecordContext) (err error) {
 	suber := ctx.Subscriber
 	ar, vr := suber.AudioReader, suber.VideoReader
 	hasAudio, hasVideo := ar != nil, vr != nil
-	writeMetaTag := func() {
-		defer func() {
-			err = file.Close()
-			if info, err := file.Stat(); err == nil && info.Size() == 0 {
-				os.Remove(file.Name())
-			}
-		}()
+	writeMetaTag := func(file *os.File, filepositions []uint64, times []float64) {
 		var amf rtmp.AMF
 		metaData := rtmp.EcmaArray{
 			"MetaDataCreator": "m7s/" + m7s.Version,
@@ -62,10 +112,6 @@ func RecordFlv(ctx *m7s.RecordContext) (err error) {
 				"filepositions": filepositions,
 				"times":         times,
 			}
-			defer func() {
-				filepositions = []uint64{0}
-				times = []float64{0}
-			}()
 		}
 		amf.Marshals("onMetaData", metaData)
 		offset := amf.Len() + 13 + 15
@@ -79,42 +125,13 @@ func RecordFlv(ctx *m7s.RecordContext) (err error) {
 				"times":         times,
 			}
 		}
-
-		if tempFile, err := os.CreateTemp("", "*.flv"); err != nil {
-			ctx.Error("create temp file failed", "err", err)
-			return
-		} else {
-			defer func() {
-				tempFile.Close()
-				os.Remove(tempFile.Name())
-				ctx.Info("writeMetaData success")
-			}()
-			_, err := tempFile.Write([]byte{'F', 'L', 'V', 0x01, flags, 0, 0, 0, 9, 0, 0, 0, 0})
-			if err != nil {
-				ctx.Error(err.Error())
-				return
-			}
-			amf.Reset()
-			marshals := amf.Marshals("onMetaData", metaData)
-			WriteFLVTag(tempFile, FLV_TAG_TYPE_SCRIPT, 0, marshals)
-			_, err = file.Seek(13, io.SeekStart)
-			if err != nil {
-				ctx.Error("writeMetaData Seek failed", "err", err)
-				return
-			}
-			_, err = io.Copy(tempFile, file)
-			if err != nil {
-				ctx.Error("writeMetaData Copy failed", "err", err)
-				return
-			}
-			_, err = tempFile.Seek(0, io.SeekStart)
-			_, err = file.Seek(0, io.SeekStart)
-			_, err = io.Copy(file, tempFile)
-			if err != nil {
-				ctx.Error("writeMetaData Copy failed", "err", err)
-				return
-			}
-		}
+		amf.Reset()
+		marshals := amf.Marshals("onMetaData", metaData)
+		writeMetaTagQueueTask.AddTask(&writeMetaTagTask{
+			file:     file,
+			flags:    flags,
+			metaData: marshals,
+		})
 	}
 	if ctx.Append {
 		var metaData rtmp.EcmaArray
@@ -151,14 +168,16 @@ func RecordFlv(ctx *m7s.RecordContext) (err error) {
 		file.Write(FLVHead)
 	}
 	if ctx.Fragment == 0 {
-		defer writeMetaTag()
+		defer writeMetaTag(file, filepositions, times)
 	}
 	checkFragment := func(absTime uint32) {
 		if ctx.Fragment == 0 {
 			return
 		}
 		if duration = int64(absTime); time.Duration(duration)*time.Millisecond >= ctx.Fragment {
-			writeMetaTag()
+			writeMetaTag(file, filepositions, times)
+			filepositions = []uint64{0}
+			times = []float64{0}
 			offset = 0
 			if file, err = os.OpenFile(ctx.FilePath, os.O_CREATE|os.O_RDWR, 0666); err != nil {
 				return

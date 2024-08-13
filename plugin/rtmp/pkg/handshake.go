@@ -89,18 +89,18 @@ func (nc *NetConnection) Handshake(checkC2 bool) (err error) {
 	return nc.complex_handshake(C1)
 }
 
-func (client *NetConnection) ClientHandshake() (err error) {
-	C0C1 := client.mediaDataPool.NextN(C1S1_SIZE + 1)
-	defer client.mediaDataPool.Recycle()
+func (nc *NetConnection) ClientHandshake() (err error) {
+	C0C1 := nc.mediaDataPool.NextN(C1S1_SIZE + 1)
+	defer nc.mediaDataPool.Recycle()
 	C0C1[0] = RTMP_HANDSHAKE_VERSION
-	if _, err = client.Write(C0C1); err == nil {
+	if _, err = nc.Write(C0C1); err == nil {
 		// read S0 S1
-		if _, err = io.ReadFull(client.Conn, C0C1); err == nil {
+		if _, err = io.ReadFull(nc.Conn, C0C1); err == nil {
 			if C0C1[0] != RTMP_HANDSHAKE_VERSION {
 				err = errors.New("S1 C1 Error")
 				// C2
-			} else if _, err = client.Write(C0C1[1:]); err == nil {
-				_, err = io.ReadFull(client.Conn, C0C1[1:]) // S2
+			} else if _, err = nc.Write(C0C1[1:]); err == nil {
+				_, err = io.ReadFull(nc.Conn, C0C1[1:]) // S2
 			}
 		}
 	}

@@ -1,4 +1,2 @@
 global:
   loglevel: info
-  tcp:
-    listenaddr: :50050

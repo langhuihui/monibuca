@@ -6,7 +6,6 @@ global:
     listenaddr: :8081
     listenaddrtls: :8555
 rtmp:
-  chunksize: 2048
   tcp:
     listenaddr: 
   push:

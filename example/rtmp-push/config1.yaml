@@ -1,6 +1,2 @@
 global:
   loglevel: info
-  tcp:
-    listenaddr: :50050
-rtmp:
-  chunksize: 2048

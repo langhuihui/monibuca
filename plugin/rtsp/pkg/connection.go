@@ -64,7 +64,7 @@ func (c *NetConnection) StopWrite() {
 	c.writing.Store(false)
 }
 
-func (c *NetConnection) Destroy() {
+func (c *NetConnection) Dispose() {
 	c.conn.Close()
 	c.BufReader.Recycle()
 	c.MemoryAllocator.Recycle()

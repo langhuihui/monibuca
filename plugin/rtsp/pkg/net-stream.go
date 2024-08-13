@@ -238,6 +238,6 @@ func (c *Stream) Teardown() (err error) {
 func (ns *Stream) disconnect() {
 	if ns != nil && ns.NetConnection != nil {
 		_ = ns.Teardown()
-		ns.NetConnection.Destroy()
+		ns.NetConnection.Dispose()
 	}
 }

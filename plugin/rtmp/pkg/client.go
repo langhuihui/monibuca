@@ -115,22 +115,10 @@ func Pull(p *m7s.PullContext) (err error) {
 			return err
 		}
 		switch msg.MessageTypeID {
-		case RTMP_MSG_AUDIO:
-			if p.Publisher.PubAudio {
-				err = p.Publisher.WriteAudio(msg.AVData.WrapAudio())
-			} else {
-				msg.AVData.Recycle()
-			}
-		case RTMP_MSG_VIDEO:
-			if p.Publisher.PubVideo {
-				err = p.Publisher.WriteVideo(msg.AVData.WrapVideo())
-			} else {
-				msg.AVData.Recycle()
-			}
 		case RTMP_MSG_AMF0_COMMAND:
 			cmd := msg.MsgData.(Commander).GetCommand()
 			switch cmd.CommandName {
-			case "_result":
+			case Response_Result:
 				if response, ok := msg.MsgData.(*ResponseCreateStreamMessage); ok {
 					connection.StreamID = response.StreamId
 					m := &PlayMessage{}
@@ -144,6 +132,7 @@ func Pull(p *m7s.PullContext) (err error) {
 					if len(args) > 0 {
 						m.StreamName += "?" + args.Encode()
 					}
+					connection.Receivers[response.StreamId] = p.Publisher
 					connection.SendMessage(RTMP_MSG_AMF0_COMMAND, m)
 					// if response, ok := msg.MsgData.(*ResponsePlayMessage); ok {
 					// 	if response.Object["code"] == "NetStream.Play.Start" {
@@ -200,14 +189,7 @@ func Push(p *m7s.PushContext) (err error) {
 					})
 				} else if response, ok := msg.MsgData.(*ResponsePublishMessage); ok {
 					if response.Infomation["code"] == NetStream_Publish_Start {
-						audio, video := connection.CreateSender(true)
-						go func() {
-							for err == nil {
-								msg, err = connection.RecvMessage()
-							}
-							p.Subscriber.Stop(err)
-						}()
-						return m7s.PlayBlock(p.Subscriber, audio.HandleAudio, video.HandleVideo)
+						connection.Subscribe(p.Subscriber)
 					} else {
 						return errors.New(response.Infomation["code"].(string))
 					}

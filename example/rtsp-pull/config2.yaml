@@ -1,6 +1,6 @@
 global:
   tcp:
-    listenaddr: :50051
+    listenaddr: :50050
   http:
     listenaddr: :8081
     listenaddrtls: :8555
