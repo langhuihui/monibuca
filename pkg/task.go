@@ -41,6 +41,7 @@ type (
 	}
 	Task struct {
 		ID        uint32
+		Name      string
 		StartTime time.Time
 		*slog.Logger
 		context.Context
@@ -72,6 +73,9 @@ func (task *Task) WaitStarted() error {
 }
 
 func (task *Task) WaitStopped() error {
+	if task.shutdown == nil {
+		return task.StopReason()
+	}
 	return task.shutdown.Await()
 }
 
@@ -88,9 +92,9 @@ func (task *Task) StopReason() error {
 }
 
 func (task *Task) Stop(err error) {
-	if task.CancelCauseFunc != nil && !task.IsStopped() {
+	if task.CancelCauseFunc != nil {
 		if task.Logger != nil {
-			task.Debug("task stop", "reason", err.Error(), "elapsed", time.Since(task.StartTime), "taskId", task.ID)
+			task.Debug("task stop", "reason", err.Error(), "elapsed", time.Since(task.StartTime), "taskId", task.ID, "taskName", task.Name)
 		}
 		task.CancelCauseFunc(err)
 	}
@@ -108,7 +112,7 @@ func (task *Task) start() (signal reflect.Value, err error) {
 	task.StartTime = time.Now()
 	err = task.startHandler()
 	if task.Logger != nil {
-		task.Debug("task start", "taskId", task.ID)
+		task.Debug("task start", "taskId", task.ID, "taskName", task.Name)
 	}
 	task.startup.Fulfill(err)
 	signal = reflect.ValueOf(task.Done())
@@ -121,7 +125,7 @@ func (task *Task) start() (signal reflect.Value, err error) {
 func (task *Task) dispose() {
 	reason := task.StopReason()
 	if task.Logger != nil {
-		task.Debug("task dispose", "reason", reason, "taskId", task.ID)
+		task.Debug("task dispose", "reason", reason, "taskId", task.ID, "taskName", task.Name)
 	}
 	task.disposeHandler()
 	task.shutdown.Fulfill(reason)
@@ -134,5 +138,5 @@ func (task *Task) init(ctx context.Context) {
 	task.parentCtx = ctx
 	task.Context, task.CancelCauseFunc = context.WithCancelCause(ctx)
 	task.startup = util.NewPromise(task.Context)
-	task.shutdown = util.NewPromise(task.Context)
+	task.shutdown = util.NewPromise(context.Background())
 }

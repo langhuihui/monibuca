@@ -7,17 +7,10 @@ import (
 
 type Connection struct {
 	pkg.MarcoTask
-	Plugin         *Plugin
-	StreamPath     string // 对应本地流
-	RemoteURL      string // 远程服务器地址（用于推拉）
-	ReConnectCount int    //重连次数
-	ConnectProxy   string // 连接代理
-}
-
-func (client *Connection) reconnect(count int) (ok bool) {
-	ok = count == -1 || client.ReConnectCount <= count
-	client.ReConnectCount++
-	return
+	Plugin       *Plugin
+	StreamPath   string // 对应本地流
+	RemoteURL    string // 远程服务器地址（用于推拉）
+	ConnectProxy string // 连接代理
 }
 
 type Puller = func(*PullContext) error

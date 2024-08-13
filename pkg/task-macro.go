@@ -2,16 +2,26 @@ package pkg
 
 import (
 	"context"
+	"log/slog"
+	"m7s.live/m7s/v5/pkg/util"
+	"os"
 	"reflect"
 	"slices"
 	"sync"
 	"sync/atomic"
 )
 
-var RootTask MarcoTask
+var RootTask MarcoLongTask
+var idG atomic.Uint32
+
+func GetNextTaskID() uint32 {
+	return idG.Add(1)
+}
 
 func init() {
 	RootTask.init(context.Background())
+	RootTask.Logger = slog.New(slog.NewTextHandler(os.Stdout, nil))
+	RootTask.Name = "Root"
 }
 
 type MarcoLongTask struct {
@@ -28,24 +38,27 @@ type MarcoTask struct {
 	Task
 	addSub    chan ITask
 	children  []ITask
-	idG       atomic.Uint32
 	lazyRun   sync.Once
 	keepAlive bool
 }
 
 func (mt *MarcoTask) init(ctx context.Context) {
 	mt.Task.init(ctx)
+	mt.shutdown = nil
 	mt.addSub = make(chan ITask, 10)
 }
 
 func (mt *MarcoTask) dispose() {
 	reason := mt.StopReason()
 	if mt.Logger != nil {
-		mt.Debug("task dispose", "reason", reason, "taskId", mt.ID)
+		mt.Debug("task dispose", "reason", reason, "taskId", mt.ID, "taskName", mt.Name)
 	}
 	mt.disposeHandler()
 	close(mt.addSub)
-	_ = mt.shutdown.Await()
+	_ = mt.WaitStopped()
+	if mt.Logger != nil {
+		mt.Debug("task disposed", "reason", reason, "taskId", mt.ID, "taskName", mt.Name)
+	}
 	for _, listener := range mt.afterDisposeListeners {
 		listener()
 	}
@@ -58,7 +71,7 @@ func (mt *MarcoTask) lazyStart(t ITask) {
 		return
 	}
 	if task.ID == 0 {
-		task.ID = mt.GetID()
+		task.ID = GetNextTaskID()
 	}
 	if task.parent == nil {
 		task.parent = mt
@@ -73,6 +86,7 @@ func (mt *MarcoTask) lazyStart(t ITask) {
 		task.disposeHandler = EmptyDispose
 	}
 	mt.lazyRun.Do(func() {
+		mt.shutdown = util.NewPromise(context.Background())
 		go mt.run()
 	})
 	mt.addSub <- t
@@ -125,10 +139,6 @@ func (mt *MarcoTask) AddChan(channel any, callback any) *ChannelTask {
 	chanTask.callback = reflect.ValueOf(callback)
 	mt.lazyStart(&chanTask)
 	return &chanTask
-}
-
-func (mt *MarcoTask) GetID() uint32 {
-	return mt.idG.Add(1)
 }
 
 func (mt *MarcoTask) run() {

@@ -58,7 +58,7 @@ type Subscriber struct {
 
 func createSubscriber(p *Plugin, streamPath string, conf config.Subscribe) *Subscriber {
 	subscriber := &Subscriber{Subscribe: conf}
-	subscriber.ID = p.Server.streamTask.GetID()
+	subscriber.ID = GetNextTaskID()
 	subscriber.Plugin = p
 	subscriber.TimeoutTimer = time.NewTimer(subscriber.WaitTimeout)
 	subscriber.Logger = p.Logger.With("streamPath", streamPath, "sId", subscriber.ID)

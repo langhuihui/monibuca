@@ -72,7 +72,7 @@ type Server struct {
 
 func NewServer() (s *Server) {
 	s = &Server{}
-	s.ID = RootTask.GetID()
+	s.ID = GetNextTaskID()
 	s.Meta = &serverMeta
 	return
 }
@@ -110,16 +110,21 @@ func (s *Server) GetKey() uint32 {
 	return s.ID
 }
 
-func (s *Server) Init(ctx context.Context, conf any) {
+func (s *Server) Init(conf any) {
+	s.Name = "server"
 	s.conf = conf
 	s.Server = s
 	s.handler = s
 	s.config.HTTP.ListenAddrTLS = ":8443"
 	s.config.HTTP.ListenAddr = ":8080"
 	s.config.TCP.ListenAddr = ":50051"
-	s.LogHandler.SetLevel(slog.LevelInfo)
+	s.LogHandler.SetLevel(slog.LevelDebug)
 	s.LogHandler.Add(defaultLogHandler)
-	s.Logger = slog.New(&s.LogHandler).With("Server", s.ID)
+	s.Logger = slog.New(&s.LogHandler).With("server", s.ID)
+	s.streamTask.Name = "stream"
+	s.pullTask.Name = "pull"
+	s.pushTask.Name = "push"
+	s.recordTask.Name = "record"
 }
 
 func (s *Server) Start() (err error) {
@@ -153,7 +158,6 @@ func (s *Server) Start() (err error) {
 	if cg != nil {
 		s.Config.ParseUserFile(cg["global"])
 	}
-	//s.eventChan = make(chan any, s.EventBusSize)
 	s.LogHandler.SetLevel(ParseLevel(s.config.LogLevel))
 	s.registerHandler(map[string]http.HandlerFunc{
 		"/api/config/json/{name}":             s.api_Config_JSON_,
@@ -250,6 +254,7 @@ func (s *Server) Start() (err error) {
 		}
 	})
 	Servers.Add(s)
+	s.Info("server started")
 	return
 }
 
@@ -266,12 +271,13 @@ func (s *Server) Dispose() {
 
 func (s *Server) Run(ctx context.Context, conf any) (err error) {
 	for {
-		s.Init(ctx, conf)
+		s.Init(conf)
 		RootTask.AddTaskWithContext(ctx, s)
 		if err = s.WaitStarted(); err != nil {
 			return
 		}
 		if err = s.WaitStopped(); err != ErrRestart {
+			s.Info("server stopped", "error", err)
 			return
 		}
 		var server Server

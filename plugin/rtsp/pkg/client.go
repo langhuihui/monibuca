@@ -40,7 +40,7 @@ func createClient(p *m7s.Connection) (s *Stream, err error) {
 		return
 	}
 	s = &Stream{NetConnection: NewNetConnection(conn)}
-	s.Logger = p.Logger
+	s.Logger = p.Logger.With("local", conn.LocalAddr().String())
 	s.URL = rtspURL
 	s.auth = util.NewAuth(s.URL.User)
 	s.Backchannel = true
@@ -74,7 +74,6 @@ func Pull(p *m7s.PullContext) (err error) {
 	if err = s.Play(); err != nil {
 		return
 	}
-	p.Connection.ReConnectCount = 0
 	return receiver.Receive()
 }
 
@@ -105,6 +104,5 @@ func Push(ctx *m7s.PushContext) (err error) {
 	if err = s.Record(); err != nil {
 		return
 	}
-	ctx.Connection.ReConnectCount = 0
 	return sender.Send()
 }

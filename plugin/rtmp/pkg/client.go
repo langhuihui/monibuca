@@ -14,6 +14,7 @@ import (
 func createClient(c *m7s.Connection) (*NetStream, error) {
 	chunkSize := 4096
 	addr := c.RemoteURL
+
 	u, err := url.Parse(addr)
 	if err != nil {
 		return nil, err
@@ -43,6 +44,8 @@ func createClient(c *m7s.Connection) (*NetStream, error) {
 	}
 	ns := &NetStream{}
 	ns.NetConnection = NewNetConnection(conn)
+	ns.Logger = c.Logger.With("local", conn.LocalAddr().String())
+	c.Info("connect")
 	defer func() {
 		if err != nil {
 			ns.Dispose()
@@ -85,16 +88,18 @@ func createClient(c *m7s.Connection) (*NetStream, error) {
 				c.Description = msg.MsgData.(*ResponseMessage).Properties
 				response := msg.MsgData.(*ResponseMessage)
 				if response.Infomation["code"] == NetConnection_Connect_Success {
-
-				} else {
-					return ns, err
+					err = ns.SendMessage(RTMP_MSG_AMF0_COMMAND, &CommandMessage{"createStream", 2})
+					if err == nil {
+						c.Info("connected")
+					}
 				}
+				return ns, err
 			default:
 				fmt.Println(cmd.CommandName)
 			}
 		}
 	}
-	c.Info("connect", "remoteURL", c.RemoteURL)
+
 	return ns, nil
 }
 
@@ -104,12 +109,8 @@ func Pull(p *m7s.PullContext) (err error) {
 		return
 	}
 	defer connection.Dispose()
-	err = connection.SendMessage(RTMP_MSG_AMF0_COMMAND, &CommandMessage{"createStream", 2})
 	var msg *Chunk
 	for err == nil {
-		if err = p.Publisher.Err(); err != nil {
-			return
-		}
 		if msg, err = connection.RecvMessage(); err != nil {
 			return err
 		}
@@ -117,10 +118,14 @@ func Pull(p *m7s.PullContext) (err error) {
 		case RTMP_MSG_AUDIO:
 			if p.Publisher.PubAudio {
 				err = p.Publisher.WriteAudio(msg.AVData.WrapAudio())
+			} else {
+				msg.AVData.Recycle()
 			}
 		case RTMP_MSG_VIDEO:
 			if p.Publisher.PubVideo {
 				err = p.Publisher.WriteVideo(msg.AVData.WrapVideo())
+			} else {
+				msg.AVData.Recycle()
 			}
 		case RTMP_MSG_AMF0_COMMAND:
 			cmd := msg.MsgData.(Commander).GetCommand()
@@ -162,7 +167,6 @@ func Push(p *m7s.PushContext) (err error) {
 		return
 	}
 	defer connection.Dispose()
-	err = connection.SendMessage(RTMP_MSG_AMF0_COMMAND, &CommandMessage{"createStream", 2})
 	var msg *Chunk
 	for err == nil {
 		msg, err = connection.RecvMessage()
@@ -196,7 +200,6 @@ func Push(p *m7s.PushContext) (err error) {
 					})
 				} else if response, ok := msg.MsgData.(*ResponsePublishMessage); ok {
 					if response.Infomation["code"] == NetStream_Publish_Start {
-						p.Connection.ReConnectCount = 0
 						audio, video := connection.CreateSender(true)
 						go func() {
 							for err == nil {
