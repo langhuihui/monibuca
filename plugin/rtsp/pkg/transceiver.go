@@ -87,24 +87,16 @@ func (s *Sender) sendRTP(pack *mrtp.RTPData, channel int) (err error) {
 	return
 }
 
-func (s *Sender) send() error {
-	return m7s.PlayBlock(s.Subscriber, func(audio *mrtp.RTPAudio) error {
+func (s *Sender) Send() (err error) {
+	s.Stream.AddTask(m7s.CreatePlayTask(s.Subscriber, func(audio *mrtp.RTPAudio) error {
 		return s.sendRTP(&audio.RTPData, s.AudioChannelID)
 	}, func(video *mrtp.Video) error {
 		return s.sendRTP(&video.RTPData, s.VideoChannelID)
-	})
-}
-
-func (s *Sender) receive() {
-	var err error
+	}))
 	for err == nil {
 		_, _, err = s.NetConnection.Receive(true)
 	}
-}
-
-func (s *Sender) Send() (err error) {
-	go s.receive()
-	return s.send()
+	return
 }
 
 func (r *Receiver) SetMedia(medias []*Media) (err error) {
@@ -136,7 +128,7 @@ func (r *Receiver) SetMedia(medias []*Media) (err error) {
 				PayloadType: webrtc.PayloadType(codec.PayloadType),
 			}
 		} else {
-			r.Warn("media kind not support", "kind", codec.Kind())
+			r.Stream.Warn("media kind not support", "kind", codec.Kind())
 		}
 	}
 	return
@@ -217,7 +209,7 @@ func (r *Receiver) Receive() (err error) {
 			if msg.Packets, err = rtcp.Unmarshal(buf); err != nil {
 				return
 			}
-			r.Debug("rtcp", "type", msg.Header.Type, "length", msg.Header.Length)
+			r.Stream.Debug("rtcp", "type", msg.Header.Type, "length", msg.Header.Length)
 			// TODO: rtcp msg
 		}
 	}

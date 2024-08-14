@@ -1,6 +1,7 @@
 package util
 
 import (
+	"reflect"
 	"slices"
 	"sync"
 )
@@ -81,6 +82,24 @@ func (c *Collection[K, T]) RemoveByKey(key K) bool {
 		}
 	}
 	return false
+}
+
+func (c *Collection[K, T]) GetOrCreate(key K) (item T, find bool) {
+	if c.L != nil {
+		c.L.Lock()
+		defer c.L.Unlock()
+	}
+	if c.m != nil {
+		item, find = c.m[key]
+		return item, find
+	}
+	for _, item = range c.Items {
+		if item.GetKey() == key {
+			return item, true
+		}
+	}
+	item = reflect.New(reflect.TypeOf(item).Elem()).Interface().(T)
+	return
 }
 
 func (c *Collection[K, T]) Get(key K) (item T, ok bool) {

@@ -49,12 +49,24 @@ type ServerConfig struct {
 	DisableAll     bool          `default:"false" desc:"禁用所有插件"` //禁用所有插件
 }
 
+type WaitStream struct {
+	*slog.Logger
+	StreamPath string
+	SubscriberCollection
+	baseTs time.Duration
+}
+
+func (w *WaitStream) GetKey() string {
+	return w.StreamPath
+}
+
 type Server struct {
 	pb.UnimplementedGlobalServer
 	Plugin
 	ServerConfig
 	Plugins                                    util.Collection[string, *Plugin]
-	Streams, Waiting                           util.Collection[string, *Publisher]
+	Streams                                    util.Collection[string, *Publisher]
+	Waiting                                    util.Collection[string, *WaitStream]
 	Pulls                                      util.Collection[string, *PullContext]
 	Pushs                                      util.Collection[string, *PushContext]
 	Records                                    util.Collection[string, *RecordContext]
@@ -231,20 +243,8 @@ func (s *Server) Start() (err error) {
 		}(tcpConf.ListenAddr)
 	}
 	s.streamTask.AddChan(time.NewTicker(s.PulseInterval).C, func(time.Time) {
-		for publisher := range s.Streams.Range {
-			if err := publisher.checkTimeout(); err != nil {
-				publisher.Stop(err)
-			}
-		}
-		for publisher := range s.Waiting.Range {
-			if publisher.Plugin != nil {
-				if err := publisher.checkTimeout(); err != nil {
-					if publisher.Plugin != nil {
-						s.createWait(publisher.StreamPath).TakeOver(publisher)
-					}
-				}
-			}
-			for sub := range publisher.SubscriberRange {
+		for waits := range s.Waiting.Range {
+			for sub := range waits.Range {
 				select {
 				case <-sub.TimeoutTimer.C:
 					sub.Stop(ErrSubscribeTimeout)
@@ -258,7 +258,7 @@ func (s *Server) Start() (err error) {
 	return
 }
 
-func (s *Server) CallOnStreamTask(callback func(*util.Task) error) {
+func (s *Server) CallOnStreamTask(callback func() error) {
 	s.streamTask.Call(callback)
 }
 
@@ -288,11 +288,12 @@ func (s *Server) Run(ctx context.Context, conf any) (err error) {
 	}
 }
 
-func (s *Server) createWait(streamPath string) *Publisher {
-	newPublisher := &Publisher{}
-	newPublisher.Logger = s.Logger.With("streamPath", streamPath)
+func (s *Server) createWait(streamPath string) *WaitStream {
+	newPublisher := &WaitStream{
+		StreamPath: streamPath,
+		Logger:     s.Logger.With("streamPath", streamPath),
+	}
 	s.Info("createWait")
-	newPublisher.StreamPath = streamPath
 	s.Waiting.Set(newPublisher)
 	return newPublisher
 }

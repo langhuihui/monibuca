@@ -25,10 +25,10 @@ rtmp:
   pull:
     pullonsub:
 #      live/pull: rtmp://localhost/live/test
-flv:
-   pull:
-     pullonstart:
-       live/test: /Users/dexter/project/v5/monibuca/example/default/record/live/test.flv
+#flv:
+#   pull:
+#     pullonstart:
+#       live/test: /Users/dexter/project/v5/monibuca/example/default/record/live/test.flv
 gb28181:
     sip:
         listenaddr:

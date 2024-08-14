@@ -389,7 +389,6 @@ func (p *Plugin) SubscribeWithConfig(ctx context.Context, streamPath string, con
 		}
 	}
 	err = p.Server.streamTask.AddTaskWithContext(ctx, subscriber).WaitStarted()
-	err = subscriber.Publisher.WaitTrack()
 	return
 }
 
@@ -470,7 +469,7 @@ func (p *Plugin) AddLogHandler(handler slog.Handler) {
 }
 
 func (p *Plugin) SaveConfig() (err error) {
-	p.Server.Call(func(*util.Task) (err error) {
+	p.Server.Call(func() (err error) {
 		if p.Modify == nil {
 			os.Remove(p.settingPath())
 			return

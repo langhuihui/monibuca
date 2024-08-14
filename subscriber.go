@@ -2,10 +2,10 @@ package m7s
 
 import (
 	"errors"
+	"fmt"
 	"net/url"
 	"reflect"
 	"runtime"
-	"runtime/debug"
 	"strings"
 	"time"
 
@@ -17,7 +17,7 @@ import (
 var AVFrameType = reflect.TypeOf((*AVFrame)(nil))
 
 type PubSubBase struct {
-	util.Task
+	util.MarcoTask
 	Plugin       *Plugin
 	StreamPath   string
 	Args         url.Values
@@ -77,10 +77,11 @@ func (s *Subscriber) Start() (err error) {
 	s.Info("subscribe")
 	if publisher, ok := server.Streams.Get(s.StreamPath); ok {
 		publisher.AddSubscriber(s)
-	} else if publisher, ok = server.Waiting.Get(s.StreamPath); ok {
-		publisher.AddSubscriber(s)
+		err = publisher.WaitTrack()
+	} else if waitStream, ok := server.Waiting.Get(s.StreamPath); ok {
+		waitStream.Add(s)
 	} else {
-		server.createWait(s.StreamPath).AddSubscriber(s)
+		server.createWait(s.StreamPath).Add(s)
 		for plugin := range server.Plugins.Range {
 			if remoteURL := plugin.GetCommonConf().Pull.CheckPullOnSub(s.StreamPath); remoteURL != "" {
 				if plugin.Meta.Puller != nil {
@@ -155,21 +156,36 @@ func (s *Subscriber) createVideoReader(dataType reflect.Type, startVideoTs time.
 }
 
 type SubscribeHandler[A any, V any] struct {
+	util.Task
+	s            *Subscriber
 	OnAudio      func(A) error
 	OnVideo      func(V) error
 	ProcessAudio chan func(*AVFrame)
 	ProcessVideo chan func(*AVFrame)
 }
 
-func PlayBlock[A any, V any](s *Subscriber, onAudio func(A) error, onVideo func(V) error) (err error) {
+func CreatePlayTask[A any, V any](s *Subscriber, onAudio func(A) error, onVideo func(V) error) util.ITask {
 	var handler SubscribeHandler[A, V]
+	handler.Name = fmt.Sprintf("play:%s", s.StreamPath)
+	handler.s = s
 	handler.OnAudio = onAudio
 	handler.OnVideo = onVideo
-	return PlayBlock0(s, handler)
+	return &handler
 }
 
-func PlayBlock0[A any, V any](s *Subscriber, handler SubscribeHandler[A, V]) (err error) {
+func PlayBlock[A any, V any](s *Subscriber, onAudio func(A) error, onVideo func(V) error) (err error) {
+	var handler SubscribeHandler[A, V]
+	handler.s = s
+	handler.OnAudio = onAudio
+	handler.OnVideo = onVideo
+	err = handler.Start()
+	s.Stop(err)
+	return
+}
+
+func (handler *SubscribeHandler[A, V]) Start() (err error) {
 	var a1, v1 reflect.Type
+	s := handler.s
 	startAudioTs, startVideoTs := s.StartAudioTS, s.StartVideoTS
 	var initState = 0
 	prePublisher := s.Publisher
@@ -183,12 +199,6 @@ func PlayBlock0[A any, V any](s *Subscriber, handler SubscribeHandler[A, V]) (er
 	awi := s.createAudioReader(a1, startAudioTs)
 	vwi := s.createVideoReader(v1, startVideoTs)
 	defer func() {
-		if err != nil {
-			s.Stop(err)
-		} else {
-			err = recover().(error)
-			s.Error(err.Error(), "stack", string(debug.Stack()))
-		}
 		if s.AudioReader != nil {
 			s.AudioReader.StopRead()
 		}
@@ -359,7 +369,6 @@ func PlayBlock0[A any, V any](s *Subscriber, handler SubscribeHandler[A, V]) (er
 			awi = s.createAudioReader(a1, startAudioTs)
 		}
 		checkPublisherChange()
-		// TODO: 优化 select
 		runtime.Gosched()
 	}
 	return

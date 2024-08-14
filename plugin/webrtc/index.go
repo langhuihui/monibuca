@@ -425,23 +425,21 @@ func (conf *WebRTCPlugin) Play_(w http.ResponseWriter, r *http.Request) {
 		if videoSender == nil {
 			suber.SubVideo = false
 		}
-		conn.AddCall(func(task *util.Task) error {
-			return m7s.PlayBlock(suber, func(frame *mrtp.RTPAudio) (err error) {
-				for _, p := range frame.Packets {
-					if err = audioTLSRTP.WriteRTP(p); err != nil {
-						return
-					}
+		conn.AddTask(m7s.CreatePlayTask(suber, func(frame *mrtp.RTPAudio) (err error) {
+			for _, p := range frame.Packets {
+				if err = audioTLSRTP.WriteRTP(p); err != nil {
+					return
 				}
-				return
-			}, func(frame *mrtp.Video) error {
-				for _, p := range frame.Packets {
-					if err := videoTLSRTP.WriteRTP(p); err != nil {
-						return err
-					}
+			}
+			return
+		}, func(frame *mrtp.Video) error {
+			for _, p := range frame.Packets {
+				if err := videoTLSRTP.WriteRTP(p); err != nil {
+					return err
 				}
-				return nil
-			})
-		}, nil)
+			}
+			return nil
+		}))
 	}
 	conn.OnICECandidate(func(ice *ICECandidate) {
 		if ice != nil {

@@ -18,9 +18,9 @@ func GetNextTaskID() uint32 {
 }
 
 func init() {
+	RootTask.Name = "root"
 	RootTask.init(context.Background())
 	RootTask.Logger = slog.New(slog.NewTextHandler(os.Stdout, nil))
-	RootTask.Name = "Root"
 }
 
 type MarcoLongTask struct {
@@ -109,30 +109,28 @@ func (mt *MarcoTask) AddTaskWithContext(ctx context.Context, t ITask) (task *Tas
 	return
 }
 
-type CallBack func(*Task) error
-
-func (mt *MarcoTask) Call(callback CallBack) {
-	task := mt.AddCall(callback, nil)
-	_ = task.WaitStarted()
+func (mt *MarcoTask) Call(callback func() error) {
+	task := CreateTaskByCallBack(callback, nil)
+	_ = mt.AddTask(task).WaitStarted()
 }
 
-func (mt *MarcoTask) AddCall(start CallBack, dispose func()) *Task {
+func CreateTaskByCallBack(start func() error, dispose func()) *Task {
 	var task Task
-	task.init(mt.Context)
+	task.Name = "call"
 	task.startHandler = func() error {
-		err := start(&task)
+		err := start()
 		if err == nil && dispose == nil {
 			err = ErrCallbackTask
 		}
 		return err
 	}
 	task.disposeHandler = dispose
-	mt.lazyStart(&task)
 	return &task
 }
 
 func (mt *MarcoTask) AddChan(channel any, callback any) *ChannelTask {
 	var chanTask ChannelTask
+	chanTask.Name = "channel"
 	chanTask.init(mt.Context)
 	chanTask.channel = reflect.ValueOf(channel)
 	chanTask.callback = reflect.ValueOf(callback)

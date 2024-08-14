@@ -1,6 +1,7 @@
 package m7s
 
 import (
+	"fmt"
 	"m7s.live/m7s/v5/pkg/util"
 	"os"
 	"path/filepath"
@@ -38,25 +39,38 @@ func (p *RecordContext) GetKey() string {
 	return p.FilePath
 }
 
-func (p *RecordContext) Do(recorder Recorder) {
-	p.AddCall(func(tmpTask *util.Task) (err error) {
-		dir := p.FilePath
-		if p.Fragment == 0 || p.Append {
-			if filepath.Ext(p.FilePath) == "" {
-				p.FilePath += ".flv"
-			}
-			dir = filepath.Dir(p.FilePath)
+type recordSubTask struct {
+	util.Task
+	ctx *RecordContext
+	Recorder
+}
+
+func (r *recordSubTask) Start() (err error) {
+	p := r.ctx
+	dir := p.FilePath
+	if p.Fragment == 0 || p.Append {
+		if filepath.Ext(p.FilePath) == "" {
+			p.FilePath += ".flv"
 		}
-		if err = os.MkdirAll(dir, 0755); err != nil {
-			return
-		}
-		p.Subscriber, err = p.Plugin.Subscribe(tmpTask.Context, p.StreamPath)
-		if err != nil {
-			return
-		}
-		err = recorder(p)
+		dir = filepath.Dir(p.FilePath)
+	}
+	r.Name = fmt.Sprintf("record:%s", p.FilePath)
+	if err = os.MkdirAll(dir, 0755); err != nil {
 		return
-	}, nil)
+	}
+	p.Subscriber, err = p.Plugin.Subscribe(r.Context, p.StreamPath)
+	if err != nil {
+		return
+	}
+	err = r.Recorder(p)
+	return
+}
+
+func (p *RecordContext) Do(recorder Recorder) {
+	p.AddTask(&recordSubTask{
+		ctx:      p,
+		Recorder: recorder,
+	})
 }
 
 func (p *RecordContext) Start() (err error) {

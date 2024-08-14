@@ -57,6 +57,40 @@ type AVTracks struct {
 	*AVTrack
 	SpeedControl
 	util.Collection[reflect.Type, *AVTrack]
+	sync.RWMutex
+}
+
+func (t *AVTracks) Set(track *AVTrack) {
+	t.AVTrack = track
+	t.Lock()
+	t.Add(track)
+	t.Unlock()
+}
+
+func (t *AVTracks) SetMinBuffer(start time.Duration) {
+	if t.AVTrack == nil {
+		return
+	}
+	t.AVTrack.BufferRange[0] = start
+}
+
+func (t *AVTracks) GetOrCreate(dataType reflect.Type) *AVTrack {
+	t.Lock()
+	defer t.Unlock()
+	if track, ok := t.Get(dataType); ok {
+		return track
+	}
+	if t.AVTrack == nil {
+		return nil
+	}
+	return t.CreateSubTrack(dataType)
+}
+
+func (t *AVTracks) CheckTimeout(timeout time.Duration) bool {
+	if t.AVTrack == nil {
+		return false
+	}
+	return time.Since(t.AVTrack.LastValue.WriteTime) > timeout
 }
 
 func (t *AVTracks) CreateSubTrack(dataType reflect.Type) (track *AVTrack) {
@@ -66,10 +100,18 @@ func (t *AVTracks) CreateSubTrack(dataType reflect.Type) (track *AVTrack) {
 	return
 }
 
-// createPublisher -> Start -> WriteAudio/WriteVideo -> Dispose
+func (t *AVTracks) Dispose() {
+	t.Lock()
+	defer t.Unlock()
+	for track := range t.Range {
+		track.Dispose()
+	}
+	t.AVTrack = nil
+	t.Clear()
+}
+
 type Publisher struct {
 	PubSubBase
-	sync.RWMutex
 	config.Publish
 	State                  PublisherState
 	AudioTrack, VideoTrack AVTracks
@@ -89,6 +131,7 @@ func (p *Publisher) GetKey() string {
 	return p.StreamPath
 }
 
+// createPublisher -> Start -> WriteAudio/WriteVideo -> Dispose
 func createPublisher(p *Plugin, streamPath string, conf config.Publish) (publisher *Publisher) {
 	publisher = &Publisher{Publish: conf}
 	publisher.ID = util.GetNextTaskID()
@@ -121,7 +164,9 @@ func (p *Publisher) Start() (err error) {
 		p.dumpFile, _ = os.OpenFile(filepath.Join("./dump", p.StreamPath), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
 	}
 	if waiting, ok := s.Waiting.Get(p.StreamPath); ok {
-		p.TakeOver(waiting)
+		for subscriber := range waiting.Range {
+			p.AddSubscriber(subscriber)
+		}
 		s.Waiting.Remove(waiting)
 	}
 	for plugin := range s.Plugins.Range {
@@ -138,58 +183,45 @@ func (p *Publisher) Start() (err error) {
 				plugin.Record(p.StreamPath, filePath)
 			}
 		}
-		//if h, ok := plugin.handler.(IOnPublishPlugin); ok {
-		//	h.OnPublish(publisher)
-		//}
 	}
-	return
-}
-
-func (p *Publisher) timeout() (err error) {
-	switch p.State {
-	case PublisherStateInit:
-		if p.PublishTimeout > 0 {
-			err = ErrPublishTimeout
+	p.AddChan(p.TimeoutTimer.C, func(time.Time) {
+		switch p.State {
+		case PublisherStateInit:
+			if p.PublishTimeout > 0 {
+				p.Stop(ErrPublishTimeout)
+			}
+		case PublisherStateTrackAdded:
+			if p.Publish.IdleTimeout > 0 {
+				p.Stop(ErrPublishIdleTimeout)
+			}
+		case PublisherStateSubscribed:
+		case PublisherStateWaitSubscriber:
+			if p.Publish.DelayCloseTimeout > 0 {
+				p.Stop(ErrPublishDelayCloseTimeout)
+			}
 		}
-	case PublisherStateTrackAdded:
-		if p.Publish.IdleTimeout > 0 {
-			err = ErrPublishIdleTimeout
-		}
-	case PublisherStateSubscribed:
-	case PublisherStateWaitSubscriber:
-		if p.Publish.DelayCloseTimeout > 0 {
-			err = ErrPublishDelayCloseTimeout
-		}
-	case PublisherStateDisposed:
-		if p.Publish.WaitCloseTimeout > 0 {
-			err = ErrPublishWaitCloseTimeout
-		}
-	}
-	return
-}
-
-func (p *Publisher) checkTimeout() (err error) {
-	select {
-	case <-p.TimeoutTimer.C:
-		err = p.timeout()
-	default:
-		if p.PublishTimeout > 0 {
-			if p.HasVideoTrack() && !p.VideoTrack.LastValue.WriteTime.IsZero() && time.Since(p.VideoTrack.LastValue.WriteTime) > p.PublishTimeout {
+	}).OnDispose(func() {
+		p.TimeoutTimer.Stop()
+	})
+	if p.PublishTimeout > 0 {
+		checkNoDataTimer := time.NewTicker(time.Second * 5)
+		p.AddChan(checkNoDataTimer.C, func(time.Time) {
+			if p.VideoTrack.CheckTimeout(p.PublishTimeout) {
 				p.Error("video timeout", "writeTime", p.VideoTrack.LastValue.WriteTime)
-				err = ErrPublishTimeout
+				p.Stop(ErrPublishTimeout)
 			}
-			if p.HasAudioTrack() && !p.AudioTrack.LastValue.WriteTime.IsZero() && time.Since(p.AudioTrack.LastValue.WriteTime) > p.PublishTimeout {
+			if p.AudioTrack.CheckTimeout(p.PublishTimeout) {
 				p.Error("audio timeout", "writeTime", p.AudioTrack.LastValue.WriteTime)
-				err = ErrPublishTimeout
+				p.Stop(ErrPublishTimeout)
 			}
-		}
+		}).OnDispose(func() {
+			checkNoDataTimer.Stop()
+		})
 	}
 	return
 }
 
 func (p *Publisher) RemoveSubscriber(subscriber *Subscriber) {
-	p.Lock()
-	defer p.Unlock()
 	p.Subscribers.Remove(subscriber)
 	p.Info("subscriber -1", "count", p.Subscribers.Length)
 	if p.Plugin == nil {
@@ -202,12 +234,8 @@ func (p *Publisher) RemoveSubscriber(subscriber *Subscriber) {
 	} else {
 		p.BufferTime = p.Plugin.GetCommonConf().Publish.BufferTime
 	}
-	if p.HasAudioTrack() {
-		p.AudioTrack.AVTrack.BufferRange[0] = p.BufferTime
-	}
-	if p.HasVideoTrack() {
-		p.VideoTrack.AVTrack.BufferRange[0] = p.BufferTime
-	}
+	p.AudioTrack.SetMinBuffer(p.BufferTime)
+	p.VideoTrack.SetMinBuffer(p.BufferTime)
 	if p.State == PublisherStateSubscribed && p.Subscribers.Length == 0 {
 		p.State = PublisherStateWaitSubscriber
 		if p.DelayCloseTimeout > 0 {
@@ -217,19 +245,13 @@ func (p *Publisher) RemoveSubscriber(subscriber *Subscriber) {
 }
 
 func (p *Publisher) AddSubscriber(subscriber *Subscriber) {
-	p.Lock()
-	defer p.Unlock()
 	subscriber.Publisher = p
 	if p.Subscribers.AddUnique(subscriber) {
 		p.Info("subscriber +1", "count", p.Subscribers.Length)
 		if subscriber.BufferTime > p.BufferTime {
 			p.BufferTime = subscriber.BufferTime
-			if p.HasAudioTrack() {
-				p.AudioTrack.AVTrack.BufferRange[0] = p.BufferTime
-			}
-			if p.HasVideoTrack() {
-				p.VideoTrack.AVTrack.BufferRange[0] = p.BufferTime
-			}
+			p.AudioTrack.SetMinBuffer(p.BufferTime)
+			p.VideoTrack.SetMinBuffer(p.BufferTime)
 		}
 		switch p.State {
 		case PublisherStateTrackAdded, PublisherStateWaitSubscriber:
@@ -267,6 +289,15 @@ func (p *Publisher) writeAV(t *AVTrack, data IAVFrame) {
 	}
 }
 
+func (p *Publisher) trackAdded() error {
+	if p.Subscribers.Length > 0 {
+		p.State = PublisherStateSubscribed
+	} else {
+		p.State = PublisherStateTrackAdded
+	}
+	return nil
+}
+
 func (p *Publisher) WriteVideo(data IAVFrame) (err error) {
 	defer func() {
 		if err != nil {
@@ -285,15 +316,8 @@ func (p *Publisher) WriteVideo(data IAVFrame) (err error) {
 	t := p.VideoTrack.AVTrack
 	if t == nil {
 		t = NewAVTrack(data, p.Logger.With("track", "video"), &p.Publish, p.videoReady)
-		p.Lock()
-		p.VideoTrack.AVTrack = t
-		p.VideoTrack.Add(t)
-		if p.Subscribers.Length > 0 {
-			p.State = PublisherStateSubscribed
-		} else {
-			p.State = PublisherStateTrackAdded
-		}
-		p.Unlock()
+		p.VideoTrack.Set(t)
+		p.Call(p.trackAdded)
 	}
 	oldCodecCtx := t.ICodecCtx
 	err = data.Parse(t)
@@ -386,15 +410,8 @@ func (p *Publisher) WriteAudio(data IAVFrame) (err error) {
 	t := p.AudioTrack.AVTrack
 	if t == nil {
 		t = NewAVTrack(data, p.Logger.With("track", "audio"), &p.Publish, p.audioReady)
-		p.Lock()
-		p.AudioTrack.AVTrack = t
-		p.AudioTrack.Add(t)
-		if p.Subscribers.Length > 0 {
-			p.State = PublisherStateSubscribed
-		} else {
-			p.State = PublisherStateTrackAdded
-		}
-		p.Unlock()
+		p.AudioTrack.Set(t)
+		p.Call(p.trackAdded)
 	}
 	oldCodecCtx := t.ICodecCtx
 	err = data.Parse(t)
@@ -457,40 +474,18 @@ func (p *Publisher) WriteData(data IDataFrame) (err error) {
 	if p.DataTrack == nil {
 		p.DataTrack = &DataTrack{}
 		p.DataTrack.Logger = p.Logger.With("track", "data")
-		p.Lock()
-		if p.Subscribers.Length > 0 {
-			p.State = PublisherStateSubscribed
-		} else {
-			p.State = PublisherStateTrackAdded
-		}
-		p.Unlock()
+		p.Call(p.trackAdded)
 	}
 	// TODO: Implement this function
 	return
 }
 
 func (p *Publisher) GetAudioTrack(dataType reflect.Type) (t *AVTrack) {
-	p.Lock()
-	defer p.Unlock()
-	if t, ok := p.AudioTrack.Get(dataType); ok {
-		return t
-	}
-	if p.HasAudioTrack() {
-		return p.AudioTrack.CreateSubTrack(dataType)
-	}
-	return
+	return p.AudioTrack.GetOrCreate(dataType)
 }
 
 func (p *Publisher) GetVideoTrack(dataType reflect.Type) (t *AVTrack) {
-	p.Lock()
-	defer p.Unlock()
-	if t, ok := p.VideoTrack.Get(dataType); ok {
-		return t
-	}
-	if p.HasVideoTrack() {
-		return p.VideoTrack.CreateSubTrack(dataType)
-	}
-	return
+	return p.VideoTrack.GetOrCreate(dataType)
 }
 
 func (p *Publisher) HasAudioTrack() bool {
@@ -505,16 +500,17 @@ func (p *Publisher) Dispose() {
 	s := p.Plugin.Server
 	s.Streams.Remove(p)
 	if p.Subscribers.Length > 0 {
-		s.Waiting.Add(p)
+		w := p.Plugin.Server.createWait(p.StreamPath)
+		w.baseTs = p.lastTs
+		w.Info("takeOver", "pId", p.ID)
+		for subscriber := range p.SubscriberRange {
+			w.Add(subscriber)
+		}
+		p.AudioTrack.Dispose()
+		p.VideoTrack.Dispose()
+		p.Subscribers.Clear()
 	}
 	p.Info("unpublish", "remain", s.Streams.Length, "reason", p.StopReason())
-	for subscriber := range p.SubscriberRange {
-		waitCloseTimeout := p.WaitCloseTimeout
-		if waitCloseTimeout == 0 {
-			waitCloseTimeout = subscriber.WaitTimeout
-		}
-		subscriber.TimeoutTimer.Reset(waitCloseTimeout)
-	}
 	if p.dumpFile != nil {
 		p.dumpFile.Close()
 	}
@@ -527,12 +523,8 @@ func (p *Publisher) TakeOver(old *Publisher) {
 	for subscriber := range old.SubscriberRange {
 		p.AddSubscriber(subscriber)
 	}
-	if old.HasAudioTrack() {
-		old.AudioTrack.Dispose()
-	}
-	if old.HasVideoTrack() {
-		old.VideoTrack.Dispose()
-	}
+	old.AudioTrack.Dispose()
+	old.VideoTrack.Dispose()
 	old.Subscribers = SubscriberCollection{}
 }
 
