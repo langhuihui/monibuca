@@ -91,7 +91,21 @@ func NewServer(conf any) (s *Server) {
 }
 
 func Run(ctx context.Context, conf any) error {
-	return util.RootTask.AddTaskWithContext(ctx, NewServer(conf)).WaitStopped()
+	for {
+		if err := util.RootTask.AddTaskWithContext(ctx, NewServer(conf)).WaitStopped(); err != ErrRestart {
+			return err
+		}
+	}
+}
+
+func AddRootTask[T util.ITask](task T) T {
+	util.RootTask.AddTask(task)
+	return task
+}
+
+func AddRootTaskWithContext[T util.ITask](ctx context.Context, task T) T {
+	util.RootTask.AddTaskWithContext(ctx, task)
+	return task
 }
 
 type rawconfig = map[string]map[string]any
@@ -259,15 +273,11 @@ func (s *Server) Dispose() {
 	_ = s.tcplis.Close()
 	_ = s.grpcClientConn.Close()
 	s.config.HTTP.StopListen()
-	if err := s.StopReason(); err == ErrRestart {
-		var server Server
-		server.ID = s.ID
-		server.Meta = s.Meta
-		server.DB = s.DB
-		*s = server
-		util.RootTask.AddTask(s)
-	} else {
-		s.Info("server stopped", "err", err)
+	if s.DB != nil {
+		db, err := s.DB.DB()
+		if err == nil {
+			err = db.Close()
+		}
 	}
 }
 

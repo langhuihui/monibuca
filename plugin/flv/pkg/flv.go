@@ -52,10 +52,17 @@ func (w *FlvWriter) WriteTag(t byte, ts, dataSize uint32, payload ...[]byte) (er
 //	return append(append(append(flv, b), avcc...), util.PutBE(b.Malloc(4), dataSize+11))
 //}
 
+func PutFlvTimestamp(header []byte, timestamp uint32) {
+	header[4] = byte(timestamp >> 16)
+	header[5] = byte(timestamp >> 8)
+	header[6] = byte(timestamp)
+	header[7] = byte(timestamp >> 24)
+}
+
 func WriteFLVTagHead(t uint8, ts, dataSize uint32, b []byte) {
 	b[0] = t
 	b[1], b[2], b[3] = byte(dataSize>>16), byte(dataSize>>8), byte(dataSize)
-	b[4], b[5], b[6], b[7] = byte(ts>>16), byte(ts>>8), byte(ts), byte(ts>>24)
+	PutFlvTimestamp(b, ts)
 }
 
 //func WriteFLVTag(w io.Writer, t byte, timestamp uint32, payload ...[]byte) (n int64, err error) {

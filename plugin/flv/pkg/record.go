@@ -13,10 +13,14 @@ import (
 	"time"
 )
 
-var writeMetaTagQueueTask util.MarcoLongTask
+type WriteFlvMetaTagQueueTask struct {
+	util.MarcoLongTask
+}
+
+var writeMetaTagQueueTask WriteFlvMetaTagQueueTask
 
 func init() {
-	util.RootTask.AddTask(&writeMetaTagQueueTask)
+	m7s.AddRootTask(&writeMetaTagQueueTask)
 }
 
 type writeMetaTagTask struct {

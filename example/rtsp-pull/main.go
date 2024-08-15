@@ -17,8 +17,8 @@ func main() {
 	flag.BoolVar(&multi, "multi", false, "debug")
 	flag.Parse()
 	if multi {
-		go m7s.Run(ctx, "config1.yaml")
+		m7s.AddRootTaskWithContext(ctx, m7s.NewServer("config2.yaml"))
 	}
 	time.Sleep(time.Second)
-	m7s.NewServer().Run(ctx, "config2.yaml")
+	m7s.Run(ctx, "config1.yaml")
 }

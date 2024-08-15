@@ -11,7 +11,6 @@ var (
 	ErrPublishTimeout           = errors.New("publish timeout")
 	ErrPublishIdleTimeout       = errors.New("publish idle timeout")
 	ErrPublishDelayCloseTimeout = errors.New("publish delay close timeout")
-	ErrPublishWaitCloseTimeout  = errors.New("publish wait close timeout")
 	ErrPushRemoteURLExist       = errors.New("push remote url exist")
 	ErrSubscribeTimeout         = errors.New("subscribe timeout")
 	ErrRestart                  = errors.New("restart")

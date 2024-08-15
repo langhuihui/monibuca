@@ -122,9 +122,12 @@ func (task *Task) StopReason() error {
 }
 
 func (task *Task) Stop(err error) {
+	if err == nil {
+		panic("task stop with nil error")
+	}
 	if task.CancelCauseFunc != nil {
 		if task.Logger != nil {
-			task.Debug("task stop", "reason", err.Error(), "elapsed", time.Since(task.StartTime), "taskId", task.ID, "taskType", task.GetTaskType(), "ownerType", task.GetOwnerType())
+			task.Debug("task stop", "reason", err, "elapsed", time.Since(task.StartTime), "taskId", task.ID, "taskType", task.GetTaskType(), "ownerType", task.GetOwnerType())
 		}
 		task.CancelCauseFunc(err)
 	}

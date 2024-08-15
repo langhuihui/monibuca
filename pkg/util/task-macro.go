@@ -10,15 +10,19 @@ import (
 	"sync/atomic"
 )
 
-var RootTask MarcoLongTask
 var idG atomic.Uint32
 
 func GetNextTaskID() uint32 {
 	return idG.Add(1)
 }
 
+var RootTask MarcoLongTask
+
 func init() {
 	RootTask.initTask(context.Background(), &RootTask)
+	RootTask.Description = map[string]any{
+		"title": "RootTask",
+	}
 	RootTask.Logger = slog.New(slog.NewTextHandler(os.Stdout, nil))
 }
 
@@ -158,6 +162,10 @@ func (mt *MarcoTask) AddChan(channel any, callback any) *ChannelTask {
 func (mt *MarcoTask) run() {
 	cases := []reflect.SelectCase{{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(mt.addSub)}}
 	defer func() {
+		err := recover()
+		if err != nil {
+			mt.Stop(err.(error))
+		}
 		stopReason := mt.StopReason()
 		for _, task := range mt.children {
 			task.Stop(stopReason)

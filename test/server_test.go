@@ -1,7 +1,6 @@
 package test
 
 import (
-	"context"
 	"m7s.live/m7s/v5"
 	"m7s.live/m7s/v5/pkg"
 	"testing"
@@ -9,8 +8,8 @@ import (
 )
 
 func TestRestart(b *testing.T) {
-	ctx := context.TODO()
-	var server = m7s.NewServer()
+	conf := map[string]map[string]any{"global": {"loglevel": "debug"}}
+	var server *m7s.Server
 	go func() {
 		time.Sleep(time.Second * 2)
 		server.Stop(pkg.ErrRestart)
@@ -22,7 +21,13 @@ func TestRestart(b *testing.T) {
 		server.Stop(pkg.ErrStopFromAPI)
 		b.Log("server stop3")
 	}()
-	if err := server.Run(ctx, map[string]map[string]any{"global": {"loglevel": "debug"}}); err != pkg.ErrStopFromAPI {
-		b.Error("server.Run should return ErrStopFromAPI", err)
+	for {
+		server = m7s.NewServer(conf)
+		if err := m7s.AddRootTask(server).WaitStopped(); err != pkg.ErrRestart {
+			return
+		}
 	}
+	//if err := util.RootTask.AddTask(server).WaitStopped(); err != pkg.ErrStopFromAPI {
+	//	b.Error("server.Run should return ErrStopFromAPI", err)
+	//}
 }

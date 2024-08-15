@@ -4,6 +4,8 @@ import (
 	"encoding/binary"
 	"net"
 	"net/http"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -15,21 +17,22 @@ import (
 
 type FLVPlugin struct {
 	m7s.Plugin
+	Path string
 }
 
 const defaultConfig m7s.DefaultYaml = `publish:
   speed: 1`
 
-func (p *FLVPlugin) OnInit() error {
-	for streamPath, url := range p.GetCommonConf().PullOnStart {
-		p.Pull(streamPath, url)
+func (plugin *FLVPlugin) OnInit() error {
+	for streamPath, url := range plugin.GetCommonConf().PullOnStart {
+		plugin.Pull(streamPath, url)
 	}
 	return nil
 }
 
 var _ = m7s.InstallPlugin[FLVPlugin](defaultConfig, PullFLV, RecordFlv)
 
-func (p *FLVPlugin) WriteFlvHeader(sub *m7s.Subscriber) (flv net.Buffers) {
+func (plugin *FLVPlugin) WriteFlvHeader(sub *m7s.Subscriber) (flv net.Buffers) {
 	at, vt := &sub.Publisher.AudioTrack, &sub.Publisher.VideoTrack
 	hasAudio, hasVideo := at.AVTrack != nil && sub.SubAudio, vt.AVTrack != nil && sub.SubVideo
 	var amf rtmp.AMF
@@ -70,13 +73,33 @@ func (p *FLVPlugin) WriteFlvHeader(sub *m7s.Subscriber) (flv net.Buffers) {
 	return
 }
 
-func (p *FLVPlugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (plugin *FLVPlugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	streamPath := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/"), ".flv")
 	if r.URL.RawQuery != "" {
 		streamPath += "?" + r.URL.RawQuery
 	}
-
-	sub, err := p.Subscribe(r.Context(), streamPath)
+	query := r.URL.Query()
+	startTimeStr := query.Get("start")
+	speedStr := query.Get("speed")
+	speed, err := strconv.ParseFloat(speedStr, 64)
+	if err != nil {
+		speed = 1
+	}
+	s, err := strconv.Atoi(startTimeStr)
+	if err == nil {
+		startTime := time.UnixMilli(int64(s))
+		var vod Vod
+		vod.Context = r.Context()
+		vod.Logger = plugin.Logger.With("streamPath", streamPath)
+		if err = vod.Init(startTime, filepath.Join(plugin.Path, streamPath)); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		vod.SetSpeed(speed)
+		err = vod.Run()
+		return
+	}
+	sub, err := plugin.Subscribe(r.Context(), streamPath)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -84,7 +107,7 @@ func (p *FLVPlugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "video/x-flv")
 	w.Header().Set("Transfer-Encoding", "identity")
 	w.WriteHeader(http.StatusOK)
-	wto := p.GetCommonConf().WriteTimeout
+	wto := plugin.GetCommonConf().WriteTimeout
 	var gotFlvTag func(net.Buffers) error
 	var b [15]byte
 
@@ -103,7 +126,7 @@ func (p *FLVPlugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		w.(http.Flusher).Flush()
 	}
-	flv := p.WriteFlvHeader(sub)
+	flv := plugin.WriteFlvHeader(sub)
 	copy(b[:4], flv[3])
 	gotFlvTag(flv[:3])
 	rtmpData2FlvTag := func(t byte, data *rtmp.RTMPData) error {
