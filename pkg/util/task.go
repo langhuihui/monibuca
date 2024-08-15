@@ -24,7 +24,7 @@ type (
 	ITask interface {
 		initTask(context.Context, ITask)
 		getParent() *MarcoTask
-		getTask() *Task
+		GetTask() *Task
 		getSignal() reflect.Value
 		Stop(error)
 		StopReason() error
@@ -35,7 +35,7 @@ type (
 		GetOwnerType() string
 	}
 	IMarcoTask interface {
-		Range(func(yield ITask) bool)
+		RangeSubTask(func(yield ITask) bool)
 	}
 	IChannelTask interface {
 		tick(reflect.Value)
@@ -61,7 +61,7 @@ type (
 		context.Context
 		context.CancelCauseFunc
 		retry                                      RetryConfig
-		owner                                      reflect.Type
+		owner                                      string
 		startHandler, runHandler                   func() error
 		afterStartListeners, afterDisposeListeners []func()
 		disposeHandler                             func()
@@ -78,14 +78,14 @@ func (task *Task) SetRetry(maxRetry int, retryInterval time.Duration) {
 }
 
 func (task *Task) GetOwnerType() string {
-	return task.owner.Name()
+	return task.owner
 }
 
 func (task *Task) GetTaskType() string {
 	return "base"
 }
 
-func (task *Task) getTask() *Task {
+func (task *Task) GetTask() *Task {
 	return task
 }
 
@@ -189,7 +189,7 @@ func (task *Task) initTask(ctx context.Context, iTask ITask) {
 	task.Context, task.CancelCauseFunc = context.WithCancelCause(ctx)
 	task.startup = NewPromise(task.Context)
 	task.shutdown = NewPromise(context.Background())
-	task.owner = reflect.TypeOf(iTask)
+	task.owner = reflect.TypeOf(iTask).Elem().Name()
 	if v, ok := iTask.(TaskStarter); ok {
 		task.startHandler = v.Start
 	}

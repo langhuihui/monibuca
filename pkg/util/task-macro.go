@@ -75,7 +75,7 @@ func (mt *MarcoTask) dispose() {
 }
 
 func (mt *MarcoTask) lazyStart(t ITask) {
-	task := t.getTask()
+	task := t.GetTask()
 	if mt.IsStopped() {
 		task.startup.Reject(mt.StopReason())
 		return
@@ -102,18 +102,14 @@ func (mt *MarcoTask) lazyStart(t ITask) {
 	mt.addSub <- t
 }
 
-func (mt *MarcoTask) Range(callback func(task *Task, m *MarcoTask) bool) {
+func (mt *MarcoTask) RangeSubTask(callback func(task ITask) bool) {
 	for _, task := range mt.children {
-		var m *MarcoTask
-		if v, ok := task.(interface{ getMaroTask() *MarcoTask }); ok {
-			m = v.getMaroTask()
-		}
-		callback(task.getTask(), m)
+		callback(task)
 	}
 }
 
 func (mt *MarcoTask) AddTask(task ITask) *Task {
-	t := task.getTask()
+	t := task.GetTask()
 	if t.parentCtx != nil && task.IsStopped() { //reuse task
 		t.parent = nil
 		return mt.AddTaskWithContext(t.parentCtx, task)
@@ -125,7 +121,7 @@ func (mt *MarcoTask) AddTaskWithContext(ctx context.Context, t ITask) (task *Tas
 	if ctx == nil && mt.Context == nil {
 		panic("context is nil")
 	}
-	if task = t.getTask(); task.parent == nil {
+	if task = t.GetTask(); task.parent == nil {
 		t.initTask(ctx, t)
 	}
 	mt.lazyStart(t)
