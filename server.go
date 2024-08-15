@@ -27,12 +27,11 @@ import (
 )
 
 var (
-	Version       = "v5.0.0"
-	MergeConfigs  = []string{"Publish", "Subscribe", "HTTP", "PublicIP", "LogLevel", "EnableAuth", "DB"}
-	ExecPath      = os.Args[0]
-	ExecDir       = filepath.Dir(ExecPath)
-	DefaultServer = NewServer()
-	serverMeta    = PluginMeta{
+	Version      = "v5.0.0"
+	MergeConfigs = []string{"Publish", "Subscribe", "HTTP", "PublicIP", "LogLevel", "EnableAuth", "DB"}
+	ExecPath     = os.Args[0]
+	ExecDir      = filepath.Dir(ExecPath)
+	serverMeta   = PluginMeta{
 		Name:    "Global",
 		Version: Version,
 	}
@@ -82,15 +81,17 @@ type Server struct {
 	conf                                       any
 }
 
-func NewServer() (s *Server) {
-	s = &Server{}
+func NewServer(conf any) (s *Server) {
+	s = &Server{
+		conf: conf,
+	}
 	s.ID = util.GetNextTaskID()
 	s.Meta = &serverMeta
 	return
 }
 
 func Run(ctx context.Context, conf any) error {
-	return DefaultServer.Run(ctx, conf)
+	return util.RootTask.AddTaskWithContext(ctx, NewServer(conf)).WaitStopped()
 }
 
 type rawconfig = map[string]map[string]any
@@ -122,9 +123,7 @@ func (s *Server) GetKey() uint32 {
 	return s.ID
 }
 
-func (s *Server) Init(conf any) {
-	s.Name = "server"
-	s.conf = conf
+func (s *Server) Start() (err error) {
 	s.Server = s
 	s.handler = s
 	s.config.HTTP.ListenAddrTLS = ":8443"
@@ -133,13 +132,6 @@ func (s *Server) Init(conf any) {
 	s.LogHandler.SetLevel(slog.LevelDebug)
 	s.LogHandler.Add(defaultLogHandler)
 	s.Logger = slog.New(&s.LogHandler).With("server", s.ID)
-	s.streamTask.Name = "stream"
-	s.pullTask.Name = "pull"
-	s.pushTask.Name = "push"
-	s.recordTask.Name = "record"
-}
-
-func (s *Server) Start() (err error) {
 	httpConf, tcpConf := &s.config.HTTP, &s.config.TCP
 	mux := runtime.NewServeMux(runtime.WithMarshalerOption("text/plain", &pb.TextPlain{}), runtime.WithRoutingErrorHandler(func(_ context.Context, _ *runtime.ServeMux, _ runtime.Marshaler, w http.ResponseWriter, r *http.Request, _ int) {
 		httpConf.GetHttpMux().ServeHTTP(w, r)
@@ -267,24 +259,15 @@ func (s *Server) Dispose() {
 	_ = s.tcplis.Close()
 	_ = s.grpcClientConn.Close()
 	s.config.HTTP.StopListen()
-}
-
-func (s *Server) Run(ctx context.Context, conf any) (err error) {
-	for {
-		s.Init(conf)
-		util.RootTask.AddTaskWithContext(ctx, s)
-		if err = s.WaitStarted(); err != nil {
-			return
-		}
-		if err = s.WaitStopped(); err != ErrRestart {
-			s.Info("server stopped", "error", err)
-			return
-		}
+	if err := s.StopReason(); err == ErrRestart {
 		var server Server
 		server.ID = s.ID
 		server.Meta = s.Meta
 		server.DB = s.DB
 		*s = server
+		util.RootTask.AddTask(s)
+	} else {
+		s.Info("server stopped", "err", err)
 	}
 }
 

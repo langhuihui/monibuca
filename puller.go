@@ -4,6 +4,7 @@ import (
 	"m7s.live/m7s/v5/pkg"
 	"m7s.live/m7s/v5/pkg/config"
 	"m7s.live/m7s/v5/pkg/util"
+	"time"
 )
 
 type Connection struct {
@@ -23,7 +24,6 @@ func createPullContext(p *Plugin, streamPath string, url string) (pullCtx *PullC
 		Pull:          p.config.Pull,
 		publishConfig: &publishConfig,
 	}
-	pullCtx.Name = "pull"
 	pullCtx.Plugin = p
 	pullCtx.ConnectProxy = p.config.Pull.Proxy
 	pullCtx.RemoteURL = url
@@ -44,25 +44,23 @@ func (p *PullContext) GetKey() string {
 }
 
 type PullSubTask struct {
-	util.RetryTask
+	util.Task
 	ctx *PullContext
 	Puller
 }
 
 func (p *PullSubTask) Start() (err error) {
-	p.MaxRetry = p.ctx.RePull
 	if p.ctx.Publisher, err = p.ctx.Plugin.PublishWithConfig(p.Context, p.ctx.StreamPath, *p.ctx.publishConfig); err != nil {
 		p.Error("pull publish failed", "error", err)
 		return
 	}
-	p.ctx.Publisher.OnDispose(func() {
-		p.Stop(p.ctx.Publisher.StopReason())
-	})
 	return p.Puller(p.ctx)
 }
 
 func (p *PullContext) Do(puller Puller) {
-	p.AddTask(&PullSubTask{ctx: p, Puller: puller})
+	task := &PullSubTask{ctx: p, Puller: puller}
+	task.SetRetry(p.RePull, time.Second*5)
+	p.AddTask(task)
 }
 
 func (p *PullContext) Start() (err error) {

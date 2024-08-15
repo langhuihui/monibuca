@@ -16,7 +16,6 @@ import (
 var writeMetaTagQueueTask util.MarcoLongTask
 
 func init() {
-	writeMetaTagQueueTask.Name = "writeMetaTagQueue"
 	util.RootTask.AddTask(&writeMetaTagQueueTask)
 }
 

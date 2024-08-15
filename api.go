@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"maps"
 	"net"
 	"net/http"
 	"runtime"
@@ -141,6 +143,27 @@ func (s *Server) StreamInfo(ctx context.Context, req *pb.StreamSnapRequest) (res
 	})
 	return
 }
+
+func (s *Server) TaskTree(context.Context, *emptypb.Empty) (res *pb.TaskTreeResponse, err error) {
+	res = &pb.TaskTreeResponse{}
+	var fillData func(m *util.MarcoTask, res *pb.TaskTreeResponse)
+	fillData = func(m *util.MarcoTask, res *pb.TaskTreeResponse) {
+		for task, marcoTask := range m.Range {
+			child := &pb.TaskTreeResponse{Id: task.ID, Type: task.GetTaskType(), Owner: task.GetOwnerType(), StartTime: timestamppb.New(task.StartTime), Description: maps.Collect(func(yield func(key, value string) bool) {
+				for k, v := range task.Description {
+					yield(k, fmt.Sprintf("%v", v))
+				}
+			})}
+			if marcoTask != nil {
+				fillData(marcoTask, child)
+			}
+			res.Children = append(res.Children, child)
+		}
+	}
+	fillData(&s.MarcoTask, res)
+	return
+}
+
 func (s *Server) GetSubscribers(ctx context.Context, req *pb.SubscribersRequest) (res *pb.SubscribersResponse, err error) {
 	s.streamTask.Call(func() error {
 		var subscribers []*pb.SubscriberSnapShot

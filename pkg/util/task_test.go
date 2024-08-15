@@ -11,7 +11,7 @@ import (
 
 func createMarcoTask() *MarcoTask {
 	var mt MarcoTask
-	mt.init(context.Background())
+	mt.initTask(context.Background())
 	mt.Logger = slog.New(slog.NewTextHandler(os.Stdout, nil))
 	return &mt
 }
@@ -54,25 +54,10 @@ func Test_RetryTask(t *testing.T) {
 func Test_Call_ExecutesCallback(t *testing.T) {
 	mt := createMarcoTask()
 	called := false
-	mt.Call(func(*Task) error {
+	mt.Call(func() error {
 		called = true
 		return nil
 	})
-	if !called {
-		t.Errorf("expected callback to be called")
-	}
-}
-
-func Test_AddCall_AddsCallbackTask(t *testing.T) {
-	mt := createMarcoTask()
-	called := false
-	task := mt.AddCall(func(*Task) error {
-		return nil
-	}, func() {
-		called = true
-	})
-	task.Stop(ErrCallbackTask)
-	mt.WaitStopped()
 	if !called {
 		t.Errorf("expected callback to be called")
 	}

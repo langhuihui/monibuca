@@ -72,7 +72,6 @@ func NewNetConnection(conn net.Conn) (ret *NetConnection) {
 		chunkHeaderBuf:  make(util.Buffer, 0, 20),
 		Receivers:       make(map[uint32]*m7s.Publisher),
 	}
-	ret.Name = "NetConnection"
 	ret.mediaDataPool.SetAllocator(util.NewScalableMemoryAllocator(1 << util.MinPowerOf2))
 	return
 }

@@ -53,7 +53,6 @@ func (plugin *PluginMeta) Init(s *Server, userConfig map[string]any) (p *Plugin)
 	p.Meta = plugin
 	p.Server = s
 	p.Logger = s.Logger.With("plugin", plugin.Name)
-	p.Name = plugin.Name
 	upperName := strings.ToUpper(plugin.Name)
 	if os.Getenv(upperName+"_ENABLE") == "false" {
 		p.Disabled = true
@@ -107,7 +106,7 @@ func (plugin *PluginMeta) Init(s *Server, userConfig map[string]any) (p *Plugin)
 			}
 		}
 	}
-	p.Description = map[string]any{"name": plugin.Name, "version": plugin.Version}
+	p.Description = map[string]any{"version": plugin.Version}
 	return
 }
 

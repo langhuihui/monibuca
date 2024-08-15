@@ -2,7 +2,6 @@ package m7s
 
 import (
 	"errors"
-	"fmt"
 	"net/url"
 	"reflect"
 	"runtime"
@@ -27,6 +26,11 @@ type PubSubBase struct {
 func (ps *PubSubBase) Init(streamPath string, conf any) {
 	if u, err := url.Parse(streamPath); err == nil {
 		ps.StreamPath, ps.Args = u.Path, u.Query()
+	}
+	ps.Description = map[string]any{
+		"streamPath": ps.StreamPath,
+		"args":       ps.Args,
+		"plugin":     ps.Plugin.Meta.Name,
 	}
 	// args to config
 	if len(ps.Args) != 0 {
@@ -60,7 +64,6 @@ type Subscriber struct {
 func createSubscriber(p *Plugin, streamPath string, conf config.Subscribe) *Subscriber {
 	subscriber := &Subscriber{Subscribe: conf}
 	subscriber.ID = util.GetNextTaskID()
-	subscriber.Name = "subscriber"
 	subscriber.Plugin = p
 	subscriber.TimeoutTimer = time.NewTimer(subscriber.WaitTimeout)
 	subscriber.Logger = p.Logger.With("streamPath", streamPath, "sId", subscriber.ID)
@@ -166,7 +169,6 @@ type SubscribeHandler[A any, V any] struct {
 
 func CreatePlayTask[A any, V any](s *Subscriber, onAudio func(A) error, onVideo func(V) error) util.ITask {
 	var handler SubscribeHandler[A, V]
-	handler.Name = fmt.Sprintf("play:%s", s.StreamPath)
 	handler.s = s
 	handler.OnAudio = onAudio
 	handler.OnVideo = onVideo

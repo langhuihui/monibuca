@@ -147,7 +147,6 @@ func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
 					}
 					var publisher *m7s.Publisher
 					publisher, err = p.Publish(nc.Context, nc.AppName+"/"+cmd.PublishingName)
-					publisher.Description = nc.Description
 					if err != nil {
 						err = ns.Response(cmd.TransactionId, NetStream_Publish_BadName, Level_Error)
 					} else {
@@ -170,7 +169,6 @@ func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) {
 					var suber *m7s.Subscriber
 					// sender.ID = fmt.Sprintf("%s|%d", conn.RemoteAddr().String(), sender.StreamID)
 					suber, err = p.Subscribe(nc.Context, streamPath)
-					suber.Description = nc.Description
 					if err != nil {
 						err = ns.Response(cmd.TransactionId, NetStream_Play_Failed, Level_Error)
 					} else {

@@ -27,6 +27,7 @@ type GlobalClient interface {
 	Summary(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*SummaryResponse, error)
 	Shutdown(ctx context.Context, in *RequestWithId, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	Restart(ctx context.Context, in *RequestWithId, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	TaskTree(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*TaskTreeResponse, error)
 	StreamList(ctx context.Context, in *StreamListRequest, opts ...grpc.CallOption) (*StreamListResponse, error)
 	WaitList(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*StreamWaitListResponse, error)
 	StreamInfo(ctx context.Context, in *StreamSnapRequest, opts ...grpc.CallOption) (*StreamInfoResponse, error)
@@ -78,6 +79,15 @@ func (c *globalClient) Shutdown(ctx context.Context, in *RequestWithId, opts ...
 func (c *globalClient) Restart(ctx context.Context, in *RequestWithId, opts ...grpc.CallOption) (*emptypb.Empty, error) {
 	out := new(emptypb.Empty)
 	err := c.cc.Invoke(ctx, "/m7s.Global/Restart", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *globalClient) TaskTree(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*TaskTreeResponse, error) {
+	out := new(TaskTreeResponse)
+	err := c.cc.Invoke(ctx, "/m7s.Global/TaskTree", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -191,6 +201,7 @@ type GlobalServer interface {
 	Summary(context.Context, *emptypb.Empty) (*SummaryResponse, error)
 	Shutdown(context.Context, *RequestWithId) (*emptypb.Empty, error)
 	Restart(context.Context, *RequestWithId) (*emptypb.Empty, error)
+	TaskTree(context.Context, *emptypb.Empty) (*TaskTreeResponse, error)
 	StreamList(context.Context, *StreamListRequest) (*StreamListResponse, error)
 	WaitList(context.Context, *emptypb.Empty) (*StreamWaitListResponse, error)
 	StreamInfo(context.Context, *StreamSnapRequest) (*StreamInfoResponse, error)
@@ -220,6 +231,9 @@ func (UnimplementedGlobalServer) Shutdown(context.Context, *RequestWithId) (*emp
 }
 func (UnimplementedGlobalServer) Restart(context.Context, *RequestWithId) (*emptypb.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Restart not implemented")
+}
+func (UnimplementedGlobalServer) TaskTree(context.Context, *emptypb.Empty) (*TaskTreeResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method TaskTree not implemented")
 }
 func (UnimplementedGlobalServer) StreamList(context.Context, *StreamListRequest) (*StreamListResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StreamList not implemented")
@@ -335,6 +349,24 @@ func _Global_Restart_Handler(srv interface{}, ctx context.Context, dec func(inte
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(GlobalServer).Restart(ctx, req.(*RequestWithId))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Global_TaskTree_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(emptypb.Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GlobalServer).TaskTree(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/m7s.Global/TaskTree",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GlobalServer).TaskTree(ctx, req.(*emptypb.Empty))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -559,6 +591,10 @@ var Global_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Restart",
 			Handler:    _Global_Restart_Handler,
+		},
+		{
+			MethodName: "TaskTree",
+			Handler:    _Global_TaskTree_Handler,
 		},
 		{
 			MethodName: "StreamList",

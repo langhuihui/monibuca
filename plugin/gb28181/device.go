@@ -3,7 +3,6 @@ package plugin_gb28181
 import (
 	"github.com/emiago/sipgo"
 	"github.com/emiago/sipgo/sip"
-	"log/slog"
 	"m7s.live/m7s/v5"
 	"m7s.live/m7s/v5/pkg/util"
 	gb28181 "m7s.live/m7s/v5/plugin/gb28181/pkg"
@@ -44,7 +43,7 @@ type Device struct {
 	dialogClient        *sipgo.DialogClient
 	contactHDR          sip.ContactHeader
 	fromHDR             sip.FromHeader
-	*slog.Logger
+	devices             *util.Collection[string, *Device]
 }
 
 func (d *Device) GetKey() string {
@@ -94,12 +93,7 @@ func (d *Device) send(req *sip.Request) (*sip.Response, error) {
 	return d.client.Do(d, req)
 }
 
-func (d *Device) eventLoop(gb *GB28181Plugin) {
-	defer func() {
-		d.Status = DeviceOfflineStatus
-		if gb.devices.RemoveByKey(d.ID) {
-		}
-	}()
+func (d *Device) Run() {
 	response, err := d.catalog()
 	if err != nil {
 		d.Error("catalog", "err", err)
@@ -126,7 +120,7 @@ func (d *Device) eventLoop(gb *GB28181Plugin) {
 			} else {
 				d.Debug("subCatalog", "response", response.String())
 			}
-			response, err = d.subscribePosition(int(gb.Position.Interval / time.Second))
+			response, err = d.subscribePosition(int(6))
 			if err != nil {
 				d.Error("subPosition", "err", err)
 			} else {
@@ -154,7 +148,7 @@ func (d *Device) eventLoop(gb *GB28181Plugin) {
 						//如果父ID并非本身所属设备，一般情况下这是因为下级设备上传了目录信息，该信息通常不需要处理。
 						// 暂时不考虑级联目录的实现
 						if d.ID != parentId {
-							if parent, ok := gb.devices.Get(parentId); ok {
+							if parent, ok := d.devices.Get(parentId); ok {
 								parent.addOrUpdateChannel(c)
 								continue
 							} else {

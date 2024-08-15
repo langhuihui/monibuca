@@ -9,6 +9,7 @@ import (
 	"github.com/quic-go/quic-go"
 	"io"
 	"m7s.live/m7s/v5"
+	"m7s.live/m7s/v5/pkg/util"
 	"net"
 	"net/http"
 	"strings"
@@ -58,17 +59,24 @@ type ConsolePlugin struct {
 
 var _ = m7s.InstallPlugin[ConsolePlugin]()
 
-func (cfg *ConsolePlugin) connect() (conn quic.Connection, err error) {
+type ConnectServerTask struct {
+	util.Task
+	cfg *ConsolePlugin
+	quic.Connection
+}
+
+func (task *ConnectServerTask) Start() (err error) {
 	tlsConf := &tls.Config{
 		InsecureSkipVerify: true,
 		NextProtos:         []string{"monibuca"},
 	}
-	conn, err = quic.DialAddr(cfg.Context, cfg.Server, tlsConf, &quic.Config{
+	cfg := task.cfg
+	task.Connection, err = quic.DialAddr(cfg.Context, cfg.Server, tlsConf, &quic.Config{
 		KeepAlivePeriod: time.Second * 10,
 		EnableDatagrams: true,
 	})
 	if stream := quic.Stream(nil); err == nil {
-		if stream, err = conn.OpenStreamSync(cfg.Context); err == nil {
+		if stream, err = task.OpenStreamSync(cfg.Context); err == nil {
 			_, err = stream.Write(append([]byte{1}, (cfg.Secret + "\n")...))
 			if msg := []byte(nil); err == nil {
 				if msg, err = bufio.NewReader(stream).ReadSlice(0); err == nil {
@@ -76,7 +84,7 @@ func (cfg *ConsolePlugin) connect() (conn quic.Connection, err error) {
 					if err = json.Unmarshal(msg[:len(msg)-1], &rMessage); err == nil {
 						if rMessage["code"].(float64) != 0 {
 							// cfg.Error("response from console server ", cfg.Server, rMessage["msg"])
-							return nil, fmt.Errorf("response from console server %s %s", cfg.Server, rMessage["msg"])
+							return fmt.Errorf("response from console server %s %s", cfg.Server, rMessage["msg"])
 						} else {
 							// cfg.reportStream = stream
 							cfg.Info("response from console server ", cfg.Server, rMessage)
@@ -95,81 +103,89 @@ func (cfg *ConsolePlugin) connect() (conn quic.Connection, err error) {
 	return
 }
 
-func (cfg *ConsolePlugin) OnInit() error {
-	if cfg.Secret == "" {
-		return nil
-	}
-	conn, err := cfg.connect()
-	if err != nil {
-		return err
-	}
-	go func() {
-		for !cfg.IsStopped() {
-			for err == nil {
-				var s quic.Stream
-				if s, err = conn.AcceptStream(cfg.Context); err == nil {
-					go cfg.ReceiveRequest(s, conn)
-				}
-			}
-			time.Sleep(time.Second)
-			conn, err = cfg.connect()
-			if err != nil {
-				break
-			}
+func (task *ConnectServerTask) Run() (err error) {
+	for err == nil {
+		var s quic.Stream
+		if s, err = task.AcceptStream(task.Task.Context); err == nil {
+			task.cfg.AddTask(&ReceiveRequestTask{
+				stream:  s,
+				handler: task.cfg.GetGlobalCommonConf().GetHandler(),
+				conn:    task.Connection,
+			})
 		}
-	}()
-	return err
+	}
+	return
 }
 
-func (cfg *ConsolePlugin) ReceiveRequest(s quic.Stream, conn quic.Connection) error {
-	defer s.Close()
-	wr := &myResponseWriter2{Stream: s}
-	reader := bufio.NewReader(s)
-	var req *http.Request
+type ReceiveRequestTask struct {
+	util.Task
+	stream  quic.Stream
+	handler http.Handler
+	conn    quic.Connection
+	req     *http.Request
+}
+
+func (task *ReceiveRequestTask) Start() (err error) {
+	reader := bufio.NewReader(task.stream)
 	url, _, err := reader.ReadLine()
 	if err == nil {
-		ctx, cancel := context.WithCancel(s.Context())
+		ctx, cancel := context.WithCancel(task.stream.Context())
 		defer cancel()
-		req, err = http.NewRequestWithContext(ctx, "GET", string(url), reader)
+		task.req, err = http.NewRequestWithContext(ctx, "GET", string(url), reader)
 		for err == nil {
 			var h []byte
 			if h, _, err = reader.ReadLine(); len(h) > 0 {
 				if b, a, f := strings.Cut(string(h), ": "); f {
-					req.Header.Set(b, a)
+					task.req.Header.Set(b, a)
 				}
 			} else {
 				break
 			}
 		}
+	}
+	return
+}
 
-		if err == nil {
-			h := cfg.GetGlobalCommonConf().GetHandler()
-			if req.Header.Get("Accept") == "text/event-stream" {
-				go h.ServeHTTP(wr, req)
-			} else if req.Header.Get("Upgrade") == "websocket" {
-				var writer myResponseWriter3
-				writer.Stream = s
-				writer.Connection = conn
-				req.Host = req.Header.Get("Host")
-				if req.Host == "" {
-					req.Host = req.URL.Host
-				}
-				if req.Host == "" {
-					req.Host = "m7s.live"
-				}
-				h.ServeHTTP(&writer, req) //建立websocket连接,握手
-			} else {
-				method := req.Header.Get("M7s-Method")
-				if method == "POST" {
-					req.Method = "POST"
-				}
-				h.ServeHTTP(wr, req)
-			}
+func (task *ReceiveRequestTask) Run() (err error) {
+	wr := &myResponseWriter2{Stream: task.stream}
+	req := task.req
+	if req.Header.Get("Accept") == "text/event-stream" {
+		go task.handler.ServeHTTP(wr, req)
+	} else if req.Header.Get("Upgrade") == "websocket" {
+		var writer myResponseWriter3
+		writer.Stream = task.stream
+		writer.Connection = task.conn
+		req.Host = req.Header.Get("Host")
+		if req.Host == "" {
+			req.Host = req.URL.Host
 		}
-		io.ReadAll(s)
+		if req.Host == "" {
+			req.Host = "m7s.live"
+		}
+		task.handler.ServeHTTP(&writer, req) //建立websocket连接,握手
+	} else {
+		method := req.Header.Get("M7s-Method")
+		if method == "POST" {
+			req.Method = "POST"
+		}
+		task.handler.ServeHTTP(wr, req)
 	}
-	if err != nil {
-		cfg.Error("read console server", "err", err)
+	_, err = io.ReadAll(task.stream)
+	return
+}
+
+func (task *ReceiveRequestTask) Dispose() {
+	task.stream.Close()
+}
+
+func (cfg *ConsolePlugin) OnInit() error {
+	if cfg.Secret == "" || cfg.Server == "" {
+		return nil
 	}
-	return err
+	connectTask := ConnectServerTask{
+		cfg: cfg,
+	}
+	connectTask.SetRetry(-1, time.Second)
+	cfg.AddTask(&connectTask)
+	return nil
 }

@@ -3,6 +3,7 @@ package m7s
 import (
 	"m7s.live/m7s/v5/pkg"
 	"m7s.live/m7s/v5/pkg/util"
+	"time"
 
 	"m7s.live/m7s/v5/pkg/config"
 )
@@ -11,7 +12,6 @@ type Pusher = func(*PushContext) error
 
 func createPushContext(p *Plugin, streamPath string, url string) (pushCtx *PushContext) {
 	pushCtx = &PushContext{Push: p.config.Push}
-	pushCtx.Name = "push"
 	pushCtx.Plugin = p
 	pushCtx.RemoteURL = url
 	pushCtx.StreamPath = streamPath
@@ -31,13 +31,12 @@ func (p *PushContext) GetKey() string {
 }
 
 type PushSubTask struct {
-	util.RetryTask
+	util.Task
 	ctx *PushContext
 	Pusher
 }
 
 func (p *PushSubTask) Start() (err error) {
-	p.MaxRetry = p.ctx.RePush
 	if p.ctx.Subscriber, err = p.ctx.Plugin.Subscribe(p.Context, p.ctx.StreamPath); err != nil {
 		p.Error("push subscribe failed", "error", err)
 		return
@@ -46,7 +45,9 @@ func (p *PushSubTask) Start() (err error) {
 }
 
 func (p *PushContext) Do(pusher Pusher) {
-	p.AddTask(&PushSubTask{ctx: p, Pusher: pusher})
+	task := &PushSubTask{ctx: p, Pusher: pusher}
+	task.SetRetry(p.RePush, time.Second*5)
+	p.AddTask(task)
 }
 
 func (p *PushContext) Start() (err error) {

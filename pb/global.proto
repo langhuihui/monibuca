@@ -27,6 +27,11 @@ service Global {
       post: "/api/restart/{id}"
     };
   }
+  rpc TaskTree (google.protobuf.Empty) returns (TaskTreeResponse) {
+    option (google.api.http) = {
+      get: "/api/task/tree"
+    };
+  }
   rpc StreamList (StreamListRequest) returns (StreamListResponse) {
     option (google.api.http) = {
       get: "/api/stream/list"
@@ -157,6 +162,15 @@ message SysInfoResponse {
   string arch = 6;
   int32 cpus = 7;
   repeated PluginInfo plugins = 8;
+}
+
+message TaskTreeResponse {
+  uint32 id = 1;
+  string type = 2;
+  string owner = 3;
+  google.protobuf.Timestamp startTime = 4;
+  map<string, string> description = 5;
+  repeated TaskTreeResponse children = 6;
 }
 
 message StreamListRequest {

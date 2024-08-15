@@ -267,18 +267,27 @@ func (gb *GB28181Plugin) StoreDevice(id string, req *sip.Request) (d *Device) {
 			},
 			Params: sip.NewParams(),
 		},
+		devices: &gb.devices,
 	}
-	gb.With(d, "id", id)
+	d.Logger = gb.With("id", id)
 	d.fromHDR.Params.Add("tag", sip.GenerateTagN(16))
 	d.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(publicIP))
 	d.dialogClient = sipgo.NewDialogClient(d.client, d.contactHDR)
 	d.channels.L = new(sync.RWMutex)
 	d.Info("StoreDevice", "source", source, "desc", desc, "servIp", servIp, "publicIP", publicIP, "recipient", req.Recipient)
-	gb.devices.Add(d)
+
 	if gb.DB != nil {
 		//TODO
 	}
-	go d.eventLoop(gb)
+	task := gb.AddTask(d)
+	task.OnStart(func() {
+		gb.devices.Add(d)
+	})
+	task.OnDispose(func() {
+		d.Status = DeviceOfflineStatus
+		if gb.devices.RemoveByKey(d.ID) {
+		}
+	})
 	return
 }
 

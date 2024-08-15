@@ -1,7 +1,6 @@
 package m7s
 
 import (
-	"fmt"
 	"m7s.live/m7s/v5/pkg/util"
 	"os"
 	"path/filepath"
@@ -20,7 +19,6 @@ func createRecoder(p *Plugin, streamPath string, filePath string) (recorder *Rec
 		FilePath:   filePath,
 		StreamPath: streamPath,
 	}
-	recorder.Name = "record"
 	recorder.Logger = p.Logger.With("filePath", filePath, "streamPath", streamPath)
 	return
 }
@@ -54,7 +52,9 @@ func (r *recordSubTask) Start() (err error) {
 		}
 		dir = filepath.Dir(p.FilePath)
 	}
-	r.Name = fmt.Sprintf("record:%s", p.FilePath)
+	r.Description = map[string]any{
+		"filePath": p.FilePath,
+	}
 	if err = os.MkdirAll(dir, 0755); err != nil {
 		return
 	}

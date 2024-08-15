@@ -135,7 +135,6 @@ func (p *Publisher) GetKey() string {
 func createPublisher(p *Plugin, streamPath string, conf config.Publish) (publisher *Publisher) {
 	publisher = &Publisher{Publish: conf}
 	publisher.ID = util.GetNextTaskID()
-	publisher.Name = "publisher"
 	publisher.Plugin = p
 	publisher.TimeoutTimer = time.NewTimer(p.config.PublishTimeout)
 	publisher.Logger = p.Logger.With("streamPath", streamPath, "pId", publisher.ID)

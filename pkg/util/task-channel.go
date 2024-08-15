@@ -8,8 +8,12 @@ type ChannelTask struct {
 	callback reflect.Value
 }
 
-func (t *ChannelTask) start() (reflect.Value, error) {
-	return t.channel, nil
+func (t *ChannelTask) GetTaskType() string {
+	return "channel"
+}
+
+func (t *ChannelTask) getSignal() reflect.Value {
+	return t.channel
 }
 
 func (t *ChannelTask) tick(signal reflect.Value) {
