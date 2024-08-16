@@ -24,6 +24,7 @@ func GetTLSConfig(certFile, keyFile string) (tslConfig *tls.Config, err error) {
 	if err == nil {
 		tslConfig = &tls.Config{
 			Certificates: []tls.Certificate{keyPair},
+			NextProtos:   []string{"monibuca"},
 		}
 	}
 	return

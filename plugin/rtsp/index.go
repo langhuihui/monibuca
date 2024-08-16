@@ -19,7 +19,7 @@ import (
 const defaultConfig = m7s.DefaultYaml(`tcp:
   listenaddr: :554`)
 
-var _ = m7s.InstallPlugin[RTSPPlugin](defaultConfig, Pull, Push)
+var _ = m7s.InstallPlugin[RTSPPlugin](defaultConfig, NewPuller, NewPusher)
 
 type RTSPPlugin struct {
 	m7s.Plugin

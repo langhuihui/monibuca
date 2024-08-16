@@ -9,6 +9,11 @@ import (
 	"strings"
 )
 
+const (
+	DIRECTION_PULL = "pull"
+	DIRECTION_PUSH = "push"
+)
+
 func createClient(p *m7s.Connection) (s *Stream, err error) {
 	addr := p.RemoteURL
 	var rtspURL *url.URL
@@ -46,63 +51,85 @@ func createClient(p *m7s.Connection) (s *Stream, err error) {
 	s.Backchannel = true
 	err = s.Options()
 	if err != nil {
-		s.disconnect()
+		s.Dispose()
 		return
 	}
 	return
 }
 
-func Pull(p *m7s.PullContext) (err error) {
-	var s *Stream
-	if s, err = createClient(&p.Connection); err != nil {
-		return
-	}
-	defer func() {
-		s.disconnect()
-		if p := recover(); p != nil {
-			err = p.(error)
-		}
-	}()
-	var media []*Media
-	if media, err = s.Describe(); err != nil {
-		return
-	}
-	receiver := &Receiver{Publisher: p.Publisher, Stream: s}
-	if err = receiver.SetMedia(media); err != nil {
-		return
-	}
-	if err = s.Play(); err != nil {
-		return
-	}
-	return receiver.Receive()
+type Client struct {
+	*Stream
+	pullCtx   m7s.PullContext
+	pushCtx   m7s.PushContext
+	direction string
 }
 
-func Push(ctx *m7s.PushContext) (err error) {
-	var s *Stream
-	if s, err = createClient(&ctx.Connection); err != nil {
-		return
-	}
-	defer s.disconnect()
-	sender := &Sender{Subscriber: ctx.Subscriber, Stream: s}
-	var medias []*Media
-	medias, err = sender.GetMedia()
-	err = s.Announce(medias)
-	if err != nil {
-		return
-	}
-	for i, media := range medias {
-		switch media.Kind {
-		case "audio", "video":
-			_, err = s.SetupMedia(media, i)
-			if err != nil {
-				return
-			}
-		default:
-			ctx.Warn("media kind not support", "kind", media.Kind)
+func (c *Client) Start() (err error) {
+	c.Stream, err = createClient(&c.pullCtx.Connection)
+	if err == nil {
+		if c.direction == DIRECTION_PULL {
+			err = c.pullCtx.Publish()
 		}
 	}
-	if err = s.Record(); err != nil {
-		return
+	return
+}
+
+func (c *Client) GetPullContext() *m7s.PullContext {
+	return &c.pullCtx
+}
+
+func (c *Client) GetPushContext() *m7s.PushContext {
+	return &c.pushCtx
+}
+
+func NewPuller() m7s.IPuller {
+	return &Client{
+		direction: DIRECTION_PULL,
 	}
-	return sender.Send()
+}
+
+func NewPusher() m7s.IPusher {
+	return &Client{
+		direction: DIRECTION_PUSH,
+	}
+}
+
+func (c *Client) Run() (err error) {
+	if c.direction == DIRECTION_PULL {
+		var media []*Media
+		if media, err = c.Describe(); err != nil {
+			return
+		}
+		receiver := &Receiver{Publisher: c.pullCtx.Publisher, Stream: c.Stream}
+		if err = receiver.SetMedia(media); err != nil {
+			return
+		}
+		if err = c.Play(); err != nil {
+			return
+		}
+		return receiver.Receive()
+	} else {
+		sender := &Sender{Subscriber: c.pushCtx.Subscriber, Stream: c.Stream}
+		var medias []*Media
+		medias, err = sender.GetMedia()
+		err = c.Announce(medias)
+		if err != nil {
+			return
+		}
+		for i, media := range medias {
+			switch media.Kind {
+			case "audio", "video":
+				_, err = c.SetupMedia(media, i)
+				if err != nil {
+					return
+				}
+			default:
+				c.Warn("media kind not support", "kind", media.Kind)
+			}
+		}
+		if err = c.Record(); err != nil {
+			return
+		}
+		return sender.Send()
+	}
 }

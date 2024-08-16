@@ -13,54 +13,39 @@ import (
 	rtmp "m7s.live/m7s/v5/plugin/rtmp/pkg"
 )
 
-func PullFLV(p *m7s.PullContext) (err error) {
-	var reader *util.BufReader
+type Puller struct {
+	util.Task
+	Ctx m7s.PullContext
+	*util.BufReader
+}
+
+func (p *Puller) GetPullContext() *m7s.PullContext {
+	return &p.Ctx
+}
+
+func NewPuller() m7s.IPuller {
+	return &Puller{}
+}
+
+func (p *Puller) Run() (err error) {
+	reader, publisher := p.BufReader, p.Ctx.Publisher
 	var hasAudio, hasVideo bool
 	var absTS uint32
-	if strings.HasPrefix(p.RemoteURL, "http") {
-		var res *http.Response
-		client := http.DefaultClient
-		if proxyConf := p.ConnectProxy; proxyConf != "" {
-			proxy, err := url.Parse(proxyConf)
-			if err != nil {
-				return err
-			}
-			transport := &http.Transport{Proxy: http.ProxyURL(proxy)}
-			client = &http.Client{Transport: transport}
-		}
-		if res, err = client.Get(p.RemoteURL); err == nil {
-			if res.StatusCode != http.StatusOK {
-				return io.EOF
-			}
-			defer res.Body.Close()
-			reader = util.NewBufReader(res.Body)
-		}
-	} else {
-		var res *os.File
-		if res, err = os.Open(p.RemoteURL); err == nil {
-			defer res.Close()
-			reader = util.NewBufReader(res)
-		}
-	}
+	var head util.Memory
+	head, err = reader.ReadBytes(13)
 	if err == nil {
-		var head util.Memory
-		head, err = reader.ReadBytes(13)
-		if err == nil {
-			var flvHead [3]byte
-			var version, flag byte
-			var reader = head.NewReader()
-			err = reader.ReadByteTo(&flvHead[0], &flvHead[1], &flvHead[2], &version, &flag)
-			if flvHead != [...]byte{'F', 'L', 'V'} {
-				err = errors.New("not flv file")
-			} else {
-				hasAudio = flag&0x04 != 0
-				hasVideo = flag&0x01 != 0
-			}
+		var flvHead [3]byte
+		var version, flag byte
+		err = head.NewReader().ReadByteTo(&flvHead[0], &flvHead[1], &flvHead[2], &version, &flag)
+		if flvHead != [...]byte{'F', 'L', 'V'} {
+			err = errors.New("not flv file")
+		} else {
+			hasAudio = flag&0x04 != 0
+			hasVideo = flag&0x01 != 0
 		}
 	}
-
 	var startTs uint32
-	pubConf := p.Publisher.GetPublishConfig()
+	pubConf := publisher.GetPublishConfig()
 	if !hasAudio {
 		pubConf.PubAudio = false
 	}
@@ -104,9 +89,9 @@ func PullFLV(p *m7s.PullContext) (err error) {
 		//fmt.Println(t, offsetTs, timestamp, startTs, puller.absTS)
 		switch t {
 		case FLV_TAG_TYPE_AUDIO:
-			err = p.Publisher.WriteAudio(frame.WrapAudio())
+			err = publisher.WriteAudio(frame.WrapAudio())
 		case FLV_TAG_TYPE_VIDEO:
-			err = p.Publisher.WriteVideo(frame.WrapVideo())
+			err = publisher.WriteVideo(frame.WrapVideo())
 		case FLV_TAG_TYPE_SCRIPT:
 			r := frame.NewReader()
 			amf := &rtmp.AMF{
@@ -121,7 +106,44 @@ func PullFLV(p *m7s.PullContext) (err error) {
 			if err != nil {
 				return err
 			}
-			p.Info("script", name, metaData)
+			publisher.Info("script", name, metaData)
+		}
+	}
+	return
+}
+
+func (p *Puller) Start() (err error) {
+	if err = p.Ctx.Publish(); err != nil {
+		return
+	}
+	remoteURL := p.Ctx.RemoteURL
+	if strings.HasPrefix(remoteURL, "http") {
+		var res *http.Response
+		client := http.DefaultClient
+		if proxyConf := p.Ctx.ConnectProxy; proxyConf != "" {
+			proxy, err := url.Parse(proxyConf)
+			if err != nil {
+				return err
+			}
+			transport := &http.Transport{Proxy: http.ProxyURL(proxy)}
+			client = &http.Client{Transport: transport}
+		}
+		if res, err = client.Get(remoteURL); err == nil {
+			if res.StatusCode != http.StatusOK {
+				return io.EOF
+			}
+			p.OnDispose(func() {
+				res.Body.Close()
+			})
+			p.BufReader = util.NewBufReader(res.Body)
+		}
+	} else {
+		var res *os.File
+		if res, err = os.Open(remoteURL); err == nil {
+			p.OnDispose(func() {
+				res.Close()
+			})
+			p.BufReader = util.NewBufReader(res)
 		}
 	}
 	return

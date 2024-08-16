@@ -2,6 +2,7 @@ package flv
 
 import (
 	"bufio"
+	"context"
 	"io"
 	"io/fs"
 	"m7s.live/m7s/v5/pkg/util"
@@ -12,7 +13,6 @@ import (
 )
 
 type Vod struct {
-	util.Task
 	io.WriteCloser
 	Dir             string
 	lastTimestamp   uint32
@@ -21,6 +21,7 @@ type Vod struct {
 	offsetTime      time.Duration
 	offsetTimestamp uint32
 	fileList        []fs.FileInfo
+	startTime       time.Time
 }
 
 func (v *Vod) SetSpeed(speed float64) {
@@ -28,7 +29,7 @@ func (v *Vod) SetSpeed(speed float64) {
 }
 
 func (v *Vod) speedControl() {
-	targetTime := time.Duration(float64(time.Since(v.StartTime)) * v.speed)
+	targetTime := time.Duration(float64(time.Since(v.startTime)) * v.speed)
 	sleepTime := time.Duration(v.lastTimestamp)*time.Millisecond - targetTime
 	//fmt.Println("sleepTime", sleepTime, time.Since(start).Milliseconds(), lastTimestamp)
 	if sleepTime > 0 {
@@ -38,6 +39,7 @@ func (v *Vod) speedControl() {
 
 func (v *Vod) Init(startTime time.Time, dir string) (err error) {
 	v.Dir = dir
+	v.startTime = time.Now()
 	singleFile := filepath.Join(dir, ".flv")
 	if util.Exist(singleFile) {
 		v.singleFile = true
@@ -71,7 +73,7 @@ func (v *Vod) Init(startTime time.Time, dir string) (err error) {
 	return
 }
 
-func (v *Vod) Run() (err error) {
+func (v *Vod) Run(ctx context.Context) (err error) {
 	flvHead := make([]byte, 9+4)
 	tagHead := make(util.Buffer, 11)
 	var file *os.File
@@ -82,11 +84,10 @@ func (v *Vod) Run() (err error) {
 		v.offsetTimestamp = -uint32(v.offsetTime.Milliseconds())
 	}
 	for i, info := range v.fileList {
-		if v.IsStopped() {
+		if ctx.Err() != nil {
 			return
 		}
 		filePath := filepath.Join(v.Dir, info.Name())
-		v.Debug("read", "file", filePath)
 		file, err = os.Open(filePath)
 		if err != nil {
 			return

@@ -147,7 +147,7 @@ func (p *Publisher) Start() (err error) {
 	if oldPublisher, ok := s.Streams.Get(p.StreamPath); ok {
 		if p.KickExist {
 			p.Warn("kick")
-			p.TakeOver(oldPublisher)
+			p.takeOver(oldPublisher)
 			oldPublisher.Stop(ErrKick)
 		} else {
 			return ErrStreamExist
@@ -516,7 +516,7 @@ func (p *Publisher) Dispose() {
 	p.State = PublisherStateDisposed
 }
 
-func (p *Publisher) TakeOver(old *Publisher) {
+func (p *Publisher) takeOver(old *Publisher) {
 	p.baseTs = old.lastTs
 	p.Info("takeOver", "old", old.ID)
 	for subscriber := range old.SubscriberRange {
@@ -535,4 +535,19 @@ func (p *Publisher) WaitTrack() (err error) {
 		err = p.audioReady.Await()
 	}
 	return
+}
+
+func (p *Publisher) Pause() {
+	//p.AudioTrack.Pause()
+	//p.VideoTrack.Pause()
+}
+
+func (p *Publisher) Resume() {
+	//p.AudioTrack.Resume()
+	//p.VideoTrack.Resume()
+}
+
+func (p *Publisher) FastForward() {
+	//p.AudioTrack.FastForward()
+	//p.VideoTrack.FastForward()
 }

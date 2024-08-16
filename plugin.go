@@ -2,6 +2,7 @@ package m7s
 
 import (
 	"context"
+	"github.com/quic-go/quic-go"
 	"log/slog"
 	"net"
 	"net/http"
@@ -118,6 +119,7 @@ type IPlugin interface {
 	util.ITask
 	OnInit() error
 	OnStop()
+	Pull(path string, url string)
 }
 
 type IRegisterHandler interface {
@@ -134,6 +136,10 @@ type ITCPPlugin interface {
 
 type IUDPPlugin interface {
 	OnUDPConnect(*net.UDPConn)
+}
+
+type IQUICPlugin interface {
+	OnQUICConnect(quic.Connection)
 }
 
 var plugins []PluginMeta
@@ -336,6 +342,18 @@ func (p *Plugin) listen() (err error) {
 			}
 		}
 	}
+
+	if quicHandler, ok := p.handler.(IQUICPlugin); ok {
+		quicConf := &p.config.Quic
+		if quicConf.ListenAddr != "" && quicConf.AutoListen {
+			p.Info("listen quic", "addr", quicConf.ListenAddr)
+			err = quicConf.ListenQuic(p, quicHandler.OnQUICConnect)
+			if err != nil {
+				p.Error("listen quic", "addr", quicConf.ListenAddr, "error", err)
+				return
+			}
+		}
+	}
 	return
 }
 
@@ -395,15 +413,15 @@ func (p *Plugin) Subscribe(ctx context.Context, streamPath string) (subscriber *
 	return p.SubscribeWithConfig(ctx, streamPath, p.config.Subscribe)
 }
 
-func (p *Plugin) Pull(streamPath string, url string) (ctx *PullContext, err error) {
-	ctx = createPullContext(p, streamPath, url)
-	err = p.Server.pullTask.AddTask(ctx).WaitStarted()
+func (p *Plugin) Pull(streamPath string, url string) {
+	puller := p.Meta.Puller()
+	p.Server.AddPullTask(puller.GetPullContext().Init(puller, p, streamPath, url))
 	return
 }
 
 func (p *Plugin) Push(streamPath string, url string) (ctx *PushContext, err error) {
-	ctx = createPushContext(p, streamPath, url)
-	err = p.Server.pushTask.AddTask(ctx).WaitStarted()
+	pusher := p.Meta.Pusher()
+	p.Server.AddPushTask(pusher.GetPushContext().Init(pusher, p, streamPath, url))
 	return
 }
 

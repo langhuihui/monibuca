@@ -88,7 +88,7 @@ func (s *Subscriber) Start() (err error) {
 		for plugin := range server.Plugins.Range {
 			if remoteURL := plugin.GetCommonConf().Pull.CheckPullOnSub(s.StreamPath); remoteURL != "" {
 				if plugin.Meta.Puller != nil {
-					plugin.Pull(s.StreamPath, remoteURL)
+					plugin.handler.Pull(s.StreamPath, remoteURL)
 				}
 			}
 		}

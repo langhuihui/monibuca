@@ -8,46 +8,39 @@ import (
 	"m7s.live/m7s/v5/pkg/config"
 )
 
-type Pusher = func(*PushContext) error
-
-func createPushContext(p *Plugin, streamPath string, url string) (pushCtx *PushContext) {
-	pushCtx = &PushContext{Push: p.config.Push}
-	pushCtx.Plugin = p
-	pushCtx.RemoteURL = url
-	pushCtx.StreamPath = streamPath
-	pushCtx.ConnectProxy = p.config.Push.Proxy
-	pushCtx.Logger = p.Logger.With("pushURL", url, "streamPath", streamPath)
-	return
+type IPusher interface {
+	util.ITask
+	GetPushContext() *PushContext
 }
+
+type Pusher = func() IPusher
 
 type PushContext struct {
 	Connection
 	Subscriber *Subscriber
 	config.Push
+	pusher IPusher
 }
 
 func (p *PushContext) GetKey() string {
 	return p.RemoteURL
 }
 
-type PushSubTask struct {
-	util.Task
-	ctx *PushContext
-	Pusher
+func (p *PushContext) Init(pusher IPusher, plugin *Plugin, streamPath string, url string) *PushContext {
+	p.Push = plugin.config.Push
+	p.Plugin = plugin
+	p.RemoteURL = url
+	p.StreamPath = streamPath
+	p.ConnectProxy = plugin.config.Push.Proxy
+	p.Logger = plugin.Logger.With("pushURL", url, "streamPath", streamPath)
+	p.pusher = pusher
+	pusher.SetRetry(plugin.config.RePush, time.Second*5)
+	return p
 }
 
-func (p *PushSubTask) Start() (err error) {
-	if p.ctx.Subscriber, err = p.ctx.Plugin.Subscribe(p.Context, p.ctx.StreamPath); err != nil {
-		p.Error("push subscribe failed", "error", err)
-		return
-	}
-	return p.Pusher(p.ctx)
-}
-
-func (p *PushContext) Do(pusher Pusher) {
-	task := &PushSubTask{ctx: p, Pusher: pusher}
-	task.SetRetry(p.RePush, time.Second*5)
-	p.AddTask(task)
+func (p *PushContext) Subscribe() (err error) {
+	p.Subscriber, err = p.Plugin.Subscribe(p.pusher.GetTask().Context, p.StreamPath)
+	return
 }
 
 func (p *PushContext) Start() (err error) {
@@ -56,9 +49,7 @@ func (p *PushContext) Start() (err error) {
 		return pkg.ErrPushRemoteURLExist
 	}
 	s.Pushs.Add(p)
-	if p.Plugin.Meta.Pusher != nil {
-		p.Do(p.Plugin.Meta.Pusher)
-	}
+	p.AddTask(p.pusher)
 	return
 }
 

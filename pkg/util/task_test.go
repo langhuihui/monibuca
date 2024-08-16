@@ -2,8 +2,9 @@ package util
 
 import (
 	"context"
+	"errors"
+	"io"
 	"log/slog"
-	"m7s.live/m7s/v5/pkg"
 	"os"
 	"testing"
 	"time"
@@ -11,7 +12,7 @@ import (
 
 func createMarcoTask() *MarcoTask {
 	var mt MarcoTask
-	mt.initTask(context.Background())
+	mt.initTask(context.Background(), &mt)
 	mt.Logger = slog.New(slog.NewTextHandler(os.Stdout, nil))
 	return &mt
 }
@@ -30,24 +31,23 @@ func Test_AddTask_AddsTaskSuccessfully(t *testing.T) {
 }
 
 type retryDemoTask struct {
-	RetryTask
+	Task
 }
 
 func (task *retryDemoTask) Start() error {
-	return pkg.ErrRestart
+	return io.ErrClosedPipe
 }
 
 func Test_RetryTask(t *testing.T) {
 	mt := createMarcoTask()
 	var demoTask retryDemoTask
-	demoTask.MaxRetry = 3
-	demoTask.RetryInterval = time.Second
+	demoTask.SetRetry(3, time.Second)
 	reason := mt.AddTask(&demoTask).WaitStopped()
-	if reason != ErrAutoStop {
+	if !errors.Is(reason, ErrRetryRunOut) {
 		t.Errorf("expected retry run out, got %v", reason)
 	}
-	if demoTask.RetryCount != 3 {
-		t.Errorf("expected 3 retries, got %d", demoTask.RetryCount)
+	if demoTask.retry.RetryCount != 3 {
+		t.Errorf("expected 3 retries, got %d", demoTask.retry.RetryCount)
 	}
 }
 
@@ -85,7 +85,7 @@ func Test_StopByContext(t *testing.T) {
 	mt.AddTaskWithContext(ctx, &task)
 	time.AfterFunc(time.Millisecond*100, cancel)
 	mt.WaitStopped()
-	if task.StopReason() != context.Canceled {
+	if !task.StopReasonIs(context.Canceled) {
 		t.Errorf("expected task to be stopped by context")
 	}
 }
@@ -98,7 +98,7 @@ func Test_ParentStop(t *testing.T) {
 	parent.AddTask(&task)
 	parent.Stop(ErrAutoStop)
 	parent.WaitStopped()
-	if task.StopReason() != ErrAutoStop {
+	if !task.StopReasonIs(ErrAutoStop) {
 		t.Errorf("expected task to be stopped")
 	}
 }

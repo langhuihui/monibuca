@@ -21,7 +21,7 @@ type RTMPPlugin struct {
 }
 
 var _ = m7s.InstallPlugin[RTMPPlugin](m7s.DefaultYaml(`tcp:
-  listenaddr: :1935`), &pb.Rtmp_ServiceDesc, pb.RegisterRtmpHandler, Pull, Push)
+  listenaddr: :1935`), &pb.Rtmp_ServiceDesc, pb.RegisterRtmpHandler, NewPusher, NewPuller)
 
 func (p *RTMPPlugin) OnInit() error {
 	for streamPath, url := range p.GetCommonConf().PullOnStart {

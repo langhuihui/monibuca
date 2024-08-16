@@ -1,7 +1,6 @@
 package plugin_gb28181
 
 import (
-	"errors"
 	"fmt"
 	"github.com/emiago/sipgo"
 	"github.com/emiago/sipgo/sip"
@@ -13,20 +12,29 @@ import (
 )
 
 type Dialog struct {
+	util.Task
 	*Channel
 	*gb28181.Receiver
 	gb28181.InviteOptions
 	gb      *GB28181Plugin
 	session *sipgo.DialogClientSession
+	pullCtx m7s.PullContext
 }
 
 func (d *Dialog) GetCallID() string {
 	return d.session.InviteRequest.CallID().Value()
 }
 
-func (d *Dialog) Pull(p *m7s.PullContext) (err error) {
+func (d *Dialog) GetPullContext() *m7s.PullContext {
+	return &d.pullCtx
+}
 
-	sss := strings.Split(p.RemoteURL, "/")
+func (d *Dialog) Start() error {
+	return d.pullCtx.Publish()
+}
+
+func (d *Dialog) Run() (err error) {
+	sss := strings.Split(d.pullCtx.RemoteURL, "/")
 	deviceId, channelId := sss[0], sss[1]
 	if len(sss) == 2 {
 		if device, ok := d.gb.devices.Get(deviceId); ok {
@@ -43,7 +51,7 @@ func (d *Dialog) Pull(p *m7s.PullContext) (err error) {
 		err = recordRange.Resolve(sss[2])
 	}
 
-	d.Receiver = gb28181.NewReceiver(p.Publisher)
+	d.Receiver = gb28181.NewReceiver(d.pullCtx.Publisher)
 	ssrc := d.CreateSSRC(d.gb.Serial)
 	d.gb.dialogs.Set(d)
 	defer d.gb.dialogs.Remove(d)
@@ -85,7 +93,7 @@ func (d *Dialog) Pull(p *m7s.PullContext) (err error) {
 		return
 	}
 	inviteResponseBody := string(d.session.InviteResponse.Body())
-	d.Info("inviteResponse", "body", inviteResponseBody)
+	d.Channel.Info("inviteResponse", "body", inviteResponseBody)
 	ds := strings.Split(inviteResponseBody, "\r\n")
 	for _, l := range ds {
 		if ls := strings.Split(l, "="); len(ls) > 1 {
@@ -108,6 +116,7 @@ func (d *Dialog) Pull(p *m7s.PullContext) (err error) {
 		}
 	}
 	err = d.session.Ack(d.gb)
+	// TODO:
 	go d.Receiver.ListenTCP(d.MediaPort)
 	d.Receiver.Demux()
 	return
@@ -117,9 +126,6 @@ func (d *Dialog) GetKey() uint32 {
 	return d.SSRC
 }
 
-func (d *Dialog) Bye() {
-	if d.Receiver != nil && d.Receiver.Publisher != nil {
-		d.Receiver.Publisher.Stop(errors.New("bye"))
-	}
+func (d *Dialog) Dispose() {
 	d.session.Close()
 }

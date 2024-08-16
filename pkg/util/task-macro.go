@@ -113,11 +113,6 @@ func (mt *MarcoTask) RangeSubTask(callback func(task ITask) bool) {
 }
 
 func (mt *MarcoTask) AddTask(task ITask) *Task {
-	t := task.GetTask()
-	if t.parentCtx != nil && task.IsStopped() { //reuse task
-		t.parent = nil
-		return mt.AddTaskWithContext(t.parentCtx, task)
-	}
 	return mt.AddTaskWithContext(mt.Context, task)
 }
 

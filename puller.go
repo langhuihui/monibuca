@@ -15,52 +15,47 @@ type Connection struct {
 	ConnectProxy string // 连接代理
 }
 
-type Puller = func(*PullContext) error
-
-func createPullContext(p *Plugin, streamPath string, url string) (pullCtx *PullContext) {
-	publishConfig := p.config.Publish
-	publishConfig.PublishTimeout = 0
-	pullCtx = &PullContext{
-		Pull:          p.config.Pull,
-		publishConfig: &publishConfig,
-	}
-	pullCtx.Plugin = p
-	pullCtx.ConnectProxy = p.config.Pull.Proxy
-	pullCtx.RemoteURL = url
-	pullCtx.StreamPath = streamPath
-	pullCtx.Logger = p.Logger.With("pullURL", url, "streamPath", streamPath)
-	return
+type IPuller interface {
+	util.ITask
+	GetPullContext() *PullContext
 }
+
+type Puller = func() IPuller
 
 type PullContext struct {
 	Connection
 	Publisher     *Publisher
 	publishConfig *config.Publish
 	config.Pull
+	puller IPuller
+}
+
+func (p *PullContext) GetPullContext() *PullContext {
+	return p
+}
+
+func (p *PullContext) Init(puller IPuller, plugin *Plugin, streamPath string, url string) *PullContext {
+	publishConfig := plugin.config.Publish
+	publishConfig.PublishTimeout = 0
+	p.Pull = plugin.config.Pull
+	p.publishConfig = &publishConfig
+	p.Plugin = plugin
+	p.ConnectProxy = plugin.config.Pull.Proxy
+	p.RemoteURL = url
+	p.StreamPath = streamPath
+	p.Logger = p.Logger.With("pullURL", url, "streamPath", streamPath)
+	p.puller = puller
+	puller.SetRetry(plugin.config.Pull.RePull, time.Second*5)
+	return p
 }
 
 func (p *PullContext) GetKey() string {
 	return p.StreamPath
 }
 
-type PullSubTask struct {
-	util.Task
-	ctx *PullContext
-	Puller
-}
-
-func (p *PullSubTask) Start() (err error) {
-	if p.ctx.Publisher, err = p.ctx.Plugin.PublishWithConfig(p.Context, p.ctx.StreamPath, *p.ctx.publishConfig); err != nil {
-		p.Error("pull publish failed", "error", err)
-		return
-	}
-	return p.Puller(p.ctx)
-}
-
-func (p *PullContext) Do(puller Puller) {
-	task := &PullSubTask{ctx: p, Puller: puller}
-	task.SetRetry(p.RePull, time.Second*5)
-	p.AddTask(task)
+func (p *PullContext) Publish() (err error) {
+	p.Publisher, err = p.Plugin.PublishWithConfig(p.puller.GetTask().Context, p.StreamPath, *p.publishConfig)
+	return
 }
 
 func (p *PullContext) Start() (err error) {
@@ -69,9 +64,7 @@ func (p *PullContext) Start() (err error) {
 		return pkg.ErrStreamExist
 	}
 	s.Pulls.Add(p)
-	if p.Plugin.Meta.Puller != nil {
-		p.Do(p.Plugin.Meta.Puller)
-	}
+	s.AddTask(p.puller)
 	return
 }
 

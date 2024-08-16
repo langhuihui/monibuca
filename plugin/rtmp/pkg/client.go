@@ -103,63 +103,52 @@ func createClient(c *m7s.Connection) (*NetStream, error) {
 	return ns, nil
 }
 
-func Pull(p *m7s.PullContext) (err error) {
-	var connection *NetStream
-	if connection, err = createClient(&p.Connection); err != nil {
-		return
-	}
-	defer connection.Dispose()
-	var msg *Chunk
-	for err == nil {
-		if msg, err = connection.RecvMessage(); err != nil {
-			return err
-		}
-		switch msg.MessageTypeID {
-		case RTMP_MSG_AMF0_COMMAND:
-			cmd := msg.MsgData.(Commander).GetCommand()
-			switch cmd.CommandName {
-			case Response_Result:
-				if response, ok := msg.MsgData.(*ResponseCreateStreamMessage); ok {
-					connection.StreamID = response.StreamId
-					m := &PlayMessage{}
-					m.StreamId = response.StreamId
-					m.TransactionId = 4
-					m.CommandMessage.CommandName = "play"
-					URL, _ := url.Parse(p.Connection.RemoteURL)
-					ps := strings.Split(URL.Path, "/")
-					args := URL.Query()
-					m.StreamName = ps[len(ps)-1]
-					if len(args) > 0 {
-						m.StreamName += "?" + args.Encode()
-					}
-					connection.Receivers[response.StreamId] = p.Publisher
-					connection.SendMessage(RTMP_MSG_AMF0_COMMAND, m)
-					// if response, ok := msg.MsgData.(*ResponsePlayMessage); ok {
-					// 	if response.Object["code"] == "NetStream.Play.Start" {
+const (
+	DIRECTION_PULL = "pull"
+	DIRECTION_PUSH = "push"
+)
 
-					// 	} else if response.Object["level"] == Level_Error {
-					// 		return errors.New(response.Object["code"].(string))
-					// 	}
-					// } else {
-					// 	return errors.New("pull faild")
-					// }
-				}
-			}
+type Client struct {
+	*NetStream
+	pullCtx   m7s.PullContext
+	pushCtx   m7s.PushContext
+	direction string
+}
+
+func (c *Client) Start() (err error) {
+	c.NetStream, err = createClient(&c.pullCtx.Connection)
+	if err == nil {
+		if c.direction == DIRECTION_PULL {
+			err = c.pullCtx.Publish()
 		}
 	}
 	return
 }
 
-func Push(p *m7s.PushContext) (err error) {
-	var connection *NetStream
-	if connection, err = createClient(&p.Connection); err != nil {
-		return
+func (c *Client) GetPullContext() *m7s.PullContext {
+	return &c.pullCtx
+}
+
+func (c *Client) GetPushContext() *m7s.PushContext {
+	return &c.pushCtx
+}
+
+func NewPuller() m7s.IPuller {
+	return &Client{
+		direction: DIRECTION_PULL,
 	}
-	defer connection.Dispose()
+}
+
+func NewPusher() m7s.IPusher {
+	return &Client{
+		direction: DIRECTION_PUSH,
+	}
+}
+
+func (c *Client) Run() (err error) {
 	var msg *Chunk
-	for err == nil {
-		msg, err = connection.RecvMessage()
-		if err != nil {
+	for {
+		if msg, err = c.RecvMessage(); err != nil {
 			return err
 		}
 		switch msg.MessageTypeID {
@@ -168,28 +157,53 @@ func Push(p *m7s.PushContext) (err error) {
 			switch cmd.CommandName {
 			case Response_Result, Response_OnStatus:
 				if response, ok := msg.MsgData.(*ResponseCreateStreamMessage); ok {
-					connection.StreamID = response.StreamId
-					URL, _ := url.Parse(p.Connection.RemoteURL)
-					_, streamPath, _ := strings.Cut(URL.Path, "/")
-					_, streamPath, _ = strings.Cut(streamPath, "/")
-					args := URL.Query()
-					if len(args) > 0 {
-						streamPath += "?" + args.Encode()
-					}
-					err = connection.SendMessage(RTMP_MSG_AMF0_COMMAND, &PublishMessage{
-						CURDStreamMessage{
-							CommandMessage{
-								"publish",
-								1,
+					c.StreamID = response.StreamId
+					if c.direction == DIRECTION_PULL {
+						m := &PlayMessage{}
+						m.StreamId = response.StreamId
+						m.TransactionId = 4
+						m.CommandMessage.CommandName = "play"
+						URL, _ := url.Parse(c.pullCtx.Connection.RemoteURL)
+						ps := strings.Split(URL.Path, "/")
+						args := URL.Query()
+						m.StreamName = ps[len(ps)-1]
+						if len(args) > 0 {
+							m.StreamName += "?" + args.Encode()
+						}
+						c.Receivers[response.StreamId] = c.pullCtx.Publisher
+						c.SendMessage(RTMP_MSG_AMF0_COMMAND, m)
+						// if response, ok := msg.MsgData.(*ResponsePlayMessage); ok {
+						// 	if response.Object["code"] == "NetStream.Play.Start" {
+
+						// 	} else if response.Object["level"] == Level_Error {
+						// 		return errors.New(response.Object["code"].(string))
+						// 	}
+						// } else {
+						// 	return errors.New("pull faild")
+						// }
+					} else {
+						URL, _ := url.Parse(c.pushCtx.Connection.RemoteURL)
+						_, streamPath, _ := strings.Cut(URL.Path, "/")
+						_, streamPath, _ = strings.Cut(streamPath, "/")
+						args := URL.Query()
+						if len(args) > 0 {
+							streamPath += "?" + args.Encode()
+						}
+						err = c.SendMessage(RTMP_MSG_AMF0_COMMAND, &PublishMessage{
+							CURDStreamMessage{
+								CommandMessage{
+									"publish",
+									1,
+								},
+								response.StreamId,
 							},
-							response.StreamId,
-						},
-						streamPath,
-						"live",
-					})
+							streamPath,
+							"live",
+						})
+					}
 				} else if response, ok := msg.MsgData.(*ResponsePublishMessage); ok {
 					if response.Infomation["code"] == NetStream_Publish_Start {
-						connection.Subscribe(p.Subscriber)
+						c.Subscribe(c.pushCtx.Subscriber)
 					} else {
 						return errors.New(response.Infomation["code"].(string))
 					}
@@ -197,5 +211,4 @@ func Push(p *m7s.PushContext) (err error) {
 			}
 		}
 	}
-	return
 }

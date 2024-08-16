@@ -291,11 +291,12 @@ func (gb *GB28181Plugin) StoreDevice(id string, req *sip.Request) (d *Device) {
 	return
 }
 
-func (gb *GB28181Plugin) DoPull(ctx *m7s.PullContext) error {
+func (gb *GB28181Plugin) Pull(streamPath, url string) {
 	dialog := Dialog{
 		gb: gb,
 	}
-	return dialog.Pull(ctx)
+	ctx := dialog.GetPullContext().Init(&dialog, &gb.Plugin, streamPath, url)
+	gb.Server.AddPullTask(ctx)
 }
 
 func (gb *GB28181Plugin) GetPullableList() []string {
@@ -337,6 +338,6 @@ func (gb *GB28181Plugin) OnBye(req *sip.Request, tx sip.ServerTransaction) {
 		return d.GetCallID() == req.CallID().Value()
 	}); ok {
 		gb.Warn("OnBye", "dialog", dialog.GetCallID())
-		dialog.Bye()
+		dialog.Stop(util.ErrTaskComplete)
 	}
 }

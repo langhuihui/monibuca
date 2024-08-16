@@ -268,6 +268,14 @@ func (s *Server) CallOnStreamTask(callback func() error) {
 	s.streamTask.Call(callback)
 }
 
+func (s *Server) AddPullTask(task *PullContext) *util.Task {
+	return s.pullTask.AddTask(task)
+}
+
+func (s *Server) AddPushTask(task *PushContext) *util.Task {
+	return s.pushTask.AddTask(task)
+}
+
 func (s *Server) Dispose() {
 	Servers.Remove(s)
 	_ = s.tcplis.Close()
