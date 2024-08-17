@@ -11,7 +11,7 @@ import (
 	"github.com/quic-go/quic-go"
 )
 
-type CascadeClientConfig struct {
+type CascadeClientPlugin struct {
 	m7s.Plugin
 	RelayAPI cascade.RelayAPIConfig `desc:"访问控制"`
 	AutoPush bool                   `desc:"自动推流到上级"` //自动推流到上级
@@ -20,16 +20,11 @@ type CascadeClientConfig struct {
 	conn     quic.Connection
 }
 
-var _ = m7s.InstallPlugin[CascadeClientConfig](m7s.DefaultYaml(`
-cascadeclient:
-	relayapi:
-		allow: 
-			- /
-`), cascade.NewCascadePuller)
+var _ = m7s.InstallPlugin[CascadeClientPlugin](cascade.NewCascadePuller)
 
 type ConnectServerTask struct {
 	util.Task
-	cfg *CascadeClientConfig
+	cfg *CascadeClientPlugin
 	quic.Connection
 }
 
@@ -43,23 +38,25 @@ func (task *ConnectServerTask) Start() (err error) {
 		KeepAlivePeriod: time.Second * 10,
 		EnableDatagrams: true,
 	})
-	if stream := quic.Stream(nil); err == nil {
-		if stream, err = task.OpenStreamSync(task.cfg); err == nil {
-			res := []byte{0}
-			fmt.Fprintf(stream, "%s", task.cfg.Secret)
-			stream.Write([]byte{0})
-			_, err = stream.Read(res)
-			if err == nil && res[0] == 0 {
-				task.Info("connected to cascade server", "server", task.cfg.Server)
-				stream.Close()
-			} else {
-				var zapErr any = err
-				if err == nil {
-					zapErr = res[0]
-				}
-				task.Error("connect to cascade server", "server", task.cfg.Server, "err", zapErr)
-				return nil
+	if err != nil {
+		return
+	}
+	var stream quic.Stream
+	if stream, err = task.OpenStreamSync(task.cfg); err == nil {
+		res := []byte{0}
+		fmt.Fprintf(stream, "%s", task.cfg.Secret)
+		stream.Write([]byte{0})
+		_, err = stream.Read(res)
+		if err == nil && res[0] == 0 {
+			task.Info("connected to cascade server", "server", task.cfg.Server)
+			stream.Close()
+		} else {
+			var zapErr any = err
+			if err == nil {
+				zapErr = res[0]
 			}
+			task.Error("connect to cascade server", "server", task.cfg.Server, "err", zapErr)
+			return nil
 		}
 	}
 	return
@@ -80,8 +77,8 @@ func (task *ConnectServerTask) Run() (err error) {
 	return
 }
 
-func (c *CascadeClientConfig) OnInit() (err error) {
-	if c.Secret == "" || c.Server == "" {
+func (c *CascadeClientPlugin) OnInit() (err error) {
+	if c.Secret == "" && c.Server == "" {
 		return nil
 	}
 	connectTask := ConnectServerTask{
@@ -92,14 +89,14 @@ func (c *CascadeClientConfig) OnInit() (err error) {
 	return
 }
 
-func (c *CascadeClientConfig) Pull(streamPath, url string) {
-	puller := cascade.NewCascadePuller().(*cascade.Puller)
-	puller.Connection = c.conn
-	puller.GetPullContext().Init(puller, &c.Plugin, streamPath, url)
-	c.Plugin.Server.AddPullTask(puller)
+func (c *CascadeClientPlugin) Pull(streamPath, url string) {
+	puller := &cascade.Puller{
+		Connection: c.conn,
+	}
+	c.Plugin.Server.AddPullTask(puller.GetPullContext().Init(puller, &c.Plugin, streamPath, url))
 }
 
-//func (c *CascadeClientConfig) Start() {
+//func (c *CascadeClientPlugin) Start() {
 //	retryDelay := [...]int{2, 3, 5, 8, 13}
 //	for i := 0; c.Err() == nil; i++ {
 //		connected, err := c.Remote()
@@ -117,7 +114,7 @@ func (c *CascadeClientConfig) Pull(streamPath, url string) {
 //	}
 //}
 
-//func (c *CascadeClientConfig) Remote() (wasConnected bool, err error) {
+//func (c *CascadeClientPlugin) Remote() (wasConnected bool, err error) {
 //	tlsConf := &tls.Config{
 //		InsecureSkipVerify: true,
 //		NextProtos:         []string{"monibuca"},

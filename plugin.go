@@ -23,26 +23,60 @@ import (
 	"m7s.live/m7s/v5/pkg/util"
 )
 
-type DefaultYaml string
+type (
+	DefaultYaml    string
+	OnExitHandler  func()
+	AuthPublisher  = func(*Publisher) *util.Promise
+	AuthSubscriber = func(*Subscriber) *util.Promise
 
-type OnExitHandler func()
-type AuthPublisher = func(*Publisher) *util.Promise
-type AuthSubscriber = func(*Subscriber) *util.Promise
+	PluginMeta struct {
+		Name                string
+		Version             string //插件版本
+		Type                reflect.Type
+		defaultYaml         DefaultYaml //默认配置
+		ServiceDesc         *grpc.ServiceDesc
+		RegisterGRPCHandler func(context.Context, *gatewayRuntime.ServeMux, *grpc.ClientConn) error
+		Puller              Puller
+		Pusher              Pusher
+		Recorder            Recorder
+		OnExit              OnExitHandler
+		OnAuthPub           AuthPublisher
+		OnAuthSub           AuthSubscriber
+	}
 
-type PluginMeta struct {
-	Name                string
-	Version             string //插件版本
-	Type                reflect.Type
-	defaultYaml         DefaultYaml //默认配置
-	ServiceDesc         *grpc.ServiceDesc
-	RegisterGRPCHandler func(context.Context, *gatewayRuntime.ServeMux, *grpc.ClientConn) error
-	Puller              Puller
-	Pusher              Pusher
-	Recorder            Recorder
-	OnExit              OnExitHandler
-	OnAuthPub           AuthPublisher
-	OnAuthSub           AuthSubscriber
-}
+	iPlugin interface {
+		nothing()
+	}
+
+	IPlugin interface {
+		util.ITask
+		OnInit() error
+		OnStop()
+		Pull(path string, url string)
+	}
+
+	IRegisterHandler interface {
+		RegisterHandler() map[string]http.HandlerFunc
+	}
+
+	IPullerPlugin interface {
+		GetPullableList() []string
+	}
+
+	ITCPPlugin interface {
+		OnTCPConnect(*net.TCPConn)
+	}
+
+	IUDPPlugin interface {
+		OnUDPConnect(*net.UDPConn)
+	}
+
+	IQUICPlugin interface {
+		OnQUICConnect(quic.Connection)
+	}
+)
+
+var plugins []PluginMeta
 
 func (plugin *PluginMeta) Init(s *Server, userConfig map[string]any) (p *Plugin) {
 	instance, ok := reflect.New(plugin.Type).Interface().(IPlugin)
@@ -110,39 +144,6 @@ func (plugin *PluginMeta) Init(s *Server, userConfig map[string]any) (p *Plugin)
 	p.Description = map[string]any{"version": plugin.Version}
 	return
 }
-
-type iPlugin interface {
-	nothing()
-}
-
-type IPlugin interface {
-	util.ITask
-	OnInit() error
-	OnStop()
-	Pull(path string, url string)
-}
-
-type IRegisterHandler interface {
-	RegisterHandler() map[string]http.HandlerFunc
-}
-
-type IPullerPlugin interface {
-	GetPullableList() []string
-}
-
-type ITCPPlugin interface {
-	OnTCPConnect(*net.TCPConn)
-}
-
-type IUDPPlugin interface {
-	OnUDPConnect(*net.UDPConn)
-}
-
-type IQUICPlugin interface {
-	OnQUICConnect(quic.Connection)
-}
-
-var plugins []PluginMeta
 
 // InstallPlugin 安装插件
 func InstallPlugin[C iPlugin](options ...any) error {
@@ -347,11 +348,13 @@ func (p *Plugin) listen() (err error) {
 		quicConf := &p.config.Quic
 		if quicConf.ListenAddr != "" && quicConf.AutoListen {
 			p.Info("listen quic", "addr", quicConf.ListenAddr)
-			err = quicConf.ListenQuic(p, quicHandler.OnQUICConnect)
-			if err != nil {
-				p.Error("listen quic", "addr", quicConf.ListenAddr, "error", err)
-				return
-			}
+			go func() {
+				p.Stop(quicConf.ListenQuic(p, quicHandler.OnQUICConnect))
+			}()
+			//if err != nil {
+			//	p.Error("listen quic", "addr", quicConf.ListenAddr, "error", err)
+			//	return
+			//}
 		}
 	}
 	return

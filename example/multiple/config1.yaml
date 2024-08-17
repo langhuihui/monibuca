@@ -5,5 +5,11 @@ global:
     listenaddrtls: :8555
   tcp:
     listenaddr: :50052
-console:
-  secret: de2c0bb9fd47684adc07a426e139239b
+cascadeclient:
+  server: localhost:44944
+  pull:
+    enableregexp: true
+    pullonsub:
+      .*: m7s://$0
+#console:
+#  secret: de2c0bb9fd47684adc07a426e139239b

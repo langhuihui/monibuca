@@ -2,6 +2,7 @@ package m7s
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -90,12 +91,10 @@ func NewServer(conf any) (s *Server) {
 	return
 }
 
-func Run(ctx context.Context, conf any) error {
-	for {
-		if err := util.RootTask.AddTaskWithContext(ctx, NewServer(conf)).WaitStopped(); err != ErrRestart {
-			return err
-		}
+func Run(ctx context.Context, conf any) (err error) {
+	for err = ErrRestart; errors.Is(err, ErrRestart); err = util.RootTask.AddTaskWithContext(ctx, NewServer(conf)).WaitStopped() {
 	}
+	return
 }
 
 func AddRootTask[T util.ITask](task T) T {
@@ -108,7 +107,7 @@ func AddRootTaskWithContext[T util.ITask](ctx context.Context, task T) T {
 	return task
 }
 
-type rawconfig = map[string]map[string]any
+type RawConfig = map[string]map[string]any
 
 func init() {
 	signalChan := make(chan os.Signal, 1)
@@ -151,7 +150,7 @@ func (s *Server) Start() (err error) {
 		httpConf.GetHttpMux().ServeHTTP(w, r)
 	}))
 	httpConf.SetMux(mux)
-	var cg rawconfig
+	var cg RawConfig
 	var configYaml []byte
 	switch v := s.conf.(type) {
 	case string:
@@ -163,7 +162,7 @@ func (s *Server) Start() (err error) {
 		}
 	case []byte:
 		configYaml = v
-	case rawconfig:
+	case RawConfig:
 		cg = v
 	}
 	if configYaml != nil {

@@ -11,19 +11,18 @@ import (
 	"m7s.live/m7s/v5/plugin/cascade/pkg"
 )
 
-type CascadeServerConfig struct {
+type CascadeServerPlugin struct {
 	m7s.Plugin
 	AutoRegister bool                   `default:"true" desc:"下级自动注册"`
 	RelayAPI     cascade.RelayAPIConfig `desc:"访问控制"`
 }
 
-var _ = m7s.InstallPlugin[CascadeServerConfig]()
+var _ = m7s.InstallPlugin[CascadeServerPlugin]()
 
-func (c *CascadeServerConfig) OnQUICConnect(conn quic.Connection) (err error) {
+func (c *CascadeServerPlugin) OnQUICConnect(conn quic.Connection) {
 	remoteAddr := conn.RemoteAddr().String()
 	c.Info("client connected:", "remoteAddr", remoteAddr)
-	var stream quic.Stream
-	stream, err = conn.AcceptStream(c)
+	stream, err := conn.AcceptStream(c)
 	if err != nil {
 		c.Error("AcceptStream", "err", err)
 		return
@@ -76,11 +75,10 @@ func (c *CascadeServerConfig) OnQUICConnect(conn quic.Connection) (err error) {
 			c.AddTask(&receiveRequestTask)
 		}
 	}
-	return
 }
 
 // API_relay_ 用于转发请求, api/relay/:instanceId/*
-func (c *CascadeServerConfig) API_relay_(w http.ResponseWriter, r *http.Request) {
+func (c *CascadeServerPlugin) API_relay_(w http.ResponseWriter, r *http.Request) {
 	paths := strings.Split(r.URL.Path, "/")
 	instanceId, err := strconv.ParseUint(paths[3], 10, 32)
 	instance, ok := cascade.SubordinateMap.Get(uint(instanceId))
@@ -105,6 +103,6 @@ func (c *CascadeServerConfig) API_relay_(w http.ResponseWriter, r *http.Request)
 }
 
 // API_list 用于获取所有下级, api/list
-func (c *CascadeServerConfig) API_list(w http.ResponseWriter, r *http.Request) {
+func (c *CascadeServerPlugin) API_list(w http.ResponseWriter, r *http.Request) {
 	//util.ReturnFetchList(SubordinateMap.ToList, w, r)
 }

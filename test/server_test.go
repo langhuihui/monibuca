@@ -8,7 +8,7 @@ import (
 )
 
 func TestRestart(b *testing.T) {
-	conf := map[string]map[string]any{"global": {"loglevel": "debug"}}
+	conf := m7s.RawConfig{"global": {"loglevel": "debug"}}
 	var server *m7s.Server
 	go func() {
 		time.Sleep(time.Second * 2)

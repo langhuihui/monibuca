@@ -2,10 +2,13 @@
 
 package db
 
-import "github.com/glebarez/sqlite"
+import (
+	"github.com/glebarez/sqlite"
+	"gorm.io/gorm"
+)
 
 func init() {
 	Factory["sqlite"] = func(dsn string) gorm.Dialector {
-		return gorm.Open(sqlite.Open(dsn), &gorm.Config{})
+		return sqlite.Open(dsn)
 	}
 }
