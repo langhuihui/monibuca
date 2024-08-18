@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"crypto/tls"
+	"embed"
 	"encoding/json"
 	"fmt"
 	"github.com/quic-go/quic-go"
@@ -12,6 +13,7 @@ import (
 	"m7s.live/m7s/v5/pkg/util"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 )
@@ -188,4 +190,25 @@ func (cfg *ConsolePlugin) OnInit() error {
 	connectTask.SetRetry(-1, time.Second)
 	cfg.AddTask(&connectTask)
 	return nil
+}
+
+//go:embed web/*
+var uiFiles embed.FS
+var fileServer = http.FileServer(http.FS(uiFiles))
+
+func (cfg *ConsolePlugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	embedPath := "/web" + r.URL.Path
+	if r.URL.Path == "/" {
+		r.URL.Path = "/web/index.html"
+	} else {
+		r.URL.Path = "/web" + r.URL.Path
+	}
+	file, err := os.Open("./" + r.URL.Path)
+	if err == nil {
+		defer file.Close()
+		http.ServeContent(w, r, r.URL.Path, time.Now(), file)
+		return
+	}
+	r.URL.Path = embedPath
+	fileServer.ServeHTTP(w, r)
 }

@@ -32,11 +32,15 @@ type (
 		dispose()
 		IsStopped() bool
 		GetTaskType() string
+		GetTaskTypeID() byte
 		GetOwnerType() string
 		SetRetry(maxRetry int, retryInterval time.Duration)
+		OnStart(func())
+		OnDispose(func())
 	}
 	IMarcoTask interface {
 		RangeSubTask(func(yield ITask) bool)
+		OnTaskAdded(func(ITask))
 	}
 	IChannelTask interface {
 		tick(reflect.Value)
@@ -86,8 +90,12 @@ func (task *Task) GetOwnerType() string {
 	return reflect.TypeOf(task.handler).Elem().Name()
 }
 
-func (task *Task) GetTaskType() string {
+func (*Task) GetTaskType() string {
 	return "base"
+}
+
+func (*Task) GetTaskTypeID() byte {
+	return 0
 }
 
 func (task *Task) GetTask() *Task {

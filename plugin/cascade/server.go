@@ -39,10 +39,7 @@ func (c *CascadeServerPlugin) OnQUICConnect(conn quic.Connection) {
 	err = c.DB.AutoMigrate(child)
 	tx := c.DB.First(child, "secret = ?", secret)
 	if tx.Error == nil {
-		var ok bool
-		if child, ok = cascade.SubordinateMap.Get(child.ID); ok {
-			cascade.SubordinateMap.Set(child)
-		}
+		cascade.SubordinateMap.Set(child)
 	} else if c.AutoRegister {
 		child.Secret = secret
 		child.IP = remoteAddr

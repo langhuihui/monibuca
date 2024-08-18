@@ -80,6 +80,16 @@ func (plugin *FLVPlugin) Download(w http.ResponseWriter, r *http.Request) {
 
 		var amf *rtmp.AMF
 		var metaData rtmp.EcmaArray
+		initMetaData := func(reader io.Reader, dataLen uint32) {
+			data := make([]byte, dataLen+4)
+			_, err = io.ReadFull(reader, data)
+			amf = &rtmp.AMF{
+				Buffer: util.Buffer(data[1+2+len("onMetaData") : len(data)-4]),
+			}
+			var obj any
+			obj, err = amf.Unmarshal()
+			metaData = obj.(rtmp.EcmaArray)
+		}
 		var filepositions []uint64
 		var times []float64
 		for pass := 0; pass < 2; pass++ {
@@ -164,7 +174,11 @@ func (plugin *FLVPlugin) Download(w http.ResponseWriter, r *http.Request) {
 					//fmt.Println(lastTimestamp, tagHead)
 					if init {
 						if t == flv.FLV_TAG_TYPE_SCRIPT {
-							_, err = reader.Discard(int(dataLen) + 4)
+							if pass == 0 {
+								initMetaData(reader, dataLen)
+							} else {
+								_, err = reader.Discard(int(dataLen) + 4)
+							}
 						} else {
 							lastTimestamp += offsetTimestamp
 							if lastTimestamp >= uint32(timeRange.Milliseconds()) {
@@ -193,14 +207,7 @@ func (plugin *FLVPlugin) Download(w http.ResponseWriter, r *http.Request) {
 					switch t {
 					case flv.FLV_TAG_TYPE_SCRIPT:
 						if pass == 0 {
-							data := make([]byte, dataLen+4)
-							_, err = io.ReadFull(reader, data)
-							amf = &rtmp.AMF{
-								Buffer: util.Buffer(data[1+2+len("onMetaData") : len(data)-4]),
-							}
-							var obj any
-							obj, err = amf.Unmarshal()
-							metaData = obj.(map[string]any)
+							initMetaData(reader, dataLen)
 						} else {
 							_, err = reader.Discard(int(dataLen) + 4)
 						}

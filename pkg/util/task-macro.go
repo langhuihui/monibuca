@@ -35,21 +35,29 @@ func (m *MarcoLongTask) initTask(ctx context.Context, task ITask) {
 	m.keepAlive = true
 }
 
-func (m *MarcoLongTask) GetTaskType() string {
+func (*MarcoLongTask) GetTaskType() string {
 	return "long"
+}
+func (*MarcoLongTask) GetTaskTypeID() byte {
+	return 2
 }
 
 // MarcoTask include sub tasks
 type MarcoTask struct {
 	Task
-	addSub    chan ITask
-	children  []ITask
-	lazyRun   sync.Once
-	keepAlive bool
+	addSub       chan ITask
+	children     []ITask
+	lazyRun      sync.Once
+	keepAlive    bool
+	addListeners []func(task ITask)
 }
 
-func (m *MarcoTask) GetTaskType() string {
+func (*MarcoTask) GetTaskType() string {
 	return "marco"
+}
+
+func (*MarcoTask) GetTaskTypeID() byte {
+	return 1
 }
 
 func (mt *MarcoTask) getMaroTask() *MarcoTask {
@@ -116,6 +124,10 @@ func (mt *MarcoTask) AddTask(task ITask) *Task {
 	return mt.AddTaskWithContext(mt.Context, task)
 }
 
+func (mt *MarcoTask) OnTaskAdded(f func(ITask)) {
+	mt.addListeners = append(mt.addListeners, f)
+}
+
 func (mt *MarcoTask) AddTaskWithContext(ctx context.Context, t ITask) (task *Task) {
 	if ctx == nil && mt.Context == nil {
 		panic("context is nil")
@@ -154,6 +166,18 @@ func (mt *MarcoTask) AddChan(channel any, callback any) *ChannelTask {
 	return &chanTask
 }
 
+func (mt *MarcoTask) addChild(task ITask) int {
+	mt.children = append(mt.children, task)
+	for _, listener := range mt.addListeners {
+		listener(task)
+	}
+	return len(mt.children) - 1
+}
+
+func (mt *MarcoTask) removeChild(index int) {
+	mt.children = slices.Delete(mt.children, index, index+1)
+}
+
 func (mt *MarcoTask) run() {
 	cases := []reflect.SelectCase{{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(mt.addSub)}}
 	defer func() {
@@ -178,10 +202,11 @@ func (mt *MarcoTask) run() {
 				return
 			}
 			if task := rev.Interface().(ITask); task.getParent() == mt {
+				index := mt.addChild(task)
 				if err := task.start(); err == nil {
-					mt.children = append(mt.children, task)
 					cases = append(cases, reflect.SelectCase{Dir: reflect.SelectRecv, Chan: task.getSignal()})
 				} else {
+					mt.removeChild(index)
 					task.Stop(err)
 				}
 			}
@@ -192,7 +217,7 @@ func (mt *MarcoTask) run() {
 				if task.getParent() == mt {
 					task.dispose()
 				}
-				mt.children = slices.Delete(mt.children, taskIndex, taskIndex+1)
+				mt.removeChild(taskIndex)
 				cases = slices.Delete(cases, chosen, chosen+1)
 
 			} else if c, ok := task.(IChannelTask); ok {

@@ -1,0 +1,34 @@
+syntax = "proto3";
+import "google/api/annotations.proto";
+//import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+package monitor;
+option go_package="m7s.live/m7s/v5/plugin/monitor/pb";
+
+service api {
+  rpc SearchTask (SearchTaskRequest) returns (SearchTaskResponse) {
+    option (google.api.http) = {
+      post: "/monitor/api/search/task"
+      body: "*"
+    };
+  }
+}
+
+message SearchTaskRequest {
+}
+
+message Task {
+  uint32 id = 1;
+  string owner = 2;
+  uint32 type = 3;
+  google.protobuf.Timestamp startTime = 4;
+  google.protobuf.Timestamp endTime = 5;
+  string description = 6;
+  string reason = 7;
+}
+
+message SearchTaskResponse {
+  uint32 code = 1;
+  string message = 2;
+  repeated Task data = 3;
+}

@@ -1,0 +1,3 @@
+import{l as p}from"./vendor-ec30964e.js";import{s as i}from"./index-747e11ee.js";const V=Vue.defineComponent({setup(c){const{id:l,logName:u}=p().params,o=Vue.ref([]),t=Vue.ref("");i({url:"/logrotate/api/get/"+u,method:"post",headers:{m7sid:l}}).then(e=>{o.value=e.content.split(`
+`)});const r=Vue.computed(()=>o.value.filter(e=>e.includes(t.value)).join(`
+`));return(e,n)=>{const s=Vue.resolveComponent("n-input");return Vue.openBlock(),Vue.createElementBlock("div",null,[Vue.createVNode(s,{type:"text",value:t.value,"onUpdate:value":n[0]||(n[0]=a=>t.value=a),placeholder:"Filter logs"},null,8,["value"]),Vue.createElementVNode("pre",null,Vue.toDisplayString(Vue.unref(r)),1)])}}});export{V as default};
