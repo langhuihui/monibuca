@@ -258,7 +258,11 @@ func (handler *SubscribeHandler[A, V]) Start() (err error) {
 	}
 	checkPublisherChange := func() {
 		if prePublisher != s.Publisher {
-			s.Info("publisher changed", "prePublisher", prePublisher.ID, "publisher", s.Publisher.ID)
+			if s.Publisher == nil {
+				s.Info("publisher gone", "prePublisher", prePublisher.ID)
+			} else {
+				s.Info("publisher changed", "prePublisher", prePublisher.ID, "publisher", s.Publisher.ID)
+			}
 			if s.AudioReader != nil {
 				startAudioTs = time.Duration(s.AudioReader.AbsTime) * time.Millisecond
 				s.AudioReader.StopRead()

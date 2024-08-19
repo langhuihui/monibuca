@@ -275,6 +275,10 @@ func (s *Server) AddPushTask(task *PushContext) *util.Task {
 	return s.pushTask.AddTask(task)
 }
 
+func (s *Server) AddRecordTask(task *RecordContext) *util.Task {
+	return s.recordTask.AddTask(task)
+}
+
 func (s *Server) Dispose() {
 	Servers.Remove(s)
 	_ = s.tcplis.Close()

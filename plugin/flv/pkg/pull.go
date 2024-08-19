@@ -2,25 +2,13 @@ package flv
 
 import (
 	"errors"
-	"io"
-	"net/http"
-	"net/url"
-	"os"
-	"strings"
-
 	"m7s.live/m7s/v5"
 	"m7s.live/m7s/v5/pkg/util"
 	rtmp "m7s.live/m7s/v5/plugin/rtmp/pkg"
 )
 
 type Puller struct {
-	util.Task
-	Ctx m7s.PullContext
-	*util.BufReader
-}
-
-func (p *Puller) GetPullContext() *m7s.PullContext {
-	return &p.Ctx
+	m7s.HttpFilePuller
 }
 
 func NewPuller() m7s.IPuller {
@@ -28,7 +16,8 @@ func NewPuller() m7s.IPuller {
 }
 
 func (p *Puller) Run() (err error) {
-	reader, publisher := p.BufReader, p.Ctx.Publisher
+	reader := util.NewBufReader(p.ReadCloser)
+	publisher := p.Ctx.Publisher
 	var hasAudio, hasVideo bool
 	var absTS uint32
 	var head util.Memory
@@ -107,43 +96,6 @@ func (p *Puller) Run() (err error) {
 				return err
 			}
 			publisher.Info("script", name, metaData)
-		}
-	}
-	return
-}
-
-func (p *Puller) Start() (err error) {
-	if err = p.Ctx.Publish(); err != nil {
-		return
-	}
-	remoteURL := p.Ctx.RemoteURL
-	if strings.HasPrefix(remoteURL, "http") {
-		var res *http.Response
-		client := http.DefaultClient
-		if proxyConf := p.Ctx.ConnectProxy; proxyConf != "" {
-			proxy, err := url.Parse(proxyConf)
-			if err != nil {
-				return err
-			}
-			transport := &http.Transport{Proxy: http.ProxyURL(proxy)}
-			client = &http.Client{Transport: transport}
-		}
-		if res, err = client.Get(remoteURL); err == nil {
-			if res.StatusCode != http.StatusOK {
-				return io.EOF
-			}
-			p.OnDispose(func() {
-				res.Body.Close()
-			})
-			p.BufReader = util.NewBufReader(res.Body)
-		}
-	} else {
-		var res *os.File
-		if res, err = os.Open(remoteURL); err == nil {
-			p.OnDispose(func() {
-				res.Close()
-			})
-			p.BufReader = util.NewBufReader(res)
 		}
 	}
 	return

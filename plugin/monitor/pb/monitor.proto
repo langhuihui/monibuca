@@ -25,6 +25,8 @@ message Task {
   google.protobuf.Timestamp endTime = 5;
   string description = 6;
   string reason = 7;
+  uint32 sessionId = 8;
+  uint32 parentId = 9;
 }
 
 message SearchTaskResponse {

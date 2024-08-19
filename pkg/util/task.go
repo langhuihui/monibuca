@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"reflect"
+	"runtime/debug"
 	"time"
 )
 
@@ -39,6 +40,7 @@ type (
 		OnDispose(func())
 	}
 	IMarcoTask interface {
+		ITask
 		RangeSubTask(func(yield ITask) bool)
 		OnTaskAdded(func(ITask))
 	}
@@ -187,6 +189,14 @@ func (task *Task) checkRetry(err error) (bool, error) {
 }
 
 func (task *Task) start() (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = errors.New(fmt.Sprint(r))
+			if task.Logger != nil {
+				task.Error("panic", "error", err, "stack", string(debug.Stack()))
+			}
+		}
+	}()
 	task.StartTime = time.Now()
 	if task.Logger != nil {
 		task.Debug("task start", "taskId", task.ID, "taskType", task.GetTaskType(), "ownerType", task.GetOwnerType())

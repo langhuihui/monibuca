@@ -9,68 +9,54 @@ import (
 	"m7s.live/m7s/v5/pkg"
 )
 
-type Recorder = func(*RecordContext) error
-
-func createRecoder(p *Plugin, streamPath string, filePath string) (recorder *RecordContext) {
-	recorder = &RecordContext{
-		Plugin:     p,
-		Fragment:   p.config.Record.Fragment,
-		Append:     p.config.Record.Append,
-		FilePath:   filePath,
-		StreamPath: streamPath,
+type (
+	IRecorder interface {
+		util.ITask
+		GetRecordContext() *RecordContext
 	}
-	recorder.Logger = p.Logger.With("filePath", filePath, "streamPath", streamPath)
-	return
+	Recorder      = func() IRecorder
+	RecordContext struct {
+		util.MarcoTask
+		StreamPath string // 对应本地流
+		Plugin     *Plugin
+		Subscriber *Subscriber
+		Fragment   time.Duration
+		Append     bool
+		FilePath   string
+		recorder   IRecorder
+	}
+	DefaultRecorder struct {
+		util.Task
+		Ctx RecordContext
+	}
+)
+
+func (r *DefaultRecorder) GetRecordContext() *RecordContext {
+	return &r.Ctx
 }
 
-type RecordContext struct {
-	util.MarcoTask
-	StreamPath string // 对应本地流
-	Plugin     *Plugin
-	Subscriber *Subscriber
-	Fragment   time.Duration
-	Append     bool
-	FilePath   string
+func (r *DefaultRecorder) Start() (err error) {
+	return r.Ctx.Subscribe()
 }
 
 func (p *RecordContext) GetKey() string {
 	return p.FilePath
 }
 
-type recordSubTask struct {
-	util.Task
-	ctx *RecordContext
-	Recorder
-}
-
-func (r *recordSubTask) Start() (err error) {
-	p := r.ctx
-	dir := p.FilePath
-	if p.Fragment == 0 || p.Append {
-		if filepath.Ext(p.FilePath) == "" {
-			p.FilePath += ".flv"
-		}
-		dir = filepath.Dir(p.FilePath)
-	}
-	r.Description = map[string]any{
-		"filePath": p.FilePath,
-	}
-	if err = os.MkdirAll(dir, 0755); err != nil {
-		return
-	}
-	p.Subscriber, err = p.Plugin.Subscribe(r.Context, p.StreamPath)
-	if err != nil {
-		return
-	}
-	err = r.Recorder(p)
+func (p *RecordContext) Subscribe() (err error) {
+	p.Subscriber, err = p.Plugin.Subscribe(p.recorder.GetTask().Context, p.StreamPath)
 	return
 }
 
-func (p *RecordContext) Do(recorder Recorder) {
-	p.AddTask(&recordSubTask{
-		ctx:      p,
-		Recorder: recorder,
-	})
+func (p *RecordContext) Init(recorder IRecorder, plugin *Plugin, streamPath string, filePath string) *RecordContext {
+	p.Plugin = plugin
+	p.Fragment = plugin.config.Record.Fragment
+	p.Append = plugin.config.Record.Append
+	p.FilePath = filePath
+	p.StreamPath = streamPath
+	p.Logger = plugin.Logger.With("filePath", filePath, "streamPath", streamPath)
+	p.recorder = recorder
+	return p
 }
 
 func (p *RecordContext) Start() (err error) {
@@ -78,10 +64,21 @@ func (p *RecordContext) Start() (err error) {
 	if _, ok := s.Records.Get(p.GetKey()); ok {
 		return pkg.ErrRecordSamePath
 	}
-	s.Records.Add(p)
-	if p.Plugin.Meta.Recorder != nil {
-		p.Do(p.Plugin.Meta.Recorder)
+	dir := p.FilePath
+	if p.Fragment == 0 || p.Append {
+		if filepath.Ext(p.FilePath) == "" {
+			p.FilePath += ".flv"
+		}
+		dir = filepath.Dir(p.FilePath)
 	}
+	p.Description = map[string]any{
+		"filePath": p.FilePath,
+	}
+	if err = os.MkdirAll(dir, 0755); err != nil {
+		return
+	}
+	s.Records.Add(p)
+	s.AddTask(p.recorder)
 	return
 }
 

@@ -8,44 +8,28 @@ import (
 	"m7s.live/m7s/v5/pkg/util"
 	"m7s.live/m7s/v5/plugin/mp4/pkg/box"
 	rtmp "m7s.live/m7s/v5/plugin/rtmp/pkg"
-	"net/http"
-	"net/url"
-	"os"
 	"strings"
 )
 
-func PullMP4(ctx *m7s.PullContext) (err error) {
-	var demuxer *box.MovDemuxer
-	if strings.HasPrefix(ctx.RemoteURL, "http") {
-		var res *http.Response
-		client := http.DefaultClient
-		if proxyConf := ctx.ConnectProxy; proxyConf != "" {
-			proxy, err := url.Parse(proxyConf)
-			if err != nil {
-				return err
-			}
-			transport := &http.Transport{Proxy: http.ProxyURL(proxy)}
-			client = &http.Client{Transport: transport}
-		}
-		if res, err = client.Get(ctx.RemoteURL); err == nil {
-			if res.StatusCode != http.StatusOK {
-				return io.EOF
-			}
-			defer res.Body.Close()
-			content, err := io.ReadAll(res.Body)
-			if err != nil {
-				return err
-			}
-			demuxer = box.CreateMp4Demuxer(strings.NewReader(string(content)))
-		}
-	} else {
-		var res *os.File
-		if res, err = os.Open(ctx.RemoteURL); err == nil {
-			defer res.Close()
-		}
-		demuxer = box.CreateMp4Demuxer(res)
-	}
+type Puller struct {
+	m7s.HttpFilePuller
+}
 
+func NewPuller() m7s.IPuller {
+	return &Puller{}
+}
+
+func (p *Puller) Run() (err error) {
+	ctx := &p.Ctx
+	var demuxer *box.MovDemuxer
+	switch v := p.ReadCloser.(type) {
+	case io.ReadSeeker:
+		demuxer = box.CreateMp4Demuxer(v)
+	default:
+		var content []byte
+		content, err = io.ReadAll(p.ReadCloser)
+		demuxer = box.CreateMp4Demuxer(strings.NewReader(string(content)))
+	}
 	var tracks []box.TrackInfo
 	if tracks, err = demuxer.ReadHead(); err != nil {
 		return

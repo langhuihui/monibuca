@@ -419,19 +419,16 @@ func (p *Plugin) Subscribe(ctx context.Context, streamPath string) (subscriber *
 func (p *Plugin) Pull(streamPath string, url string) {
 	puller := p.Meta.Puller()
 	p.Server.AddPullTask(puller.GetPullContext().Init(puller, p, streamPath, url))
-	return
 }
 
-func (p *Plugin) Push(streamPath string, url string) (ctx *PushContext, err error) {
+func (p *Plugin) Push(streamPath string, url string) {
 	pusher := p.Meta.Pusher()
 	p.Server.AddPushTask(pusher.GetPushContext().Init(pusher, p, streamPath, url))
-	return
 }
 
-func (p *Plugin) Record(streamPath string, filePath string) (ctx *RecordContext, err error) {
-	ctx = createRecoder(p, streamPath, filePath)
-	err = p.Server.recordTask.AddTask(ctx).WaitStarted()
-	return
+func (p *Plugin) Record(streamPath string, filePath string) {
+	recorder := p.Meta.Recorder()
+	p.Server.AddRecordTask(recorder.GetRecordContext().Init(recorder, p, streamPath, filePath))
 }
 
 func (p *Plugin) registerHandler(handlers map[string]http.HandlerFunc) {

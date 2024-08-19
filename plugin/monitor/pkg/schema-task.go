@@ -5,15 +5,11 @@ import (
 )
 
 type Task struct {
-	ID          uint32 `gorm:"primarykey"`
-	CreatedAt   time.Time
-	StartTime   time.Time
-	OwnerType   string
-	TaskType    byte
-	Description string
-	Reason      string
-}
-
-func (i *Task) GetKey() uint32 {
-	return i.ID
+	ID                          uint `gorm:"primarykey"`
+	SessionID, TaskID, ParentID uint32
+	StartTime, EndTime          time.Time
+	OwnerType                   string
+	TaskType                    byte
+	Description                 string
+	Reason                      string
 }

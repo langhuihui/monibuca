@@ -9,6 +9,7 @@ import (
 	_ "m7s.live/m7s/v5/plugin/flv"
 	_ "m7s.live/m7s/v5/plugin/gb28181"
 	_ "m7s.live/m7s/v5/plugin/logrotate"
+	_ "m7s.live/m7s/v5/plugin/monitor"
 	_ "m7s.live/m7s/v5/plugin/mp4"
 	_ "m7s.live/m7s/v5/plugin/preview"
 	_ "m7s.live/m7s/v5/plugin/rtmp"

@@ -134,12 +134,21 @@ func writeMetaTag(file *os.File, suber *m7s.Subscriber, filepositions []uint64, 
 	writeMetaTagQueueTask.AddTask(task)
 }
 
-func RecordFlv(ctx *m7s.RecordContext) (err error) {
+func NewRecorder() m7s.IRecorder {
+	return &Recorder{}
+}
+
+type Recorder struct {
+	m7s.DefaultRecorder
+}
+
+func (r *Recorder) Run() (err error) {
 	var file *os.File
 	var filepositions []uint64
 	var times []float64
 	var offset int64
 	var duration int64
+	ctx := &r.Ctx
 	suber := ctx.Subscriber
 	noFragment := ctx.Fragment == 0 || ctx.Append
 	if noFragment {

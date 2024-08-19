@@ -28,7 +28,7 @@ func (plugin *FLVPlugin) OnInit() error {
 	return nil
 }
 
-var _ = m7s.InstallPlugin[FLVPlugin](defaultConfig, NewPuller, RecordFlv)
+var _ = m7s.InstallPlugin[FLVPlugin](defaultConfig, NewPuller, NewRecorder)
 
 func (plugin *FLVPlugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	streamPath := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/"), ".flv")

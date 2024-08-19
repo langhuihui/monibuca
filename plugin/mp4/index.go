@@ -81,7 +81,7 @@ func (p *MP4Plugin) OnInit() error {
 	return nil
 }
 
-var _ = m7s.InstallPlugin[MP4Plugin](defaultConfig, pkg.PullMP4, pkg.RecordMP4)
+var _ = m7s.InstallPlugin[MP4Plugin](defaultConfig, pkg.NewPuller, pkg.NewRecorder)
 
 func (p *MP4Plugin) GetPullableList() []string {
 	return slices.Collect(maps.Keys(p.GetCommonConf().PullOnSub))

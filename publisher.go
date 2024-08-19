@@ -503,6 +503,7 @@ func (p *Publisher) Dispose() {
 		w.baseTs = p.lastTs
 		w.Info("takeOver", "pId", p.ID)
 		for subscriber := range p.SubscriberRange {
+			subscriber.Publisher = nil
 			w.Add(subscriber)
 		}
 		p.AudioTrack.Dispose()
