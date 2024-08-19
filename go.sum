@@ -366,6 +366,8 @@ m7s.live/engine/v4 v4.15.3-0.20240722051802-56130d53398b h1:tx6xHzlpyEV5bgAnv3yl
 m7s.live/engine/v4 v4.15.3-0.20240722051802-56130d53398b/go.mod h1:uKxjmsjU1WARUNowEkP83BSrJMUjGwkJrX5nPi6DGmE=
 m7s.live/engine/v4 v4.15.3-0.20240726031118-172ebf3ad151 h1:cK7Cas66pi5VZuHc9oXyiEAWw7n9FzLHYGZuPjQR/nM=
 m7s.live/engine/v4 v4.15.3-0.20240726031118-172ebf3ad151/go.mod h1:uKxjmsjU1WARUNowEkP83BSrJMUjGwkJrX5nPi6DGmE=
+m7s.live/engine/v4 v4.15.3-0.20240802033404-005fb482f8cc h1:uY/SL+qmadBRPnec2qE5r1dwdklt6YJFOgrx5WXjzEk=
+m7s.live/engine/v4 v4.15.3-0.20240802033404-005fb482f8cc/go.mod h1:uKxjmsjU1WARUNowEkP83BSrJMUjGwkJrX5nPi6DGmE=
 m7s.live/plugin/debug/v4 v4.0.3 h1:lwqKkySXhu47kon/YeF+h5UXXac6c9seb2L6Y8X5ktM=
 m7s.live/plugin/debug/v4 v4.0.3/go.mod h1:muzikl1KrHfbT/+2aHzKg9qDGfpArViQAtpcfFrST88=
 m7s.live/plugin/fmp4/v4 v4.0.6 h1:X4FXfYuI1OCgaJzyJUNySDRPNPHzLJ5StgX/IxljQIA=
@@ -376,6 +378,8 @@ m7s.live/plugin/gb28181/v4 v4.4.6-0.20240723071507-edffd7d4702e h1:Nnzf6aHzoX8Xw
 m7s.live/plugin/gb28181/v4 v4.4.6-0.20240723071507-edffd7d4702e/go.mod h1:s016EyfJmz3bqJSCw35dD6mhIhjMKpDqTNnSl4Gvm+Q=
 m7s.live/plugin/gb28181/v4 v4.4.6-0.20240730020729-78e16b4746c9 h1:lOI5ocD7HtpKNPWhtB20JFxDZNME37u18RJKw9q7E1g=
 m7s.live/plugin/gb28181/v4 v4.4.6-0.20240730020729-78e16b4746c9/go.mod h1:s016EyfJmz3bqJSCw35dD6mhIhjMKpDqTNnSl4Gvm+Q=
+m7s.live/plugin/gb28181/v4 v4.4.6-0.20240819083701-5690be3b64f7 h1:qP6KoLofKLb10UWqXXXdY+2vgUsloxaiCfXOd9Oq0NI=
+m7s.live/plugin/gb28181/v4 v4.4.6-0.20240819083701-5690be3b64f7/go.mod h1:H7JcHPXuc97YAomxTnNoTWwicYOyhOX2vkGsSIH8kKc=
 m7s.live/plugin/hdl/v4 v4.1.11 h1:HL/nVE9CB2zjjVXrQFlaJPodM8hRXj2xuGBMgv7hn6w=
 m7s.live/plugin/hdl/v4 v4.1.11/go.mod h1:wTkYejcTlJzBrdVZnwTYCwsKjDKt5ULTW6J0SuTH6cg=
 m7s.live/plugin/hls/v4 v4.3.9 h1:j6n28Xd/aB7x6rdmgmnUbTzCQHAHAJQ4DUFXF/220m8=
@@ -386,6 +390,8 @@ m7s.live/plugin/jessica/v4 v4.2.1 h1:GbQ8V2ElHT7Q/0y1cyXCzw/DvTnqkpP1kCOpVd+0d6Y
 m7s.live/plugin/jessica/v4 v4.2.1/go.mod h1:62tI6vio/PkJhuIbkrIKZm9jAEHwkzXe4Uk1EJaK5iQ=
 m7s.live/plugin/logrotate/v4 v4.0.6 h1:BIuwLzIdXhPNnhplMXIxBn/zQ8JzCsCs8/DWk6LDO9c=
 m7s.live/plugin/logrotate/v4 v4.0.6/go.mod h1:a8hIV59GjpQDE+Ip790CU7yOHaG4+Iweci0sLvo43FU=
+m7s.live/plugin/logrotate/v4 v4.0.7-0.20240801090450-9c18c88a8905 h1:OD8rJB+nmW1v7zDMYTXbdXGoZd0fLo0SvHCJLvEC7PU=
+m7s.live/plugin/logrotate/v4 v4.0.7-0.20240801090450-9c18c88a8905/go.mod h1:CKMnlNCxvFT7J+6HvRaQqE/qWV+Ejwvf1EgEN2aH6CE=
 m7s.live/plugin/monitor/v4 v4.0.5 h1:NOoCBd8832H0BuTGvtuxGljSxFW3GIMM/gg+5xk8KcA=
 m7s.live/plugin/monitor/v4 v4.0.5/go.mod h1:rMERBOcTTTdsVh+rPLjxdM45aAjVSQ+I0kADvUol4J4=
 m7s.live/plugin/preview/v4 v4.1.5 h1:/Rrov9W/ZNmbr71FKu0QUDlym8gwVzhX1TIN8DUmDms=
@@ -402,6 +408,10 @@ m7s.live/plugin/record/v4 v4.4.8-0.20240726031118-0157e27a6b7e h1:VaoWFtkD6KLK9a
 m7s.live/plugin/record/v4 v4.4.8-0.20240726031118-0157e27a6b7e/go.mod h1:f6SwwCd9y/l96Qdk8SrxnG7gfRZpNudU7umYsGEfTkI=
 m7s.live/plugin/record/v4 v4.4.8-0.20240726083222-cbdc649240a6 h1:AZJ8ck1YeeAMmRH6rGxTXkG+AEa7muEgwDtTR/VxRF4=
 m7s.live/plugin/record/v4 v4.4.8-0.20240726083222-cbdc649240a6/go.mod h1:f6SwwCd9y/l96Qdk8SrxnG7gfRZpNudU7umYsGEfTkI=
+m7s.live/plugin/record/v4 v4.4.8-0.20240802033404-d7fb4e26ee23 h1:YTisgcF4+uvHnd5URv/d4plkMlFX9QZPS/uprNOLzGM=
+m7s.live/plugin/record/v4 v4.4.8-0.20240802033404-d7fb4e26ee23/go.mod h1:f6SwwCd9y/l96Qdk8SrxnG7gfRZpNudU7umYsGEfTkI=
+m7s.live/plugin/record/v4 v4.4.8-0.20240818073213-699868b602da h1:T9saucGcIyO1yqBS6DCy5xFj/gXpPVAHw2dColZocng=
+m7s.live/plugin/record/v4 v4.4.8-0.20240818073213-699868b602da/go.mod h1:f6SwwCd9y/l96Qdk8SrxnG7gfRZpNudU7umYsGEfTkI=
 m7s.live/plugin/room/v4 v4.1.1 h1:6bPQrvLkCt5C3iak/2ipV59hSkPNfUaptzRuEbfJi+8=
 m7s.live/plugin/room/v4 v4.1.1/go.mod h1:k5UKhDuTDXQCjul7GMbnyWXTHhCK59VbGY/UeKJ9Jqs=
 m7s.live/plugin/rtmp/v4 v4.3.1 h1:CksvXkCkzKYCY8zQHfs5M7rS3BEAigiN96ljjoUVReE=
