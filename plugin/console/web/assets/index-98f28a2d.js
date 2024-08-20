@@ -1,1 +1,0 @@
-import{l as u,m as a}from"./vendor-ec30964e.js";const c=Vue.defineComponent({name:"Redirect",setup(){const t=u(),o=a();return Vue.onBeforeMount(()=>{const{params:r,query:n}=t,{path:e}=r;o.replace({path:"/"+(Array.isArray(e)?e.join("/"):e),query:n})}),()=>Vue.createVNode(naive.NEmpty,null,null)}});export{c as default};

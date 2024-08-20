@@ -309,28 +309,43 @@ func (gb *GB28181Plugin) GetPullableList() []string {
 	})
 }
 
-func (gb *GB28181Plugin) OnTCPConnect(conn *net.TCPConn) {
-	var reader = (*rtp2.TCP)(conn)
-	var theDialog *Dialog
-	_ = reader.Read(func(data util.Buffer) (err error) {
-		if theDialog != nil {
-			return theDialog.ReadRTP(data)
+type PSServer struct {
+	util.Task
+	*rtp2.TCP
+	theDialog *Dialog
+	gb        *GB28181Plugin
+}
+
+func (gb *GB28181Plugin) OnTCPConnect(conn *net.TCPConn) util.ITask {
+	ret := &PSServer{gb: gb, TCP: (*rtp2.TCP)(conn)}
+	ret.Task.Logger = gb.With("remote", conn.RemoteAddr().String())
+	return ret
+}
+
+func (task *PSServer) Dispose() {
+	_ = task.TCP.Close()
+	if task.theDialog != nil {
+		close(task.theDialog.FeedChan)
+	}
+}
+
+func (task *PSServer) Go() (err error) {
+	return task.Read(func(data util.Buffer) (err error) {
+		if task.theDialog != nil {
+			return task.theDialog.ReadRTP(data)
 		}
 		var rtpPacket rtp.Packet
 		if err = rtpPacket.Unmarshal(data); err != nil {
-			gb.Error("decode rtp", "err", err)
+			task.Error("decode rtp", "err", err)
 		}
 		ssrc := rtpPacket.SSRC
-		if dialog, ok := gb.dialogs.Get(ssrc); ok {
-			theDialog = dialog
+		if dialog, ok := task.gb.dialogs.Get(ssrc); ok {
+			task.theDialog = dialog
 			return dialog.ReadRTP(data)
 		}
-		gb.Warn("dialog not found", "ssrc", ssrc)
+		task.Warn("dialog not found", "ssrc", ssrc)
 		return
 	})
-	if theDialog != nil {
-		close(theDialog.FeedChan)
-	}
 }
 
 func (gb *GB28181Plugin) OnBye(req *sip.Request, tx sip.ServerTransaction) {

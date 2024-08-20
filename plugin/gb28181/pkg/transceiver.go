@@ -1,14 +1,11 @@
 package gb28181
 
 import (
-	"fmt"
 	"github.com/pion/rtp"
 	"m7s.live/m7s/v5"
 	"m7s.live/m7s/v5/pkg"
-	"m7s.live/m7s/v5/pkg/config"
 	"m7s.live/m7s/v5/pkg/util"
 	rtp2 "m7s.live/m7s/v5/plugin/rtp/pkg"
-	"net"
 	"os"
 )
 
@@ -26,12 +23,13 @@ type Receiver struct {
 	*m7s.Publisher
 	rtp.Packet
 	*util.BufReader
-	FeedChan chan []byte
-	psm      util.Memory
-	dump     *os.File
-	dumpLen  []byte
-	psVideo  PSVideo
-	psAudio  PSAudio
+	FeedChan  chan []byte
+	psm       util.Memory
+	dump      *os.File
+	dumpLen   []byte
+	psVideo   PSVideo
+	psAudio   PSAudio
+	RTPReader *rtp2.TCP
 }
 
 func NewReceiver(puber *m7s.Publisher) *Receiver {
@@ -125,22 +123,19 @@ func (dec *Receiver) decProgramStreamMap() (err error) {
 	return nil
 }
 
-func (p *Receiver) ListenTCP(port uint16) (err error) {
-	var tcpConf config.TCP
-	tcpConf.ListenAddr = fmt.Sprintf(":%d", port)
-	tcpConf.ListenNum = 1
-	return tcpConf.Listen(p.OnTCPConnect)
-}
-
 func (p *Receiver) ReadRTP(rtp util.Buffer) (err error) {
 	if err = p.Unmarshal(rtp); err != nil {
 		return
 	}
+	p.FeedChan <- p.Payload
 	return
 }
 
-func (p *Receiver) OnTCPConnect(conn *net.TCPConn) {
-	var reader = (*rtp2.TCP)(conn)
-	reader.Read(p.ReadRTP)
-	close(p.FeedChan)
+func (p *Receiver) Dispose() {
+	p.RTPReader.Close()
+	//close(p.FeedChan)
+}
+
+func (p *Receiver) Go() (err error) {
+	return p.RTPReader.Read(p.ReadRTP)
 }

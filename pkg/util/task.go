@@ -17,6 +17,7 @@ var (
 	ErrCallbackTask = errors.New("callback")
 	ErrRetryRunOut  = errors.New("retry out")
 	ErrTaskComplete = errors.New("complete")
+	ErrExit         = errors.New("exit")
 	EmptyStart      = func() error { return nil }
 	EmptyDispose    = func() {}
 )

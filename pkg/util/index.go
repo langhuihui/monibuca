@@ -49,11 +49,7 @@ func RandomNumString(length int) string {
 	return string(b)
 }
 
-func initFatalLog() *os.File {
-	fatal_log_dir := "./fatal"
-	if _fatal_log := os.Getenv("M7S_FATAL_LOG"); _fatal_log != "" {
-		fatal_log_dir = _fatal_log
-	}
+func InitFatalLog(fatal_log_dir string) *os.File {
 	os.MkdirAll(fatal_log_dir, 0766)
 	fatal_log := filepath.Join(fatal_log_dir, "latest.log")
 	info, err := os.Stat(fatal_log)

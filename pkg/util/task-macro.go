@@ -26,6 +26,11 @@ func init() {
 	RootTask.Logger = slog.New(slog.NewTextHandler(os.Stdout, nil))
 }
 
+func ShutdownRootTask() {
+	RootTask.Stop(ErrExit)
+	RootTask.dispose()
+}
+
 type MarcoLongTask struct {
 	MarcoTask
 }

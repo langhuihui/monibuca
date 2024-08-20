@@ -3,6 +3,8 @@ package config
 import (
 	"crypto/tls"
 	_ "embed"
+	"log/slog"
+	"m7s.live/m7s/v5/pkg/util"
 	"net"
 	"runtime"
 	"time"
@@ -39,55 +41,76 @@ type TCP struct {
 	NoDelay       bool   `desc:"是否禁用Nagle算法"`        //是否禁用Nagle算法
 	KeepAlive     bool   `desc:"是否启用KeepAlive"`      //是否启用KeepAlive
 	AutoListen    bool   `default:"true" desc:"是否自动监听"`
-	listener      net.Listener
-	listenerTls   net.Listener
 }
 
-func (tcp *TCP) StopListen() {
-	if tcp.listener != nil {
-		tcp.listener.Close()
-	}
-	if tcp.listenerTls != nil {
-		tcp.listenerTls.Close()
-	}
+func (config *TCP) CreateTCPTask(logger *slog.Logger, handler TCPHandler) *ListenTCPTask {
+	ret := &ListenTCPTask{TCP: config, handler: handler}
+	ret.Logger = logger.With("addr", config.ListenAddr)
+	return ret
 }
 
-func (tcp *TCP) Listen(handler func(*net.TCPConn)) (err error) {
-	tcp.listener, err = net.Listen("tcp", tcp.ListenAddr)
+func (config *TCP) CreateTCPTLSTask(logger *slog.Logger, handler TCPHandler) *ListenTCPTLSTask {
+	ret := &ListenTCPTLSTask{ListenTCPTask{TCP: config, handler: handler}}
+	ret.Logger = logger.With("addr", config.ListenAddrTLS)
+	return ret
+}
+
+type TCPHandler = func(conn *net.TCPConn) util.ITask
+
+type ListenTCPTask struct {
+	util.MarcoLongTask
+	*TCP
+	net.Listener
+	handler TCPHandler
+}
+
+func (task *ListenTCPTask) Start() (err error) {
+	task.Listener, err = net.Listen("tcp", task.ListenAddr)
 	if err == nil {
-		count := tcp.ListenNum
-		if count == 0 {
-			count = runtime.NumCPU()
-		}
-		for range count {
-			go tcp.listen(tcp.listener, handler)
-		}
-	}
-	return
-}
-
-func (tcp *TCP) ListenTLS(handler func(*net.TCPConn)) (err error) {
-	if tlsConfig, err := GetTLSConfig(tcp.CertFile, tcp.KeyFile); err == nil {
-		tcp.listenerTls, err = tls.Listen("tcp", tcp.ListenAddrTLS, tlsConfig)
-		if err == nil {
-			count := tcp.ListenNum
-			if count == 0 {
-				count = runtime.NumCPU()
-			}
-			for range count {
-				go tcp.listen(tcp.listenerTls, handler)
-			}
-		}
+		task.Info("listen tcp")
 	} else {
-		return err
+		task.Error("failed to listen tcp", "error", err)
+	}
+	if task.handler == nil {
+		return nil
+	}
+	count := task.ListenNum
+	if count == 0 {
+		count = runtime.NumCPU()
+	}
+	for range count {
+		go task.listen(task.handler)
 	}
 	return
 }
 
-func (tcp *TCP) listen(l net.Listener, handler func(*net.TCPConn)) {
+func (task *ListenTCPTask) Dispose() {
+	task.Info("tcp server stop")
+	task.Listener.Close()
+}
+
+type ListenTCPTLSTask struct {
+	ListenTCPTask
+}
+
+func (task *ListenTCPTLSTask) Start() (err error) {
+	var tlsConfig *tls.Config
+	if tlsConfig, err = GetTLSConfig(task.CertFile, task.KeyFile); err != nil {
+		return
+	}
+	task.Listener, err = tls.Listen("tcp", task.ListenAddrTLS, tlsConfig)
+	if err == nil {
+		task.Info("listen tcp tls")
+	} else {
+		task.Error("failed to listen tcp tls", "error", err)
+	}
+	return
+}
+
+func (task *ListenTCPTask) listen(handler TCPHandler) {
 	var tempDelay time.Duration
 	for {
-		conn, err := l.Accept()
+		conn, err := task.Accept()
 		if err != nil {
 			if ne, ok := err.(net.Error); ok && !ne.Timeout() {
 				if tempDelay == 0 {
@@ -111,10 +134,11 @@ func (tcp *TCP) listen(l net.Listener, handler func(*net.TCPConn)) {
 		case *tls.Conn:
 			tcpConn = v.NetConn().(*net.TCPConn)
 		}
-		if !tcp.NoDelay {
+		if !task.NoDelay {
 			tcpConn.SetNoDelay(false)
 		}
 		tempDelay = 0
-		go handler(tcpConn)
+		subTask := handler(tcpConn)
+		task.AddTask(subTask)
 	}
 }

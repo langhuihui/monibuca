@@ -3,6 +3,7 @@ package plugin_cascade
 import (
 	"bufio"
 	"m7s.live/m7s/v5"
+	"m7s.live/m7s/v5/pkg/util"
 	"net/http"
 	"strconv"
 	"strings"
@@ -19,37 +20,51 @@ type CascadeServerPlugin struct {
 
 var _ = m7s.InstallPlugin[CascadeServerPlugin]()
 
-func (c *CascadeServerPlugin) OnQUICConnect(conn quic.Connection) {
-	remoteAddr := conn.RemoteAddr().String()
-	c.Info("client connected:", "remoteAddr", remoteAddr)
-	stream, err := conn.AcceptStream(c)
+type CascadeServer struct {
+	util.MarcoLongTask
+	quic.Connection
+	conf *CascadeServerPlugin
+}
+
+func (c *CascadeServerPlugin) OnQUICConnect(conn quic.Connection) util.ITask {
+	ret := &CascadeServer{
+		Connection: conn,
+		conf:       c,
+	}
+	ret.Logger = c.Logger.With("remoteAddr", conn.RemoteAddr().String())
+	return ret
+}
+
+func (task *CascadeServer) Go() {
+	remoteAddr := task.Connection.RemoteAddr().String()
+	stream, err := task.AcceptStream(task)
 	if err != nil {
-		c.Error("AcceptStream", "err", err)
+		task.Error("AcceptStream", "err", err)
 		return
 	}
 	var secret string
 	r := bufio.NewReader(stream)
 	if secret, err = r.ReadString(0); err != nil {
-		c.Error("read secret", "err", err)
+		task.Error("read secret", "err", err)
 		return
 	}
 	secret = secret[:len(secret)-1] // 去掉msg末尾的0
 	var instance cascade.Instance
 	child := &instance
-	err = c.DB.AutoMigrate(child)
-	tx := c.DB.First(child, "secret = ?", secret)
+	err = task.conf.DB.AutoMigrate(child)
+	tx := task.conf.DB.First(child, "secret = ?", secret)
 	if tx.Error == nil {
 		cascade.SubordinateMap.Set(child)
-	} else if c.AutoRegister {
+	} else if task.conf.AutoRegister {
 		child.Secret = secret
 		child.IP = remoteAddr
-		tx = c.DB.First(child, "ip = ?", remoteAddr)
+		tx = task.conf.DB.First(child, "ip = ?", remoteAddr)
 		if tx.Error != nil {
-			c.DB.Create(child)
+			task.conf.DB.Create(child)
 		}
 		cascade.SubordinateMap.Set(child)
 	} else {
-		c.Error("invalid secret:", "secret", secret)
+		task.Error("invalid secret:", "secret", secret)
 		_, err = stream.Write([]byte{1, 0})
 		return
 	}
@@ -58,18 +73,18 @@ func (c *CascadeServerPlugin) OnQUICConnect(conn quic.Connection) {
 	if child.Name == "" {
 		child.Name = remoteAddr
 	}
-	c.DB.Updates(child)
-	child.Connection = conn
+	task.conf.DB.Updates(child)
+	child.Connection = task.Connection
 	_, err = stream.Write([]byte{0, 0})
 	err = stream.Close()
-	c.Info("client register:", "remoteAddr", remoteAddr)
+	task.Info("client register:", "remoteAddr", remoteAddr)
 	for err == nil {
 		var receiveRequestTask cascade.ReceiveRequestTask
-		receiveRequestTask.Connection = conn
-		receiveRequestTask.Plugin = &c.Plugin
-		receiveRequestTask.Handler = c.GetGlobalCommonConf().GetHandler()
-		if receiveRequestTask.Stream, err = conn.AcceptStream(c); err == nil {
-			c.AddTask(&receiveRequestTask)
+		receiveRequestTask.Connection = task.Connection
+		receiveRequestTask.Plugin = &task.conf.Plugin
+		receiveRequestTask.Handler = task.conf.GetGlobalCommonConf().GetHandler()
+		if receiveRequestTask.Stream, err = task.AcceptStream(task); err == nil {
+			task.AddTask(&receiveRequestTask)
 		}
 	}
 }

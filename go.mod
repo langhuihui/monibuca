@@ -1,6 +1,6 @@
 module m7s.live/m7s/v5
 
-go 1.22.5
+go 1.23
 
 require (
 	github.com/Eyevinn/mp4ff v0.45.1

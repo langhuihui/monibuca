@@ -64,15 +64,15 @@ type (
 	}
 
 	ITCPPlugin interface {
-		OnTCPConnect(*net.TCPConn)
+		OnTCPConnect(conn *net.TCPConn) util.ITask
 	}
 
 	IUDPPlugin interface {
-		OnUDPConnect(*net.UDPConn)
+		OnUDPConnect(conn *net.UDPConn) util.ITask
 	}
 
 	IQUICPlugin interface {
-		OnQUICConnect(quic.Connection)
+		OnQUICConnect(quic.Connection) util.ITask
 	}
 )
 
@@ -127,7 +127,7 @@ func (plugin *PluginMeta) Init(s *Server, userConfig map[string]any) (p *Plugin)
 	} else {
 		p.assign()
 	}
-	p.Info("init", "ctx", p.Context, "version", plugin.Version)
+	p.Info("init", "version", plugin.Version)
 	var err error
 	if p.config.DSN == s.GetCommonConf().DSN {
 		p.DB = s.DB
@@ -281,64 +281,50 @@ func (p *Plugin) Start() (err error) {
 
 func (p *Plugin) Dispose() {
 	p.handler.OnStop()
-	p.config.HTTP.StopListen()
-	p.config.TCP.StopListen()
 	p.Server.Plugins.Remove(p)
+}
+
+func (p *Plugin) stopOnError(t util.ITask) {
+	p.AddTask(t).OnDispose(func() {
+		p.Stop(t.StopReason())
+	})
 }
 
 func (p *Plugin) listen() (err error) {
 	httpConf := &p.config.HTTP
+
 	if httpConf.ListenAddrTLS != "" && (httpConf.ListenAddrTLS != p.Server.config.HTTP.ListenAddrTLS) {
-		p.Info("https listen at ", "addr", httpConf.ListenAddrTLS)
-		go func() {
-			p.Stop(httpConf.ListenTLS())
-		}()
-	}
-	if httpConf.ListenAddr != "" && (httpConf.ListenAddr != p.Server.config.HTTP.ListenAddr) {
-		p.Info("http listen at ", "addr", httpConf.ListenAddr)
-		go func() {
-			p.Stop(httpConf.Listen())
-		}()
+		p.stopOnError(httpConf.CreateHTTPSTask(p.Logger))
 	}
 
-	defer func() {
-		if err != nil {
-			p.config.HTTP.StopListen()
-		}
-	}()
+	if httpConf.ListenAddr != "" && (httpConf.ListenAddr != p.Server.config.HTTP.ListenAddr) {
+		p.stopOnError(httpConf.CreateHTTPTask(p.Logger))
+	}
 
 	if tcphandler, ok := p.handler.(ITCPPlugin); ok {
 		tcpConf := &p.config.TCP
 		if tcpConf.ListenAddr != "" && tcpConf.AutoListen {
-			p.Info("listen tcp", "addr", tcpConf.ListenAddr)
-			err = tcpConf.Listen(tcphandler.OnTCPConnect)
+			task := tcpConf.CreateTCPTask(p.Logger, tcphandler.OnTCPConnect)
+			err = p.AddTask(task).WaitStarted()
 			if err != nil {
-				p.Error("listen tcp", "addr", tcpConf.ListenAddr, "error", err)
 				return
 			}
 		}
 		if tcpConf.ListenAddrTLS != "" && tcpConf.AutoListen {
-			p.Info("listen tcp tls", "addr", tcpConf.ListenAddrTLS)
-			err = tcpConf.ListenTLS(tcphandler.OnTCPConnect)
+			task := tcpConf.CreateTCPTLSTask(p.Logger, tcphandler.OnTCPConnect)
+			err = p.AddTask(task).WaitStarted()
 			if err != nil {
-				p.Error("listen tcp tls", "addr", tcpConf.ListenAddrTLS, "error", err)
 				return
 			}
 		}
-		defer func() {
-			if err != nil {
-				p.config.TCP.StopListen()
-			}
-		}()
 	}
 
 	if udpHandler, ok := p.handler.(IUDPPlugin); ok {
 		udpConf := &p.config.UDP
 		if udpConf.ListenAddr != "" && udpConf.AutoListen {
-			p.Info("listen udp", "addr", udpConf.ListenAddr)
-			err = udpConf.Listen(udpHandler.OnUDPConnect)
+			task := udpConf.CreateUDPTask(p.Logger, udpHandler.OnUDPConnect)
+			err = p.AddTask(task).WaitStarted()
 			if err != nil {
-				p.Error("listen udp", "addr", udpConf.ListenAddr, "error", err)
 				return
 			}
 		}
@@ -347,14 +333,8 @@ func (p *Plugin) listen() (err error) {
 	if quicHandler, ok := p.handler.(IQUICPlugin); ok {
 		quicConf := &p.config.Quic
 		if quicConf.ListenAddr != "" && quicConf.AutoListen {
-			p.Info("listen quic", "addr", quicConf.ListenAddr)
-			go func() {
-				p.Stop(quicConf.ListenQuic(p, quicHandler.OnQUICConnect))
-			}()
-			//if err != nil {
-			//	p.Error("listen quic", "addr", quicConf.ListenAddr, "error", err)
-			//	return
-			//}
+			task := quicConf.CreateQUICTask(p.Logger, quicHandler.OnQUICConnect)
+			err = p.AddTask(task).WaitStarted()
 		}
 	}
 	return
@@ -362,10 +342,6 @@ func (p *Plugin) listen() (err error) {
 
 func (p *Plugin) OnInit() error {
 	return nil
-}
-
-func (p *Plugin) OnExit() {
-
 }
 
 func (p *Plugin) OnStop() {

@@ -6,7 +6,6 @@ import (
 	"maps"
 	"net"
 	"net/http"
-	"runtime/debug"
 	"slices"
 	"strconv"
 	"strings"
@@ -36,34 +35,33 @@ func (p *RTSPPlugin) OnInit() error {
 	return nil
 }
 
-func (p *RTSPPlugin) OnTCPConnect(conn *net.TCPConn) {
-	logger := p.Logger.With("remote", conn.RemoteAddr().String())
+type RTSPServer struct {
+	*NetConnection
+	conf *RTSPPlugin
+}
+
+func (p *RTSPPlugin) OnTCPConnect(conn *net.TCPConn) util.ITask {
+	ret := &RTSPServer{NetConnection: NewNetConnection(conn), conf: p}
+	ret.Logger = p.With("remote", conn.RemoteAddr().String())
+	return ret
+}
+
+func (task *RTSPServer) Go() (err error) {
 	var receiver *Receiver
 	var sender *Sender
-	var err error
-	nc := NewNetConnection(conn)
-	nc.Logger = logger
-	p.AddTask(nc).WaitStarted()
-	defer func() {
-		nc.Stop(err)
-		if p := recover(); p != nil {
-			err = p.(error)
-			logger.Error(err.Error(), "stack", string(debug.Stack()))
-		}
-	}()
 	var req *util.Request
 	var sendMode bool
 	for {
-		req, err = nc.ReadRequest()
+		req, err = task.ReadRequest()
 		if err != nil {
 			return
 		}
 
-		if nc.URL == nil {
-			nc.URL = req.URL
-			logger = logger.With("url", nc.URL.String())
-			nc.UserAgent = req.Header.Get("User-Agent")
-			logger.Info("connect", "userAgent", nc.UserAgent)
+		if task.URL == nil {
+			task.URL = req.URL
+			task.Logger = task.With("url", task.URL.String())
+			task.UserAgent = req.Header.Get("User-Agent")
+			task.Info("connect", "userAgent", task.UserAgent)
 		}
 
 		//if !c.auth.Validate(req) {
@@ -88,7 +86,7 @@ func (p *RTSPPlugin) OnTCPConnect(conn *net.TCPConn) {
 				},
 				Request: req,
 			}
-			if err = nc.WriteResponse(res); err != nil {
+			if err = task.WriteResponse(res); err != nil {
 				return
 			}
 
@@ -98,18 +96,18 @@ func (p *RTSPPlugin) OnTCPConnect(conn *net.TCPConn) {
 				return
 			}
 
-			nc.SDP = string(req.Body) // for info
+			task.SDP = string(req.Body) // for info
 			var medias []*Media
 			if medias, err = UnmarshalSDP(req.Body); err != nil {
 				return
 			}
 
 			receiver = &Receiver{
-				Stream: &Stream{NetConnection: nc},
+				Stream: &Stream{NetConnection: task.NetConnection},
 			}
-			if receiver.Publisher, err = p.Publish(nc, strings.TrimPrefix(nc.URL.Path, "/")); err != nil {
+			if receiver.Publisher, err = task.conf.Publish(task, strings.TrimPrefix(task.URL.Path, "/")); err != nil {
 				receiver = nil
-				err = nc.WriteResponse(&util.Response{
+				err = task.WriteResponse(&util.Response{
 					StatusCode: 500, Status: err.Error(),
 				})
 				return
@@ -118,25 +116,25 @@ func (p *RTSPPlugin) OnTCPConnect(conn *net.TCPConn) {
 				return
 			}
 			res := &util.Response{Request: req}
-			if err = nc.WriteResponse(res); err != nil {
+			if err = task.WriteResponse(res); err != nil {
 				return
 			}
 			receiver.Publisher.OnDispose(func() {
-				nc.Stop(receiver.Publisher.StopReason())
+				task.Stop(receiver.Publisher.StopReason())
 			})
 		case MethodDescribe:
 			sendMode = true
 			sender = &Sender{
-				Stream: &Stream{NetConnection: nc},
+				Stream: &Stream{NetConnection: task.NetConnection},
 			}
-			sender.Subscriber, err = p.Subscribe(nc, strings.TrimPrefix(nc.URL.Path, "/"))
+			sender.Subscriber, err = task.conf.Subscribe(task, strings.TrimPrefix(task.URL.Path, "/"))
 			if err != nil {
 				res := &util.Response{
 					StatusCode: http.StatusBadRequest,
 					Status:     err.Error(),
 					Request:    req,
 				}
-				_ = nc.WriteResponse(res)
+				_ = task.WriteResponse(res)
 				return
 			}
 			res := &util.Response{
@@ -150,13 +148,13 @@ func (p *RTSPPlugin) OnTCPConnect(conn *net.TCPConn) {
 			if medias, err = sender.GetMedia(); err != nil {
 				return
 			}
-			if res.Body, err = MarshalSDP(nc.SessionName, medias); err != nil {
+			if res.Body, err = MarshalSDP(task.SessionName, medias); err != nil {
 				return
 			}
 
-			nc.SDP = string(res.Body) // for info
+			task.SDP = string(res.Body) // for info
 
-			if err = nc.WriteResponse(res); err != nil {
+			if err = task.WriteResponse(res); err != nil {
 				return
 			}
 
@@ -171,7 +169,7 @@ func (p *RTSPPlugin) OnTCPConnect(conn *net.TCPConn) {
 			const transport = "RTP/AVP/TCP;unicast;interleaved="
 			if strings.HasPrefix(tr, transport) {
 
-				nc.Session = util.RandomString(10)
+				task.Session = util.RandomString(10)
 
 				if sendMode {
 					if i := reqTrackID(req); i >= 0 {
@@ -187,31 +185,31 @@ func (p *RTSPPlugin) OnTCPConnect(conn *net.TCPConn) {
 				res.Status = "461 Unsupported transport"
 			}
 
-			if err = nc.WriteResponse(res); err != nil {
+			if err = task.WriteResponse(res); err != nil {
 				return
 			}
 
 		case MethodRecord:
 			res := &util.Response{Request: req}
-			if err = nc.WriteResponse(res); err != nil {
+			if err = task.WriteResponse(res); err != nil {
 				return
 			}
 			err = receiver.Receive()
 			return
 		case MethodPlay:
 			res := &util.Response{Request: req}
-			if err = nc.WriteResponse(res); err != nil {
+			if err = task.WriteResponse(res); err != nil {
 				return
 			}
 			err = sender.Send()
 			return
 		case MethodTeardown:
 			res := &util.Response{Request: req}
-			_ = nc.WriteResponse(res)
+			_ = task.WriteResponse(res)
 			return
 
 		default:
-			p.Warn("unsupported method", "method", req.Method)
+			task.Warn("unsupported method", "method", req.Method)
 		}
 	}
 }

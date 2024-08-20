@@ -2,7 +2,9 @@ package config
 
 import (
 	"context"
+	"crypto/tls"
 	"log/slog"
+	"m7s.live/m7s/v5/pkg/util"
 
 	"github.com/quic-go/quic-go"
 )
@@ -18,23 +20,50 @@ type Quic struct {
 	AutoListen bool   `default:"true" desc:"是否自动监听"`
 }
 
-func (q *Quic) ListenQuic(ctx context.Context, handler func(connection quic.Connection)) error {
-	ltsc, err := GetTLSConfig(q.CertFile, q.KeyFile)
-	if err != nil {
-		return err
+func (q *Quic) CreateQUICTask(logger *slog.Logger, handler func(connection quic.Connection) util.ITask) *ListenQuicTask {
+	ret := &ListenQuicTask{
+		Quic:    q,
+		handler: handler,
 	}
-	listener, err := quic.ListenAddr(q.ListenAddr, ltsc, &quic.Config{
+	ret.Logger = logger.With("addr", q.ListenAddr)
+	return ret
+}
+
+type ListenQuicTask struct {
+	util.MarcoLongTask
+	*Quic
+	*quic.Listener
+	handler func(connection quic.Connection) util.ITask
+}
+
+func (task *ListenQuicTask) Start() (err error) {
+	var ltsc *tls.Config
+	ltsc, err = GetTLSConfig(task.CertFile, task.KeyFile)
+	if err != nil {
+		return
+	}
+	task.Listener, err = quic.ListenAddr(task.ListenAddr, ltsc, &quic.Config{
 		EnableDatagrams: true,
 	})
 	if err != nil {
-		return err
+		task.Error("listen quic error", err)
+		return
 	}
-	slog.Info("quic listen", "addr", q.ListenAddr)
+	task.Info("listen quic on", task.ListenAddr)
+	return
+}
+
+func (task *ListenQuicTask) Go() error {
 	for {
-		conn, err := listener.Accept(ctx)
+		conn, err := task.Accept(task.Context)
 		if err != nil {
 			return err
 		}
-		go handler(conn)
+		subTask := task.handler(conn)
+		task.AddTask(subTask)
 	}
+}
+
+func (task *ListenQuicTask) Dispose() {
+	_ = task.Listener.Close()
 }

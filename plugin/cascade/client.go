@@ -22,13 +22,13 @@ type CascadeClientPlugin struct {
 
 var _ = m7s.InstallPlugin[CascadeClientPlugin](cascade.NewCascadePuller)
 
-type ConnectServerTask struct {
+type CascadeClient struct {
 	util.Task
 	cfg *CascadeClientPlugin
 	quic.Connection
 }
 
-func (task *ConnectServerTask) Start() (err error) {
+func (task *CascadeClient) Start() (err error) {
 	tlsConf := &tls.Config{
 		InsecureSkipVerify: true,
 		NextProtos:         []string{"monibuca"},
@@ -62,7 +62,7 @@ func (task *ConnectServerTask) Start() (err error) {
 	return
 }
 
-func (task *ConnectServerTask) Run() (err error) {
+func (task *CascadeClient) Run() (err error) {
 	for err == nil {
 		var s quic.Stream
 		if s, err = task.AcceptStream(task.Task.Context); err == nil {
@@ -81,7 +81,7 @@ func (c *CascadeClientPlugin) OnInit() (err error) {
 	if c.Secret == "" && c.Server == "" {
 		return nil
 	}
-	connectTask := ConnectServerTask{
+	connectTask := CascadeClient{
 		cfg: c,
 	}
 	connectTask.SetRetry(-1, time.Second)

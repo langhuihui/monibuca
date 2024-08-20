@@ -5,11 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"net"
+	"m7s.live/m7s/v5/pkg/config"
 	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 	"syscall"
 	"time"
@@ -44,6 +45,7 @@ var (
 type ServerConfig struct {
 	EnableSubEvent bool          `default:"true" desc:"启用订阅事件,禁用可以提高性能"` //启用订阅事件,禁用可以提高性能
 	SettingDir     string        `default:".m7s" desc:""`
+	FatalDir       string        `default:"fatal" desc:""`
 	EventBusSize   int           `default:"10" desc:"事件总线大小"`    //事件总线大小
 	PulseInterval  time.Duration `default:"5s" desc:"心跳事件间隔"`    //心跳事件间隔
 	DisableAll     bool          `default:"false" desc:"禁用所有插件"` //禁用所有插件
@@ -75,7 +77,6 @@ type Server struct {
 	apiList                                    []string
 	grpcServer                                 *grpc.Server
 	grpcClientConn                             *grpc.ClientConn
-	tcplis                                     net.Listener
 	lastSummaryTime                            time.Time
 	lastSummary                                *pb.SummaryResponse
 	streamTask, pullTask, pushTask, recordTask util.MarcoLongTask
@@ -113,6 +114,7 @@ func init() {
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	util.RootTask.AddChan(signalChan, func(os.Signal) {
+		util.ShutdownRootTask()
 		for _, meta := range plugins {
 			if meta.OnExit != nil {
 				meta.OnExit()
@@ -176,6 +178,11 @@ func (s *Server) Start() (err error) {
 		s.Config.ParseUserFile(cg["global"])
 	}
 	s.LogHandler.SetLevel(ParseLevel(s.config.LogLevel))
+	err = debug.SetCrashOutput(util.InitFatalLog(s.FatalDir), debug.CrashOptions{})
+	if err != nil {
+		s.Error("SetCrashOutput", "error", err)
+		return
+	}
 	s.registerHandler(map[string]http.HandlerFunc{
 		"/api/config/json/{name}":             s.api_Config_JSON_,
 		"/api/stream/annexb/{streamPath...}":  s.api_Stream_AnnexB_,
@@ -191,23 +198,12 @@ func (s *Server) Start() (err error) {
 		}
 	}
 	if httpConf.ListenAddrTLS != "" {
-		s.Info("https listen at ", "addr", httpConf.ListenAddrTLS)
-		go func(addr string) {
-			if err = httpConf.ListenTLS(); err != http.ErrServerClosed {
-				s.Stop(err)
-			}
-			s.Info("https stop listen at ", "addr", addr)
-		}(httpConf.ListenAddrTLS)
+		s.stopOnError(httpConf.CreateHTTPSTask(s.Logger))
 	}
 	if httpConf.ListenAddr != "" {
-		s.Info("http listen at ", "addr", httpConf.ListenAddr)
-		go func(addr string) {
-			if err = httpConf.Listen(); err != http.ErrServerClosed {
-				s.Stop(err)
-			}
-			s.Info("http stop listen at ", "addr", addr)
-		}(httpConf.ListenAddr)
+		s.stopOnError(httpConf.CreateHTTPTask(s.Logger))
 	}
+	var tcpTask *config.ListenTCPTask
 	if tcpConf.ListenAddr != "" {
 		var opts []grpc.ServerOption
 		s.grpcServer = grpc.NewServer(opts...)
@@ -222,8 +218,8 @@ func (s *Server) Start() (err error) {
 			s.Error("register handler faild", "error", err)
 			return
 		}
-		s.tcplis, err = net.Listen("tcp", tcpConf.ListenAddr)
-		if err != nil {
+		tcpTask = tcpConf.CreateTCPTask(s.Logger, nil)
+		if err = s.AddTask(tcpTask).WaitStarted(); err != nil {
 			s.Error("failed to listen", "error", err)
 			return
 		}
@@ -234,19 +230,14 @@ func (s *Server) Start() (err error) {
 	s.AddTask(&s.recordTask)
 	for _, plugin := range plugins {
 		if p := plugin.Init(s, cg[strings.ToLower(plugin.Name)]); !p.Disabled {
-			s.AddTask(p.handler).WaitStarted()
+			s.AddTask(p.handler)
 		}
 	}
 
-	if s.tcplis != nil {
-		go func(addr string) {
-			if err = s.grpcServer.Serve(s.tcplis); err != nil {
-				s.Stop(err)
-			} else {
-				s.Info("grpc stop listen at ", "addr", addr)
-			}
-		}(tcpConf.ListenAddr)
+	if tcpTask != nil {
+		tcpTask.AddTask(&GRPCServer{Task: util.Task{Logger: s.Logger}, s: s, tcpTask: tcpTask})
 	}
+
 	s.streamTask.AddChan(time.NewTicker(s.PulseInterval).C, func(time.Time) {
 		for waits := range s.Waiting.Range {
 			for sub := range waits.Range {
@@ -261,6 +252,20 @@ func (s *Server) Start() (err error) {
 	Servers.Add(s)
 	s.Info("server started")
 	return
+}
+
+type GRPCServer struct {
+	util.Task
+	s       *Server
+	tcpTask *config.ListenTCPTask
+}
+
+func (gRPC *GRPCServer) Dispose() {
+	gRPC.s.Stop(gRPC.StopReason())
+}
+
+func (gRPC *GRPCServer) Go() (err error) {
+	return gRPC.s.grpcServer.Serve(gRPC.tcpTask.Listener)
 }
 
 func (s *Server) CallOnStreamTask(callback func() error) {
@@ -281,9 +286,7 @@ func (s *Server) AddRecordTask(task *RecordContext) *util.Task {
 
 func (s *Server) Dispose() {
 	Servers.Remove(s)
-	_ = s.tcplis.Close()
 	_ = s.grpcClientConn.Close()
-	s.config.HTTP.StopListen()
 	if s.DB != nil {
 		db, err := s.DB.DB()
 		if err == nil {
