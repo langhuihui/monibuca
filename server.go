@@ -26,6 +26,7 @@ import (
 	. "m7s.live/m7s/v5/pkg"
 	"m7s.live/m7s/v5/pkg/db"
 	"m7s.live/m7s/v5/pkg/util"
+	sysruntime "runtime"
 )
 
 var (
@@ -89,6 +90,13 @@ func NewServer(conf any) (s *Server) {
 	}
 	s.ID = util.GetNextTaskID()
 	s.Meta = &serverMeta
+	s.Description = map[string]any{
+		"version":   Version,
+		"goVersion": sysruntime.Version(),
+		"os":        sysruntime.GOOS,
+		"arch":      sysruntime.GOARCH,
+		"cpus":      int32(sysruntime.NumCPU()),
+	}
 	return
 }
 
@@ -110,21 +118,32 @@ func AddRootTaskWithContext[T util.ITask](ctx context.Context, task T) T {
 
 type RawConfig = map[string]map[string]any
 
-func init() {
+type OSSignal struct {
+	util.ChannelTask
+}
+
+func (o *OSSignal) Start() error {
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
-	util.RootTask.AddChan(signalChan, func(os.Signal) {
-		util.ShutdownRootTask()
-		for _, meta := range plugins {
-			if meta.OnExit != nil {
-				meta.OnExit()
-			}
+	o.SignalChan = signalChan
+	return nil
+}
+
+func (o *OSSignal) Tick(any) {
+	util.ShutdownRootTask()
+	for _, meta := range plugins {
+		if meta.OnExit != nil {
+			meta.OnExit()
 		}
-		if serverMeta.OnExit != nil {
-			serverMeta.OnExit()
-		}
-		os.Exit(0)
-	})
+	}
+	if serverMeta.OnExit != nil {
+		serverMeta.OnExit()
+	}
+	os.Exit(0)
+}
+
+func init() {
+	util.RootTask.AddTask(&OSSignal{})
 	for k, v := range myip.LocalAndInternalIPs() {
 		Routes[k] = v
 		fmt.Println(k, v)
@@ -237,21 +256,41 @@ func (s *Server) Start() (err error) {
 	if tcpTask != nil {
 		tcpTask.AddTask(&GRPCServer{Task: util.Task{Logger: s.Logger}, s: s, tcpTask: tcpTask})
 	}
-
-	s.streamTask.AddChan(time.NewTicker(s.PulseInterval).C, func(time.Time) {
-		for waits := range s.Waiting.Range {
-			for sub := range waits.Range {
-				select {
-				case <-sub.TimeoutTimer.C:
-					sub.Stop(ErrSubscribeTimeout)
-				default:
+	s.streamTask.AddTask(&CheckSubWaitTimeout{s: s})
+	Servers.Add(s)
+	s.Info("server started")
+	s.Post(func() error {
+		for plugin := range s.Plugins.Range {
+			if plugin.Meta.Puller != nil {
+				for streamPath, url := range plugin.config.PullOnStart {
+					plugin.handler.Pull(streamPath, url)
 				}
 			}
 		}
+		return nil
 	})
-	Servers.Add(s)
-	s.Info("server started")
 	return
+}
+
+type CheckSubWaitTimeout struct {
+	util.TickTask
+	s *Server
+}
+
+func (c *CheckSubWaitTimeout) GetTickInterval() time.Duration {
+	return c.s.PulseInterval
+}
+
+func (c *CheckSubWaitTimeout) Tick(any) {
+	for waits := range c.s.Waiting.Range {
+		for sub := range waits.Range {
+			select {
+			case <-sub.TimeoutTimer.C:
+				sub.Stop(ErrSubscribeTimeout)
+			default:
+			}
+		}
+	}
 }
 
 type GRPCServer struct {

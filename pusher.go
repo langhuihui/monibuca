@@ -28,11 +28,11 @@ func (p *PushContext) GetKey() string {
 
 func (p *PushContext) Init(pusher IPusher, plugin *Plugin, streamPath string, url string) *PushContext {
 	p.Push = plugin.config.Push
-	p.Plugin = plugin
-	p.RemoteURL = url
-	p.StreamPath = streamPath
-	p.ConnectProxy = plugin.config.Push.Proxy
+	p.Connection.Init(plugin, streamPath, url, plugin.config.Push.Proxy)
 	p.Logger = plugin.Logger.With("pushURL", url, "streamPath", streamPath)
+	if pusherTask := pusher.GetTask(); pusherTask.Logger == nil {
+		pusherTask.Logger = p.Logger
+	}
 	p.pusher = pusher
 	pusher.SetRetry(plugin.config.RePush, time.Second*5)
 	return p

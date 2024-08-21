@@ -8,8 +8,8 @@ global:
 #    ringsize: 20-250
 #    buffertime: 10s
   #   speed: 1
-console:
-  secret: de2c0bb9fd47684adc07a426e139239b
+#console:
+#  secret: de2c0bb9fd47684adc07a426e139239b
 logrotate:
   level: debug
 rtsp:

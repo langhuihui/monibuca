@@ -21,13 +21,6 @@ type FLVPlugin struct {
 const defaultConfig m7s.DefaultYaml = `publish:
   speed: 1`
 
-func (plugin *FLVPlugin) OnInit() error {
-	for streamPath, url := range plugin.GetCommonConf().PullOnStart {
-		plugin.Pull(streamPath, url)
-	}
-	return nil
-}
-
 var _ = m7s.InstallPlugin[FLVPlugin](defaultConfig, NewPuller, NewRecorder)
 
 func (plugin *FLVPlugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {

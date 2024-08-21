@@ -55,6 +55,9 @@ func (p *RecordContext) Init(recorder IRecorder, plugin *Plugin, streamPath stri
 	p.FilePath = filePath
 	p.StreamPath = streamPath
 	p.Logger = plugin.Logger.With("filePath", filePath, "streamPath", streamPath)
+	if recorderTask := recorder.GetTask(); recorderTask.Logger == nil {
+		recorderTask.Logger = p.Logger
+	}
 	p.recorder = recorder
 	return p
 }

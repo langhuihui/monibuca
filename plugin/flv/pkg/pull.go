@@ -34,7 +34,7 @@ func (p *Puller) Run() (err error) {
 		}
 	}
 	var startTs uint32
-	pubConf := publisher.GetPublishConfig()
+	pubConf := &publisher.Publish
 	if !hasAudio {
 		pubConf.PubAudio = false
 	}

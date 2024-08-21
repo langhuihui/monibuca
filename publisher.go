@@ -183,41 +183,63 @@ func (p *Publisher) Start() (err error) {
 			}
 		}
 	}
-	p.AddChan(p.TimeoutTimer.C, func(time.Time) {
-		switch p.State {
-		case PublisherStateInit:
-			if p.PublishTimeout > 0 {
-				p.Stop(ErrPublishTimeout)
-			}
-		case PublisherStateTrackAdded:
-			if p.Publish.IdleTimeout > 0 {
-				p.Stop(ErrPublishIdleTimeout)
-			}
-		case PublisherStateSubscribed:
-		case PublisherStateWaitSubscriber:
-			if p.Publish.DelayCloseTimeout > 0 {
-				p.Stop(ErrPublishDelayCloseTimeout)
-			}
-		}
-	}).OnDispose(func() {
-		p.TimeoutTimer.Stop()
-	})
+	p.AddTask(&PublishTimeout{Publisher: p})
 	if p.PublishTimeout > 0 {
-		checkNoDataTimer := time.NewTicker(time.Second * 5)
-		p.AddChan(checkNoDataTimer.C, func(time.Time) {
-			if p.VideoTrack.CheckTimeout(p.PublishTimeout) {
-				p.Error("video timeout", "writeTime", p.VideoTrack.LastValue.WriteTime)
-				p.Stop(ErrPublishTimeout)
-			}
-			if p.AudioTrack.CheckTimeout(p.PublishTimeout) {
-				p.Error("audio timeout", "writeTime", p.AudioTrack.LastValue.WriteTime)
-				p.Stop(ErrPublishTimeout)
-			}
-		}).OnDispose(func() {
-			checkNoDataTimer.Stop()
-		})
+		p.AddTask(&PublishNoDataTimeout{Publisher: p})
 	}
 	return
+}
+
+type PublishTimeout struct {
+	util.ChannelTask
+	Publisher *Publisher
+}
+
+func (p *PublishTimeout) Start() error {
+	p.SignalChan = p.Publisher.TimeoutTimer.C
+	return nil
+}
+
+func (p *PublishTimeout) Dispose() {
+	p.Publisher.TimeoutTimer.Stop()
+}
+
+func (p *PublishTimeout) Tick(any) {
+	switch p.Publisher.State {
+	case PublisherStateInit:
+		if p.Publisher.PublishTimeout > 0 {
+			p.Stop(ErrPublishTimeout)
+		}
+	case PublisherStateTrackAdded:
+		if p.Publisher.Publish.IdleTimeout > 0 {
+			p.Stop(ErrPublishIdleTimeout)
+		}
+	case PublisherStateSubscribed:
+	case PublisherStateWaitSubscriber:
+		if p.Publisher.Publish.DelayCloseTimeout > 0 {
+			p.Stop(ErrPublishDelayCloseTimeout)
+		}
+	}
+}
+
+type PublishNoDataTimeout struct {
+	util.TickTask
+	Publisher *Publisher
+}
+
+func (p *PublishNoDataTimeout) GetTickInterval() time.Duration {
+	return time.Second * 5
+}
+
+func (p *PublishNoDataTimeout) Tick(any) {
+	if p.Publisher.VideoTrack.CheckTimeout(p.Publisher.PublishTimeout) {
+		p.Error("video timeout", "writeTime", p.Publisher.VideoTrack.LastValue.WriteTime)
+		p.Stop(ErrPublishTimeout)
+	}
+	if p.Publisher.AudioTrack.CheckTimeout(p.Publisher.PublishTimeout) {
+		p.Error("audio timeout", "writeTime", p.Publisher.AudioTrack.LastValue.WriteTime)
+		p.Stop(ErrPublishTimeout)
+	}
 }
 
 func (p *Publisher) RemoveSubscriber(subscriber *Subscriber) {

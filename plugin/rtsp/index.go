@@ -3,10 +3,8 @@ package plugin_rtsp
 import (
 	"errors"
 	"fmt"
-	"maps"
 	"net"
 	"net/http"
-	"slices"
 	"strconv"
 	"strings"
 
@@ -22,17 +20,6 @@ var _ = m7s.InstallPlugin[RTSPPlugin](defaultConfig, NewPuller, NewPusher)
 
 type RTSPPlugin struct {
 	m7s.Plugin
-}
-
-func (p *RTSPPlugin) GetPullableList() []string {
-	return slices.Collect(maps.Keys(p.GetCommonConf().PullOnSub))
-}
-
-func (p *RTSPPlugin) OnInit() error {
-	for streamPath, url := range p.GetCommonConf().PullOnStart {
-		p.Pull(streamPath, url)
-	}
-	return nil
 }
 
 type RTSPServer struct {

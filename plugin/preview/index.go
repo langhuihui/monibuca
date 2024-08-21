@@ -3,9 +3,11 @@ package plugin_preview
 import (
 	"embed"
 	"fmt"
+	"maps"
 	"mime"
 	"net/http"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"m7s.live/m7s/v5"
@@ -35,6 +37,11 @@ func (p *PreviewPlugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				if pullPlugin, ok := plugin.GetHandler().(m7s.IPullerPlugin); ok {
 					s += fmt.Sprintf("<h3>%s</h3>", plugin.Meta.Name)
 					for _, streamPath := range pullPlugin.GetPullableList() {
+						s += fmt.Sprintf("<a href='%s'>%s</a><br>", streamPath, streamPath)
+					}
+				} else if plugin.Meta.Puller != nil {
+					s += fmt.Sprintf("<h3>%s</h3>", plugin.Meta.Name)
+					for _, streamPath := range slices.Collect(maps.Keys(plugin.GetCommonConf().PullOnSub)) {
 						s += fmt.Sprintf("<a href='%s'>%s</a><br>", streamPath, streamPath)
 					}
 				}

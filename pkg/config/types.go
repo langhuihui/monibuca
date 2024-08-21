@@ -8,21 +8,6 @@ import (
 	"time"
 )
 
-type PublishConfig interface {
-	GetPublishConfig() *Publish
-}
-
-type SubscribeConfig interface {
-	GetSubscribeConfig() *Subscribe
-}
-type PullConfig interface {
-	GetPullConfig() *Pull
-}
-
-type PushConfig interface {
-	GetPushConfig() *Push
-}
-
 type Publish struct {
 	MaxCount          int             `default:"0" desc:"最大发布者数量"` // 最大发布者数量
 	PubAudio          bool            `default:"true" desc:"是否发布音频"`
@@ -40,10 +25,6 @@ type Publish struct {
 	Dump              bool
 }
 
-func (c *Publish) GetPublishConfig() *Publish {
-	return c
-}
-
 type Subscribe struct {
 	MaxCount        int           `default:"0" desc:"最大订阅者数量"` // 最大订阅者数量
 	SubAudio        bool          `default:"true" desc:"是否订阅音频"`
@@ -58,20 +39,13 @@ type Subscribe struct {
 	Internal        bool          `default:"false" desc:"是否内部订阅"`                       // 是否内部订阅
 }
 
-func (c *Subscribe) GetSubscribeConfig() *Subscribe {
-	return c
-}
-
 type Pull struct {
 	RePull       int               `desc:"断开后自动重试次数,0:不重试,-1:无限重试"` // 断开后自动重拉,0 表示不自动重拉，-1 表示无限重拉，高于0 的数代表最大重拉次数
 	EnableRegexp bool              `desc:"是否启用正则表达式"`               // 是否启用正则表达式
 	PullOnStart  map[string]string `desc:"启动时拉流的列表"`                // 启动时拉流的列表
 	PullOnSub    map[string]string `desc:"订阅时自动拉流的列表"`              // 订阅时自动拉流的列表
 	Proxy        string            `desc:"代理地址"`                    // 代理地址
-}
-
-func (p *Pull) GetPullConfig() *Pull {
-	return p
+	Header       map[string][]string
 }
 
 func (p *Pull) CheckPullOnStart(streamPath string) string {
@@ -125,10 +99,7 @@ type Push struct {
 	RePush       int               `desc:"断开后自动重试次数,0:不重试,-1:无限重试"` // 断开后自动重推,0 表示不自动重推，-1 表示无限重推，高于0 的数代表最大重推次数
 	PushList     map[string]string `desc:"自动推流列表"`                  // 自动推流列表
 	Proxy        string            `desc:"代理地址"`                    // 代理地址
-}
-
-func (p *Push) GetPushConfig() *Push {
-	return p
+	Header       map[string][]string
 }
 
 func (p *Push) AddPush(url string, streamPath string) {
@@ -187,6 +158,7 @@ func (p *Record) CheckRecord(streamPath string) string {
 
 type Common struct {
 	PublicIP   string
+	PublicIPv6 string
 	LogLevel   string `default:"info" enum:"trace:跟踪,debug:调试,info:信息,warn:警告,error:错误"` //日志级别
 	EnableAuth bool   `desc:"启用鉴权"`                                                      //启用鉴权
 	Publish

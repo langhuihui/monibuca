@@ -1,11 +1,12 @@
 package util
 
-import "reflect"
+import (
+	"time"
+)
 
 type ChannelTask struct {
 	Task
-	channel  reflect.Value
-	callback reflect.Value
+	SignalChan any
 }
 
 func (*ChannelTask) GetTaskType() string {
@@ -16,10 +17,28 @@ func (*ChannelTask) GetTaskTypeID() byte {
 	return 3
 }
 
-func (t *ChannelTask) getSignal() reflect.Value {
-	return t.channel
+func (t *ChannelTask) GetSignal() any {
+	return t.SignalChan
 }
 
-func (t *ChannelTask) tick(signal reflect.Value) {
-	t.callback.Call([]reflect.Value{signal})
+func (t *ChannelTask) Tick(any) {
+}
+
+type TickTask struct {
+	ChannelTask
+	Ticker *time.Ticker
+}
+
+func (t *TickTask) GetTickInterval() time.Duration {
+	return time.Second
+}
+
+func (t *TickTask) Start() (err error) {
+	t.Ticker = time.NewTicker(t.handler.(interface{ GetTickInterval() time.Duration }).GetTickInterval())
+	t.SignalChan = t.Ticker.C
+	return
+}
+
+func (t *TickTask) Dispose() {
+	t.Ticker.Stop()
 }

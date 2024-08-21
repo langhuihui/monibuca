@@ -15,10 +15,10 @@ import (
 type (
 	Connection struct {
 		util.MarcoTask
-		Plugin       *Plugin
-		StreamPath   string // 对应本地流
-		RemoteURL    string // 远程服务器地址（用于推拉）
-		ConnectProxy string // 连接代理
+		Plugin     *Plugin
+		StreamPath string // 对应本地流
+		RemoteURL  string // 远程服务器地址（用于推拉）
+		HTTPClient *http.Client
 	}
 
 	IPuller interface {
@@ -43,6 +43,21 @@ type (
 	}
 )
 
+func (conn *Connection) Init(plugin *Plugin, streamPath string, href string, proxyConf string) {
+	conn.RemoteURL = href
+	conn.StreamPath = streamPath
+	conn.Plugin = plugin
+	conn.HTTPClient = http.DefaultClient
+	if proxyConf != "" {
+		proxy, err := url.Parse(proxyConf)
+		if err != nil {
+			return
+		}
+		transport := &http.Transport{Proxy: http.ProxyURL(proxy)}
+		conn.HTTPClient = &http.Client{Transport: transport}
+	}
+}
+
 func (p *PullContext) GetPullContext() *PullContext {
 	return p
 }
@@ -52,11 +67,11 @@ func (p *PullContext) Init(puller IPuller, plugin *Plugin, streamPath string, ur
 	publishConfig.PublishTimeout = 0
 	p.Pull = plugin.config.Pull
 	p.publishConfig = &publishConfig
-	p.Plugin = plugin
-	p.ConnectProxy = plugin.config.Pull.Proxy
-	p.RemoteURL = url
-	p.StreamPath = streamPath
-	p.Logger = p.Logger.With("pullURL", url, "streamPath", streamPath)
+	p.Connection.Init(plugin, streamPath, url, plugin.config.Pull.Proxy)
+	p.Logger = plugin.Logger.With("pullURL", url, "streamPath", streamPath)
+	if pullerTask := puller.GetTask(); pullerTask.Logger == nil {
+		pullerTask.Logger = p.Logger
+	}
 	p.puller = puller
 	puller.SetRetry(plugin.config.Pull.RePull, time.Second*5)
 	return p
@@ -92,16 +107,7 @@ func (p *HttpFilePuller) Start() (err error) {
 	remoteURL := p.Ctx.RemoteURL
 	if strings.HasPrefix(remoteURL, "http") {
 		var res *http.Response
-		client := http.DefaultClient
-		if proxyConf := p.Ctx.ConnectProxy; proxyConf != "" {
-			proxy, err := url.Parse(proxyConf)
-			if err != nil {
-				return err
-			}
-			transport := &http.Transport{Proxy: http.ProxyURL(proxy)}
-			client = &http.Client{Transport: transport}
-		}
-		if res, err = client.Get(remoteURL); err == nil {
+		if res, err = p.Ctx.HTTPClient.Get(remoteURL); err == nil {
 			if res.StatusCode != http.StatusOK {
 				return io.EOF
 			}

@@ -110,6 +110,7 @@ func (plugin *PluginMeta) Init(s *Server, userConfig map[string]any) (p *Plugin)
 		}
 	}
 	p.Config.ParseUserFile(userConfig)
+	p.Description = map[string]any{"version": plugin.Version, "userConfig": userConfig}
 	finalConfig, _ := yaml.Marshal(p.Config.GetMap())
 	p.Logger.Handler().(*MultiLogHandler).SetLevel(ParseLevel(p.config.LogLevel))
 	p.Debug("config", "detail", string(finalConfig))
@@ -141,7 +142,7 @@ func (plugin *PluginMeta) Init(s *Server, userConfig map[string]any) (p *Plugin)
 			}
 		}
 	}
-	p.Description = map[string]any{"version": plugin.Version}
+
 	return
 }
 
@@ -462,21 +463,30 @@ func (p *Plugin) AddLogHandler(handler slog.Handler) {
 }
 
 func (p *Plugin) SaveConfig() (err error) {
-	p.Server.Call(func() (err error) {
-		if p.Modify == nil {
-			os.Remove(p.settingPath())
-			return
+	return util.RootTask.AddTask(&SaveConfig{Plugin: p}).WaitStopped()
+}
+
+type SaveConfig struct {
+	util.Task
+	Plugin *Plugin
+	file   *os.File
+}
+
+func (s *SaveConfig) Start() (err error) {
+	if s.Plugin.Modify == nil {
+		err = os.Remove(s.Plugin.settingPath())
+		if err == nil {
+			err = util.ErrTaskComplete
 		}
-		var file *os.File
-		if file, err = os.OpenFile(p.settingPath(), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666); err != nil {
-			return
-		}
-		defer file.Close()
-		err = yaml.NewEncoder(file).Encode(p.Modify)
-		return
-	})
-	if err == nil {
-		p.Info("config saved")
 	}
+	s.file, err = os.OpenFile(s.Plugin.settingPath(), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
 	return
+}
+
+func (s *SaveConfig) Run() (err error) {
+	return yaml.NewEncoder(s.file).Encode(s.Plugin.Modify)
+}
+
+func (s *SaveConfig) Dispose() {
+	s.file.Close()
 }

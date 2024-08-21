@@ -2,10 +2,8 @@ package plugin_mp4
 
 import (
 	"io"
-	"maps"
 	"net"
 	"net/http"
-	"slices"
 	"strings"
 	"time"
 
@@ -74,18 +72,7 @@ type MP4Plugin struct {
 const defaultConfig m7s.DefaultYaml = `publish:
   speed: 1`
 
-func (p *MP4Plugin) OnInit() error {
-	for streamPath, url := range p.GetCommonConf().PullOnStart {
-		p.Pull(streamPath, url)
-	}
-	return nil
-}
-
 var _ = m7s.InstallPlugin[MP4Plugin](defaultConfig, pkg.NewPuller, pkg.NewRecorder)
-
-func (p *MP4Plugin) GetPullableList() []string {
-	return slices.Collect(maps.Keys(p.GetCommonConf().PullOnSub))
-}
 
 func (p *MP4Plugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	streamPath := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/"), ".mp4")

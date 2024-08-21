@@ -1,9 +1,9 @@
 package plugin_webrtc
 
 import (
+	"embed"
 	_ "embed"
-	"errors"
-	"fmt"
+	"github.com/pion/logging"
 	"io"
 	"net"
 	"net/http"
@@ -12,32 +12,22 @@ import (
 	"time"
 
 	"github.com/pion/interceptor"
-	"github.com/pion/rtcp"
-	"github.com/pion/rtp"
 	. "github.com/pion/webrtc/v3"
 	"m7s.live/m7s/v5"
 	. "m7s.live/m7s/v5/pkg"
-	"m7s.live/m7s/v5/pkg/codec"
-	"m7s.live/m7s/v5/pkg/util"
-	mrtp "m7s.live/m7s/v5/plugin/rtp/pkg"
 	. "m7s.live/m7s/v5/plugin/webrtc/pkg"
 )
 
 var (
-	//go:embed publish.html
-	publishHTML []byte
-
-	//go:embed subscribe.html
-	subscribeHTML []byte
-	reg_level     = regexp.MustCompile("profile-level-id=(4.+f)")
-	_             = m7s.InstallPlugin[WebRTCPlugin]()
+	//go:embed web
+	web       embed.FS
+	reg_level = regexp.MustCompile("profile-level-id=(4.+f)")
+	_         = m7s.InstallPlugin[WebRTCPlugin](NewPuller, NewPusher)
 )
 
 type WebRTCPlugin struct {
 	m7s.Plugin
 	ICEServers []ICEServer   `desc:"ice服务器配置"`
-	PublicIP   string        `desc:"公网IP"`
-	PublicIPv6 string        `desc:"公网IPv6"`
 	Port       string        `default:"tcp:9000" desc:"监听端口"`
 	PLI        time.Duration `default:"2s" desc:"发送PLI请求间隔"`          // 视频流丢包后，发送PLI请求
 	EnableOpus bool          `default:"true" desc:"是否启用opus编码"`       // 是否启用opus编码
@@ -49,6 +39,16 @@ type WebRTCPlugin struct {
 	api        *API
 }
 
+func (p *WebRTCPlugin) RegisterHandler() map[string]http.HandlerFunc {
+	return map[string]http.HandlerFunc{
+		"/test/{name}": p.testPage,
+	}
+}
+
+func (p *WebRTCPlugin) NewLogger(scope string) logging.LeveledLogger {
+	return &LoggerTransform{Logger: p.Logger.With("scope", scope)}
+}
+
 func (p *WebRTCPlugin) OnInit() (err error) {
 	if len(p.ICEServers) > 0 {
 		for i := range p.ICEServers {
@@ -56,6 +56,7 @@ func (p *WebRTCPlugin) OnInit() (err error) {
 			p.ICEServers[i].UnmarshalJSON(b)
 		}
 	}
+	p.s.LoggerFactory = p
 	RegisterCodecs(&p.m)
 	if p.EnableOpus {
 		p.m.RegisterCodec(RTPCodecParameters{
@@ -76,10 +77,10 @@ func (p *WebRTCPlugin) OnInit() (err error) {
 		}, RTPCodecTypeVideo)
 	}
 	i := &interceptor.Registry{}
-	if p.PublicIP != "" {
-		ips := []string{p.PublicIP}
-		if p.PublicIPv6 != "" {
-			ips = append(ips, p.PublicIPv6)
+	if p.GetCommonConf().PublicIP != "" {
+		ips := []string{p.GetCommonConf().PublicIP}
+		if p.GetCommonConf().PublicIPv6 != "" {
+			ips = append(ips, p.GetCommonConf().PublicIPv6)
 		}
 		p.s.SetNAT1To1IPs(ips, ICECandidateTypeHost)
 	}
@@ -126,333 +127,39 @@ func (p *WebRTCPlugin) OnInit() (err error) {
 	return
 }
 
-func (*WebRTCPlugin) Test_Publish(w http.ResponseWriter, r *http.Request) {
-	w.Write(publishHTML)
-}
-func (*WebRTCPlugin) Test_ScreenShare(w http.ResponseWriter, r *http.Request) {
-	w.Write(publishHTML)
-}
-func (*WebRTCPlugin) Test_Subscribe(w http.ResponseWriter, r *http.Request) {
-	w.Write(subscribeHTML)
+func (p *WebRTCPlugin) testPage(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	switch name {
+	case "publish", "screenshare":
+		name = "web/publish.html"
+	case "subscribe":
+		name = "web/subscribe.html"
+	case "push":
+		name = "web/push.html"
+	case "pull":
+		name = "web/pull.html"
+	}
+	f, err := web.Open(name)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	io.Copy(w, f)
 }
 
-// https://datatracker.ietf.org/doc/html/draft-ietf-wish-whip
-func (conf *WebRTCPlugin) Push_(w http.ResponseWriter, r *http.Request) {
-	streamPath := r.URL.Path[len("/push/"):]
-	rawQuery := r.URL.RawQuery
-	auth := r.Header.Get("Authorization")
-	if strings.HasPrefix(auth, "Bearer ") {
-		auth = auth[len("Bearer "):]
-		if rawQuery != "" {
-			rawQuery += "&bearer=" + auth
-		} else {
-			rawQuery = "bearer=" + auth
-		}
-		conf.Info("push", "stream", streamPath, "bearer", auth)
-	}
-	w.Header().Set("Content-Type", "application/sdp")
-	w.Header().Set("Location", "/webrtc/api/stop/push/"+streamPath)
-	w.Header().Set("Access-Control-Allow-Private-Network", "true")
-	if rawQuery != "" {
-		streamPath += "?" + rawQuery
-	}
-	bytes, err := io.ReadAll(r.Body)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	var conn Connection
-	conn.SDP = string(bytes)
-	if conn.PeerConnection, err = conf.api.NewPeerConnection(Configuration{
-		ICEServers: conf.ICEServers,
-	}); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	var publisher *m7s.Publisher
-	if publisher, err = conf.Publish(conf.Context, streamPath); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	conn.OnTrack(func(track *TrackRemote, receiver *RTPReceiver) {
-		publisher.Info("OnTrack", "kind", track.Kind().String(), "payloadType", uint8(track.Codec().PayloadType))
-		var n int
+func (p *WebRTCPlugin) Pull(streamPath, url string) {
+	if strings.HasPrefix(url, "https://rtc.live.cloudflare.com") {
+		cfClient := NewCFClient(DIRECTION_PULL)
 		var err error
-		if codecP := track.Codec(); track.Kind() == RTPCodecTypeAudio {
-			if !publisher.PubAudio {
-				return
-			}
-			mem := util.NewScalableMemoryAllocator(1 << 12)
-			defer mem.Recycle()
-			frame := &mrtp.RTPAudio{}
-			frame.RTPCodecParameters = &codecP
-			frame.SetAllocator(mem)
-			for {
-				var packet rtp.Packet
-				buf := mem.Malloc(mrtp.MTUSize)
-				if n, _, err = track.Read(buf); err == nil {
-					mem.FreeRest(&buf, n)
-					err = packet.Unmarshal(buf)
-				}
-				if err != nil {
-					return
-				}
-				if len(packet.Payload) == 0 {
-					mem.Free(buf)
-					continue
-				}
-				if len(frame.Packets) == 0 || packet.Timestamp == frame.Packets[0].Timestamp {
-					frame.AddRecycleBytes(buf)
-					frame.Packets = append(frame.Packets, &packet)
-				} else {
-					err = publisher.WriteAudio(frame)
-					frame = &mrtp.RTPAudio{}
-					frame.AddRecycleBytes(buf)
-					frame.Packets = []*rtp.Packet{&packet}
-					frame.RTPCodecParameters = &codecP
-					frame.SetAllocator(mem)
-				}
-			}
-		} else {
-			if !publisher.PubVideo {
-				return
-			}
-			var lastPLISent time.Time
-			mem := util.NewScalableMemoryAllocator(1 << 12)
-			defer mem.Recycle()
-			frame := &mrtp.Video{}
-			frame.RTPCodecParameters = &codecP
-			frame.SetAllocator(mem)
-			for {
-				if time.Since(lastPLISent) > conf.PLI {
-					if rtcpErr := conn.WriteRTCP([]rtcp.Packet{&rtcp.PictureLossIndication{MediaSSRC: uint32(track.SSRC())}}); rtcpErr != nil {
-						publisher.Error("writeRTCP", "error", rtcpErr)
-						return
-					}
-					lastPLISent = time.Now()
-				}
-				var packet rtp.Packet
-				buf := mem.Malloc(mrtp.MTUSize)
-				if n, _, err = track.Read(buf); err == nil {
-					mem.FreeRest(&buf, n)
-					err = packet.Unmarshal(buf)
-				}
-				if err != nil {
-					return
-				}
-				if len(packet.Payload) == 0 {
-					mem.Free(buf)
-					continue
-				}
-				if len(frame.Packets) == 0 || packet.Timestamp == frame.Packets[0].Timestamp {
-					frame.AddRecycleBytes(buf)
-					frame.Packets = append(frame.Packets, &packet)
-				} else {
-					// t := time.Now()
-					err = publisher.WriteVideo(frame)
-					// fmt.Println("write video", time.Since(t))
-					frame = &mrtp.Video{}
-					frame.AddRecycleBytes(buf)
-					frame.Packets = []*rtp.Packet{&packet}
-					frame.RTPCodecParameters = &codecP
-					frame.SetAllocator(mem)
-				}
-			}
-		}
-	})
-	conn.OnICECandidate(func(ice *ICECandidate) {
-		if ice != nil {
-			publisher.Info(ice.ToJSON().Candidate)
-		}
-	})
-	conn.OnDataChannel(func(d *DataChannel) {
-		publisher.Info("OnDataChannel", "label", d.Label())
-		d.OnMessage(func(msg DataChannelMessage) {
-			conn.SDP = string(msg.Data[1:])
-			publisher.Debug("dc message", "sdp", conn.SDP)
-			if err := conn.SetRemoteDescription(SessionDescription{Type: SDPTypeOffer, SDP: conn.SDP}); err != nil {
-				return
-			}
-			if answer, err := conn.GetAnswer(); err == nil {
-				d.SendText(answer)
-			} else {
-				return
-			}
-			switch msg.Data[0] {
-			case '0':
-				publisher.Stop(errors.New("stop by remote"))
-			case '1':
-
-			}
+		cfClient.PeerConnection, err = p.api.NewPeerConnection(Configuration{
+			ICEServers:   p.ICEServers,
+			BundlePolicy: BundlePolicyMaxBundle,
 		})
-	})
-	conn.OnConnectionStateChange(func(state PeerConnectionState) {
-		publisher.Info("Connection State has changed:" + state.String())
-		switch state {
-		case PeerConnectionStateConnected:
-
-		case PeerConnectionStateDisconnected, PeerConnectionStateFailed, PeerConnectionStateClosed:
-			publisher.Stop(errors.New("connection state:" + state.String()))
-		}
-	})
-	if err := conn.SetRemoteDescription(SessionDescription{Type: SDPTypeOffer, SDP: conn.SDP}); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	if answer, err := conn.GetAnswer(); err == nil {
-		w.WriteHeader(http.StatusCreated)
-		fmt.Fprint(w, answer)
-	} else {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-}
-
-func (conf *WebRTCPlugin) Play_(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/sdp")
-	streamPath := r.URL.Path[len("/play/"):]
-	rawQuery := r.URL.RawQuery
-	var conn Connection
-	bytes, err := io.ReadAll(r.Body)
-	defer func() {
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-		}
-	}()
-	if err != nil {
-		return
-	}
-	conn.SDP = string(bytes)
-	if conn.PeerConnection, err = conf.api.NewPeerConnection(Configuration{
-		ICEServers: conf.ICEServers,
-	}); err != nil {
-		return
-	}
-	conf.AddTask(&conn)
-	var suber *m7s.Subscriber
-	if rawQuery != "" {
-		streamPath += "?" + rawQuery
-	}
-	if suber, err = conf.Subscribe(conf.Context, streamPath); err != nil {
-		return
-	}
-	conn.AddTask(suber)
-	var useDC bool
-	var audioTLSRTP, videoTLSRTP *TrackLocalStaticRTP
-	var audioSender, videoSender *RTPSender
-	if vt := suber.VideoReader.Track; vt != nil {
-		if vt.FourCC() == codec.FourCC_H265 {
-			useDC = true
-		} else {
-			var rcc RTPCodecParameters
-			if ctx, ok := vt.ICodecCtx.(mrtp.IRTPCtx); ok {
-				rcc = ctx.GetRTPCodecParameter()
-			} else {
-				var rtpCtx mrtp.RTPData
-				var tmpAVTrack AVTrack
-				tmpAVTrack.ICodecCtx, tmpAVTrack.SequenceFrame, err = rtpCtx.ConvertCtx(vt.ICodecCtx)
-				if err == nil {
-					rcc = tmpAVTrack.ICodecCtx.(mrtp.IRTPCtx).GetRTPCodecParameter()
-				} else {
-					return
-				}
-			}
-			videoTLSRTP, err = NewTrackLocalStaticRTP(rcc.RTPCodecCapability, vt.FourCC().String(), suber.StreamPath)
-			if err != nil {
-				return
-			}
-			videoSender, err = conn.PeerConnection.AddTrack(videoTLSRTP)
-			if err != nil {
-				return
-			}
-			go func() {
-				rtcpBuf := make([]byte, 1500)
-				for {
-					if n, _, rtcpErr := videoSender.Read(rtcpBuf); rtcpErr != nil {
-						suber.Warn("rtcp read error", "error", rtcpErr)
-						return
-					} else {
-						if p, err := rtcp.Unmarshal(rtcpBuf[:n]); err == nil {
-							for _, pp := range p {
-								switch pp.(type) {
-								case *rtcp.PictureLossIndication:
-									// fmt.Println("PictureLossIndication")
-								}
-							}
-						}
-					}
-				}
-			}()
-		}
-	}
-	if at := suber.AudioReader.Track; at != nil {
-		if at.FourCC() == codec.FourCC_MP4A {
-			useDC = true
-		} else {
-			ctx := at.ICodecCtx.(interface {
-				GetRTPCodecCapability() RTPCodecCapability
-			})
-			audioTLSRTP, err = NewTrackLocalStaticRTP(ctx.GetRTPCodecCapability(), at.FourCC().String(), suber.StreamPath)
-			if err != nil {
-				return
-			}
-			audioSender, err = conn.PeerConnection.AddTrack(audioTLSRTP)
-			if err != nil {
-				return
-			}
-		}
-	}
-
-	if conf.EnableDC && useDC {
-		dc, err := conn.CreateDataChannel(suber.StreamPath, nil)
-		if err != nil {
+			p.Error("pull", "error", err)
 			return
 		}
-		// TODO: DataChannel
-		go func() {
-			// suber.Handle(m7s.SubscriberHandler{
-			// 	OnAudio: func(audio *rtmp.RTMPAudio) error {
-			// 	},
-			// 	OnVideo: func(video *rtmp.RTMPVideo) error {
-			// 	},
-			// })
-			dc.Close()
-		}()
-	} else {
-		if audioSender == nil {
-			suber.SubAudio = false
-		}
-		if videoSender == nil {
-			suber.SubVideo = false
-		}
-		conn.AddTask(m7s.CreatePlayTask(suber, func(frame *mrtp.RTPAudio) (err error) {
-			for _, p := range frame.Packets {
-				if err = audioTLSRTP.WriteRTP(p); err != nil {
-					return
-				}
-			}
-			return
-		}, func(frame *mrtp.Video) error {
-			for _, p := range frame.Packets {
-				if err := videoTLSRTP.WriteRTP(p); err != nil {
-					return err
-				}
-			}
-			return nil
-		}))
-	}
-	conn.OnICECandidate(func(ice *ICECandidate) {
-		if ice != nil {
-			suber.Info(ice.ToJSON().Candidate)
-		}
-	})
-	if err = conn.SetRemoteDescription(SessionDescription{Type: SDPTypeOffer, SDP: conn.SDP}); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if sdp, err := conn.GetAnswer(); err == nil {
-		w.Write([]byte(sdp))
-	} else {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		ctx := cfClient.GetPullContext().Init(cfClient, &p.Plugin, streamPath, url)
+		p.Server.AddPullTask(ctx)
 	}
 }

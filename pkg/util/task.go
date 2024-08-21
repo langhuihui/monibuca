@@ -14,7 +14,6 @@ const TraceLevel = slog.Level(-8)
 
 var (
 	ErrAutoStop     = errors.New("auto stop")
-	ErrCallbackTask = errors.New("callback")
 	ErrRetryRunOut  = errors.New("retry out")
 	ErrTaskComplete = errors.New("complete")
 	ErrExit         = errors.New("exit")
@@ -27,7 +26,7 @@ type (
 		initTask(context.Context, ITask)
 		getParent() *MarcoTask
 		GetTask() *Task
-		getSignal() reflect.Value
+		GetSignal() any
 		Stop(error)
 		StopReason() error
 		start() error
@@ -46,7 +45,7 @@ type (
 		OnTaskAdded(func(ITask))
 	}
 	IChannelTask interface {
-		tick(reflect.Value)
+		Tick(any)
 	}
 	TaskStarter interface {
 		Start() error
@@ -164,8 +163,8 @@ func (task *Task) OnDispose(listener func()) {
 	task.afterDisposeListeners = append(task.afterDisposeListeners, listener)
 }
 
-func (task *Task) getSignal() reflect.Value {
-	return reflect.ValueOf(task.Done())
+func (task *Task) GetSignal() any {
+	return task.Done()
 }
 
 func (task *Task) checkRetry(err error) (bool, error) {
@@ -202,11 +201,13 @@ func (task *Task) start() (err error) {
 	if task.Logger != nil {
 		task.Debug("task start", "taskId", task.ID, "taskType", task.GetTaskType(), "ownerType", task.GetOwnerType())
 	}
+	hasRun := false
 	for {
 		err = task.startHandler()
 		if err == nil {
 			task.ResetRetryCount()
 			if runHandler, ok := task.handler.(TaskBlock); ok {
+				hasRun = true
 				err = runHandler.Run()
 				if err == nil {
 					err = ErrTaskComplete
@@ -227,6 +228,13 @@ func (task *Task) start() (err error) {
 		}
 	}
 	task.startup.Fulfill(err)
+	if err != nil {
+		if hasRun {
+			task.Stop(err)
+			task.dispose()
+		}
+		return
+	}
 	for _, listener := range task.afterStartListeners {
 		listener()
 	}

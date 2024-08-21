@@ -3,14 +3,11 @@ package plugin_rtmp
 import (
 	"errors"
 	"io"
-	"m7s.live/m7s/v5/pkg/util"
-	"maps"
-	"net"
-	"slices"
-
 	"m7s.live/m7s/v5"
+	"m7s.live/m7s/v5/pkg/util"
 	"m7s.live/m7s/v5/plugin/rtmp/pb"
 	. "m7s.live/m7s/v5/plugin/rtmp/pkg"
+	"net"
 )
 
 type RTMPPlugin struct {
@@ -23,17 +20,6 @@ type RTMPPlugin struct {
 
 var _ = m7s.InstallPlugin[RTMPPlugin](m7s.DefaultYaml(`tcp:
   listenaddr: :1935`), &pb.Rtmp_ServiceDesc, pb.RegisterRtmpHandler, NewPusher, NewPuller)
-
-func (p *RTMPPlugin) OnInit() error {
-	for streamPath, url := range p.GetCommonConf().PullOnStart {
-		p.Pull(streamPath, url)
-	}
-	return nil
-}
-
-func (p *RTMPPlugin) GetPullableList() []string {
-	return slices.Collect(maps.Keys(p.GetCommonConf().PullOnSub))
-}
 
 type RTMPServer struct {
 	*NetConnection

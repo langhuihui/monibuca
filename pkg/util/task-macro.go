@@ -145,30 +145,29 @@ func (mt *MarcoTask) AddTaskWithContext(ctx context.Context, t ITask) (task *Tas
 }
 
 func (mt *MarcoTask) Call(callback func() error) {
-	task := CreateTaskByCallBack(callback, nil)
-	_ = mt.AddTask(task).WaitStarted()
+	mt.Post(callback).WaitStarted()
 }
 
-func CreateTaskByCallBack(start func() error, dispose func()) *Task {
-	var task Task
+func (mt *MarcoTask) Post(callback func() error) *Task {
+	task := CreateTaskByCallBack(callback, nil)
+	return mt.AddTask(task)
+}
+
+type CallBackTask struct {
+	Task
+}
+
+func CreateTaskByCallBack(start func() error, dispose func()) ITask {
+	var task CallBackTask
 	task.startHandler = func() error {
 		err := start()
 		if err == nil && dispose == nil {
-			err = ErrCallbackTask
+			err = ErrTaskComplete
 		}
 		return err
 	}
 	task.disposeHandler = dispose
 	return &task
-}
-
-func (mt *MarcoTask) AddChan(channel any, callback any) *ChannelTask {
-	var chanTask ChannelTask
-	chanTask.initTask(mt.Context, &chanTask)
-	chanTask.channel = reflect.ValueOf(channel)
-	chanTask.callback = reflect.ValueOf(callback)
-	mt.lazyStart(&chanTask)
-	return &chanTask
 }
 
 func (mt *MarcoTask) addChild(task ITask) int {
@@ -209,11 +208,14 @@ func (mt *MarcoTask) run() {
 			if task := rev.Interface().(ITask); task.getParent() == mt {
 				index := mt.addChild(task)
 				if err := task.start(); err == nil {
-					cases = append(cases, reflect.SelectCase{Dir: reflect.SelectRecv, Chan: task.getSignal()})
+					cases = append(cases, reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(task.GetSignal())})
 				} else {
 					mt.removeChild(index)
 					task.Stop(err)
 				}
+			} else {
+				mt.children = append(mt.children, task)
+				cases = append(cases, reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(task.GetSignal())})
 			}
 		} else {
 			taskIndex := chosen - 1
@@ -226,7 +228,7 @@ func (mt *MarcoTask) run() {
 				cases = slices.Delete(cases, chosen, chosen+1)
 
 			} else if c, ok := task.(IChannelTask); ok {
-				c.tick(rev)
+				c.Tick(rev.Interface())
 			}
 		}
 		if !mt.keepAlive && len(mt.children) == 0 {
