@@ -254,7 +254,7 @@ func (s *Server) Start() (err error) {
 	}
 
 	if tcpTask != nil {
-		tcpTask.AddTask(&GRPCServer{Task: util.Task{Logger: s.Logger}, s: s, tcpTask: tcpTask})
+		s.AddTask(&GRPCServer{Task: util.Task{Logger: s.Logger}, s: s, tcpTask: tcpTask})
 	}
 	s.streamTask.AddTask(&CheckSubWaitTimeout{s: s})
 	Servers.Add(s)
@@ -328,6 +328,7 @@ func (s *Server) Dispose() {
 	_ = s.grpcClientConn.Close()
 	if s.DB != nil {
 		db, err := s.DB.DB()
+		s.DB.Commit()
 		if err == nil {
 			err = db.Close()
 		}
