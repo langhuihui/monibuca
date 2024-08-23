@@ -21,7 +21,7 @@ var RootTask MarcoLongTask
 func init() {
 	RootTask.initTask(context.Background(), &RootTask)
 	RootTask.Description = map[string]any{
-		"title": "RootTask",
+		"ownerType": "root",
 	}
 	RootTask.Logger = slog.New(slog.NewTextHandler(os.Stdout, nil))
 }
@@ -40,55 +40,56 @@ func (m *MarcoLongTask) initTask(ctx context.Context, task ITask) {
 	m.keepAlive = true
 }
 
-func (*MarcoLongTask) GetTaskType() string {
-	return "long"
-}
-func (*MarcoLongTask) GetTaskTypeID() byte {
-	return 2
+func (*MarcoLongTask) GetTaskType() TaskType {
+	return TASK_TYPE_LONG_MACRO
 }
 
 // MarcoTask include sub tasks
 type MarcoTask struct {
 	Task
-	addSub       chan ITask
-	children     []ITask
-	lazyRun      sync.Once
-	keepAlive    bool
-	addListeners []func(task ITask)
+	addSub                chan ITask
+	children              []ITask
+	lazyRun               sync.Once
+	keepAlive             bool
+	childrenDisposed      chan struct{}
+	childDisposeListeners []func(ITask)
+	blocked               bool
 }
 
-func (*MarcoTask) GetTaskType() string {
-	return "marco"
+func (*MarcoTask) GetTaskType() TaskType {
+	return TASK_TYPE_MACRO
 }
 
-func (*MarcoTask) GetTaskTypeID() byte {
-	return 1
+func (mt *MarcoTask) Blocked() bool {
+	return mt.blocked
 }
 
-func (mt *MarcoTask) getMaroTask() *MarcoTask {
-	return mt
+func (mt *MarcoTask) waitChildrenDispose() {
+	close(mt.addSub)
+	<-mt.childrenDisposed
 }
 
-func (mt *MarcoTask) initTask(ctx context.Context, task ITask) {
-	mt.Task.initTask(ctx, task)
-	mt.shutdown = nil
-	mt.addSub = make(chan ITask, 10)
+func (mt *MarcoTask) OnChildDispose(listener func(ITask)) {
+	mt.childDisposeListeners = append(mt.childDisposeListeners, listener)
+}
+
+func (mt *MarcoTask) onChildDispose(child ITask) {
+	for _, listener := range mt.childDisposeListeners {
+		listener(child)
+	}
+	if mt.parent != nil {
+		mt.parent.onChildDispose(child)
+	}
+	if child.getParent() == mt {
+		child.dispose()
+	}
 }
 
 func (mt *MarcoTask) dispose() {
-	reason := mt.StopReason()
-	if mt.Logger != nil {
-		mt.Debug("task dispose", "reason", reason, "taskId", mt.ID, "taskType", mt.GetTaskType(), "ownerType", mt.GetOwnerType())
+	if mt.childrenDisposed != nil {
+		mt.OnBeforeDispose(mt.waitChildrenDispose)
 	}
-	mt.disposeHandler()
-	close(mt.addSub)
-	_ = mt.WaitStopped()
-	if mt.Logger != nil {
-		mt.Debug("task disposed", "reason", reason, "taskId", mt.ID, "taskType", mt.GetTaskType(), "ownerType", mt.GetOwnerType())
-	}
-	for _, listener := range mt.afterDisposeListeners {
-		listener()
-	}
+	mt.Task.dispose()
 }
 
 func (mt *MarcoTask) lazyStart(t ITask) {
@@ -102,6 +103,7 @@ func (mt *MarcoTask) lazyStart(t ITask) {
 	}
 	if task.parent == nil {
 		task.parent = mt
+		task.level = mt.level + 1
 	}
 	if task.Logger == nil {
 		task.Logger = mt.Logger
@@ -113,7 +115,8 @@ func (mt *MarcoTask) lazyStart(t ITask) {
 		task.disposeHandler = EmptyDispose
 	}
 	mt.lazyRun.Do(func() {
-		mt.shutdown = NewPromise(context.Background())
+		mt.childrenDisposed = make(chan struct{})
+		mt.addSub = make(chan ITask, 10)
 		go mt.run()
 	})
 	mt.addSub <- t
@@ -127,10 +130,6 @@ func (mt *MarcoTask) RangeSubTask(callback func(task ITask) bool) {
 
 func (mt *MarcoTask) AddTask(task ITask) *Task {
 	return mt.AddTaskWithContext(mt.Context, task)
-}
-
-func (mt *MarcoTask) OnTaskAdded(f func(ITask)) {
-	mt.addListeners = append(mt.addListeners, f)
 }
 
 func (mt *MarcoTask) AddTaskWithContext(ctx context.Context, t ITask) (task *Task) {
@@ -153,32 +152,13 @@ func (mt *MarcoTask) Post(callback func() error) *Task {
 	return mt.AddTask(task)
 }
 
-type CallBackTask struct {
-	Task
-}
-
-func CreateTaskByCallBack(start func() error, dispose func()) ITask {
-	var task CallBackTask
-	task.startHandler = func() error {
-		err := start()
-		if err == nil && dispose == nil {
-			err = ErrTaskComplete
-		}
-		return err
-	}
-	task.disposeHandler = dispose
-	return &task
-}
-
 func (mt *MarcoTask) addChild(task ITask) int {
 	mt.children = append(mt.children, task)
-	for _, listener := range mt.addListeners {
-		listener(task)
-	}
 	return len(mt.children) - 1
 }
 
 func (mt *MarcoTask) removeChild(index int) {
+	mt.onChildDispose(mt.children[index])
 	mt.children = slices.Delete(mt.children, index, index+1)
 }
 
@@ -192,16 +172,15 @@ func (mt *MarcoTask) run() {
 		stopReason := mt.StopReason()
 		for _, task := range mt.children {
 			task.Stop(stopReason)
-			if task.getParent() == mt {
-				task.dispose()
-			}
+			mt.onChildDispose(task)
 		}
 		mt.children = nil
-		mt.addSub = nil
-		mt.shutdown.Fulfill(stopReason)
+		close(mt.childrenDisposed)
 	}()
 	for {
+		mt.blocked = false
 		if chosen, rev, ok := reflect.Select(cases); chosen == 0 {
+			mt.blocked = true
 			if !ok {
 				return
 			}
@@ -210,25 +189,23 @@ func (mt *MarcoTask) run() {
 				if err := task.start(); err == nil {
 					cases = append(cases, reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(task.GetSignal())})
 				} else {
-					mt.removeChild(index)
 					task.Stop(err)
+					mt.removeChild(index)
 				}
 			} else {
-				mt.children = append(mt.children, task)
+				mt.addChild(task)
 				cases = append(cases, reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(task.GetSignal())})
 			}
 		} else {
 			taskIndex := chosen - 1
 			task := mt.children[taskIndex]
+			switch tt := task.(type) {
+			case IChannelTask:
+				tt.Tick(rev.Interface())
+			}
 			if !ok {
-				if task.getParent() == mt {
-					task.dispose()
-				}
 				mt.removeChild(taskIndex)
 				cases = slices.Delete(cases, chosen, chosen+1)
-
-			} else if c, ok := task.(IChannelTask); ok {
-				c.Tick(rev.Interface())
 			}
 		}
 		if !mt.keepAlive && len(mt.children) == 0 {

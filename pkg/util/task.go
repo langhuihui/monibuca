@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"reflect"
 	"runtime/debug"
+	"strings"
 	"time"
 )
 
@@ -21,28 +22,55 @@ var (
 	EmptyDispose    = func() {}
 )
 
+const (
+	TASK_STATE_INIT TaskState = iota
+	TASK_STATE_STARTING
+	TASK_STATE_STARTED
+	TASK_STATE_RUNNING
+	TASK_STATE_GOING
+	TASK_STATE_DISPOSING
+	TASK_STATE_DISPOSED
+)
+
+const (
+	TASK_TYPE_BASE TaskType = iota
+	TASK_TYPE_MACRO
+	TASK_TYPE_LONG_MACRO
+	TASK_TYPE_CHANNEL
+	TASK_TYPE_CALL
+)
+
 type (
-	ITask interface {
+	TaskState byte
+	TaskType  byte
+	ITask     interface {
 		initTask(context.Context, ITask)
 		getParent() *MarcoTask
+		GetParent() ITask
 		GetTask() *Task
+		GetTaskID() uint32
 		GetSignal() any
 		Stop(error)
 		StopReason() error
 		start() error
 		dispose()
 		IsStopped() bool
-		GetTaskType() string
-		GetTaskTypeID() byte
+		GetTaskType() TaskType
 		GetOwnerType() string
 		SetRetry(maxRetry int, retryInterval time.Duration)
 		OnStart(func())
+		OnBeforeDispose(func())
 		OnDispose(func())
+		GetState() TaskState
+		GetLevel() byte
 	}
 	IMarcoTask interface {
 		ITask
 		RangeSubTask(func(yield ITask) bool)
-		OnTaskAdded(func(ITask))
+		OnChildDispose(func(ITask))
+		Blocked() bool
+		Call(func() error)
+		Post(func() error) *Task
 	}
 	IChannelTask interface {
 		Tick(any)
@@ -70,34 +98,51 @@ type (
 		*slog.Logger
 		context.Context
 		context.CancelCauseFunc
-		handler                                    ITask
-		retry                                      RetryConfig
-		startHandler                               func() error
-		afterStartListeners, afterDisposeListeners []func()
-		disposeHandler                             func()
-		Description                                map[string]any
-		startup, shutdown                          *Promise
-		parent                                     *MarcoTask
-		parentCtx                                  context.Context
-		needRetry                                  bool
+		handler                                                            ITask
+		retry                                                              RetryConfig
+		startHandler                                                       func() error
+		afterStartListeners, beforeDisposeListeners, afterDisposeListeners []func()
+		disposeHandler                                                     func()
+		Description                                                        map[string]any
+		startup, shutdown                                                  *Promise
+		parent                                                             *MarcoTask
+		parentCtx                                                          context.Context
+		needRetry                                                          bool
+		state                                                              TaskState
+		level                                                              byte
 	}
 )
 
+func (task *Task) GetState() TaskState {
+	return task.state
+}
+func (task *Task) GetLevel() byte {
+	return task.level
+}
+func (task *Task) GetParent() ITask {
+	if task.parent != nil {
+		return task.parent.handler
+	}
+	return nil
+}
 func (task *Task) SetRetry(maxRetry int, retryInterval time.Duration) {
 	task.retry.MaxRetry = maxRetry
 	task.retry.RetryInterval = retryInterval
 }
-
+func (task *Task) GetTaskID() uint32 {
+	return task.ID
+}
 func (task *Task) GetOwnerType() string {
-	return reflect.TypeOf(task.handler).Elem().Name()
+	if task.Description != nil {
+		if ownerType, ok := task.Description["ownerType"]; ok {
+			return ownerType.(string)
+		}
+	}
+	return strings.TrimSuffix(reflect.TypeOf(task.handler).Elem().Name(), "Task")
 }
 
-func (*Task) GetTaskType() string {
-	return "base"
-}
-
-func (*Task) GetTaskTypeID() byte {
-	return 0
+func (*Task) GetTaskType() TaskType {
+	return TASK_TYPE_BASE
 }
 
 func (task *Task) GetTask() *Task {
@@ -117,13 +162,13 @@ func (task *Task) WaitStarted() error {
 }
 
 func (task *Task) WaitStopped() (err error) {
-	err = task.WaitStarted()
+	err = task.startup.Await()
 	if err != nil {
 		return err
 	}
-	if task.shutdown == nil {
-		return task.StopReason()
-	}
+	//if task.shutdown == nil {
+	//	return task.StopReason()
+	//}
 	return task.shutdown.Await()
 }
 
@@ -157,6 +202,10 @@ func (task *Task) Stop(err error) {
 
 func (task *Task) OnStart(listener func()) {
 	task.afterStartListeners = append(task.afterStartListeners, listener)
+}
+
+func (task *Task) OnBeforeDispose(listener func()) {
+	task.beforeDisposeListeners = append(task.beforeDisposeListeners, listener)
 }
 
 func (task *Task) OnDispose(listener func()) {
@@ -203,11 +252,14 @@ func (task *Task) start() (err error) {
 	}
 	hasRun := false
 	for {
+		task.state = TASK_STATE_STARTING
 		err = task.startHandler()
+		task.state = TASK_STATE_STARTED
 		if err == nil {
 			task.ResetRetryCount()
 			if runHandler, ok := task.handler.(TaskBlock); ok {
 				hasRun = true
+				task.state = TASK_STATE_RUNNING
 				err = runHandler.Run()
 				if err == nil {
 					err = ErrTaskComplete
@@ -239,20 +291,29 @@ func (task *Task) start() (err error) {
 		listener()
 	}
 	if goHandler, ok := task.handler.(TaskGo); ok {
+		task.state = TASK_STATE_GOING
 		go task.run(goHandler.Go)
 	}
 	return
 }
 
 func (task *Task) dispose() {
+	task.state = TASK_STATE_DISPOSING
 	reason := task.StopReason()
 	if task.Logger != nil {
 		task.Debug("task dispose", "reason", reason, "taskId", task.ID, "taskType", task.GetTaskType(), "ownerType", task.GetOwnerType())
+	}
+	for _, listener := range task.beforeDisposeListeners {
+		listener()
 	}
 	task.disposeHandler()
 	task.shutdown.Fulfill(reason)
 	for _, listener := range task.afterDisposeListeners {
 		listener()
+	}
+	task.state = TASK_STATE_DISPOSED
+	if task.Logger != nil {
+		task.Debug("task disposed", "reason", reason, "taskId", task.ID, "taskType", task.GetTaskType(), "ownerType", task.GetOwnerType())
 	}
 	if !errors.Is(reason, ErrTaskComplete) && task.needRetry {
 		task.Context, task.CancelCauseFunc = context.WithCancelCause(task.parentCtx)

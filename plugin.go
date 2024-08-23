@@ -110,7 +110,10 @@ func (plugin *PluginMeta) Init(s *Server, userConfig map[string]any) (p *Plugin)
 		}
 	}
 	p.Config.ParseUserFile(userConfig)
-	p.Description = map[string]any{"version": plugin.Version, "userConfig": userConfig}
+	p.Description = map[string]any{"version": plugin.Version}
+	if userConfig != nil {
+		p.Description["userConfig"] = userConfig
+	}
 	finalConfig, _ := yaml.Marshal(p.Config.GetMap())
 	p.Logger.Handler().(*MultiLogHandler).SetLevel(ParseLevel(p.config.LogLevel))
 	p.Debug("config", "detail", string(finalConfig))

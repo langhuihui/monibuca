@@ -130,7 +130,10 @@ func (o *OSSignal) Start() error {
 }
 
 func (o *OSSignal) Tick(any) {
-	util.ShutdownRootTask()
+	go util.ShutdownRootTask()
+}
+
+func exit() {
 	for _, meta := range plugins {
 		if meta.OnExit != nil {
 			meta.OnExit()
@@ -144,6 +147,7 @@ func (o *OSSignal) Tick(any) {
 
 func init() {
 	util.RootTask.AddTask(&OSSignal{})
+	util.RootTask.OnDispose(exit)
 	for k, v := range myip.LocalAndInternalIPs() {
 		Routes[k] = v
 		fmt.Println(k, v)
@@ -243,16 +247,15 @@ func (s *Server) Start() (err error) {
 			return
 		}
 	}
-	s.AddTask(&s.streamTask)
-	s.AddTask(&s.pullTask)
-	s.AddTask(&s.pushTask)
-	s.AddTask(&s.recordTask)
+	s.AddTask(&s.streamTask).Description = map[string]any{"ownerType": "Stream"}
+	s.AddTask(&s.pullTask).Description = map[string]any{"ownerType": "Pull"}
+	s.AddTask(&s.pushTask).Description = map[string]any{"ownerType": "Push"}
+	s.AddTask(&s.recordTask).Description = map[string]any{"ownerType": "Record"}
 	for _, plugin := range plugins {
 		if p := plugin.Init(s, cg[strings.ToLower(plugin.Name)]); !p.Disabled {
 			s.AddTask(p.handler)
 		}
 	}
-
 	if tcpTask != nil {
 		s.AddTask(&GRPCServer{Task: util.Task{Logger: s.Logger}, s: s, tcpTask: tcpTask})
 	}
@@ -328,7 +331,6 @@ func (s *Server) Dispose() {
 	_ = s.grpcClientConn.Close()
 	if s.DB != nil {
 		db, err := s.DB.DB()
-		s.DB.Commit()
 		if err == nil {
 			err = db.Close()
 		}
@@ -350,11 +352,11 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "favicon.ico")
 		return
 	}
-	fmt.Fprintf(w, "visit:%s\nMonibuca Engine %s StartTime:%s\n", r.URL.Path, Version, s.StartTime)
+	_, _ = fmt.Fprintf(w, "visit:%s\nMonibuca Engine %s StartTime:%s\n", r.URL.Path, Version, s.StartTime)
 	for plugin := range s.Plugins.Range {
-		fmt.Fprintf(w, "Plugin %s Version:%s\n", plugin.Meta.Name, plugin.Meta.Version)
+		_, _ = fmt.Fprintf(w, "Plugin %s Version:%s\n", plugin.Meta.Name, plugin.Meta.Version)
 	}
 	for _, api := range s.apiList {
-		fmt.Fprintf(w, "%s\n", api)
+		_, _ = fmt.Fprintf(w, "%s\n", api)
 	}
 }

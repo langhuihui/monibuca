@@ -166,11 +166,13 @@ message SysInfoResponse {
 
 message TaskTreeResponse {
   uint32 id = 1;
-  string type = 2;
+  uint32 type = 2;
   string owner = 3;
   google.protobuf.Timestamp startTime = 4;
   map<string, string> description = 5;
   repeated TaskTreeResponse children = 6;
+  uint32 state = 7;
+  bool blocked = 8;
 }
 
 message StreamListRequest {

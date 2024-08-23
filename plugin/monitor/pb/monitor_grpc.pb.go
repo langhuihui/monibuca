@@ -11,6 +11,7 @@ import (
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
+	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
 // This is a compile-time assertion to ensure that this generated file
@@ -23,6 +24,7 @@ const _ = grpc.SupportPackageIsVersion7
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type ApiClient interface {
 	SearchTask(ctx context.Context, in *SearchTaskRequest, opts ...grpc.CallOption) (*SearchTaskResponse, error)
+	SessionList(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*SessionListResponse, error)
 }
 
 type apiClient struct {
@@ -42,11 +44,21 @@ func (c *apiClient) SearchTask(ctx context.Context, in *SearchTaskRequest, opts 
 	return out, nil
 }
 
+func (c *apiClient) SessionList(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*SessionListResponse, error) {
+	out := new(SessionListResponse)
+	err := c.cc.Invoke(ctx, "/monitor.api/SessionList", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ApiServer is the server API for Api service.
 // All implementations must embed UnimplementedApiServer
 // for forward compatibility
 type ApiServer interface {
 	SearchTask(context.Context, *SearchTaskRequest) (*SearchTaskResponse, error)
+	SessionList(context.Context, *emptypb.Empty) (*SessionListResponse, error)
 	mustEmbedUnimplementedApiServer()
 }
 
@@ -56,6 +68,9 @@ type UnimplementedApiServer struct {
 
 func (UnimplementedApiServer) SearchTask(context.Context, *SearchTaskRequest) (*SearchTaskResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SearchTask not implemented")
+}
+func (UnimplementedApiServer) SessionList(context.Context, *emptypb.Empty) (*SessionListResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SessionList not implemented")
 }
 func (UnimplementedApiServer) mustEmbedUnimplementedApiServer() {}
 
@@ -88,6 +103,24 @@ func _Api_SearchTask_Handler(srv interface{}, ctx context.Context, dec func(inte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Api_SessionList_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(emptypb.Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).SessionList(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/monitor.api/SessionList",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).SessionList(ctx, req.(*emptypb.Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Api_ServiceDesc is the grpc.ServiceDesc for Api service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -98,6 +131,10 @@ var Api_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SearchTask",
 			Handler:    _Api_SearchTask_Handler,
+		},
+		{
+			MethodName: "SessionList",
+			Handler:    _Api_SessionList_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -145,27 +145,23 @@ func (s *Server) StreamInfo(ctx context.Context, req *pb.StreamSnapRequest) (res
 }
 
 func (s *Server) TaskTree(context.Context, *emptypb.Empty) (res *pb.TaskTreeResponse, err error) {
-	res = &pb.TaskTreeResponse{Id: s.ID, Type: s.GetTaskType(), Owner: s.GetOwnerType(), StartTime: timestamppb.New(s.StartTime), Description: maps.Collect(func(yield func(key, value string) bool) {
-		for k, v := range s.Description {
-			yield(k, fmt.Sprintf("%v", v))
-		}
-	})}
-	var fillData func(m util.IMarcoTask, res *pb.TaskTreeResponse)
-	fillData = func(m util.IMarcoTask, res *pb.TaskTreeResponse) {
-		for task := range m.RangeSubTask {
-			t := task.GetTask()
-			child := &pb.TaskTreeResponse{Id: t.ID, Type: task.GetTaskType(), Owner: task.GetOwnerType(), StartTime: timestamppb.New(t.StartTime), Description: maps.Collect(func(yield func(key, value string) bool) {
-				for k, v := range t.Description {
-					yield(k, fmt.Sprintf("%v", v))
-				}
-			})}
-			if marcoTask, ok := task.(util.IMarcoTask); ok {
-				fillData(marcoTask, child)
+	var fillData func(m util.IMarcoTask) *pb.TaskTreeResponse
+	fillData = func(m util.IMarcoTask) (res *pb.TaskTreeResponse) {
+		res = &pb.TaskTreeResponse{Id: m.GetTaskID(), State: uint32(m.GetState()), Blocked: m.Blocked(), Type: uint32(m.GetTaskType()), Owner: m.GetOwnerType(), StartTime: timestamppb.New(m.GetTask().StartTime), Description: maps.Collect(func(yield func(key, value string) bool) {
+			for k, v := range m.GetTask().Description {
+				yield(k, fmt.Sprintf("%v", v))
 			}
-			res.Children = append(res.Children, child)
+		})}
+		for task := range m.RangeSubTask {
+			if marcoTask, ok := task.(util.IMarcoTask); ok {
+				res.Children = append(res.Children, fillData(marcoTask))
+			} else {
+				res.Children = append(res.Children, &pb.TaskTreeResponse{Id: task.GetTaskID(), State: uint32(task.GetState()), Type: uint32(task.GetTaskType()), Owner: task.GetOwnerType(), StartTime: timestamppb.New(task.GetTask().StartTime)})
+			}
 		}
+		return
 	}
-	fillData(s, res)
+	res = fillData(&util.RootTask)
 	return
 }
 

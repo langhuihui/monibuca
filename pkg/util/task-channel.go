@@ -9,12 +9,8 @@ type ChannelTask struct {
 	SignalChan any
 }
 
-func (*ChannelTask) GetTaskType() string {
-	return "channel"
-}
-
-func (*ChannelTask) GetTaskTypeID() byte {
-	return 3
+func (*ChannelTask) GetTaskType() TaskType {
+	return TASK_TYPE_CHANNEL
 }
 
 func (t *ChannelTask) GetSignal() any {

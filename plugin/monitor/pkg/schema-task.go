@@ -12,4 +12,5 @@ type Task struct {
 	TaskType                    byte
 	Description                 string
 	Reason                      string
+	Level                       byte
 }

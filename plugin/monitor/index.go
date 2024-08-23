@@ -6,6 +6,8 @@ import (
 	"m7s.live/m7s/v5/pkg/util"
 	"m7s.live/m7s/v5/plugin/monitor/pb"
 	monitor "m7s.live/m7s/v5/plugin/monitor/pkg"
+	"os"
+	"strings"
 	"time"
 )
 
@@ -25,49 +27,27 @@ func (cfg *MonitorPlugin) OnStop() {
 	}
 }
 
-func (cfg *MonitorPlugin) taskDisposeListener(task util.ITask, mt util.IMarcoTask) func() {
-	return func() {
-		var th monitor.Task
-		th.SessionID = cfg.session.ID
-		th.TaskID = task.GetTask().ID
-		th.ParentID = mt.GetTask().ID
-		th.StartTime = task.GetTask().StartTime
-		th.EndTime = time.Now()
-		th.OwnerType = task.GetOwnerType()
-		th.TaskType = task.GetTaskTypeID()
-		th.Reason = task.StopReason().Error()
-		b, _ := json.Marshal(task.GetTask().Description)
-		th.Description = string(b)
-		cfg.DB.Create(&th)
-	}
+func (cfg *MonitorPlugin) saveTask(task util.ITask) {
+	var th monitor.Task
+	th.SessionID = cfg.session.ID
+	th.TaskID = task.GetTaskID()
+	th.ParentID = task.GetParent().GetTaskID()
+	th.StartTime = task.GetTask().StartTime
+	th.EndTime = time.Now()
+	th.OwnerType = task.GetOwnerType()
+	th.TaskType = byte(task.GetTaskType())
+	th.Reason = task.StopReason().Error()
+	th.Level = task.GetLevel()
+	b, _ := json.Marshal(task.GetTask().Description)
+	th.Description = string(b)
+	cfg.DB.Create(&th)
 }
-
-func (cfg *MonitorPlugin) monitorTask(mt util.IMarcoTask) {
-	mt.OnTaskAdded(func(task util.ITask) {
-		task.GetTask().OnDispose(cfg.taskDisposeListener(task, mt))
-	})
-	for t := range mt.RangeSubTask {
-		t.OnDispose(cfg.taskDisposeListener(t, mt))
-		if mt, ok := t.(util.IMarcoTask); ok {
-			cfg.monitorTask(mt)
-		}
-	}
-}
-
-//func (cfg *MonitorPlugin) saveUnDisposeTask(mt util.IMarcoTask) {
-//	for t := range mt.RangeSubTask {
-//		cfg.taskDisposeListener(t, mt)()
-//		if mt, ok := t.(util.IMarcoTask); ok {
-//			cfg.saveUnDisposeTask(mt)
-//		}
-//	}
-//}
 
 func (cfg *MonitorPlugin) OnInit() (err error) {
 	//cfg.columnstore, err = frostdb.New()
 	//database, _ := cfg.columnstore.DB(cfg, "monitor")
 	if cfg.DB != nil {
-		session := &monitor.Session{StartTime: time.Now()}
+		session := &monitor.Session{StartTime: time.Now(), PID: os.Getpid(), Args: strings.Join(os.Args, " ")}
 		err = cfg.DB.AutoMigrate(session)
 		if err != nil {
 			return err
@@ -82,7 +62,10 @@ func (cfg *MonitorPlugin) OnInit() (err error) {
 		if err != nil {
 			return err
 		}
-		cfg.monitorTask(cfg.Plugin.Server)
+		cfg.Plugin.Server.OnBeforeDispose(func() {
+			cfg.saveTask(cfg.Plugin.Server)
+		})
+		cfg.Plugin.Server.OnChildDispose(cfg.saveTask)
 	}
 	return
 }
