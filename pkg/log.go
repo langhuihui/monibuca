@@ -3,7 +3,7 @@ package pkg
 import (
 	"context"
 	"log/slog"
-	"m7s.live/m7s/v5/pkg/util"
+	"m7s.live/m7s/v5/pkg/task"
 	"slices"
 )
 
@@ -12,7 +12,7 @@ var _ slog.Handler = (*MultiLogHandler)(nil)
 func ParseLevel(level string) slog.Level {
 	var lv slog.LevelVar
 	if level == "trace" {
-		lv.Set(util.TraceLevel)
+		lv.Set(task.TraceLevel)
 	} else {
 		lv.UnmarshalText([]byte(level))
 	}

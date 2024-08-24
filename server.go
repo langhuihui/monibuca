@@ -5,15 +5,17 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"m7s.live/m7s/v5/pkg/config"
+	"m7s.live/m7s/v5/pkg/task"
 	"net/http"
 	"os"
-	"os/signal"
 	"path/filepath"
 	"runtime/debug"
 	"strings"
-	"syscall"
 	"time"
+
+	"m7s.live/m7s/v5/pkg/config"
+
+	sysruntime "runtime"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	myip "github.com/husanpao/ip"
@@ -26,7 +28,6 @@ import (
 	. "m7s.live/m7s/v5/pkg"
 	"m7s.live/m7s/v5/pkg/db"
 	"m7s.live/m7s/v5/pkg/util"
-	sysruntime "runtime"
 )
 
 var (
@@ -38,7 +39,7 @@ var (
 		Name:    "Global",
 		Version: Version,
 	}
-	Servers           util.Collection[uint32, *Server]
+	Servers           task.RootManager[uint32, *Server]
 	Routes            = map[string]string{}
 	defaultLogHandler = console.NewHandler(os.Stdout, &console.HandlerOptions{TimeFormat: "15:04:05.000000"})
 )
@@ -67,28 +68,28 @@ type Server struct {
 	pb.UnimplementedGlobalServer
 	Plugin
 	ServerConfig
-	Plugins                                    util.Collection[string, *Plugin]
-	Streams                                    util.Collection[string, *Publisher]
-	Waiting                                    util.Collection[string, *WaitStream]
-	Pulls                                      util.Collection[string, *PullContext]
-	Pushs                                      util.Collection[string, *PushContext]
-	Records                                    util.Collection[string, *RecordContext]
-	Subscribers                                SubscriberCollection
-	LogHandler                                 MultiLogHandler
-	apiList                                    []string
-	grpcServer                                 *grpc.Server
-	grpcClientConn                             *grpc.ClientConn
-	lastSummaryTime                            time.Time
-	lastSummary                                *pb.SummaryResponse
-	streamTask, pullTask, pushTask, recordTask util.MarcoLongTask
-	conf                                       any
+	Plugins         util.Collection[string, *Plugin]
+	Streams         task.Manager[string, *Publisher]
+	Waiting         util.Collection[string, *WaitStream]
+	Pulls           task.Manager[string, *PullContext]
+	Pushs           task.Manager[string, *PushContext]
+	Records         task.Manager[string, *RecordContext]
+	Transforms      task.Manager[string, *TransformContext]
+	Subscribers     SubscriberCollection
+	LogHandler      MultiLogHandler
+	apiList         []string
+	grpcServer      *grpc.Server
+	grpcClientConn  *grpc.ClientConn
+	lastSummaryTime time.Time
+	lastSummary     *pb.SummaryResponse
+	conf            any
 }
 
 func NewServer(conf any) (s *Server) {
 	s = &Server{
 		conf: conf,
 	}
-	s.ID = util.GetNextTaskID()
+	s.ID = task.GetNextTaskID()
 	s.Meta = &serverMeta
 	s.Description = map[string]any{
 		"version":   Version,
@@ -101,37 +102,17 @@ func NewServer(conf any) (s *Server) {
 }
 
 func Run(ctx context.Context, conf any) (err error) {
-	for err = ErrRestart; errors.Is(err, ErrRestart); err = util.RootTask.AddTaskWithContext(ctx, NewServer(conf)).WaitStopped() {
+	for err = ErrRestart; errors.Is(err, ErrRestart); err = Servers.AddTask(NewServer(conf), ctx).WaitStopped() {
 	}
 	return
 }
 
-func AddRootTask[T util.ITask](task T) T {
-	util.RootTask.AddTask(task)
-	return task
-}
-
-func AddRootTaskWithContext[T util.ITask](ctx context.Context, task T) T {
-	util.RootTask.AddTaskWithContext(ctx, task)
+func AddRootTask[T task.ITask](task T, opt ...any) T {
+	Servers.AddTask(task, opt...)
 	return task
 }
 
 type RawConfig = map[string]map[string]any
-
-type OSSignal struct {
-	util.ChannelTask
-}
-
-func (o *OSSignal) Start() error {
-	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
-	o.SignalChan = signalChan
-	return nil
-}
-
-func (o *OSSignal) Tick(any) {
-	go util.ShutdownRootTask()
-}
 
 func exit() {
 	for _, meta := range plugins {
@@ -146,8 +127,8 @@ func exit() {
 }
 
 func init() {
-	util.RootTask.AddTask(&OSSignal{})
-	util.RootTask.OnDispose(exit)
+	Servers.Init()
+	Servers.OnDispose(exit)
 	for k, v := range myip.LocalAndInternalIPs() {
 		Routes[k] = v
 		fmt.Println(k, v)
@@ -247,20 +228,20 @@ func (s *Server) Start() (err error) {
 			return
 		}
 	}
-	s.AddTask(&s.streamTask).Description = map[string]any{"ownerType": "Stream"}
-	s.AddTask(&s.pullTask).Description = map[string]any{"ownerType": "Pull"}
-	s.AddTask(&s.pushTask).Description = map[string]any{"ownerType": "Push"}
-	s.AddTask(&s.recordTask).Description = map[string]any{"ownerType": "Record"}
+	s.AddTaskLazy(&s.Records)
+	s.AddTaskLazy(&s.Streams)
+	s.AddTaskLazy(&s.Pulls)
+	s.AddTaskLazy(&s.Pushs)
+	s.AddTaskLazy(&s.Transforms)
 	for _, plugin := range plugins {
-		if p := plugin.Init(s, cg[strings.ToLower(plugin.Name)]); !p.Disabled {
-			s.AddTask(p.handler)
-		}
+		plugin.Init(s, cg[strings.ToLower(plugin.Name)])
 	}
 	if tcpTask != nil {
-		s.AddTask(&GRPCServer{Task: util.Task{Logger: s.Logger}, s: s, tcpTask: tcpTask})
+		s.AddTask(&GRPCServer{s: s, tcpTask: tcpTask}, s.Logger)
 	}
-	s.streamTask.AddTask(&CheckSubWaitTimeout{s: s})
-	Servers.Add(s)
+	s.Streams.OnStart(func() {
+		s.Streams.AddTask(&CheckSubWaitTimeout{s: s})
+	})
 	s.Info("server started")
 	s.Post(func() error {
 		for plugin := range s.Plugins.Range {
@@ -276,7 +257,7 @@ func (s *Server) Start() (err error) {
 }
 
 type CheckSubWaitTimeout struct {
-	util.TickTask
+	task.TickTask
 	s *Server
 }
 
@@ -297,7 +278,7 @@ func (c *CheckSubWaitTimeout) Tick(any) {
 }
 
 type GRPCServer struct {
-	util.Task
+	task.Task
 	s       *Server
 	tcpTask *config.ListenTCPTask
 }
@@ -311,23 +292,10 @@ func (gRPC *GRPCServer) Go() (err error) {
 }
 
 func (s *Server) CallOnStreamTask(callback func() error) {
-	s.streamTask.Call(callback)
-}
-
-func (s *Server) AddPullTask(task *PullContext) *util.Task {
-	return s.pullTask.AddTask(task)
-}
-
-func (s *Server) AddPushTask(task *PushContext) *util.Task {
-	return s.pushTask.AddTask(task)
-}
-
-func (s *Server) AddRecordTask(task *RecordContext) *util.Task {
-	return s.recordTask.AddTask(task)
+	s.Streams.Call(callback)
 }
 
 func (s *Server) Dispose() {
-	Servers.Remove(s)
 	_ = s.grpcClientConn.Close()
 	if s.DB != nil {
 		db, err := s.DB.DB()

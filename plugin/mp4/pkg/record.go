@@ -4,14 +4,14 @@ import (
 	"m7s.live/m7s/v5"
 	"m7s.live/m7s/v5/pkg"
 	"m7s.live/m7s/v5/pkg/codec"
-	"m7s.live/m7s/v5/pkg/util"
+	"m7s.live/m7s/v5/pkg/task"
 	"m7s.live/m7s/v5/plugin/mp4/pkg/box"
 	"os"
 	"time"
 )
 
 type WriteTrailerQueueTask struct {
-	util.MarcoLongTask
+	task.MarcoLongTask
 }
 
 var writeTrailerQueueTask WriteTrailerQueueTask
@@ -29,7 +29,7 @@ type Recorder struct {
 }
 
 type writeTrailerTask struct {
-	util.Task
+	task.Task
 	muxer *box.Movmuxer
 	file  *os.File
 }

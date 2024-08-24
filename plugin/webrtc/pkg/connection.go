@@ -6,13 +6,14 @@ import (
 	"github.com/pion/rtp"
 	. "github.com/pion/webrtc/v3"
 	"m7s.live/m7s/v5"
+	"m7s.live/m7s/v5/pkg/task"
 	"m7s.live/m7s/v5/pkg/util"
 	mrtp "m7s.live/m7s/v5/plugin/rtp/pkg"
 	"time"
 )
 
 type Connection struct {
-	util.MarcoTask
+	task.MarcoTask
 	*PeerConnection
 	SDP string
 	// LocalSDP *sdp.SessionDescription

@@ -19,8 +19,7 @@ func (r *StressPlugin) pull(count int, format, url string, puller m7s.Puller) (e
 		for j := i; j < count; j++ {
 			p := puller()
 			ctx := p.GetPullContext().Init(p, &r.Plugin, fmt.Sprintf("stress/%d", j), fmt.Sprintf(format, url))
-			err = r.Plugin.Server.AddPullTask(ctx).WaitStarted()
-			if err != nil {
+			if err = ctx.WaitStarted(); err != nil {
 				return
 			}
 			r.pullers.AddUnique(ctx)
@@ -42,8 +41,7 @@ func (r *StressPlugin) push(count int, streamPath, format, remoteHost string, pu
 		for j := i; j < count; j++ {
 			p := pusher()
 			ctx := p.GetPushContext().Init(p, &r.Plugin, streamPath, fmt.Sprintf(format, remoteHost, j))
-			err = r.Plugin.Server.AddPushTask(ctx).WaitStarted()
-			if err != nil {
+			if err = ctx.WaitStarted(); err != nil {
 				return
 			}
 			r.pushers.AddUnique(ctx)

@@ -3,6 +3,7 @@ package plugin_rtsp
 import (
 	"errors"
 	"fmt"
+	"m7s.live/m7s/v5/pkg/task"
 	"net"
 	"net/http"
 	"strconv"
@@ -27,7 +28,7 @@ type RTSPServer struct {
 	conf *RTSPPlugin
 }
 
-func (p *RTSPPlugin) OnTCPConnect(conn *net.TCPConn) util.ITask {
+func (p *RTSPPlugin) OnTCPConnect(conn *net.TCPConn) task.ITask {
 	ret := &RTSPServer{NetConnection: NewNetConnection(conn), conf: p}
 	ret.Logger = p.With("remote", conn.RemoteAddr().String())
 	return ret

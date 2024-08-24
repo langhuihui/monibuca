@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"m7s.live/m7s/v5/pkg/codec"
 	"m7s.live/m7s/v5/pkg/config"
+	"m7s.live/m7s/v5/pkg/task"
 	"reflect"
 	"time"
 
@@ -116,5 +117,5 @@ func (t *Track) WaitReady() error {
 }
 
 func (t *Track) Trace(msg string, fields ...any) {
-	t.Log(context.TODO(), util.TraceLevel, msg, fields...)
+	t.Log(context.TODO(), task.TraceLevel, msg, fields...)
 }

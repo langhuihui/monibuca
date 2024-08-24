@@ -2,14 +2,14 @@ package m7s
 
 import (
 	"m7s.live/m7s/v5/pkg"
-	"m7s.live/m7s/v5/pkg/util"
+	"m7s.live/m7s/v5/pkg/task"
 	"time"
 
 	"m7s.live/m7s/v5/pkg/config"
 )
 
 type IPusher interface {
-	util.ITask
+	task.ITask
 	GetPushContext() *PushContext
 }
 
@@ -35,6 +35,7 @@ func (p *PushContext) Init(pusher IPusher, plugin *Plugin, streamPath string, ur
 	}
 	p.pusher = pusher
 	pusher.SetRetry(plugin.config.RePush, time.Second*5)
+	plugin.Server.Pushs.Add(p)
 	return p
 }
 

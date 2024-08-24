@@ -3,7 +3,7 @@ package config
 import (
 	"crypto/tls"
 	"log/slog"
-	"m7s.live/m7s/v5/pkg/util"
+	"m7s.live/m7s/v5/pkg/task"
 	"net"
 	"time"
 )
@@ -15,17 +15,17 @@ type UDP struct {
 	AutoListen bool   `default:"true" desc:"是否自动监听"`
 }
 
-func (config *UDP) CreateUDPTask(logger *slog.Logger, handler func(conn *net.UDPConn) util.ITask) *ListenUDPTask {
+func (config *UDP) CreateUDPTask(logger *slog.Logger, handler func(conn *net.UDPConn) task.ITask) *ListenUDPTask {
 	ret := &ListenUDPTask{UDP: config, handler: handler}
 	ret.Logger = logger.With("addr", config.ListenAddr)
 	return ret
 }
 
 type ListenUDPTask struct {
-	util.MarcoLongTask
+	task.MarcoLongTask
 	*UDP
 	net.Listener
-	handler func(conn *net.UDPConn) util.ITask
+	handler func(conn *net.UDPConn) task.ITask
 }
 
 func (task *ListenUDPTask) Dispose() {

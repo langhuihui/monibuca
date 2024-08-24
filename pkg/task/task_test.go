@@ -1,4 +1,4 @@
-package util
+package task
 
 import (
 	"context"
@@ -61,21 +61,6 @@ func Test_Call_ExecutesCallback(t *testing.T) {
 	if !called {
 		t.Errorf("expected callback to be called")
 	}
-}
-
-func Test_AddChan_AddsChannelTask(t *testing.T) {
-	mt := createMarcoTask()
-	channel := time.NewTimer(time.Millisecond * 100)
-	called := false
-	callback := func(time.Time) {
-		called = true
-	}
-	mt.AddChan(channel.C, callback)
-	time.AfterFunc(time.Millisecond*500, func() {
-		if !called {
-			t.Errorf("expected callback to be called")
-		}
-	})
 }
 
 func Test_StopByContext(t *testing.T) {

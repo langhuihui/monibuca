@@ -2,8 +2,8 @@ package m7s
 
 import (
 	"context"
-	"github.com/quic-go/quic-go"
 	"log/slog"
+	"m7s.live/m7s/v5/pkg/task"
 	"net"
 	"net/http"
 	"os"
@@ -11,6 +11,8 @@ import (
 	"reflect"
 	"runtime"
 	"strings"
+
+	"github.com/quic-go/quic-go"
 
 	gatewayRuntime "github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	myip "github.com/husanpao/ip"
@@ -39,6 +41,7 @@ type (
 		Puller              Puller
 		Pusher              Pusher
 		Recorder            Recorder
+		Transformer         Transformer
 		OnExit              OnExitHandler
 		OnAuthPub           AuthPublisher
 		OnAuthSub           AuthSubscriber
@@ -49,7 +52,7 @@ type (
 	}
 
 	IPlugin interface {
-		util.ITask
+		task.ITask
 		OnInit() error
 		OnStop()
 		Pull(path string, url string)
@@ -64,15 +67,15 @@ type (
 	}
 
 	ITCPPlugin interface {
-		OnTCPConnect(conn *net.TCPConn) util.ITask
+		OnTCPConnect(conn *net.TCPConn) task.ITask
 	}
 
 	IUDPPlugin interface {
-		OnUDPConnect(conn *net.UDPConn) util.ITask
+		OnUDPConnect(conn *net.UDPConn) task.ITask
 	}
 
 	IQUICPlugin interface {
-		OnQUICConnect(quic.Connection) util.ITask
+		OnQUICConnect(quic.Connection) task.ITask
 	}
 )
 
@@ -145,7 +148,7 @@ func (plugin *PluginMeta) Init(s *Server, userConfig map[string]any) (p *Plugin)
 			}
 		}
 	}
-
+	s.AddTask(instance)
 	return
 }
 
@@ -193,7 +196,7 @@ func InstallPlugin[C iPlugin](options ...any) error {
 }
 
 type Plugin struct {
-	util.MarcoLongTask
+	task.MarcoLongTask
 	Disabled bool
 	Meta     *PluginMeta
 	config   config.Common
@@ -288,7 +291,7 @@ func (p *Plugin) Dispose() {
 	p.Server.Plugins.Remove(p)
 }
 
-func (p *Plugin) stopOnError(t util.ITask) {
+func (p *Plugin) stopOnError(t task.ITask) {
 	p.AddTask(t).OnDispose(func() {
 		p.Stop(t.StopReason())
 	})
@@ -366,7 +369,7 @@ func (p *Plugin) PublishWithConfig(ctx context.Context, streamPath string, conf 
 			}
 		}
 	}
-	err = p.Server.streamTask.AddTaskWithContext(ctx, publisher).WaitStarted()
+	err = p.Server.Streams.AddTask(publisher, ctx).WaitStarted()
 	return
 }
 
@@ -388,7 +391,7 @@ func (p *Plugin) SubscribeWithConfig(ctx context.Context, streamPath string, con
 			}
 		}
 	}
-	err = p.Server.streamTask.AddTaskWithContext(ctx, subscriber).WaitStarted()
+	err = p.Server.Streams.AddTask(subscriber, ctx).WaitStarted()
 	return
 }
 
@@ -398,17 +401,22 @@ func (p *Plugin) Subscribe(ctx context.Context, streamPath string) (subscriber *
 
 func (p *Plugin) Pull(streamPath string, url string) {
 	puller := p.Meta.Puller()
-	p.Server.AddPullTask(puller.GetPullContext().Init(puller, p, streamPath, url))
+	puller.GetPullContext().Init(puller, p, streamPath, url)
 }
 
 func (p *Plugin) Push(streamPath string, url string) {
 	pusher := p.Meta.Pusher()
-	p.Server.AddPushTask(pusher.GetPushContext().Init(pusher, p, streamPath, url))
+	pusher.GetPushContext().Init(pusher, p, streamPath, url)
 }
 
 func (p *Plugin) Record(streamPath string, filePath string) {
 	recorder := p.Meta.Recorder()
-	p.Server.AddRecordTask(recorder.GetRecordContext().Init(recorder, p, streamPath, filePath))
+	recorder.GetRecordContext().Init(recorder, p, streamPath, filePath)
+}
+
+func (p *Plugin) Transform(fromStreamPath, toStreamPath string) {
+	transformer := p.Meta.Transformer()
+	transformer.GetTransformContext().Init(transformer, p, fromStreamPath, toStreamPath)
 }
 
 func (p *Plugin) registerHandler(handlers map[string]http.HandlerFunc) {
@@ -466,11 +474,11 @@ func (p *Plugin) AddLogHandler(handler slog.Handler) {
 }
 
 func (p *Plugin) SaveConfig() (err error) {
-	return util.RootTask.AddTask(&SaveConfig{Plugin: p}).WaitStopped()
+	return Servers.AddTask(&SaveConfig{Plugin: p}).WaitStopped()
 }
 
 type SaveConfig struct {
-	util.Task
+	task.Task
 	Plugin *Plugin
 	file   *os.File
 }
@@ -479,7 +487,7 @@ func (s *SaveConfig) Start() (err error) {
 	if s.Plugin.Modify == nil {
 		err = os.Remove(s.Plugin.settingPath())
 		if err == nil {
-			err = util.ErrTaskComplete
+			err = task.ErrTaskComplete
 		}
 	}
 	s.file, err = os.OpenFile(s.Plugin.settingPath(), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)

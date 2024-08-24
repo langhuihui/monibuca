@@ -6,6 +6,7 @@ import (
 	"github.com/emiago/sipgo/sip"
 	"m7s.live/m7s/v5"
 	"m7s.live/m7s/v5/pkg/config"
+	"m7s.live/m7s/v5/pkg/task"
 	"m7s.live/m7s/v5/pkg/util"
 	gb28181 "m7s.live/m7s/v5/plugin/gb28181/pkg"
 	rtp2 "m7s.live/m7s/v5/plugin/rtp/pkg"
@@ -15,7 +16,7 @@ import (
 )
 
 type Dialog struct {
-	util.MarcoTask
+	task.MarcoTask
 	*Channel
 	*gb28181.Receiver
 	gb28181.InviteOptions
@@ -122,7 +123,7 @@ func (d *Dialog) Run() (err error) {
 	var tcpConf config.TCP
 	tcpConf.ListenAddr = fmt.Sprintf(":%d", d.MediaPort)
 	tcpConf.ListenNum = 1
-	tcpConf.CreateTCPTask(d.Logger, func(conn *net.TCPConn) util.ITask {
+	tcpConf.CreateTCPTask(d.Logger, func(conn *net.TCPConn) task.ITask {
 		d.Receiver.RTPReader = (*rtp2.TCP)(conn)
 		return d.Receiver
 	})

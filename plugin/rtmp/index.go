@@ -4,7 +4,7 @@ import (
 	"errors"
 	"io"
 	"m7s.live/m7s/v5"
-	"m7s.live/m7s/v5/pkg/util"
+	"m7s.live/m7s/v5/pkg/task"
 	"m7s.live/m7s/v5/plugin/rtmp/pb"
 	. "m7s.live/m7s/v5/plugin/rtmp/pkg"
 	"net"
@@ -26,7 +26,7 @@ type RTMPServer struct {
 	conf *RTMPPlugin
 }
 
-func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) util.ITask {
+func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) task.ITask {
 	ret := &RTMPServer{NetConnection: NewNetConnection(conn), conf: p}
 	ret.Logger = p.With("remote", conn.RemoteAddr().String())
 	return ret

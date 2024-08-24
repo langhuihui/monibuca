@@ -11,6 +11,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"m7s.live/m7s/v5"
 	"m7s.live/m7s/v5/pkg/config"
+	"m7s.live/m7s/v5/pkg/task"
 	"m7s.live/m7s/v5/pkg/util"
 	"m7s.live/m7s/v5/plugin/gb28181/pb"
 	gb28181 "m7s.live/m7s/v5/plugin/gb28181/pkg"
@@ -295,8 +296,7 @@ func (gb *GB28181Plugin) Pull(streamPath, url string) {
 	dialog := Dialog{
 		gb: gb,
 	}
-	ctx := dialog.GetPullContext().Init(&dialog, &gb.Plugin, streamPath, url)
-	gb.Server.AddPullTask(ctx)
+	dialog.GetPullContext().Init(&dialog, &gb.Plugin, streamPath, url)
 }
 
 func (gb *GB28181Plugin) GetPullableList() []string {
@@ -310,13 +310,13 @@ func (gb *GB28181Plugin) GetPullableList() []string {
 }
 
 type PSServer struct {
-	util.Task
+	task.Task
 	*rtp2.TCP
 	theDialog *Dialog
 	gb        *GB28181Plugin
 }
 
-func (gb *GB28181Plugin) OnTCPConnect(conn *net.TCPConn) util.ITask {
+func (gb *GB28181Plugin) OnTCPConnect(conn *net.TCPConn) task.ITask {
 	ret := &PSServer{gb: gb, TCP: (*rtp2.TCP)(conn)}
 	ret.Task.Logger = gb.With("remote", conn.RemoteAddr().String())
 	return ret
@@ -353,6 +353,6 @@ func (gb *GB28181Plugin) OnBye(req *sip.Request, tx sip.ServerTransaction) {
 		return d.GetCallID() == req.CallID().Value()
 	}); ok {
 		gb.Warn("OnBye", "dialog", dialog.GetCallID())
-		dialog.Stop(util.ErrTaskComplete)
+		dialog.Stop(task.ErrTaskComplete)
 	}
 }

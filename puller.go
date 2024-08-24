@@ -4,7 +4,7 @@ import (
 	"io"
 	"m7s.live/m7s/v5/pkg"
 	"m7s.live/m7s/v5/pkg/config"
-	"m7s.live/m7s/v5/pkg/util"
+	"m7s.live/m7s/v5/pkg/task"
 	"net/http"
 	"net/url"
 	"os"
@@ -14,7 +14,7 @@ import (
 
 type (
 	Connection struct {
-		util.MarcoTask
+		task.MarcoTask
 		Plugin     *Plugin
 		StreamPath string // 对应本地流
 		RemoteURL  string // 远程服务器地址（用于推拉）
@@ -22,7 +22,7 @@ type (
 	}
 
 	IPuller interface {
-		util.ITask
+		task.ITask
 		GetPullContext() *PullContext
 	}
 
@@ -37,7 +37,7 @@ type (
 	}
 
 	HttpFilePuller struct {
-		util.Task
+		task.Task
 		Ctx PullContext
 		io.ReadCloser
 	}
@@ -74,6 +74,7 @@ func (p *PullContext) Init(puller IPuller, plugin *Plugin, streamPath string, ur
 	}
 	p.puller = puller
 	puller.SetRetry(plugin.config.Pull.RePull, time.Second*5)
+	plugin.Server.Pulls.Add(p)
 	return p
 }
 

@@ -10,7 +10,7 @@ import (
 	"github.com/quic-go/quic-go"
 	"io"
 	"m7s.live/m7s/v5"
-	"m7s.live/m7s/v5/pkg/util"
+	"m7s.live/m7s/v5/pkg/task"
 	"net"
 	"net/http"
 	"os"
@@ -62,7 +62,7 @@ type ConsolePlugin struct {
 var _ = m7s.InstallPlugin[ConsolePlugin]()
 
 type ConnectServerTask struct {
-	util.Task
+	task.Task
 	cfg *ConsolePlugin
 	quic.Connection
 }
@@ -120,7 +120,7 @@ func (task *ConnectServerTask) Run() (err error) {
 }
 
 type ReceiveRequestTask struct {
-	util.Task
+	task.Task
 	stream  quic.Stream
 	handler http.Handler
 	conn    quic.Connection

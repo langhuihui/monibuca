@@ -1,7 +1,7 @@
 package m7s
 
 import (
-	"m7s.live/m7s/v5/pkg/util"
+	"m7s.live/m7s/v5/pkg/task"
 	"os"
 	"path/filepath"
 	"time"
@@ -11,12 +11,12 @@ import (
 
 type (
 	IRecorder interface {
-		util.ITask
+		task.ITask
 		GetRecordContext() *RecordContext
 	}
 	Recorder      = func() IRecorder
 	RecordContext struct {
-		util.MarcoTask
+		task.MarcoTask
 		StreamPath string // 对应本地流
 		Plugin     *Plugin
 		Subscriber *Subscriber
@@ -26,7 +26,7 @@ type (
 		recorder   IRecorder
 	}
 	DefaultRecorder struct {
-		util.Task
+		task.Task
 		Ctx RecordContext
 	}
 )
@@ -59,6 +59,7 @@ func (p *RecordContext) Init(recorder IRecorder, plugin *Plugin, streamPath stri
 		recorderTask.Logger = p.Logger
 	}
 	p.recorder = recorder
+	plugin.Server.Records.Add(p)
 	return p
 }
 
@@ -80,11 +81,6 @@ func (p *RecordContext) Start() (err error) {
 	if err = os.MkdirAll(dir, 0755); err != nil {
 		return
 	}
-	s.Records.Add(p)
-	s.AddTask(p.recorder)
+	p.AddTask(p.recorder)
 	return
-}
-
-func (p *RecordContext) Dispose() {
-	p.Plugin.Server.Records.Remove(p)
 }

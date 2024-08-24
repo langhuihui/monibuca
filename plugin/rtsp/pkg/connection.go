@@ -2,6 +2,7 @@ package rtsp
 
 import (
 	"encoding/binary"
+	"m7s.live/m7s/v5/pkg/task"
 	"net"
 	"net/url"
 	"runtime"
@@ -26,7 +27,7 @@ func NewNetConnection(conn net.Conn) *NetConnection {
 }
 
 type NetConnection struct {
-	util.MarcoTask
+	task.MarcoTask
 	*util.BufReader
 	Backchannel     bool
 	Media           string

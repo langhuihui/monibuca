@@ -1,10 +1,11 @@
-package util
+package task
 
 import (
 	"context"
 	"errors"
 	"fmt"
 	"log/slog"
+	"m7s.live/m7s/v5/pkg/util"
 	"reflect"
 	"runtime/debug"
 	"strings"
@@ -44,7 +45,7 @@ type (
 	TaskState byte
 	TaskType  byte
 	ITask     interface {
-		initTask(context.Context, ITask)
+		keepalive() bool
 		getParent() *MarcoTask
 		GetParent() ITask
 		GetTask() *Task
@@ -66,6 +67,8 @@ type (
 	}
 	IMarcoTask interface {
 		ITask
+		getMarcoTask() *MarcoTask
+		AddTask(ITask, ...any) *Task
 		RangeSubTask(func(yield ITask) bool)
 		OnChildDispose(func(ITask))
 		Blocked() bool
@@ -92,7 +95,8 @@ type (
 		RetryCount    int
 		RetryInterval time.Duration
 	}
-	Task struct {
+	Description = map[string]any
+	Task        struct {
 		ID        uint32
 		StartTime time.Time
 		*slog.Logger
@@ -100,18 +104,20 @@ type (
 		context.CancelCauseFunc
 		handler                                                            ITask
 		retry                                                              RetryConfig
-		startHandler                                                       func() error
 		afterStartListeners, beforeDisposeListeners, afterDisposeListeners []func()
-		disposeHandler                                                     func()
-		Description                                                        map[string]any
-		startup, shutdown                                                  *Promise
-		parent                                                             *MarcoTask
-		parentCtx                                                          context.Context
-		needRetry                                                          bool
-		state                                                              TaskState
-		level                                                              byte
+		Description
+		startup, shutdown *util.Promise
+		parent            *MarcoTask
+		parentCtx         context.Context
+		needRetry         bool
+		state             TaskState
+		level             byte
 	}
 )
+
+func (*Task) keepalive() bool {
+	return false
+}
 
 func (task *Task) GetState() TaskState {
 	return task.state
@@ -253,7 +259,9 @@ func (task *Task) start() (err error) {
 	hasRun := false
 	for {
 		task.state = TASK_STATE_STARTING
-		err = task.startHandler()
+		if v, ok := task.handler.(TaskStarter); ok {
+			err = v.Start()
+		}
 		task.state = TASK_STATE_STARTED
 		if err == nil {
 			task.ResetRetryCount()
@@ -306,7 +314,9 @@ func (task *Task) dispose() {
 	for _, listener := range task.beforeDisposeListeners {
 		listener()
 	}
-	task.disposeHandler()
+	if v, ok := task.handler.(TaskDisposal); ok {
+		v.Dispose()
+	}
 	task.shutdown.Fulfill(reason)
 	for _, listener := range task.afterDisposeListeners {
 		listener()
@@ -317,25 +327,11 @@ func (task *Task) dispose() {
 	}
 	if !errors.Is(reason, ErrTaskComplete) && task.needRetry {
 		task.Context, task.CancelCauseFunc = context.WithCancelCause(task.parentCtx)
-		task.startup = NewPromise(task.Context)
-		task.shutdown = NewPromise(context.Background())
+		task.startup = util.NewPromise(task.Context)
+		task.shutdown = util.NewPromise(context.Background())
 		parent := task.parent
 		task.parent = nil
 		parent.AddTask(task.handler)
-	}
-}
-
-func (task *Task) initTask(ctx context.Context, iTask ITask) {
-	task.parentCtx = ctx
-	task.Context, task.CancelCauseFunc = context.WithCancelCause(ctx)
-	task.startup = NewPromise(task.Context)
-	task.shutdown = NewPromise(context.Background())
-	task.handler = iTask
-	if v, ok := iTask.(TaskStarter); ok {
-		task.startHandler = v.Start
-	}
-	if v, ok := iTask.(TaskDisposal); ok {
-		task.disposeHandler = v.Dispose
 	}
 }
 

@@ -5,7 +5,7 @@ import (
 	"crypto/subtle"
 	"crypto/tls"
 	"log/slog"
-	"m7s.live/m7s/v5/pkg/util"
+	"m7s.live/m7s/v5/pkg/task"
 	"net/http"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
@@ -167,7 +167,7 @@ func BasicAuth(u, p string, next http.Handler) http.Handler {
 }
 
 type ListenHTTPTask struct {
-	util.Task
+	task.Task
 	*HTTP
 	*http.Server
 }

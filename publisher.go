@@ -2,6 +2,7 @@ package m7s
 
 import (
 	"context"
+	"m7s.live/m7s/v5/pkg/task"
 	"math"
 	"os"
 	"path/filepath"
@@ -134,7 +135,7 @@ func (p *Publisher) GetKey() string {
 // createPublisher -> Start -> WriteAudio/WriteVideo -> Dispose
 func createPublisher(p *Plugin, streamPath string, conf config.Publish) (publisher *Publisher) {
 	publisher = &Publisher{Publish: conf}
-	publisher.ID = util.GetNextTaskID()
+	publisher.ID = task.GetNextTaskID()
 	publisher.Plugin = p
 	publisher.TimeoutTimer = time.NewTimer(p.config.PublishTimeout)
 	publisher.Logger = p.Logger.With("streamPath", streamPath, "pId", publisher.ID)
@@ -191,7 +192,7 @@ func (p *Publisher) Start() (err error) {
 }
 
 type PublishTimeout struct {
-	util.ChannelTask
+	task.ChannelTask
 	Publisher *Publisher
 }
 
@@ -223,7 +224,7 @@ func (p *PublishTimeout) Tick(any) {
 }
 
 type PublishNoDataTimeout struct {
-	util.TickTask
+	task.TickTask
 	Publisher *Publisher
 }
 
@@ -303,7 +304,7 @@ func (p *Publisher) writeAV(t *AVTrack, data IAVFrame) {
 		}
 	}
 	p.lastTs = frame.Timestamp
-	if p.Enabled(p, util.TraceLevel) {
+	if p.Enabled(p, task.TraceLevel) {
 		codec := t.FourCC().String()
 		data := frame.Wraps[0].String()
 		p.Trace("write", "seq", frame.Sequence, "ts", uint32(frame.Timestamp/time.Millisecond), "codec", codec, "size", bytesIn, "data", data)

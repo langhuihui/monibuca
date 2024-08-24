@@ -2,6 +2,7 @@ package m7s
 
 import (
 	"errors"
+	"m7s.live/m7s/v5/pkg/task"
 	"net/url"
 	"reflect"
 	"runtime"
@@ -16,7 +17,7 @@ import (
 var AVFrameType = reflect.TypeOf((*AVFrame)(nil))
 
 type PubSubBase struct {
-	util.MarcoTask
+	task.MarcoTask
 	Plugin       *Plugin
 	StreamPath   string
 	Args         url.Values
@@ -63,7 +64,7 @@ type Subscriber struct {
 
 func createSubscriber(p *Plugin, streamPath string, conf config.Subscribe) *Subscriber {
 	subscriber := &Subscriber{Subscribe: conf}
-	subscriber.ID = util.GetNextTaskID()
+	subscriber.ID = task.GetNextTaskID()
 	subscriber.Plugin = p
 	subscriber.TimeoutTimer = time.NewTimer(subscriber.WaitTimeout)
 	subscriber.Logger = p.Logger.With("streamPath", streamPath, "sId", subscriber.ID)
@@ -159,7 +160,7 @@ func (s *Subscriber) createVideoReader(dataType reflect.Type, startVideoTs time.
 }
 
 type SubscribeHandler[A any, V any] struct {
-	util.Task
+	task.Task
 	s            *Subscriber
 	OnAudio      func(A) error
 	OnVideo      func(V) error
@@ -167,7 +168,7 @@ type SubscribeHandler[A any, V any] struct {
 	ProcessVideo chan func(*AVFrame)
 }
 
-func CreatePlayTask[A any, V any](s *Subscriber, onAudio func(A) error, onVideo func(V) error) util.ITask {
+func CreatePlayTask[A any, V any](s *Subscriber, onAudio func(A) error, onVideo func(V) error) task.ITask {
 	var handler SubscribeHandler[A, V]
 	handler.s = s
 	handler.OnAudio = onAudio
@@ -211,7 +212,7 @@ func (handler *SubscribeHandler[A, V]) Start() (err error) {
 	sendAudioFrame := func() (err error) {
 		if awi >= 0 {
 			if len(audioFrame.Wraps) > awi {
-				if s.Enabled(s, util.TraceLevel) {
+				if s.Enabled(s, task.TraceLevel) {
 					s.Trace("send audio frame", "seq", audioFrame.Sequence)
 				}
 				err = handler.OnAudio(audioFrame.Wraps[awi].(A))
@@ -235,7 +236,7 @@ func (handler *SubscribeHandler[A, V]) Start() (err error) {
 	sendVideoFrame := func() (err error) {
 		if vwi >= 0 {
 			if len(videoFrame.Wraps) > vwi {
-				if s.Enabled(s, util.TraceLevel) {
+				if s.Enabled(s, task.TraceLevel) {
 					s.Trace("send video frame", "seq", videoFrame.Sequence, "data", videoFrame.Wraps[vwi].String(), "size", videoFrame.Wraps[vwi].GetSize())
 				}
 				err = handler.OnVideo(videoFrame.Wraps[vwi].(V))

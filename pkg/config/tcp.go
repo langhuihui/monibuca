@@ -4,7 +4,7 @@ import (
 	"crypto/tls"
 	_ "embed"
 	"log/slog"
-	"m7s.live/m7s/v5/pkg/util"
+	"m7s.live/m7s/v5/pkg/task"
 	"net"
 	"runtime"
 	"time"
@@ -55,10 +55,10 @@ func (config *TCP) CreateTCPTLSTask(logger *slog.Logger, handler TCPHandler) *Li
 	return ret
 }
 
-type TCPHandler = func(conn *net.TCPConn) util.ITask
+type TCPHandler = func(conn *net.TCPConn) task.ITask
 
 type ListenTCPTask struct {
-	util.MarcoLongTask
+	task.MarcoLongTask
 	*TCP
 	net.Listener
 	handler TCPHandler

@@ -5,6 +5,7 @@ import (
 	"io"
 	"m7s.live/m7s/v5"
 	"m7s.live/m7s/v5/pkg"
+	"m7s.live/m7s/v5/pkg/task"
 	"m7s.live/m7s/v5/pkg/util"
 	rtmp "m7s.live/m7s/v5/plugin/rtmp/pkg"
 	"os"
@@ -14,7 +15,7 @@ import (
 )
 
 type WriteFlvMetaTagQueueTask struct {
-	util.MarcoLongTask
+	task.MarcoLongTask
 }
 
 var writeMetaTagQueueTask WriteFlvMetaTagQueueTask
@@ -24,7 +25,7 @@ func init() {
 }
 
 type writeMetaTagTask struct {
-	util.Task
+	task.Task
 	file     *os.File
 	writer   *FlvWriter
 	flags    byte

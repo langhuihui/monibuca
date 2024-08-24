@@ -3,7 +3,7 @@ package plugin_monitor
 import (
 	"encoding/json"
 	"m7s.live/m7s/v5"
-	"m7s.live/m7s/v5/pkg/util"
+	"m7s.live/m7s/v5/pkg/task"
 	"m7s.live/m7s/v5/plugin/monitor/pb"
 	monitor "m7s.live/m7s/v5/plugin/monitor/pkg"
 	"os"
@@ -27,7 +27,7 @@ func (cfg *MonitorPlugin) OnStop() {
 	}
 }
 
-func (cfg *MonitorPlugin) saveTask(task util.ITask) {
+func (cfg *MonitorPlugin) saveTask(task task.ITask) {
 	var th monitor.Task
 	th.SessionID = cfg.session.ID
 	th.TaskID = task.GetTaskID()

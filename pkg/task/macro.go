@@ -1,9 +1,9 @@
-package util
+package task
 
 import (
 	"context"
 	"log/slog"
-	"os"
+	"m7s.live/m7s/v5/pkg/util"
 	"reflect"
 	"slices"
 	"sync"
@@ -16,41 +16,12 @@ func GetNextTaskID() uint32 {
 	return idG.Add(1)
 }
 
-var RootTask MarcoLongTask
-
-func init() {
-	RootTask.initTask(context.Background(), &RootTask)
-	RootTask.Description = map[string]any{
-		"ownerType": "root",
-	}
-	RootTask.Logger = slog.New(slog.NewTextHandler(os.Stdout, nil))
-}
-
-func ShutdownRootTask() {
-	RootTask.Stop(ErrExit)
-	RootTask.dispose()
-}
-
-type MarcoLongTask struct {
-	MarcoTask
-}
-
-func (m *MarcoLongTask) initTask(ctx context.Context, task ITask) {
-	m.MarcoTask.initTask(ctx, task)
-	m.keepAlive = true
-}
-
-func (*MarcoLongTask) GetTaskType() TaskType {
-	return TASK_TYPE_LONG_MACRO
-}
-
 // MarcoTask include sub tasks
 type MarcoTask struct {
 	Task
 	addSub                chan ITask
 	children              []ITask
 	lazyRun               sync.Once
-	keepAlive             bool
 	childrenDisposed      chan struct{}
 	childDisposeListeners []func(ITask)
 	blocked               bool
@@ -58,6 +29,10 @@ type MarcoTask struct {
 
 func (*MarcoTask) GetTaskType() TaskType {
 	return TASK_TYPE_MACRO
+}
+
+func (mt *MarcoTask) getMarcoTask() *MarcoTask {
+	return mt
 }
 
 func (mt *MarcoTask) Blocked() bool {
@@ -92,54 +67,61 @@ func (mt *MarcoTask) dispose() {
 	mt.Task.dispose()
 }
 
-func (mt *MarcoTask) lazyStart(t ITask) {
-	task := t.GetTask()
-	if mt.IsStopped() {
-		task.startup.Reject(mt.StopReason())
-		return
-	}
-	if task.ID == 0 {
-		task.ID = GetNextTaskID()
-	}
-	if task.parent == nil {
-		task.parent = mt
-		task.level = mt.level + 1
-	}
-	if task.Logger == nil {
-		task.Logger = mt.Logger
-	}
-	if task.startHandler == nil {
-		task.startHandler = EmptyStart
-	}
-	if task.disposeHandler == nil {
-		task.disposeHandler = EmptyDispose
-	}
-	mt.lazyRun.Do(func() {
-		mt.childrenDisposed = make(chan struct{})
-		mt.addSub = make(chan ITask, 10)
-		go mt.run()
-	})
-	mt.addSub <- t
-}
-
 func (mt *MarcoTask) RangeSubTask(callback func(task ITask) bool) {
 	for _, task := range mt.children {
 		callback(task)
 	}
 }
 
-func (mt *MarcoTask) AddTask(task ITask) *Task {
-	return mt.AddTaskWithContext(mt.Context, task)
+func (mt *MarcoTask) AddTaskLazy(t IMarcoTask) {
+	t.GetTask().parent = mt
 }
 
-func (mt *MarcoTask) AddTaskWithContext(ctx context.Context, t ITask) (task *Task) {
-	if ctx == nil && mt.Context == nil {
-		panic("context is nil")
+func (mt *MarcoTask) AddTask(t ITask, opt ...any) (task *Task) {
+	mt.lazyRun.Do(func() {
+		if mt.parent != nil && mt.handler == nil {
+			mt.parent.AddTask(mt)
+		}
+		mt.childrenDisposed = make(chan struct{})
+		mt.addSub = make(chan ITask, 10)
+		go mt.run()
+	})
+	if task = t.GetTask(); task.handler == nil {
+		task.parentCtx = mt.Context
+		for _, o := range opt {
+			switch v := o.(type) {
+			case context.Context:
+				task.parentCtx = v
+			case Description:
+				task.Description = v
+			case RetryConfig:
+				task.retry = v
+			case *slog.Logger:
+				task.Logger = v
+			}
+		}
+		if task.parentCtx == nil {
+			panic("context is nil")
+		}
+		task.parent = mt
+		task.level = mt.level + 1
+		if task.ID == 0 {
+			task.ID = GetNextTaskID()
+		}
+		task.Context, task.CancelCauseFunc = context.WithCancelCause(task.parentCtx)
+		task.startup = util.NewPromise(task.Context)
+		task.shutdown = util.NewPromise(context.Background())
+		task.handler = t
+		if task.Logger == nil {
+			task.Logger = mt.Logger
+		}
 	}
-	if task = t.GetTask(); task.parent == nil {
-		t.initTask(ctx, t)
+	if mt.IsStopped() {
+		task.startup.Reject(mt.StopReason())
+		return
 	}
-	mt.lazyStart(t)
+
+	mt.addSub <- t
 	return
 }
 
@@ -208,7 +190,7 @@ func (mt *MarcoTask) run() {
 				cases = slices.Delete(cases, chosen, chosen+1)
 			}
 		}
-		if !mt.keepAlive && len(mt.children) == 0 {
+		if !mt.handler.keepalive() && len(mt.children) == 0 {
 			mt.Stop(ErrAutoStop)
 		}
 	}

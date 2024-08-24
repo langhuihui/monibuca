@@ -4,6 +4,7 @@ import (
 	"github.com/emiago/sipgo"
 	"github.com/emiago/sipgo/sip"
 	"m7s.live/m7s/v5"
+	"m7s.live/m7s/v5/pkg/task"
 	"m7s.live/m7s/v5/pkg/util"
 	gb28181 "m7s.live/m7s/v5/plugin/gb28181/pkg"
 	"net/http"
@@ -22,7 +23,7 @@ const (
 )
 
 type Device struct {
-	util.Task
+	task.Task
 	ID                  string
 	Name                string
 	Manufacturer        string

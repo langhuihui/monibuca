@@ -3,10 +3,9 @@ package config
 import (
 	"context"
 	"crypto/tls"
-	"log/slog"
-	"m7s.live/m7s/v5/pkg/util"
-
 	"github.com/quic-go/quic-go"
+	"log/slog"
+	"m7s.live/m7s/v5/pkg/task"
 )
 
 type QuicConfig interface {
@@ -20,7 +19,7 @@ type Quic struct {
 	AutoListen bool   `default:"true" desc:"是否自动监听"`
 }
 
-func (q *Quic) CreateQUICTask(logger *slog.Logger, handler func(connection quic.Connection) util.ITask) *ListenQuicTask {
+func (q *Quic) CreateQUICTask(logger *slog.Logger, handler func(connection quic.Connection) task.ITask) *ListenQuicTask {
 	ret := &ListenQuicTask{
 		Quic:    q,
 		handler: handler,
@@ -30,10 +29,10 @@ func (q *Quic) CreateQUICTask(logger *slog.Logger, handler func(connection quic.
 }
 
 type ListenQuicTask struct {
-	util.MarcoLongTask
+	task.MarcoLongTask
 	*Quic
 	*quic.Listener
-	handler func(connection quic.Connection) util.ITask
+	handler func(connection quic.Connection) task.ITask
 }
 
 func (task *ListenQuicTask) Start() (err error) {
