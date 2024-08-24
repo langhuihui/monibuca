@@ -4,7 +4,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"m7s.live/m7s/v5"
-	"m7s.live/m7s/v5/pkg/util"
+	"m7s.live/m7s/v5/pkg/task"
 	"m7s.live/m7s/v5/plugin/cascade/pkg"
 	"time"
 
@@ -23,7 +23,7 @@ type CascadeClientPlugin struct {
 var _ = m7s.InstallPlugin[CascadeClientPlugin](cascade.NewCascadePuller)
 
 type CascadeClient struct {
-	util.Task
+	task.Task
 	cfg *CascadeClientPlugin
 	quic.Connection
 }

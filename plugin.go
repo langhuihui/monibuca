@@ -52,7 +52,7 @@ type (
 	}
 
 	IPlugin interface {
-		task.ITask
+		task.IMarcoTask
 		OnInit() error
 		OnStop()
 		Pull(path string, url string)

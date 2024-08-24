@@ -74,19 +74,21 @@ func (mt *MarcoTask) RangeSubTask(callback func(task ITask) bool) {
 }
 
 func (mt *MarcoTask) AddTaskLazy(t IMarcoTask) {
-	t.GetTask().parent = mt
+	task := t.GetTask()
+	task.parent = mt
+	task.handler = t
 }
 
 func (mt *MarcoTask) AddTask(t ITask, opt ...any) (task *Task) {
 	mt.lazyRun.Do(func() {
-		if mt.parent != nil && mt.handler == nil {
-			mt.parent.AddTask(mt)
+		if mt.parent != nil && mt.Context == nil {
+			mt.parent.AddTask(mt.handler)
 		}
 		mt.childrenDisposed = make(chan struct{})
 		mt.addSub = make(chan ITask, 10)
 		go mt.run()
 	})
-	if task = t.GetTask(); task.handler == nil {
+	if task = t.GetTask(); task.Context == nil {
 		task.parentCtx = mt.Context
 		for _, o := range opt {
 			switch v := o.(type) {

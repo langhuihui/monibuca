@@ -123,10 +123,10 @@ func (d *Dialog) Run() (err error) {
 	var tcpConf config.TCP
 	tcpConf.ListenAddr = fmt.Sprintf(":%d", d.MediaPort)
 	tcpConf.ListenNum = 1
-	tcpConf.CreateTCPTask(d.Logger, func(conn *net.TCPConn) task.ITask {
+	d.AddTask(tcpConf.CreateTCPTask(d.Logger, func(conn *net.TCPConn) task.ITask {
 		d.Receiver.RTPReader = (*rtp2.TCP)(conn)
 		return d.Receiver
-	})
+	}))
 	d.Receiver.Demux()
 	return
 }

@@ -31,10 +31,10 @@ type RootManager[K comparable, T ManagerItem[K]] struct {
 }
 
 func (m *RootManager[K, T]) Init() {
-	m.Context = context.Background()
+	m.Context, m.CancelCauseFunc = context.WithCancelCause(context.Background())
 	m.handler = m
 	m.Logger = slog.New(slog.NewTextHandler(os.Stdout, nil))
-	m.AddTask(&OSSignal{})
+	m.AddTask(&OSSignal{root: m})
 }
 
 func (m *RootManager[K, T]) Shutdown() {

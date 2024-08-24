@@ -17,7 +17,7 @@ type WriteTrailerQueueTask struct {
 var writeTrailerQueueTask WriteTrailerQueueTask
 
 func init() {
-	m7s.AddRootTask(&writeTrailerQueueTask)
+	m7s.Servers.AddTaskLazy(&writeTrailerQueueTask)
 }
 
 func NewRecorder() *Recorder {

@@ -196,6 +196,7 @@ func (task *Task) StopReasonIs(err error) bool {
 
 func (task *Task) Stop(err error) {
 	if err == nil {
+		task.Error("task stop with nil error", "taskId", task.ID, "taskType", task.GetTaskType(), "ownerType", task.GetOwnerType(), "parent", task.GetParent().GetOwnerType())
 		panic("task stop with nil error")
 	}
 	if task.CancelCauseFunc != nil {

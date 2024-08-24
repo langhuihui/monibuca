@@ -107,11 +107,6 @@ func Run(ctx context.Context, conf any) (err error) {
 	return
 }
 
-func AddRootTask[T task.ITask](task T, opt ...any) T {
-	Servers.AddTask(task, opt...)
-	return task
-}
-
 type RawConfig = map[string]map[string]any
 
 func exit() {

@@ -12,7 +12,8 @@ import (
 
 func createMarcoTask() *MarcoTask {
 	var mt MarcoTask
-	mt.initTask(context.Background(), &mt)
+	mt.Context, mt.CancelCauseFunc = context.WithCancelCause(context.Background())
+	mt.handler = &mt
 	mt.Logger = slog.New(slog.NewTextHandler(os.Stdout, nil))
 	return &mt
 }
@@ -67,7 +68,7 @@ func Test_StopByContext(t *testing.T) {
 	mt := createMarcoTask()
 	var task Task
 	ctx, cancel := context.WithCancel(context.Background())
-	mt.AddTaskWithContext(ctx, &task)
+	mt.AddTask(&task, ctx)
 	time.AfterFunc(time.Millisecond*100, cancel)
 	mt.WaitStopped()
 	if !task.StopReasonIs(context.Canceled) {

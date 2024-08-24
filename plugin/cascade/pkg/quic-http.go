@@ -5,7 +5,7 @@ import (
 	"context"
 	"io"
 	"m7s.live/m7s/v5"
-	"m7s.live/m7s/v5/pkg/util"
+	"m7s.live/m7s/v5/pkg/task"
 	flv "m7s.live/m7s/v5/plugin/flv/pkg"
 	"net"
 	"net/http"
@@ -40,7 +40,7 @@ func (c *RelayAPIConfig) Check(path string) bool {
 }
 
 type ReceiveRequestTask struct {
-	util.Task
+	task.Task
 	Plugin *m7s.Plugin
 	quic.Connection
 	quic.Stream
