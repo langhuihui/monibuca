@@ -2,12 +2,13 @@ package m7s
 
 import (
 	"errors"
-	"m7s.live/m7s/v5/pkg/task"
 	"net/url"
 	"reflect"
 	"runtime"
 	"strings"
 	"time"
+
+	"m7s.live/m7s/v5/pkg/task"
 
 	. "m7s.live/m7s/v5/pkg"
 	"m7s.live/m7s/v5/pkg/config"
@@ -17,7 +18,7 @@ import (
 var AVFrameType = reflect.TypeOf((*AVFrame)(nil))
 
 type PubSubBase struct {
-	task.MarcoTask
+	task.Job
 	Plugin       *Plugin
 	StreamPath   string
 	Args         url.Values

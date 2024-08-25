@@ -2,6 +2,10 @@ package plugin_gb28181
 
 import (
 	"fmt"
+	"net"
+	"strconv"
+	"strings"
+
 	"github.com/emiago/sipgo"
 	"github.com/emiago/sipgo/sip"
 	"m7s.live/m7s/v5"
@@ -10,26 +14,23 @@ import (
 	"m7s.live/m7s/v5/pkg/util"
 	gb28181 "m7s.live/m7s/v5/plugin/gb28181/pkg"
 	rtp2 "m7s.live/m7s/v5/plugin/rtp/pkg"
-	"net"
-	"strconv"
-	"strings"
 )
 
 type Dialog struct {
-	task.MarcoTask
+	task.Job
 	*Channel
 	*gb28181.Receiver
 	gb28181.InviteOptions
 	gb      *GB28181Plugin
 	session *sipgo.DialogClientSession
-	pullCtx m7s.PullContext
+	pullCtx m7s.PullJob
 }
 
 func (d *Dialog) GetCallID() string {
 	return d.session.InviteRequest.CallID().Value()
 }
 
-func (d *Dialog) GetPullContext() *m7s.PullContext {
+func (d *Dialog) GetPullJob() *m7s.PullJob {
 	return &d.pullCtx
 }
 
@@ -123,7 +124,7 @@ func (d *Dialog) Run() (err error) {
 	var tcpConf config.TCP
 	tcpConf.ListenAddr = fmt.Sprintf(":%d", d.MediaPort)
 	tcpConf.ListenNum = 1
-	d.AddTask(tcpConf.CreateTCPTask(d.Logger, func(conn *net.TCPConn) task.ITask {
+	d.AddTask(tcpConf.CreateTCPWork(d.Logger, func(conn *net.TCPConn) task.ITask {
 		d.Receiver.RTPReader = (*rtp2.TCP)(conn)
 		return d.Receiver
 	}))

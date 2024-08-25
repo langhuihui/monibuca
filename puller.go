@@ -2,19 +2,20 @@ package m7s
 
 import (
 	"io"
-	"m7s.live/m7s/v5/pkg"
-	"m7s.live/m7s/v5/pkg/config"
-	"m7s.live/m7s/v5/pkg/task"
 	"net/http"
 	"net/url"
 	"os"
 	"strings"
 	"time"
+
+	"m7s.live/m7s/v5/pkg"
+	"m7s.live/m7s/v5/pkg/config"
+	"m7s.live/m7s/v5/pkg/task"
 )
 
 type (
 	Connection struct {
-		task.MarcoTask
+		task.Job
 		Plugin     *Plugin
 		StreamPath string // 对应本地流
 		RemoteURL  string // 远程服务器地址（用于推拉）
@@ -23,12 +24,12 @@ type (
 
 	IPuller interface {
 		task.ITask
-		GetPullContext() *PullContext
+		GetPullJob() *PullJob
 	}
 
 	Puller = func() IPuller
 
-	PullContext struct {
+	PullJob struct {
 		Connection
 		Publisher     *Publisher
 		publishConfig *config.Publish
@@ -36,9 +37,9 @@ type (
 		puller IPuller
 	}
 
-	HttpFilePuller struct {
+	HTTPFilePuller struct {
 		task.Task
-		Ctx PullContext
+		PullJob PullJob
 		io.ReadCloser
 	}
 )
@@ -58,11 +59,11 @@ func (conn *Connection) Init(plugin *Plugin, streamPath string, href string, pro
 	}
 }
 
-func (p *PullContext) GetPullContext() *PullContext {
+func (p *PullJob) GetPullJob() *PullJob {
 	return p
 }
 
-func (p *PullContext) Init(puller IPuller, plugin *Plugin, streamPath string, url string) *PullContext {
+func (p *PullJob) Init(puller IPuller, plugin *Plugin, streamPath string, url string) *PullJob {
 	publishConfig := plugin.config.Publish
 	publishConfig.PublishTimeout = 0
 	p.Pull = plugin.config.Pull
@@ -78,16 +79,16 @@ func (p *PullContext) Init(puller IPuller, plugin *Plugin, streamPath string, ur
 	return p
 }
 
-func (p *PullContext) GetKey() string {
+func (p *PullJob) GetKey() string {
 	return p.StreamPath
 }
 
-func (p *PullContext) Publish() (err error) {
+func (p *PullJob) Publish() (err error) {
 	p.Publisher, err = p.Plugin.PublishWithConfig(p.puller.GetTask().Context, p.StreamPath, *p.publishConfig)
 	return
 }
 
-func (p *PullContext) Start() (err error) {
+func (p *PullJob) Start() (err error) {
 	s := p.Plugin.Server
 	if _, ok := s.Pulls.Get(p.GetKey()); ok {
 		return pkg.ErrStreamExist
@@ -97,18 +98,18 @@ func (p *PullContext) Start() (err error) {
 	return
 }
 
-func (p *PullContext) Dispose() {
+func (p *PullJob) Dispose() {
 	p.Plugin.Server.Pulls.Remove(p)
 }
 
-func (p *HttpFilePuller) Start() (err error) {
-	if err = p.Ctx.Publish(); err != nil {
+func (p *HTTPFilePuller) Start() (err error) {
+	if err = p.PullJob.Publish(); err != nil {
 		return
 	}
-	remoteURL := p.Ctx.RemoteURL
+	remoteURL := p.PullJob.RemoteURL
 	if strings.HasPrefix(remoteURL, "http") {
 		var res *http.Response
-		if res, err = p.Ctx.HTTPClient.Get(remoteURL); err == nil {
+		if res, err = p.PullJob.HTTPClient.Get(remoteURL); err == nil {
 			if res.StatusCode != http.StatusOK {
 				return io.EOF
 			}
@@ -123,10 +124,10 @@ func (p *HttpFilePuller) Start() (err error) {
 	return
 }
 
-func (p *HttpFilePuller) GetPullContext() *PullContext {
-	return &p.Ctx
+func (p *HTTPFilePuller) GetPullJob() *PullJob {
+	return &p.PullJob
 }
 
-func (p *HttpFilePuller) Dispose() {
+func (p *HTTPFilePuller) Dispose() {
 	p.ReadCloser.Close()
 }

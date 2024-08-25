@@ -1,17 +1,18 @@
 package plugin_stress
 
 import (
+	"sync"
+
 	"m7s.live/m7s/v5"
 	"m7s.live/m7s/v5/pkg/util"
 	"m7s.live/m7s/v5/plugin/stress/pb"
-	"sync"
 )
 
 type StressPlugin struct {
 	pb.UnimplementedApiServer
 	m7s.Plugin
-	pushers util.Collection[string, *m7s.PushContext]
-	pullers util.Collection[string, *m7s.PullContext]
+	pushers util.Collection[string, *m7s.PushJob]
+	pullers util.Collection[string, *m7s.PullJob]
 }
 
 var _ = m7s.InstallPlugin[StressPlugin](&pb.Api_ServiceDesc, pb.RegisterApiHandler)

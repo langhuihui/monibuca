@@ -2,6 +2,7 @@ package cascade
 
 import (
 	"fmt"
+
 	"github.com/quic-go/quic-go"
 	"m7s.live/m7s/v5"
 	flv "m7s.live/m7s/v5/plugin/flv/pkg"
@@ -12,8 +13,8 @@ type Puller struct {
 	quic.Connection
 }
 
-func (p *Puller) GetPullContext() *m7s.PullContext {
-	return &p.Ctx
+func (p *Puller) GetPullJob() *m7s.PullJob {
+	return &p.PullJob
 }
 
 func NewCascadePuller() m7s.IPuller {
@@ -21,7 +22,7 @@ func NewCascadePuller() m7s.IPuller {
 }
 
 func (p *Puller) Start() (err error) {
-	if err = p.Ctx.Publish(); err != nil {
+	if err = p.PullJob.Publish(); err != nil {
 		return
 	}
 	var stream quic.Stream
@@ -30,6 +31,6 @@ func (p *Puller) Start() (err error) {
 		return
 	}
 	p.ReadCloser = stream
-	_, err = fmt.Fprintf(stream, "%s %s\r\n", "PULLFLV", p.Ctx.Publisher.StreamPath)
+	_, err = fmt.Fprintf(stream, "%s %s\r\n", "PULLFLV", p.PullJob.Publisher.StreamPath)
 	return
 }

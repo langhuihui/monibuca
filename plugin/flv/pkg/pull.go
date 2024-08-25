@@ -2,13 +2,14 @@ package flv
 
 import (
 	"errors"
+
 	"m7s.live/m7s/v5"
 	"m7s.live/m7s/v5/pkg/util"
 	rtmp "m7s.live/m7s/v5/plugin/rtmp/pkg"
 )
 
 type Puller struct {
-	m7s.HttpFilePuller
+	m7s.HTTPFilePuller
 }
 
 func NewPuller() m7s.IPuller {
@@ -17,7 +18,7 @@ func NewPuller() m7s.IPuller {
 
 func (p *Puller) Run() (err error) {
 	reader := util.NewBufReader(p.ReadCloser)
-	publisher := p.Ctx.Publisher
+	publisher := p.PullJob.Publisher
 	var hasAudio, hasVideo bool
 	var absTS uint32
 	var head util.Memory

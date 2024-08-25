@@ -159,6 +159,6 @@ func (p *WebRTCPlugin) Pull(streamPath, url string) {
 			p.Error("pull", "error", err)
 			return
 		}
-		cfClient.GetPullContext().Init(cfClient, &p.Plugin, streamPath, url)
+		cfClient.GetPullJob().Init(cfClient, &p.Plugin, streamPath, url)
 	}
 }

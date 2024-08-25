@@ -4,10 +4,11 @@ import (
 	"crypto/tls"
 	_ "embed"
 	"log/slog"
-	"m7s.live/m7s/v5/pkg/task"
 	"net"
 	"runtime"
 	"time"
+
+	"m7s.live/m7s/v5/pkg/task"
 )
 
 //go:embed local.monibuca.com_bundle.pem
@@ -43,28 +44,28 @@ type TCP struct {
 	AutoListen    bool   `default:"true" desc:"是否自动监听"`
 }
 
-func (config *TCP) CreateTCPTask(logger *slog.Logger, handler TCPHandler) *ListenTCPTask {
-	ret := &ListenTCPTask{TCP: config, handler: handler}
+func (config *TCP) CreateTCPWork(logger *slog.Logger, handler TCPHandler) *ListenTCPWork {
+	ret := &ListenTCPWork{TCP: config, handler: handler}
 	ret.Logger = logger.With("addr", config.ListenAddr)
 	return ret
 }
 
-func (config *TCP) CreateTCPTLSTask(logger *slog.Logger, handler TCPHandler) *ListenTCPTLSTask {
-	ret := &ListenTCPTLSTask{ListenTCPTask{TCP: config, handler: handler}}
+func (config *TCP) CreateTCPTLSWork(logger *slog.Logger, handler TCPHandler) *ListenTCPTLSWork {
+	ret := &ListenTCPTLSWork{ListenTCPWork{TCP: config, handler: handler}}
 	ret.Logger = logger.With("addr", config.ListenAddrTLS)
 	return ret
 }
 
 type TCPHandler = func(conn *net.TCPConn) task.ITask
 
-type ListenTCPTask struct {
-	task.MarcoLongTask
+type ListenTCPWork struct {
+	task.Work
 	*TCP
 	net.Listener
 	handler TCPHandler
 }
 
-func (task *ListenTCPTask) Start() (err error) {
+func (task *ListenTCPWork) Start() (err error) {
 	task.Listener, err = net.Listen("tcp", task.ListenAddr)
 	if err == nil {
 		task.Info("listen tcp")
@@ -84,16 +85,16 @@ func (task *ListenTCPTask) Start() (err error) {
 	return
 }
 
-func (task *ListenTCPTask) Dispose() {
+func (task *ListenTCPWork) Dispose() {
 	task.Info("tcp server stop")
 	task.Listener.Close()
 }
 
-type ListenTCPTLSTask struct {
-	ListenTCPTask
+type ListenTCPTLSWork struct {
+	ListenTCPWork
 }
 
-func (task *ListenTCPTLSTask) Start() (err error) {
+func (task *ListenTCPTLSWork) Start() (err error) {
 	var tlsConfig *tls.Config
 	if tlsConfig, err = GetTLSConfig(task.CertFile, task.KeyFile); err != nil {
 		return
@@ -107,7 +108,7 @@ func (task *ListenTCPTLSTask) Start() (err error) {
 	return
 }
 
-func (task *ListenTCPTask) listen(handler TCPHandler) {
+func (task *ListenTCPWork) listen(handler TCPHandler) {
 	var tempDelay time.Duration
 	for {
 		conn, err := task.Accept()

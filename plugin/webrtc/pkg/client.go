@@ -15,19 +15,19 @@ type PullRequest struct {
 
 type Client struct {
 	Connection
-	pullCtx   m7s.PullContext
-	pushCtx   m7s.PushContext
+	pullCtx   m7s.PullJob
+	pushCtx   m7s.PushJob
 	direction string
 	appId     string
 	token     string
 	apiBase   string
 }
 
-func (c *Client) GetPullContext() *m7s.PullContext {
+func (c *Client) GetPullJob() *m7s.PullJob {
 	return &c.pullCtx
 }
 
-func (c *Client) GetPushContext() *m7s.PushContext {
+func (c *Client) GetPushJob() *m7s.PushJob {
 	return &c.pushCtx
 }
 

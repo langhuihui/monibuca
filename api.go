@@ -5,13 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"m7s.live/m7s/v5/pkg/task"
 	"maps"
 	"net"
 	"net/http"
 	"runtime"
 	"strings"
 	"time"
+
+	"m7s.live/m7s/v5/pkg/task"
 
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/disk"
@@ -146,15 +147,15 @@ func (s *Server) StreamInfo(ctx context.Context, req *pb.StreamSnapRequest) (res
 }
 
 func (s *Server) TaskTree(context.Context, *emptypb.Empty) (res *pb.TaskTreeResponse, err error) {
-	var fillData func(m task.IMarcoTask) *pb.TaskTreeResponse
-	fillData = func(m task.IMarcoTask) (res *pb.TaskTreeResponse) {
+	var fillData func(m task.IJob) *pb.TaskTreeResponse
+	fillData = func(m task.IJob) (res *pb.TaskTreeResponse) {
 		res = &pb.TaskTreeResponse{Id: m.GetTaskID(), State: uint32(m.GetState()), Blocked: m.Blocked(), Type: uint32(m.GetTaskType()), Owner: m.GetOwnerType(), StartTime: timestamppb.New(m.GetTask().StartTime), Description: maps.Collect(func(yield func(key, value string) bool) {
 			for k, v := range m.GetTask().Description {
 				yield(k, fmt.Sprintf("%v", v))
 			}
 		})}
 		for t := range m.RangeSubTask {
-			if marcoTask, ok := t.(task.IMarcoTask); ok {
+			if marcoTask, ok := t.(task.IJob); ok {
 				res.Children = append(res.Children, fillData(marcoTask))
 			} else {
 				res.Children = append(res.Children, &pb.TaskTreeResponse{Id: t.GetTaskID(), State: uint32(t.GetState()), Type: uint32(t.GetTaskType()), Owner: t.GetOwnerType(), StartTime: timestamppb.New(t.GetTask().StartTime)})

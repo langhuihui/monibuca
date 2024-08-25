@@ -10,8 +10,8 @@ import (
 	"time"
 )
 
-func createMarcoTask() *MarcoTask {
-	var mt MarcoTask
+func createMarcoTask() *Job {
+	var mt Job
 	mt.Context, mt.CancelCauseFunc = context.WithCancelCause(context.Background())
 	mt.handler = &mt
 	mt.Logger = slog.New(slog.NewTextHandler(os.Stdout, nil))
@@ -78,7 +78,7 @@ func Test_StopByContext(t *testing.T) {
 
 func Test_ParentStop(t *testing.T) {
 	mt := createMarcoTask()
-	parent := &MarcoTask{}
+	parent := &Job{}
 	mt.AddTask(parent)
 	var task Task
 	parent.AddTask(&task)

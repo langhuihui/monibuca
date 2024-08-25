@@ -2,16 +2,17 @@ package cascade
 
 import (
 	"fmt"
+	"io"
+	"net/http"
+
 	"github.com/gobwas/ws"
 	"github.com/gobwas/ws/wsutil"
 	"github.com/quic-go/quic-go"
-	"io"
-	"m7s.live/m7s/v5/pkg/util"
-	"net/http"
+	"m7s.live/m7s/v5/pkg/task"
 )
 
 type Http2Quic struct {
-	util.Task
+	task.Task
 	quic.Connection
 	quic.Stream
 }

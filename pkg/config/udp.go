@@ -3,9 +3,10 @@ package config
 import (
 	"crypto/tls"
 	"log/slog"
-	"m7s.live/m7s/v5/pkg/task"
 	"net"
 	"time"
+
+	"m7s.live/m7s/v5/pkg/task"
 )
 
 type UDP struct {
@@ -15,24 +16,24 @@ type UDP struct {
 	AutoListen bool   `default:"true" desc:"是否自动监听"`
 }
 
-func (config *UDP) CreateUDPTask(logger *slog.Logger, handler func(conn *net.UDPConn) task.ITask) *ListenUDPTask {
-	ret := &ListenUDPTask{UDP: config, handler: handler}
+func (config *UDP) CreateUDPWork(logger *slog.Logger, handler func(conn *net.UDPConn) task.ITask) *ListenUDPWork {
+	ret := &ListenUDPWork{UDP: config, handler: handler}
 	ret.Logger = logger.With("addr", config.ListenAddr)
 	return ret
 }
 
-type ListenUDPTask struct {
-	task.MarcoLongTask
+type ListenUDPWork struct {
+	task.Work
 	*UDP
 	net.Listener
 	handler func(conn *net.UDPConn) task.ITask
 }
 
-func (task *ListenUDPTask) Dispose() {
+func (task *ListenUDPWork) Dispose() {
 	task.Close()
 }
 
-func (task *ListenUDPTask) Start() (err error) {
+func (task *ListenUDPWork) Start() (err error) {
 	task.Listener, err = net.Listen("udp", task.ListenAddr)
 	if err == nil {
 		task.Info("listen udp")
@@ -42,7 +43,7 @@ func (task *ListenUDPTask) Start() (err error) {
 	return
 }
 
-func (task *ListenUDPTask) Go() error {
+func (task *ListenUDPWork) Go() error {
 	var tempDelay time.Duration
 	for {
 		conn, err := task.Accept()

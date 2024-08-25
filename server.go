@@ -5,13 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"m7s.live/m7s/v5/pkg/task"
 	"net/http"
 	"os"
 	"path/filepath"
 	"runtime/debug"
 	"strings"
 	"time"
+
+	"m7s.live/m7s/v5/pkg/task"
 
 	"m7s.live/m7s/v5/pkg/config"
 
@@ -71,10 +72,10 @@ type Server struct {
 	Plugins         util.Collection[string, *Plugin]
 	Streams         task.Manager[string, *Publisher]
 	Waiting         util.Collection[string, *WaitStream]
-	Pulls           task.Manager[string, *PullContext]
-	Pushs           task.Manager[string, *PushContext]
-	Records         task.Manager[string, *RecordContext]
-	Transforms      task.Manager[string, *TransformContext]
+	Pulls           task.Manager[string, *PullJob]
+	Pushs           task.Manager[string, *PushJob]
+	Records         task.Manager[string, *RecordJob]
+	Transforms      task.Manager[string, *TransformJob]
 	Subscribers     SubscriberCollection
 	LogHandler      MultiLogHandler
 	apiList         []string
@@ -102,7 +103,7 @@ func NewServer(conf any) (s *Server) {
 }
 
 func Run(ctx context.Context, conf any) (err error) {
-	for err = ErrRestart; errors.Is(err, ErrRestart); err = Servers.AddTask(NewServer(conf), ctx).WaitStopped() {
+	for err = ErrRestart; errors.Is(err, ErrRestart); err = Servers.Add(NewServer(conf), ctx).WaitStopped() {
 	}
 	return
 }
@@ -197,12 +198,12 @@ func (s *Server) Start() (err error) {
 		}
 	}
 	if httpConf.ListenAddrTLS != "" {
-		s.stopOnError(httpConf.CreateHTTPSTask(s.Logger))
+		s.stopOnError(httpConf.CreateHTTPSWork(s.Logger))
 	}
 	if httpConf.ListenAddr != "" {
-		s.stopOnError(httpConf.CreateHTTPTask(s.Logger))
+		s.stopOnError(httpConf.CreateHTTPWork(s.Logger))
 	}
-	var tcpTask *config.ListenTCPTask
+	var tcpTask *config.ListenTCPWork
 	if tcpConf.ListenAddr != "" {
 		var opts []grpc.ServerOption
 		s.grpcServer = grpc.NewServer(opts...)
@@ -217,7 +218,7 @@ func (s *Server) Start() (err error) {
 			s.Error("register handler faild", "error", err)
 			return
 		}
-		tcpTask = tcpConf.CreateTCPTask(s.Logger, nil)
+		tcpTask = tcpConf.CreateTCPWork(s.Logger, nil)
 		if err = s.AddTask(tcpTask).WaitStarted(); err != nil {
 			s.Error("failed to listen", "error", err)
 			return
@@ -275,7 +276,7 @@ func (c *CheckSubWaitTimeout) Tick(any) {
 type GRPCServer struct {
 	task.Task
 	s       *Server
-	tcpTask *config.ListenTCPTask
+	tcpTask *config.ListenTCPWork
 }
 
 func (gRPC *GRPCServer) Dispose() {

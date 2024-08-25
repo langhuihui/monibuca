@@ -3,19 +3,20 @@ package flv
 import (
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
+	"slices"
+	"time"
+
 	"m7s.live/m7s/v5"
 	"m7s.live/m7s/v5/pkg"
 	"m7s.live/m7s/v5/pkg/task"
 	"m7s.live/m7s/v5/pkg/util"
 	rtmp "m7s.live/m7s/v5/plugin/rtmp/pkg"
-	"os"
-	"path/filepath"
-	"slices"
-	"time"
 )
 
 type WriteFlvMetaTagQueueTask struct {
-	task.MarcoLongTask
+	task.Work
 }
 
 var writeMetaTagQueueTask WriteFlvMetaTagQueueTask
@@ -149,7 +150,7 @@ func (r *Recorder) Run() (err error) {
 	var times []float64
 	var offset int64
 	var duration int64
-	ctx := &r.Ctx
+	ctx := &r.RecordJob
 	suber := ctx.Subscriber
 	noFragment := ctx.Fragment == 0 || ctx.Append
 	if noFragment {

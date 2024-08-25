@@ -2,11 +2,12 @@ package rtmp
 
 import (
 	"errors"
-	"m7s.live/m7s/v5"
-	"m7s.live/m7s/v5/pkg/task"
 	"net"
 	"runtime"
 	"sync/atomic"
+
+	"m7s.live/m7s/v5"
+	"m7s.live/m7s/v5/pkg/task"
 
 	"m7s.live/m7s/v5/pkg/util"
 )
@@ -44,7 +45,7 @@ const (
 )
 
 type NetConnection struct {
-	task.MarcoTask
+	task.Job
 	*util.BufReader
 	net.Conn
 	bandwidth                     uint32

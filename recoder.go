@@ -1,10 +1,11 @@
 package m7s
 
 import (
-	"m7s.live/m7s/v5/pkg/task"
 	"os"
 	"path/filepath"
 	"time"
+
+	"m7s.live/m7s/v5/pkg/task"
 
 	"m7s.live/m7s/v5/pkg"
 )
@@ -12,11 +13,11 @@ import (
 type (
 	IRecorder interface {
 		task.ITask
-		GetRecordContext() *RecordContext
+		GetRecordJob() *RecordJob
 	}
-	Recorder      = func() IRecorder
-	RecordContext struct {
-		task.MarcoTask
+	Recorder  = func() IRecorder
+	RecordJob struct {
+		task.Job
 		StreamPath string // 对应本地流
 		Plugin     *Plugin
 		Subscriber *Subscriber
@@ -27,28 +28,28 @@ type (
 	}
 	DefaultRecorder struct {
 		task.Task
-		Ctx RecordContext
+		RecordJob RecordJob
 	}
 )
 
-func (r *DefaultRecorder) GetRecordContext() *RecordContext {
-	return &r.Ctx
+func (r *DefaultRecorder) GetRecordJob() *RecordJob {
+	return &r.RecordJob
 }
 
 func (r *DefaultRecorder) Start() (err error) {
-	return r.Ctx.Subscribe()
+	return r.RecordJob.Subscribe()
 }
 
-func (p *RecordContext) GetKey() string {
+func (p *RecordJob) GetKey() string {
 	return p.FilePath
 }
 
-func (p *RecordContext) Subscribe() (err error) {
+func (p *RecordJob) Subscribe() (err error) {
 	p.Subscriber, err = p.Plugin.Subscribe(p.recorder.GetTask().Context, p.StreamPath)
 	return
 }
 
-func (p *RecordContext) Init(recorder IRecorder, plugin *Plugin, streamPath string, filePath string) *RecordContext {
+func (p *RecordJob) Init(recorder IRecorder, plugin *Plugin, streamPath string, filePath string) *RecordJob {
 	p.Plugin = plugin
 	p.Fragment = plugin.config.Record.Fragment
 	p.Append = plugin.config.Record.Append
@@ -63,7 +64,7 @@ func (p *RecordContext) Init(recorder IRecorder, plugin *Plugin, streamPath stri
 	return p
 }
 
-func (p *RecordContext) Start() (err error) {
+func (p *RecordJob) Start() (err error) {
 	s := p.Plugin.Server
 	if _, ok := s.Records.Get(p.GetKey()); ok {
 		return pkg.ErrRecordSamePath

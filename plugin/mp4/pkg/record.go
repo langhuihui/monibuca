@@ -1,17 +1,18 @@
 package mp4
 
 import (
+	"os"
+	"time"
+
 	"m7s.live/m7s/v5"
 	"m7s.live/m7s/v5/pkg"
 	"m7s.live/m7s/v5/pkg/codec"
 	"m7s.live/m7s/v5/pkg/task"
 	"m7s.live/m7s/v5/plugin/mp4/pkg/box"
-	"os"
-	"time"
 )
 
 type WriteTrailerQueueTask struct {
-	task.MarcoLongTask
+	task.Work
 }
 
 var writeTrailerQueueTask WriteTrailerQueueTask
@@ -45,7 +46,7 @@ func (task *writeTrailerTask) Start() (err error) {
 }
 
 func (r *Recorder) Run() (err error) {
-	ctx := &r.Ctx
+	ctx := &r.RecordJob
 	var file *os.File
 	var muxer *box.Movmuxer
 	var audioId, videoId uint32

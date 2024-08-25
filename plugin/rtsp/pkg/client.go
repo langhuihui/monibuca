@@ -2,11 +2,12 @@ package rtsp
 
 import (
 	"crypto/tls"
-	"m7s.live/m7s/v5"
-	"m7s.live/m7s/v5/pkg/util"
 	"net"
 	"net/url"
 	"strings"
+
+	"m7s.live/m7s/v5"
+	"m7s.live/m7s/v5/pkg/util"
 )
 
 const (
@@ -59,8 +60,8 @@ func createClient(p *m7s.Connection) (s *Stream, err error) {
 
 type Client struct {
 	*Stream
-	pullCtx   m7s.PullContext
-	pushCtx   m7s.PushContext
+	pullCtx   m7s.PullJob
+	pushCtx   m7s.PushJob
 	direction string
 }
 
@@ -74,11 +75,11 @@ func (c *Client) Start() (err error) {
 	return
 }
 
-func (c *Client) GetPullContext() *m7s.PullContext {
+func (c *Client) GetPullJob() *m7s.PullJob {
 	return &c.pullCtx
 }
 
-func (c *Client) GetPushContext() *m7s.PushContext {
+func (c *Client) GetPushJob() *m7s.PushJob {
 	return &c.pushCtx
 }
 

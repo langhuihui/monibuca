@@ -3,7 +3,6 @@ package m7s
 import (
 	"context"
 	"log/slog"
-	"m7s.live/m7s/v5/pkg/task"
 	"net"
 	"net/http"
 	"os"
@@ -11,6 +10,8 @@ import (
 	"reflect"
 	"runtime"
 	"strings"
+
+	"m7s.live/m7s/v5/pkg/task"
 
 	"github.com/quic-go/quic-go"
 
@@ -52,7 +53,7 @@ type (
 	}
 
 	IPlugin interface {
-		task.IMarcoTask
+		task.IJob
 		OnInit() error
 		OnStop()
 		Pull(path string, url string)
@@ -196,7 +197,7 @@ func InstallPlugin[C iPlugin](options ...any) error {
 }
 
 type Plugin struct {
-	task.MarcoLongTask
+	task.Work
 	Disabled bool
 	Meta     *PluginMeta
 	config   config.Common
@@ -301,24 +302,24 @@ func (p *Plugin) listen() (err error) {
 	httpConf := &p.config.HTTP
 
 	if httpConf.ListenAddrTLS != "" && (httpConf.ListenAddrTLS != p.Server.config.HTTP.ListenAddrTLS) {
-		p.stopOnError(httpConf.CreateHTTPSTask(p.Logger))
+		p.stopOnError(httpConf.CreateHTTPSWork(p.Logger))
 	}
 
 	if httpConf.ListenAddr != "" && (httpConf.ListenAddr != p.Server.config.HTTP.ListenAddr) {
-		p.stopOnError(httpConf.CreateHTTPTask(p.Logger))
+		p.stopOnError(httpConf.CreateHTTPWork(p.Logger))
 	}
 
 	if tcphandler, ok := p.handler.(ITCPPlugin); ok {
 		tcpConf := &p.config.TCP
 		if tcpConf.ListenAddr != "" && tcpConf.AutoListen {
-			task := tcpConf.CreateTCPTask(p.Logger, tcphandler.OnTCPConnect)
+			task := tcpConf.CreateTCPWork(p.Logger, tcphandler.OnTCPConnect)
 			err = p.AddTask(task).WaitStarted()
 			if err != nil {
 				return
 			}
 		}
 		if tcpConf.ListenAddrTLS != "" && tcpConf.AutoListen {
-			task := tcpConf.CreateTCPTLSTask(p.Logger, tcphandler.OnTCPConnect)
+			task := tcpConf.CreateTCPTLSWork(p.Logger, tcphandler.OnTCPConnect)
 			err = p.AddTask(task).WaitStarted()
 			if err != nil {
 				return
@@ -329,7 +330,7 @@ func (p *Plugin) listen() (err error) {
 	if udpHandler, ok := p.handler.(IUDPPlugin); ok {
 		udpConf := &p.config.UDP
 		if udpConf.ListenAddr != "" && udpConf.AutoListen {
-			task := udpConf.CreateUDPTask(p.Logger, udpHandler.OnUDPConnect)
+			task := udpConf.CreateUDPWork(p.Logger, udpHandler.OnUDPConnect)
 			err = p.AddTask(task).WaitStarted()
 			if err != nil {
 				return
@@ -340,7 +341,7 @@ func (p *Plugin) listen() (err error) {
 	if quicHandler, ok := p.handler.(IQUICPlugin); ok {
 		quicConf := &p.config.Quic
 		if quicConf.ListenAddr != "" && quicConf.AutoListen {
-			task := quicConf.CreateQUICTask(p.Logger, quicHandler.OnQUICConnect)
+			task := quicConf.CreateQUICWork(p.Logger, quicHandler.OnQUICConnect)
 			err = p.AddTask(task).WaitStarted()
 		}
 	}
@@ -401,22 +402,22 @@ func (p *Plugin) Subscribe(ctx context.Context, streamPath string) (subscriber *
 
 func (p *Plugin) Pull(streamPath string, url string) {
 	puller := p.Meta.Puller()
-	puller.GetPullContext().Init(puller, p, streamPath, url)
+	puller.GetPullJob().Init(puller, p, streamPath, url)
 }
 
 func (p *Plugin) Push(streamPath string, url string) {
 	pusher := p.Meta.Pusher()
-	pusher.GetPushContext().Init(pusher, p, streamPath, url)
+	pusher.GetPushJob().Init(pusher, p, streamPath, url)
 }
 
 func (p *Plugin) Record(streamPath string, filePath string) {
 	recorder := p.Meta.Recorder()
-	recorder.GetRecordContext().Init(recorder, p, streamPath, filePath)
+	recorder.GetRecordJob().Init(recorder, p, streamPath, filePath)
 }
 
 func (p *Plugin) Transform(fromStreamPath, toStreamPath string) {
 	transformer := p.Meta.Transformer()
-	transformer.GetTransformContext().Init(transformer, p, fromStreamPath, toStreamPath)
+	transformer.GetTransformJob().Init(transformer, p, fromStreamPath, toStreamPath)
 }
 
 func (p *Plugin) registerHandler(handlers map[string]http.HandlerFunc) {

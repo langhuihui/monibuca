@@ -1,18 +1,19 @@
 package mp4
 
 import (
-	"github.com/deepch/vdk/codec/h265parser"
 	"io"
+	"strings"
+
+	"github.com/deepch/vdk/codec/h265parser"
 	"m7s.live/m7s/v5"
 	"m7s.live/m7s/v5/pkg/codec"
 	"m7s.live/m7s/v5/pkg/util"
 	"m7s.live/m7s/v5/plugin/mp4/pkg/box"
 	rtmp "m7s.live/m7s/v5/plugin/rtmp/pkg"
-	"strings"
 )
 
 type Puller struct {
-	m7s.HttpFilePuller
+	m7s.HTTPFilePuller
 }
 
 func NewPuller() m7s.IPuller {
@@ -20,7 +21,7 @@ func NewPuller() m7s.IPuller {
 }
 
 func (p *Puller) Run() (err error) {
-	ctx := &p.Ctx
+	ctx := &p.PullJob
 	var demuxer *box.MovDemuxer
 	switch v := p.ReadCloser.(type) {
 	case io.ReadSeeker:

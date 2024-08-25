@@ -5,11 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"m7s.live/m7s/v5/pkg/util"
 	"reflect"
 	"runtime/debug"
 	"strings"
 	"time"
+
+	"m7s.live/m7s/v5/pkg/util"
 )
 
 const TraceLevel = slog.Level(-8)
@@ -34,9 +35,9 @@ const (
 )
 
 const (
-	TASK_TYPE_BASE TaskType = iota
-	TASK_TYPE_MACRO
-	TASK_TYPE_LONG_MACRO
+	TASK_TYPE_TASK TaskType = iota
+	TASK_TYPE_JOB
+	TASK_TYPE_Work
 	TASK_TYPE_CHANNEL
 	TASK_TYPE_CALL
 )
@@ -46,7 +47,7 @@ type (
 	TaskType  byte
 	ITask     interface {
 		keepalive() bool
-		getParent() *MarcoTask
+		getParent() *Job
 		GetParent() ITask
 		GetTask() *Task
 		GetTaskID() uint32
@@ -65,9 +66,9 @@ type (
 		GetState() TaskState
 		GetLevel() byte
 	}
-	IMarcoTask interface {
+	IJob interface {
 		ITask
-		getMarcoTask() *MarcoTask
+		getJob() *Job
 		AddTask(ITask, ...any) *Task
 		RangeSubTask(func(yield ITask) bool)
 		OnChildDispose(func(ITask))
@@ -107,7 +108,7 @@ type (
 		afterStartListeners, beforeDisposeListeners, afterDisposeListeners []func()
 		Description
 		startup, shutdown *util.Promise
-		parent            *MarcoTask
+		parent            *Job
 		parentCtx         context.Context
 		needRetry         bool
 		state             TaskState
@@ -148,14 +149,14 @@ func (task *Task) GetOwnerType() string {
 }
 
 func (*Task) GetTaskType() TaskType {
-	return TASK_TYPE_BASE
+	return TASK_TYPE_TASK
 }
 
 func (task *Task) GetTask() *Task {
 	return task
 }
 
-func (task *Task) getParent() *MarcoTask {
+func (task *Task) getParent() *Job {
 	return task.parent
 }
 

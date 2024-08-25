@@ -9,6 +9,6 @@ import (
 
 func (r *RTMPPlugin) PushOut(ctx context.Context, req *pb.PushRequest) (res *gpb.SuccessResponse, err error) {
 	pusher := rtmp.NewPusher()
-	err = pusher.GetPushContext().Init(pusher, &r.Plugin, req.StreamPath, req.RemoteURL).WaitStarted()
+	err = pusher.GetPushJob().Init(pusher, &r.Plugin, req.StreamPath, req.RemoteURL).WaitStarted()
 	return &gpb.SuccessResponse{}, err
 }

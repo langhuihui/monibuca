@@ -2,6 +2,8 @@ package webrtc
 
 import (
 	"errors"
+	"time"
+
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
 	. "github.com/pion/webrtc/v3"
@@ -9,11 +11,10 @@ import (
 	"m7s.live/m7s/v5/pkg/task"
 	"m7s.live/m7s/v5/pkg/util"
 	mrtp "m7s.live/m7s/v5/plugin/rtp/pkg"
-	"time"
 )
 
 type Connection struct {
-	task.MarcoTask
+	task.Job
 	*PeerConnection
 	SDP string
 	// LocalSDP *sdp.SessionDescription

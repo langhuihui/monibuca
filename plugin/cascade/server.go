@@ -2,14 +2,15 @@ package plugin_cascade
 
 import (
 	"bufio"
-	"m7s.live/m7s/v5"
-	"m7s.live/m7s/v5/pkg/util"
 	"net/http"
 	"strconv"
 	"strings"
 
+	"m7s.live/m7s/v5"
+	"m7s.live/m7s/v5/pkg/task"
+
 	"github.com/quic-go/quic-go"
-	"m7s.live/m7s/v5/plugin/cascade/pkg"
+	cascade "m7s.live/m7s/v5/plugin/cascade/pkg"
 )
 
 type CascadeServerPlugin struct {
@@ -21,12 +22,12 @@ type CascadeServerPlugin struct {
 var _ = m7s.InstallPlugin[CascadeServerPlugin]()
 
 type CascadeServer struct {
-	util.MarcoLongTask
+	task.Work
 	quic.Connection
 	conf *CascadeServerPlugin
 }
 
-func (c *CascadeServerPlugin) OnQUICConnect(conn quic.Connection) util.ITask {
+func (c *CascadeServerPlugin) OnQUICConnect(conn quic.Connection) task.ITask {
 	ret := &CascadeServer{
 		Connection: conn,
 		conf:       c,

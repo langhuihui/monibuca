@@ -296,7 +296,7 @@ func (gb *GB28181Plugin) Pull(streamPath, url string) {
 	dialog := Dialog{
 		gb: gb,
 	}
-	dialog.GetPullContext().Init(&dialog, &gb.Plugin, streamPath, url)
+	dialog.GetPullJob().Init(&dialog, &gb.Plugin, streamPath, url)
 }
 
 func (gb *GB28181Plugin) GetPullableList() []string {

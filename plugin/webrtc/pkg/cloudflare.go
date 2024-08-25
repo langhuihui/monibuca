@@ -4,18 +4,19 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"github.com/pion/webrtc/v3"
-	"m7s.live/m7s/v5"
 	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/pion/webrtc/v3"
+	"m7s.live/m7s/v5"
 )
 
 type (
 	CFClient struct {
 		Connection
-		pullCtx   m7s.PullContext
-		pushCtx   m7s.PushContext
+		pullCtx   m7s.PullJob
+		pushCtx   m7s.PushJob
 		direction string
 		ApiBase   string
 		sessionId string
@@ -153,10 +154,10 @@ func (c *CFClient) request(href string, body any, result any) (err error) {
 	return
 }
 
-func (c *CFClient) GetPullContext() *m7s.PullContext {
+func (c *CFClient) GetPullJob() *m7s.PullJob {
 	return &c.pullCtx
 }
 
-func (c *CFClient) GetPushContext() *m7s.PushContext {
+func (c *CFClient) GetPushJob() *m7s.PushJob {
 	return &c.pushCtx
 }

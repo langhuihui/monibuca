@@ -93,7 +93,7 @@ func (c *CascadeClientPlugin) Pull(streamPath, url string) {
 	puller := &cascade.Puller{
 		Connection: c.conn,
 	}
-	puller.GetPullContext().Init(puller, &c.Plugin, streamPath, url)
+	puller.GetPullJob().Init(puller, &c.Plugin, streamPath, url)
 }
 
 //func (c *CascadeClientPlugin) Start() {

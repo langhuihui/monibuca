@@ -18,6 +18,6 @@ import (
 func main() {
 	ctx := context.Background()
 	// ctx, _ := context.WithDeadline(context.Background(), time.Now().Add(time.Second*100))
-	m7s.AddRootTaskWithContext(ctx, m7s.NewServer("config2.yaml"))
+	go m7s.Run(ctx, "config2.yaml")
 	m7s.Run(ctx, "config1.yaml")
 }

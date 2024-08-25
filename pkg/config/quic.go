@@ -3,8 +3,9 @@ package config
 import (
 	"context"
 	"crypto/tls"
-	"github.com/quic-go/quic-go"
 	"log/slog"
+
+	"github.com/quic-go/quic-go"
 	"m7s.live/m7s/v5/pkg/task"
 )
 
@@ -19,8 +20,8 @@ type Quic struct {
 	AutoListen bool   `default:"true" desc:"是否自动监听"`
 }
 
-func (q *Quic) CreateQUICTask(logger *slog.Logger, handler func(connection quic.Connection) task.ITask) *ListenQuicTask {
-	ret := &ListenQuicTask{
+func (q *Quic) CreateQUICWork(logger *slog.Logger, handler func(connection quic.Connection) task.ITask) *ListenQuicWork {
+	ret := &ListenQuicWork{
 		Quic:    q,
 		handler: handler,
 	}
@@ -28,14 +29,14 @@ func (q *Quic) CreateQUICTask(logger *slog.Logger, handler func(connection quic.
 	return ret
 }
 
-type ListenQuicTask struct {
-	task.MarcoLongTask
+type ListenQuicWork struct {
+	task.Work
 	*Quic
 	*quic.Listener
 	handler func(connection quic.Connection) task.ITask
 }
 
-func (task *ListenQuicTask) Start() (err error) {
+func (task *ListenQuicWork) Start() (err error) {
 	var ltsc *tls.Config
 	ltsc, err = GetTLSConfig(task.CertFile, task.KeyFile)
 	if err != nil {
@@ -52,7 +53,7 @@ func (task *ListenQuicTask) Start() (err error) {
 	return
 }
 
-func (task *ListenQuicTask) Go() error {
+func (task *ListenQuicWork) Go() error {
 	for {
 		conn, err := task.Accept(task.Context)
 		if err != nil {
@@ -63,6 +64,6 @@ func (task *ListenQuicTask) Go() error {
 	}
 }
 
-func (task *ListenQuicTask) Dispose() {
+func (task *ListenQuicWork) Dispose() {
 	_ = task.Listener.Close()
 }

@@ -1,32 +1,33 @@
 package m7s
 
 import (
+	"time"
+
 	"m7s.live/m7s/v5/pkg"
 	"m7s.live/m7s/v5/pkg/task"
-	"time"
 
 	"m7s.live/m7s/v5/pkg/config"
 )
 
 type IPusher interface {
 	task.ITask
-	GetPushContext() *PushContext
+	GetPushJob() *PushJob
 }
 
 type Pusher = func() IPusher
 
-type PushContext struct {
+type PushJob struct {
 	Connection
 	Subscriber *Subscriber
 	config.Push
 	pusher IPusher
 }
 
-func (p *PushContext) GetKey() string {
+func (p *PushJob) GetKey() string {
 	return p.RemoteURL
 }
 
-func (p *PushContext) Init(pusher IPusher, plugin *Plugin, streamPath string, url string) *PushContext {
+func (p *PushJob) Init(pusher IPusher, plugin *Plugin, streamPath string, url string) *PushJob {
 	p.Push = plugin.config.Push
 	p.Connection.Init(plugin, streamPath, url, plugin.config.Push.Proxy)
 	p.Logger = plugin.Logger.With("pushURL", url, "streamPath", streamPath)
@@ -39,12 +40,12 @@ func (p *PushContext) Init(pusher IPusher, plugin *Plugin, streamPath string, ur
 	return p
 }
 
-func (p *PushContext) Subscribe() (err error) {
+func (p *PushJob) Subscribe() (err error) {
 	p.Subscriber, err = p.Plugin.Subscribe(p.pusher.GetTask().Context, p.StreamPath)
 	return
 }
 
-func (p *PushContext) Start() (err error) {
+func (p *PushJob) Start() (err error) {
 	s := p.Plugin.Server
 	if _, ok := s.Pushs.Get(p.GetKey()); ok {
 		return pkg.ErrPushRemoteURLExist
@@ -54,6 +55,6 @@ func (p *PushContext) Start() (err error) {
 	return
 }
 
-func (p *PushContext) Dispose() {
+func (p *PushJob) Dispose() {
 	p.Plugin.Server.Pushs.Remove(p)
 }

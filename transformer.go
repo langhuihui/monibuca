@@ -8,11 +8,11 @@ import (
 type (
 	ITransformer interface {
 		task.ITask
-		GetTransformContext() *TransformContext
+		GetTransformJob() *TransformJob
 	}
-	Transformer      = func() ITransformer
-	TransformContext struct {
-		task.MarcoTask
+	Transformer  = func() ITransformer
+	TransformJob struct {
+		task.Job
 		FromStreamPath string // 待转换的本地流
 		ToStreamPath   string // 转换后的本地流
 		Plugin         *Plugin
@@ -22,33 +22,37 @@ type (
 	}
 	DefaultTransformer struct {
 		task.Task
-		Ctx TransformContext
+		TransformJob TransformJob
 	}
 )
 
-func (r *DefaultTransformer) GetTransformContext() *TransformContext {
-	return &r.Ctx
+func (r *DefaultTransformer) GetTransformJob() *TransformJob {
+	return &r.TransformJob
 }
 
 func (r *DefaultTransformer) Start() (err error) {
-	return r.Ctx.Subscribe()
+	err = r.TransformJob.Subscribe()
+	if err == nil {
+		err = r.TransformJob.Publish()
+	}
+	return
 }
 
-func (p *TransformContext) GetKey() string {
+func (p *TransformJob) GetKey() string {
 	return p.ToStreamPath
 }
 
-func (p *TransformContext) Subscribe() (err error) {
+func (p *TransformJob) Subscribe() (err error) {
 	p.Subscriber, err = p.Plugin.Subscribe(p.transformer.GetTask().Context, p.FromStreamPath)
 	return
 }
 
-func (p *TransformContext) Publish() (err error) {
+func (p *TransformJob) Publish() (err error) {
 	p.Publisher, err = p.Plugin.Publish(p.transformer.GetTask().Context, p.ToStreamPath)
 	return
 }
 
-func (p *TransformContext) Init(transformer ITransformer, plugin *Plugin, fromStreamPath string, toStreamPath string) *TransformContext {
+func (p *TransformJob) Init(transformer ITransformer, plugin *Plugin, fromStreamPath string, toStreamPath string) *TransformJob {
 	p.Plugin = plugin
 	p.FromStreamPath = fromStreamPath
 	p.ToStreamPath = toStreamPath
@@ -61,7 +65,7 @@ func (p *TransformContext) Init(transformer ITransformer, plugin *Plugin, fromSt
 	return p
 }
 
-func (p *TransformContext) Start() (err error) {
+func (p *TransformJob) Start() (err error) {
 	s := p.Plugin.Server
 	if _, ok := s.Transforms.Get(p.GetKey()); ok {
 		return pkg.ErrRecordSamePath
@@ -71,6 +75,6 @@ func (p *TransformContext) Start() (err error) {
 	return
 }
 
-func (p *TransformContext) Dispose() {
+func (p *TransformJob) Dispose() {
 	p.Plugin.Server.Transforms.Remove(p)
 }

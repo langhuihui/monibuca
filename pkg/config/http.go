@@ -90,14 +90,14 @@ func (config *HTTP) GetHTTPConfig() *HTTP {
 // 	return config.mux.Handler(r)
 // }
 
-func (config *HTTP) CreateHTTPTask(logger *slog.Logger) *ListenHTTPTask {
-	ret := &ListenHTTPTask{HTTP: config}
+func (config *HTTP) CreateHTTPWork(logger *slog.Logger) *ListenHTTPWork {
+	ret := &ListenHTTPWork{HTTP: config}
 	ret.Logger = logger.With("addr", config.ListenAddr)
 	return ret
 }
 
-func (config *HTTP) CreateHTTPSTask(logger *slog.Logger) *ListenHTTPSTask {
-	ret := &ListenHTTPSTask{ListenHTTPTask{HTTP: config}}
+func (config *HTTP) CreateHTTPSWork(logger *slog.Logger) *ListenHTTPSWork {
+	ret := &ListenHTTPSWork{ListenHTTPWork{HTTP: config}}
 	ret.Logger = logger.With("addr", config.ListenAddrTLS)
 	return ret
 }
@@ -166,13 +166,13 @@ func BasicAuth(u, p string, next http.Handler) http.Handler {
 	})
 }
 
-type ListenHTTPTask struct {
+type ListenHTTPWork struct {
 	task.Task
 	*HTTP
 	*http.Server
 }
 
-func (task *ListenHTTPTask) Start() (err error) {
+func (task *ListenHTTPWork) Start() (err error) {
 	task.Server = &http.Server{
 		Addr:         task.ListenAddr,
 		ReadTimeout:  task.HTTP.ReadTimeout,
@@ -183,21 +183,21 @@ func (task *ListenHTTPTask) Start() (err error) {
 	return
 }
 
-func (task *ListenHTTPTask) Go() error {
+func (task *ListenHTTPWork) Go() error {
 	task.Info("listen http")
 	return task.Server.ListenAndServe()
 }
 
-func (task *ListenHTTPTask) Dispose() {
+func (task *ListenHTTPWork) Dispose() {
 	task.Info("http server stop")
 	task.Server.Close()
 }
 
-type ListenHTTPSTask struct {
-	ListenHTTPTask
+type ListenHTTPSWork struct {
+	ListenHTTPWork
 }
 
-func (task *ListenHTTPSTask) Start() (err error) {
+func (task *ListenHTTPSWork) Start() (err error) {
 	cer, _ := tls.X509KeyPair(LocalCert, LocalKey)
 	task.Server = &http.Server{
 		Addr:         task.HTTP.ListenAddrTLS,
@@ -233,7 +233,7 @@ func (task *ListenHTTPSTask) Start() (err error) {
 	return
 }
 
-func (task *ListenHTTPSTask) Go() error {
+func (task *ListenHTTPSWork) Go() error {
 	task.Info("listen https")
 	return task.Server.ListenAndServeTLS(task.HTTP.CertFile, task.HTTP.KeyFile)
 }
