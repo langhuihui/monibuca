@@ -56,7 +56,8 @@ type (
 		task.IJob
 		OnInit() error
 		OnStop()
-		Pull(path string, url string)
+		Pull(string, config.Pull)
+		Transform(string, config.Transform)
 	}
 
 	IRegisterHandler interface {
@@ -77,6 +78,10 @@ type (
 
 	IQUICPlugin interface {
 		OnQUICConnect(quic.Connection) task.ITask
+	}
+
+	IListenPublishPlugin interface {
+		OnPublish(*Publisher) task.ITask
 	}
 )
 
@@ -182,6 +187,8 @@ func InstallPlugin[C iPlugin](options ...any) error {
 			meta.Pusher = v
 		case Recorder:
 			meta.Recorder = v
+		case Transformer:
+			meta.Transformer = v
 		case AuthPublisher:
 			meta.OnAuthPub = v
 		case AuthSubscriber:
@@ -195,6 +202,8 @@ func InstallPlugin[C iPlugin](options ...any) error {
 	plugins = append(plugins, meta)
 	return nil
 }
+
+var _ IPlugin = (*Plugin)(nil)
 
 type Plugin struct {
 	task.Work
@@ -400,24 +409,24 @@ func (p *Plugin) Subscribe(ctx context.Context, streamPath string) (subscriber *
 	return p.SubscribeWithConfig(ctx, streamPath, p.config.Subscribe)
 }
 
-func (p *Plugin) Pull(streamPath string, url string) {
+func (p *Plugin) Pull(streamPath string, conf config.Pull) {
 	puller := p.Meta.Puller()
-	puller.GetPullJob().Init(puller, p, streamPath, url)
+	puller.GetPullJob().Init(puller, p, streamPath, conf)
 }
 
-func (p *Plugin) Push(streamPath string, url string) {
+func (p *Plugin) Push(streamPath string, conf config.Push) {
 	pusher := p.Meta.Pusher()
-	pusher.GetPushJob().Init(pusher, p, streamPath, url)
+	pusher.GetPushJob().Init(pusher, p, streamPath, conf)
 }
 
-func (p *Plugin) Record(streamPath string, filePath string) {
+func (p *Plugin) Record(streamPath string, conf config.Record) {
 	recorder := p.Meta.Recorder()
-	recorder.GetRecordJob().Init(recorder, p, streamPath, filePath)
+	recorder.GetRecordJob().Init(recorder, p, streamPath, conf)
 }
 
-func (p *Plugin) Transform(fromStreamPath, toStreamPath string) {
+func (p *Plugin) Transform(streamPath string, conf config.Transform) {
 	transformer := p.Meta.Transformer()
-	transformer.GetTransformJob().Init(transformer, p, fromStreamPath, toStreamPath)
+	transformer.GetTransformJob().Init(transformer, p, streamPath, conf)
 }
 
 func (p *Plugin) registerHandler(handlers map[string]http.HandlerFunc) {

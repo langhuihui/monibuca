@@ -2,12 +2,14 @@ package m7s
 
 import (
 	"context"
+	"fmt"
 	"m7s.live/m7s/v5/pkg/task"
 	"math"
 	"os"
 	"path/filepath"
 	"reflect"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -147,9 +149,7 @@ func (p *Publisher) Start() (err error) {
 	s := p.Plugin.Server
 	if oldPublisher, ok := s.Streams.Get(p.StreamPath); ok {
 		if p.KickExist {
-			p.Warn("kick")
 			p.takeOver(oldPublisher)
-			oldPublisher.Stop(ErrKick)
 		} else {
 			return ErrStreamExist
 		}
@@ -173,15 +173,40 @@ func (p *Publisher) Start() (err error) {
 		if plugin.Disabled {
 			continue
 		}
-		if remoteURL := plugin.GetCommonConf().CheckPush(p.StreamPath); remoteURL != "" {
-			if plugin.Meta.Pusher != nil {
-				plugin.Push(p.StreamPath, remoteURL)
+		onPublish := plugin.GetCommonConf().OnPub
+		if plugin.Meta.Pusher != nil {
+			for r, pushConf := range onPublish.Push {
+				if group := r.FindStringSubmatch(p.StreamPath); group != nil {
+					for i, g := range group {
+						pushConf.URL = strings.Replace(pushConf.URL, fmt.Sprintf("$%d", i), g, -1)
+					}
+					plugin.Push(p.StreamPath, pushConf)
+				}
 			}
 		}
-		if filePath := plugin.GetCommonConf().CheckRecord(p.StreamPath); filePath != "" {
-			if plugin.Meta.Recorder != nil {
-				plugin.Record(p.StreamPath, filePath)
+		if plugin.Meta.Recorder != nil {
+			for r, recConf := range onPublish.Record {
+				if group := r.FindStringSubmatch(p.StreamPath); group != nil {
+					for i, g := range group {
+						recConf.FilePath = strings.Replace(recConf.FilePath, fmt.Sprintf("$%d", i), g, -1)
+					}
+					plugin.Record(p.StreamPath, recConf)
+				}
 			}
+		}
+		if plugin.Meta.Transformer != nil {
+			for r, tranConf := range onPublish.Transform {
+				if group := r.FindStringSubmatch(p.StreamPath); group != nil {
+					for i, g := range group {
+						tranConf.Target = strings.Replace(tranConf.Target, fmt.Sprintf("$%d", i), g, -1)
+					}
+					plugin.Transform(p.StreamPath, tranConf)
+				}
+			}
+		}
+
+		if v, ok := plugin.handler.(IListenPublishPlugin); ok {
+			v.OnPublish(p)
 		}
 	}
 	p.AddTask(&PublishTimeout{Publisher: p})
@@ -520,9 +545,11 @@ func (p *Publisher) HasVideoTrack() bool {
 
 func (p *Publisher) Dispose() {
 	s := p.Plugin.Server
-	s.Streams.Remove(p)
+	if !p.StopReasonIs(ErrKick) {
+		s.Streams.Remove(p)
+	}
 	if p.Subscribers.Length > 0 {
-		w := p.Plugin.Server.createWait(p.StreamPath)
+		w := s.createWait(p.StreamPath)
 		w.baseTs = p.lastTs
 		w.Info("takeOver", "pId", p.ID)
 		for subscriber := range p.SubscriberRange {
@@ -542,6 +569,7 @@ func (p *Publisher) Dispose() {
 
 func (p *Publisher) takeOver(old *Publisher) {
 	p.baseTs = old.lastTs
+	old.Stop(ErrKick)
 	p.Info("takeOver", "old", old.ID)
 	for subscriber := range old.SubscriberRange {
 		p.AddSubscriber(subscriber)

@@ -18,6 +18,5 @@ rtmp:
   tcp:
     autolisten: false
 flv:
- pull:
-   pullonstart:
+   pull:
      live/test: /Users/dexter/Movies/002.flv

@@ -1,6 +1,7 @@
 package m7s
 
 import (
+	"m7s.live/m7s/v5/pkg/config"
 	"os"
 	"path/filepath"
 	"time"
@@ -49,18 +50,21 @@ func (p *RecordJob) Subscribe() (err error) {
 	return
 }
 
-func (p *RecordJob) Init(recorder IRecorder, plugin *Plugin, streamPath string, filePath string) *RecordJob {
+func (p *RecordJob) Init(recorder IRecorder, plugin *Plugin, streamPath string, conf config.Record) *RecordJob {
 	p.Plugin = plugin
-	p.Fragment = plugin.config.Record.Fragment
-	p.Append = plugin.config.Record.Append
-	p.FilePath = filePath
+	p.Fragment = conf.Fragment
+	p.Append = conf.Append
+	p.FilePath = conf.FilePath
 	p.StreamPath = streamPath
-	p.Logger = plugin.Logger.With("filePath", filePath, "streamPath", streamPath)
-	if recorderTask := recorder.GetTask(); recorderTask.Logger == nil {
-		recorderTask.Logger = p.Logger
-	}
 	p.recorder = recorder
-	plugin.Server.Records.Add(p)
+	p.Description = map[string]any{
+		"plugin":     plugin.Meta.Name,
+		"streamPath": streamPath,
+		"filePath":   conf.FilePath,
+		"append":     conf.Append,
+		"fragment":   conf.Fragment,
+	}
+	plugin.Server.Records.Add(p, plugin.Logger.With("filePath", conf.FilePath, "streamPath", streamPath))
 	return p
 }
 
@@ -76,12 +80,10 @@ func (p *RecordJob) Start() (err error) {
 		}
 		dir = filepath.Dir(p.FilePath)
 	}
-	p.Description = map[string]any{
-		"filePath": p.FilePath,
-	}
+	p.Description["filePath"] = p.FilePath
 	if err = os.MkdirAll(dir, 0755); err != nil {
 		return
 	}
-	p.AddTask(p.recorder)
+	p.AddTask(p.recorder, p.Logger)
 	return
 }

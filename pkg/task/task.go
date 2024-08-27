@@ -46,6 +46,7 @@ type (
 	TaskState byte
 	TaskType  byte
 	ITask     interface {
+		context.Context
 		keepalive() bool
 		getParent() *Job
 		GetParent() ITask

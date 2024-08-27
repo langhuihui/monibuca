@@ -3,6 +3,7 @@ package plugin_stress
 import (
 	"context"
 	"fmt"
+	"m7s.live/m7s/v5/pkg/config"
 
 	"google.golang.org/protobuf/types/known/emptypb"
 	"m7s.live/m7s/v5"
@@ -18,7 +19,7 @@ func (r *StressPlugin) pull(count int, format, url string, puller m7s.Puller) (e
 	if i := r.pullers.Length; count > i {
 		for j := i; j < count; j++ {
 			p := puller()
-			ctx := p.GetPullJob().Init(p, &r.Plugin, fmt.Sprintf("stress/%d", j), fmt.Sprintf(format, url))
+			ctx := p.GetPullJob().Init(p, &r.Plugin, fmt.Sprintf("stress/%d", j), config.Pull{URL: fmt.Sprintf(format, url, j)})
 			if err = ctx.WaitStarted(); err != nil {
 				return
 			}
@@ -40,7 +41,7 @@ func (r *StressPlugin) push(count int, streamPath, format, remoteHost string, pu
 	if i := r.pushers.Length; count > i {
 		for j := i; j < count; j++ {
 			p := pusher()
-			ctx := p.GetPushJob().Init(p, &r.Plugin, streamPath, fmt.Sprintf(format, remoteHost, j))
+			ctx := p.GetPushJob().Init(p, &r.Plugin, streamPath, config.Push{URL: fmt.Sprintf(format, remoteHost, j)})
 			if err = ctx.WaitStarted(); err != nil {
 				return
 			}

@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"github.com/pion/logging"
 	"io"
+	"m7s.live/m7s/v5/pkg/config"
 	"net"
 	"net/http"
 	"regexp"
@@ -147,8 +148,8 @@ func (p *WebRTCPlugin) testPage(w http.ResponseWriter, r *http.Request) {
 	io.Copy(w, f)
 }
 
-func (p *WebRTCPlugin) Pull(streamPath, url string) {
-	if strings.HasPrefix(url, "https://rtc.live.cloudflare.com") {
+func (p *WebRTCPlugin) Pull(streamPath string, conf config.Pull) {
+	if strings.HasPrefix(conf.URL, "https://rtc.live.cloudflare.com") {
 		cfClient := NewCFClient(DIRECTION_PULL)
 		var err error
 		cfClient.PeerConnection, err = p.api.NewPeerConnection(Configuration{
@@ -159,6 +160,6 @@ func (p *WebRTCPlugin) Pull(streamPath, url string) {
 			p.Error("pull", "error", err)
 			return
 		}
-		cfClient.GetPullJob().Init(cfClient, &p.Plugin, streamPath, url)
+		cfClient.GetPullJob().Init(cfClient, &p.Plugin, streamPath, conf)
 	}
 }

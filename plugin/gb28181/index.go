@@ -292,11 +292,11 @@ func (gb *GB28181Plugin) StoreDevice(id string, req *sip.Request) (d *Device) {
 	return
 }
 
-func (gb *GB28181Plugin) Pull(streamPath, url string) {
+func (gb *GB28181Plugin) Pull(streamPath string, conf config.Pull) {
 	dialog := Dialog{
 		gb: gb,
 	}
-	dialog.GetPullJob().Init(&dialog, &gb.Plugin, streamPath, url)
+	dialog.GetPullJob().Init(&dialog, &gb.Plugin, streamPath, conf)
 }
 
 func (gb *GB28181Plugin) GetPullableList() []string {

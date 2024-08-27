@@ -2,6 +2,10 @@ global:
   loglevel: trace
   http:
     listenaddr: :8082
+  onpublish:
+    record:
+      .* :
+        filepath: $0
 #  enableauth: true
 #  tcp:
 #    listenaddr: :50051
@@ -22,9 +26,9 @@ rtmp:
   subscribe:
     # submode: 1
     # subaudio: false
-  pull:
-    pullonsub:
-#      live/pull: rtmp://localhost/live/test
+  onsub:
+    pull:
+      live/.*: rtmp://localhost/$0
 #flv:
 #   pull:
 #     pullonstart:
@@ -33,7 +37,6 @@ gb28181:
     sip:
         listenaddr:
           - udp::5060
-    pull:
-      enableregexp: true
-      pullonsub:
+    onsubscribe:
+      pull:
         .* : $0

@@ -242,8 +242,8 @@ func (s *Server) Start() (err error) {
 	s.Post(func() error {
 		for plugin := range s.Plugins.Range {
 			if plugin.Meta.Puller != nil {
-				for streamPath, url := range plugin.config.PullOnStart {
-					plugin.handler.Pull(streamPath, url)
+				for streamPath, conf := range plugin.config.Pull {
+					plugin.handler.Pull(streamPath, conf)
 				}
 			}
 		}

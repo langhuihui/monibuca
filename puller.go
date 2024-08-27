@@ -20,6 +20,7 @@ type (
 		StreamPath string // 对应本地流
 		RemoteURL  string // 远程服务器地址（用于推拉）
 		HTTPClient *http.Client
+		Header     http.Header
 	}
 
 	IPuller interface {
@@ -33,8 +34,7 @@ type (
 		Connection
 		Publisher     *Publisher
 		publishConfig *config.Publish
-		config.Pull
-		puller IPuller
+		puller        IPuller
 	}
 
 	HTTPFilePuller struct {
@@ -44,10 +44,11 @@ type (
 	}
 )
 
-func (conn *Connection) Init(plugin *Plugin, streamPath string, href string, proxyConf string) {
+func (conn *Connection) Init(plugin *Plugin, streamPath string, href string, proxyConf string, header http.Header) {
 	conn.RemoteURL = href
 	conn.StreamPath = streamPath
 	conn.Plugin = plugin
+	conn.Header = header
 	conn.HTTPClient = http.DefaultClient
 	if proxyConf != "" {
 		proxy, err := url.Parse(proxyConf)
@@ -63,19 +64,20 @@ func (p *PullJob) GetPullJob() *PullJob {
 	return p
 }
 
-func (p *PullJob) Init(puller IPuller, plugin *Plugin, streamPath string, url string) *PullJob {
+func (p *PullJob) Init(puller IPuller, plugin *Plugin, streamPath string, conf config.Pull) *PullJob {
 	publishConfig := plugin.config.Publish
 	publishConfig.PublishTimeout = 0
-	p.Pull = plugin.config.Pull
 	p.publishConfig = &publishConfig
-	p.Connection.Init(plugin, streamPath, url, plugin.config.Pull.Proxy)
-	p.Logger = plugin.Logger.With("pullURL", url, "streamPath", streamPath)
-	if pullerTask := puller.GetTask(); pullerTask.Logger == nil {
-		pullerTask.Logger = p.Logger
-	}
+	p.Connection.Init(plugin, streamPath, conf.URL, conf.Proxy, conf.Header)
 	p.puller = puller
-	puller.SetRetry(plugin.config.Pull.RePull, time.Second*5)
-	plugin.Server.Pulls.Add(p)
+	p.Description = map[string]any{
+		"plugin":     plugin.Meta.Name,
+		"streamPath": streamPath,
+		"url":        conf.URL,
+		"maxRetry":   conf.MaxRetry,
+	}
+	puller.SetRetry(conf.MaxRetry, time.Second*5)
+	plugin.Server.Pulls.Add(p, plugin.Logger.With("pullURL", conf.URL, "streamPath", streamPath))
 	return p
 }
 
@@ -93,13 +95,8 @@ func (p *PullJob) Start() (err error) {
 	if _, ok := s.Pulls.Get(p.GetKey()); ok {
 		return pkg.ErrStreamExist
 	}
-	s.Pulls.Add(p)
-	s.AddTask(p.puller)
+	p.AddTask(p.puller, p.Logger)
 	return
-}
-
-func (p *PullJob) Dispose() {
-	p.Plugin.Server.Pulls.Remove(p)
 }
 
 func (p *HTTPFilePuller) Start() (err error) {

@@ -2,6 +2,7 @@ package m7s
 
 import (
 	"errors"
+	"fmt"
 	"net/url"
 	"reflect"
 	"runtime"
@@ -88,9 +89,22 @@ func (s *Subscriber) Start() (err error) {
 	} else {
 		server.createWait(s.StreamPath).Add(s)
 		for plugin := range server.Plugins.Range {
-			if remoteURL := plugin.GetCommonConf().Pull.CheckPullOnSub(s.StreamPath); remoteURL != "" {
+			for reg, conf := range plugin.GetCommonConf().OnSub.Pull {
 				if plugin.Meta.Puller != nil {
-					plugin.handler.Pull(s.StreamPath, remoteURL)
+					if group := reg.FindStringSubmatch(s.StreamPath); group != nil {
+						for i, value := range group {
+							conf.URL = strings.Replace(conf.URL, fmt.Sprintf("$%d", i), value, -1)
+						}
+					}
+					plugin.handler.Pull(s.StreamPath, conf)
+				}
+			}
+			for reg, conf := range plugin.GetCommonConf().OnSub.Transform {
+				// TODO:
+				if plugin.Meta.Transformer != nil {
+					if reg.MatchString(s.StreamPath) {
+						plugin.handler.Transform(s.StreamPath, conf)
+					}
 				}
 			}
 		}

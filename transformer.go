@@ -2,6 +2,7 @@ package m7s
 
 import (
 	"m7s.live/m7s/v5/pkg"
+	"m7s.live/m7s/v5/pkg/config"
 	"m7s.live/m7s/v5/pkg/task"
 )
 
@@ -13,12 +14,12 @@ type (
 	Transformer  = func() ITransformer
 	TransformJob struct {
 		task.Job
-		FromStreamPath string // 待转换的本地流
-		ToStreamPath   string // 转换后的本地流
-		Plugin         *Plugin
-		Publisher      *Publisher
-		Subscriber     *Subscriber
-		transformer    ITransformer
+		StreamPath  string // 对应本地流
+		Target      string // 对应目标流
+		Plugin      *Plugin
+		Publisher   *Publisher
+		Subscriber  *Subscriber
+		transformer ITransformer
 	}
 	DefaultTransformer struct {
 		task.Task
@@ -39,29 +40,30 @@ func (r *DefaultTransformer) Start() (err error) {
 }
 
 func (p *TransformJob) GetKey() string {
-	return p.ToStreamPath
+	return p.Target
 }
 
 func (p *TransformJob) Subscribe() (err error) {
-	p.Subscriber, err = p.Plugin.Subscribe(p.transformer.GetTask().Context, p.FromStreamPath)
+	p.Subscriber, err = p.Plugin.Subscribe(p.transformer, p.StreamPath)
 	return
 }
 
 func (p *TransformJob) Publish() (err error) {
-	p.Publisher, err = p.Plugin.Publish(p.transformer.GetTask().Context, p.ToStreamPath)
+	p.Publisher, err = p.Plugin.Publish(p.transformer, p.Target)
 	return
 }
 
-func (p *TransformJob) Init(transformer ITransformer, plugin *Plugin, fromStreamPath string, toStreamPath string) *TransformJob {
+func (p *TransformJob) Init(transformer ITransformer, plugin *Plugin, streamPath string, conf config.Transform) *TransformJob {
 	p.Plugin = plugin
-	p.FromStreamPath = fromStreamPath
-	p.ToStreamPath = toStreamPath
-	p.Logger = plugin.Logger.With("fromStreamPath", fromStreamPath, "toStreamPath", toStreamPath)
-	if recorderTask := transformer.GetTask(); recorderTask.Logger == nil {
-		recorderTask.Logger = p.Logger
-	}
+	p.Target = conf.Target
+	p.StreamPath = streamPath
 	p.transformer = transformer
-	plugin.Server.Transforms.Add(p)
+	p.Description = map[string]any{
+		"streamPath": streamPath,
+		"target":     conf.Target,
+		"conf":       conf.Conf,
+	}
+	plugin.Server.Transforms.Add(p, plugin.Logger.With("streamPath", streamPath))
 	return p
 }
 
@@ -70,11 +72,6 @@ func (p *TransformJob) Start() (err error) {
 	if _, ok := s.Transforms.Get(p.GetKey()); ok {
 		return pkg.ErrRecordSamePath
 	}
-	s.Transforms.Add(p)
-	s.AddTask(p.transformer)
+	p.AddTask(p.transformer, p.Logger)
 	return
-}
-
-func (p *TransformJob) Dispose() {
-	p.Plugin.Server.Transforms.Remove(p)
 }

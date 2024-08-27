@@ -1,9 +1,8 @@
 package config
 
 import (
-	"regexp"
-
 	"gopkg.in/yaml.v3"
+	"regexp"
 )
 
 type Regexp struct {

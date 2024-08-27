@@ -1,8 +1,6 @@
 package m7s
 
 import (
-	"time"
-
 	"m7s.live/m7s/v5/pkg"
 	"m7s.live/m7s/v5/pkg/task"
 
@@ -19,24 +17,24 @@ type Pusher = func() IPusher
 type PushJob struct {
 	Connection
 	Subscriber *Subscriber
-	config.Push
-	pusher IPusher
+	pusher     IPusher
 }
 
 func (p *PushJob) GetKey() string {
-	return p.RemoteURL
+	return p.Connection.RemoteURL
 }
 
-func (p *PushJob) Init(pusher IPusher, plugin *Plugin, streamPath string, url string) *PushJob {
-	p.Push = plugin.config.Push
-	p.Connection.Init(plugin, streamPath, url, plugin.config.Push.Proxy)
-	p.Logger = plugin.Logger.With("pushURL", url, "streamPath", streamPath)
-	if pusherTask := pusher.GetTask(); pusherTask.Logger == nil {
-		pusherTask.Logger = p.Logger
-	}
+func (p *PushJob) Init(pusher IPusher, plugin *Plugin, streamPath string, conf config.Push) *PushJob {
+	p.Connection.Init(plugin, streamPath, conf.URL, conf.Proxy, conf.Header)
 	p.pusher = pusher
-	pusher.SetRetry(plugin.config.RePush, time.Second*5)
-	plugin.Server.Pushs.Add(p)
+	p.Description = map[string]any{
+		"plugin":     plugin.Meta.Name,
+		"streamPath": streamPath,
+		"url":        conf.URL,
+		"maxRetry":   conf.MaxRetry,
+	}
+	pusher.SetRetry(conf.MaxRetry, conf.RetryInterval)
+	plugin.Server.Pushs.Add(p, plugin.Logger.With("pushURL", conf.URL, "streamPath", streamPath))
 	return p
 }
 
@@ -50,11 +48,6 @@ func (p *PushJob) Start() (err error) {
 	if _, ok := s.Pushs.Get(p.GetKey()); ok {
 		return pkg.ErrPushRemoteURLExist
 	}
-	s.Pushs.Add(p)
-	p.AddTask(p.pusher)
+	p.AddTask(p.pusher, p.Logger)
 	return
-}
-
-func (p *PushJob) Dispose() {
-	p.Plugin.Server.Pushs.Remove(p)
 }
