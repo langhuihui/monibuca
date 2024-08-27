@@ -203,7 +203,7 @@ func (s *Server) Start() (err error) {
 	if httpConf.ListenAddr != "" {
 		s.stopOnError(httpConf.CreateHTTPWork(s.Logger))
 	}
-	var tcpTask *config.ListenTCPWork
+	var grpcServer *GRPCServer
 	if tcpConf.ListenAddr != "" {
 		var opts []grpc.ServerOption
 		s.grpcServer = grpc.NewServer(opts...)
@@ -218,8 +218,8 @@ func (s *Server) Start() (err error) {
 			s.Error("register handler faild", "error", err)
 			return
 		}
-		tcpTask = tcpConf.CreateTCPWork(s.Logger, nil)
-		if err = s.AddTask(tcpTask).WaitStarted(); err != nil {
+		grpcServer = &GRPCServer{s: s, tcpTask: tcpConf.CreateTCPWork(s.Logger, nil)}
+		if err = s.AddTask(grpcServer.tcpTask).WaitStarted(); err != nil {
 			s.Error("failed to listen", "error", err)
 			return
 		}
@@ -232,8 +232,8 @@ func (s *Server) Start() (err error) {
 	for _, plugin := range plugins {
 		plugin.Init(s, cg[strings.ToLower(plugin.Name)])
 	}
-	if tcpTask != nil {
-		s.AddTask(&GRPCServer{s: s, tcpTask: tcpTask}, s.Logger)
+	if grpcServer != nil {
+		s.AddTask(grpcServer, s.Logger)
 	}
 	s.Streams.OnStart(func() {
 		s.Streams.AddTask(&CheckSubWaitTimeout{s: s})

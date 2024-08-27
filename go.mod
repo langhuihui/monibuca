@@ -24,6 +24,7 @@ require (
 	github.com/pion/rtp v1.8.6
 	github.com/pion/sdp/v3 v3.0.9
 	github.com/pion/webrtc/v3 v3.2.12
+	github.com/pkg/errors v0.9.1
 	github.com/quic-go/quic-go v0.43.1
 	github.com/rs/zerolog v1.33.0
 	github.com/samber/slog-common v0.17.1

@@ -12,5 +12,4 @@ var (
 
 type TranscodePlugin struct {
 	m7s.Plugin
-	Rules []transcode.TransRule
 }

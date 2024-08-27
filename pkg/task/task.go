@@ -20,8 +20,7 @@ var (
 	ErrRetryRunOut  = errors.New("retry out")
 	ErrTaskComplete = errors.New("complete")
 	ErrExit         = errors.New("exit")
-	EmptyStart      = func() error { return nil }
-	EmptyDispose    = func() {}
+	ErrPanic        = errors.New("panic")
 )
 
 const (
@@ -259,43 +258,25 @@ func (task *Task) start() (err error) {
 	if task.Logger != nil {
 		task.Debug("task start", "taskId", task.ID, "taskType", task.GetTaskType(), "ownerType", task.GetOwnerType())
 	}
-	hasRun := false
-	for {
-		task.state = TASK_STATE_STARTING
-		if v, ok := task.handler.(TaskStarter); ok {
-			err = v.Start()
-		}
+	task.state = TASK_STATE_STARTING
+	if v, ok := task.handler.(TaskStarter); ok {
+		err = v.Start()
+	}
+	if err == nil {
 		task.state = TASK_STATE_STARTED
-		if err == nil {
-			task.ResetRetryCount()
-			if runHandler, ok := task.handler.(TaskBlock); ok {
-				hasRun = true
-				task.state = TASK_STATE_RUNNING
-				err = runHandler.Run()
-				if err == nil {
-					err = ErrTaskComplete
-					task.Stop(err)
-					task.dispose()
-				}
+		task.ResetRetryCount()
+		if runHandler, ok := task.handler.(TaskBlock); ok {
+			task.state = TASK_STATE_RUNNING
+			err = runHandler.Run()
+			if err == nil {
+				return ErrTaskComplete
 			}
 		}
-		if task.IsStopped() {
-			return task.StopReason()
-		}
+	} else {
 		task.needRetry, err = task.checkRetry(err)
-		if task.needRetry {
-			task.Stop(err)
-			task.dispose()
-		} else {
-			break
-		}
 	}
 	task.startup.Fulfill(err)
 	if err != nil {
-		if hasRun {
-			task.Stop(err)
-			task.dispose()
-		}
 		return
 	}
 	for _, listener := range task.afterStartListeners {
@@ -309,10 +290,16 @@ func (task *Task) start() (err error) {
 }
 
 func (task *Task) dispose() {
+	if task.state < TASK_STATE_STARTED {
+		return
+	}
 	task.state = TASK_STATE_DISPOSING
 	reason := task.StopReason()
 	if task.Logger != nil {
-		task.Debug("task dispose", "reason", reason, "taskId", task.ID, "taskType", task.GetTaskType(), "ownerType", task.GetOwnerType())
+		taskType, ownerType := task.GetTaskType(), task.GetOwnerType()
+		yargs := []any{"reason", reason, "taskId", task.ID, "taskType", taskType, "ownerType", ownerType}
+		task.Debug("task dispose", yargs...)
+		defer task.Debug("task disposed", yargs...)
 	}
 	for _, listener := range task.beforeDisposeListeners {
 		listener()
@@ -325,9 +312,6 @@ func (task *Task) dispose() {
 		listener()
 	}
 	task.state = TASK_STATE_DISPOSED
-	if task.Logger != nil {
-		task.Debug("task disposed", "reason", reason, "taskId", task.ID, "taskType", task.GetTaskType(), "ownerType", task.GetOwnerType())
-	}
 	if !errors.Is(reason, ErrTaskComplete) && task.needRetry {
 		task.Context, task.CancelCauseFunc = context.WithCancelCause(task.parentCtx)
 		task.startup = util.NewPromise(task.Context)

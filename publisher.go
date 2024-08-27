@@ -197,8 +197,11 @@ func (p *Publisher) Start() (err error) {
 		if plugin.Meta.Transformer != nil {
 			for r, tranConf := range onPublish.Transform {
 				if group := r.FindStringSubmatch(p.StreamPath); group != nil {
-					for i, g := range group {
-						tranConf.Target = strings.Replace(tranConf.Target, fmt.Sprintf("$%d", i), g, -1)
+					for j, to := range tranConf.Output {
+						for i, g := range group {
+							to.Target = strings.Replace(to.Target, fmt.Sprintf("$%d", i), g, -1)
+						}
+						tranConf.Output[j] = to
 					}
 					plugin.Transform(p.StreamPath, tranConf)
 				}

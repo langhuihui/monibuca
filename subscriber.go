@@ -100,9 +100,16 @@ func (s *Subscriber) Start() (err error) {
 				}
 			}
 			for reg, conf := range plugin.GetCommonConf().OnSub.Transform {
-				// TODO:
 				if plugin.Meta.Transformer != nil {
 					if reg.MatchString(s.StreamPath) {
+						if group := reg.FindStringSubmatch(s.StreamPath); group != nil {
+							for j, c := range conf.Output {
+								for i, value := range group {
+									c.Target = strings.Replace(c.Target, fmt.Sprintf("$%d", i), value, -1)
+								}
+								conf.Output[j] = c
+							}
+						}
 						plugin.handler.Transform(s.StreamPath, conf)
 					}
 				}
@@ -306,6 +313,9 @@ func (handler *SubscribeHandler[A, V]) Start() (err error) {
 				if err == nil {
 					videoFrame = &vr.Value
 					err = s.Err()
+				} else if errors.Is(err, ErrDiscard) {
+					s.VideoReader = nil
+					break
 				} else {
 					s.Stop(err)
 				}
@@ -362,6 +372,9 @@ func (handler *SubscribeHandler[A, V]) Start() (err error) {
 					}
 					audioFrame = &ar.Value
 					err = s.Err()
+				} else if errors.Is(err, ErrDiscard) {
+					s.AudioReader = nil
+					break
 				} else {
 					s.Stop(err)
 				}

@@ -147,18 +147,17 @@ func (s *Server) StreamInfo(ctx context.Context, req *pb.StreamSnapRequest) (res
 }
 
 func (s *Server) TaskTree(context.Context, *emptypb.Empty) (res *pb.TaskTreeResponse, err error) {
-	var fillData func(m task.IJob) *pb.TaskTreeResponse
-	fillData = func(m task.IJob) (res *pb.TaskTreeResponse) {
-		res = &pb.TaskTreeResponse{Id: m.GetTaskID(), State: uint32(m.GetState()), Blocked: m.Blocked(), Type: uint32(m.GetTaskType()), Owner: m.GetOwnerType(), StartTime: timestamppb.New(m.GetTask().StartTime), Description: maps.Collect(func(yield func(key, value string) bool) {
+	var fillData func(m task.ITask) *pb.TaskTreeResponse
+	fillData = func(m task.ITask) (res *pb.TaskTreeResponse) {
+		res = &pb.TaskTreeResponse{Id: m.GetTaskID(), State: uint32(m.GetState()), Type: uint32(m.GetTaskType()), Owner: m.GetOwnerType(), StartTime: timestamppb.New(m.GetTask().StartTime), Description: maps.Collect(func(yield func(key, value string) bool) {
 			for k, v := range m.GetTask().Description {
-				yield(k, fmt.Sprintf("%v", v))
+				yield(k, fmt.Sprintf("%+v", v))
 			}
 		})}
-		for t := range m.RangeSubTask {
-			if marcoTask, ok := t.(task.IJob); ok {
-				res.Children = append(res.Children, fillData(marcoTask))
-			} else {
-				res.Children = append(res.Children, &pb.TaskTreeResponse{Id: t.GetTaskID(), State: uint32(t.GetState()), Type: uint32(t.GetTaskType()), Owner: t.GetOwnerType(), StartTime: timestamppb.New(t.GetTask().StartTime)})
+		if job, ok := m.(task.IJob); ok {
+			res.Blocked = job.Blocked()
+			for t := range job.RangeSubTask {
+				res.Children = append(res.Children, fillData(t))
 			}
 		}
 		return
@@ -167,19 +166,19 @@ func (s *Server) TaskTree(context.Context, *emptypb.Empty) (res *pb.TaskTreeResp
 	return
 }
 
-func (s *Server) GetSubscribers(ctx context.Context, req *pb.SubscribersRequest) (res *pb.SubscribersResponse, err error) {
+func (s *Server) GetSubscribers(context.Context, *pb.SubscribersRequest) (res *pb.SubscribersResponse, err error) {
 	s.Streams.Call(func() error {
 		var subscribers []*pb.SubscriberSnapShot
 		for subscriber := range s.Subscribers.Range {
 			meta, _ := json.Marshal(subscriber.Description)
 			snap := &pb.SubscriberSnapShot{
-				Id:        uint32(subscriber.ID),
+				Id:        subscriber.ID,
 				StartTime: timestamppb.New(subscriber.StartTime),
 				Meta:      string(meta),
 			}
 			if ar := subscriber.AudioReader; ar != nil {
 				snap.AudioReader = &pb.RingReaderSnapShot{
-					Sequence:  uint32(ar.Value.Sequence),
+					Sequence:  ar.Value.Sequence,
 					Timestamp: ar.AbsTime,
 					Delay:     ar.Delay,
 					State:     int32(ar.State),
@@ -187,7 +186,7 @@ func (s *Server) GetSubscribers(ctx context.Context, req *pb.SubscribersRequest)
 			}
 			if vr := subscriber.VideoReader; vr != nil {
 				snap.VideoReader = &pb.RingReaderSnapShot{
-					Sequence:  uint32(vr.Value.Sequence),
+					Sequence:  vr.Value.Sequence,
 					Timestamp: vr.AbsTime,
 					Delay:     vr.Delay,
 					State:     int32(vr.State),
@@ -203,7 +202,7 @@ func (s *Server) GetSubscribers(ctx context.Context, req *pb.SubscribersRequest)
 	})
 	return
 }
-func (s *Server) AudioTrackSnap(ctx context.Context, req *pb.StreamSnapRequest) (res *pb.TrackSnapShotResponse, err error) {
+func (s *Server) AudioTrackSnap(_ context.Context, req *pb.StreamSnapRequest) (res *pb.TrackSnapShotResponse, err error) {
 	s.Streams.Call(func() error {
 		if pub, ok := s.Streams.Get(req.StreamPath); ok && pub.HasAudioTrack() {
 			res = &pb.TrackSnapShotResponse{}
@@ -301,7 +300,7 @@ func (s *Server) VideoTrackSnap(ctx context.Context, req *pb.StreamSnapRequest) 
 				if sub.VideoReader == nil {
 					continue
 				}
-				res.Reader[uint32(sub.ID)] = sub.VideoReader.Value.Sequence
+				res.Reader[sub.ID] = sub.VideoReader.Value.Sequence
 			}
 			pub.VideoTrack.Ring.Do(func(v *pkg.AVFrame) {
 				if v.TryRLock() {

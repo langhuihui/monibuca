@@ -1,0 +1,9 @@
+global:
+  loglevel: debug
+transcode:
+  onpub:
+    transform:
+      .+:
+        output:
+          - target: rtmp://localhost/$0/h265
+            conf: -c:v h265

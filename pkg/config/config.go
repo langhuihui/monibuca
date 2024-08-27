@@ -339,3 +339,9 @@ func (config *Config) assign(k string, v any) (target reflect.Value) {
 	}
 	return
 }
+
+func Parse(target any, conf map[string]any) {
+	var c Config
+	c.Parse(target)
+	c.ParseModifyFile(conf)
+}

@@ -1,8 +1,8 @@
 global:
   loglevel: debug
 flv:
-  record:
-    enableregexp: true
-#    fragment: 10s
-    recordlist:
-      .+: record/$0
+  onpub:
+    record:
+      .+:
+        filepath: record/$0
+        fragment: 10s

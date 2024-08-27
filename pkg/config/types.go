@@ -54,8 +54,11 @@ type (
 		Append   bool          `desc:"是否追加录制"` // 是否追加录制
 	}
 	Transform struct {
-		Target string `desc:"转码目标"` // 转码目标
-		Conf   any
+		Input  any
+		Output []struct {
+			Target string `desc:"转码目标"` // 转码目标
+			Conf   any
+		}
 	}
 	OnPublish struct {
 		Push      map[Regexp]Push

@@ -2,6 +2,7 @@ package util
 
 import (
 	"io"
+	"net"
 	"net/textproto"
 	"strings"
 )
@@ -35,6 +36,29 @@ func NewBufReaderWithBufLen(reader io.Reader, bufLen int) (r *BufReader) {
 	//fmt.Println("NewBufReaderWithBufLen", uintptr(unsafe.Pointer(r.allocator)))
 	return
 }
+
+func NewBufReaderBuffersChan(feedChan chan net.Buffers) (r *BufReader) {
+	r = &BufReader{
+		Allocator: NewScalableMemoryAllocator(defaultBufSize),
+		BufLen:    defaultBufSize,
+		feedData: func() error {
+			data, ok := <-feedChan
+			if !ok {
+				return io.EOF
+			}
+			for _, buf := range data {
+				n := len(buf)
+				r.buf.Size += n
+				r.buf.Length += n
+			}
+			r.buf.Buffers = append(r.buf.Buffers, data...)
+			return nil
+		},
+	}
+	r.buf.Memory = &Memory{}
+	return
+}
+
 func NewBufReaderChan(feedChan chan []byte) (r *BufReader) {
 	r = &BufReader{
 		Allocator: NewScalableMemoryAllocator(defaultBufSize),
@@ -54,6 +78,7 @@ func NewBufReaderChan(feedChan chan []byte) (r *BufReader) {
 	r.buf.Memory = &Memory{}
 	return
 }
+
 func NewBufReader(reader io.Reader) (r *BufReader) {
 	return NewBufReaderWithBufLen(reader, defaultBufSize)
 }
@@ -141,6 +166,11 @@ func (r *BufReader) ReadRange(n int, yield func([]byte)) (err error) {
 			r.buf.Range(yield)
 		}
 	}
+	return
+}
+
+func (r *BufReader) Read(to []byte) (n int, err error) {
+	err = r.ReadNto(len(to), to)
 	return
 }
 

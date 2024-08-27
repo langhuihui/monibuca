@@ -1,7 +1,7 @@
 global:
   loglevel: debug
 mp4:
-  record:
-    enableregexp: true
-    recordlist:
-      .+: record/$0.mp4
+  onpub:
+    record:
+      .+:
+        filepath: record/$0.mp4
