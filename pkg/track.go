@@ -32,9 +32,10 @@ type (
 		Track
 		*RingWriter
 		codec.ICodecCtx
-		Allocator     *util.ScalableMemoryAllocator
-		SequenceFrame IAVFrame
-		WrapIndex     int
+		Allocator      *util.ScalableMemoryAllocator
+		SequenceFrame  IAVFrame
+		WrapIndex      int
+		BaseTs, LastTs time.Duration
 	}
 )
 

@@ -1,5 +1,5 @@
 global:
-  loglevel: trace
+  loglevel: debug
   http:
     listenaddr: :8082
   onpublish:

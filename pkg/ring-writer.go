@@ -3,6 +3,7 @@ package pkg
 import (
 	"fmt"
 	"log/slog"
+	"m7s.live/m7s/v5/pkg/task"
 	"m7s.live/m7s/v5/pkg/util"
 	"sync"
 	"time"
@@ -139,7 +140,7 @@ func (rb *RingWriter) Step() (normal bool) {
 	isIDR := rb.Value.IDR
 	next := rb.Next()
 	if isIDR {
-		rb.SLogger.Debug("add idr")
+		rb.SLogger.Log(nil, task.TraceLevel, "add idr")
 		rb.PushIDR()
 	}
 	if rb.IDRingList.Len() > 0 {
@@ -153,12 +154,12 @@ func (rb *RingWriter) Step() (normal bool) {
 			}
 		} else if next == oldIDR.Value {
 			if nextOld := oldIDR.Next(); nextOld != nil && rb.durationFrom(nextOld.Value) > rb.BufferRange[0] {
-				rb.SLogger.Debug("remove old idr")
+				rb.SLogger.Log(nil, task.TraceLevel, "remove old idr")
 				rb.Lock()
 				rb.IDRingList.Remove(oldIDR)
 				rb.Unlock()
 			} else {
-				rb.SLogger.Debug("not enough buffer")
+				rb.SLogger.Log(nil, task.TraceLevel, "not enough buffer")
 				rb.glow(5)
 				next = rb.Next()
 			}

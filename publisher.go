@@ -61,10 +61,12 @@ type AVTracks struct {
 	SpeedControl
 	util.Collection[reflect.Type, *AVTrack]
 	sync.RWMutex
+	baseTs time.Duration //from old publisher's lastTs
 }
 
 func (t *AVTracks) Set(track *AVTrack) {
 	t.AVTrack = track
+	track.BaseTs = t.baseTs
 	t.Lock()
 	t.Add(track)
 	t.Unlock()
@@ -122,7 +124,6 @@ type Publisher struct {
 	DataTrack              *DataTrack
 	Subscribers            SubscriberCollection
 	GOP                    int
-	baseTs, lastTs         time.Duration
 	dumpFile               *os.File
 }
 
@@ -318,20 +319,21 @@ func (p *Publisher) writeAV(t *AVTrack, data IAVFrame) {
 	frame.Wraps = append(frame.Wraps, data)
 	ts := data.GetTimestamp()
 	frame.CTS = data.GetCTS()
-	if p.lastTs == 0 {
-		p.baseTs -= ts
+	if t.LastTs == 0 {
+		t.BaseTs -= ts
 	}
-	frame.Timestamp = max(1, p.baseTs+ts)
+	frame.Timestamp = max(1, t.BaseTs+ts)
 	bytesIn := frame.Wraps[0].GetSize()
 	t.AddBytesIn(bytesIn)
 	if t.FPS > 0 {
 		frameDur := float64(time.Second) / float64(t.FPS)
-		if math.Abs(float64(frame.Timestamp-p.lastTs)) > 5*frameDur { //时间戳突变
-			frame.Timestamp = p.lastTs + time.Duration(frameDur)
-			p.baseTs = frame.Timestamp - ts
+		if math.Abs(float64(frame.Timestamp-t.LastTs)) > 10*frameDur { //时间戳突变
+			p.Warn("timestamp mutation", "fps", t.FPS, "lastTs", t.LastTs, "ts", frame.Timestamp, "frameDur", time.Duration(frameDur))
+			frame.Timestamp = t.LastTs + time.Duration(frameDur)
+			t.BaseTs = frame.Timestamp - ts
 		}
 	}
-	p.lastTs = frame.Timestamp
+	t.LastTs = frame.Timestamp
 	if p.Enabled(p, task.TraceLevel) {
 		codec := t.FourCC().String()
 		data := frame.Wraps[0].String()
@@ -438,7 +440,7 @@ func (p *Publisher) WriteVideo(data IAVFrame) (err error) {
 		}
 	}
 	t.Step()
-	p.VideoTrack.speedControl(p.Speed, p.lastTs)
+	p.VideoTrack.speedControl(p.Speed, t.LastTs)
 	return
 }
 
@@ -513,7 +515,7 @@ func (p *Publisher) WriteAudio(data IAVFrame) (err error) {
 		}
 	}
 	t.Step()
-	p.AudioTrack.speedControl(p.Publish.Speed, p.lastTs)
+	p.AudioTrack.speedControl(p.Publish.Speed, t.LastTs)
 	return
 }
 
@@ -553,7 +555,12 @@ func (p *Publisher) Dispose() {
 	}
 	if p.Subscribers.Length > 0 {
 		w := s.createWait(p.StreamPath)
-		w.baseTs = p.lastTs
+		if p.HasAudioTrack() {
+			w.baseTsAudio = p.AudioTrack.LastTs
+		}
+		if p.HasVideoTrack() {
+			w.baseTsVideo = p.VideoTrack.LastTs
+		}
 		w.Info("takeOver", "pId", p.ID)
 		for subscriber := range p.SubscriberRange {
 			subscriber.Publisher = nil
@@ -571,7 +578,12 @@ func (p *Publisher) Dispose() {
 }
 
 func (p *Publisher) takeOver(old *Publisher) {
-	p.baseTs = old.lastTs
+	if old.HasAudioTrack() {
+		p.AudioTrack.baseTs = old.AudioTrack.LastTs
+	}
+	if old.HasVideoTrack() {
+		p.VideoTrack.baseTs = old.VideoTrack.LastTs
+	}
 	old.Stop(ErrKick)
 	p.Info("takeOver", "old", old.ID)
 	for subscriber := range old.SubscriberRange {

@@ -58,7 +58,7 @@ type WaitStream struct {
 	*slog.Logger
 	StreamPath string
 	SubscriberCollection
-	baseTs time.Duration
+	baseTsAudio, baseTsVideo time.Duration
 }
 
 func (w *WaitStream) GetKey() string {
