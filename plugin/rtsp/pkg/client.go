@@ -15,10 +15,20 @@ const (
 	DIRECTION_PUSH = "push"
 )
 
-func createClient(p *m7s.Connection) (s *Stream, err error) {
-	addr := p.RemoteURL
+type Client struct {
+	Stream
+	pullCtx   m7s.PullJob
+	pushCtx   m7s.PushJob
+	direction string
+}
+
+func (c *Client) Start() (err error) {
 	var rtspURL *url.URL
-	rtspURL, err = url.Parse(addr)
+	if c.direction == DIRECTION_PULL {
+		rtspURL, err = url.Parse(c.pullCtx.RemoteURL)
+	} else {
+		rtspURL, err = url.Parse(c.pushCtx.RemoteURL)
+	}
 	if err != nil {
 		return
 	}
@@ -45,33 +55,11 @@ func createClient(p *m7s.Connection) (s *Stream, err error) {
 	if err != nil {
 		return
 	}
-	s = &Stream{NetConnection: NewNetConnection(conn)}
-	s.Logger = p.Logger.With("local", conn.LocalAddr().String())
-	s.URL = rtspURL
-	s.auth = util.NewAuth(s.URL.User)
-	s.Backchannel = true
-	err = s.Options()
-	if err != nil {
-		s.Dispose()
-		return
-	}
-	return
-}
-
-type Client struct {
-	*Stream
-	pullCtx   m7s.PullJob
-	pushCtx   m7s.PushJob
-	direction string
-}
-
-func (c *Client) Start() (err error) {
-	c.Stream, err = createClient(&c.pullCtx.Connection)
-	if err == nil {
-		if c.direction == DIRECTION_PULL {
-			err = c.pullCtx.Publish()
-		}
-	}
+	c.conn = conn
+	c.URL = rtspURL
+	c.UserAgent = "monibuca" + m7s.Version
+	c.auth = util.NewAuth(c.URL.User)
+	c.Backchannel = true
 	return
 }
 
@@ -84,19 +72,32 @@ func (c *Client) GetPushJob() *m7s.PushJob {
 }
 
 func NewPuller() m7s.IPuller {
-	return &Client{
+	client := &Client{
 		direction: DIRECTION_PULL,
 	}
+	client.NetConnection = &NetConnection{}
+	return client
 }
 
 func NewPusher() m7s.IPusher {
-	return &Client{
+	client := &Client{
 		direction: DIRECTION_PUSH,
 	}
+	client.NetConnection = &NetConnection{}
+	return client
 }
 
 func (c *Client) Run() (err error) {
+	c.BufReader = util.NewBufReader(c.conn)
+	c.MemoryAllocator = util.NewScalableMemoryAllocator(1 << 12)
+	if err = c.Options(); err != nil {
+		return
+	}
 	if c.direction == DIRECTION_PULL {
+		err = c.pullCtx.Publish()
+		if err != nil {
+			return
+		}
 		var media []*Media
 		if media, err = c.Describe(); err != nil {
 			return

@@ -197,7 +197,12 @@ func (config *Config) ParseUserFile(conf map[string]any) {
 		if config.Has(k) {
 			if prop := config.Get(k); prop.props != nil {
 				if v != nil {
-					prop.ParseUserFile(v.(map[string]any))
+					switch vv := v.(type) {
+					case map[string]any:
+						prop.ParseUserFile(vv)
+					default:
+						prop.props[0].Ptr.Set(reflect.ValueOf(v))
+					}
 				}
 			} else {
 				fv := prop.assign(k, v)

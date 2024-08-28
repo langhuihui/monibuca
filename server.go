@@ -141,7 +141,7 @@ func (s *Server) GetKey() uint32 {
 func (s *Server) Start() (err error) {
 	s.Server = s
 	s.handler = s
-	s.config.HTTP.ListenAddrTLS = ":8443"
+	//s.config.HTTP.ListenAddrTLS = ":8443"
 	s.config.HTTP.ListenAddr = ":8080"
 	s.config.TCP.ListenAddr = ":50051"
 	s.LogHandler.SetLevel(slog.LevelDebug)

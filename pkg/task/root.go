@@ -8,11 +8,13 @@ import (
 	"syscall"
 )
 
+type shutdown interface {
+	Shutdown()
+}
+
 type OSSignal struct {
 	ChannelTask
-	root interface {
-		Shutdown()
-	}
+	root shutdown
 }
 
 func (o *OSSignal) Start() error {
@@ -34,6 +36,7 @@ func (m *RootManager[K, T]) Init() {
 	m.Context, m.CancelCauseFunc = context.WithCancelCause(context.Background())
 	m.handler = m
 	m.Logger = slog.New(slog.NewTextHandler(os.Stdout, nil))
+	m.state = TASK_STATE_STARTED
 	m.AddTask(&OSSignal{root: m})
 }
 

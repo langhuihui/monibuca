@@ -1,12 +1,10 @@
 global:
-  tcp:
-    listenaddr: :50050
-  http:
-    listenaddr: :8081
-    listenaddrtls: :8555
+  tcp: :50050
+  http: :8081
 rtsp:
-  tcp:
-    listenaddr: :8554
+  tcp: :8554
   pull:
-    pullonstart:
-      live/test: rtsp://localhost/live/test
+      live/test:
+        url: rtsp://localhost/live/test
+        maxretry: -1
+        retryinterval: 5s

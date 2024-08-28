@@ -90,9 +90,8 @@ func (task *RTSPServer) Go() (err error) {
 				return
 			}
 
-			receiver = &Receiver{
-				Stream: &Stream{NetConnection: task.NetConnection},
-			}
+			receiver = &Receiver{}
+			receiver.NetConnection = task.NetConnection
 			if receiver.Publisher, err = task.conf.Publish(task, strings.TrimPrefix(task.URL.Path, "/")); err != nil {
 				receiver = nil
 				err = task.WriteResponse(&util.Response{
@@ -112,9 +111,8 @@ func (task *RTSPServer) Go() (err error) {
 			})
 		case MethodDescribe:
 			sendMode = true
-			sender = &Sender{
-				Stream: &Stream{NetConnection: task.NetConnection},
-			}
+			sender = &Sender{}
+			sender.NetConnection = task.NetConnection
 			sender.Subscriber, err = task.conf.Subscribe(task, strings.TrimPrefix(task.URL.Path, "/"))
 			if err != nil {
 				res := &util.Response{

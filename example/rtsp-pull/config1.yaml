@@ -1,6 +1,6 @@
 global:
   loglevel: info
-flv:
-  pull:
-    pullonstart:
-      live/test: /Users/dexter/Movies/jb-demo.flv
+#flv:
+#  pull:
+#    pullonstart:
+#      live/test: /Users/dexter/Movies/jb-demo.flv

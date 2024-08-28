@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"m7s.live/m7s/v5"
+	"m7s.live/m7s/v5/pkg/config"
 	"m7s.live/m7s/v5/pkg/task"
 	"m7s.live/m7s/v5/plugin/cascade/pkg"
 	"time"
@@ -89,11 +90,11 @@ func (c *CascadeClientPlugin) OnInit() (err error) {
 	return
 }
 
-func (c *CascadeClientPlugin) Pull(streamPath, url string) {
+func (c *CascadeClientPlugin) Pull(streamPath string, conf config.Pull) {
 	puller := &cascade.Puller{
 		Connection: c.conn,
 	}
-	puller.GetPullJob().Init(puller, &c.Plugin, streamPath, url)
+	puller.GetPullJob().Init(puller, &c.Plugin, streamPath, conf)
 }
 
 //func (c *CascadeClientPlugin) Start() {

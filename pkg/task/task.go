@@ -225,6 +225,9 @@ func (task *Task) GetSignal() any {
 }
 
 func (task *Task) checkRetry(err error) (bool, error) {
+	if errors.Is(err, ErrTaskComplete) {
+		return false, err
+	}
 	if task.retry.MaxRetry < 0 || task.retry.RetryCount < task.retry.MaxRetry {
 		task.retry.RetryCount++
 		if task.Logger != nil {
@@ -270,10 +273,15 @@ func (task *Task) start() (err error) {
 			err = runHandler.Run()
 			if err == nil {
 				return ErrTaskComplete
+			} else {
+				task.needRetry, err = task.checkRetry(err)
 			}
 		}
 	} else {
 		task.needRetry, err = task.checkRetry(err)
+		if task.needRetry {
+			defer task.reStart()
+		}
 	}
 	task.startup.Fulfill(err)
 	if err != nil {
@@ -289,12 +297,23 @@ func (task *Task) start() (err error) {
 	return
 }
 
+func (task *Task) reStart() {
+	if task.IsStopped() {
+		task.Context, task.CancelCauseFunc = context.WithCancelCause(task.parentCtx)
+		task.shutdown = util.NewPromise(context.Background())
+	}
+	task.startup = util.NewPromise(task.Context)
+	parent := task.parent
+	task.parent = nil
+	parent.AddTask(task.handler)
+}
+
 func (task *Task) dispose() {
 	if task.state < TASK_STATE_STARTED {
 		return
 	}
-	task.state = TASK_STATE_DISPOSING
 	reason := task.StopReason()
+	task.state = TASK_STATE_DISPOSING
 	if task.Logger != nil {
 		taskType, ownerType := task.GetTaskType(), task.GetOwnerType()
 		yargs := []any{"reason", reason, "taskId", task.ID, "taskType", taskType, "ownerType", ownerType}
@@ -313,12 +332,7 @@ func (task *Task) dispose() {
 	}
 	task.state = TASK_STATE_DISPOSED
 	if !errors.Is(reason, ErrTaskComplete) && task.needRetry {
-		task.Context, task.CancelCauseFunc = context.WithCancelCause(task.parentCtx)
-		task.startup = util.NewPromise(task.Context)
-		task.shutdown = util.NewPromise(context.Background())
-		parent := task.parent
-		task.parent = nil
-		parent.AddTask(task.handler)
+		task.reStart()
 	}
 }
 

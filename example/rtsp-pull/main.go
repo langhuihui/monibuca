@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"m7s.live/m7s/v5"
+	_ "m7s.live/m7s/v5/plugin/console"
 	_ "m7s.live/m7s/v5/plugin/debug"
-	_ "m7s.live/m7s/v5/plugin/flv"
 	_ "m7s.live/m7s/v5/plugin/rtsp"
 )
 

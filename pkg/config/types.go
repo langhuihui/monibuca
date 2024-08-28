@@ -36,10 +36,11 @@ type (
 		Internal        bool          `default:"false" desc:"是否内部订阅"`                       // 是否内部订阅
 	}
 	Pull struct {
-		URL      string `desc:"拉流地址"`
-		MaxRetry int    `desc:"断开后自动重试次数,0:不重试,-1:无限重试"` // 断开后自动重拉,0 表示不自动重拉，-1 表示无限重拉，高于0 的数代表最大重拉次数
-		Proxy    string `desc:"代理地址"`                    // 代理地址
-		Header   map[string][]string
+		URL           string        `desc:"拉流地址"`
+		MaxRetry      int           `desc:"断开后自动重试次数,0:不重试,-1:无限重试"` // 断开后自动重拉,0 表示不自动重拉，-1 表示无限重拉，高于0 的数代表最大重拉次数
+		RetryInterval time.Duration `desc:"重试间隔" default:"5s"`       // 重试间隔
+		Proxy         string        `desc:"代理地址"`                    // 代理地址
+		Header        map[string][]string
 	}
 	Push struct {
 		URL           string        `desc:"推送地址"`                    // 推送地址

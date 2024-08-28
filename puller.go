@@ -2,15 +2,13 @@ package m7s
 
 import (
 	"io"
+	"m7s.live/m7s/v5/pkg"
+	"m7s.live/m7s/v5/pkg/config"
+	"m7s.live/m7s/v5/pkg/task"
 	"net/http"
 	"net/url"
 	"os"
 	"strings"
-	"time"
-
-	"m7s.live/m7s/v5/pkg"
-	"m7s.live/m7s/v5/pkg/config"
-	"m7s.live/m7s/v5/pkg/task"
 )
 
 type (
@@ -76,7 +74,7 @@ func (p *PullJob) Init(puller IPuller, plugin *Plugin, streamPath string, conf c
 		"url":        conf.URL,
 		"maxRetry":   conf.MaxRetry,
 	}
-	puller.SetRetry(conf.MaxRetry, time.Second*5)
+	puller.SetRetry(conf.MaxRetry, conf.RetryInterval)
 	plugin.Server.Pulls.Add(p, plugin.Logger.With("pullURL", conf.URL, "streamPath", streamPath))
 	return p
 }

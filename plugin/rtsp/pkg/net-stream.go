@@ -236,8 +236,6 @@ func (c *Stream) Teardown() (err error) {
 }
 
 func (ns *Stream) Dispose() {
-	if ns != nil && ns.NetConnection != nil {
-		_ = ns.Teardown()
-		ns.NetConnection.Dispose()
-	}
+	_ = ns.Teardown()
+	ns.NetConnection.Dispose()
 }

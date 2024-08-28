@@ -88,7 +88,7 @@ func (mt *Job) AddTaskLazy(t IJob) {
 func (mt *Job) AddTask(t ITask, opt ...any) (task *Task) {
 	mt.lazyRun.Do(func() {
 		if mt.parent != nil && mt.Context == nil {
-			mt.parent.AddTask(mt.handler)
+			mt.parent.AddTask(mt.handler) //from lazy
 		}
 		mt.childrenDisposed = make(chan struct{})
 		mt.addSub = make(chan ITask, 10)

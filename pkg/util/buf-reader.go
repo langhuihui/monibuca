@@ -170,7 +170,8 @@ func (r *BufReader) ReadRange(n int, yield func([]byte)) (err error) {
 }
 
 func (r *BufReader) Read(to []byte) (n int, err error) {
-	err = r.ReadNto(len(to), to)
+	n = len(to)
+	err = r.ReadNto(n, to)
 	return
 }
 

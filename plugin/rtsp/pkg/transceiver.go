@@ -12,12 +12,12 @@ import (
 
 type Sender struct {
 	*m7s.Subscriber
-	*Stream
+	Stream
 }
 
 type Receiver struct {
 	*m7s.Publisher
-	*Stream
+	Stream
 	AudioCodecParameters *webrtc.RTPCodecParameters
 	VideoCodecParameters *webrtc.RTPCodecParameters
 }
