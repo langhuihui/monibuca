@@ -4,7 +4,7 @@ go 1.21
 
 require (
 	go.uber.org/zap v1.27.0
-	m7s.live/engine/v4 v4.15.3-0.20240802033404-005fb482f8cc
+	m7s.live/engine/v4 v4.15.3-0.20240829115103-f231a0cd71c1
 	m7s.live/plugin/debug/v4 v4.0.3
 	m7s.live/plugin/fmp4/v4 v4.0.6
 	m7s.live/plugin/gb28181/v4 v4.4.6-0.20240819083701-5690be3b64f7
