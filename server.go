@@ -142,12 +142,12 @@ func (s *Server) Start() (err error) {
 	s.Server = s
 	s.handler = s
 	//s.config.HTTP.ListenAddrTLS = ":8443"
-	s.config.HTTP.ListenAddr = ":8080"
-	s.config.TCP.ListenAddr = ":50051"
+	httpConf, tcpConf := &s.config.HTTP, &s.config.TCP
+	httpConf.ListenAddr = ":8080"
+	tcpConf.ListenAddr = ":50051"
 	s.LogHandler.SetLevel(slog.LevelDebug)
 	s.LogHandler.Add(defaultLogHandler)
 	s.Logger = slog.New(&s.LogHandler).With("server", s.ID)
-	httpConf, tcpConf := &s.config.HTTP, &s.config.TCP
 	mux := runtime.NewServeMux(runtime.WithMarshalerOption("text/plain", &pb.TextPlain{}), runtime.WithRoutingErrorHandler(func(_ context.Context, _ *runtime.ServeMux, _ runtime.Marshaler, w http.ResponseWriter, r *http.Request, _ int) {
 		httpConf.GetHttpMux().ServeHTTP(w, r)
 	}))

@@ -6,28 +6,26 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"sync/atomic"
 	"testing"
 	"time"
 )
 
-func createMarcoTask() *Job {
-	var mt Job
-	mt.Context, mt.CancelCauseFunc = context.WithCancelCause(context.Background())
-	mt.handler = &mt
-	mt.Logger = slog.New(slog.NewTextHandler(os.Stdout, nil))
-	return &mt
-}
+var root Work
 
 func init() {
+	root.Context, root.CancelCauseFunc = context.WithCancelCause(context.Background())
+	root.handler = &root
+	root.Logger = slog.New(slog.NewTextHandler(os.Stdout, nil))
 	slog.SetLogLoggerLevel(slog.LevelDebug)
 }
 
 func Test_AddTask_AddsTaskSuccessfully(t *testing.T) {
-	mt := createMarcoTask()
-	task := &Task{}
-	mt.AddTask(task).WaitStarted()
-	if len(mt.children) != 1 {
-		t.Errorf("expected 1 child task, got %d", len(mt.children))
+	var task Task
+	root.AddTask(&task)
+	_ = task.WaitStarted()
+	if len(root.children) != 1 {
+		t.Errorf("expected 1 child task, got %d", len(root.children))
 	}
 }
 
@@ -40,10 +38,9 @@ func (task *retryDemoTask) Start() error {
 }
 
 func Test_RetryTask(t *testing.T) {
-	mt := createMarcoTask()
 	var demoTask retryDemoTask
 	demoTask.SetRetry(3, time.Second)
-	reason := mt.AddTask(&demoTask).WaitStopped()
+	reason := root.AddTask(&demoTask).WaitStopped()
 	if !errors.Is(reason, ErrRetryRunOut) {
 		t.Errorf("expected retry run out, got %v", reason)
 	}
@@ -53,9 +50,8 @@ func Test_RetryTask(t *testing.T) {
 }
 
 func Test_Call_ExecutesCallback(t *testing.T) {
-	mt := createMarcoTask()
 	called := false
-	mt.Call(func() error {
+	root.Call(func() error {
 		called = true
 		return nil
 	})
@@ -65,57 +61,111 @@ func Test_Call_ExecutesCallback(t *testing.T) {
 }
 
 func Test_StopByContext(t *testing.T) {
-	mt := createMarcoTask()
 	var task Task
 	ctx, cancel := context.WithCancel(context.Background())
-	mt.AddTask(&task, ctx)
+	root.AddTask(&task, ctx)
 	time.AfterFunc(time.Millisecond*100, cancel)
-	mt.WaitStopped()
-	if !task.StopReasonIs(context.Canceled) {
+	if !errors.Is(task.WaitStopped(), context.Canceled) {
 		t.Errorf("expected task to be stopped by context")
 	}
 }
 
 func Test_ParentStop(t *testing.T) {
-	mt := createMarcoTask()
-	parent := &Job{}
-	mt.AddTask(parent)
+	var parent Job
+	root.AddTask(&parent)
+	var called atomic.Uint32
 	var task Task
+	checkCalled := func(expected uint32) {
+		if count := called.Add(1); count != expected {
+			t.Errorf("expected %d, got %d", expected, count)
+		}
+	}
+	task.OnDispose(func() {
+		checkCalled(1)
+	})
+	parent.OnDispose(func() {
+		checkCalled(2)
+	})
 	parent.AddTask(&task)
 	parent.Stop(ErrAutoStop)
-	parent.WaitStopped()
-	if !task.StopReasonIs(ErrAutoStop) {
-		t.Errorf("expected task to be stopped")
+	if !errors.Is(task.WaitStopped(), ErrAutoStop) {
+		t.Errorf("expected task auto stop")
+	}
+}
+
+func Test_ParentAutoStop(t *testing.T) {
+	var parent Job
+	root.AddTask(&parent)
+	var called atomic.Uint32
+	var task Task
+	checkCalled := func(expected uint32) {
+		if count := called.Add(1); count != expected {
+			t.Errorf("expected %d, got %d", expected, count)
+		}
+	}
+	task.OnDispose(func() {
+		checkCalled(1)
+	})
+	parent.OnDispose(func() {
+		checkCalled(2)
+	})
+	parent.AddTask(&task)
+	time.AfterFunc(time.Second, func() {
+		task.Stop(ErrTaskComplete)
+	})
+	if !errors.Is(parent.WaitStopped(), ErrAutoStop) {
+		t.Errorf("expected task auto stop")
 	}
 }
 
 func Test_Hooks(t *testing.T) {
-	mt := createMarcoTask()
-	called := 0
+	var called atomic.Uint32
 	var task Task
-	task.OnStart(func() {
-		called++
-		if called != 1 {
-			t.Errorf("expected 1, got %d", called)
+	checkCalled := func(expected uint32) {
+		if count := called.Add(1); count != expected {
+			t.Errorf("expected %d, got %d", expected, count)
 		}
+	}
+	task.OnStart(func() {
+		checkCalled(1)
 	})
 	task.OnDispose(func() {
-		called++
-		if called != 3 {
-			t.Errorf("expected 3, got %d", called)
-		}
+		checkCalled(3)
 	})
 	task.OnStart(func() {
-		called++
-		if called != 2 {
-			t.Errorf("expected 2, got %d", called)
-		}
+		checkCalled(2)
 	})
 	task.OnDispose(func() {
-		called++
-		if called != 4 {
-			t.Errorf("expected 4, got %d", called)
-		}
+		checkCalled(4)
 	})
-	mt.AddTask(&task).WaitStarted()
+	root.AddTask(&task).WaitStopped()
 }
+
+//type DemoTask struct {
+//	Task
+//	file     *os.File
+//	filePath string
+//}
+//
+//func (d *DemoTask) Start() (err error) {
+//	d.file, err = os.Open(d.filePath)
+//	return
+//}
+//
+//func (d *DemoTask) Run() (err error) {
+//	_, err = d.file.Write([]byte("hello"))
+//	return
+//}
+//
+//func (d *DemoTask) Dispose() {
+//	d.file.Close()
+//}
+//
+//type HelloWorld struct {
+//	DemoTask
+//}
+//
+//func (h *HelloWorld) Run() (err error) {
+//	_, err = h.file.Write([]byte("world"))
+//	return nil
+//}
