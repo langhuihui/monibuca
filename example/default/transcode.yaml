@@ -6,4 +6,4 @@ transcode:
       .+:
         output:
           - target: rtmp://localhost/$0/h265
-            conf: -loglevel trace -c:v h265
+            conf: -loglevel debug -c:a aac -c:v hevc_videotoolbox

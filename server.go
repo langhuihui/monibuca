@@ -75,7 +75,7 @@ type Server struct {
 	Pulls           task.Manager[string, *PullJob]
 	Pushs           task.Manager[string, *PushJob]
 	Records         task.Manager[string, *RecordJob]
-	Transforms      task.Manager[string, *TransformJob]
+	Transforms      Transforms
 	Subscribers     SubscriberCollection
 	LogHandler      MultiLogHandler
 	apiList         []string

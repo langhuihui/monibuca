@@ -1,42 +1,15 @@
 global:
   loglevel: debug
-  http:
-    listenaddr: :8082
-  onpublish:
-    record:
-      .* :
-        filepath: $0
-#  enableauth: true
-#  tcp:
-#    listenaddr: :50051
-#    ringsize: 20-250
-#    buffertime: 10s
-  #   speed: 1
-#console:
-#  secret: de2c0bb9fd47684adc07a426e139239b
-logrotate:
-  level: debug
-rtsp:
+
 rtmp:
-#  tcp:
-#    listenaddr: :11935
-  publish:
-    # idletimeout: 10s
-    # closedelaytimeout: 4s
-  subscribe:
-    # submode: 1
-    # subaudio: false
   onsub:
     pull:
       live/.*: rtmp://localhost/$0
-#flv:
-#   pull:
-#     pullonstart:
-#       live/test: /Users/dexter/project/v5/monibuca/example/default/record/live/test.flv
+
 gb28181:
     sip:
         listenaddr:
           - udp::5060
-    onsubscribe:
+    onsub:
       pull:
         .* : $0

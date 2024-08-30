@@ -4,6 +4,7 @@ import (
 	"m7s.live/m7s/v5/pkg"
 	"m7s.live/m7s/v5/pkg/config"
 	"m7s.live/m7s/v5/pkg/task"
+	"m7s.live/m7s/v5/pkg/util"
 )
 
 type (
@@ -25,7 +26,19 @@ type (
 		task.Job
 		TransformJob TransformJob
 	}
+	TransformedMap struct {
+		StreamPath   string
+		TransformJob *TransformJob
+	}
+	Transforms struct {
+		Transformed util.Collection[string, *TransformedMap]
+		task.Manager[string, *TransformJob]
+	}
 )
+
+func (t *TransformedMap) GetKey() string {
+	return t.StreamPath
+}
 
 func (r *DefaultTransformer) GetTransformJob() *TransformJob {
 	return &r.TransformJob
@@ -61,8 +74,36 @@ func (p *TransformJob) Init(transformer ITransformer, plugin *Plugin, streamPath
 func (p *TransformJob) Start() (err error) {
 	s := p.Plugin.Server
 	if _, ok := s.Transforms.Get(p.GetKey()); ok {
-		return pkg.ErrRecordSamePath
+		return pkg.ErrTransformSame
+	}
+
+	if _, ok := s.Transforms.Transformed.Get(p.GetKey()); ok {
+		return pkg.ErrStreamExist
+	}
+
+	for _, to := range p.Config.Output {
+		if to.StreamPath != "" {
+			s.Transforms.Transformed.Set(&TransformedMap{
+				StreamPath:   to.StreamPath,
+				TransformJob: p,
+			})
+		}
 	}
 	p.AddTask(p.transformer, p.Logger)
 	return
+}
+
+func (p *TransformJob) TransformPublished(pub *Publisher) {
+	p.Publisher = pub
+	pub.OnDispose(func() {
+		p.Stop(pub.StopReason())
+	})
+}
+
+func (p *TransformJob) Dispose() {
+	for _, to := range p.Config.Output {
+		if to.StreamPath != "" {
+			p.Plugin.Server.Transforms.Transformed.RemoveByKey(to.StreamPath)
+		}
+	}
 }

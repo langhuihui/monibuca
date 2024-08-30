@@ -20,4 +20,5 @@ var (
 	ErrLost                     = errors.New("lost")
 
 	ErrRecordSamePath = errors.New("record same path")
+	ErrTransformSame  = errors.New("transform same")
 )

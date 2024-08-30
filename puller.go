@@ -115,6 +115,7 @@ func (p *HTTPFilePuller) Start() (err error) {
 		if res, err = os.Open(remoteURL); err == nil {
 			p.ReadCloser = res
 		}
+		//p.PullJob.Publisher.Publish.Speed = 1
 	}
 	return
 }

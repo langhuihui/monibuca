@@ -8,6 +8,7 @@ import (
 	"m7s.live/m7s/v5/pkg/util"
 	flv "m7s.live/m7s/v5/plugin/flv/pkg"
 	"net"
+	"net/url"
 	"os/exec"
 	"strings"
 	"time"
@@ -46,8 +47,12 @@ type (
 func NewTransform() m7s.ITransformer {
 	ret := &Transformer{}
 	ret.WriteFlvTag = func(flv net.Buffers) (err error) {
+		var buffer []byte
+		for _, b := range flv {
+			buffer = append(buffer, b...)
+		}
 		select {
-		case ret.rBuf <- flv:
+		case ret.rBuf <- buffer:
 		default:
 			ret.Warn("pipe input buffer full")
 		}
@@ -59,7 +64,7 @@ func NewTransform() m7s.ITransformer {
 type Transformer struct {
 	m7s.DefaultTransformer
 	TransRule
-	rBuf chan net.Buffers
+	rBuf chan []byte
 	*util.BufReader
 	flv.Live
 }
@@ -95,11 +100,17 @@ func (t *Transformer) Start() (err error) {
 		}
 		t.To[i] = enc
 		args = append(args, strings.Fields(enc.Args)...)
-		if strings.HasPrefix(to.Target, "rtmp://") {
+		var targetUrl *url.URL
+		targetUrl, err = url.Parse(to.Target)
+		if err != nil {
+			return
+		}
+		switch targetUrl.Scheme {
+		case "rtmp":
 			args = append(args, "-f", "flv", to.Target)
-		} else if strings.HasPrefix(to.Target, "rtsp://") {
+		case "rtsp":
 			args = append(args, "-f", "rtsp", to.Target)
-		} else {
+		default:
 			args = append(args, to.Target)
 		}
 	}
@@ -107,10 +118,10 @@ func (t *Transformer) Start() (err error) {
 		"cmd":    args,
 		"config": t.TransRule,
 	}
-	t.rBuf = make(chan net.Buffers, 100)
-	t.BufReader = util.NewBufReaderBuffersChan(t.rBuf)
+	t.rBuf = make(chan []byte, 100)
+	t.BufReader = util.NewBufReaderChan(t.rBuf)
 	t.Subscriber = t.TransformJob.Subscriber
-
+	//t.BufReader.Dump, err = os.OpenFile("dump.flv", os.O_CREATE|os.O_WRONLY, 0644)
 	var cmdTask CommandTask
 	cmdTask.logFileName = fmt.Sprintf("logs/transcode_%s_%s.log", strings.ReplaceAll(t.TransformJob.StreamPath, "/", "_"), time.Now().Format("20060102150405"))
 	cmdTask.Cmd = exec.CommandContext(t, "ffmpeg", args...)

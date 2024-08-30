@@ -60,12 +60,13 @@ type Subscriber struct {
 	PubSubBase
 	config.Subscribe
 	Publisher                  *Publisher
+	waitPublishDone            chan struct{}
 	AudioReader, VideoReader   *AVRingReader
 	StartAudioTS, StartVideoTS time.Duration
 }
 
 func createSubscriber(p *Plugin, streamPath string, conf config.Subscribe) *Subscriber {
-	subscriber := &Subscriber{Subscribe: conf}
+	subscriber := &Subscriber{Subscribe: conf, waitPublishDone: make(chan struct{})}
 	subscriber.ID = task.GetNextTaskID()
 	subscriber.Plugin = p
 	subscriber.TimeoutTimer = time.NewTimer(subscriber.WaitTimeout)
@@ -83,11 +84,21 @@ func (s *Subscriber) Start() (err error) {
 	s.Info("subscribe")
 	if publisher, ok := server.Streams.Get(s.StreamPath); ok {
 		publisher.AddSubscriber(s)
-		err = publisher.WaitTrack()
+		return publisher.WaitTrack()
 	} else if waitStream, ok := server.Waiting.Get(s.StreamPath); ok {
 		waitStream.Add(s)
 	} else {
 		server.createWait(s.StreamPath).Add(s)
+		//	var avoidTrans bool
+		//AVOID:
+		//	for trans := range server.Transforms.Range {
+		//		for _, output := range trans.Config.Output {
+		//			if output.StreamPath == s.StreamPath {
+		//				avoidTrans = true
+		//				break AVOID
+		//			}
+		//		}
+		//	}
 		for plugin := range server.Plugins.Range {
 			for reg, conf := range plugin.GetCommonConf().OnSub.Pull {
 				if plugin.Meta.Puller != nil {
@@ -99,21 +110,23 @@ func (s *Subscriber) Start() (err error) {
 					plugin.handler.Pull(s.StreamPath, conf)
 				}
 			}
-			for reg, conf := range plugin.GetCommonConf().OnSub.Transform {
-				if plugin.Meta.Transformer != nil {
-					if reg.MatchString(s.StreamPath) {
-						if group := reg.FindStringSubmatch(s.StreamPath); group != nil {
-							for j, c := range conf.Output {
-								for i, value := range group {
-									c.Target = strings.Replace(c.Target, fmt.Sprintf("$%d", i), value, -1)
-								}
-								conf.Output[j] = c
-							}
-						}
-						plugin.handler.Transform(s.StreamPath, conf)
-					}
-				}
-			}
+			//if !avoidTrans {
+			//	for reg, conf := range plugin.GetCommonConf().OnSub.Transform {
+			//		if plugin.Meta.Transformer != nil {
+			//			if reg.MatchString(s.StreamPath) {
+			//				if group := reg.FindStringSubmatch(s.StreamPath); group != nil {
+			//					for j, c := range conf.Output {
+			//						for i, value := range group {
+			//							c.Target = strings.Replace(c.Target, fmt.Sprintf("$%d", i), value, -1)
+			//						}
+			//						conf.Output[j] = c
+			//					}
+			//				}
+			//				plugin.handler.Transform(s.StreamPath, conf)
+			//			}
+			//		}
+			//	}
+			//}
 		}
 	}
 	return

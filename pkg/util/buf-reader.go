@@ -4,6 +4,7 @@ import (
 	"io"
 	"net"
 	"net/textproto"
+	"os"
 	"strings"
 )
 
@@ -14,6 +15,7 @@ type BufReader struct {
 	buf       MemoryReader
 	BufLen    int
 	feedData  func() error
+	Dump      *os.File
 }
 
 func NewBufReaderWithBufLen(reader io.Reader, bufLen int) (r *BufReader) {
@@ -172,6 +174,9 @@ func (r *BufReader) ReadRange(n int, yield func([]byte)) (err error) {
 func (r *BufReader) Read(to []byte) (n int, err error) {
 	n = len(to)
 	err = r.ReadNto(n, to)
+	if r.Dump != nil {
+		r.Dump.Write(to)
+	}
 	return
 }
 

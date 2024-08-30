@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/mcuadros/go-defaults"
 	"log/slog"
 	"os"
 	"reflect"
@@ -324,23 +325,52 @@ func (config *Config) assign(k string, v any) (target reflect.Value) {
 		regexpStr := source.String()
 		target.Set(reflect.ValueOf(Regexp{regexp.MustCompile(regexpStr)}))
 	default:
-		tmpStruct := reflect.StructOf([]reflect.StructField{
-			{
-				Name: strings.ToUpper(k),
-				Type: ft,
-			},
-		})
-		tmpValue := reflect.New(tmpStruct)
-		if v != nil {
-			var out []byte
-			if vv, ok := v.(string); ok {
-				out = []byte(fmt.Sprintf("%s: %s", k, vv))
-			} else {
-				out, _ = yaml.Marshal(map[string]any{k: v})
+		if ft.Kind() == reflect.Map {
+			target = reflect.MakeMap(ft)
+			tmpStruct := reflect.StructOf([]reflect.StructField{
+				{
+					Name: "Key",
+					Type: ft.Key(),
+				},
+			})
+			tmpValue := reflect.New(tmpStruct)
+			for k, v := range v.(map[string]any) {
+				_ = yaml.Unmarshal([]byte(fmt.Sprintf("key: %s", k)), tmpValue.Interface())
+				var value reflect.Value
+				if ft.Elem().Kind() == reflect.Struct {
+					value = reflect.New(ft.Elem())
+					defaults.SetDefaults(value.Interface())
+					if reflect.TypeOf(v).Kind() != reflect.Map {
+						value.Elem().Field(0).Set(reflect.ValueOf(v))
+					} else {
+						out, _ := yaml.Marshal(v)
+						_ = yaml.Unmarshal(out, value.Interface())
+					}
+					value = value.Elem()
+				} else {
+					value = reflect.ValueOf(v)
+				}
+				target.SetMapIndex(tmpValue.Elem().Field(0), value)
 			}
-			_ = yaml.Unmarshal(out, tmpValue.Interface())
+		} else {
+			tmpStruct := reflect.StructOf([]reflect.StructField{
+				{
+					Name: strings.ToUpper(k),
+					Type: ft,
+				},
+			})
+			tmpValue := reflect.New(tmpStruct)
+			if v != nil {
+				var out []byte
+				if vv, ok := v.(string); ok {
+					out = []byte(fmt.Sprintf("%s: %s", k, vv))
+				} else {
+					out, _ = yaml.Marshal(map[string]any{k: v})
+				}
+				_ = yaml.Unmarshal(out, tmpValue.Interface())
+			}
+			target = tmpValue.Elem().Field(0)
 		}
-		target = tmpValue.Elem().Field(0)
 	}
 	return
 }

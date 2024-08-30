@@ -2,9 +2,11 @@ package m7s
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -58,6 +60,7 @@ type (
 		OnStop()
 		Pull(string, config.Pull)
 		Transform(string, config.Transform)
+		OnPublish(*Publisher)
 	}
 
 	IRegisterHandler interface {
@@ -78,10 +81,6 @@ type (
 
 	IQUICPlugin interface {
 		OnQUICConnect(quic.Connection) task.ITask
-	}
-
-	IListenPublishPlugin interface {
-		OnPublish(*Publisher) task.ITask
 	}
 )
 
@@ -364,7 +363,46 @@ func (p *Plugin) OnInit() error {
 func (p *Plugin) OnStop() {
 
 }
-
+func (p *Plugin) OnPublish(pub *Publisher) {
+	onPublish := p.config.OnPub
+	if p.Meta.Pusher != nil {
+		for r, pushConf := range onPublish.Push {
+			if group := r.FindStringSubmatch(pub.StreamPath); group != nil {
+				for i, g := range group {
+					pushConf.URL = strings.Replace(pushConf.URL, fmt.Sprintf("$%d", i), g, -1)
+				}
+				p.Push(pub.StreamPath, pushConf)
+			}
+		}
+	}
+	if p.Meta.Recorder != nil {
+		for r, recConf := range onPublish.Record {
+			if group := r.FindStringSubmatch(pub.StreamPath); group != nil {
+				for i, g := range group {
+					recConf.FilePath = strings.Replace(recConf.FilePath, fmt.Sprintf("$%d", i), g, -1)
+				}
+				p.Record(pub.StreamPath, recConf)
+			}
+		}
+	}
+	if p.Meta.Transformer != nil {
+		for r, tranConf := range onPublish.Transform {
+			if group := r.FindStringSubmatch(pub.StreamPath); group != nil {
+				for j, to := range tranConf.Output {
+					for i, g := range group {
+						to.Target = strings.Replace(to.Target, fmt.Sprintf("$%d", i), g, -1)
+					}
+					targetUrl, err := url.Parse(to.Target)
+					if err == nil {
+						to.StreamPath = strings.TrimPrefix(targetUrl.Path, "/")
+					}
+					tranConf.Output[j] = to
+				}
+				p.Transform(pub.StreamPath, tranConf)
+			}
+		}
+	}
+}
 func (p *Plugin) PublishWithConfig(ctx context.Context, streamPath string, conf config.Publish) (publisher *Publisher, err error) {
 	publisher = createPublisher(p, streamPath, conf)
 	if p.config.EnableAuth {
@@ -402,6 +440,14 @@ func (p *Plugin) SubscribeWithConfig(ctx context.Context, streamPath string, con
 		}
 	}
 	err = p.Server.Streams.AddTask(subscriber, ctx).WaitStarted()
+	if err == nil {
+		select {
+		case <-subscriber.waitPublishDone:
+			err = subscriber.Publisher.WaitTrack()
+		case <-subscriber.Done():
+			err = subscriber.Err()
+		}
+	}
 	return
 }
 

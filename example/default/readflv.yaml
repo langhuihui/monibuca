@@ -2,5 +2,4 @@ global:
   loglevel: trace
 flv:
   pull:
-    pullonstart:
-      live/test: /Users/dexter/Movies/jb-demo.flv
+    live/test: dump.flv

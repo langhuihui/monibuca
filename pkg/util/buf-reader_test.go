@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"io"
 	"math/rand"
+	"net"
 	"testing"
 )
 
@@ -20,6 +21,29 @@ func (l *limitReader) Read(p []byte) (n int, err error) {
 	}
 	n, err = l.reader.Read(p)
 	return
+}
+
+func TestBufReader_Buffered(t *testing.T) {
+	var feeder = make(chan net.Buffers, 100)
+	testReader := NewBufReaderBuffersChan(feeder)
+	testReader.BufLen = 4
+	t.Run("feed", func(t *testing.T) {
+		feeder <- net.Buffers{[]byte{1, 2, 3, 4, 5}, []byte{6, 7, 8, 9, 10}}
+		feeder <- net.Buffers{[]byte{11, 12, 13, 14, 15}, []byte{16, 17, 18, 19, 20}}
+	})
+	t.Run("read", func(t *testing.T) {
+		var b = make([]byte, 10)
+		testReader.Read(b)
+		if !bytes.Equal(b, []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}) {
+			t.Error("read error")
+			return
+		}
+		testReader.Read(b)
+		if !bytes.Equal(b, []byte{11, 12, 13, 14, 15, 16, 17, 18, 19, 20}) {
+			t.Error("read error")
+			return
+		}
+	})
 }
 
 func TestBufRead(t *testing.T) {

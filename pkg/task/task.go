@@ -54,8 +54,10 @@ type (
 		GetSignal() any
 		Stop(error)
 		StopReason() error
-		start() error
+		start() bool
 		dispose()
+		checkRetry(error) bool
+		reset()
 		IsStopped() bool
 		GetTaskType() TaskType
 		GetOwnerType() string
@@ -110,7 +112,6 @@ type (
 		startup, shutdown *util.Promise
 		parent            *Job
 		parentCtx         context.Context
-		needRetry         bool
 		state             TaskState
 		level             byte
 	}
@@ -224,31 +225,36 @@ func (task *Task) GetSignal() any {
 	return task.Done()
 }
 
-func (task *Task) checkRetry(err error) (bool, error) {
+func (task *Task) checkRetry(err error) bool {
 	if errors.Is(err, ErrTaskComplete) {
-		return false, err
+		return false
 	}
 	if task.retry.MaxRetry < 0 || task.retry.RetryCount < task.retry.MaxRetry {
 		task.retry.RetryCount++
 		if task.Logger != nil {
-			task.Warn(fmt.Sprintf("retry %d/%d", task.retry.RetryCount, task.retry.MaxRetry))
+			if task.retry.MaxRetry < 0 {
+				task.Warn(fmt.Sprintf("retry %d/∞", task.retry.RetryCount))
+			} else {
+				task.Warn(fmt.Sprintf("retry %d/%d", task.retry.RetryCount, task.retry.MaxRetry))
+			}
 		}
 		if delta := time.Since(task.StartTime); delta < task.retry.RetryInterval {
 			time.Sleep(task.retry.RetryInterval - delta)
 		}
-		return true, err
+		return true
 	} else {
 		if task.retry.MaxRetry > 0 {
 			if task.Logger != nil {
 				task.Warn(fmt.Sprintf("max retry %d failed", task.retry.MaxRetry))
 			}
-			return false, errors.Join(err, ErrRetryRunOut)
+			return false
 		}
 	}
-	return false, err
+	return false
 }
 
-func (task *Task) start() (err error) {
+func (task *Task) start() bool {
+	var err error
 	defer func() {
 		if r := recover(); r != nil {
 			err = errors.New(fmt.Sprint(r))
@@ -257,55 +263,52 @@ func (task *Task) start() (err error) {
 			}
 		}
 	}()
-	task.StartTime = time.Now()
-	if task.Logger != nil {
-		task.Debug("task start", "taskId", task.ID, "taskType", task.GetTaskType(), "ownerType", task.GetOwnerType())
-	}
-	task.state = TASK_STATE_STARTING
-	if v, ok := task.handler.(TaskStarter); ok {
-		err = v.Start()
-	}
-	if err == nil {
-		task.state = TASK_STATE_STARTED
-		task.ResetRetryCount()
-		if runHandler, ok := task.handler.(TaskBlock); ok {
-			task.state = TASK_STATE_RUNNING
-			err = runHandler.Run()
-			if err == nil {
-				return ErrTaskComplete
-			} else {
-				task.needRetry, err = task.checkRetry(err)
+	for {
+		task.StartTime = time.Now()
+		if task.Logger != nil {
+			task.Debug("task start", "taskId", task.ID, "taskType", task.GetTaskType(), "ownerType", task.GetOwnerType())
+		}
+		task.state = TASK_STATE_STARTING
+		if v, ok := task.handler.(TaskStarter); ok {
+			err = v.Start()
+		}
+		if err == nil {
+			task.state = TASK_STATE_STARTED
+			task.startup.Fulfill(err)
+			for _, listener := range task.afterStartListeners {
+				listener()
+			}
+			task.ResetRetryCount()
+			if runHandler, ok := task.handler.(TaskBlock); ok {
+				task.state = TASK_STATE_RUNNING
+				err = runHandler.Run()
+				if err == nil {
+					err = ErrTaskComplete
+				}
 			}
 		}
-	} else {
-		task.needRetry, err = task.checkRetry(err)
-		if task.needRetry {
-			defer task.reStart()
+		if err == nil {
+			if goHandler, ok := task.handler.(TaskGo); ok {
+				task.state = TASK_STATE_GOING
+				go task.run(goHandler.Go)
+			}
+			return true
+		} else {
+			task.Stop(err)
+			task.parent.onChildDispose(task.handler)
+			if task.checkRetry(err) {
+				task.reset()
+			} else {
+				return false
+			}
 		}
 	}
-	task.startup.Fulfill(err)
-	if err != nil {
-		return
-	}
-	for _, listener := range task.afterStartListeners {
-		listener()
-	}
-	if goHandler, ok := task.handler.(TaskGo); ok {
-		task.state = TASK_STATE_GOING
-		go task.run(goHandler.Go)
-	}
-	return
 }
 
-func (task *Task) reStart() {
-	if task.IsStopped() {
-		task.Context, task.CancelCauseFunc = context.WithCancelCause(task.parentCtx)
-		task.shutdown = util.NewPromise(context.Background())
-	}
+func (task *Task) reset() {
+	task.Context, task.CancelCauseFunc = context.WithCancelCause(task.parentCtx)
+	task.shutdown = util.NewPromise(context.Background())
 	task.startup = util.NewPromise(task.Context)
-	parent := task.parent
-	task.parent = nil
-	parent.AddTask(task.handler)
 }
 
 func (task *Task) dispose() {
@@ -331,9 +334,6 @@ func (task *Task) dispose() {
 		listener()
 	}
 	task.state = TASK_STATE_DISPOSED
-	if !errors.Is(reason, ErrTaskComplete) && task.needRetry {
-		task.reStart()
-	}
 }
 
 func (task *Task) ResetRetryCount() {
@@ -341,16 +341,9 @@ func (task *Task) ResetRetryCount() {
 }
 
 func (task *Task) run(handler func() error) {
-	var err error
-	err = handler()
-	if err == nil {
-		task.needRetry = false
+	if err := handler(); err == nil {
 		task.Stop(ErrTaskComplete)
 	} else {
-		if task.needRetry, err = task.checkRetry(err); !task.needRetry {
-			task.Stop(errors.Join(err, ErrRetryRunOut))
-		} else {
-			task.Stop(err)
-		}
+		task.Stop(err)
 	}
 }

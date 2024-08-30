@@ -147,11 +147,6 @@ func (mt *Job) addChild(task ITask) int {
 	return len(mt.children) - 1
 }
 
-func (mt *Job) removeChild(index int) {
-	defer mt.onChildDispose(mt.children[index])
-	mt.children = slices.Delete(mt.children, index, index+1)
-}
-
 func (mt *Job) run() {
 	cases := []reflect.SelectCase{{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(mt.addSub)}}
 	defer func() {
@@ -177,27 +172,25 @@ func (mt *Job) run() {
 			if !ok {
 				return
 			}
-			if task := rev.Interface().(ITask); task.getParent() == mt {
-				index := mt.addChild(task)
-				if err := task.start(); err == nil {
-					cases = append(cases, reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(task.GetSignal())})
-				} else {
-					task.Stop(err)
-					mt.removeChild(index)
-				}
-			} else {
-				mt.addChild(task)
-				cases = append(cases, reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(task.GetSignal())})
+			if child := rev.Interface().(ITask); child.getParent() != mt || child.start() {
+				mt.children = append(mt.children, child)
+				cases = append(cases, reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(child.GetSignal())})
 			}
 		} else {
 			taskIndex := chosen - 1
-			task := mt.children[taskIndex]
-			switch tt := task.(type) {
+			child := mt.children[taskIndex]
+			switch tt := child.(type) {
 			case IChannelTask:
 				tt.Tick(rev.Interface())
 			}
 			if !ok {
-				mt.removeChild(taskIndex)
+				if mt.onChildDispose(child); child.checkRetry(child.StopReason()) {
+					if child.reset(); child.start() {
+						cases[chosen].Chan = reflect.ValueOf(child.GetSignal())
+						continue
+					}
+				}
+				mt.children = slices.Delete(mt.children, taskIndex, taskIndex+1)
 				cases = slices.Delete(cases, chosen, chosen+1)
 			}
 		}

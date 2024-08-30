@@ -1,4 +1,5 @@
 global:
+  loglevel: debug
   tcp: :50050
   http: :8081
 rtsp:
@@ -7,4 +8,4 @@ rtsp:
       live/test:
         url: rtsp://localhost/live/test
         maxretry: -1
-        retryinterval: 5s
+        retryinterval: 10s

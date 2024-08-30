@@ -2,14 +2,12 @@ package m7s
 
 import (
 	"context"
-	"fmt"
 	"m7s.live/m7s/v5/pkg/task"
 	"math"
 	"os"
 	"path/filepath"
 	"reflect"
 	"slices"
-	"strings"
 	"sync"
 	"time"
 
@@ -171,48 +169,14 @@ func (p *Publisher) Start() (err error) {
 		s.Waiting.Remove(waiting)
 	}
 	for plugin := range s.Plugins.Range {
-		if plugin.Disabled {
-			continue
-		}
-		onPublish := plugin.GetCommonConf().OnPub
-		if plugin.Meta.Pusher != nil {
-			for r, pushConf := range onPublish.Push {
-				if group := r.FindStringSubmatch(p.StreamPath); group != nil {
-					for i, g := range group {
-						pushConf.URL = strings.Replace(pushConf.URL, fmt.Sprintf("$%d", i), g, -1)
-					}
-					plugin.Push(p.StreamPath, pushConf)
-				}
-			}
-		}
-		if plugin.Meta.Recorder != nil {
-			for r, recConf := range onPublish.Record {
-				if group := r.FindStringSubmatch(p.StreamPath); group != nil {
-					for i, g := range group {
-						recConf.FilePath = strings.Replace(recConf.FilePath, fmt.Sprintf("$%d", i), g, -1)
-					}
-					plugin.Record(p.StreamPath, recConf)
-				}
-			}
-		}
-		if plugin.Meta.Transformer != nil {
-			for r, tranConf := range onPublish.Transform {
-				if group := r.FindStringSubmatch(p.StreamPath); group != nil {
-					for j, to := range tranConf.Output {
-						for i, g := range group {
-							to.Target = strings.Replace(to.Target, fmt.Sprintf("$%d", i), g, -1)
-						}
-						tranConf.Output[j] = to
-					}
-					plugin.Transform(p.StreamPath, tranConf)
-				}
-			}
-		}
-
-		if v, ok := plugin.handler.(IListenPublishPlugin); ok {
-			v.OnPublish(p)
-		}
+		plugin.OnPublish(p)
 	}
+	s.Transforms.Post(func() error {
+		if m, ok := s.Transforms.Transformed.Get(p.StreamPath); ok {
+			m.TransformJob.TransformPublished(p)
+		}
+		return nil
+	})
 	p.AddTask(&PublishTimeout{Publisher: p})
 	if p.PublishTimeout > 0 {
 		p.AddTask(&PublishNoDataTimeout{Publisher: p})
@@ -297,6 +261,7 @@ func (p *Publisher) RemoveSubscriber(subscriber *Subscriber) {
 
 func (p *Publisher) AddSubscriber(subscriber *Subscriber) {
 	subscriber.Publisher = p
+	close(subscriber.waitPublishDone)
 	if p.Subscribers.AddUnique(subscriber) {
 		p.Info("subscriber +1", "count", p.Subscribers.Length)
 		if subscriber.BufferTime > p.BufferTime {
