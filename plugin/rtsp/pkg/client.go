@@ -111,6 +111,10 @@ func (c *Client) Run() (err error) {
 		}
 		return receiver.Receive()
 	} else {
+		err = c.pushCtx.Subscribe()
+		if err != nil {
+			return
+		}
 		sender := &Sender{Subscriber: c.pushCtx.Subscriber, Stream: c.Stream}
 		var medias []*Media
 		medias, err = sender.GetMedia()

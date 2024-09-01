@@ -1,0 +1,12 @@
+global:
+  loglevel: debug
+  tcp: :50050
+  http: :8081
+  disableall: true
+rtsp:
+  enable: true
+  tcp: :8554
+  pull:
+      live/test:
+        url: rtsp://localhost/live/test
+        maxretry: -1

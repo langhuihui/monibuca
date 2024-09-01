@@ -22,12 +22,13 @@ var _ = m7s.InstallPlugin[RTMPPlugin](m7s.DefaultYaml(`tcp:
   listenaddr: :1935`), &pb.Rtmp_ServiceDesc, pb.RegisterRtmpHandler, NewPusher, NewPuller)
 
 type RTMPServer struct {
-	*NetConnection
+	NetConnection
 	conf *RTMPPlugin
 }
 
 func (p *RTMPPlugin) OnTCPConnect(conn *net.TCPConn) task.ITask {
-	ret := &RTMPServer{NetConnection: NewNetConnection(conn), conf: p}
+	ret := &RTMPServer{conf: p}
+	ret.Init(conn)
 	ret.Logger = p.With("remote", conn.RemoteAddr().String())
 	return ret
 }
@@ -132,7 +133,7 @@ func (task *RTMPServer) Go() (err error) {
 					// err = nc.SendMessage(RTMP_MSG_AMF0_COMMAND, m)
 				case *PublishMessage:
 					ns := NetStream{
-						NetConnection: task.NetConnection,
+						NetConnection: &task.NetConnection,
 						StreamID:      cmd.StreamId,
 					}
 					var publisher *m7s.Publisher
@@ -153,7 +154,7 @@ func (task *RTMPServer) Go() (err error) {
 				case *PlayMessage:
 					streamPath := task.AppName + "/" + cmd.StreamName
 					ns := NetStream{
-						NetConnection: task.NetConnection,
+						NetConnection: &task.NetConnection,
 						StreamID:      cmd.StreamId,
 					}
 					var suber *m7s.Subscriber

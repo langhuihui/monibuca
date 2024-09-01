@@ -3,7 +3,6 @@ package rtmp
 import (
 	"crypto/tls"
 	"errors"
-	"fmt"
 	"net"
 	"net/url"
 	"strings"
@@ -11,96 +10,50 @@ import (
 	"m7s.live/m7s/v5"
 )
 
-func createClient(c *m7s.Connection) (*NetStream, error) {
-	chunkSize := 4096
-	addr := c.RemoteURL
-
-	u, err := url.Parse(addr)
+func (c *Client) Start() (err error) {
+	var addr string
+	if c.direction == DIRECTION_PULL {
+		addr = c.pullCtx.Connection.RemoteURL
+		err = c.pullCtx.Publish()
+		if err != nil {
+			return
+		}
+	} else {
+		addr = c.pushCtx.Connection.RemoteURL
+	}
+	c.u, err = url.Parse(addr)
 	if err != nil {
-		return nil, err
+		return
 	}
-	ps := strings.Split(u.Path, "/")
+	ps := strings.Split(c.u.Path, "/")
 	if len(ps) < 3 {
-		return nil, errors.New("illegal rtmp url")
+		return errors.New("illegal rtmp url")
 	}
-	isRtmps := u.Scheme == "rtmps"
-	if strings.Count(u.Host, ":") == 0 {
+	isRtmps := c.u.Scheme == "rtmps"
+	if strings.Count(c.u.Host, ":") == 0 {
 		if isRtmps {
-			u.Host += ":443"
+			c.u.Host += ":443"
 		} else {
-			u.Host += ":1935"
+			c.u.Host += ":1935"
 		}
 	}
 	var conn net.Conn
 	if isRtmps {
 		var tlsconn *tls.Conn
-		tlsconn, err = tls.Dial("tcp", u.Host, &tls.Config{})
+		tlsconn, err = tls.Dial("tcp", c.u.Host, &tls.Config{})
 		conn = tlsconn
 	} else {
-		conn, err = net.Dial("tcp", u.Host)
+		conn, err = net.Dial("tcp", c.u.Host)
 	}
 	if err != nil {
-		return nil, err
+		return err
 	}
-	ns := &NetStream{}
-	ns.NetConnection = NewNetConnection(conn)
-	ns.Logger = c.Logger.With("local", conn.LocalAddr().String())
+	c.Init(conn)
+	c.Logger = c.Logger.With("local", conn.LocalAddr().String())
 	c.Info("connect")
-	defer func() {
-		if err != nil {
-			ns.Dispose()
-		}
-	}()
-	if err = ns.ClientHandshake(); err != nil {
-		return ns, err
-	}
-	ns.AppName = strings.Join(ps[1:len(ps)-1], "/")
-	err = ns.SendMessage(RTMP_MSG_CHUNK_SIZE, Uint32Message(chunkSize))
-	if err != nil {
-		return ns, err
-	}
-	ns.WriteChunkSize = chunkSize
-	path := u.Path
-	if len(u.Query()) != 0 {
-		path += "?" + u.RawQuery
-	}
-	err = ns.SendMessage(RTMP_MSG_AMF0_COMMAND, &CallMessage{
-		CommandMessage{"connect", 1},
-		map[string]any{
-			"app":      ns.AppName,
-			"flashVer": "monibuca/" + m7s.Version,
-			"swfUrl":   addr,
-			"tcUrl":    strings.TrimSuffix(addr, path) + "/" + ns.AppName,
-		},
-		nil,
-	})
-	var msg *Chunk
-	for err != nil {
-		msg, err = ns.RecvMessage()
-		if err != nil {
-			return ns, err
-		}
-		switch msg.MessageTypeID {
-		case RTMP_MSG_AMF0_COMMAND:
-			cmd := msg.MsgData.(Commander).GetCommand()
-			switch cmd.CommandName {
-			case "_result":
-				c.Description = msg.MsgData.(*ResponseMessage).Properties
-				response := msg.MsgData.(*ResponseMessage)
-				if response.Infomation["code"] == NetConnection_Connect_Success {
-					err = ns.SendMessage(RTMP_MSG_AMF0_COMMAND, &CommandMessage{"createStream", 2})
-					if err == nil {
-						c.Info("connected")
-					}
-				}
-				return ns, err
-			default:
-				fmt.Println(cmd.CommandName)
-			}
-		}
-	}
-
-	return ns, nil
+	c.WriteChunkSize = c.chunkSize
+	c.AppName = strings.Join(ps[1:len(ps)-1], "/")
+	return err
 }
 
 const (
@@ -109,20 +62,12 @@ const (
 )
 
 type Client struct {
-	*NetStream
+	NetStream
+	chunkSize int
 	pullCtx   m7s.PullJob
 	pushCtx   m7s.PushJob
 	direction string
-}
-
-func (c *Client) Start() (err error) {
-	c.NetStream, err = createClient(&c.pullCtx.Connection)
-	if err == nil {
-		if c.direction == DIRECTION_PULL {
-			err = c.pullCtx.Publish()
-		}
-	}
-	return
+	u         *url.URL
 }
 
 func (c *Client) GetPullJob() *m7s.PullJob {
@@ -134,20 +79,47 @@ func (c *Client) GetPushJob() *m7s.PushJob {
 }
 
 func NewPuller() m7s.IPuller {
-	return &Client{
+	ret := &Client{
 		direction: DIRECTION_PULL,
+		chunkSize: 4096,
 	}
+	ret.NetConnection = &NetConnection{}
+	return ret
 }
 
 func NewPusher() m7s.IPusher {
-	return &Client{
+	ret := &Client{
 		direction: DIRECTION_PUSH,
+		chunkSize: 4096,
 	}
+	ret.NetConnection = &NetConnection{}
+	return ret
 }
 
 func (c *Client) Run() (err error) {
+	if err = c.ClientHandshake(); err != nil {
+		return
+	}
+	err = c.SendMessage(RTMP_MSG_CHUNK_SIZE, Uint32Message(c.chunkSize))
+	if err != nil {
+		return
+	}
+	path := c.u.Path
+	if len(c.u.Query()) != 0 {
+		path += "?" + c.u.RawQuery
+	}
+	err = c.SendMessage(RTMP_MSG_AMF0_COMMAND, &CallMessage{
+		CommandMessage{"connect", 1},
+		map[string]any{
+			"app":      c.AppName,
+			"flashVer": "monibuca/" + m7s.Version,
+			"swfUrl":   c.u.String(),
+			"tcUrl":    strings.TrimSuffix(c.u.String(), path) + "/" + c.AppName,
+		},
+		nil,
+	})
 	var msg *Chunk
-	for {
+	for err == nil {
 		if msg, err = c.RecvMessage(); err != nil {
 			return err
 		}
@@ -156,7 +128,16 @@ func (c *Client) Run() (err error) {
 			cmd := msg.MsgData.(Commander).GetCommand()
 			switch cmd.CommandName {
 			case Response_Result, Response_OnStatus:
-				if response, ok := msg.MsgData.(*ResponseCreateStreamMessage); ok {
+				switch response := msg.MsgData.(type) {
+				case *ResponseMessage:
+					c.Description = response.Properties
+					if response.Infomation["code"] == NetConnection_Connect_Success {
+						err = c.SendMessage(RTMP_MSG_AMF0_COMMAND, &CommandMessage{"createStream", 2})
+						if err == nil {
+							c.Info("connected")
+						}
+					}
+				case *ResponseCreateStreamMessage:
 					c.StreamID = response.StreamId
 					if c.direction == DIRECTION_PULL {
 						m := &PlayMessage{}
@@ -171,7 +152,7 @@ func (c *Client) Run() (err error) {
 							m.StreamName += "?" + args.Encode()
 						}
 						c.Receivers[response.StreamId] = c.pullCtx.Publisher
-						c.SendMessage(RTMP_MSG_AMF0_COMMAND, m)
+						err = c.SendMessage(RTMP_MSG_AMF0_COMMAND, m)
 						// if response, ok := msg.MsgData.(*ResponsePlayMessage); ok {
 						// 	if response.Object["code"] == "NetStream.Play.Start" {
 
@@ -182,6 +163,10 @@ func (c *Client) Run() (err error) {
 						// 	return errors.New("pull faild")
 						// }
 					} else {
+						err = c.pushCtx.Subscribe()
+						if err != nil {
+							return
+						}
 						URL, _ := url.Parse(c.pushCtx.Connection.RemoteURL)
 						_, streamPath, _ := strings.Cut(URL.Path, "/")
 						_, streamPath, _ = strings.Cut(streamPath, "/")
@@ -201,7 +186,7 @@ func (c *Client) Run() (err error) {
 							"live",
 						})
 					}
-				} else if response, ok := msg.MsgData.(*ResponsePublishMessage); ok {
+				case *ResponsePublishMessage:
 					if response.Infomation["code"] == NetStream_Publish_Start {
 						c.Subscribe(c.pushCtx.Subscriber)
 					} else {
@@ -211,4 +196,5 @@ func (c *Client) Run() (err error) {
 			}
 		}
 	}
+	return
 }

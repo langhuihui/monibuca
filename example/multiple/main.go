@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"m7s.live/m7s/v5"
 	_ "m7s.live/m7s/v5/plugin/cascade"
 	_ "m7s.live/m7s/v5/plugin/console"
@@ -13,11 +14,13 @@ import (
 	_ "m7s.live/m7s/v5/plugin/rtsp"
 	_ "m7s.live/m7s/v5/plugin/stress"
 	_ "m7s.live/m7s/v5/plugin/webrtc"
+	"path/filepath"
 )
 
 func main() {
 	ctx := context.Background()
-	// ctx, _ := context.WithDeadline(context.Background(), time.Now().Add(time.Second*100))
-	go m7s.Run(ctx, "config2.yaml")
-	m7s.Run(ctx, "config1.yaml")
+	conf := flag.String("c", "", "config file dir")
+	flag.Parse()
+	go m7s.Run(ctx, filepath.Join(*conf, "config2.yaml"))
+	m7s.Run(ctx, filepath.Join(*conf, "config1.yaml"))
 }

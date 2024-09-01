@@ -204,18 +204,19 @@ type SubscribeHandler[A any, V any] struct {
 }
 
 func CreatePlayTask[A any, V any](s *Subscriber, onAudio func(A) error, onVideo func(V) error) task.ITask {
-	var handler SubscribeHandler[A, V]
-	handler.s = s
-	handler.OnAudio = onAudio
-	handler.OnVideo = onVideo
-	return &handler
+	return &SubscribeHandler[A, V]{
+		s:       s,
+		OnAudio: onAudio,
+		OnVideo: onVideo,
+	}
 }
 
 func PlayBlock[A any, V any](s *Subscriber, onAudio func(A) error, onVideo func(V) error) (err error) {
-	var handler SubscribeHandler[A, V]
-	handler.s = s
-	handler.OnAudio = onAudio
-	handler.OnVideo = onVideo
+	handler := &SubscribeHandler[A, V]{
+		s:       s,
+		OnAudio: onAudio,
+		OnVideo: onVideo,
+	}
 	err = handler.Start()
 	s.Stop(err)
 	return

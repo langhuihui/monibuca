@@ -1,0 +1,15 @@
+global:
+  loglevel: debug
+  tcp: :50050
+  http: :8081
+  disableall: true
+flv:
+  enable: true
+  pull:
+    live/test: /Users/dexter/Movies/jb-demo.flv
+rtmp:
+  enable: true
+  tcp: :1936
+  onpub:
+    push:
+      live/test: rtmp://localhost/live/test

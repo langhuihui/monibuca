@@ -78,6 +78,19 @@ func NewNetConnection(conn net.Conn) (ret *NetConnection) {
 	return
 }
 
+func (nc *NetConnection) Init(conn net.Conn) {
+	nc.Conn = conn
+	nc.BufReader = util.NewBufReader(conn)
+	nc.bandwidth = RTMP_MAX_CHUNK_SIZE << 3
+	nc.ReadChunkSize = RTMP_DEFAULT_CHUNK_SIZE
+	nc.WriteChunkSize = RTMP_DEFAULT_CHUNK_SIZE
+	nc.incommingChunks = make(map[uint32]*Chunk)
+	nc.tmpBuf = make(util.Buffer, 4)
+	nc.chunkHeaderBuf = make(util.Buffer, 0, 20)
+	nc.mediaDataPool.SetAllocator(util.NewScalableMemoryAllocator(1 << util.MinPowerOf2))
+	nc.Receivers = make(map[uint32]*m7s.Publisher)
+}
+
 func (nc *NetConnection) Dispose() {
 	nc.Conn.Close()
 	nc.BufReader.Recycle()
