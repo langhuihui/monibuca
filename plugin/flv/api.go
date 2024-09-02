@@ -20,19 +20,23 @@ func (plugin *FLVPlugin) Download(w http.ResponseWriter, r *http.Request) {
 	streamPath := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/download/"), ".flv")
 	singleFile := filepath.Join(plugin.Path, streamPath+".flv")
 	query := r.URL.Query()
-	rangeStr := strings.Split(query.Get("range"), "-")
-	s, err := strconv.Atoi(rangeStr[0])
+	rangeStr := strings.Split(query.Get("range"), "~")
+	var startTime, endTime time.Time
+	if len(rangeStr) != 2 {
+		http.NotFound(w, r)
+		return
+	}
+	var err error
+	startTime, err = util.TimeQueryParse(rangeStr[0])
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	startTime := time.UnixMilli(int64(s))
-	e, err := strconv.Atoi(rangeStr[1])
+	endTime, err = util.TimeQueryParse(rangeStr[1])
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	endTime := time.UnixMilli(int64(e))
 	timeRange := endTime.Sub(startTime)
 	plugin.Info("download", "stream", streamPath, "start", startTime, "end", endTime)
 	dir := filepath.Join(plugin.Path, streamPath)

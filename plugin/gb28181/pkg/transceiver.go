@@ -4,8 +4,10 @@ import (
 	"github.com/pion/rtp"
 	"m7s.live/m7s/v5"
 	"m7s.live/m7s/v5/pkg"
+	"m7s.live/m7s/v5/pkg/task"
 	"m7s.live/m7s/v5/pkg/util"
 	rtp2 "m7s.live/m7s/v5/plugin/rtp/pkg"
+	"net"
 	"os"
 )
 
@@ -19,31 +21,38 @@ const (
 	MEPGProgramEndCode = 0x000001b9
 )
 
-type Receiver struct {
+type PSPublisher struct {
 	*m7s.Publisher
-	rtp.Packet
 	*util.BufReader
-	FeedChan  chan []byte
-	psm       util.Memory
-	dump      *os.File
-	dumpLen   []byte
-	psVideo   PSVideo
-	psAudio   PSAudio
-	RTPReader *rtp2.TCP
+	Receiver
 }
 
-func NewReceiver(puber *m7s.Publisher) *Receiver {
-	ret := &Receiver{
+type Receiver struct {
+	task.Task
+	rtp.Packet
+	FeedChan   chan []byte
+	psm        util.Memory
+	dump       *os.File
+	dumpLen    []byte
+	psVideo    PSVideo
+	psAudio    PSAudio
+	RTPReader  *rtp2.TCP
+	ListenAddr string
+	listener   net.Listener
+}
+
+func NewPSPublisher(puber *m7s.Publisher) *PSPublisher {
+	ret := &PSPublisher{
 		Publisher: puber,
-		FeedChan:  make(chan []byte),
 	}
+	ret.FeedChan = make(chan []byte, 10)
 	ret.BufReader = util.NewBufReaderChan(ret.FeedChan)
 	ret.psVideo.SetAllocator(ret.Allocator)
 	ret.psAudio.SetAllocator(ret.Allocator)
 	return ret
 }
 
-func (p *Receiver) ReadPayload() (payload util.Memory, err error) {
+func (p *PSPublisher) ReadPayload() (payload util.Memory, err error) {
 	payloadlen, err := p.ReadBE(2)
 	if err != nil {
 		return
@@ -51,7 +60,7 @@ func (p *Receiver) ReadPayload() (payload util.Memory, err error) {
 	return p.ReadBytes(payloadlen)
 }
 
-func (p *Receiver) Demux() {
+func (p *PSPublisher) Demux() {
 	var payload util.Memory
 	defer p.Info("demux exit")
 	for {
@@ -96,7 +105,7 @@ func (p *Receiver) Demux() {
 	}
 }
 
-func (dec *Receiver) decProgramStreamMap() (err error) {
+func (dec *PSPublisher) decProgramStreamMap() (err error) {
 	dec.psm, err = dec.ReadPayload()
 	if err != nil {
 		return err
@@ -131,11 +140,24 @@ func (p *Receiver) ReadRTP(rtp util.Buffer) (err error) {
 	return
 }
 
+func (p *Receiver) Start() (err error) {
+	p.listener, err = net.Listen("tcp", p.ListenAddr)
+	return
+}
+
 func (p *Receiver) Dispose() {
-	p.RTPReader.Close()
+	p.listener.Close()
+	if p.RTPReader != nil {
+		p.RTPReader.Close()
+	}
 	//close(p.FeedChan)
 }
 
-func (p *Receiver) Go() (err error) {
+func (p *Receiver) Go() error {
+	conn, err := p.listener.Accept()
+	if err != nil {
+		return err
+	}
+	p.RTPReader = (*rtp2.TCP)(conn.(*net.TCPConn))
 	return p.RTPReader.Read(p.ReadRTP)
 }

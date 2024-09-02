@@ -13,7 +13,7 @@ import (
 )
 
 type Vod struct {
-	io.WriteCloser
+	io.Writer
 	Dir             string
 	lastTimestamp   uint32
 	speed           float64
@@ -40,7 +40,7 @@ func (v *Vod) speedControl() {
 func (v *Vod) Init(startTime time.Time, dir string) (err error) {
 	v.Dir = dir
 	v.startTime = time.Now()
-	singleFile := filepath.Join(dir, ".flv")
+	singleFile := dir + ".flv"
 	if util.Exist(singleFile) {
 		v.singleFile = true
 	} else if util.Exist(dir) {

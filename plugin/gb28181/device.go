@@ -94,8 +94,9 @@ func (d *Device) send(req *sip.Request) (*sip.Response, error) {
 	return d.client.Do(d, req)
 }
 
-func (d *Device) Run() {
-	response, err := d.catalog()
+func (d *Device) Go() (err error) {
+	var response *sip.Response
+	response, err = d.catalog()
 	if err != nil {
 		d.Error("catalog", "err", err)
 	} else {

@@ -1,6 +1,7 @@
 package plugin_flv
 
 import (
+	"m7s.live/m7s/v5/pkg/util"
 	"net"
 	"net/http"
 	"path/filepath"
@@ -25,32 +26,36 @@ var _ = m7s.InstallPlugin[FLVPlugin](defaultConfig, NewPuller, NewRecorder)
 
 func (plugin *FLVPlugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	streamPath := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/"), ".flv")
-	if r.URL.RawQuery != "" {
-		streamPath += "?" + r.URL.RawQuery
-	}
 	query := r.URL.Query()
-	startTimeStr := query.Get("start")
 	speedStr := query.Get("speed")
 	speed, err := strconv.ParseFloat(speedStr, 64)
+	defer func() {
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		}
+	}()
 	if err != nil {
 		speed = 1
 	}
-	s, err := strconv.Atoi(startTimeStr)
-	if err == nil {
-		startTime := time.UnixMilli(int64(s))
+	if startTime, err := util.TimeQueryParse(query.Get("start")); err == nil {
 		var vod Vod
 		if err = vod.Init(startTime, filepath.Join(plugin.Path, streamPath)); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+		vod.Writer = w
 		vod.SetSpeed(speed)
+		plugin.Info("vod start", "streamPath", streamPath, "startTime", startTime, "speed", speed)
 		err = vod.Run(r.Context())
+		plugin.Info("vod done", "streamPath", streamPath, "err", err)
 		return
 	}
 	var live Live
+	if r.URL.RawQuery != "" {
+		streamPath += "?" + r.URL.RawQuery
+	}
 	live.Subscriber, err = plugin.Subscribe(r.Context(), streamPath)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	w.Header().Set("Content-Type", "video/x-flv")
@@ -72,5 +77,5 @@ func (plugin *FLVPlugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		w.(http.Flusher).Flush()
 	}
-	live.Run()
+	err = live.Run()
 }

@@ -6,7 +6,6 @@ import (
 	"github.com/emiago/sipgo"
 	"github.com/emiago/sipgo/sip"
 	"github.com/icholy/digest"
-	"github.com/pion/rtp"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"m7s.live/m7s/v5"
@@ -15,7 +14,6 @@ import (
 	"m7s.live/m7s/v5/pkg/util"
 	"m7s.live/m7s/v5/plugin/gb28181/pb"
 	gb28181 "m7s.live/m7s/v5/plugin/gb28181/pkg"
-	rtp2 "m7s.live/m7s/v5/plugin/rtp/pkg"
 	"net"
 	"net/http"
 	"os"
@@ -55,7 +53,9 @@ type GB28181Plugin struct {
 	tcpPorts  chan uint16
 }
 
-var _ = m7s.InstallPlugin[GB28181Plugin](pb.RegisterApiHandler, &pb.Api_ServiceDesc)
+var _ = m7s.InstallPlugin[GB28181Plugin](pb.RegisterApiHandler, &pb.Api_ServiceDesc, func() m7s.IPuller {
+	return new(Dialog)
+})
 
 func init() {
 	sip.SIPDebug = true
@@ -280,15 +280,15 @@ func (gb *GB28181Plugin) StoreDevice(id string, req *sip.Request) (d *Device) {
 	if gb.DB != nil {
 		//TODO
 	}
-	task := gb.AddTask(d)
-	task.OnStart(func() {
+	d.OnStart(func() {
 		gb.devices.Add(d)
 	})
-	task.OnDispose(func() {
+	d.OnDispose(func() {
 		d.Status = DeviceOfflineStatus
 		if gb.devices.RemoveByKey(d.ID) {
 		}
 	})
+	gb.AddTask(d)
 	return
 }
 
@@ -309,44 +309,44 @@ func (gb *GB28181Plugin) GetPullableList() []string {
 	})
 }
 
-type PSServer struct {
-	task.Task
-	*rtp2.TCP
-	theDialog *Dialog
-	gb        *GB28181Plugin
-}
-
-func (gb *GB28181Plugin) OnTCPConnect(conn *net.TCPConn) task.ITask {
-	ret := &PSServer{gb: gb, TCP: (*rtp2.TCP)(conn)}
-	ret.Task.Logger = gb.With("remote", conn.RemoteAddr().String())
-	return ret
-}
-
-func (task *PSServer) Dispose() {
-	_ = task.TCP.Close()
-	if task.theDialog != nil {
-		close(task.theDialog.FeedChan)
-	}
-}
-
-func (task *PSServer) Go() (err error) {
-	return task.Read(func(data util.Buffer) (err error) {
-		if task.theDialog != nil {
-			return task.theDialog.ReadRTP(data)
-		}
-		var rtpPacket rtp.Packet
-		if err = rtpPacket.Unmarshal(data); err != nil {
-			task.Error("decode rtp", "err", err)
-		}
-		ssrc := rtpPacket.SSRC
-		if dialog, ok := task.gb.dialogs.Get(ssrc); ok {
-			task.theDialog = dialog
-			return dialog.ReadRTP(data)
-		}
-		task.Warn("dialog not found", "ssrc", ssrc)
-		return
-	})
-}
+//type PSServer struct {
+//	task.Task
+//	*rtp2.TCP
+//	theDialog *Dialog
+//	gb        *GB28181Plugin
+//}
+//
+//func (gb *GB28181Plugin) OnTCPConnect(conn *net.TCPConn) task.ITask {
+//	ret := &PSServer{gb: gb, TCP: (*rtp2.TCP)(conn)}
+//	ret.Task.Logger = gb.With("remote", conn.RemoteAddr().String())
+//	return ret
+//}
+//
+//func (task *PSServer) Dispose() {
+//	_ = task.TCP.Close()
+//	if task.theDialog != nil {
+//		close(task.theDialog.FeedChan)
+//	}
+//}
+//
+//func (task *PSServer) Go() (err error) {
+//	return task.Read(func(data util.Buffer) (err error) {
+//		if task.theDialog != nil {
+//			return task.theDialog.ReadRTP(data)
+//		}
+//		var rtpPacket rtp.Packet
+//		if err = rtpPacket.Unmarshal(data); err != nil {
+//			task.Error("decode rtp", "err", err)
+//		}
+//		ssrc := rtpPacket.SSRC
+//		if dialog, ok := task.gb.dialogs.Get(ssrc); ok {
+//			task.theDialog = dialog
+//			return dialog.ReadRTP(data)
+//		}
+//		task.Warn("dialog not found", "ssrc", ssrc)
+//		return
+//	})
+//}
 
 func (gb *GB28181Plugin) OnBye(req *sip.Request, tx sip.ServerTransaction) {
 	if dialog, ok := gb.dialogs.Find(func(d *Dialog) bool {

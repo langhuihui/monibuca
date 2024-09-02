@@ -1,11 +1,7 @@
 global:
   loglevel: debug
-
-rtmp:
-  onsub:
-    pull:
-      live/.*: rtmp://localhost/$0
-
+flv:
+  path: record
 gb28181:
     sip:
         listenaddr:

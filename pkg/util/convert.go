@@ -6,7 +6,16 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	"time"
 )
+
+func TimeQueryParse(query string) (t time.Time, err error) {
+	if !strings.Contains(query, "T") {
+		query = time.Now().Format("2006-01-02") + "T" + query
+	}
+	t, err = time.ParseInLocation("2006-01-02T15:04:05", query, time.Local)
+	return
+}
 
 /*
 func ReadByteToUintX(r io.Reader, l int) (data uint64, err error) {

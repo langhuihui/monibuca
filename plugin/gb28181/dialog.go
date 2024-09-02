@@ -2,24 +2,20 @@ package plugin_gb28181
 
 import (
 	"fmt"
-	"net"
 	"strconv"
 	"strings"
 
 	"github.com/emiago/sipgo"
 	"github.com/emiago/sipgo/sip"
 	"m7s.live/m7s/v5"
-	"m7s.live/m7s/v5/pkg/config"
 	"m7s.live/m7s/v5/pkg/task"
 	"m7s.live/m7s/v5/pkg/util"
 	gb28181 "m7s.live/m7s/v5/plugin/gb28181/pkg"
-	rtp2 "m7s.live/m7s/v5/plugin/rtp/pkg"
 )
 
 type Dialog struct {
 	task.Job
 	*Channel
-	*gb28181.Receiver
 	gb28181.InviteOptions
 	gb      *GB28181Plugin
 	session *sipgo.DialogClientSession
@@ -34,11 +30,11 @@ func (d *Dialog) GetPullJob() *m7s.PullJob {
 	return &d.pullCtx
 }
 
-func (d *Dialog) Start() error {
-	return d.pullCtx.Publish()
-}
-
-func (d *Dialog) Run() (err error) {
+func (d *Dialog) Start() (err error) {
+	err = d.pullCtx.Publish()
+	if err != nil {
+		return
+	}
 	sss := strings.Split(d.pullCtx.RemoteURL, "/")
 	deviceId, channelId := sss[0], sss[1]
 	if len(sss) == 2 {
@@ -55,8 +51,6 @@ func (d *Dialog) Run() (err error) {
 		var recordRange util.Range[int]
 		err = recordRange.Resolve(sss[2])
 	}
-
-	d.Receiver = gb28181.NewReceiver(d.pullCtx.Publisher)
 	ssrc := d.CreateSSRC(d.gb.Serial)
 	d.gb.dialogs.Set(d)
 	defer d.gb.dialogs.Remove(d)
@@ -90,9 +84,10 @@ func (d *Dialog) Run() (err error) {
 	fromHeader := d.Channel.Device.fromHDR
 	subjectHeader := sip.NewHeader("Subject", fmt.Sprintf("%s:%s,%s:0", d.DeviceID, ssrc, d.gb.Serial))
 	d.session, err = d.Channel.Device.dialogClient.Invite(d.gb, d.Channel.Device.Recipient, []byte(strings.Join(sdpInfo, "\r\n")+"\r\n"), &contentTypeHeader, subjectHeader, &fromHeader)
-	if err != nil {
-		return
-	}
+	return
+}
+
+func (d *Dialog) Run() (err error) {
 	err = d.session.WaitAnswer(d.gb, sipgo.AnswerOptions{})
 	if err != nil {
 		return
@@ -121,14 +116,10 @@ func (d *Dialog) Run() (err error) {
 		}
 	}
 	err = d.session.Ack(d.gb)
-	var tcpConf config.TCP
-	tcpConf.ListenAddr = fmt.Sprintf(":%d", d.MediaPort)
-	tcpConf.ListenNum = 1
-	d.AddTask(tcpConf.CreateTCPWork(d.Logger, func(conn *net.TCPConn) task.ITask {
-		d.Receiver.RTPReader = (*rtp2.TCP)(conn)
-		return d.Receiver
-	}))
-	d.Receiver.Demux()
+	pub := gb28181.NewPSPublisher(d.pullCtx.Publisher)
+	pub.ListenAddr = fmt.Sprintf(":%d", d.MediaPort)
+	d.AddTask(&pub.Receiver)
+	pub.Demux()
 	return
 }
 

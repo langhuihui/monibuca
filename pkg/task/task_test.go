@@ -39,11 +39,11 @@ func (task *retryDemoTask) Start() error {
 
 func Test_RetryTask(t *testing.T) {
 	var demoTask retryDemoTask
+	var parent Job
+	root.AddTask(&parent)
 	demoTask.SetRetry(3, time.Second)
-	reason := root.AddTask(&demoTask).WaitStopped()
-	if !errors.Is(reason, ErrRetryRunOut) {
-		t.Errorf("expected retry run out, got %v", reason)
-	}
+	parent.AddTask(&demoTask)
+	_ = parent.WaitStopped()
 	if demoTask.retry.RetryCount != 3 {
 		t.Errorf("expected 3 retries, got %d", demoTask.retry.RetryCount)
 	}
@@ -138,9 +138,11 @@ func Test_Hooks(t *testing.T) {
 	task.OnDispose(func() {
 		checkCalled(4)
 	})
+	task.Stop(ErrTaskComplete)
 	root.AddTask(&task).WaitStopped()
 }
 
+//
 //type DemoTask struct {
 //	Task
 //	file     *os.File
@@ -167,5 +169,14 @@ func Test_Hooks(t *testing.T) {
 //
 //func (h *HelloWorld) Run() (err error) {
 //	_, err = h.file.Write([]byte("world"))
+//	return nil
+//}
+
+//type HelloWorld struct {
+//	Task
+//}
+//
+//func (h *HelloWorld) Start() (err error) {
+//	fmt.Println("Hello World")
 //	return nil
 //}

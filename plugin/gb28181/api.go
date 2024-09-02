@@ -60,9 +60,9 @@ func (gb *GB28181Plugin) List(context.Context, *emptypb.Empty) (ret *pb.Response
 func (gb *GB28181Plugin) replayPS(pub *m7s.Publisher, f *os.File) {
 	defer f.Close()
 	var t uint16
-	receiver := gb28181.NewReceiver(pub)
-	go receiver.Demux()
-	defer close(receiver.FeedChan)
+	puber := gb28181.NewPSPublisher(pub)
+	go puber.Demux()
+	defer close(puber.FeedChan)
 	for l := make([]byte, 6); pub.State != m7s.PublisherStateDisposed; time.Sleep(time.Millisecond * time.Duration(t)) {
 		_, err := f.Read(l)
 		if err != nil {
@@ -75,9 +75,9 @@ func (gb *GB28181Plugin) replayPS(pub *m7s.Publisher, f *os.File) {
 		if err != nil {
 			return
 		}
-		err = receiver.ReadRTP(payload)
+		err = puber.ReadRTP(payload)
 		select {
-		case receiver.FeedChan <- receiver.Packet.Payload:
+		case puber.FeedChan <- puber.Packet.Payload:
 		case <-pub.Done():
 			return
 		}
