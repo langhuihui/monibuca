@@ -37,6 +37,8 @@ type Movmuxer struct {
 	movFlag        MP4_FLAG
 	onNewFragment  OnFragment
 	fragDuration   uint32
+	moov           *BasicBox
+	mdat           *BasicBox
 }
 
 type MuxerOption func(muxer *Movmuxer)
@@ -85,9 +87,9 @@ func CreateMp4Muxer(w io.WriteSeeker, options ...MuxerOption) (*Movmuxer, error)
 			return nil, err
 		}
 		muxer.mdatOffset = uint32(currentOffset)
-		mdat := BasicBox{Type: [4]byte{'m', 'd', 'a', 't'}}
-		mdat.Size = 8
-		mdatlen, mdatBox := mdat.Encode()
+		muxer.mdat = &BasicBox{Type: [4]byte{'m', 'd', 'a', 't'}}
+		muxer.mdat.Size = 8
+		mdatlen, mdatBox := muxer.mdat.Encode()
 		_, err = muxer.writer.Write(mdatBox[0:mdatlen])
 		if err != nil {
 			return nil, err
@@ -202,6 +204,29 @@ func (muxer *Movmuxer) WriteSample(trackId uint32, data Sample) (err error) {
 	return
 }
 
+func (muxer *Movmuxer) ReWriteWithMoov(w io.Writer) (err error) {
+	reader := muxer.writer.(io.ReadSeeker)
+	_, err = reader.Seek(0, io.SeekStart)
+	if err != nil {
+		return
+	}
+	_, err = io.CopyN(w, reader, int64(muxer.mdatOffset))
+	if err != nil {
+		return
+	}
+	for _, track := range muxer.tracks {
+		for i := range len(track.samplelist) {
+			track.samplelist[i].offset += muxer.moov.Size
+		}
+	}
+	err = muxer.writeMoov(w)
+	if err != nil {
+		return
+	}
+	_, err = io.CopyN(w, reader, int64(muxer.mdat.Size))
+	return
+}
+
 func (muxer *Movmuxer) WriteTrailer() (err error) {
 	for _, track := range muxer.tracks {
 		if err = track.flush(); err != nil {
@@ -257,9 +282,9 @@ func (muxer *Movmuxer) reWriteMdatSize() (err error) {
 	}
 	datalen := currentOffset - int64(muxer.mdatOffset)
 	if datalen > 0xFFFFFFFF {
-		mdat := BasicBox{Type: [4]byte{'m', 'd', 'a', 't'}}
-		mdat.Size = uint64(datalen + 8)
-		mdatBoxLen, mdatBox := mdat.Encode()
+		muxer.mdat = &BasicBox{Type: [4]byte{'m', 'd', 'a', 't'}}
+		muxer.mdat.Size = uint64(datalen + 8)
+		mdatBoxLen, mdatBox := muxer.mdat.Encode()
 		if _, err = muxer.writer.Seek(int64(muxer.mdatOffset)-8, io.SeekStart); err != nil {
 			return
 		}
@@ -273,6 +298,7 @@ func (muxer *Movmuxer) reWriteMdatSize() (err error) {
 		if _, err = muxer.writer.Seek(int64(muxer.mdatOffset), io.SeekStart); err != nil {
 			return
 		}
+		muxer.mdat.Size = uint64(datalen + 8)
 		tmpdata := make([]byte, 4)
 		binary.BigEndian.PutUint32(tmpdata, uint32(datalen))
 		if _, err = muxer.writer.Write(tmpdata); err != nil {
@@ -318,6 +344,7 @@ func (muxer *Movmuxer) writeMoov(w io.Writer) (err error) {
 	}
 	copy(moovBox[offset:], mvex)
 	_, err = w.Write(moovBox)
+	muxer.moov = &moov
 	return
 }
 

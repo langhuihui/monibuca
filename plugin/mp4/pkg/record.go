@@ -1,6 +1,7 @@
 package mp4
 
 import (
+	"github.com/VictoriaMetrics/VictoriaMetrics/lib/fs"
 	"m7s.live/m7s/v5"
 	"m7s.live/m7s/v5/pkg"
 	"m7s.live/m7s/v5/pkg/codec"
@@ -39,10 +40,25 @@ func (task *writeTrailerTask) Start() (err error) {
 	err = task.muxer.WriteTrailer()
 	if err != nil {
 		task.Error("write trailer", "err", err)
+		return task.file.Close()
 	} else {
 		task.Info("write trailer")
+		var temp *os.File
+		temp, err = os.CreateTemp("", "*.mp4")
+		if err != nil {
+			task.Error("create temp file", "err", err)
+			return
+		}
+		err = task.muxer.ReWriteWithMoov(temp)
+		if err != nil {
+			task.Error("rewrite with moov", "err", err)
+			return
+		}
+		err = task.file.Close()
+		err = temp.Close()
+		fs.MustCopyFile(temp.Name(), task.file.Name())
+		return os.Remove(temp.Name())
 	}
-	return task.file.Close()
 }
 
 func (r *Recorder) Run() (err error) {
@@ -52,7 +68,7 @@ func (r *Recorder) Run() (err error) {
 	var muxer *box.Movmuxer
 	var audioId, videoId uint32
 	// TODO: fragment
-	if file, err = os.OpenFile(recordJob.FilePath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666); err != nil {
+	if file, err = os.OpenFile(recordJob.FilePath, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0666); err != nil {
 		return
 	}
 	muxer, err = box.CreateMp4Muxer(file)
