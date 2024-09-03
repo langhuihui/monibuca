@@ -305,14 +305,18 @@ func (nc *NetConnection) RecvMessage() (msg *Chunk, err error) {
 					err = r.WriteAudio(msg.AVData.WrapAudio())
 				} else {
 					msg.AVData.Recycle()
-					nc.Warn("ReceiveAudio", "MessageStreamID", msg.MessageStreamID)
+					if r.PubAudio {
+						nc.Warn("ReceiveAudio", "MessageStreamID", msg.MessageStreamID)
+					}
 				}
 			case RTMP_MSG_VIDEO:
 				if r, ok := nc.Receivers[msg.MessageStreamID]; ok && r.PubVideo {
 					err = r.WriteVideo(msg.AVData.WrapVideo())
 				} else {
 					msg.AVData.Recycle()
-					nc.Warn("ReceiveVideo", "MessageStreamID", msg.MessageStreamID)
+					if r.PubVideo {
+						nc.Warn("ReceiveVideo", "MessageStreamID", msg.MessageStreamID)
+					}
 				}
 			}
 		}

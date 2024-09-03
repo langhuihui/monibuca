@@ -2,6 +2,7 @@ package rtmp
 
 import (
 	"encoding/binary"
+	"github.com/deepch/vdk/codec/h264parser"
 	"github.com/deepch/vdk/codec/h265parser"
 	"io"
 	"time"
@@ -44,16 +45,21 @@ func (avcc *RTMPVideo) Parse(t *AVTrack) (err error) {
 		switch fourCC {
 		case codec.FourCC_H264:
 			var ctx codec.H264Ctx
-			if _, err = ctx.RecordInfo.Unmarshal(cloneFrame.Buffers[0][reader.Offset():]); err == nil {
+			ctx.Record = cloneFrame.Buffers[0][reader.Offset():]
+			if _, err = ctx.RecordInfo.Unmarshal(ctx.Record); err == nil {
 				t.SequenceFrame = &cloneFrame
 				t.ICodecCtx = &ctx
+				ctx.SPSInfo, err = h264parser.ParseSPS(ctx.SPS())
 			}
 		case codec.FourCC_H265:
 			var ctx H265Ctx
-			if _, err = ctx.RecordInfo.Unmarshal(cloneFrame.Buffers[0][reader.Offset():]); err == nil {
+			ctx.Enhanced = enhanced
+			ctx.Record = cloneFrame.Buffers[0][reader.Offset():]
+			if _, err = ctx.RecordInfo.Unmarshal(ctx.Record); err == nil {
 				ctx.RecordInfo.LengthSizeMinusOne = 3 // Unmarshal wrong LengthSizeMinusOne
 				t.SequenceFrame = &cloneFrame
 				t.ICodecCtx = &ctx
+				ctx.SPSInfo, err = h265parser.ParseSPS(ctx.SPS())
 			}
 		case codec.FourCC_AV1:
 			var ctx AV1Ctx

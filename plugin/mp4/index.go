@@ -183,24 +183,12 @@ func (p *MP4Plugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			durVideo = video.Timestamp - lastVTime
 		}
 		bs := video.Memory.ToBytes()
-		b0 := bs[0]
-		idr := b0&0b0111_0000>>4 == 1
-		if b0&0b1000_0000 == 0 {
-			offsetVideo = 5
-			if bs[1] == 0 {
-				return nil
-			}
+		if ctx, ok := sub.VideoReader.Track.ICodecCtx.(*rtmp.H265Ctx); ok && ctx.Enhanced && bs[1]&0b1111 == rtmp.PacketTypeCodedFrames {
+			offsetVideo = 8
 		} else {
-			switch packetType := b0 & 0b1111; packetType {
-			case rtmp.PacketTypeSequenceStart:
-				return nil
-			case rtmp.PacketTypeCodedFrames:
-				offsetVideo = 8
-			case rtmp.PacketTypeCodedFramesX:
-				offsetVideo = 5
-			}
+			offsetVideo = 5
 		}
-		ctx.video.Push(&ctx, video.Timestamp, durVideo, bs[offsetVideo:], util.Conditoinal(idr, mp4.SyncSampleFlags, mp4.NonSyncSampleFlags))
+		ctx.video.Push(&ctx, video.Timestamp, durVideo, bs[offsetVideo:], util.Conditoinal(sub.VideoReader.Value.IDR, mp4.SyncSampleFlags, mp4.NonSyncSampleFlags))
 		lastVTime = video.Timestamp
 		return nil
 	})

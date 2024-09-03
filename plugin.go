@@ -442,7 +442,7 @@ func (p *Plugin) SubscribeWithConfig(ctx context.Context, streamPath string, con
 	err = p.Server.Streams.AddTask(subscriber, ctx).WaitStarted()
 	if err == nil {
 		select {
-		case <-subscriber.waitPublishDone:
+		case <-subscriber.waitPublishDone.Done():
 			err = subscriber.Publisher.WaitTrack()
 		case <-subscriber.Done():
 			err = subscriber.Err()

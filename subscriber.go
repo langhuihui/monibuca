@@ -60,13 +60,13 @@ type Subscriber struct {
 	PubSubBase
 	config.Subscribe
 	Publisher                  *Publisher
-	waitPublishDone            chan struct{}
+	waitPublishDone            *util.Promise
 	AudioReader, VideoReader   *AVRingReader
 	StartAudioTS, StartVideoTS time.Duration
 }
 
 func createSubscriber(p *Plugin, streamPath string, conf config.Subscribe) *Subscriber {
-	subscriber := &Subscriber{Subscribe: conf, waitPublishDone: make(chan struct{})}
+	subscriber := &Subscriber{Subscribe: conf, waitPublishDone: util.NewPromise(p)}
 	subscriber.ID = task.GetNextTaskID()
 	subscriber.Plugin = p
 	subscriber.TimeoutTimer = time.NewTimer(subscriber.WaitTimeout)

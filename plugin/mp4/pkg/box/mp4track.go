@@ -1,7 +1,6 @@
 package box
 
 import (
-	"encoding/binary"
 	"github.com/yapingcat/gomedia/go-codec"
 	"io"
 )
@@ -274,98 +273,25 @@ func (track *mp4track) makeEmptyStblTable() {
 	track.stbltable.stss = &movstss{}
 }
 
-func (track *mp4track) writeH264(nalus [][]byte, pts, dts uint64) (err error) {
-	//h264extra, ok := track.extra.(*h264ExtraData)
-	//if !ok {
-	//	panic("must init h264ExtraData first")
-	//}
-	for _, nalu := range nalus {
-		nalu_type := codec.H264_NAL_TYPE(nalu[0] & 0x1F)
-		//aud/sps/pps/sei 为帧间隔
-		//通过first_slice_in_mb来判断，改nalu是否为一帧的开头
-		if track.lastSample.hasVcl && isH264NewAccessUnit(nalu) {
-			var currentOffset int64
-			if currentOffset, err = track.writer.Seek(0, io.SeekCurrent); err != nil {
-				return
-			}
-			entry := sampleEntry{
-				pts:                    track.lastSample.pts,
-				dts:                    track.lastSample.dts,
-				size:                   0,
-				isKeyFrame:             track.lastSample.isKey,
-				SampleDescriptionIndex: 1,
-				offset:                 uint64(currentOffset),
-			}
-			n := 0
-			if n, err = track.writer.Write(track.lastSample.cache); err != nil {
-				return
-			}
-			entry.size = uint64(n)
-			track.addSampleEntry(entry)
-			track.lastSample.cache = track.lastSample.cache[:0]
-			track.lastSample.hasVcl = false
-		}
-		if codec.IsH264VCLNaluType(nalu_type) {
-			track.lastSample.pts = pts
-			track.lastSample.dts = dts
-			track.lastSample.hasVcl = true
-			track.lastSample.isKey = false
-			if nalu_type == codec.H264_NAL_I_SLICE {
-				track.lastSample.isKey = true
-			}
-		}
-		naluLen := uint32(len(nalu))
-		var lenBytes [4]byte
-		binary.BigEndian.PutUint32(lenBytes[:], naluLen)
-		track.lastSample.cache = append(append(track.lastSample.cache, lenBytes[:]...), nalu...)
+func (track *mp4track) write(sample Sample) (err error) {
+	var currentOffset int64
+	if currentOffset, err = track.writer.Seek(0, io.SeekCurrent); err != nil {
+		return
 	}
-	return
-}
-
-func (track *mp4track) writeH265(nalus [][]byte, pts, dts uint64) (err error) {
-	//h265extra, ok := track.extra.(*h265ExtraData)
-	//if !ok {
-	//	panic("must init h265ExtraData first")
-	//}
-	for _, nalu := range nalus {
-		nalu_type := codec.H265_NAL_TYPE((nalu[0] >> 1) & 0x3F)
-		if track.lastSample.hasVcl && isH265NewAccessUnit(nalu) {
-			var currentOffset int64
-			if currentOffset, err = track.writer.Seek(0, io.SeekCurrent); err != nil {
-				return
-			}
-			entry := sampleEntry{
-				pts:                    track.lastSample.pts,
-				dts:                    track.lastSample.dts,
-				size:                   0,
-				isKeyFrame:             track.lastSample.isKey,
-				SampleDescriptionIndex: 1,
-				offset:                 uint64(currentOffset),
-			}
-			n := 0
-			if n, err = track.writer.Write(track.lastSample.cache); err != nil {
-				return
-			}
-			entry.size = uint64(n)
-			track.addSampleEntry(entry)
-			track.lastSample.cache = track.lastSample.cache[:0]
-			track.lastSample.hasVcl = false
-		}
-		if codec.IsH265VCLNaluType(nalu_type) {
-			track.lastSample.pts = pts
-			track.lastSample.dts = dts
-			track.lastSample.hasVcl = true
-			track.lastSample.isKey = false
-			if nalu_type >= codec.H265_NAL_SLICE_BLA_W_LP && nalu_type <= codec.H265_NAL_SLICE_CRA {
-				track.lastSample.isKey = true
-			}
-		}
-		naluLen := uint32(len(nalu))
-		var lenBytes [4]byte
-		binary.BigEndian.PutUint32(lenBytes[:], naluLen)
-		track.lastSample.cache = append(append(track.lastSample.cache, lenBytes[:]...), nalu...)
+	entry := sampleEntry{
+		pts:                    uint64(sample.PTS),
+		dts:                    uint64(sample.DTS),
+		size:                   0,
+		isKeyFrame:             sample.KeyFrame,
+		SampleDescriptionIndex: 1,
+		offset:                 uint64(currentOffset),
 	}
-
+	n := 0
+	if n, err = track.writer.Write(sample.Data); err != nil {
+		return
+	}
+	entry.size = uint64(n)
+	track.addSampleEntry(entry)
 	return
 }
 

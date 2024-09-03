@@ -107,7 +107,9 @@ func (t *AVTracks) Dispose() {
 	t.Lock()
 	defer t.Unlock()
 	for track := range t.Range {
-		track.Dispose()
+		if track == t.AVTrack || track.RingWriter != t.AVTrack.RingWriter {
+			track.Dispose()
+		}
 	}
 	t.AVTrack = nil
 	t.Clear()
@@ -261,7 +263,7 @@ func (p *Publisher) RemoveSubscriber(subscriber *Subscriber) {
 
 func (p *Publisher) AddSubscriber(subscriber *Subscriber) {
 	subscriber.Publisher = p
-	close(subscriber.waitPublishDone)
+	subscriber.waitPublishDone.Resolve()
 	if p.Subscribers.AddUnique(subscriber) {
 		p.Info("subscriber +1", "count", p.Subscribers.Length)
 		if subscriber.BufferTime > p.BufferTime {
