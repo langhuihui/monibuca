@@ -9,3 +9,4 @@ record
 bin
 .DS_Store
 .db
+!plugin/record

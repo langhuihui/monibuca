@@ -26,6 +26,10 @@ type (
 	}
 )
 
+func (ctx *AudioCtx) GetRecord() []byte {
+	return []byte{}
+}
+
 func (ctx *AudioCtx) GetSampleRate() int {
 	return ctx.SampleRate
 }
@@ -54,6 +58,9 @@ func (ctx *AACCtx) GetSampleRate() int {
 func (ctx *AACCtx) GetBase() ICodecCtx {
 	return ctx
 }
+func (ctx *AACCtx) GetRecord() []byte {
+	return ctx.ConfigBytes
+}
 func (ctx *AACCtx) GetInfo() string {
 	return fmt.Sprintf("sample rate: %d, channels: %d, object type: %d", ctx.SampleRate(), ctx.GetChannels(), ctx.Config.ObjectType)
 }
@@ -64,7 +71,9 @@ func (*PCMUCtx) FourCC() FourCC {
 func (*PCMACtx) FourCC() FourCC {
 	return FourCC_ALAW
 }
-
+func (*PCMACtx) GetRecord() []byte {
+	return []byte{} //TODO
+}
 func (ctx *PCMACtx) GetBase() ICodecCtx {
 	return ctx
 }
@@ -72,7 +81,9 @@ func (ctx *PCMACtx) GetBase() ICodecCtx {
 func (ctx *PCMUCtx) GetBase() ICodecCtx {
 	return ctx
 }
-
+func (*PCMUCtx) GetRecord() []byte {
+	return []byte{} //TODO
+}
 func (*AACCtx) FourCC() FourCC {
 	return FourCC_MP4A
 }
@@ -95,4 +106,9 @@ func (ctx *OPUSCtx) GetSampleRate() int {
 }
 func (ctx *OPUSCtx) GetInfo() string {
 	return fmt.Sprintf("sample rate: %d, channels: %d", ctx.SampleRate(), ctx.ChannelLayout().Count())
+}
+
+func (ctx *OPUSCtx) GetRecord() []byte {
+	// TODO: 需要实现
+	return FourCC_OPUS[:]
 }

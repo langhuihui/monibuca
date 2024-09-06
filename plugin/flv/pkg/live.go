@@ -9,11 +9,12 @@ import (
 )
 
 type Live struct {
+	b           [15]byte
 	Subscriber  *m7s.Subscriber
 	WriteFlvTag func(net.Buffers) error
 }
 
-func (task *Live) WriteFlvHeader() (flv net.Buffers) {
+func (task *Live) WriteFlvHeader() (err error) {
 	at, vt := &task.Subscriber.Publisher.AudioTrack, &task.Subscriber.Publisher.VideoTrack
 	hasAudio, hasVideo := at.AVTrack != nil && task.Subscriber.SubAudio, vt.AVTrack != nil && task.Subscriber.SubVideo
 	var amf rtmp.AMF
@@ -47,27 +48,37 @@ func (task *Live) WriteFlvHeader() (flv net.Buffers) {
 		metaData["height"] = ctx.Height()
 	}
 	var data = amf.Marshal(metaData)
-	var b [15]byte
-	WriteFLVTagHead(FLV_TAG_TYPE_SCRIPT, 0, uint32(len(data)), b[:])
-	flv = append(flv, []byte{'F', 'L', 'V', 0x01, flags, 0, 0, 0, 9, 0, 0, 0, 0}, b[:11], data, b[11:])
-	binary.BigEndian.PutUint32(b[11:], uint32(len(data))+11)
-	return
+	WriteFLVTagHead(FLV_TAG_TYPE_SCRIPT, 0, uint32(len(data)), task.b[4:])
+	defer binary.BigEndian.PutUint32(task.b[:4], uint32(len(data))+11)
+	return task.WriteFlvTag(net.Buffers{[]byte{'F', 'L', 'V', 0x01, flags, 0, 0, 0, 9, 0, 0, 0, 0}, task.b[4:], data})
+}
+
+func (task *Live) rtmpData2FlvTag(t byte, data *rtmp.RTMPData) error {
+	WriteFLVTagHead(t, data.Timestamp, uint32(data.Size), task.b[4:])
+	defer binary.BigEndian.PutUint32(task.b[:4], uint32(data.Size)+11)
+	return task.WriteFlvTag(append(net.Buffers{task.b[:]}, data.Memory.Buffers...))
+}
+
+func (task *Live) WriteAudioTag(data *rtmp.RTMPAudio) error {
+	return task.rtmpData2FlvTag(FLV_TAG_TYPE_AUDIO, &data.RTMPData)
+}
+
+func (task *Live) WriteVideoTag(data *rtmp.RTMPVideo) error {
+	return task.rtmpData2FlvTag(FLV_TAG_TYPE_VIDEO, &data.RTMPData)
 }
 
 func (task *Live) Run() (err error) {
-	var b [15]byte
-	flv := task.WriteFlvHeader()
-	copy(b[:4], flv[3])
-	err = task.WriteFlvTag(flv[:3])
-	rtmpData2FlvTag := func(t byte, data *rtmp.RTMPData) error {
-		WriteFLVTagHead(t, data.Timestamp, uint32(data.Size), b[4:])
-		defer binary.BigEndian.PutUint32(b[:4], uint32(data.Size)+11)
-		return task.WriteFlvTag(append(net.Buffers{b[:]}, data.Memory.Buffers...))
+	err = task.WriteFlvHeader()
+	if err != nil {
+		return
 	}
 	err = m7s.PlayBlock(task.Subscriber, func(audio *rtmp.RTMPAudio) error {
-		return rtmpData2FlvTag(FLV_TAG_TYPE_AUDIO, &audio.RTMPData)
+		return task.WriteAudioTag(audio)
 	}, func(video *rtmp.RTMPVideo) error {
-		return rtmpData2FlvTag(FLV_TAG_TYPE_VIDEO, &video.RTMPData)
+		return task.WriteVideoTag(video)
 	})
-	return task.WriteFlvTag(net.Buffers{b[:4]})
+	if err != nil {
+		return
+	}
+	return task.WriteFlvTag(net.Buffers{task.b[:4]})
 }

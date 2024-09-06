@@ -367,20 +367,14 @@ func (p *Plugin) OnPublish(pub *Publisher) {
 	onPublish := p.config.OnPub
 	if p.Meta.Pusher != nil {
 		for r, pushConf := range onPublish.Push {
-			if group := r.FindStringSubmatch(pub.StreamPath); group != nil {
-				for i, g := range group {
-					pushConf.URL = strings.Replace(pushConf.URL, fmt.Sprintf("$%d", i), g, -1)
-				}
+			if pushConf.URL = r.Replace(pub.StreamPath, pushConf.URL); pushConf.URL != "" {
 				p.Push(pub.StreamPath, pushConf)
 			}
 		}
 	}
 	if p.Meta.Recorder != nil {
 		for r, recConf := range onPublish.Record {
-			if group := r.FindStringSubmatch(pub.StreamPath); group != nil {
-				for i, g := range group {
-					recConf.FilePath = strings.Replace(recConf.FilePath, fmt.Sprintf("$%d", i), g, -1)
-				}
+			if recConf.FilePath = r.Replace(pub.StreamPath, recConf.FilePath); recConf.FilePath != "" {
 				p.Record(pub.StreamPath, recConf)
 			}
 		}
@@ -390,7 +384,7 @@ func (p *Plugin) OnPublish(pub *Publisher) {
 			if group := r.FindStringSubmatch(pub.StreamPath); group != nil {
 				for j, to := range tranConf.Output {
 					for i, g := range group {
-						to.Target = strings.Replace(to.Target, fmt.Sprintf("$%d", i), g, -1)
+						to.Target = strings.ReplaceAll(to.Target, fmt.Sprintf("$%d", i), g)
 					}
 					targetUrl, err := url.Parse(to.Target)
 					if err == nil {
@@ -402,6 +396,45 @@ func (p *Plugin) OnPublish(pub *Publisher) {
 			}
 		}
 	}
+}
+func (p *Plugin) OnSubscribe(sub *Subscriber) {
+	//	var avoidTrans bool
+	//AVOID:
+	//	for trans := range server.Transforms.Range {
+	//		for _, output := range trans.Config.Output {
+	//			if output.StreamPath == s.StreamPath {
+	//				avoidTrans = true
+	//				break AVOID
+	//			}
+	//		}
+	//	}
+	for reg, conf := range p.config.OnSub.Pull {
+		if p.Meta.Puller != nil {
+			if group := reg.FindStringSubmatch(sub.StreamPath); group != nil {
+				for i, value := range group {
+					conf.URL = strings.Replace(conf.URL, fmt.Sprintf("$%d", i), value, -1)
+				}
+			}
+			p.handler.Pull(sub.StreamPath, conf)
+		}
+	}
+	//if !avoidTrans {
+	//	for reg, conf := range plugin.GetCommonConf().OnSub.Transform {
+	//		if plugin.Meta.Transformer != nil {
+	//			if reg.MatchString(s.StreamPath) {
+	//				if group := reg.FindStringSubmatch(s.StreamPath); group != nil {
+	//					for j, c := range conf.Output {
+	//						for i, value := range group {
+	//							c.Target = strings.Replace(c.Target, fmt.Sprintf("$%d", i), value, -1)
+	//						}
+	//						conf.Output[j] = c
+	//					}
+	//				}
+	//				plugin.handler.Transform(s.StreamPath, conf)
+	//			}
+	//		}
+	//	}
+	//}
 }
 func (p *Plugin) PublishWithConfig(ctx context.Context, streamPath string, conf config.Publish) (publisher *Publisher, err error) {
 	publisher = createPublisher(p, streamPath, conf)

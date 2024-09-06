@@ -75,9 +75,6 @@ func (p *RecordJob) Start() (err error) {
 	}
 	dir := p.FilePath
 	if p.Fragment == 0 || p.Append {
-		if filepath.Ext(p.FilePath) == "" {
-			p.FilePath += ".flv"
-		}
 		dir = filepath.Dir(p.FilePath)
 	}
 	p.Description["filePath"] = p.FilePath

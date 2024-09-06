@@ -16,7 +16,7 @@ import (
 	"time"
 )
 
-func (plugin *FLVPlugin) Download(w http.ResponseWriter, r *http.Request) {
+func (plugin *FLVPlugin) Download_(w http.ResponseWriter, r *http.Request) {
 	streamPath := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/download/"), ".flv")
 	singleFile := filepath.Join(plugin.Path, streamPath+".flv")
 	query := r.URL.Query()

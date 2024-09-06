@@ -122,3 +122,7 @@ func (ctx *H264Ctx) GetInfo() string {
 func (h264 *H264Ctx) GetBase() ICodecCtx {
 	return h264
 }
+
+func (ctx *H264Ctx) GetRecord() []byte {
+	return ctx.Record
+}

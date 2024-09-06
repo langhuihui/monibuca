@@ -1,0 +1,7 @@
+record:
+#  db:
+#    dbtype: duckdb
+  onpub:
+    record:
+      .+:
+        filepath: record/$0

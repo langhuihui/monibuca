@@ -37,3 +37,7 @@ func (ctx *AV1Ctx) Height() int {
 func (*AV1Ctx) FourCC() FourCC {
 	return FourCC_AV1
 }
+
+func (ctx *AV1Ctx) GetRecord() []byte {
+	return ctx.ConfigOBUs
+}

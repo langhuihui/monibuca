@@ -33,7 +33,7 @@ import (
 
 var (
 	Version      = "v5.0.0"
-	MergeConfigs = []string{"Publish", "Subscribe", "HTTP", "PublicIP", "LogLevel", "EnableAuth", "DB"}
+	MergeConfigs = [...]string{"Publish", "Subscribe", "HTTP", "PublicIP", "PublicIPv6", "LogLevel", "EnableAuth", "DB"}
 	ExecPath     = os.Args[0]
 	ExecDir      = filepath.Dir(ExecPath)
 	serverMeta   = PluginMeta{
@@ -45,45 +45,56 @@ var (
 	defaultLogHandler = console.NewHandler(os.Stdout, &console.HandlerOptions{TimeFormat: "15:04:05.000000"})
 )
 
-type ServerConfig struct {
-	EnableSubEvent bool          `default:"true" desc:"启用订阅事件,禁用可以提高性能"` //启用订阅事件,禁用可以提高性能
-	SettingDir     string        `default:".m7s" desc:""`
-	FatalDir       string        `default:"fatal" desc:""`
-	EventBusSize   int           `default:"10" desc:"事件总线大小"`    //事件总线大小
-	PulseInterval  time.Duration `default:"5s" desc:"心跳事件间隔"`    //心跳事件间隔
-	DisableAll     bool          `default:"false" desc:"禁用所有插件"` //禁用所有插件
-}
-
-type WaitStream struct {
-	*slog.Logger
-	StreamPath string
-	SubscriberCollection
-	baseTsAudio, baseTsVideo time.Duration
-}
+type (
+	ServerConfig struct {
+		EnableSubEvent bool                     `default:"true" desc:"启用订阅事件,禁用可以提高性能"` //启用订阅事件,禁用可以提高性能
+		SettingDir     string                   `default:".m7s" desc:""`
+		FatalDir       string                   `default:"fatal" desc:""`
+		PulseInterval  time.Duration            `default:"5s" desc:"心跳事件间隔"`    //心跳事件间隔
+		DisableAll     bool                     `default:"false" desc:"禁用所有插件"` //禁用所有插件
+		StreamAlias    map[config.Regexp]string `desc:"流别名"`
+	}
+	WaitStream struct {
+		*slog.Logger
+		StreamPath string
+		SubscriberCollection
+		baseTsAudio, baseTsVideo time.Duration
+	}
+	Server struct {
+		pb.UnimplementedGlobalServer
+		Plugin
+		ServerConfig
+		Plugins         util.Collection[string, *Plugin]
+		Streams         task.Manager[string, *Publisher]
+		Waiting         util.Collection[string, *WaitStream]
+		Pulls           task.Manager[string, *PullJob]
+		Pushs           task.Manager[string, *PushJob]
+		Records         task.Manager[string, *RecordJob]
+		Transforms      Transforms
+		Devices         DeviceManager
+		Subscribers     SubscriberCollection
+		LogHandler      MultiLogHandler
+		apiList         []string
+		grpcServer      *grpc.Server
+		grpcClientConn  *grpc.ClientConn
+		lastSummaryTime time.Time
+		lastSummary     *pb.SummaryResponse
+		conf            any
+	}
+	CheckSubWaitTimeout struct {
+		task.TickTask
+		s *Server
+	}
+	GRPCServer struct {
+		task.Task
+		s       *Server
+		tcpTask *config.ListenTCPWork
+	}
+	RawConfig = map[string]map[string]any
+)
 
 func (w *WaitStream) GetKey() string {
 	return w.StreamPath
-}
-
-type Server struct {
-	pb.UnimplementedGlobalServer
-	Plugin
-	ServerConfig
-	Plugins         util.Collection[string, *Plugin]
-	Streams         task.Manager[string, *Publisher]
-	Waiting         util.Collection[string, *WaitStream]
-	Pulls           task.Manager[string, *PullJob]
-	Pushs           task.Manager[string, *PushJob]
-	Records         task.Manager[string, *RecordJob]
-	Transforms      Transforms
-	Subscribers     SubscriberCollection
-	LogHandler      MultiLogHandler
-	apiList         []string
-	grpcServer      *grpc.Server
-	grpcClientConn  *grpc.ClientConn
-	lastSummaryTime time.Time
-	lastSummary     *pb.SummaryResponse
-	conf            any
 }
 
 func NewServer(conf any) (s *Server) {
@@ -107,8 +118,6 @@ func Run(ctx context.Context, conf any) (err error) {
 	}
 	return
 }
-
-type RawConfig = map[string]map[string]any
 
 func exit() {
 	for _, meta := range plugins {
@@ -252,11 +261,6 @@ func (s *Server) Start() (err error) {
 	return
 }
 
-type CheckSubWaitTimeout struct {
-	task.TickTask
-	s *Server
-}
-
 func (c *CheckSubWaitTimeout) GetTickInterval() time.Duration {
 	return c.s.PulseInterval
 }
@@ -271,12 +275,6 @@ func (c *CheckSubWaitTimeout) Tick(any) {
 			}
 		}
 	}
-}
-
-type GRPCServer struct {
-	task.Task
-	s       *Server
-	tcpTask *config.ListenTCPWork
 }
 
 func (gRPC *GRPCServer) Dispose() {

@@ -17,7 +17,7 @@ const (
 )
 const (
 	SUBMODE_REAL = iota
-	SUBMODE_NOJUMP
+	SUBMODE_RECORD
 	SUBMODE_BUFFER
 	SUBMODE_WAITKEY
 )
@@ -81,7 +81,7 @@ func (r *AVRingReader) ReadFrame(conf *config.Subscribe) (err error) {
 			} else {
 				r.State = READSTATE_NORMAL
 			}
-		case SUBMODE_NOJUMP:
+		case SUBMODE_RECORD:
 			r.State = READSTATE_NORMAL
 		case SUBMODE_BUFFER:
 			for {
@@ -137,12 +137,12 @@ func (r *AVRingReader) ReadFrame(conf *config.Subscribe) (err error) {
 		if err = r.readFrame(conf.SubMode); err != nil {
 			return
 		}
-		if conf.SubMode != SUBMODE_REAL {
-			// 防止过快消费
-			if fast := r.Value.Timestamp - r.FirstTs - time.Since(r.startTime); fast > 0 && fast < time.Second {
-				time.Sleep(fast)
-			}
-		}
+		// if conf.SubMode == SUBMODE_NOJUMP {
+		// 	// 防止过快消费
+		// 	if fast := r.Value.Timestamp - r.FirstTs - time.Since(r.startTime); fast > 0 && fast < time.Second {
+		// 		time.Sleep(fast)
+		// 	}
+		// }
 	case READSTATE_WAITKEY:
 		r.Info("wait key frame", "seq", r.Value.Sequence)
 		for {

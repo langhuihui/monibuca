@@ -85,48 +85,26 @@ func (s *Subscriber) Start() (err error) {
 	if publisher, ok := server.Streams.Get(s.StreamPath); ok {
 		publisher.AddSubscriber(s)
 		return publisher.WaitTrack()
-	} else if waitStream, ok := server.Waiting.Get(s.StreamPath); ok {
-		waitStream.Add(s)
 	} else {
-		server.createWait(s.StreamPath).Add(s)
-		//	var avoidTrans bool
-		//AVOID:
-		//	for trans := range server.Transforms.Range {
-		//		for _, output := range trans.Config.Output {
-		//			if output.StreamPath == s.StreamPath {
-		//				avoidTrans = true
-		//				break AVOID
-		//			}
-		//		}
-		//	}
-		for plugin := range server.Plugins.Range {
-			for reg, conf := range plugin.GetCommonConf().OnSub.Pull {
-				if plugin.Meta.Puller != nil {
-					if group := reg.FindStringSubmatch(s.StreamPath); group != nil {
-						for i, value := range group {
-							conf.URL = strings.Replace(conf.URL, fmt.Sprintf("$%d", i), value, -1)
-						}
-					}
-					plugin.handler.Pull(s.StreamPath, conf)
+		for reg, streamPath := range server.StreamAlias {
+			if g := reg.FindStringSubmatch(s.StreamPath); len(g) > 0 {
+				for i, gg := range g {
+					streamPath = strings.ReplaceAll(streamPath, fmt.Sprintf("$%d", i), gg)
+				}
+				if publisher, ok = server.Streams.Get(streamPath); ok {
+					s.Description["alias"] = streamPath
+					publisher.AddSubscriber(s)
+					return publisher.WaitTrack()
 				}
 			}
-			//if !avoidTrans {
-			//	for reg, conf := range plugin.GetCommonConf().OnSub.Transform {
-			//		if plugin.Meta.Transformer != nil {
-			//			if reg.MatchString(s.StreamPath) {
-			//				if group := reg.FindStringSubmatch(s.StreamPath); group != nil {
-			//					for j, c := range conf.Output {
-			//						for i, value := range group {
-			//							c.Target = strings.Replace(c.Target, fmt.Sprintf("$%d", i), value, -1)
-			//						}
-			//						conf.Output[j] = c
-			//					}
-			//				}
-			//				plugin.handler.Transform(s.StreamPath, conf)
-			//			}
-			//		}
-			//	}
-			//}
+		}
+		if waitStream, ok := server.Waiting.Get(s.StreamPath); ok {
+			waitStream.Add(s)
+		} else {
+			server.createWait(s.StreamPath).Add(s)
+			for plugin := range server.Plugins.Range {
+				plugin.OnSubscribe(s)
+			}
 		}
 	}
 	return

@@ -1,8 +1,10 @@
 package config
 
 import (
+	"fmt"
 	"gopkg.in/yaml.v3"
 	"regexp"
+	"strings"
 )
 
 type Regexp struct {
@@ -45,4 +47,14 @@ func (r *Regexp) UnmarshalJSON(b []byte) error {
 	}
 	r.Regexp = regexp.MustCompile(string(b))
 	return nil
+}
+
+func (r *Regexp) Replace(source, target string) string {
+	if group := r.FindStringSubmatch(source); group != nil {
+		for i, g := range group {
+			target = strings.ReplaceAll(target, fmt.Sprintf("$%d", i), g)
+		}
+		return target
+	}
+	return ""
 }

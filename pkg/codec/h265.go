@@ -32,3 +32,7 @@ func (*H265Ctx) FourCC() FourCC {
 func (h265 *H265Ctx) GetBase() ICodecCtx {
 	return h265
 }
+
+func (h265 *H265Ctx) GetRecord() []byte {
+	return h265.Record
+}

@@ -1,5 +1,5 @@
 global:
-  loglevel: debug
+  loglevel: trace
 flv:
   path: record
 gb28181:

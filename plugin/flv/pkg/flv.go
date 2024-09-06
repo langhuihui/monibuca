@@ -2,8 +2,9 @@ package flv
 
 import (
 	"bufio"
-	"encoding/binary"
 	"io"
+	"net"
+
 	"m7s.live/m7s/v5/pkg/util"
 	rtmp "m7s.live/m7s/v5/plugin/rtmp/pkg"
 )
@@ -26,18 +27,22 @@ func NewFlvWriter(w io.Writer) *FlvWriter {
 	return &FlvWriter{Writer: w}
 }
 
+func (w *FlvWriter) WriteHeader(hasAudio, hasVideo bool) (err error) {
+	var flags byte
+	if hasAudio {
+		flags |= 0x04
+	}
+	if hasVideo {
+		flags |= 0x01
+	}
+	_, err = w.Write([]byte{'F', 'L', 'V', 0x01, flags, 0, 0, 0, 9, 0, 0, 0, 0})
+	return
+}
+
 func (w *FlvWriter) WriteTag(t byte, ts, dataSize uint32, payload ...[]byte) (err error) {
 	WriteFLVTagHead(t, ts, dataSize, w.buf[:])
-	if _, err = w.Write(w.buf[:11]); err != nil {
-		return
-	}
-	for _, p := range payload {
-		if _, err = w.Write(p); err != nil {
-			return
-		}
-	}
-	binary.BigEndian.PutUint32(w.buf[11:], dataSize+11)
-	_, err = w.Write(w.buf[11:])
+	var buffers net.Buffers = append(append(net.Buffers{w.buf[:11]}, payload...), util.PutBE(w.buf[11:], dataSize+11))
+	_, err = buffers.WriteTo(w)
 	return
 }
 
