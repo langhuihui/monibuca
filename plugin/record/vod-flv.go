@@ -54,7 +54,7 @@ func (plugin *RecordPlugin) vodFLV(w http.ResponseWriter, r *http.Request) {
 			dbType := plugin.GetCommonConf().DBType
 			if factory, ok := db.Factory[dbType]; ok {
 				var streamDB *gorm.DB
-				streamDB, err = gorm.Open(factory(filepath.Join(plugin.Path, stream.StreamPath, fmt.Sprintf("%d.db", stream.ID))), &gorm.Config{})
+				streamDB, err = gorm.Open(factory(filepath.Join(stream.FilePath, fmt.Sprintf("%d.db", stream.ID))), &gorm.Config{})
 				if err != nil {
 					http.Error(w, err.Error(), http.StatusInternalServerError)
 					return
@@ -70,7 +70,8 @@ func (plugin *RecordPlugin) vodFLV(w http.ResponseWriter, r *http.Request) {
 					if stream.VideoCodec == codec.FourCC_H264.String() {
 						avccConfig = append([]byte{0x17, 0x00, 0x00, 0x00, 0x00}, stream.VideoConfig...)
 					} else if stream.VideoCodec == codec.FourCC_H265.String() {
-						avccConfig = append([]byte{0x40, 0x01, 0x00, 0x00, 0x00}, stream.VideoConfig...)
+						// TODO: HEVC
+						//avccConfig = append([]byte{0x40, 0x01, 0x00, 0x00, 0x00}, stream.VideoConfig...)
 					}
 					flvWriter.WriteTag(flv.FLV_TAG_TYPE_VIDEO, 0, uint32(len(avccConfig)), avccConfig)
 					streamDB.Last(&record.Sample{}, "type=? AND timestamp<=?", record.FRAME_TYPE_VIDEO_KEY_FRAME, startTimestamp).Scan(&startId)
@@ -87,9 +88,9 @@ func (plugin *RecordPlugin) vodFLV(w http.ResponseWriter, r *http.Request) {
 					streamDB.ScanRows(rows, &frame)
 					switch frame.Type {
 					case record.FRAME_TYPE_AUDIO:
-						flvWriter.WriteTag(flv.FLV_TAG_TYPE_AUDIO, uint32(frame.Timestamp), uint32(len(frame.Data)), frame.Data)
+						//flvWriter.WriteTag(flv.FLV_TAG_TYPE_AUDIO, uint32(frame.Timestamp), uint32(len(frame.Data)), frame.Data)
 					case record.FRAME_TYPE_VIDEO, record.FRAME_TYPE_VIDEO_KEY_FRAME:
-						flvWriter.WriteTag(flv.FLV_TAG_TYPE_VIDEO, uint32(frame.Timestamp), uint32(len(frame.Data)), frame.Data)
+						//flvWriter.WriteTag(flv.FLV_TAG_TYPE_VIDEO, uint32(frame.Timestamp), uint32(len(frame.Data)), frame.Data)
 					}
 					speedControl(frame.Timestamp)
 				}

@@ -39,7 +39,7 @@ func (r *Recorder) Start() (err error) {
 	sub := recordJob.Subscriber
 	var newStream RecordStream
 	r.stream = &newStream
-	newStream.StreamPath = sub.StreamPath
+	newStream.FilePath = recordJob.FilePath
 	newStream.StartTime = sub.StartTime
 	if sub.Publisher.HasAudioTrack() {
 		newStream.AudioCodec = sub.Publisher.AudioTrack.ICodecCtx.FourCC().String()

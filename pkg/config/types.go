@@ -2,6 +2,7 @@ package config
 
 import (
 	"m7s.live/m7s/v5/pkg/util"
+	"net/url"
 	"time"
 )
 
@@ -41,6 +42,7 @@ type (
 		RetryInterval time.Duration `default:"5s" desc:"重试间隔"`       // 重试间隔
 		Proxy         string        `desc:"代理地址"`                    // 代理地址
 		Header        map[string][]string
+		Args          url.Values
 	}
 	Push struct {
 		URL           string        `desc:"推送地址"`                    // 推送地址

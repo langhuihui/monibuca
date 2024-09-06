@@ -2,6 +2,8 @@ package pkg
 
 import (
 	"fmt"
+	"github.com/deepch/vdk/codec/h264parser"
+	"github.com/deepch/vdk/codec/h265parser"
 	"io"
 	"m7s.live/m7s/v5/pkg/codec"
 	"m7s.live/m7s/v5/pkg/util"
@@ -78,15 +80,68 @@ func (r *RawAudio) Dump(b byte, writer io.Writer) {
 var _ IAVFrame = (*H26xFrame)(nil)
 
 type H26xFrame struct {
+	codec.FourCC
 	Timestamp time.Duration
 	CTS       time.Duration
 	Nalus
 	util.RecyclableMemory
 }
 
-func (h *H26xFrame) Parse(track *AVTrack) error {
-	//TODO implement me
-	panic("implement me")
+func (h *H26xFrame) Parse(track *AVTrack) (err error) {
+	switch h.FourCC {
+	case codec.FourCC_H264:
+		var ctx *codec.H264Ctx
+		if track.ICodecCtx != nil {
+			ctx = track.ICodecCtx.GetBase().(*codec.H264Ctx)
+		}
+		for _, nalu := range h.Nalus {
+			switch codec.ParseH264NALUType(nalu.Buffers[0][0]) {
+			case h264parser.NALU_SPS:
+				ctx = &codec.H264Ctx{}
+				track.ICodecCtx = ctx
+				ctx.RecordInfo.SPS = [][]byte{nalu.ToBytes()}
+				if ctx.SPSInfo, err = h264parser.ParseSPS(ctx.SPS()); err != nil {
+					return
+				}
+			case h264parser.NALU_PPS:
+				ctx.RecordInfo.PPS = [][]byte{nalu.ToBytes()}
+				ctx.Record = make([]byte, ctx.RecordInfo.Len())
+				ctx.RecordInfo.Marshal(ctx.Record)
+			case codec.NALU_IDR_Picture:
+				track.Value.IDR = true
+			}
+		}
+	case codec.FourCC_H265:
+		var ctx *codec.H265Ctx
+		if track.ICodecCtx != nil {
+			ctx = track.ICodecCtx.GetBase().(*codec.H265Ctx)
+		}
+		for _, nalu := range h.Nalus {
+			switch codec.ParseH265NALUType(nalu.Buffers[0][0]) {
+			case h265parser.NAL_UNIT_VPS:
+				ctx = &codec.H265Ctx{}
+				ctx.RecordInfo.VPS = [][]byte{nalu.ToBytes()}
+				track.ICodecCtx = ctx
+			case h265parser.NAL_UNIT_SPS:
+				ctx.RecordInfo.SPS = [][]byte{nalu.ToBytes()}
+				if ctx.SPSInfo, err = h265parser.ParseSPS(ctx.SPS()); err != nil {
+					return
+				}
+			case h265parser.NAL_UNIT_PPS:
+				ctx.RecordInfo.PPS = [][]byte{nalu.ToBytes()}
+				ctx.Record = make([]byte, ctx.RecordInfo.Len())
+				ctx.RecordInfo.Marshal(ctx.Record, ctx.SPSInfo)
+			case h265parser.NAL_UNIT_CODED_SLICE_BLA_W_LP,
+				h265parser.NAL_UNIT_CODED_SLICE_BLA_W_RADL,
+				h265parser.NAL_UNIT_CODED_SLICE_BLA_N_LP,
+				h265parser.NAL_UNIT_CODED_SLICE_IDR_W_RADL,
+				h265parser.NAL_UNIT_CODED_SLICE_IDR_N_LP,
+				h265parser.NAL_UNIT_CODED_SLICE_CRA:
+				track.Value.IDR = true
+			}
+		}
+	}
+	return
 }
 
 func (h *H26xFrame) ConvertCtx(ctx codec.ICodecCtx) (codec.ICodecCtx, IAVFrame, error) {
@@ -120,8 +175,7 @@ func (h *H26xFrame) GetSize() int {
 }
 
 func (h *H26xFrame) String() string {
-	//TODO implement me
-	panic("implement me")
+	return fmt.Sprintf("H26xFrame{FourCC: %s, Timestamp: %s, CTS: %s}", h.FourCC, h.Timestamp, h.CTS)
 }
 
 func (h *H26xFrame) Dump(b byte, writer io.Writer) {

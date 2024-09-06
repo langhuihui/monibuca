@@ -11,15 +11,17 @@ import (
 type (
 	RecordPlugin struct {
 		m7s.Plugin
-		Path string `default:"record"`
 	}
 )
 
 var defaultYaml m7s.DefaultYaml = `subscribe:
   submode: 1
+publish:
+  speed: 1
+  delayclosetimeout: 1s
 `
 
-var _ = m7s.InstallPlugin[RecordPlugin](defaultYaml, record.NewRecorder)
+var _ = m7s.InstallPlugin[RecordPlugin](defaultYaml, record.NewRecorder, record.NewPuller)
 
 func (plugin *RecordPlugin) RegisterHandler() map[string]http.HandlerFunc {
 	return map[string]http.HandlerFunc{

@@ -21,6 +21,11 @@ var (
 	FourCC_ULAW = FourCC{'u', 'l', 'a', 'w'}
 )
 
+func ParseFourCC(s string) (f FourCC) {
+	copy(f[:], s)
+	return f
+}
+
 func (f FourCC) String() string {
 	return string(f[:])
 }

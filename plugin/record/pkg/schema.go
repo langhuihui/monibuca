@@ -12,7 +12,7 @@ type (
 	RecordStream struct {
 		ID                       uint `gorm:"primarykey"`
 		StartTime, EndTime       time.Time
-		StreamPath               string
+		FilePath                 string
 		AudioCodec, VideoCodec   string
 		AudioConfig, VideoConfig []byte
 	}

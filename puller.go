@@ -16,6 +16,7 @@ type (
 		task.Job
 		Plugin     *Plugin
 		StreamPath string // 对应本地流
+		Args       url.Values
 		RemoteURL  string // 远程服务器地址（用于推拉）
 		HTTPClient *http.Client
 		Header     http.Header
@@ -66,12 +67,14 @@ func (p *PullJob) Init(puller IPuller, plugin *Plugin, streamPath string, conf c
 	publishConfig := plugin.config.Publish
 	publishConfig.PublishTimeout = 0
 	p.publishConfig = &publishConfig
+	p.Args = conf.Args
 	p.Connection.Init(plugin, streamPath, conf.URL, conf.Proxy, conf.Header)
 	p.puller = puller
 	p.Description = map[string]any{
 		"plugin":     plugin.Meta.Name,
 		"streamPath": streamPath,
 		"url":        conf.URL,
+		"args":       conf.Args,
 		"maxRetry":   conf.MaxRetry,
 	}
 	puller.SetRetry(conf.MaxRetry, conf.RetryInterval)
@@ -84,7 +87,11 @@ func (p *PullJob) GetKey() string {
 }
 
 func (p *PullJob) Publish() (err error) {
-	p.Publisher, err = p.Plugin.PublishWithConfig(p.puller.GetTask().Context, p.StreamPath, *p.publishConfig)
+	streamPath := p.StreamPath
+	if len(p.Args) > 0 {
+		streamPath += "?" + p.Args.Encode()
+	}
+	p.Publisher, err = p.Plugin.PublishWithConfig(p.puller.GetTask().Context, streamPath, *p.publishConfig)
 	return
 }
 

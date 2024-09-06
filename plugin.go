@@ -410,11 +410,8 @@ func (p *Plugin) OnSubscribe(sub *Subscriber) {
 	//	}
 	for reg, conf := range p.config.OnSub.Pull {
 		if p.Meta.Puller != nil {
-			if group := reg.FindStringSubmatch(sub.StreamPath); group != nil {
-				for i, value := range group {
-					conf.URL = strings.Replace(conf.URL, fmt.Sprintf("$%d", i), value, -1)
-				}
-			}
+			conf.Args = sub.Args
+			conf.URL = reg.Replace(sub.StreamPath, conf.URL)
 			p.handler.Pull(sub.StreamPath, conf)
 		}
 	}

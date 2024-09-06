@@ -102,9 +102,9 @@ func (s *Subscriber) Start() (err error) {
 			waitStream.Add(s)
 		} else {
 			server.createWait(s.StreamPath).Add(s)
-			for plugin := range server.Plugins.Range {
-				plugin.OnSubscribe(s)
-			}
+		}
+		for plugin := range server.Plugins.Range {
+			plugin.OnSubscribe(s)
 		}
 	}
 	return
@@ -115,6 +115,8 @@ func (s *Subscriber) Dispose() {
 	s.Info("unsubscribe", "reason", s.StopReason())
 	if s.Publisher != nil {
 		s.Publisher.RemoveSubscriber(s)
+	} else if waitStream, ok := s.Plugin.Server.Waiting.Get(s.StreamPath); ok {
+		waitStream.Remove(s)
 	}
 }
 
