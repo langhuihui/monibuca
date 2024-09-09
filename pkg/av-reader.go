@@ -156,22 +156,20 @@ func (r *AVRingReader) ReadFrame(conf *config.Subscribe) (err error) {
 			}
 		}
 	}
-	r.AbsTime = uint32((r.Value.Timestamp - r.SkipTs).Milliseconds())
-	if r.AbsTime == 0 {
-		r.AbsTime = 1
+
+	if r.Value.Timestamp < r.SkipTs {
+		r.Error("timestamp < skipTs", "ts", r.Value.Timestamp, "skipTs", r.SkipTs)
+		r.AbsTime++
+	} else {
+		r.AbsTime = uint32((r.Value.Timestamp - r.SkipTs).Milliseconds())
+		if r.AbsTime == 0 {
+			r.AbsTime = 1
+		}
 	}
-	r.Delay = uint32(r.Track.LastValue.Sequence - r.Value.Sequence)
+	r.Delay = r.Track.LastValue.Sequence - r.Value.Sequence
 	r.Log(context.TODO(), task.TraceLevel, r.Track.FourCC().String(), "delay", r.Delay)
 	return
 }
-
-// func (r *AVRingReader) GetPTS32() uint32 {
-// 	return uint32((r.Value.Raw.Timestamp - r.SkipTs*90/time.Millisecond))
-// }
-
-// func (r *AVRingReader) GetDTS32() uint32 {
-// 	return uint32((r.Value.CTS - r.SkipTs*90/time.Millisecond))
-// }
 
 func (r *AVRingReader) ResetAbsTime() {
 	r.SkipTs = r.Value.Timestamp

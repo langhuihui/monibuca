@@ -31,6 +31,12 @@ type (
 		task.Task
 		RecordJob RecordJob
 	}
+	RecordStream struct {
+		ID                     uint `gorm:"primarykey"`
+		StartTime, EndTime     time.Time
+		FilePath               string
+		AudioCodec, VideoCodec string
+	}
 )
 
 func (r *DefaultRecorder) GetRecordJob() *RecordJob {

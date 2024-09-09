@@ -37,8 +37,6 @@ func (ps *PubSubBase) Init(streamPath string, conf any) {
 	}
 	// args to config
 	if len(ps.Args) != 0 {
-		var c config.Config
-		c.Parse(conf)
 		ignores, cc := make(map[string]struct{}), make(map[string]any)
 		for key, value := range ps.Args {
 			if strings.HasSuffix(key, "ArgName") {
@@ -50,7 +48,7 @@ func (ps *PubSubBase) Init(streamPath string, conf any) {
 				cc[strings.ToLower(key)] = value[0]
 			}
 		}
-		c.ParseModifyFile(cc)
+		config.Parse(conf, cc)
 	}
 }
 
@@ -176,11 +174,10 @@ func (s *Subscriber) createVideoReader(dataType reflect.Type, startVideoTs time.
 
 type SubscribeHandler[A any, V any] struct {
 	task.Task
-	s            *Subscriber
-	OnAudio      func(A) error
-	OnVideo      func(V) error
-	ProcessAudio chan func(*AVFrame)
-	ProcessVideo chan func(*AVFrame)
+	s                          *Subscriber
+	OnAudio                    func(A) error
+	OnVideo                    func(V) error
+	ProcessAudio, ProcessVideo chan func(*AVFrame)
 }
 
 func CreatePlayTask[A any, V any](s *Subscriber, onAudio func(A) error, onVideo func(V) error) task.ITask {

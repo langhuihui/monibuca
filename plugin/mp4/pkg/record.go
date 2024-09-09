@@ -1,14 +1,17 @@
 package mp4
 
 import (
+	"fmt"
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/fs"
 	"m7s.live/m7s/v5"
 	"m7s.live/m7s/v5/pkg"
 	"m7s.live/m7s/v5/pkg/codec"
 	"m7s.live/m7s/v5/pkg/task"
 	"m7s.live/m7s/v5/plugin/mp4/pkg/box"
+	record "m7s.live/m7s/v5/plugin/record/pkg"
 	rtmp "m7s.live/m7s/v5/plugin/rtmp/pkg"
 	"os"
+	"path/filepath"
 	"time"
 )
 
@@ -17,18 +20,6 @@ type WriteTrailerQueueTask struct {
 }
 
 var writeTrailerQueueTask WriteTrailerQueueTask
-
-func init() {
-	m7s.Servers.AddTaskLazy(&writeTrailerQueueTask)
-}
-
-func NewRecorder() m7s.IRecorder {
-	return &Recorder{}
-}
-
-type Recorder struct {
-	m7s.DefaultRecorder
-}
 
 type writeTrailerTask struct {
 	task.Task
@@ -61,53 +52,143 @@ func (task *writeTrailerTask) Start() (err error) {
 	}
 }
 
-func (r *Recorder) Run() (err error) {
+func init() {
+	m7s.Servers.AddTaskLazy(&writeTrailerQueueTask)
+}
+
+func NewRecorder() m7s.IRecorder {
+	return &Recorder{}
+}
+
+type Recorder struct {
+	m7s.DefaultRecorder
+	file   *os.File
+	muxer  *box.Movmuxer
+	stream record.RecordStream
+}
+
+func (r *Recorder) writeTailer() {
+	r.stream.EndTime = time.Now()
+	r.RecordJob.Plugin.DB.Save(&r.stream)
+	writeTrailerQueueTask.AddTask(&writeTrailerTask{
+		file:  r.file,
+		muxer: r.muxer,
+	}, r.Logger)
+}
+
+func (r *Recorder) createStream() (err error) {
 	recordJob := &r.RecordJob
 	sub := recordJob.Subscriber
-	var file *os.File
-	var muxer *box.Movmuxer
-	var audioId, videoId uint32
-	// TODO: fragment
-	if file, err = os.OpenFile(recordJob.FilePath, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0666); err != nil {
-		return
+	r.stream = record.RecordStream{
+		StartTime: time.Now(),
+		FilePath:  recordJob.FilePath,
 	}
-	muxer, err = box.CreateMp4Muxer(file)
+	if sub.Publisher.HasAudioTrack() {
+		r.stream.AudioCodec = sub.Publisher.AudioTrack.ICodecCtx.FourCC().String()
+		r.stream.AudioConfig = sub.Publisher.AudioTrack.ICodecCtx.GetRecord()
+	}
+	if sub.Publisher.HasVideoTrack() {
+		r.stream.VideoCodec = sub.Publisher.VideoTrack.ICodecCtx.FourCC().String()
+		r.stream.VideoConfig = sub.Publisher.VideoTrack.ICodecCtx.GetRecord()
+	}
+	recordJob.Plugin.DB.Save(&r.stream)
+	if r.RecordJob.Fragment == 0 {
+		if r.file, err = os.Create(fmt.Sprintf("%d.mp4", r.RecordJob.FilePath)); err != nil {
+			return
+		}
+	} else {
+		if r.file, err = os.Create(filepath.Join(r.RecordJob.FilePath, fmt.Sprintf("%d.mp4", r.stream.ID))); err != nil {
+			return
+		}
+	}
+	r.muxer, err = box.CreateMp4Muxer(r.file)
+	return
+}
+
+func (r *Recorder) Start() (err error) {
+	err = r.RecordJob.Plugin.DB.AutoMigrate(&r.stream)
 	if err != nil {
 		return
 	}
-	defer writeTrailerQueueTask.AddTask(&writeTrailerTask{
-		file:  file,
-		muxer: muxer,
-	}, r.Logger)
+	return r.DefaultRecorder.Start()
+}
+
+func (r *Recorder) Dispose() {
+	if r.file != nil && r.muxer != nil {
+		r.writeTailer()
+	}
+}
+
+func (r *Recorder) Run() (err error) {
+	recordJob := &r.RecordJob
+	sub := recordJob.Subscriber
+	var audioId, videoId uint32
+	err = r.createStream()
+	if err != nil {
+		return
+	}
 	var at, vt *pkg.AVTrack
-	//err = muxer.WriteInitSegment(file)
+
+	checkFragment := func(absTime uint32) (err error) {
+		if duration := int64(absTime); time.Duration(duration)*time.Millisecond >= recordJob.Fragment {
+			r.writeTailer()
+			err = r.createStream()
+			if err != nil {
+				return
+			}
+			at, vt = nil, nil
+			if vr := sub.VideoReader; vr != nil {
+				vr.ResetAbsTime()
+				//seq := vt.SequenceFrame.(*rtmp.RTMPVideo)
+				//offset = int64(seq.Size + 15)
+			}
+			if ar := sub.AudioReader; ar != nil {
+				ar.ResetAbsTime()
+			}
+		}
+		return
+	}
+
 	return m7s.PlayBlock(sub, func(audio *pkg.RawAudio) error {
+		if sub.VideoReader == nil && recordJob.Fragment != 0 {
+			err := checkFragment(sub.AudioReader.AbsTime)
+			if err != nil {
+				return err
+			}
+		}
 		if at == nil {
 			at = sub.AudioReader.Track
 			switch ctx := at.ICodecCtx.GetBase().(type) {
 			case *codec.AACCtx:
-				audioId = muxer.AddAudioTrack(box.MP4_CODEC_AAC, box.WithExtraData(ctx.ConfigBytes))
+				audioId = r.muxer.AddAudioTrack(box.MP4_CODEC_AAC, box.WithExtraData(ctx.ConfigBytes))
 			case *codec.PCMACtx:
-				audioId = muxer.AddAudioTrack(box.MP4_CODEC_G711A, box.WithAudioSampleRate(uint32(ctx.SampleRate)), box.WithAudioChannelCount(uint8(ctx.Channels)), box.WithAudioSampleBits(uint8(ctx.SampleSize)))
+				audioId = r.muxer.AddAudioTrack(box.MP4_CODEC_G711A, box.WithAudioSampleRate(uint32(ctx.SampleRate)), box.WithAudioChannelCount(uint8(ctx.Channels)), box.WithAudioSampleBits(uint8(ctx.SampleSize)))
 			case *codec.PCMUCtx:
-				audioId = muxer.AddAudioTrack(box.MP4_CODEC_G711U, box.WithAudioSampleRate(uint32(ctx.SampleRate)), box.WithAudioChannelCount(uint8(ctx.Channels)), box.WithAudioSampleBits(uint8(ctx.SampleSize)))
+				audioId = r.muxer.AddAudioTrack(box.MP4_CODEC_G711U, box.WithAudioSampleRate(uint32(ctx.SampleRate)), box.WithAudioChannelCount(uint8(ctx.Channels)), box.WithAudioSampleBits(uint8(ctx.SampleSize)))
 			}
 		}
-		return muxer.WriteSample(audioId, box.Sample{
+		dts := sub.AudioReader.AbsTime
+		return r.muxer.WriteSample(audioId, box.Sample{
 			Data: audio.ToBytes(),
-			PTS:  uint32(audio.Timestamp / time.Millisecond),
-			DTS:  uint32(audio.Timestamp / time.Millisecond),
+			PTS:  dts,
+			DTS:  dts,
 		})
 	}, func(video *rtmp.RTMPVideo) error {
+		if sub.VideoReader.Value.IDR && recordJob.Fragment != 0 {
+			err := checkFragment(sub.VideoReader.AbsTime)
+			if err != nil {
+				return err
+			}
+		}
 		offset := 5
 		bytes := video.ToBytes()
 		if vt == nil {
 			vt = sub.VideoReader.Track
 			switch ctx := vt.ICodecCtx.GetBase().(type) {
 			case *codec.H264Ctx:
-				videoId = muxer.AddVideoTrack(box.MP4_CODEC_H264, box.WithExtraData(ctx.Record), box.WithVideoWidth(uint32(ctx.Width())), box.WithVideoHeight(uint32(ctx.Height())))
+				videoId = r.muxer.AddVideoTrack(box.MP4_CODEC_H264, box.WithExtraData(ctx.Record), box.WithVideoWidth(uint32(ctx.Width())), box.WithVideoHeight(uint32(ctx.Height())))
 			case *codec.H265Ctx:
-				videoId = muxer.AddVideoTrack(box.MP4_CODEC_H265, box.WithExtraData(ctx.Record), box.WithVideoWidth(uint32(ctx.Width())), box.WithVideoHeight(uint32(ctx.Height())))
+				videoId = r.muxer.AddVideoTrack(box.MP4_CODEC_H265, box.WithExtraData(ctx.Record), box.WithVideoWidth(uint32(ctx.Width())), box.WithVideoHeight(uint32(ctx.Height())))
 			}
 		}
 		switch ctx := vt.ICodecCtx.(type) {
@@ -128,11 +209,11 @@ func (r *Recorder) Run() (err error) {
 			}
 		}
 
-		return muxer.WriteSample(videoId, box.Sample{
+		return r.muxer.WriteSample(videoId, box.Sample{
 			KeyFrame: sub.VideoReader.Value.IDR,
 			Data:     bytes[offset:],
-			PTS:      video.Timestamp + video.CTS,
-			DTS:      video.Timestamp,
+			PTS:      sub.VideoReader.AbsTime + video.CTS,
+			DTS:      sub.VideoReader.AbsTime,
 		})
 	})
 }

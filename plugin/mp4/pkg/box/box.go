@@ -11,6 +11,80 @@ const (
 	FullBoxLen  = 12
 )
 
+var (
+	TypeFTYP = [4]byte{'f', 't', 'y', 'p'}
+	TypeSTYP = [4]byte{'s', 't', 'y', 'p'}
+	TypeMOOV = [4]byte{'m', 'o', 'o', 'v'}
+	TypeMVHD = [4]byte{'m', 'v', 'h', 'd'}
+	TypeTRAK = [4]byte{'t', 'r', 'a', 'k'}
+	TypeTKHD = [4]byte{'t', 'k', 'h', 'd'}
+	TypeMDIA = [4]byte{'m', 'd', 'i', 'a'}
+	TypeMDHD = [4]byte{'m', 'd', 'h', 'd'}
+	TypeHDLR = [4]byte{'h', 'd', 'l', 'r'}
+	TypeMINF = [4]byte{'m', 'i', 'n', 'f'}
+	TypeSTBL = [4]byte{'s', 't', 'b', 'l'}
+	TypeSTSD = [4]byte{'s', 't', 's', 'd'}
+	TypeSTTS = [4]byte{'s', 't', 't', 's'}
+	TypeSTSC = [4]byte{'s', 't', 's', 'c'}
+	TypeSTSZ = [4]byte{'s', 't', 's', 'z'}
+	TypeSTCO = [4]byte{'s', 't', 'c', 'o'}
+	TypeMDAT = [4]byte{'m', 'd', 'a', 't'}
+	TypeFREE = [4]byte{'f', 'r', 'e', 'e'}
+	TypeUUID = [4]byte{'u', 'u', 'i', 'd'}
+
+	TypeVMHD = [4]byte{'v', 'm', 'h', 'd'}
+	TypeSMHD = [4]byte{'s', 'm', 'h', 'd'}
+	TypeHMHD = [4]byte{'h', 'm', 'h', 'd'}
+	TypeNMHD = [4]byte{'n', 'm', 'h', 'd'}
+	TypeCTTS = [4]byte{'c', 't', 't', 's'}
+	TypeCO64 = [4]byte{'c', 'o', '6', '4'}
+	TypePSSH = [4]byte{'p', 's', 's', 'h'}
+
+	TypeSTSS = [4]byte{'s', 't', 's', 's'}
+	TypeENCv = [4]byte{'e', 'n', 'c', 'v'}
+	TypeSINF = [4]byte{'s', 'i', 'n', 'f'}
+	TypeFRMA = [4]byte{'f', 'r', 'm', 'a'}
+	TypeSCHI = [4]byte{'s', 'c', 'h', 'i'}
+	TypeTENC = [4]byte{'t', 'e', 'n', 'c'}
+	TypeAVC1 = [4]byte{'a', 'v', 'c', '1'}
+	TypeHVC1 = [4]byte{'h', 'v', 'c', '1'}
+	TypeHEV1 = [4]byte{'h', 'e', 'v', '1'}
+	TypeENCA = [4]byte{'e', 'n', 'c', 'a'}
+	TypeMP4A = [4]byte{'m', 'p', '4', 'a'}
+	TypeULAW = [4]byte{'u', 'l', 'a', 'w'}
+	TypeALAW = [4]byte{'a', 'l', 'a', 'w'}
+	TypeOPUS = [4]byte{'o', 'p', 'u', 's'}
+	TypeAVCC = [4]byte{'a', 'v', 'c', 'C'}
+	TypeHVCC = [4]byte{'h', 'v', 'c', 'C'}
+	TypeESDS = [4]byte{'e', 's', 'd', 's'}
+	TypeEDTS = [4]byte{'e', 'd', 't', 's'}
+	TypeELST = [4]byte{'e', 'l', 's', 't'}
+	TypeMVEX = [4]byte{'m', 'v', 'e', 'x'}
+	TypeMOOF = [4]byte{'m', 'o', 'o', 'f'}
+	TypeMFHD = [4]byte{'m', 'f', 'h', 'd'}
+	TypeTRAF = [4]byte{'t', 'r', 'a', 'f'}
+	TypeTFHD = [4]byte{'t', 'f', 'h', 'd'}
+	TypeTFDT = [4]byte{'t', 'f', 'd', 't'}
+	TypeTRUN = [4]byte{'t', 'r', 'u', 'n'}
+	TypeSENC = [4]byte{'s', 'e', 'n', 'c'}
+	TypeSAIZ = [4]byte{'s', 'a', 'i', 'z'}
+	TypeSAIO = [4]byte{'s', 'a', 'i', 'o'}
+	TypeSGPD = [4]byte{'s', 'g', 'p', 'd'}
+	TypeWAVE = [4]byte{'w', 'a', 'v', 'e'}
+	TypeMSDH = [4]byte{'m', 's', 'd', 'h'}
+	TypeMSIX = [4]byte{'m', 's', 'i', 'x'}
+	TypeISOM = [4]byte{'i', 's', 'o', 'm'}
+	TypeISO2 = [4]byte{'i', 's', 'o', '2'}
+	TypeISO3 = [4]byte{'i', 's', 'o', '3'}
+	TypeISO4 = [4]byte{'i', 's', 'o', '4'}
+	TypeISO5 = [4]byte{'i', 's', 'o', '5'}
+	TypeISO6 = [4]byte{'i', 's', 'o', '6'}
+	TypeMP41 = [4]byte{'m', 'p', '4', '1'}
+	TypeMP42 = [4]byte{'m', 'p', '4', '2'}
+	TypeDASH = [4]byte{'d', 'a', 's', 'h'}
+	TypeMFRA = [4]byte{'m', 'f', 'r', 'a'}
+)
+
 type BoxEncoder interface {
 	Encode(buf []byte) (int, []byte)
 }
@@ -31,7 +105,7 @@ type BoxSize interface {
 //     } else if (size==0) {
 //        // box extends to end of file
 //     }
-//     if (boxtype==‘uuid’) {
+//     if (boxtype=='uuid') {
 //     unsigned int(8)[16] usertype = extended_type;
 //  }
 // }

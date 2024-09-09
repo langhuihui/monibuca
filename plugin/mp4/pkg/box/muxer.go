@@ -64,13 +64,13 @@ func CreateMp4Muxer(w io.WriteSeeker, options ...MuxerOption) (*Movmuxer, error)
 
 	if !muxer.movFlag.isFragment() && !muxer.movFlag.isDash() {
 		ftyp := NewFileTypeBox()
-		ftyp.Major_brand = mov_tag(isom)
+		ftyp.Major_brand = mov_tag(TypeISOM)
 		ftyp.Minor_version = 0x200
 		ftyp.Compatible_brands = make([]uint32, 4)
-		ftyp.Compatible_brands[0] = mov_tag(isom)
-		ftyp.Compatible_brands[1] = mov_tag(iso2)
-		ftyp.Compatible_brands[2] = mov_tag(avc1)
-		ftyp.Compatible_brands[3] = mov_tag(mp41)
+		ftyp.Compatible_brands[0] = mov_tag(TypeISOM)
+		ftyp.Compatible_brands[1] = mov_tag(TypeISO2)
+		ftyp.Compatible_brands[2] = mov_tag(TypeAVC1)
+		ftyp.Compatible_brands[3] = mov_tag(TypeMP41)
 		length, boxdata := ftyp.Encode()
 		_, err := muxer.writer.Write(boxdata[0:length])
 		if err != nil {
@@ -87,7 +87,7 @@ func CreateMp4Muxer(w io.WriteSeeker, options ...MuxerOption) (*Movmuxer, error)
 			return nil, err
 		}
 		muxer.mdatOffset = uint32(currentOffset)
-		muxer.mdat = &BasicBox{Type: [4]byte{'m', 'd', 'a', 't'}}
+		muxer.mdat = &BasicBox{Type: TypeMDAT}
 		muxer.mdat.Size = 8
 		mdatlen, mdatBox := muxer.mdat.Encode()
 		_, err = muxer.writer.Write(mdatBox[0:mdatlen])
@@ -223,7 +223,7 @@ func (muxer *Movmuxer) ReWriteWithMoov(w io.Writer) (err error) {
 	if err != nil {
 		return
 	}
-	_, err = io.CopyN(w, reader, int64(muxer.mdat.Size))
+	_, err = io.CopyN(w, reader, int64(muxer.mdat.Size)-BasicBoxLen)
 	return
 }
 
@@ -267,7 +267,7 @@ func (muxer *Movmuxer) OnNewFragment(onFragment OnFragment) {
 }
 
 func (muxer *Movmuxer) WriteInitSegment(w io.Writer) error {
-	ftypBox := makeFtypBox(mov_tag(iso5), 0x200, []uint32{mov_tag(iso5), mov_tag(iso6), mov_tag(mp41)})
+	ftypBox := makeFtypBox(mov_tag(TypeISO5), 0x200, []uint32{mov_tag(TypeISO5), mov_tag(TypeISO6), mov_tag(TypeMP41)})
 	_, err := w.Write(ftypBox)
 	if err != nil {
 		return err
@@ -282,7 +282,7 @@ func (muxer *Movmuxer) reWriteMdatSize() (err error) {
 	}
 	datalen := currentOffset - int64(muxer.mdatOffset)
 	if datalen > 0xFFFFFFFF {
-		muxer.mdat = &BasicBox{Type: [4]byte{'m', 'd', 'a', 't'}}
+		muxer.mdat = &BasicBox{Type: TypeMDAT}
 		muxer.mdat.Size = uint64(datalen + 8)
 		mdatBoxLen, mdatBox := muxer.mdat.Encode()
 		if _, err = muxer.writer.Seek(int64(muxer.mdatOffset)-8, io.SeekStart); err != nil {
@@ -333,7 +333,7 @@ func (muxer *Movmuxer) writeMoov(w io.Writer) (err error) {
 		moovsize += len(traks[i-1])
 	}
 
-	moov := BasicBox{Type: [4]byte{'m', 'o', 'o', 'v'}}
+	moov := BasicBox{Type: TypeMOOV}
 	moov.Size = 8 + uint64(moovsize)
 	offset, moovBox := moov.Encode()
 	copy(moovBox[offset:], mvhd)
@@ -358,7 +358,7 @@ func (muxer *Movmuxer) writeMfra() (err error) {
 
 	mfro := makeMfroBox(uint32(mfraSize) + 16)
 	mfraSize += len(mfro)
-	mfra := BasicBox{Type: [4]byte{'m', 'f', 'r', 'a'}}
+	mfra := BasicBox{Type: TypeMFRA}
 	mfra.Size = 8 + uint64(mfraSize)
 	offset, mfraBox := mfra.Encode()
 	for _, tfra := range tfras {
@@ -381,7 +381,7 @@ func (muxer *Movmuxer) flushFragment() (err error) {
 
 	if muxer.movFlag.isFragment() {
 		if muxer.nextFragmentId == 1 { //first fragment ,write moov
-			ftypBox := makeFtypBox(mov_tag(iso5), 0x200, []uint32{mov_tag(iso5), mov_tag(iso6), mov_tag(mp41)})
+			ftypBox := makeFtypBox(mov_tag(TypeISO5), 0x200, []uint32{mov_tag(TypeISO5), mov_tag(TypeISO6), mov_tag(TypeMP41)})
 			_, err := muxer.writer.Write(ftypBox)
 			if err != nil {
 				return err
@@ -427,7 +427,7 @@ func (muxer *Movmuxer) flushFragment() (err error) {
 	}
 	muxer.nextFragmentId++
 
-	moof := BasicBox{Type: [4]byte{'m', 'o', 'o', 'f'}}
+	moof := BasicBox{Type: TypeMOOF}
 	moof.Size = uint64(moofSize)
 	offset, moofBox := moof.Encode()
 	copy(moofBox[offset:], mfhd)
@@ -437,12 +437,12 @@ func (muxer *Movmuxer) flushFragment() (err error) {
 		offset += len(trafs[i])
 	}
 
-	mdat := BasicBox{Type: [4]byte{'m', 'd', 'a', 't'}}
+	mdat := BasicBox{Type: TypeMDAT}
 	mdat.Size = 8
 	_, mdatBox := mdat.Encode()
 
 	if muxer.movFlag.isDash() {
-		stypBox := makeStypBox(mov_tag(msdh), 0, []uint32{mov_tag(msdh), mov_tag(msix)})
+		stypBox := makeStypBox(mov_tag(TypeMSDH), 0, []uint32{mov_tag(TypeMSDH), mov_tag(TypeMSIX)})
 		_, err := muxer.writer.Write(stypBox)
 		if err != nil {
 			return err

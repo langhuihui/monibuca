@@ -2,7 +2,6 @@ package box
 
 import (
 	"errors"
-	"github.com/deepch/vdk/codec/h264parser"
 	"io"
 	"m7s.live/m7s/v5/pkg/util"
 )
@@ -106,19 +105,19 @@ func (demuxer *MovDemuxer) ReadHead() ([]TrackInfo, error) {
 			err = errors.New("mp4 Parser error")
 			break
 		}
-		switch mov_tag(basebox.Type) {
-		case mov_tag([4]byte{'f', 't', 'y', 'p'}):
+		switch basebox.Type {
+		case TypeFTYP:
 			err = decodeFtypBox(demuxer, uint32(basebox.Size))
-		case mov_tag([4]byte{'f', 'r', 'e', 'e'}):
+		case TypeFREE:
 			err = decodeFreeBox(demuxer, uint32(basebox.Size))
-		case mov_tag([4]byte{'m', 'd', 'a', 't'}):
+		case TypeMDAT:
 			var currentOffset int64
 			if currentOffset, err = demuxer.reader.Seek(0, io.SeekCurrent); err != nil {
 				break
 			}
 			demuxer.mdatOffset = append(demuxer.mdatOffset, uint64(currentOffset))
 			_, err = demuxer.reader.Seek(int64(basebox.Size)-BasicBoxLen, io.SeekCurrent)
-		case mov_tag([4]byte{'m', 'o', 'o', 'v'}):
+		case TypeMOOV:
 			var currentOffset int64
 			if currentOffset, err = demuxer.reader.Seek(0, io.SeekCurrent); err != nil {
 				break
@@ -132,114 +131,113 @@ func (demuxer *MovDemuxer) ReadHead() ([]TrackInfo, error) {
 				break
 			}
 			_, err = demuxer.reader.Seek(currentOffset, io.SeekStart)
-		case mov_tag([4]byte{'m', 'v', 'h', 'd'}):
+		case TypeMVHD:
 			err = decodeMvhd(demuxer)
-		case mov_tag([4]byte{'p', 's', 's', 'h'}):
+		case TypePSSH:
 			err = decodePsshBox(demuxer, uint32(basebox.Size))
-		case mov_tag([4]byte{'t', 'r', 'a', 'k'}):
-			track := &mp4track{}
-			demuxer.tracks = append(demuxer.tracks, track)
-		case mov_tag([4]byte{'t', 'k', 'h', 'd'}):
+		case TypeTRAK:
+			demuxer.tracks = append(demuxer.tracks, &mp4track{})
+		case TypeTKHD:
 			err = decodeTkhdBox(demuxer)
-		case mov_tag([4]byte{'m', 'd', 'h', 'd'}):
+		case TypeMDHD:
 			err = decodeMdhdBox(demuxer)
-		case mov_tag([4]byte{'h', 'd', 'l', 'r'}):
+		case TypeHDLR:
 			err = decodeHdlrBox(demuxer, basebox.Size)
-		case mov_tag([4]byte{'m', 'd', 'i', 'a'}):
-		case mov_tag([4]byte{'m', 'i', 'n', 'f'}):
-		case mov_tag([4]byte{'v', 'm', 'h', 'd'}):
+		case TypeMDIA:
+		case TypeMINF:
+		case TypeVMHD:
 			err = decodeVmhdBox(demuxer)
-		case mov_tag([4]byte{'s', 'm', 'h', 'd'}):
+		case TypeSMHD:
 			err = decodeSmhdBox(demuxer)
-		case mov_tag([4]byte{'h', 'm', 'h', 'd'}):
+		case TypeHMHD:
 			_, err = fullbox.Decode(demuxer.reader)
-		case mov_tag([4]byte{'n', 'm', 'h', 'd'}):
+		case TypeNMHD:
 			_, err = fullbox.Decode(demuxer.reader)
-		case mov_tag([4]byte{'s', 't', 'b', 'l'}):
+		case TypeSTBL:
 			demuxer.tracks[len(demuxer.tracks)-1].stbltable = new(movstbl)
-		case mov_tag([4]byte{'s', 't', 's', 'd'}):
+		case TypeSTSD:
 			err = decodeStsdBox(demuxer)
-		case mov_tag([4]byte{'s', 't', 't', 's'}):
+		case TypeSTTS:
 			err = decodeSttsBox(demuxer)
-		case mov_tag([4]byte{'c', 't', 't', 's'}):
+		case TypeCTTS:
 			err = decodeCttsBox(demuxer)
-		case mov_tag([4]byte{'s', 't', 's', 'c'}):
+		case TypeSTSC:
 			err = decodeStscBox(demuxer)
-		case mov_tag([4]byte{'s', 't', 's', 'z'}):
+		case TypeSTSZ:
 			err = decodeStszBox(demuxer)
-		case mov_tag([4]byte{'s', 't', 'c', 'o'}):
+		case TypeSTCO:
 			err = decodeStcoBox(demuxer)
-		case mov_tag([4]byte{'c', 'o', '6', '4'}):
+		case TypeCO64:
 			err = decodeCo64Box(demuxer)
-		case mov_tag([4]byte{'s', 't', 's', 's'}):
+		case TypeSTSS:
 			err = decodeStssBox(demuxer)
-		case mov_tag([4]byte{'e', 'n', 'c', 'v'}):
+		case TypeENCv:
 			err = decodeVisualSampleEntry(demuxer)
-		case mov_tag([4]byte{'s', 'i', 'n', 'f'}):
-		case mov_tag([4]byte{'f', 'r', 'm', 'a'}):
+		case TypeSINF:
+		case TypeFRMA:
 			err = decodeFrmaBox(demuxer, uint32(basebox.Size))
-		case mov_tag([4]byte{'s', 'c', 'h', 'i'}):
-		case mov_tag([4]byte{'t', 'e', 'n', 'c'}):
+		case TypeSCHI:
+		case TypeTENC:
 			err = decodeTencBox(demuxer, uint32(basebox.Size))
-		case mov_tag([4]byte{'a', 'v', 'c', '1'}):
+		case TypeAVC1:
 			demuxer.tracks[len(demuxer.tracks)-1].cid = MP4_CODEC_H264
 			demuxer.tracks[len(demuxer.tracks)-1].extra = new(h264ExtraData)
 			err = decodeVisualSampleEntry(demuxer)
-		case mov_tag([4]byte{'h', 'v', 'c', '1'}), mov_tag([4]byte{'h', 'e', 'v', '1'}):
+		case TypeHVC1, TypeHEV1:
 			demuxer.tracks[len(demuxer.tracks)-1].cid = MP4_CODEC_H265
 			demuxer.tracks[len(demuxer.tracks)-1].extra = newh265ExtraData()
 			err = decodeVisualSampleEntry(demuxer)
-		case mov_tag([4]byte{'e', 'n', 'c', 'a'}):
+		case TypeENCA:
 			err = decodeAudioSampleEntry(demuxer)
-		case mov_tag([4]byte{'m', 'p', '4', 'a'}):
+		case TypeMP4A:
 			demuxer.tracks[len(demuxer.tracks)-1].cid = MP4_CODEC_AAC
 			demuxer.tracks[len(demuxer.tracks)-1].extra = new(aacExtraData)
 			err = decodeAudioSampleEntry(demuxer)
-		case mov_tag([4]byte{'u', 'l', 'a', 'w'}):
+		case TypeULAW:
 			demuxer.tracks[len(demuxer.tracks)-1].cid = MP4_CODEC_G711U
 			err = decodeAudioSampleEntry(demuxer)
-		case mov_tag([4]byte{'a', 'l', 'a', 'w'}):
+		case TypeALAW:
 			demuxer.tracks[len(demuxer.tracks)-1].cid = MP4_CODEC_G711A
 			err = decodeAudioSampleEntry(demuxer)
-		case mov_tag([4]byte{'o', 'p', 'u', 's'}):
+		case TypeOPUS:
 			demuxer.tracks[len(demuxer.tracks)-1].cid = MP4_CODEC_OPUS
-		case mov_tag([4]byte{'a', 'v', 'c', 'C'}):
+		case TypeAVCC:
 			err = decodeAvccBox(demuxer, uint32(basebox.Size))
-		case mov_tag([4]byte{'h', 'v', 'c', 'C'}):
+		case TypeHVCC:
 			err = decodeHvccBox(demuxer, uint32(basebox.Size))
-		case mov_tag([4]byte{'e', 's', 'd', 's'}):
+		case TypeESDS:
 			err = decodeEsdsBox(demuxer, uint32(basebox.Size))
-		case mov_tag([4]byte{'e', 'd', 't', 's'}):
-		case mov_tag([4]byte{'e', 'l', 's', 't'}):
+		case TypeEDTS:
+		case TypeELST:
 			err = decodeElstBox(demuxer)
-		case mov_tag([4]byte{'m', 'v', 'e', 'x'}):
+		case TypeMVEX:
 			demuxer.isFragement = true
-		case mov_tag([4]byte{'m', 'o', 'o', 'f'}):
+		case TypeMOOF:
 			if demuxer.moofOffset, err = demuxer.reader.Seek(0, io.SeekCurrent); err != nil {
 				break
 			}
 			demuxer.moofOffset -= 8
 			demuxer.dataOffset = uint32(basebox.Size) + 8
-		case mov_tag([4]byte{'m', 'f', 'h', 'd'}):
+		case TypeMFHD:
 			err = decodeMfhdBox(demuxer)
-		case mov_tag([4]byte{'t', 'r', 'a', 'f'}):
-		case mov_tag([4]byte{'t', 'f', 'h', 'd'}):
+		case TypeTRAF:
+		case TypeTFHD:
 			err = decodeTfhdBox(demuxer, uint32(basebox.Size))
-		case mov_tag([4]byte{'t', 'f', 'd', 't'}):
+		case TypeTFDT:
 			err = decodeTfdtBox(demuxer, uint32(basebox.Size))
-		case mov_tag([4]byte{'t', 'r', 'u', 'n'}):
+		case TypeTRUN:
 			err = decodeTrunBox(demuxer, uint32(basebox.Size))
-		case mov_tag([4]byte{'s', 'e', 'n', 'c'}):
+		case TypeSENC:
 			err = decodeSencBox(demuxer, uint32(basebox.Size))
-		case mov_tag([4]byte{'s', 'a', 'i', 'z'}):
+		case TypeSAIZ:
 			err = decodeSaizBox(demuxer, uint32(basebox.Size))
-		case mov_tag([4]byte{'s', 'a', 'i', 'o'}):
+		case TypeSAIO:
 			err = decodeSaioBox(demuxer, uint32(basebox.Size))
-		case mov_tag([4]byte{'u', 'u', 'i', 'd'}):
+		case TypeUUID:
 			_, err = demuxer.reader.Seek(int64(basebox.Size)-BasicBoxLen-16, io.SeekCurrent)
-		case mov_tag([4]byte{'s', 'g', 'p', 'd'}):
+		case TypeSGPD:
 			err = decodeSgpdBox(demuxer, uint32(basebox.Size))
-		case mov_tag([4]byte{'w', 'a', 'v', 'e'}):
+		case TypeWAVE:
 			err = decodeWaveBox(demuxer)
 		default:
 			_, err = demuxer.reader.Seek(int64(basebox.Size)-BasicBoxLen, io.SeekCurrent)
@@ -269,11 +267,12 @@ func (demuxer *MovDemuxer) ReadHead() ([]TrackInfo, error) {
 		info.Timescale = track.timescale
 		switch e := track.extra.(type) {
 		case *h264ExtraData:
-			data, err := h264parser.NewCodecDataFromSPSAndPPS(e.spss[0], e.ppss[0])
-			if err != nil {
-				return nil, err
-			}
-			info.ExtraData = data.Record
+			//data, err := h264parser.NewCodecDataFromSPSAndPPS(e.spss[0], e.ppss[0])
+			//if err != nil {
+			//	return nil, err
+			//}
+			//info.ExtraData = data.Record
+			info.ExtraData = e.export()
 		case *h265ExtraData:
 			info.ExtraData = e.export()
 		case *aacExtraData:

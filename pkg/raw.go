@@ -2,6 +2,7 @@ package pkg
 
 import (
 	"fmt"
+	"github.com/deepch/vdk/codec/aacparser"
 	"github.com/deepch/vdk/codec/h264parser"
 	"github.com/deepch/vdk/codec/h265parser"
 	"io"
@@ -18,9 +19,13 @@ type RawAudio struct {
 	util.RecyclableMemory
 }
 
-func (r *RawAudio) Parse(track *AVTrack) error {
+func (r *RawAudio) Parse(track *AVTrack) (err error) {
 	if track.ICodecCtx == nil {
 		switch r.FourCC {
+		case codec.FourCC_MP4A:
+			ctx := &codec.AACCtx{}
+			ctx.CodecData, err = aacparser.NewCodecDataFromMPEG4AudioConfigBytes(r.ToBytes())
+			track.ICodecCtx = ctx
 		case codec.FourCC_ALAW:
 			track.ICodecCtx = &codec.PCMACtx{
 				AudioCtx: codec.AudioCtx{
@@ -39,7 +44,7 @@ func (r *RawAudio) Parse(track *AVTrack) error {
 			}
 		}
 	}
-	return nil
+	return
 }
 
 func (r *RawAudio) ConvertCtx(ctx codec.ICodecCtx) (codec.ICodecCtx, IAVFrame, error) {

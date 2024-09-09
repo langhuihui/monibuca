@@ -48,6 +48,7 @@ func (s *SpeedControl) speedControl(speed float64, ts time.Duration) {
 		}
 		should := time.Duration(float64(ts) / speed)
 		s.Delta = should - elapsed
+		//fmt.Println(speed, elapsed, should, s.Delta)
 		if s.Delta > threshold {
 			time.Sleep(s.Delta)
 		}

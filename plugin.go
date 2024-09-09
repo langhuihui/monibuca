@@ -486,7 +486,7 @@ func (p *Plugin) Subscribe(ctx context.Context, streamPath string) (subscriber *
 }
 
 func (p *Plugin) Pull(streamPath string, conf config.Pull) {
-	puller := p.Meta.Puller()
+	puller := p.Meta.Puller(conf)
 	puller.GetPullJob().Init(puller, p, streamPath, conf)
 }
 

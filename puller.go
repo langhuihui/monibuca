@@ -1,14 +1,17 @@
 package m7s
 
 import (
+	"fmt"
 	"io"
 	"m7s.live/m7s/v5/pkg"
 	"m7s.live/m7s/v5/pkg/config"
 	"m7s.live/m7s/v5/pkg/task"
+	"m7s.live/m7s/v5/pkg/util"
 	"net/http"
 	"net/url"
 	"os"
 	"strings"
+	"time"
 )
 
 type (
@@ -27,7 +30,7 @@ type (
 		GetPullJob() *PullJob
 	}
 
-	Puller = func() IPuller
+	Puller = func(config.Pull) IPuller
 
 	PullJob struct {
 		Connection
@@ -40,6 +43,15 @@ type (
 		task.Task
 		PullJob PullJob
 		io.ReadCloser
+	}
+
+	RecordFilePuller struct {
+		task.Task
+		PullJob       PullJob
+		PullStartTime time.Time
+		Streams       []RecordStream
+		File          *os.File
+		offsetTime    time.Duration
 	}
 )
 
@@ -68,7 +80,24 @@ func (p *PullJob) Init(puller IPuller, plugin *Plugin, streamPath string, conf c
 	publishConfig.PublishTimeout = 0
 	p.publishConfig = &publishConfig
 	p.Args = conf.Args
-	p.Connection.Init(plugin, streamPath, conf.URL, conf.Proxy, conf.Header)
+	remoteURL := conf.URL
+	u, err := url.Parse(remoteURL)
+	if err == nil {
+		if u.Host == "" {
+			// file
+			remoteURL = u.Path
+		}
+		if p.Args == nil {
+			p.Args = u.Query()
+		} else {
+			for k, v := range u.Query() {
+				for _, vv := range v {
+					p.Args.Add(k, vv)
+				}
+			}
+		}
+	}
+	p.Connection.Init(plugin, streamPath, remoteURL, conf.Proxy, conf.Header)
 	p.puller = puller
 	p.Description = map[string]any{
 		"plugin":     plugin.Meta.Name,
@@ -133,4 +162,40 @@ func (p *HTTPFilePuller) GetPullJob() *PullJob {
 
 func (p *HTTPFilePuller) Dispose() {
 	p.ReadCloser.Close()
+}
+
+func (p *RecordFilePuller) GetPullJob() *PullJob {
+	return &p.PullJob
+}
+
+func (p *RecordFilePuller) SpeedControl(ts int64) {
+	targetTime := time.Duration(float64(time.Since(p.PullJob.StartTime)) * p.PullJob.Publisher.Speed)
+	timestamp := time.Duration(ts) * time.Millisecond
+	if ts > 0 && p.offsetTime == 0 {
+		p.offsetTime = timestamp
+	}
+	sleepTime := timestamp - targetTime - p.offsetTime
+	p.Trace("SpeedControl", "timestamp", timestamp, "targetTime", targetTime, "offsetTime", p.offsetTime, "sleepTime", sleepTime)
+	if sleepTime > 0 {
+		time.Sleep(sleepTime)
+	}
+}
+
+func (p *RecordFilePuller) Start() (err error) {
+	if err = p.PullJob.Publish(); err != nil {
+		return
+	}
+	if p.PullStartTime, err = util.TimeQueryParse(p.PullJob.Args.Get("start")); err != nil {
+		return
+	}
+
+	tx := p.PullJob.Plugin.DB.Find(&p.Streams, "end_time>? AND file_path=?", p.PullStartTime, p.PullJob.RemoteURL)
+	if tx.Error != nil {
+		return tx.Error
+	}
+	if len(p.Streams) == 0 {
+		return fmt.Errorf("stream not found")
+	}
+	p.Info("vod", "streams", p.Streams)
+	return
 }

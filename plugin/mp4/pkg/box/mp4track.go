@@ -34,18 +34,19 @@ type extraData interface {
 }
 
 type h264ExtraData struct {
-	spss [][]byte
-	ppss [][]byte
+	aacExtraData
+	//spss [][]byte
+	//ppss [][]byte
 }
 
-func (extra *h264ExtraData) export() []byte {
-	data, _ := codec.CreateH264AVCCExtradata(extra.spss, extra.ppss)
-	return data
-}
-
-func (extra *h264ExtraData) load(data []byte) {
-	extra.spss, extra.ppss = codec.CovertExtradata(data)
-}
+//func (extra *h264ExtraData) export() []byte {
+//	data, _ := codec.CreateH264AVCCExtradata(extra.spss, extra.ppss)
+//	return data
+//}
+//
+//func (extra *h264ExtraData) load(data []byte) {
+//	extra.spss, extra.ppss = codec.CovertExtradata(data)
+//}
 
 type h265ExtraData struct {
 	hvccExtra *codec.HEVCRecordConfiguration

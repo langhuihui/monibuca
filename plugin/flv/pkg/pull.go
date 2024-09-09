@@ -2,6 +2,7 @@ package flv
 
 import (
 	"errors"
+	"m7s.live/m7s/v5/pkg/config"
 
 	"m7s.live/m7s/v5"
 	"m7s.live/m7s/v5/pkg/util"
@@ -12,7 +13,7 @@ type Puller struct {
 	m7s.HTTPFilePuller
 }
 
-func NewPuller() m7s.IPuller {
+func NewPuller(_ config.Pull) m7s.IPuller {
 	return &Puller{}
 }
 

@@ -129,6 +129,8 @@ func (r *MemoryReader) ReadBytesTo(buf []byte) (actual int) {
 	}
 	l := n
 	for n > 0 {
+		curBuf = r.GetCurrent()
+		curBufLen = len(curBuf)
 		if n < curBufLen {
 			actual += n
 			copy(buf[l-n:], curBuf[:n])

@@ -46,6 +46,9 @@ func (p *Puller) Run() (err error) {
 	if tx.Error != nil {
 		return tx.Error
 	}
+	if len(streams) == 0 {
+		return fmt.Errorf("stream not found")
+	}
 	var startTimestamp int64
 	beginTime := time.Now()
 	speedControl := func(ts int64) {
@@ -80,51 +83,62 @@ func (p *Puller) Run() (err error) {
 			startTimestamp = p.PullStartTime.Sub(stream.StartTime).Milliseconds()
 			hasAudio, hasVideo := stream.AudioCodec != "", stream.VideoCodec != ""
 			audioFourCC, videoFourCC := codec.ParseFourCC(stream.AudioCodec), codec.ParseFourCC(stream.VideoCodec)
-			var startId uint
 			if hasAudio && audioFourCC == codec.FourCC_MP4A {
 				var rawAudio pkg.RawAudio
+				rawAudio.SetAllocator(p.allocator)
 				rawAudio.FourCC = audioFourCC
 				rawAudio.Memory.AppendOne(stream.AudioConfig)
 				err = p.PullJob.Publisher.WriteAudio(&rawAudio)
 			}
 			if hasVideo {
 				var rawVideo pkg.H26xFrame
+				rawVideo.SetAllocator(p.allocator)
 				rawVideo.FourCC = videoFourCC
 				switch videoFourCC {
 				case codec.FourCC_H264:
-					conf, _ := h264parser.NewCodecDataFromAVCDecoderConfRecord(stream.VideoConfig)
+					conf, err := h264parser.NewCodecDataFromAVCDecoderConfRecord(stream.VideoConfig)
+					if err != nil {
+						return err
+					}
 					rawVideo.Nalus.Append(conf.SPS())
 					rawVideo.Nalus.Append(conf.PPS())
 				case codec.FourCC_H265:
-					conf, _ := h265parser.NewCodecDataFromAVCDecoderConfRecord(stream.VideoConfig)
+					conf, err := h265parser.NewCodecDataFromAVCDecoderConfRecord(stream.VideoConfig)
+					if err != nil {
+						return err
+					}
 					rawVideo.Nalus.Append(conf.VPS())
 					rawVideo.Nalus.Append(conf.SPS())
 					rawVideo.Nalus.Append(conf.PPS())
 				}
 				err = p.PullJob.Publisher.WriteVideo(&rawVideo)
-				var keyFrame Sample
-				tx = streamDB.Last(&keyFrame, "type=? AND timestamp<=?", FRAME_TYPE_VIDEO_KEY_FRAME, startTimestamp)
-				if tx.Error != nil {
-					return tx.Error
-				}
-				startId = keyFrame.ID
-			} else {
-				// TODO
 			}
-			rows, err := streamDB.Model(&Sample{}).Where("id>=? ", startId).Rows()
+			var keyFrame Sample
+			tx = streamDB.Last(&keyFrame, "type=? AND timestamp<=?", util.Conditoinal(hasVideo, FRAME_TYPE_VIDEO_KEY_FRAME, FRAME_TYPE_AUDIO), startTimestamp)
+			if tx.Error != nil {
+				return tx.Error
+			}
+			rows, err := streamDB.Model(&Sample{}).Where("id>=? ", keyFrame.ID).Rows()
 			if err != nil {
 				return err
 			}
+			var seek bool
 			for rows.Next() {
+				if p.IsStopped() {
+					return p.StopReason()
+				}
 				var frame Sample
 				streamDB.ScanRows(rows, &frame)
+				if !seek {
+					seek = true
+					file.Seek(frame.Offset, io.SeekStart)
+				}
 				switch frame.Type {
 				case FRAME_TYPE_AUDIO:
 					var rawAudio pkg.RawAudio
+					rawAudio.FourCC = audioFourCC
 					rawAudio.SetAllocator(p.allocator)
 					rawAudio.Timestamp = time.Duration(frame.Timestamp) * time.Millisecond
-					rawAudio.FourCC = audioFourCC
-					file.Seek(frame.Offset, io.SeekStart)
 					file.Read(rawAudio.NextN(int(frame.Length)))
 					err = p.PullJob.Publisher.WriteAudio(&rawAudio)
 				case FRAME_TYPE_VIDEO, FRAME_TYPE_VIDEO_KEY_FRAME:
@@ -132,8 +146,13 @@ func (p *Puller) Run() (err error) {
 					rawVideo.FourCC = videoFourCC
 					rawVideo.SetAllocator(p.allocator)
 					rawVideo.Timestamp = time.Duration(frame.Timestamp) * time.Millisecond
-					file.Seek(frame.Offset, io.SeekStart)
-					file.Read(rawVideo.NextN(int(frame.Length)))
+					n, err := file.Read(rawVideo.NextN(int(frame.Length)))
+					if err != nil {
+						return err
+					}
+					if n != int(frame.Length) {
+						return fmt.Errorf("read frame error")
+					}
 					r := rawVideo.NewReader()
 					for {
 						nalulen, err := r.ReadBE(4)

@@ -2,7 +2,6 @@ package record
 
 import (
 	"fmt"
-	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -78,13 +77,15 @@ func (r *Recorder) Start() (err error) {
 func (r *Recorder) Run() (err error) {
 	recordJob := &r.RecordJob
 	sub := recordJob.Subscriber
+	var offset int64
 	return m7s.PlayBlock(sub, func(audio *pkg.RawAudio) (err error) {
 		var sample Sample
 		sample.Type = FRAME_TYPE_AUDIO
 		sample.Timestamp = audio.Timestamp.Milliseconds()
 		sample.Length = uint(audio.Size)
 		data := slices.Clone(audio.Buffers)
-		sample.Offset, err = r.file.Seek(0, io.SeekCurrent)
+		sample.Offset = offset
+		offset += int64(sample.Length)
 		_, err = data.WriteTo(r.file)
 		r.DB.Save(&sample)
 		return
@@ -96,12 +97,13 @@ func (r *Recorder) Run() (err error) {
 		}
 		sample.Timestamp = video.Timestamp.Milliseconds()
 		sample.CTS = video.CTS.Milliseconds()
-		sample.Offset, err = r.file.Seek(0, io.SeekCurrent)
+		sample.Offset = offset
 		for _, nalu := range video.Nalus {
 			sample.Length += uint(nalu.Size) + 4
 			avcc := append(net.Buffers{[]byte{byte(nalu.Size >> 24), byte(nalu.Size >> 16), byte(nalu.Size >> 8), byte(nalu.Size)}}, nalu.Buffers...)
 			_, err = avcc.WriteTo(r.file)
 		}
+		offset += int64(sample.Length)
 		r.DB.Save(&sample)
 		return
 	})

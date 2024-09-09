@@ -132,7 +132,11 @@ func (config *Config) Parse(s any, prefix ...string) {
 			prop := config.Get(name)
 
 			prop.tag = ft.Tag
-			prop.Parse(fv, append(prefix, strings.ToUpper(ft.Name))...)
+			if len(prefix) > 0 {
+				prop.Parse(fv, append(prefix, strings.ToUpper(ft.Name))...)
+			} else {
+				prop.Parse(fv)
+			}
 			for _, kv := range strings.Split(ft.Tag.Get("enum"), ",") {
 				kvs := strings.Split(kv, ":")
 				if len(kvs) != 2 {

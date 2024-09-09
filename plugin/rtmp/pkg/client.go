@@ -3,6 +3,7 @@ package rtmp
 import (
 	"crypto/tls"
 	"errors"
+	"m7s.live/m7s/v5/pkg/config"
 	"net"
 	"net/url"
 	"strings"
@@ -78,7 +79,7 @@ func (c *Client) GetPushJob() *m7s.PushJob {
 	return &c.pushCtx
 }
 
-func NewPuller() m7s.IPuller {
+func NewPuller(_ config.Pull) m7s.IPuller {
 	ret := &Client{
 		direction: DIRECTION_PULL,
 		chunkSize: 4096,
