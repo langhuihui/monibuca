@@ -62,6 +62,8 @@ type (
 			Target     string `desc:"转码目标"` // 转码目标
 			StreamPath string
 			Conf       any
+			Filter     string `desc:"视频滤镜"`
+			Overlay    string `desc:"视频叠加"`
 		}
 	}
 	OnPublish struct {

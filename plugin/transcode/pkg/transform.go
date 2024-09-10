@@ -99,6 +99,14 @@ func (t *Transformer) Start() (err error) {
 			}
 		}
 		t.To[i] = enc
+		if to.Overlay != "" {
+			args = append(args, "-i", to.Overlay)
+		}
+		if to.Filter != "" {
+			args = append(args, "-filter_complex", strings.ReplaceAll(to.Filter, "\n", ""))
+			args = append(args, "-map", "[out]")
+			args = append(args, "-map", "0:a")
+		}
 		args = append(args, strings.Fields(enc.Args)...)
 		var targetUrl *url.URL
 		targetUrl, err = url.Parse(to.Target)

@@ -1,9 +1,25 @@
 global:
   loglevel: debug
+
+#rtsp:
+#  tcp:
+#    listenaddr: :10554
+
 transcode:
   onpub:
     transform:
-      .+:
+#      .+:
+#        output:
+#          - target: rtmp://localhost/$0/h265
+#            conf: -loglevel debug -c:a aac -c:v hevc_videotoolbox
+      live/.*:
         output:
-          - target: rtmp://localhost/$0/h265
-            conf: -loglevel debug -c:a aac -c:v hevc_videotoolbox
+          - target: rtmp://localhost/$0/h264
+            overlay: rtmp://localhost/overlay/test
+#            filter:  drawtext=fontfile=/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf:fontsize=24:fontcolor=white:box=1:boxcolor=black@0.5:boxborderw=5:x=(w-tw)/2:y=h-th-10:text='%{localtime\:%Y-%m-%d %H.%M.%S}'
+            filter: |
+              [1:v]crop=400:300:10:10[overlay];
+              [0:v][overlay]overlay=600:100[base];
+              [base]drawtext=fontfile=/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf:fontsize=24:fontcolor=white:box=1:boxcolor=black@0.5:boxborderw=5:x=(w-tw)/2:y=h-th-10:text='%{localtime\:%Y-%m-%d %H.%M.%S}'[out]
+            conf: -loglevel debug -c:a copy -c:v h264
+
