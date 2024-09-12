@@ -3,6 +3,7 @@ package box
 type Sample struct {
 	KeyFrame bool
 	Data     []byte
-	PTS      uint32
-	DTS      uint32
+	DTS, PTS uint64
+	Offset   int64
+	Size     int
 }

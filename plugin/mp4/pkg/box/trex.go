@@ -24,7 +24,7 @@ type TrackExtendsBox struct {
 
 func NewTrackExtendsBox(track uint32) *TrackExtendsBox {
 	return &TrackExtendsBox{
-		Box:     NewFullBox([4]byte{'t', 'r', 'e', 'x'}, 0),
+		Box:     NewFullBox(TypeTREX, 0),
 		TrackID: track,
 	}
 }
@@ -70,11 +70,4 @@ func (trex *TrackExtendsBox) Encode() (int, []byte) {
 	binary.BigEndian.PutUint32(buf[offset:], trex.DefaultSampleFlags)
 	offset += 4
 	return offset, buf
-}
-
-func makeTrexBox(track *mp4track) []byte {
-	trex := NewTrackExtendsBox(track.trackId)
-	trex.DefaultSampleDescriptionIndex = 1
-	_, boxData := trex.Encode()
-	return boxData
 }

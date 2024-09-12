@@ -69,7 +69,7 @@ func (d *Dialog) Start() (err error) {
 	sdpInfo := []string{
 		"v=0",
 		fmt.Sprintf("o=%s 0 0 IN IP4 %s", d.DeviceID, d.Device.mediaIp),
-		"s=" + util.Conditoinal(d.IsLive(), "Play", "Playback"),
+		"s=" + util.Conditional(d.IsLive(), "Play", "Playback"),
 		"u=" + d.DeviceID + ":0",
 		"c=IN IP4 " + d.Device.mediaIp,
 		d.String(),

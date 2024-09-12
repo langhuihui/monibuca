@@ -4,6 +4,8 @@ import (
 	"encoding/binary"
 	"io"
 	"time"
+
+	"m7s.live/m7s/v5/pkg/util"
 )
 
 // aligned(8) class TrackHeaderBox
@@ -34,7 +36,6 @@ import (
 // }
 
 type TrackHeaderBox struct {
-	Box               *FullBox
 	Creation_time     uint64
 	Modification_time uint64
 	Track_ID          uint32
@@ -50,7 +51,6 @@ type TrackHeaderBox struct {
 func NewTrackHeaderBox() *TrackHeaderBox {
 	_, offset := time.Now().Zone()
 	return &TrackHeaderBox{
-		Box:               NewFullBox([4]byte{'t', 'k', 'h', 'd'}, 0),
 		Creation_time:     uint64(time.Now().Unix() + int64(offset) + 0x7C25B080),
 		Modification_time: uint64(time.Now().Unix() + int64(offset) + 0x7C25B080),
 		Layer:             0,
@@ -59,20 +59,13 @@ func NewTrackHeaderBox() *TrackHeaderBox {
 	}
 }
 
-func (tkhd *TrackHeaderBox) Size() uint64 {
-	if tkhd.Box.Version == 1 {
-		return tkhd.Box.Size() + 92
-	} else {
-		return tkhd.Box.Size() + 80
-	}
-}
-
 func (tkhd *TrackHeaderBox) Decode(r io.Reader) (offset int, err error) {
-	if offset, err = tkhd.Box.Decode(r); err != nil {
+	var fullbox FullBox
+	if offset, err = fullbox.Decode(r); err != nil {
 		return 0, err
 	}
 	boxsize := 0
-	if tkhd.Box.Version == 0 {
+	if fullbox.Version == 0 {
 		boxsize = 80
 	} else {
 		boxsize = 92
@@ -82,7 +75,7 @@ func (tkhd *TrackHeaderBox) Decode(r io.Reader) (offset int, err error) {
 		return 0, err
 	}
 	n := 0
-	if tkhd.Box.Version == 1 {
+	if fullbox.Version == 1 {
 		tkhd.Creation_time = binary.BigEndian.Uint64(buf[n:])
 		n += 8
 		tkhd.Modification_time = binary.BigEndian.Uint64(buf[n:])
@@ -119,12 +112,11 @@ func (tkhd *TrackHeaderBox) Decode(r io.Reader) (offset int, err error) {
 }
 
 func (tkhd *TrackHeaderBox) Encode() (int, []byte) {
-	tkhd.Box.Box.Size = tkhd.Size()
-	if tkhd.Duration > 0xFFFFFFFF {
-		tkhd.Box.Version = 1
-	}
-	offset, buf := tkhd.Box.Encode()
-	if tkhd.Box.Version == 1 {
+	fullbox := NewFullBox(TypeTKHD, util.Conditional[uint8](tkhd.Duration > 0xFFFFFFFF, 1, 0))
+	fullbox.Flags[2] = 0x03 //Track_enabled | Track_in_movie
+	fullbox.Box.Size = util.Conditional[uint64](fullbox.Version == 1, 92, 80) + FullBoxLen
+	offset, buf := fullbox.Encode()
+	if fullbox.Version == 1 {
 		binary.BigEndian.PutUint64(buf[offset:], tkhd.Creation_time)
 		offset += 8
 		binary.BigEndian.PutUint64(buf[offset:], tkhd.Creation_time)
@@ -158,34 +150,4 @@ func (tkhd *TrackHeaderBox) Encode() (int, []byte) {
 	offset += 4
 	binary.BigEndian.PutUint32(buf[offset:], uint32(tkhd.Height))
 	return offset + 4, buf
-}
-
-func makeTkhdBox(track *mp4track) []byte {
-	tkhd := NewTrackHeaderBox()
-	tkhd.Duration = uint64(track.duration)
-	tkhd.Track_ID = track.trackId
-	//  flags is a 24-bit integer with flags; the following values are defined:
-	// Track_enabled: Indicates that the track is enabled. Flag value is 0x000001. A disabled track (the low bit is zero) is treated as if it were not present.
-	// Track_in_movie: Indicates that the track is used in the presentation. Flag value is 0x000002.
-	// Track_in_preview: Indicates that the track is used when previewing the presentation. Flag value is 0x000004.
-	tkhd.Box.Flags[2] = 0x03 //Track_enabled | Track_in_movie
-	if track.cid == MP4_CODEC_AAC || track.cid == MP4_CODEC_G711A || track.cid == MP4_CODEC_G711U || track.cid == MP4_CODEC_OPUS {
-		tkhd.Volume = 0x0100
-	} else {
-		tkhd.Width = track.width << 16
-		tkhd.Height = track.height << 16
-	}
-	_, tkhdbox := tkhd.Encode()
-	return tkhdbox
-}
-
-func decodeTkhdBox(demuxer *MovDemuxer) (err error) {
-	tkhd := TrackHeaderBox{Box: new(FullBox)}
-	if _, err = tkhd.Decode(demuxer.reader); err != nil {
-		return err
-	}
-	track := demuxer.tracks[len(demuxer.tracks)-1]
-	track.duration = uint32(tkhd.Duration)
-	track.trackId = tkhd.Track_ID
-	return
 }

@@ -46,7 +46,7 @@ func (d *DTSEstimator) add(pts uint32) {
 
 // Feed provides PTS to the estimator, and returns the estimated DTS.
 func (d *DTSEstimator) Feed(pts uint32) uint32 {
-	interval := Conditoinal(pts > d.prevPTS, pts-d.prevPTS, d.prevPTS-pts)
+	interval := Conditional(pts > d.prevPTS, pts-d.prevPTS, d.prevPTS-pts)
 	if interval > 10*d.interval {
 		*d = *NewDTSEstimator()
 	}

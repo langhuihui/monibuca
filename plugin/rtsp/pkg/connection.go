@@ -209,7 +209,7 @@ func (c *NetConnection) ReadResponse() (res *util.Response, err error) {
 
 func (c *NetConnection) Receive(sendMode bool) (channelID byte, buf []byte, err error) {
 	ts := time.Now()
-	if err = c.conn.SetReadDeadline(ts.Add(util.Conditoinal(sendMode, time.Second*60, time.Second*15))); err != nil {
+	if err = c.conn.SetReadDeadline(ts.Add(util.Conditional(sendMode, time.Second*60, time.Second*15))); err != nil {
 		return
 	}
 	var magic []byte

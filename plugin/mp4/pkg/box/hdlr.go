@@ -1,7 +1,7 @@
 package box
 
 import (
-	"bytes"
+	"encoding/binary"
 	"io"
 )
 
@@ -25,95 +25,69 @@ import (
 // ‘meta’ Timed Metadata track
 // ‘auxv’ Auxiliary Video track
 
-type HandlerType [4]byte
-
-var vide HandlerType = HandlerType{'v', 'i', 'd', 'e'}
-var soun HandlerType = HandlerType{'s', 'o', 'u', 'n'}
-var hint HandlerType = HandlerType{'h', 'i', 'n', 't'}
-var meta HandlerType = HandlerType{'m', 'e', 't', 'a'}
-var auxv HandlerType = HandlerType{'a', 'u', 'x', 'v'}
-
-func (ht HandlerType) equal(other HandlerType) bool {
-	return bytes.Equal(ht[:], other[:])
-}
-
+type HandlerType = [4]byte
 type HandlerBox struct {
-	Box          *FullBox
+	Pre_defined  uint32
 	Handler_type HandlerType
+	Reserved     [3]uint32
 	Name         string
 }
 
 func NewHandlerBox(handlerType HandlerType, name string) *HandlerBox {
 	return &HandlerBox{
-		Box:          NewFullBox([4]byte{'h', 'd', 'l', 'r'}, 0),
 		Handler_type: handlerType,
 		Name:         name,
 	}
 }
 
-func (hdlr *HandlerBox) Size() uint64 {
-	return hdlr.Box.Size() + 20 + uint64(len(hdlr.Name)+1)
-}
-
 func (hdlr *HandlerBox) Decode(r io.Reader, size uint64) (offset int, err error) {
-	if _, err = hdlr.Box.Decode(r); err != nil {
+	var fullbox FullBox
+	if _, err = fullbox.Decode(r); err != nil {
 		return 0, err
 	}
 	buf := make([]byte, size-FullBoxLen)
 	if _, err = io.ReadFull(r, buf); err != nil {
 		return 0, err
 	}
-	offset = 0
-	hdlr.Handler_type[0] = buf[offset]
-	hdlr.Handler_type[1] = buf[offset+1]
-	hdlr.Handler_type[2] = buf[offset+2]
-	hdlr.Handler_type[3] = buf[offset+3]
-	offset += 4
-	hdlr.Name = string(buf[offset : size-FullBoxLen])
+	hdlr.Pre_defined = binary.BigEndian.Uint32(buf[:4])
+	copy(hdlr.Handler_type[:], buf[4:8])
+	hdlr.Name = string(buf[20 : size-FullBoxLen])
 	offset = int(size - FullBoxLen)
 	return
 }
 
 func (hdlr *HandlerBox) Encode() (int, []byte) {
-	hdlr.Box.Box.Size = hdlr.Size()
-	offset, buf := hdlr.Box.Encode()
-	offset += 4
-	buf[offset] = hdlr.Handler_type[0]
-	buf[offset+1] = hdlr.Handler_type[1]
-	buf[offset+2] = hdlr.Handler_type[2]
-	buf[offset+3] = hdlr.Handler_type[3]
-	offset += 16
+	fullbox := NewFullBox(TypeHDLR, 0)
+	fullbox.Box.Size = 20 + uint64(len(hdlr.Name)+1) + FullBoxLen
+	offset, buf := fullbox.Encode()
+	binary.BigEndian.PutUint32(buf[offset:], hdlr.Pre_defined)
+	copy(buf[offset+4:], hdlr.Handler_type[:])
+	offset += 20
 	copy(buf[offset:], []byte(hdlr.Name))
 	return offset + len(hdlr.Name), buf
 }
 
-func getHandlerType(cid MP4_CODEC_TYPE) HandlerType {
+func GetHandlerType(cid MP4_CODEC_TYPE) HandlerType {
 	switch cid {
 	case MP4_CODEC_H264, MP4_CODEC_H265:
-		return vide
+		return TypeVIDE
 	case MP4_CODEC_AAC, MP4_CODEC_G711A, MP4_CODEC_G711U,
 		MP4_CODEC_MP2, MP4_CODEC_MP3, MP4_CODEC_OPUS:
-		return soun
+		return TypeSOUN
 	default:
 		panic("unsupport codec id")
 	}
 }
 
-func makeHdlrBox(hdt HandlerType) []byte {
+func MakeHdlrBox(hdt HandlerType) []byte {
 	var hdlr *HandlerBox = nil
-	if hdt.equal(vide) {
+	if hdt == TypeVIDE {
 		hdlr = NewHandlerBox(hdt, "VideoHandler")
-	} else if hdt.equal(soun) {
+	} else if hdt == TypeSOUN {
 		hdlr = NewHandlerBox(hdt, "SoundHandler")
 	} else {
 		hdlr = NewHandlerBox(hdt, "")
 	}
 	_, boxdata := hdlr.Encode()
 	return boxdata
-}
-
-func decodeHdlrBox(demuxer *MovDemuxer, size uint64) (err error) {
-	hdlr := HandlerBox{Box: new(FullBox)}
-	_, err = hdlr.Decode(demuxer.reader, size)
-	return
 }

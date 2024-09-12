@@ -22,26 +22,15 @@ import (
 //     }
 // }
 
-type CompositionOffsetBox struct {
-	box  *FullBox
-	ctts *movctts
-}
+type CompositionOffsetBox []CTTSEntry
 
-func NewCompositionOffsetBox() *CompositionOffsetBox {
-	return &CompositionOffsetBox{
-		box: NewFullBox([4]byte{'c', 't', 't', 's'}, 0),
-	}
-}
-func (ctts *CompositionOffsetBox) Size() uint64 {
-	if ctts.ctts == nil {
-		return ctts.box.Size()
-	} else {
-		return ctts.box.Size() + 4 + 8*uint64(ctts.ctts.entryCount)
-	}
+func (ctts CompositionOffsetBox) Size() uint64 {
+	return FullBoxLen + 4 + 8*uint64(len(ctts))
 }
 
 func (ctts *CompositionOffsetBox) Decode(r io.Reader) (offset int, err error) {
-	if _, err = ctts.box.Decode(r); err != nil {
+	var fullbox FullBox
+	if _, err = fullbox.Decode(r); err != nil {
 		return
 	}
 	entryCountBuf := make([]byte, 4)
@@ -49,52 +38,35 @@ func (ctts *CompositionOffsetBox) Decode(r io.Reader) (offset int, err error) {
 		return
 	}
 	offset = 8
-	ctts.ctts = new(movctts)
-	ctts.ctts.entryCount = binary.BigEndian.Uint32(entryCountBuf)
-	ctts.ctts.entrys = make([]cttsEntry, ctts.ctts.entryCount)
+	l := binary.BigEndian.Uint32(entryCountBuf)
+	*ctts = make([]CTTSEntry, l)
 
-	buf := make([]byte, ctts.ctts.entryCount*8)
+	buf := make([]byte, l*8)
 	if _, err = io.ReadFull(r, buf); err != nil {
 		return
 	}
 	idx := 0
-	for i := 0; i < int(ctts.ctts.entryCount); i++ {
-		ctts.ctts.entrys[i].sampleCount = binary.BigEndian.Uint32(buf[idx:])
+	for i := 0; i < int(l); i++ {
+		(*ctts)[i].SampleCount = binary.BigEndian.Uint32(buf[idx:])
 		idx += 4
-		ctts.ctts.entrys[i].sampleOffset = binary.BigEndian.Uint32(buf[idx:])
+		(*ctts)[i].SampleOffset = binary.BigEndian.Uint32(buf[idx:])
 		idx += 4
 	}
 	offset += idx
 	return
 }
 
-func (ctts *CompositionOffsetBox) Encode() (int, []byte) {
-	ctts.box.Box.Size = ctts.Size()
-	offset, buf := ctts.box.Encode()
-	binary.BigEndian.PutUint32(buf[offset:], ctts.ctts.entryCount)
+func (ctts CompositionOffsetBox) Encode() (int, []byte) {
+	fullbox := NewFullBox(TypeCTTS, 0)
+	fullbox.Box.Size = ctts.Size()
+	offset, buf := fullbox.Encode()
+	binary.BigEndian.PutUint32(buf[offset:], uint32(len(ctts)))
 	offset += 4
-	for i := 0; i < int(ctts.ctts.entryCount); i++ {
-		binary.BigEndian.PutUint32(buf[offset:], ctts.ctts.entrys[i].sampleCount)
+	for _, entry := range ctts {
+		binary.BigEndian.PutUint32(buf[offset:], entry.SampleCount)
 		offset += 4
-		binary.BigEndian.PutUint32(buf[offset:], ctts.ctts.entrys[i].sampleOffset)
+		binary.BigEndian.PutUint32(buf[offset:], entry.SampleOffset)
 		offset += 4
 	}
 	return offset, buf
-}
-
-func makeCtts(ctts *movctts) (boxdata []byte) {
-	cttsbox := NewCompositionOffsetBox()
-	cttsbox.ctts = ctts
-	_, boxdata = cttsbox.Encode()
-	return
-}
-
-func decodeCttsBox(demuxer *MovDemuxer) (err error) {
-	ctts := CompositionOffsetBox{box: new(FullBox)}
-	if _, err = ctts.Decode(demuxer.reader); err != nil {
-		return
-	}
-	track := demuxer.tracks[len(demuxer.tracks)-1]
-	track.stbltable.ctts = ctts.ctts
-	return
 }

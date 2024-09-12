@@ -16,7 +16,7 @@ type ReadWriteSeekCloser interface {
 	io.Closer
 }
 
-func Conditoinal[T any](cond bool, t, f T) T {
+func Conditional[T any](cond bool, t, f T) T {
 	if cond {
 		return t
 	} else {

@@ -14,83 +14,59 @@ import (
 //     }
 // }
 
-type SampleToChunkBox struct {
-	box        *FullBox
-	stscentrys *movstsc
-}
+type SampleToChunkBox []STSCEntry
 
 func NewSampleToChunkBox() *SampleToChunkBox {
-	return &SampleToChunkBox{
-		box: NewFullBox([4]byte{'s', 't', 's', 'c'}, 0),
-	}
+	return &SampleToChunkBox{}
 }
 
-func (stsc *SampleToChunkBox) Size() uint64 {
-	if stsc.stscentrys == nil {
-		return stsc.box.Size()
-	} else {
-		return stsc.box.Size() + 4 + 12*uint64(stsc.stscentrys.entryCount)
-	}
+func (stsc SampleToChunkBox) Size() uint64 {
+	return FullBoxLen + 4 + 12*uint64(len(stsc))
 }
 
 func (stsc *SampleToChunkBox) Decode(r io.Reader) (offset int, err error) {
-	if _, err = stsc.box.Decode(r); err != nil {
+	var fullbox FullBox
+	if _, err = fullbox.Decode(r); err != nil {
 		return
 	}
 	tmp := make([]byte, 4)
 	if _, err = io.ReadFull(r, tmp); err != nil {
 		return
 	}
-	stsc.stscentrys = new(movstsc)
-	stsc.stscentrys.entryCount = binary.BigEndian.Uint32(tmp)
-	stsc.stscentrys.entrys = make([]stscEntry, stsc.stscentrys.entryCount)
-	buf := make([]byte, stsc.stscentrys.entryCount*12)
+	l := binary.BigEndian.Uint32(tmp)
+	*stsc = make([]STSCEntry, l)
+	buf := make([]byte, l*12)
 	if _, err = io.ReadFull(r, buf); err != nil {
 		return
 	}
 	offset = 8
 	idx := 0
-	for i := 0; i < int(stsc.stscentrys.entryCount); i++ {
-		stsc.stscentrys.entrys[i].firstChunk = binary.BigEndian.Uint32(buf[idx:])
+	for i := 0; i < int(l); i++ {
+		entry := &(*stsc)[i]
+		entry.FirstChunk = binary.BigEndian.Uint32(buf[idx:])
 		idx += 4
-		stsc.stscentrys.entrys[i].samplesPerChunk = binary.BigEndian.Uint32(buf[idx:])
+		entry.SamplesPerChunk = binary.BigEndian.Uint32(buf[idx:])
 		idx += 4
-		stsc.stscentrys.entrys[i].sampleDescriptionIndex = binary.BigEndian.Uint32(buf[idx:])
+		entry.SampleDescriptionIndex = binary.BigEndian.Uint32(buf[idx:])
 		idx += 4
 	}
 	offset += idx
 	return
 }
 
-func (stsc *SampleToChunkBox) Encode() (int, []byte) {
-	stsc.box.Box.Size = stsc.Size()
-	offset, buf := stsc.box.Encode()
-	binary.BigEndian.PutUint32(buf[offset:], stsc.stscentrys.entryCount)
+func (stsc SampleToChunkBox) Encode() (int, []byte) {
+	fullbox := NewFullBox(TypeSTSC, 0)
+	fullbox.Box.Size = stsc.Size()
+	offset, buf := fullbox.Encode()
+	binary.BigEndian.PutUint32(buf[offset:], uint32(len(stsc)))
 	offset += 4
-	for i := 0; i < int(stsc.stscentrys.entryCount); i++ {
-		binary.BigEndian.PutUint32(buf[offset:], stsc.stscentrys.entrys[i].firstChunk)
+	for _, entry := range stsc {
+		binary.BigEndian.PutUint32(buf[offset:], entry.FirstChunk)
 		offset += 4
-		binary.BigEndian.PutUint32(buf[offset:], stsc.stscentrys.entrys[i].samplesPerChunk)
+		binary.BigEndian.PutUint32(buf[offset:], entry.SamplesPerChunk)
 		offset += 4
-		binary.BigEndian.PutUint32(buf[offset:], stsc.stscentrys.entrys[i].sampleDescriptionIndex)
+		binary.BigEndian.PutUint32(buf[offset:], entry.SampleDescriptionIndex)
 		offset += 4
 	}
 	return offset, buf
-}
-
-func makeStsc(stsc *movstsc) (boxdata []byte) {
-	stscbox := NewSampleToChunkBox()
-	stscbox.stscentrys = stsc
-	_, boxdata = stscbox.Encode()
-	return
-}
-
-func decodeStscBox(demuxer *MovDemuxer) (err error) {
-	stsc := SampleToChunkBox{box: new(FullBox)}
-	if _, err = stsc.Decode(demuxer.reader); err != nil {
-		return
-	}
-	track := demuxer.tracks[len(demuxer.tracks)-1]
-	track.stbltable.stsc = stsc.stscentrys
-	return
 }

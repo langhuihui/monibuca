@@ -115,7 +115,7 @@ func ReturnFetchList[T any](fetch func() []T, rw http.ResponseWriter, r *http.Re
 			}
 		}
 	}
-	rw.Header().Set("Content-Type", Conditoinal(isYaml, "text/yaml", "application/json"))
+	rw.Header().Set("Content-Type", Conditional(isYaml, "text/yaml", "application/json"))
 	if isYaml {
 		if err := yaml.NewEncoder(rw).Encode(output); err != nil {
 			http.Error(rw, err.Error(), http.StatusInternalServerError)
@@ -149,7 +149,7 @@ func ReturnFetchValue[T any](fetch func() T, rw http.ResponseWriter, r *http.Req
 		sse := NewSSE(rw, r.Context())
 		tick := time.NewTicker(tickDur)
 		defer tick.Stop()
-		writer := Conditoinal(isYaml, sse.WriteYAML, sse.WriteJSON)
+		writer := Conditional(isYaml, sse.WriteYAML, sse.WriteJSON)
 		writer(fetch())
 		for range tick.C {
 			if writer(fetch()) != nil {
@@ -158,7 +158,7 @@ func ReturnFetchValue[T any](fetch func() T, rw http.ResponseWriter, r *http.Req
 		}
 	} else {
 		data := fetch()
-		rw.Header().Set("Content-Type", Conditoinal(isYaml, "text/yaml", "application/json"))
+		rw.Header().Set("Content-Type", Conditional(isYaml, "text/yaml", "application/json"))
 		if isYaml {
 			if err := yaml.NewEncoder(rw).Encode(data); err != nil {
 				http.Error(rw, err.Error(), http.StatusInternalServerError)

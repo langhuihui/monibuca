@@ -168,19 +168,6 @@ func (p *RecordFilePuller) GetPullJob() *PullJob {
 	return &p.PullJob
 }
 
-func (p *RecordFilePuller) SpeedControl(ts int64) {
-	targetTime := time.Duration(float64(time.Since(p.PullJob.StartTime)) * p.PullJob.Publisher.Speed)
-	timestamp := time.Duration(ts) * time.Millisecond
-	if ts > 0 && p.offsetTime == 0 {
-		p.offsetTime = timestamp
-	}
-	sleepTime := timestamp - targetTime - p.offsetTime
-	p.Trace("SpeedControl", "timestamp", timestamp, "targetTime", targetTime, "offsetTime", p.offsetTime, "sleepTime", sleepTime)
-	if sleepTime > 0 {
-		time.Sleep(sleepTime)
-	}
-}
-
 func (p *RecordFilePuller) Start() (err error) {
 	if err = p.PullJob.Publish(); err != nil {
 		return

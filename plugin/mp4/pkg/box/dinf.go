@@ -16,13 +16,12 @@ import "encoding/binary"
 // 	}
 // }
 
-func makeDefaultDinfBox() []byte {
-	dinf := BasicBox{Type: [4]byte{'d', 'i', 'n', 'f'}}
-	dinf.Size = 36
+func MakeDefaultDinfBox() []byte {
+	dinf := BasicBox{Type: TypeDINF, Size: 36}
 	offset, dinfbox := dinf.Encode()
 	binary.BigEndian.PutUint32(dinfbox[offset:], 28)
 	offset += 4
-	copy(dinfbox[offset:], []byte("dref"))
+	copy(dinfbox[offset:], TypeDREF[:])
 	offset += 4
 	offset += 4
 	binary.BigEndian.PutUint32(dinfbox[offset:], 1)

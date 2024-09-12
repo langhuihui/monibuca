@@ -323,7 +323,7 @@ func (handler *SubscribeHandler[A, V]) Start() (err error) {
 				}
 				if ar != nil {
 					if audioFrame != nil {
-						if util.Conditoinal(s.SyncMode == 0, videoFrame.Timestamp > audioFrame.Timestamp, videoFrame.WriteTime.After(audioFrame.WriteTime)) {
+						if util.Conditional(s.SyncMode == 0, videoFrame.Timestamp > audioFrame.Timestamp, videoFrame.WriteTime.After(audioFrame.WriteTime)) {
 							// fmt.Println("switch audio", audioFrame.CanRead)
 							err = sendAudioFrame()
 							break
@@ -380,7 +380,7 @@ func (handler *SubscribeHandler[A, V]) Start() (err error) {
 					}
 				}
 				if vr != nil && videoFrame != nil {
-					if util.Conditoinal(s.SyncMode == 0, audioFrame.Timestamp > videoFrame.Timestamp, audioFrame.WriteTime.After(videoFrame.WriteTime)) {
+					if util.Conditional(s.SyncMode == 0, audioFrame.Timestamp > videoFrame.Timestamp, audioFrame.WriteTime.After(videoFrame.WriteTime)) {
 						err = sendVideoFrame()
 						break
 					}

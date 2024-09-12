@@ -37,7 +37,6 @@ const (
 )
 
 type TrackFragmentHeaderBox struct {
-	Box                    *FullBox
 	Track_ID               uint32
 	BaseDataOffset         uint64
 	SampleDescriptionIndex uint32
@@ -48,15 +47,13 @@ type TrackFragmentHeaderBox struct {
 
 func NewTrackFragmentHeaderBox(trackid uint32) *TrackFragmentHeaderBox {
 	return &TrackFragmentHeaderBox{
-		Box:                    NewFullBox([4]byte{'t', 'f', 'h', 'd'}, 0),
 		Track_ID:               trackid,
 		SampleDescriptionIndex: 1,
 	}
 }
 
-func (tfhd *TrackFragmentHeaderBox) Size() uint64 {
-	n := tfhd.Box.Size()
-	thfdFlags := uint32(tfhd.Box.Flags[0])<<16 | uint32(tfhd.Box.Flags[1])<<8 | uint32(tfhd.Box.Flags[2])
+func (tfhd *TrackFragmentHeaderBox) Size(thfdFlags uint32) uint64 {
+	n := uint64(FullBoxLen)
 	n += 4
 	if thfdFlags&TF_FLAG_BASE_DATA_OFFSET > 0 {
 		n += 8
@@ -77,7 +74,8 @@ func (tfhd *TrackFragmentHeaderBox) Size() uint64 {
 }
 
 func (tfhd *TrackFragmentHeaderBox) Decode(r io.Reader, size uint32, moofOffset uint64) (offset int, err error) {
-	if offset, err = tfhd.Box.Decode(r); err != nil {
+	var fullbox FullBox
+	if offset, err = fullbox.Decode(r); err != nil {
 		return
 	}
 	buf := make([]byte, size-12)
@@ -87,7 +85,7 @@ func (tfhd *TrackFragmentHeaderBox) Decode(r io.Reader, size uint32, moofOffset 
 	n := 0
 	tfhd.Track_ID = binary.BigEndian.Uint32(buf[n:])
 	n += 4
-	tfhdFlags := uint32(tfhd.Box.Flags[0])<<16 | uint32(tfhd.Box.Flags[1])<<8 | uint32(tfhd.Box.Flags[2])
+	tfhdFlags := uint32(fullbox.Flags[0])<<16 | uint32(fullbox.Flags[1])<<8 | uint32(fullbox.Flags[2])
 	if tfhdFlags&uint32(TF_FLAG_BASE_DATA_OFFSET) > 0 {
 		tfhd.BaseDataOffset = binary.BigEndian.Uint64(buf[n:])
 		n += 8
@@ -118,12 +116,16 @@ func (tfhd *TrackFragmentHeaderBox) Decode(r io.Reader, size uint32, moofOffset 
 	return
 }
 
-func (tfhd *TrackFragmentHeaderBox) Encode() (int, []byte) {
-	tfhd.Box.Box.Size = tfhd.Size()
-	offset, buf := tfhd.Box.Encode()
+func (tfhd *TrackFragmentHeaderBox) Encode(tFfFlags uint32) (int, []byte) {
+	fullbox := NewFullBox(TypeTFHD, 0)
+	fullbox.Flags[0] = byte(tFfFlags >> 16)
+	fullbox.Flags[1] = byte(tFfFlags >> 8)
+	fullbox.Flags[2] = byte(tFfFlags)
+	fullbox.Box.Size = tfhd.Size(tFfFlags)
+	offset, buf := fullbox.Encode()
 	binary.BigEndian.PutUint32(buf[offset:], tfhd.Track_ID)
 	offset += 4
-	thfdFlags := uint32(tfhd.Box.Flags[0])<<16 | uint32(tfhd.Box.Flags[1])<<8 | uint32(tfhd.Box.Flags[2])
+	thfdFlags := uint32(fullbox.Flags[0])<<16 | uint32(fullbox.Flags[1])<<8 | uint32(fullbox.Flags[2])
 	if thfdFlags&uint32(TF_FLAG_BASE_DATA_OFFSET) > 0 {
 		binary.BigEndian.PutUint64(buf[offset:], tfhd.BaseDataOffset)
 		offset += 8
@@ -145,57 +147,4 @@ func (tfhd *TrackFragmentHeaderBox) Encode() (int, []byte) {
 		offset += 4
 	}
 	return offset, buf
-}
-
-func decodeTfhdBox(demuxer *MovDemuxer, size uint32) error {
-	tfhd := &TrackFragmentHeaderBox{Box: new(FullBox)}
-	_, err := tfhd.Decode(demuxer.reader, size, uint64(demuxer.moofOffset))
-	for i := 0; i < len(demuxer.tracks); i++ {
-		if demuxer.tracks[i].trackId != tfhd.Track_ID {
-			continue
-		}
-		demuxer.currentTrack = demuxer.tracks[i]
-		demuxer.tracks[i].defaultDuration = tfhd.DefaultSampleDuration
-		demuxer.tracks[i].defaultSize = tfhd.DefaultSampleSize
-		demuxer.tracks[i].baseDataOffset = tfhd.BaseDataOffset
-	}
-	return err
-}
-
-func makeTfhdBox(track *mp4track, offset uint64) []byte {
-	tfFlags := TF_FLAG_SAMPLE_DESCRIPTION_INDEX_PRESENT
-	tfFlags |= TF_FLAG_DEAAULT_BASE_IS_MOOF
-	tfhd := NewTrackFragmentHeaderBox(track.trackId)
-	tfhd.BaseDataOffset = offset
-	if len(track.samplelist) > 1 {
-		tfhd.DefaultSampleDuration = uint32(track.samplelist[1].dts - track.samplelist[0].dts)
-	} else if len(track.samplelist) == 1 && len(track.fragments) > 0 {
-		tfhd.DefaultSampleDuration = uint32(track.samplelist[0].dts - track.fragments[len(track.fragments)-1].lastDts)
-	} else {
-		tfhd.DefaultSampleDuration = 0
-		tfFlags |= TF_FLAG_DURATION_IS_EMPTY
-	}
-	if len(track.samplelist) > 0 {
-		tfFlags |= TF_FLAG_DEAAULT_SAMPLE_FLAGS_PRESENT
-		tfFlags |= TF_FLAG_DEFAULT_SAMPLE_DURATION_PRESENT
-		tfFlags |= TF_FLAG_DEFAULT_SAMPLE_SIZE_PRESENT
-		tfhd.DefaultSampleSize = uint32(track.samplelist[0].size)
-	} else {
-		tfhd.DefaultSampleSize = 0
-	}
-	tfhd.Box.Flags[0] = uint8(tfFlags >> 16)
-	tfhd.Box.Flags[1] = uint8(tfFlags >> 8)
-	tfhd.Box.Flags[2] = uint8(tfFlags)
-
-	//ffmpeg movenc.c mov_write_tfhd_tag
-	if isVideo(track.cid) {
-		tfhd.DefaultSampleFlags = MOV_FRAG_SAMPLE_FLAG_DEPENDS_YES | MOV_FRAG_SAMPLE_FLAG_IS_NON_SYNC
-	} else {
-		tfhd.DefaultSampleFlags = MOV_FRAG_SAMPLE_FLAG_DEPENDS_NO
-	}
-	track.defaultDuration = tfhd.DefaultSampleDuration
-	track.defaultSize = tfhd.DefaultSampleSize
-	track.defaultSampleFlags = tfhd.DefaultSampleFlags
-	_, boxData := tfhd.Encode()
-	return boxData
 }

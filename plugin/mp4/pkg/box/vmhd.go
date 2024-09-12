@@ -17,25 +17,20 @@ import (
 // }
 
 type VideoMediaHeaderBox struct {
-	Box          *FullBox
 	Graphicsmode uint16
 	Opcolor      [3]uint16
 }
 
 func NewVideoMediaHeaderBox() *VideoMediaHeaderBox {
 	return &VideoMediaHeaderBox{
-		Box:          NewFullBox([4]byte{'v', 'm', 'h', 'd'}, 0),
 		Graphicsmode: 0,
 		Opcolor:      [3]uint16{0, 0, 0},
 	}
 }
 
-func (vmhd *VideoMediaHeaderBox) Size() uint64 {
-	return vmhd.Box.Size() + 8
-}
-
 func (vmhd *VideoMediaHeaderBox) Decode(r io.Reader) (offset int, err error) {
-	if _, err = vmhd.Box.Decode(r); err != nil {
+	var fullbox FullBox
+	if _, err = fullbox.Decode(r); err != nil {
 		return 0, err
 	}
 	buf := make([]byte, 8)
@@ -52,9 +47,10 @@ func (vmhd *VideoMediaHeaderBox) Decode(r io.Reader) (offset int, err error) {
 }
 
 func (vmhd *VideoMediaHeaderBox) Encode() (int, []byte) {
-	vmhd.Box.Box.Size = vmhd.Size()
-	vmhd.Box.Flags[2] = 1
-	offset, buf := vmhd.Box.Encode()
+	fullbox := NewFullBox(TypeVMHD, 0)
+	fullbox.Box.Size = FullBoxLen + 8
+	fullbox.Flags[2] = 1
+	offset, buf := fullbox.Encode()
 	binary.BigEndian.PutUint16(buf[offset:], vmhd.Graphicsmode)
 	offset += 2
 	binary.BigEndian.PutUint16(buf[offset:], vmhd.Opcolor[0])
@@ -66,14 +62,8 @@ func (vmhd *VideoMediaHeaderBox) Encode() (int, []byte) {
 	return offset, buf
 }
 
-func makeVmhdBox() []byte {
+func MakeVmhdBox() []byte {
 	vmhd := NewVideoMediaHeaderBox()
 	_, vmhdbox := vmhd.Encode()
 	return vmhdbox
-}
-
-func decodeVmhdBox(demuxer *MovDemuxer) (err error) {
-	vmhd := VideoMediaHeaderBox{Box: new(FullBox)}
-	_, err = vmhd.Decode(demuxer.reader)
-	return
 }

@@ -16,24 +16,24 @@ const (
 // PsshBox - Protection System Specific Header Box
 // Defined in ISO/IEC 23001-7 Section 8.1
 type PsshBox struct {
-	Box      *FullBox
 	SystemID [16]byte
 	KIDs     [][16]byte
 	Data     []byte
 }
 
-func (pssh *PsshBox) Decode(r io.Reader, size uint32) (offset int, err error) {
-	if offset, err = pssh.Box.Decode(r); err != nil {
+func (pssh *PsshBox) Decode(r io.Reader, basebox *BasicBox) (offset int, err error) {
+	var fullbox FullBox
+	if offset, err = fullbox.Decode(r); err != nil {
 		return
 	}
-	buf := make([]byte, size-12)
+	buf := make([]byte, basebox.Size-FullBoxLen)
 	if _, err = io.ReadFull(r, buf); err != nil {
 		return 0, err
 	}
 	n := 0
 	copy(pssh.SystemID[:], buf[n:n+16])
 	n += 16
-	if pssh.Box.Version > 0 {
+	if fullbox.Version > 0 {
 		kidCount := binary.BigEndian.Uint32(buf[n:])
 		n += 4
 		for i := uint32(0); i < kidCount; i++ {
@@ -59,13 +59,4 @@ func (pssh *PsshBox) IsPlayReady() bool {
 
 func (pssh *PsshBox) IsFairPlay() bool {
 	return hex.EncodeToString(pssh.SystemID[:]) == UUIDFairPlay
-}
-
-func decodePsshBox(demuxer *MovDemuxer, size uint32) (err error) {
-	pssh := PsshBox{Box: new(FullBox)}
-	if _, err = pssh.Decode(demuxer.reader, size); err != nil {
-		return err
-	}
-	demuxer.pssh = append(demuxer.pssh, pssh)
-	return
 }

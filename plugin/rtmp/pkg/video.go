@@ -2,10 +2,11 @@ package rtmp
 
 import (
 	"encoding/binary"
-	"github.com/deepch/vdk/codec/h264parser"
-	"github.com/deepch/vdk/codec/h265parser"
 	"io"
 	"time"
+
+	"github.com/deepch/vdk/codec/h264parser"
+	"github.com/deepch/vdk/codec/h265parser"
 
 	. "m7s.live/m7s/v5/pkg"
 	"m7s.live/m7s/v5/pkg/codec"
@@ -249,7 +250,7 @@ func (avcc *RTMPVideo) muxOld26x(codecID VideoCodecID, from *AVFrame) {
 	nalus := from.Raw.(Nalus)
 	avcc.InitRecycleIndexes(len(nalus)) // Recycle partial data
 	head := avcc.NextN(5)
-	head[0] = util.Conditoinal[byte](from.IDR, 0x10, 0x20) | byte(codecID)
+	head[0] = util.Conditional[byte](from.IDR, 0x10, 0x20) | byte(codecID)
 	head[1] = 1
 	util.PutBE(head[2:5], from.CTS/time.Millisecond) // cts
 	for _, nalu := range nalus {

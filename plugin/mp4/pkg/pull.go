@@ -3,23 +3,24 @@ package mp4
 import (
 	"errors"
 	"fmt"
-	"github.com/deepch/vdk/codec/h265parser"
 	"io"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/deepch/vdk/codec/h265parser"
 	"m7s.live/m7s/v5"
 	"m7s.live/m7s/v5/pkg/codec"
 	"m7s.live/m7s/v5/pkg/config"
 	"m7s.live/m7s/v5/pkg/util"
 	"m7s.live/m7s/v5/plugin/mp4/pkg/box"
 	rtmp "m7s.live/m7s/v5/plugin/rtmp/pkg"
-	"os"
-	"path/filepath"
-	"strings"
 )
 
 type (
 	RecordReader struct {
 		m7s.RecordFilePuller
-		demuxer *box.MovDemuxer
+		demuxer *Demuxer
 	}
 	HTTPReader struct {
 		m7s.HTTPFilePuller
@@ -35,23 +36,22 @@ func NewPuller(conf config.Pull) m7s.IPuller {
 
 func (p *HTTPReader) Run() (err error) {
 	pullJob := &p.PullJob
-	var demuxer *box.MovDemuxer
+	var demuxer *Demuxer
 	allocator := util.NewScalableMemoryAllocator(1 << 10)
 	defer allocator.Recycle()
 	switch v := p.ReadCloser.(type) {
 	case io.ReadSeeker:
-		demuxer = box.CreateMp4Demuxer(v)
+		demuxer = NewDemuxer(v)
 	default:
 		var content []byte
 		content, err = io.ReadAll(p.ReadCloser)
-		demuxer = box.CreateMp4Demuxer(strings.NewReader(string(content)))
+		demuxer = NewDemuxer(strings.NewReader(string(content)))
 	}
-	var tracks []box.TrackInfo
-	if tracks, err = demuxer.ReadHead(); err != nil {
+	if err = demuxer.Demux(); err != nil {
 		return
 	}
 	publisher := pullJob.Publisher
-	for _, track := range tracks {
+	for _, track := range demuxer.Tracks {
 		switch track.Cid {
 		case box.MP4_CODEC_H264:
 			var sequence rtmp.RTMPVideo
@@ -76,14 +76,14 @@ func (p *HTTPReader) Run() (err error) {
 			pullJob.Error("Error reading MP4 packet", "err", err)
 			return err
 		}
-		switch track := tracks[pkg.TrackId-1]; track.Cid {
+		switch track := pkg.Track; track.Cid {
 		case box.MP4_CODEC_H264:
 			var videoFrame rtmp.RTMPVideo
 			videoFrame.SetAllocator(allocator)
 			videoFrame.CTS = uint32(pkg.Pts - pkg.Dts)
 			videoFrame.Timestamp = uint32(pkg.Dts)
 			keyFrame := codec.H264NALUType(pkg.Data[5]&0x1F) == codec.NALU_IDR_Picture
-			videoFrame.AppendOne([]byte{util.Conditoinal[byte](keyFrame, 0x17, 0x27), 0x01, byte(videoFrame.CTS >> 24), byte(videoFrame.CTS >> 8), byte(videoFrame.CTS)})
+			videoFrame.AppendOne([]byte{util.Conditional[byte](keyFrame, 0x17, 0x27), 0x01, byte(videoFrame.CTS >> 24), byte(videoFrame.CTS >> 8), byte(videoFrame.CTS)})
 			videoFrame.AddRecycleBytes(pkg.Data)
 			err = publisher.WriteVideo(&videoFrame)
 		case box.MP4_CODEC_H265:
@@ -139,13 +139,12 @@ func (p *RecordReader) Run() (err error) {
 		if err != nil {
 			return
 		}
-		p.demuxer = box.CreateMp4Demuxer(p.File)
-		var tracks []box.TrackInfo
-		if tracks, err = p.demuxer.ReadHead(); err != nil {
+		p.demuxer = NewDemuxer(p.File)
+		if err = p.demuxer.Demux(); err != nil {
 			return
 		}
 		if i == 0 {
-			for _, track := range tracks {
+			for _, track := range p.demuxer.Tracks {
 				switch track.Cid {
 				case box.MP4_CODEC_H264:
 					var sequence rtmp.RTMPVideo
@@ -181,7 +180,7 @@ func (p *RecordReader) Run() (err error) {
 				return err
 			}
 			ts = int64(pkg.Dts + uint64(tsOffset))
-			switch track := tracks[pkg.TrackId-1]; track.Cid {
+			switch track := pkg.Track; track.Cid {
 			case box.MP4_CODEC_H264:
 				keyFrame := codec.ParseH264NALUType(pkg.Data[5]) == codec.NALU_IDR_Picture
 				if !firstKeyFrameSent {
@@ -195,7 +194,7 @@ func (p *RecordReader) Run() (err error) {
 				videoFrame.SetAllocator(allocator)
 				videoFrame.CTS = uint32(pkg.Pts - pkg.Dts)
 				videoFrame.Timestamp = uint32(ts)
-				videoFrame.AppendOne([]byte{util.Conditoinal[byte](keyFrame, 0x17, 0x27), 0x01, byte(videoFrame.CTS >> 24), byte(videoFrame.CTS >> 8), byte(videoFrame.CTS)})
+				videoFrame.AppendOne([]byte{util.Conditional[byte](keyFrame, 0x17, 0x27), 0x01, byte(videoFrame.CTS >> 24), byte(videoFrame.CTS >> 8), byte(videoFrame.CTS)})
 				videoFrame.AddRecycleBytes(pkg.Data)
 				err = publisher.WriteVideo(&videoFrame)
 			case box.MP4_CODEC_H265:

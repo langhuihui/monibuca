@@ -1,8 +1,8 @@
 global:
   loglevel: debug
 mp4:
-#  pull:
-#    record/test: record/live/test?start=2024-09-09T13:11:50
+  pull:
+    record/test: record/live/test?start=2024-09-12T10:25:00
   publish:
     delayclosetimeout: 1s
   onsub:
@@ -11,5 +11,5 @@ mp4:
   onpub:
     record:
       ^live/.+:
-        fragment: 1m
+        fragment: 30s
         filepath: record/$0

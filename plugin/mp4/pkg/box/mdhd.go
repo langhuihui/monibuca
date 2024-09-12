@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/yapingcat/gomedia/go-codec"
+	"m7s.live/m7s/v5/pkg/util"
 )
 
 // aligned(8) class MediaHeaderBox extends FullBox(‘mdhd’, version, 0) {
@@ -39,7 +40,6 @@ func ff_mov_iso639_to_lang(lang [3]byte) (code int) {
 }
 
 type MediaHeaderBox struct {
-	Box               *FullBox
 	Creation_time     uint64
 	Modification_time uint64
 	Timescale         uint32
@@ -52,7 +52,6 @@ type MediaHeaderBox struct {
 func NewMediaHeaderBox() *MediaHeaderBox {
 	_, offset := time.Now().Zone()
 	return &MediaHeaderBox{
-		Box:               NewFullBox(TypeMDHD, 0),
 		Creation_time:     uint64(time.Now().Unix() + int64(offset) + 0x7C25B080),
 		Modification_time: uint64(time.Now().Unix() + int64(offset) + 0x7C25B080),
 		Timescale:         1000,
@@ -60,30 +59,18 @@ func NewMediaHeaderBox() *MediaHeaderBox {
 	}
 }
 
-func (mdhd *MediaHeaderBox) Size() uint64 {
-	if mdhd.Box.Version == 1 {
-		return mdhd.Box.Size() + 32
-	} else {
-		return mdhd.Box.Size() + 20
-	}
-}
-
 func (mdhd *MediaHeaderBox) Decode(r io.Reader) (offset int, err error) {
-	if _, err = mdhd.Box.Decode(r); err != nil {
+	var fullbox FullBox
+	if offset, err = fullbox.Decode(r); err != nil {
 		return 0, err
 	}
-	boxsize := 0
-	if mdhd.Box.Version == 1 {
-		boxsize = 32
-	} else {
-		boxsize = 20
-	}
-	buf := make([]byte, boxsize)
+
+	buf := make([]byte, util.Conditional(fullbox.Version == 1, 32, 20))
 	if _, err = io.ReadFull(r, buf); err != nil {
 		return 0, err
 	}
 	offset = 0
-	if mdhd.Box.Version == 1 {
+	if fullbox.Version == 1 {
 		mdhd.Creation_time = binary.BigEndian.Uint64(buf[offset:])
 		offset += 8
 		mdhd.Modification_time = binary.BigEndian.Uint64(buf[offset:])
@@ -113,9 +100,10 @@ func (mdhd *MediaHeaderBox) Decode(r io.Reader) (offset int, err error) {
 }
 
 func (mdhd *MediaHeaderBox) Encode() (int, []byte) {
-	mdhd.Box.Box.Size = mdhd.Size()
-	offset, buf := mdhd.Box.Encode()
-	if mdhd.Box.Version == 1 {
+	fullbox := NewFullBox(TypeMDHD, 0)
+	fullbox.Box.Size = util.Conditional[uint64](fullbox.Version == 1, 32, 20) + FullBoxLen
+	offset, buf := fullbox.Encode()
+	if fullbox.Version == 1 {
 		binary.BigEndian.PutUint64(buf[offset:], mdhd.Creation_time)
 		offset += 8
 		binary.BigEndian.PutUint64(buf[offset:], mdhd.Modification_time)
@@ -140,19 +128,9 @@ func (mdhd *MediaHeaderBox) Encode() (int, []byte) {
 	return offset, buf
 }
 
-func makeMdhdBox(duration uint32) []byte {
+func MakeMdhdBox(duration uint32) []byte {
 	mdhd := NewMediaHeaderBox()
 	mdhd.Duration = uint64(duration)
 	_, boxdata := mdhd.Encode()
 	return boxdata
-}
-
-func decodeMdhdBox(demuxer *MovDemuxer) (err error) {
-	mdhd := MediaHeaderBox{Box: new(FullBox)}
-	if _, err = mdhd.Decode(demuxer.reader); err != nil {
-		return
-	}
-	track := demuxer.tracks[len(demuxer.tracks)-1]
-	track.timescale = mdhd.Timescale
-	return err
 }

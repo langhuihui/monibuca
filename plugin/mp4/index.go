@@ -74,6 +74,12 @@ const defaultConfig m7s.DefaultYaml = `publish:
 
 var _ = m7s.InstallPlugin[MP4Plugin](defaultConfig, pkg.NewPuller, pkg.NewRecorder)
 
+func (p *MP4Plugin) RegisterHandler() map[string]http.HandlerFunc {
+	return map[string]http.HandlerFunc{
+		"/download/{filePath...}": p.download,
+	}
+}
+
 func (p *MP4Plugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	streamPath := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/"), ".mp4")
 	if r.URL.RawQuery != "" {
@@ -188,7 +194,7 @@ func (p *MP4Plugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		} else {
 			offsetVideo = 5
 		}
-		ctx.video.Push(&ctx, video.Timestamp, durVideo, bs[offsetVideo:], util.Conditoinal(sub.VideoReader.Value.IDR, mp4.SyncSampleFlags, mp4.NonSyncSampleFlags))
+		ctx.video.Push(&ctx, video.Timestamp, durVideo, bs[offsetVideo:], util.Conditional(sub.VideoReader.Value.IDR, mp4.SyncSampleFlags, mp4.NonSyncSampleFlags))
 		lastVTime = video.Timestamp
 		return nil
 	})

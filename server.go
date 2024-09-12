@@ -169,7 +169,7 @@ func (s *Server) Start() (err error) {
 			v = filepath.Join(ExecDir, v)
 		}
 		if configYaml, err = os.ReadFile(v); err != nil {
-			s.Warn("read config file faild", "error", err.Error())
+			s.Warn("read config file failed", "error", err.Error())
 		}
 	case []byte:
 		configYaml = v

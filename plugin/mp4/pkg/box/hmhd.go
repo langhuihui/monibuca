@@ -15,7 +15,6 @@ import (
 // }
 
 type HintMediaHeaderBox struct {
-	Box        *FullBox
 	MaxPDUsize uint16
 	AvgPDUsize uint16
 	Maxbitrate uint32
@@ -23,17 +22,12 @@ type HintMediaHeaderBox struct {
 }
 
 func NewHintMediaHeaderBox() *HintMediaHeaderBox {
-	return &HintMediaHeaderBox{
-		Box: NewFullBox([4]byte{'h', 'm', 'h', 'd'}, 0),
-	}
-}
-
-func (hmhd *HintMediaHeaderBox) Size() uint64 {
-	return hmhd.Box.Size() + 16
+	return &HintMediaHeaderBox{}
 }
 
 func (hmhd *HintMediaHeaderBox) Decode(r io.Reader) (offset int, err error) {
-	if _, err = hmhd.Box.Decode(r); err != nil {
+	var fullbox FullBox
+	if _, err = fullbox.Decode(r); err != nil {
 		return 0, err
 	}
 	buf := make([]byte, 16)
@@ -53,8 +47,9 @@ func (hmhd *HintMediaHeaderBox) Decode(r io.Reader) (offset int, err error) {
 }
 
 func (hmhd *HintMediaHeaderBox) Encode() (int, []byte) {
-	hmhd.Box.Box.Size = hmhd.Size()
-	offset, buf := hmhd.Box.Encode()
+	fullbox := NewFullBox(TypeHMHD, 0)
+	fullbox.Box.Size = FullBoxLen + 16
+	offset, buf := fullbox.Encode()
 	binary.BigEndian.PutUint16(buf[offset:], hmhd.MaxPDUsize)
 	offset += 2
 	binary.BigEndian.PutUint16(buf[offset:], hmhd.AvgPDUsize)

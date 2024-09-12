@@ -158,7 +158,7 @@ func (r *AVRingReader) ReadFrame(conf *config.Subscribe) (err error) {
 	}
 
 	if r.Value.Timestamp < r.SkipTs {
-		r.Error("timestamp < skipTs", "ts", r.Value.Timestamp, "skipTs", r.SkipTs)
+		r.Warn("timestamp < skipTs", "ts", r.Value.Timestamp, "skipTs", r.SkipTs, "absTime", r.AbsTime)
 		r.AbsTime++
 	} else {
 		r.AbsTime = uint32((r.Value.Timestamp - r.SkipTs).Milliseconds())

@@ -1,9 +1,7 @@
 package box
 
 import (
-	"encoding/binary"
 	"fmt"
-	"io"
 )
 
 // SeigSampleGroupEntry - CencSampleEncryptionInformationGroupEntry as defined in
@@ -30,70 +28,13 @@ type SgpdBox struct {
 	SampleGroupEntries           []interface{}
 }
 
-func decodeSgpdBox(demuxer *MovDemuxer, size uint32) (err error) {
-	buf := make([]byte, size-BasicBoxLen)
-	if _, err = io.ReadFull(demuxer.reader, buf); err != nil {
-		return
-	}
-	n := 0
-	versionAndFlags := binary.BigEndian.Uint32(buf[n:])
-	n += 4
-	version := byte(versionAndFlags >> 24)
-
-	b := &SgpdBox{
-		Version: version,
-		Flags:   versionAndFlags & 0x00ffffff,
-	}
-	b.GroupingType = string(buf[n : n+4])
-	n += 4
-
-	if b.Version >= 1 {
-		b.DefaultLength = binary.BigEndian.Uint32(buf[n:])
-		n += 4
-	}
-	if b.Version >= 2 {
-		b.DefaultGroupDescriptionIndex = binary.BigEndian.Uint32(buf[n:])
-		n += 4
-	}
-	entryCount := int(binary.BigEndian.Uint32(buf[n:]))
-	n += 4
-
-	track := demuxer.tracks[len(demuxer.tracks)-1]
-	for i := 0; i < entryCount; i++ {
-		var descriptionLength = b.DefaultLength
-		if b.Version >= 1 && b.DefaultLength == 0 {
-			descriptionLength = binary.BigEndian.Uint32(buf[n:])
-			n += 4
-			b.DescriptionLengths = append(b.DescriptionLengths, descriptionLength)
-		}
-		var (
-			sgEntry interface{}
-			offset  int
-		)
-		sgEntry, offset, err = decodeSampleGroupEntry(b.GroupingType, descriptionLength, buf[n:])
-		n += offset
-		if err != nil {
-			return err
-		}
-		if sgEntry == nil {
-			continue
-		}
-		if seig, ok := sgEntry.(*SeigSampleGroupEntry); ok {
-			track.lastSeig = seig
-		}
-		b.SampleGroupEntries = append(b.SampleGroupEntries, sgEntry)
-	}
-
-	return nil
-}
-
 type SampleGroupEntryDecoder func(name string, length uint32, buf []byte) (interface{}, int, error)
 
 var sgeDecoders = map[string]SampleGroupEntryDecoder{
 	"seig": DecodeSeigSampleGroupEntry,
 }
 
-func decodeSampleGroupEntry(name string, length uint32, buf []byte) (interface{}, int, error) {
+func DecodeSampleGroupEntry(name string, length uint32, buf []byte) (interface{}, int, error) {
 	decode, ok := sgeDecoders[name]
 	if ok {
 		return decode(name, length, buf)

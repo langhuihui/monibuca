@@ -14,23 +14,22 @@ import (
 // 	}
 
 type TrackFragmentBaseMediaDecodeTimeBox struct {
-	Box                 *FullBox
 	BaseMediaDecodeTime uint64
 }
 
 func NewTrackFragmentBaseMediaDecodeTimeBox(fragStart uint64) *TrackFragmentBaseMediaDecodeTimeBox {
 	return &TrackFragmentBaseMediaDecodeTimeBox{
-		Box:                 NewFullBox([4]byte{'t', 'f', 'd', 't'}, 1),
 		BaseMediaDecodeTime: fragStart,
 	}
 }
 
 func (tfdt *TrackFragmentBaseMediaDecodeTimeBox) Size() uint64 {
-	return tfdt.Box.Size() + 8
+	return FullBoxLen + 8
 }
 
 func (tfdt *TrackFragmentBaseMediaDecodeTimeBox) Decode(r io.Reader, size uint32) (offset int, err error) {
-	if offset, err = tfdt.Box.Decode(r); err != nil {
+	var fullbox FullBox
+	if offset, err = fullbox.Decode(r); err != nil {
 		return
 	}
 
@@ -38,7 +37,7 @@ func (tfdt *TrackFragmentBaseMediaDecodeTimeBox) Decode(r io.Reader, size uint32
 	if _, err = io.ReadFull(r, buf); err != nil {
 		return 0, err
 	}
-	if tfdt.Box.Version == 1 {
+	if fullbox.Version == 1 {
 		tfdt.BaseMediaDecodeTime = binary.BigEndian.Uint64(buf)
 		offset += 8
 	} else {
@@ -49,26 +48,9 @@ func (tfdt *TrackFragmentBaseMediaDecodeTimeBox) Decode(r io.Reader, size uint32
 }
 
 func (tfdt *TrackFragmentBaseMediaDecodeTimeBox) Encode() (int, []byte) {
-	tfdt.Box.Box.Size = tfdt.Size()
-	offset, boxdata := tfdt.Box.Encode()
+	fullbox := NewFullBox(TypeTFDT, 1)
+	fullbox.Box.Size = tfdt.Size()
+	offset, boxdata := fullbox.Encode()
 	binary.BigEndian.PutUint64(boxdata[offset:], tfdt.BaseMediaDecodeTime)
 	return offset + 8, boxdata
-}
-
-func decodeTfdtBox(demuxer *MovDemuxer, size uint32) error {
-	tfdt := TrackFragmentBaseMediaDecodeTimeBox{Box: new(FullBox)}
-	_, err := tfdt.Decode(demuxer.reader, size)
-	if demuxer.currentTrack != nil {
-		demuxer.currentTrack.startDts = tfdt.BaseMediaDecodeTime
-	}
-	return err
-}
-
-func makeTfdtBox(track *mp4track) []byte {
-	if len(track.samplelist) == 0 {
-		return nil
-	}
-	tfdt := NewTrackFragmentBaseMediaDecodeTimeBox(track.samplelist[0].dts)
-	_, boxData := tfdt.Encode()
-	return boxData
 }

@@ -12,22 +12,16 @@ import (
 // }
 
 type SoundMediaHeaderBox struct {
-	Box     *FullBox
 	Balance int16
 }
 
 func NewSoundMediaHeaderBox() *SoundMediaHeaderBox {
-	return &SoundMediaHeaderBox{
-		Box: NewFullBox([4]byte{'s', 'm', 'h', 'd'}, 0),
-	}
-}
-
-func (smhd *SoundMediaHeaderBox) Size() uint64 {
-	return smhd.Box.Size() + 4
+	return &SoundMediaHeaderBox{}
 }
 
 func (smhd *SoundMediaHeaderBox) Decode(r io.Reader) (offset int, err error) {
-	if offset, err = smhd.Box.Decode(r); err != nil {
+	var fullbox FullBox
+	if offset, err = fullbox.Decode(r); err != nil {
 		return 0, err
 	}
 	buf := make([]byte, 4)
@@ -39,20 +33,15 @@ func (smhd *SoundMediaHeaderBox) Decode(r io.Reader) (offset int, err error) {
 }
 
 func (smhd *SoundMediaHeaderBox) Encode() (int, []byte) {
-	smhd.Box.Box.Size = smhd.Size()
-	offset, buf := smhd.Box.Encode()
+	fullbox := NewFullBox(TypeSMHD, 0)
+	fullbox.Box.Size = FullBoxLen + 4
+	offset, buf := fullbox.Encode()
 	binary.BigEndian.PutUint16(buf[offset:], uint16(smhd.Balance))
 	return offset + 2, buf
 }
 
-func makeSmhdBox() []byte {
+func MakeSmhdBox() []byte {
 	smhd := NewSoundMediaHeaderBox()
 	_, smhdbox := smhd.Encode()
 	return smhdbox
-}
-
-func decodeSmhdBox(demuxer *MovDemuxer) (err error) {
-	smhd := SoundMediaHeaderBox{Box: new(FullBox)}
-	_, err = smhd.Decode(demuxer.reader)
-	return
 }

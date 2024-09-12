@@ -159,7 +159,7 @@ func (r *Recorder) Run() (err error) {
 		if !strings.HasSuffix(filePath, ".flv") {
 			filePath += ".flv"
 		}
-		if file, err = os.OpenFile(filePath, os.O_CREATE|os.O_RDWR|util.Conditoinal(ctx.Append, os.O_APPEND, os.O_TRUNC), 0666); err != nil {
+		if file, err = os.OpenFile(filePath, os.O_CREATE|os.O_RDWR|util.Conditional(ctx.Append, os.O_APPEND, os.O_TRUNC), 0666); err != nil {
 			return
 		}
 		defer writeMetaTag(file, suber, filepositions, times, &duration)

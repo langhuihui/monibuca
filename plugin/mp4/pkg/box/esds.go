@@ -77,7 +77,7 @@ func makeDecoderConfigDescriptor(cid MP4_CODEC_TYPE, vosData []byte) []byte {
 		decoder_specific_info_len = uint32(len(vosData)) + 5
 	}
 	dcd := makeBaseDescriptor(0x04, 13+decoder_specific_info_len)
-	dcd[5] = getBojecttypeWithCodecId(cid)
+	dcd[5] = GetBojecttypeWithCodecId(cid)
 	if cid == MP4_CODEC_H264 || cid == MP4_CODEC_H265 {
 		dcd[6] = 0x11
 	} else if cid == MP4_CODEC_G711A || cid == MP4_CODEC_G711U || cid == MP4_CODEC_AAC {
@@ -109,7 +109,7 @@ func makeSLDescriptor() []byte {
 	return sldes
 }
 
-func decodeESDescriptor(esd []byte, track *mp4track) (vosData []byte) {
+func DecodeESDescriptor(esd []byte) (cid MP4_CODEC_TYPE, vosData []byte) {
 	var bs *codec.BitStream
 	for len(esd) > 0 {
 		based := BaseDescriptor{}
@@ -129,7 +129,7 @@ func decodeESDescriptor(esd []byte, track *mp4track) (vosData []byte) {
 			}
 			esd = bs.RemainData()
 		case 0x04:
-			track.cid = getCodecIdByObjectType(bs.Uint8(8))
+			cid = getCodecIdByObjectType(bs.Uint8(8))
 			bs.Uint8(32)
 			bs.Uint8(64)
 			esd = bs.RemainData()
@@ -142,12 +142,6 @@ func decodeESDescriptor(esd []byte, track *mp4track) (vosData []byte) {
 			bs.SkipBits(int(based.sizeOfInstance) * 8)
 			esd = bs.RemainData()
 		}
-	}
-	if track.cid == MP4_CODEC_AAC && len(vosData) == 0 {
-		panic("no vosdata")
-	}
-	if track.cid == MP4_CODEC_AAC {
-		track.extra = new(aacExtraData)
 	}
 	return
 }

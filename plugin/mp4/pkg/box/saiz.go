@@ -2,13 +2,11 @@ package box
 
 import (
 	"encoding/binary"
-	"errors"
 	"io"
 )
 
 // SaizBox - Sample Auxiliary Information Sizes Box (saiz)  (in stbl or traf box)
 type SaizBox struct {
-	Box                   *FullBox
 	AuxInfoType           string // Used for Common Encryption Scheme (4-bytes uint32 according to spec)
 	AuxInfoTypeParameter  uint32
 	SampleCount           uint32
@@ -17,7 +15,8 @@ type SaizBox struct {
 }
 
 func (s *SaizBox) Decode(r io.Reader, size uint32) error {
-	if _, err := s.Box.Decode(r); err != nil {
+	var fullbox FullBox
+	if _, err := fullbox.Decode(r); err != nil {
 		return err
 	}
 	buf := make([]byte, size-12)
@@ -25,7 +24,7 @@ func (s *SaizBox) Decode(r io.Reader, size uint32) error {
 		return err
 	}
 	var n int
-	flags := uint32(s.Box.Flags[0])<<16 | uint32(s.Box.Flags[1])<<8 | uint32(s.Box.Flags[2])
+	flags := uint32(fullbox.Flags[0])<<16 | uint32(fullbox.Flags[1])<<8 | uint32(fullbox.Flags[2])
 	if flags&0x01 != 0 {
 		s.AuxInfoType = string(buf[n : n+4])
 		n += 4
@@ -44,18 +43,5 @@ func (s *SaizBox) Decode(r io.Reader, size uint32) error {
 			n += 1
 		}
 	}
-	return nil
-}
-
-func decodeSaizBox(demuxer *MovDemuxer, size uint32) error {
-	saiz := SaizBox{Box: new(FullBox)}
-	err := saiz.Decode(demuxer.reader, size)
-	if err != nil {
-		return err
-	}
-	if demuxer.currentTrack == nil {
-		return errors.New("current track is nil")
-	}
-	demuxer.currentTrack.lastSaiz = &saiz
 	return nil
 }

@@ -103,7 +103,7 @@ func (dops *OpusSpecificBox) Decode(r io.Reader, size uint32) (offset int, err e
 	return int(size - BasicBoxLen), nil
 }
 
-func makeOpusSpecificBox(extraData []byte) []byte {
+func MakeOpusSpecificBox(extraData []byte) []byte {
 	ctx := &codec.OpusContext{}
 	ctx.ParseExtranData(extraData)
 	dops := NewdOpsBox()

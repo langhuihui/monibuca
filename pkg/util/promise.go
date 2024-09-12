@@ -51,7 +51,7 @@ func (p *Promise) Fulfill(err error) {
 	if p.timer != nil {
 		p.timer.Stop()
 	}
-	p.CancelCauseFunc(Conditoinal(err == nil, ErrResolve, err))
+	p.CancelCauseFunc(Conditional(err == nil, ErrResolve, err))
 }
 
 func (p *Promise) IsPending() bool {
