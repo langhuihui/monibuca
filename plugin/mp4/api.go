@@ -54,7 +54,7 @@ func (p *MP4Plugin) download(w http.ResponseWriter, r *http.Request) {
 	muxer.CurrentOffset = int64(n)
 	var lastTs, tsOffset int64
 	var parts []*ContentPart
-	var sampleOffset = muxer.CurrentOffset + box.BasicBoxLen*2 // a freebox and mdatbox or a large mdatbox
+	sampleOffset := muxer.CurrentOffset + box.BasicBoxLen*2
 	mdatOffset := sampleOffset
 	var audioTrack, videoTrack *mp4.Track
 	for i, stream := range streams {
@@ -87,7 +87,7 @@ func (p *MP4Plugin) download(w http.ResponseWriter, r *http.Request) {
 			startTimestamp := startTime.Sub(stream.StartTime).Milliseconds()
 			var startSample *box.Sample
 			if startSample, err = demuxer.SeekTime(uint64(startTimestamp)); err != nil {
-				return
+				continue
 			}
 			tsOffset = -int64(startSample.DTS)
 		}
@@ -119,6 +119,16 @@ func (p *MP4Plugin) download(w http.ResponseWriter, r *http.Request) {
 			parts = append(parts, part)
 		}
 	}
+	moovSize := muxer.GetMoovSize()
+	for _, track := range muxer.Tracks {
+		for i := range track.Samplelist {
+			track.Samplelist[i].Offset += int64(moovSize)
+		}
+	}
+	err = muxer.WriteMoov(w)
+	if err != nil {
+		return
+	}
 	var mdatBox = box.MediaDataBox(sampleOffset - mdatOffset)
 	boxLen, buf := mdatBox.Encode()
 	if boxLen == box.BasicBoxLen*2 {
@@ -140,5 +150,4 @@ func (p *MP4Plugin) download(w http.ResponseWriter, r *http.Request) {
 		totalWritten += written
 		part.Close()
 	}
-	muxer.WriteMoov(w)
 }

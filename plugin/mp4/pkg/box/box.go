@@ -148,7 +148,7 @@ func (box *BasicBox) Decode(r io.Reader) (nn int, err error) {
 		if _, err = io.ReadFull(r, largeSize[:]); err != nil {
 			return
 		}
-		box.Size = uint64(binary.BigEndian.Uint64(largeSize[:]))
+		box.Size = binary.BigEndian.Uint64(largeSize[:])
 		nn += 8
 	}
 	if _, err = io.ReadFull(r, box.Type[:]); err != nil {

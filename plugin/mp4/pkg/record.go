@@ -2,11 +2,11 @@ package mp4
 
 import (
 	"fmt"
+	"github.com/VictoriaMetrics/VictoriaMetrics/lib/fs"
 	"os"
 	"path/filepath"
 	"time"
 
-	"github.com/VictoriaMetrics/VictoriaMetrics/lib/fs"
 	"m7s.live/m7s/v5"
 	"m7s.live/m7s/v5/pkg"
 	"m7s.live/m7s/v5/pkg/codec"
