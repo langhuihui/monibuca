@@ -127,10 +127,9 @@ type IBox interface {
 	Decode(io.Reader, *BasicBox) (int, error)
 }
 type BasicBox struct {
-	Offset   int64
-	Size     uint64
-	Type     [4]byte
-	UserType [16]byte
+	Offset int64
+	Size   uint64
+	Type   [4]byte
 }
 
 func NewBasicBox(boxtype [4]byte) *BasicBox {
@@ -143,47 +142,27 @@ func (box *BasicBox) Decode(r io.Reader) (nn int, err error) {
 	if _, err = io.ReadFull(r, box.Type[:]); err != nil {
 		return
 	}
-	box.Size = uint64(binary.BigEndian.Uint32(box.Type[:]))
+	nn = 4
+	if box.Size = uint64(binary.BigEndian.Uint32(box.Type[:])); box.Size == 1 {
+		var largeSize [8]byte
+		if _, err = io.ReadFull(r, largeSize[:]); err != nil {
+			return
+		}
+		box.Size = uint64(binary.BigEndian.Uint64(largeSize[:]))
+		nn += 8
+	}
 	if _, err = io.ReadFull(r, box.Type[:]); err != nil {
 		return
 	}
-	nn = BasicBoxLen
-	if box.Size == 1 {
-		if _, err = io.ReadFull(r, box.UserType[:8]); err != nil {
-			return
-		}
-		box.Size = binary.BigEndian.Uint64(box.UserType[:8])
-		box.UserType = [16]byte{}
-		nn += 8
-	}
-	if box.Type == TypeUUID {
-		if _, err = io.ReadFull(r, box.UserType[:]); err != nil {
-			return
-		}
-		nn += 16
-	}
+	nn += 4
 	return
 }
 
 func (box *BasicBox) Encode() (int, []byte) {
-	nn := 8
-	var buf []byte
-	if box.Size > 0xFFFFFFFF { //just for mdat box
-		buf = make([]byte, 16)
-		binary.BigEndian.PutUint32(buf, 1)
-		copy(buf[4:], box.Type[:])
-		nn += 8
-		binary.BigEndian.PutUint64(buf[8:], box.Size)
-	} else {
-		buf = make([]byte, box.Size)
-		binary.BigEndian.PutUint32(buf, uint32(box.Size))
-		copy(buf[4:], box.Type[:])
-		if box.Type == TypeUUID {
-			copy(buf[nn:nn+16], box.UserType[:])
-			nn += 16
-		}
-	}
-	return nn, buf
+	buf := make([]byte, box.Size)
+	binary.BigEndian.PutUint32(buf, uint32(box.Size))
+	copy(buf[4:], box.Type[:])
+	return BasicBoxLen, buf
 }
 
 // aligned(8) class FullBox(unsigned int(32) boxtype, unsigned int(8) v, bit(24) f) extends Box(boxtype) {

@@ -2,10 +2,10 @@ package mp4
 
 import (
 	"encoding/binary"
+	"errors"
 	"io"
 	"slices"
 
-	"m7s.live/m7s/v5/pkg/util"
 	. "m7s.live/m7s/v5/plugin/mp4/pkg/box"
 )
 
@@ -56,7 +56,7 @@ type (
 		reader        io.ReadSeeker
 		mdatOffset    []uint64
 		Tracks        []*Track
-		readSampleIdx []uint32
+		ReadSampleIdx []uint32
 		IsFragment    bool
 		currentTrack  *Track
 		pssh          []*PsshBox
@@ -143,7 +143,9 @@ func (d *Demuxer) Demux() (err error) {
 			d.Timescale = mvhd.Timescale
 		case TypeMDAT:
 			d.mdatOffset = append(d.mdatOffset, uint64(basebox.Offset+BasicBoxLen))
-			_, err = d.reader.Seek(offset, io.SeekStart)
+			if _, err = d.reader.Seek(offset, io.SeekStart); err != nil {
+				return
+			}
 		case TypePSSH:
 			var pssh PsshBox
 			pssh.Decode(d.reader, &basebox)
@@ -163,7 +165,9 @@ func (d *Demuxer) Demux() (err error) {
 			lastTrack.Timescale = mdhd.Timescale
 		case TypeHDLR:
 			var hdlr HandlerBox
-			_, err = hdlr.Decode(d.reader, basebox.Size)
+			if _, err = hdlr.Decode(d.reader, basebox.Size); err != nil {
+				return
+			}
 		case TypeVMHD:
 			var vmhd VideoMediaHeaderBox
 			vmhd.Decode(d.reader)
@@ -178,7 +182,9 @@ func (d *Demuxer) Demux() (err error) {
 			fullbox.Decode(d.reader)
 		case TypeSTSD:
 			var stsd SampleDescriptionBox
-			contentSize, err = stsd.Decode(d.reader)
+			if contentSize, err = stsd.Decode(d.reader); err != nil {
+				return
+			}
 			hasChild = true
 		case TypeSTTS:
 			var stts TimeToSampleBox
@@ -209,7 +215,9 @@ func (d *Demuxer) Demux() (err error) {
 			stss.Decode(d.reader)
 			lastTrack.SampleTable.STSS = &stss
 		case TypeENCV:
-			contentSize, err = decodeVisualSampleEntry()
+			if contentSize, err = decodeVisualSampleEntry(); err != nil {
+				return
+			}
 		case TypeFRMA:
 			buf := make([]byte, basebox.Size-BasicBoxLen)
 			if _, err = io.ReadFull(d.reader, buf); err != nil {
@@ -253,30 +261,44 @@ func (d *Demuxer) Demux() (err error) {
 			}
 		case TypeAVC1:
 			lastTrack.Cid = MP4_CODEC_H264
-			contentSize, err = decodeVisualSampleEntry()
+			if contentSize, err = decodeVisualSampleEntry(); err != nil {
+				return
+			}
 			hasChild = true
 		case TypeHVC1, TypeHEV1:
 			lastTrack.Cid = MP4_CODEC_H265
-			contentSize, err = decodeVisualSampleEntry()
+			if contentSize, err = decodeVisualSampleEntry(); err != nil {
+				return
+			}
 			hasChild = true
 		case TypeENCA:
-			contentSize, err = decodeAudioSampleEntry()
+			if contentSize, err = decodeAudioSampleEntry(); err != nil {
+				return
+			}
 			hasChild = true
 		case TypeMP4A:
 			lastTrack.Cid = MP4_CODEC_AAC
-			contentSize, err = decodeAudioSampleEntry()
+			if contentSize, err = decodeAudioSampleEntry(); err != nil {
+				return
+			}
 			hasChild = true
 		case TypeULAW:
 			lastTrack.Cid = MP4_CODEC_G711U
-			contentSize, err = decodeAudioSampleEntry()
+			if contentSize, err = decodeAudioSampleEntry(); err != nil {
+				return
+			}
 			hasChild = true
 		case TypeALAW:
 			lastTrack.Cid = MP4_CODEC_G711A
-			contentSize, err = decodeAudioSampleEntry()
+			if contentSize, err = decodeAudioSampleEntry(); err != nil {
+				return
+			}
 			hasChild = true
 		case TypeOPUS:
 			lastTrack.Cid = MP4_CODEC_OPUS
-			contentSize, err = decodeAudioSampleEntry()
+			if contentSize, err = decodeAudioSampleEntry(); err != nil {
+				return
+			}
 			hasChild = true
 		case TypeAVCC:
 			lastTrack.ExtraData = make([]byte, basebox.Size-BasicBoxLen)
@@ -345,11 +367,20 @@ func (d *Demuxer) Demux() (err error) {
 		case TypeSAIO:
 			var saio SaioBox
 			saio.Decode(d.reader, uint32(basebox.Size))
-			err = d.decodeSaioBox(&saio)
+			if err = d.decodeSaioBox(&saio); err != nil {
+				return
+			}
 		case TypeUUID:
-			_, err = d.reader.Seek(int64(basebox.Size)-BasicBoxLen-16, io.SeekCurrent)
+			var uuid [16]byte
+			if _, err = io.ReadFull(d.reader, uuid[:]); err != nil {
+				return
+			}
+			// TODO
+			// _, err = d.reader.Seek(int64(basebox.Size)-BasicBoxLen-16, io.SeekCurrent)
 		case TypeSGPD:
-			err = d.decodeSgpdBox(uint32(basebox.Size))
+			if err = d.decodeSgpdBox(uint32(basebox.Size)); err != nil {
+				return
+			}
 		case TypeWAVE:
 			if _, err = io.ReadFull(d.reader, make([]byte, 24)); err != nil {
 				return
@@ -357,6 +388,9 @@ func (d *Demuxer) Demux() (err error) {
 		default:
 			if basebox.Size != BasicBoxLen {
 				_, err = d.reader.Seek(int64(basebox.Size)-BasicBoxLen, io.SeekCurrent)
+				if err != nil {
+					return
+				}
 			}
 		}
 		if hasChild {
@@ -378,7 +412,7 @@ func (d *Demuxer) Demux() (err error) {
 	if !d.IsFragment {
 		d.buildSampleList()
 	}
-	d.readSampleIdx = make([]uint32, len(d.Tracks))
+	d.ReadSampleIdx = make([]uint32, len(d.Tracks))
 	for _, track := range d.Tracks {
 		if len(track.Samplelist) > 0 {
 			track.StartDts = uint64(track.Samplelist[0].DTS) * 1000 / uint64(track.Timescale)
@@ -388,17 +422,40 @@ func (d *Demuxer) Demux() (err error) {
 	return nil
 }
 
-func (d *Demuxer) SeekTime(dts uint64) error {
-	for i, track := range d.Tracks {
-		for j := 0; j < len(track.Samplelist); j++ {
-			if track.Samplelist[j].DTS*1000/uint64(track.Timescale) < dts {
-				continue
-			}
-			d.readSampleIdx[i] = uint32(j)
-			break
+func (d *Demuxer) SeekTime(dts uint64) (sample *Sample, err error) {
+	var audioTrack, videoTrack *Track
+	for _, track := range d.Tracks {
+		if track.Cid.IsAudio() {
+			audioTrack = track
+		} else if track.Cid.IsVideo() {
+			videoTrack = track
 		}
 	}
-	return nil
+	if videoTrack != nil {
+		idx := videoTrack.Seek(dts)
+		if idx == -1 {
+			return nil, errors.New("seek failed")
+		}
+		d.ReadSampleIdx[videoTrack.TrackId-1] = uint32(idx)
+		sample = &videoTrack.Samplelist[idx]
+		if audioTrack != nil {
+			for i, sample := range audioTrack.Samplelist {
+				if sample.Offset < int64(videoTrack.Samplelist[idx].Offset) {
+					continue
+				}
+				d.ReadSampleIdx[audioTrack.TrackId-1] = uint32(i)
+				break
+			}
+		}
+	} else if audioTrack != nil {
+		idx := audioTrack.Seek(dts)
+		if idx == -1 {
+			return nil, errors.New("seek failed")
+		}
+		d.ReadSampleIdx[audioTrack.TrackId-1] = uint32(idx)
+		sample = &audioTrack.Samplelist[idx]
+	}
+	return
 }
 
 func (d *Demuxer) buildSampleList() {
@@ -469,6 +526,11 @@ func (d *Demuxer) buildSampleList() {
 					track.Samplelist[iterator].PTS = (track.Samplelist[iterator].DTS) + uint64((*stbl.CTTS)[i].SampleOffset)
 					iterator++
 				}
+			}
+		}
+		if stbl.STSS != nil {
+			for _, keyIndex := range *stbl.STSS {
+				track.Samplelist[keyIndex-1].KeyFrame = true
 			}
 		}
 	}
@@ -602,17 +664,45 @@ func (d *Demuxer) decodeSgpdBox(size uint32) (err error) {
 	return nil
 }
 
-func (d *Demuxer) ReadPacket(allocator *util.ScalableMemoryAllocator) (*AVPacket, error) {
+func (d *Demuxer) readSubSample(idx uint32, track *Track) (subSample *SubSample) {
+	if int(idx) < len(track.subSamples) {
+		subSample = new(SubSample)
+		subSample.Number = idx
+		if len(track.subSamples[idx].IV) > 0 {
+			copy(subSample.IV[:], track.subSamples[idx].IV)
+		} else {
+			copy(subSample.IV[:], track.defaultConstantIV)
+		}
+		if track.lastSeig != nil {
+			copy(subSample.KID[:], track.lastSeig.KID[:])
+			subSample.CryptByteBlock = track.lastSeig.CryptByteBlock
+			subSample.SkipByteBlock = track.lastSeig.SkipByteBlock
+		} else {
+			copy(subSample.KID[:], track.defaultKID[:])
+			subSample.CryptByteBlock = track.defaultCryptByteBlock
+			subSample.SkipByteBlock = track.defaultSkipByteBlock
+		}
+		subSample.PsshBoxes = append(subSample.PsshBoxes, d.pssh...)
+		if len(track.subSamples[idx].SubSamples) > 0 {
+			subSample.Patterns = make([]SubSamplePattern, len(track.subSamples[idx].SubSamples))
+			for ei, e := range track.subSamples[idx].SubSamples {
+				subSample.Patterns[ei].BytesClear = e.BytesOfClearData
+				subSample.Patterns[ei].BytesProtected = e.BytesOfProtectedData
+			}
+		}
+		return subSample
+	}
+	return nil
+}
+
+func (d *Demuxer) ReadSample(yield func(*Track, Sample) bool) {
 	for {
 		maxdts := int64(-1)
 		minTsSample := Sample{DTS: uint64(maxdts)}
-		var (
-			subSample  *SubSample = nil
-			whichTrack *Track     = nil
-		)
+		var whichTrack *Track
 		whichTracki := 0
 		for i, track := range d.Tracks {
-			idx := d.readSampleIdx[i]
+			idx := d.ReadSampleIdx[i]
 			if int(idx) == len(track.Samplelist) {
 				continue
 			}
@@ -629,54 +719,48 @@ func (d *Demuxer) ReadPacket(allocator *util.ScalableMemoryAllocator) (*AVPacket
 					whichTracki = i
 				}
 			}
-			if int(idx) < len(track.subSamples) {
-				subSample = new(SubSample)
-				subSample.Number = idx
-				if len(track.subSamples[idx].IV) > 0 {
-					copy(subSample.IV[:], track.subSamples[idx].IV)
-				} else {
-					copy(subSample.IV[:], track.defaultConstantIV)
-				}
-				if track.lastSeig != nil {
-					copy(subSample.KID[:], track.lastSeig.KID[:])
-					subSample.CryptByteBlock = track.lastSeig.CryptByteBlock
-					subSample.SkipByteBlock = track.lastSeig.SkipByteBlock
-				} else {
-					copy(subSample.KID[:], track.defaultKID[:])
-					subSample.CryptByteBlock = track.defaultCryptByteBlock
-					subSample.SkipByteBlock = track.defaultSkipByteBlock
-				}
-				subSample.PsshBoxes = append(subSample.PsshBoxes, d.pssh...)
-				if len(track.subSamples[idx].SubSamples) > 0 {
-					subSample.Patterns = make([]SubSamplePattern, len(track.subSamples[idx].SubSamples))
-					for ei, e := range track.subSamples[idx].SubSamples {
-						subSample.Patterns[ei].BytesClear = e.BytesOfClearData
-						subSample.Patterns[ei].BytesProtected = e.BytesOfProtectedData
-					}
-				}
-			}
+			// subSample := d.readSubSample(idx, whichTrack)
+		}
+		if minTsSample.DTS == uint64(maxdts) {
+			return
 		}
 
-		if minTsSample.DTS == uint64(maxdts) {
-			return nil, io.EOF
+		d.ReadSampleIdx[whichTracki]++
+		if !yield(whichTrack, minTsSample) {
+			return
 		}
-		if _, err := d.reader.Seek(int64(minTsSample.Offset), io.SeekStart); err != nil {
-			return nil, err
+	}
+}
+
+func (d *Demuxer) RangeSample(yield func(*Track, *Sample) bool) {
+	for {
+		var minTsSample *Sample
+		var whichTrack *Track
+		whichTracki := 0
+		for i, track := range d.Tracks {
+			idx := d.ReadSampleIdx[i]
+			if int(idx) == len(track.Samplelist) {
+				continue
+			}
+			if whichTrack == nil {
+				minTsSample = &track.Samplelist[idx]
+				whichTrack = track
+				whichTracki = i
+			} else {
+				if minTsSample.Offset > track.Samplelist[idx].Offset {
+					minTsSample = &track.Samplelist[idx]
+					whichTrack = track
+					whichTracki = i
+				}
+			}
+			// subSample := d.readSubSample(idx, whichTrack)
 		}
-		//sample := make([]byte, minTsSample.size)
-		sample := allocator.Malloc(int(minTsSample.Size))
-		if _, err := io.ReadFull(d.reader, sample); err != nil {
-			return nil, err
+		if minTsSample == nil {
+			return
 		}
-		d.readSampleIdx[whichTracki]++
-		avpkg := &AVPacket{
-			Track: whichTrack,
-			Pts:   minTsSample.PTS * 1000 / uint64(whichTrack.Timescale),
-			Dts:   minTsSample.DTS * 1000 / uint64(whichTrack.Timescale),
-			Data:  sample,
-		}
-		if len(avpkg.Data) > 0 {
-			return avpkg, nil
+		d.ReadSampleIdx[whichTracki]++
+		if !yield(whichTrack, minTsSample) {
+			return
 		}
 	}
 }

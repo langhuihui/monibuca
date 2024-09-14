@@ -1,8 +1,8 @@
 global:
   loglevel: debug
 mp4:
-  pull:
-    record/test: record/live/test?start=2024-09-12T10:25:00
+#  pull:
+#    record/test: record/live/test?start=2024-09-12T10:25:00
   publish:
     delayclosetimeout: 1s
   onsub:

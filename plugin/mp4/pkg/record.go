@@ -24,14 +24,13 @@ var writeTrailerQueueTask WriteTrailerQueueTask
 type writeTrailerTask struct {
 	task.Task
 	muxer *FileMuxer
-	file  *os.File
 }
 
 func (task *writeTrailerTask) Start() (err error) {
 	err = task.muxer.WriteTrailer()
 	if err != nil {
 		task.Error("write trailer", "err", err)
-		return task.file.Close()
+		return task.muxer.File.Close()
 	} else {
 		task.Info("write trailer")
 		var temp *os.File
@@ -45,9 +44,9 @@ func (task *writeTrailerTask) Start() (err error) {
 			task.Error("rewrite with moov", "err", err)
 			return
 		}
-		err = task.file.Close()
+		err = task.muxer.File.Close()
 		err = temp.Close()
-		fs.MustCopyFile(temp.Name(), task.file.Name())
+		fs.MustCopyFile(temp.Name(), task.muxer.File.Name())
 		return os.Remove(temp.Name())
 	}
 }
@@ -62,7 +61,6 @@ func NewRecorder() m7s.IRecorder {
 
 type Recorder struct {
 	m7s.DefaultRecorder
-	file   *os.File
 	muxer  *FileMuxer
 	stream m7s.RecordStream
 }
@@ -71,7 +69,6 @@ func (r *Recorder) writeTailer() {
 	r.stream.EndTime = time.Now()
 	r.RecordJob.Plugin.DB.Save(&r.stream)
 	writeTrailerQueueTask.AddTask(&writeTrailerTask{
-		file:  r.file,
 		muxer: r.muxer,
 	}, r.Logger)
 }
@@ -90,16 +87,17 @@ func (r *Recorder) createStream() (err error) {
 		r.stream.VideoCodec = sub.Publisher.VideoTrack.ICodecCtx.FourCC().String()
 	}
 	recordJob.Plugin.DB.Save(&r.stream)
+	var file *os.File
 	if r.RecordJob.Fragment == 0 {
-		if r.file, err = os.Create(fmt.Sprintf("%d.mp4", r.RecordJob.FilePath)); err != nil {
+		if file, err = os.Create(fmt.Sprintf("%d.mp4", r.RecordJob.FilePath)); err != nil {
 			return
 		}
 	} else {
-		if r.file, err = os.Create(filepath.Join(r.RecordJob.FilePath, fmt.Sprintf("%d.mp4", r.stream.ID))); err != nil {
+		if file, err = os.Create(filepath.Join(r.RecordJob.FilePath, fmt.Sprintf("%d.mp4", r.stream.ID))); err != nil {
 			return
 		}
 	}
-	r.muxer, err = NewFileMuxer(r.file)
+	r.muxer, err = NewFileMuxer(file)
 	return
 }
 
@@ -112,7 +110,7 @@ func (r *Recorder) Start() (err error) {
 }
 
 func (r *Recorder) Dispose() {
-	if r.file != nil && r.muxer != nil {
+	if r.muxer != nil {
 		r.writeTailer()
 	}
 }
@@ -176,7 +174,7 @@ func (r *Recorder) Run() (err error) {
 			}
 		}
 		dts := sub.AudioReader.AbsTime
-		return r.muxer.WriteSample(r.file, audioTrack, box.Sample{
+		return r.muxer.WriteSample(audioTrack, box.Sample{
 			Data: audio.ToBytes(),
 			PTS:  uint64(dts),
 			DTS:  uint64(dts),
@@ -225,7 +223,7 @@ func (r *Recorder) Run() (err error) {
 			}
 		}
 
-		return r.muxer.WriteSample(r.file, videoTrack, box.Sample{
+		return r.muxer.WriteSample(videoTrack, box.Sample{
 			KeyFrame: sub.VideoReader.Value.IDR,
 			Data:     bytes[offset:],
 			PTS:      uint64(sub.VideoReader.AbsTime) + uint64(video.CTS),

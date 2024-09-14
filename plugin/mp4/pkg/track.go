@@ -88,6 +88,20 @@ func (track *Track) makeElstBox() []byte {
 
 }
 
+func (track *Track) Seek(dts uint64) int {
+	for i, sample := range track.Samplelist {
+		if sample.DTS*1000/uint64(track.Timescale) < dts {
+			continue
+		} else if track.Cid.IsVideo() {
+			if sample.KeyFrame {
+				return i
+			}
+		} else {
+			return i
+		}
+	}
+	return -1
+}
 
 func (track *Track) makeEdtsBox() []byte {
 	elst := track.makeElstBox()
@@ -97,7 +111,7 @@ func (track *Track) makeEdtsBox() []byte {
 	return edtsbox
 }
 
-func (track *Track) addSampleEntry(entry Sample) {
+func (track *Track) AddSampleEntry(entry Sample) {
 	if len(track.Samplelist) <= 1 {
 		track.Duration = 0
 	} else {
