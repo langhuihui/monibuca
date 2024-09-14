@@ -346,17 +346,17 @@ func (handler *SubscribeHandler[A, V]) Start() (err error) {
 		// 正常模式下或者纯音频模式下，音频开始播放
 		if ar != nil {
 			for err == nil {
-				switch ar.State {
-				case READSTATE_INIT:
-					if vr != nil {
-						ar.FirstTs = vr.FirstTs
-
-					}
-				case READSTATE_NORMAL:
-					if vr != nil {
-						ar.SkipTs = vr.SkipTs
-					}
-				}
+				//switch ar.State {
+				//case READSTATE_INIT:
+				//	if vr != nil {
+				//		ar.FirstTs = vr.FirstTs
+				//
+				//	}
+				//case READSTATE_NORMAL:
+				//	if vr != nil {
+				//		ar.SkipTs = vr.SkipTs
+				//	}
+				//}
 				if err = ar.ReadFrame(&s.Subscribe); err == nil {
 					if prePublisher != s.Publisher {
 						break

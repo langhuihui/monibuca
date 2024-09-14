@@ -305,7 +305,7 @@ func (p *Publisher) writeAV(t *AVTrack, data IAVFrame) {
 	if p.Enabled(p, task.TraceLevel) {
 		codec := t.FourCC().String()
 		data := frame.Wraps[0].String()
-		p.Trace("write", "seq", frame.Sequence, "ts", uint32(frame.Timestamp/time.Millisecond), "codec", codec, "size", bytesIn, "data", data)
+		p.Trace("write", "seq", frame.Sequence, "ts0", ts, "ts", uint32(frame.Timestamp/time.Millisecond), "codec", codec, "size", bytesIn, "data", data)
 	}
 }
 

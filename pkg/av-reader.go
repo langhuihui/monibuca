@@ -167,11 +167,12 @@ func (r *AVRingReader) ReadFrame(conf *config.Subscribe) (err error) {
 		}
 	}
 	r.Delay = r.Track.LastValue.Sequence - r.Value.Sequence
-	r.Log(context.TODO(), task.TraceLevel, r.Track.FourCC().String(), "delay", r.Delay)
+	r.Log(context.TODO(), task.TraceLevel, r.Track.FourCC().String(), "ts", r.Value.Timestamp, "delay", r.Delay)
 	return
 }
 
 func (r *AVRingReader) ResetAbsTime() {
 	r.SkipTs = r.Value.Timestamp
+	r.Info("reset absTime", "skipTs", r.SkipTs)
 	r.AbsTime = 1
 }
