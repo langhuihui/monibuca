@@ -124,9 +124,9 @@ func (avcc *RTMPVideo) ConvertCtx(from codec.ICodecCtx) (to codec.ICodecCtx, seq
 	switch fourCC := from.FourCC(); fourCC {
 	case codec.FourCC_H264:
 		h264ctx := from.GetBase().(*codec.H264Ctx)
-		b = make(util.Buffer, h264ctx.RecordInfo.Len()+4)
+		b = make(util.Buffer, h264ctx.RecordInfo.Len()+5)
 		b[0] = 0x17
-		h264ctx.RecordInfo.Marshal(b[4:])
+		h264ctx.RecordInfo.Marshal(b[5:])
 		var seqFrame RTMPData
 		seqFrame.AppendOne(b)
 		//if t.Enabled(context.TODO(), TraceLevel) {

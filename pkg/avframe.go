@@ -73,6 +73,8 @@ func (frame *AVFrame) Clone() {
 
 func (frame *AVFrame) Reset() {
 	frame.Timestamp = 0
+	frame.IDR = false
+	frame.CTS = 0
 	frame.Raw = nil
 	if len(frame.Wraps) > 0 {
 		for _, wrap := range frame.Wraps {

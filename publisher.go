@@ -2,7 +2,6 @@ package m7s
 
 import (
 	"context"
-	"m7s.live/m7s/v5/pkg/task"
 	"math"
 	"os"
 	"path/filepath"
@@ -10,6 +9,8 @@ import (
 	"slices"
 	"sync"
 	"time"
+
+	"m7s.live/m7s/v5/pkg/task"
 
 	. "m7s.live/m7s/v5/pkg"
 	"m7s.live/m7s/v5/pkg/config"
@@ -563,11 +564,15 @@ func (p *Publisher) takeOver(old *Publisher) {
 }
 
 func (p *Publisher) WaitTrack() (err error) {
+	var v, a error
 	if p.PubVideo {
-		err = p.videoReady.Await()
+		v = p.videoReady.Await()
 	}
 	if p.PubAudio {
-		err = p.audioReady.Await()
+		a = p.audioReady.Await()
+	}
+	if v != nil && a != nil {
+		return ErrNoTrack
 	}
 	return
 }

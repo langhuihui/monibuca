@@ -1,14 +1,13 @@
 global:
-  loglevel: trace
-flv:
-  path: record
+  loglevel: debug
 gb28181:
-    sip:
-        listenaddr:
+  autoinvite: true
+  sip:
+    listenaddr:
           - udp::5060
-    onsub:
-      pull:
-        .* : $0
+  onsub:
+    pull:
+      .* : $0
 
 #rtsp:
 #  tcp:

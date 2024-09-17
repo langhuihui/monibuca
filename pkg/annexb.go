@@ -134,7 +134,7 @@ func (a *AnnexB) Demux(codecCtx codec.ICodecCtx) (ret any, err error) {
 					gotNalu()
 				}
 				reader.Skip(startCode)
-				for _ = range reader.ClipFront {
+				for range reader.ClipFront {
 				}
 			}
 		} else if err == io.EOF {

@@ -3,6 +3,15 @@ package plugin_gb28181
 import (
 	"errors"
 	"fmt"
+	"net"
+	"net/http"
+	"os"
+	"slices"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/emiago/sipgo"
 	"github.com/emiago/sipgo/sip"
 	"github.com/icholy/digest"
@@ -14,14 +23,6 @@ import (
 	"m7s.live/m7s/v5/pkg/util"
 	"m7s.live/m7s/v5/plugin/gb28181/pb"
 	gb28181 "m7s.live/m7s/v5/plugin/gb28181/pkg"
-	"net"
-	"net/http"
-	"os"
-	"slices"
-	"strconv"
-	"strings"
-	"sync"
-	"time"
 )
 
 type SipConfig struct {
@@ -39,18 +40,19 @@ type PositionConfig struct {
 type GB28181Plugin struct {
 	pb.UnimplementedApiServer
 	m7s.Plugin
-	Serial    string `default:"34020000002000000001" desc:"sip 服务 id"` //sip 服务器 id, 默认 34020000002000000001
-	Realm     string `default:"3402000000" desc:"sip 服务域"`             //sip 服务器域，默认 3402000000
-	Username  string
-	Password  string
-	Sip       SipConfig
-	MediaPort util.Range[uint16] `default:"10000-20000" desc:"媒体端口范围"` //媒体端口范围
-	Position  PositionConfig
-	ua        *sipgo.UserAgent
-	server    *sipgo.Server
-	devices   util.Collection[string, *Device]
-	dialogs   util.Collection[uint32, *Dialog]
-	tcpPorts  chan uint16
+	AutoInvite bool   `default:"true" desc:"自动邀请"`
+	Serial     string `default:"34020000002000000001" desc:"sip 服务 id"` //sip 服务器 id, 默认 34020000002000000001
+	Realm      string `default:"3402000000" desc:"sip 服务域"`             //sip 服务器域，默认 3402000000
+	Username   string
+	Password   string
+	Sip        SipConfig
+	MediaPort  util.Range[uint16] `default:"10000-20000" desc:"媒体端口范围"` //媒体端口范围
+	Position   PositionConfig
+	ua         *sipgo.UserAgent
+	server     *sipgo.Server
+	devices    util.Collection[string, *Device]
+	dialogs    util.Collection[uint32, *Dialog]
+	tcpPorts   chan uint16
 }
 
 var _ = m7s.InstallPlugin[GB28181Plugin](pb.RegisterApiHandler, &pb.Api_ServiceDesc, func() m7s.IPuller {
@@ -232,12 +234,13 @@ func (gb *GB28181Plugin) StoreDevice(id string, req *sip.Request) (d *Device) {
 	desc := req.Destination()
 	servIp, sPortStr, _ := net.SplitHostPort(desc)
 	publicIP := gb.GetPublicIP(servIp)
+	host := publicIP
 	//如果相等，则服务器是内网通道.海康摄像头不支持...自动获取
-	//if strings.LastIndex(deviceIp, ".") != -1 && strings.LastIndex(servIp, ".") != -1 {
-	//	if servIp[0:strings.LastIndex(servIp, ".")] == deviceIp[0:strings.LastIndex(deviceIp, ".")] || mediaIP == "" {
-	//		mediaIP = servIp
-	//	}
-	//}
+	if strings.LastIndex(source, ".") != -1 && strings.LastIndex(servIp, ".") != -1 {
+		if servIp[0:strings.LastIndex(servIp, ".")] == source[0:strings.LastIndex(source, ".")] {
+			host = servIp
+		}
+	}
 	hostname, portStr, _ := net.SplitHostPort(source)
 	port, _ := strconv.Atoi(portStr)
 	serverPort, _ := strconv.Atoi(sPortStr)
@@ -252,12 +255,12 @@ func (gb *GB28181Plugin) StoreDevice(id string, req *sip.Request) (d *Device) {
 		},
 		Transport: req.Transport(),
 
-		mediaIp:   publicIP,
+		mediaIp:   host,
 		eventChan: make(chan any, 10),
 		contactHDR: sip.ContactHeader{
 			Address: sip.Uri{
 				User: gb.Serial,
-				Host: publicIP,
+				Host: host,
 				Port: serverPort,
 			},
 		},
@@ -272,7 +275,7 @@ func (gb *GB28181Plugin) StoreDevice(id string, req *sip.Request) (d *Device) {
 	}
 	d.Logger = gb.With("id", id)
 	d.fromHDR.Params.Add("tag", sip.GenerateTagN(16))
-	d.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(publicIP))
+	d.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(host))
 	d.dialogClient = sipgo.NewDialogClient(d.client, d.contactHDR)
 	d.channels.L = new(sync.RWMutex)
 	d.Info("StoreDevice", "source", source, "desc", desc, "servIp", servIp, "publicIP", publicIP, "recipient", req.Recipient)
@@ -282,6 +285,13 @@ func (gb *GB28181Plugin) StoreDevice(id string, req *sip.Request) (d *Device) {
 	}
 	d.OnStart(func() {
 		gb.devices.Add(d)
+		d.channels.OnAdd(func(c *Channel) {
+			if gb.AutoInvite {
+				gb.Pull(fmt.Sprintf("%s/%s", d.ID, c.DeviceID), config.Pull{
+					URL: fmt.Sprintf("%s/%s", d.ID, c.DeviceID),
+				})
+			}
+		})
 	})
 	d.OnDispose(func() {
 		d.Status = DeviceOfflineStatus

@@ -8,5 +8,7 @@ dump
 record
 bin
 .DS_Store
-.db
+*.db
 !plugin/record
+*.flv
+pullcf.yaml

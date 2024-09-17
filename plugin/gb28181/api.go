@@ -2,16 +2,17 @@ package plugin_gb28181
 
 import (
 	"context"
+	"net/http"
+	"os"
+	"strings"
+	"time"
+
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"m7s.live/m7s/v5"
 	"m7s.live/m7s/v5/pkg/util"
 	"m7s.live/m7s/v5/plugin/gb28181/pb"
 	gb28181 "m7s.live/m7s/v5/plugin/gb28181/pkg"
-	"net/http"
-	"os"
-	"strings"
-	"time"
 )
 
 func (gb *GB28181Plugin) List(context.Context, *emptypb.Empty) (ret *pb.ResponseList, err error) {
@@ -62,7 +63,7 @@ func (gb *GB28181Plugin) replayPS(pub *m7s.Publisher, f *os.File) {
 	var t uint16
 	puber := gb28181.NewPSPublisher(pub)
 	go puber.Demux()
-	defer close(puber.FeedChan)
+	defer close(puber.Receiver.FeedChan)
 	for l := make([]byte, 6); pub.State != m7s.PublisherStateDisposed; time.Sleep(time.Millisecond * time.Duration(t)) {
 		_, err := f.Read(l)
 		if err != nil {
@@ -75,10 +76,10 @@ func (gb *GB28181Plugin) replayPS(pub *m7s.Publisher, f *os.File) {
 		if err != nil {
 			return
 		}
-		err = puber.ReadRTP(payload)
-		select {
-		case puber.FeedChan <- puber.Packet.Payload:
-		case <-pub.Done():
+		if err = puber.Receiver.ReadRTP(payload); err != nil {
+			gb.Error("replayPS", "err", err)
+		}
+		if pub.IsStopped() {
 			return
 		}
 	}

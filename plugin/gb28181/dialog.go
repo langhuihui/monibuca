@@ -117,7 +117,7 @@ func (d *Dialog) Run() (err error) {
 	}
 	err = d.session.Ack(d.gb)
 	pub := gb28181.NewPSPublisher(d.pullCtx.Publisher)
-	pub.ListenAddr = fmt.Sprintf(":%d", d.MediaPort)
+	pub.Receiver.ListenAddr = fmt.Sprintf(":%d", d.MediaPort)
 	d.AddTask(&pub.Receiver)
 	pub.Demux()
 	return

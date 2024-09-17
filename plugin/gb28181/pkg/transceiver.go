@@ -1,14 +1,15 @@
 package gb28181
 
 import (
+	"net"
+	"os"
+
 	"github.com/pion/rtp"
 	"m7s.live/m7s/v5"
 	"m7s.live/m7s/v5/pkg"
 	"m7s.live/m7s/v5/pkg/task"
 	"m7s.live/m7s/v5/pkg/util"
 	rtp2 "m7s.live/m7s/v5/plugin/rtp/pkg"
-	"net"
-	"os"
 )
 
 const (
@@ -24,7 +25,7 @@ const (
 type PSPublisher struct {
 	*m7s.Publisher
 	*util.BufReader
-	Receiver
+	Receiver Receiver
 }
 
 type Receiver struct {
@@ -45,10 +46,10 @@ func NewPSPublisher(puber *m7s.Publisher) *PSPublisher {
 	ret := &PSPublisher{
 		Publisher: puber,
 	}
-	ret.FeedChan = make(chan []byte, 10)
-	ret.BufReader = util.NewBufReaderChan(ret.FeedChan)
-	ret.psVideo.SetAllocator(ret.Allocator)
-	ret.psAudio.SetAllocator(ret.Allocator)
+	ret.Receiver.FeedChan = make(chan []byte, 10)
+	ret.BufReader = util.NewBufReaderChan(ret.Receiver.FeedChan)
+	ret.Receiver.psVideo.SetAllocator(ret.Allocator)
+	ret.Receiver.psAudio.SetAllocator(ret.Allocator)
 	return ret
 }
 
@@ -68,7 +69,7 @@ func (p *PSPublisher) Demux() {
 		if err != nil {
 			return
 		}
-		p.Debug("demux", "code", code)
+		p.Trace("demux", "code", code)
 		switch code {
 		case StartCodePS:
 			var psl byte
@@ -86,14 +87,14 @@ func (p *PSPublisher) Demux() {
 		case StartCodeVideo:
 			payload, err = p.ReadPayload()
 			var annexB *pkg.AnnexB
-			annexB, err = p.psVideo.parsePESPacket(payload)
+			annexB, err = p.Receiver.psVideo.parsePESPacket(payload)
 			if annexB != nil {
 				err = p.WriteVideo(annexB)
 			}
 		case StartCodeAudio:
 			payload, err = p.ReadPayload()
 			var audioFrame pkg.IAVFrame
-			audioFrame, err = p.psAudio.parsePESPacket(payload)
+			audioFrame, err = p.Receiver.psAudio.parsePESPacket(payload)
 			if audioFrame != nil {
 				err = p.WriteAudio(audioFrame)
 			}
@@ -106,13 +107,13 @@ func (p *PSPublisher) Demux() {
 }
 
 func (dec *PSPublisher) decProgramStreamMap() (err error) {
-	dec.psm, err = dec.ReadPayload()
+	dec.Receiver.psm, err = dec.ReadPayload()
 	if err != nil {
 		return err
 	}
 	var programStreamInfoLen, programStreamMapLen, elementaryStreamInfoLength uint32
 	var streamType, elementaryStreamID byte
-	reader := dec.psm.NewReader()
+	reader := dec.Receiver.psm.NewReader()
 	reader.Skip(2)
 	programStreamInfoLen, err = reader.ReadBE(2)
 	reader.Skip(int(programStreamInfoLen))
@@ -121,9 +122,9 @@ func (dec *PSPublisher) decProgramStreamMap() (err error) {
 		streamType, err = reader.ReadByte()
 		elementaryStreamID, err = reader.ReadByte()
 		if elementaryStreamID >= 0xe0 && elementaryStreamID <= 0xef {
-			dec.psVideo.streamType = streamType
+			dec.Receiver.psVideo.streamType = streamType
 		} else if elementaryStreamID >= 0xc0 && elementaryStreamID <= 0xdf {
-			dec.psAudio.streamType = streamType
+			dec.Receiver.psAudio.streamType = streamType
 		}
 		elementaryStreamInfoLength, err = reader.ReadBE(2)
 		reader.Skip(int(elementaryStreamInfoLength))
@@ -136,12 +137,19 @@ func (p *Receiver) ReadRTP(rtp util.Buffer) (err error) {
 	if err = p.Unmarshal(rtp); err != nil {
 		return
 	}
-	p.FeedChan <- p.Payload
+	copyData := make([]byte, len(p.Payload))
+	copy(copyData, p.Payload)
+	p.FeedChan <- copyData
 	return
 }
 
 func (p *Receiver) Start() (err error) {
 	p.listener, err = net.Listen("tcp", p.ListenAddr)
+	if err != nil {
+		p.Error("start listen", "err", err)
+		return
+	}
+	p.Info("start listen", "addr", p.ListenAddr)
 	return
 }
 
@@ -154,10 +162,13 @@ func (p *Receiver) Dispose() {
 }
 
 func (p *Receiver) Go() error {
+	p.Info("start accept")
 	conn, err := p.listener.Accept()
 	if err != nil {
+		p.Error("accept", "err", err)
 		return err
 	}
 	p.RTPReader = (*rtp2.TCP)(conn.(*net.TCPConn))
+	p.Info("accept", "addr", conn.RemoteAddr())
 	return p.RTPReader.Read(p.ReadRTP)
 }

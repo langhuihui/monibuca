@@ -1,16 +1,25 @@
 package util
 
 import (
-	"reflect"
 	"slices"
 	"sync"
 )
 
 type Collection[K comparable, T interface{ GetKey() K }] struct {
-	L      *sync.RWMutex
-	Items  []T
-	m      map[K]T
-	Length int
+	L               *sync.RWMutex
+	Items           []T
+	m               map[K]T
+	Length          int
+	addListeners    []func(T)
+	removeListeners []func(T)
+}
+
+func (c *Collection[K, T]) OnAdd(listener func(T)) {
+	c.addListeners = append(c.addListeners, listener)
+}
+
+func (c *Collection[K, T]) OnRemove(listener func(T)) {
+	c.removeListeners = append(c.removeListeners, listener)
 }
 
 func (c *Collection[K, T]) Add(item T) {
@@ -29,6 +38,9 @@ func (c *Collection[K, T]) Add(item T) {
 		c.m[item.GetKey()] = item
 	}
 	c.Length++
+	for _, listener := range c.addListeners {
+		listener(item)
+	}
 }
 
 func (c *Collection[K, T]) AddUnique(item T) (ok bool) {
@@ -38,7 +50,7 @@ func (c *Collection[K, T]) AddUnique(item T) (ok bool) {
 	return !ok
 }
 
-func (c *Collection[K, T]) Set(item T) {
+func (c *Collection[K, T]) Set(item T) (added bool) {
 	key := item.GetKey()
 	if c.m != nil {
 		c.m[key] = item
@@ -46,10 +58,11 @@ func (c *Collection[K, T]) Set(item T) {
 	for i := range c.Items {
 		if c.Items[i].GetKey() == key {
 			c.Items[i] = item
-			return
+			return false
 		}
 	}
 	c.Add(item)
+	return true
 }
 
 func (c *Collection[K, T]) Range(f func(T) bool) {
@@ -76,31 +89,35 @@ func (c *Collection[K, T]) RemoveByKey(key K) bool {
 	delete(c.m, key)
 	for i := range c.Length {
 		if c.Items[i].GetKey() == key {
+			item := c.Items[i]
 			c.Items = slices.Delete(c.Items, i, i+1)
 			c.Length--
+			for _, listener := range c.removeListeners {
+				listener(item)
+			}
 			return true
 		}
 	}
 	return false
 }
 
-func (c *Collection[K, T]) GetOrCreate(key K) (item T, find bool) {
-	if c.L != nil {
-		c.L.Lock()
-		defer c.L.Unlock()
-	}
-	if c.m != nil {
-		item, find = c.m[key]
-		return item, find
-	}
-	for _, item = range c.Items {
-		if item.GetKey() == key {
-			return item, true
-		}
-	}
-	item = reflect.New(reflect.TypeOf(item).Elem()).Interface().(T)
-	return
-}
+// func (c *Collection[K, T]) GetOrCreate(key K) (item T, find bool) {
+// 	if c.L != nil {
+// 		c.L.Lock()
+// 		defer c.L.Unlock()
+// 	}
+// 	if c.m != nil {
+// 		item, find = c.m[key]
+// 		return item, find
+// 	}
+// 	for _, item = range c.Items {
+// 		if item.GetKey() == key {
+// 			return item, true
+// 		}
+// 	}
+// 	item = reflect.New(reflect.TypeOf(item).Elem()).Interface().(T)
+// 	return
+// }
 
 func (c *Collection[K, T]) Get(key K) (item T, ok bool) {
 	if c.L != nil {

@@ -213,6 +213,6 @@ func (d *Device) addOrUpdateChannel(c gb28181.ChannelInfo) {
 			Logger:      d.Logger.With("channel", c.DeviceID),
 			ChannelInfo: c,
 		}
-		d.channels.Add(channel)
+		d.channels.Set(channel)
 	}
 }

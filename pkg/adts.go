@@ -1,11 +1,14 @@
 package pkg
 
 import (
-	"github.com/deepch/vdk/codec/aacparser"
+	"bytes"
+	"fmt"
 	"io"
+	"time"
+
+	"github.com/deepch/vdk/codec/aacparser"
 	"m7s.live/m7s/v5/pkg/codec"
 	"m7s.live/m7s/v5/pkg/util"
-	"time"
 )
 
 var _ IAVFrame = (*ADTS)(nil)
@@ -29,6 +32,9 @@ func (A *ADTS) Parse(track *AVTrack) (err error) {
 		if err != nil {
 			return err
 		}
+		b := &bytes.Buffer{}
+		aacparser.WriteMPEG4AudioConfig(b, ctx.Config)
+		ctx.ConfigBytes = b.Bytes()
 		track.ICodecCtx = ctx
 		track.Info("ADTS", "hdrlen", hdrlen, "framelen", framelen, "samples", samples)
 	}
@@ -70,8 +76,7 @@ func (A *ADTS) GetSize() int {
 }
 
 func (A *ADTS) String() string {
-	//TODO implement me
-	panic("implement me")
+	return fmt.Sprintf("ADTS{size:%d}", A.Size)
 }
 
 func (A *ADTS) Dump(b byte, writer io.Writer) {
