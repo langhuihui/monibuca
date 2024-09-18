@@ -101,7 +101,7 @@ func (conf *WebRTCPlugin) Play_(w http.ResponseWriter, r *http.Request) {
 	var useDC bool
 	var audioTLSRTP, videoTLSRTP *TrackLocalStaticRTP
 	var audioSender, videoSender *RTPSender
-	if vt := suber.VideoReader.Track; vt != nil {
+	if vt := suber.Publisher.VideoTrack.AVTrack; vt != nil {
 		if vt.FourCC() == codec.FourCC_H265 {
 			useDC = true
 		} else {
@@ -111,7 +111,7 @@ func (conf *WebRTCPlugin) Play_(w http.ResponseWriter, r *http.Request) {
 			} else {
 				var rtpCtx mrtp.RTPData
 				var tmpAVTrack AVTrack
-				tmpAVTrack.ICodecCtx, tmpAVTrack.SequenceFrame, err = rtpCtx.ConvertCtx(vt.ICodecCtx)
+				tmpAVTrack.ICodecCtx, _, err = rtpCtx.ConvertCtx(vt.ICodecCtx)
 				if err == nil {
 					rcc = tmpAVTrack.ICodecCtx.(mrtp.IRTPCtx).GetRTPCodecParameter()
 				} else {
@@ -146,7 +146,7 @@ func (conf *WebRTCPlugin) Play_(w http.ResponseWriter, r *http.Request) {
 			}()
 		}
 	}
-	if at := suber.AudioReader.Track; at != nil {
+	if at := suber.Publisher.AudioTrack.AVTrack; at != nil {
 		if at.FourCC() == codec.FourCC_MP4A {
 			useDC = true
 		} else {

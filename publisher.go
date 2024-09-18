@@ -206,16 +206,16 @@ func (p *PublishTimeout) Tick(any) {
 	switch p.Publisher.State {
 	case PublisherStateInit:
 		if p.Publisher.PublishTimeout > 0 {
-			p.Stop(ErrPublishTimeout)
+			p.Publisher.Stop(ErrPublishTimeout)
 		}
 	case PublisherStateTrackAdded:
 		if p.Publisher.Publish.IdleTimeout > 0 {
-			p.Stop(ErrPublishIdleTimeout)
+			p.Publisher.Stop(ErrPublishIdleTimeout)
 		}
 	case PublisherStateSubscribed:
 	case PublisherStateWaitSubscriber:
 		if p.Publisher.Publish.DelayCloseTimeout > 0 {
-			p.Stop(ErrPublishDelayCloseTimeout)
+			p.Publisher.Stop(ErrPublishDelayCloseTimeout)
 		}
 	}
 }
@@ -232,11 +232,11 @@ func (p *PublishNoDataTimeout) GetTickInterval() time.Duration {
 func (p *PublishNoDataTimeout) Tick(any) {
 	if p.Publisher.VideoTrack.CheckTimeout(p.Publisher.PublishTimeout) {
 		p.Error("video timeout", "writeTime", p.Publisher.VideoTrack.LastValue.WriteTime)
-		p.Stop(ErrPublishTimeout)
+		p.Publisher.Stop(ErrPublishTimeout)
 	}
 	if p.Publisher.AudioTrack.CheckTimeout(p.Publisher.PublishTimeout) {
 		p.Error("audio timeout", "writeTime", p.Publisher.AudioTrack.LastValue.WriteTime)
-		p.Stop(ErrPublishTimeout)
+		p.Publisher.Stop(ErrPublishTimeout)
 	}
 }
 
