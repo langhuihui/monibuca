@@ -73,10 +73,10 @@ func (p *HTTPReader) Run() (err error) {
 		if p.IsStopped() {
 			break
 		}
-		if _, err = demuxer.reader.Seek(int64(sample.Offset), io.SeekStart); err != nil {
+		if _, err = demuxer.reader.Seek(sample.Offset, io.SeekStart); err != nil {
 			return
 		}
-		sample.Data = allocator.Malloc(int(sample.Size))
+		sample.Data = allocator.Malloc(sample.Size)
 		if _, err = io.ReadFull(demuxer.reader, sample.Data); err != nil {
 			allocator.Free(sample.Data)
 			return

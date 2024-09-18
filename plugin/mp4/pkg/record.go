@@ -65,19 +65,19 @@ type Recorder struct {
 	stream m7s.RecordStream
 }
 
-func (r *Recorder) writeTailer() {
-	r.stream.EndTime = time.Now()
+func (r *Recorder) writeTailer(end time.Time) {
+	r.stream.EndTime = end
 	r.RecordJob.Plugin.DB.Save(&r.stream)
 	writeTrailerQueueTask.AddTask(&writeTrailerTask{
 		muxer: r.muxer,
 	}, r.Logger)
 }
 
-func (r *Recorder) createStream() (err error) {
+func (r *Recorder) createStream(start time.Time) (err error) {
 	recordJob := &r.RecordJob
 	sub := recordJob.Subscriber
 	r.stream = m7s.RecordStream{
-		StartTime: time.Now(),
+		StartTime: start,
 		FilePath:  recordJob.FilePath,
 	}
 	if sub.Publisher.HasAudioTrack() {
@@ -111,7 +111,7 @@ func (r *Recorder) Start() (err error) {
 
 func (r *Recorder) Dispose() {
 	if r.muxer != nil {
-		r.writeTailer()
+		r.writeTailer(time.Now())
 	}
 }
 
@@ -119,7 +119,7 @@ func (r *Recorder) Run() (err error) {
 	recordJob := &r.RecordJob
 	sub := recordJob.Subscriber
 	var audioTrack, videoTrack *Track
-	err = r.createStream()
+	err = r.createStream(time.Now())
 	if err != nil {
 		return
 	}
@@ -127,8 +127,9 @@ func (r *Recorder) Run() (err error) {
 
 	checkFragment := func(absTime uint32) (err error) {
 		if duration := int64(absTime); time.Duration(duration)*time.Millisecond >= recordJob.Fragment {
-			r.writeTailer()
-			err = r.createStream()
+			now := time.Now()
+			r.writeTailer(now)
+			err = r.createStream(now)
 			if err != nil {
 				return
 			}

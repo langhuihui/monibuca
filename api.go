@@ -206,15 +206,17 @@ func (s *Server) AudioTrackSnap(_ context.Context, req *pb.StreamSnapRequest) (r
 	s.Streams.Call(func() error {
 		if pub, ok := s.Streams.Get(req.StreamPath); ok && pub.HasAudioTrack() {
 			res = &pb.TrackSnapShotResponse{}
-			for _, memlist := range pub.AudioTrack.Allocator.GetChildren() {
-				var list []*pb.MemoryBlock
-				for _, block := range memlist.GetBlocks() {
-					list = append(list, &pb.MemoryBlock{
-						S: uint32(block.Start),
-						E: uint32(block.End),
-					})
+			if pub.AudioTrack.Allocator != nil {
+				for _, memlist := range pub.AudioTrack.Allocator.GetChildren() {
+					var list []*pb.MemoryBlock
+					for _, block := range memlist.GetBlocks() {
+						list = append(list, &pb.MemoryBlock{
+							S: uint32(block.Start),
+							E: uint32(block.End),
+						})
+					}
+					res.Memory = append(res.Memory, &pb.MemoryBlockGroup{List: list, Size: uint32(memlist.Size)})
 				}
-				res.Memory = append(res.Memory, &pb.MemoryBlockGroup{List: list, Size: uint32(memlist.Size)})
 			}
 			res.Reader = make(map[uint32]uint32)
 			for sub := range pub.SubscriberRange {
@@ -285,15 +287,17 @@ func (s *Server) VideoTrackSnap(ctx context.Context, req *pb.StreamSnapRequest) 
 	s.Streams.Call(func() error {
 		if pub, ok := s.Streams.Get(req.StreamPath); ok && pub.HasVideoTrack() {
 			res = &pb.TrackSnapShotResponse{}
-			for _, memlist := range pub.VideoTrack.Allocator.GetChildren() {
-				var list []*pb.MemoryBlock
-				for _, block := range memlist.GetBlocks() {
-					list = append(list, &pb.MemoryBlock{
-						S: uint32(block.Start),
-						E: uint32(block.End),
-					})
+			if pub.VideoTrack.Allocator != nil {
+				for _, memlist := range pub.VideoTrack.Allocator.GetChildren() {
+					var list []*pb.MemoryBlock
+					for _, block := range memlist.GetBlocks() {
+						list = append(list, &pb.MemoryBlock{
+							S: uint32(block.Start),
+							E: uint32(block.End),
+						})
+					}
+					res.Memory = append(res.Memory, &pb.MemoryBlockGroup{List: list, Size: uint32(memlist.Size)})
 				}
-				res.Memory = append(res.Memory, &pb.MemoryBlockGroup{List: list, Size: uint32(memlist.Size)})
 			}
 			res.Reader = make(map[uint32]uint32)
 			for sub := range pub.SubscriberRange {

@@ -1,8 +1,11 @@
 package plugin_mp4
 
 import (
+	"context"
 	"fmt"
+	"google.golang.org/protobuf/types/known/timestamppb"
 	"io"
+	"m7s.live/m7s/v5/plugin/mp4/pb"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -19,6 +22,43 @@ type ContentPart struct {
 	*os.File
 	Start int64
 	Size  int
+}
+
+func (p *MP4Plugin) List(ctx context.Context, req *pb.ReqRecordList) (resp *pb.ResponseList, err error) {
+	var streams []m7s.RecordStream
+	if p.DB == nil {
+		err = fmt.Errorf("db not init")
+		return
+	}
+	r := strings.Split(req.Range, "~")
+	if len(r) != 2 {
+		err = fmt.Errorf("invalid range")
+		return
+	}
+	var startTime, endTime time.Time
+	startTime, err = util.TimeQueryParse(r[0])
+	if err != nil {
+		return
+	}
+	endTime, err = util.TimeQueryParseRefer(r[1], startTime)
+	if err != nil {
+		return
+	}
+	if req.FilePath == "" {
+		p.DB.Find(&streams, "end_time>? AND start_time<?", startTime, endTime)
+	} else {
+		p.DB.Find(&streams, "end_time>? AND start_time<? AND file_path=?", startTime, endTime, req.FilePath)
+	}
+	resp = &pb.ResponseList{}
+	for _, stream := range streams {
+		resp.Data = append(resp.Data, &pb.RecordFile{
+			Id:        uint32(stream.ID),
+			StartTime: timestamppb.New(stream.StartTime),
+			EndTime:   timestamppb.New(stream.EndTime),
+			FilePath:  stream.FilePath,
+		})
+	}
+	return
 }
 
 func (p *MP4Plugin) download(w http.ResponseWriter, r *http.Request) {

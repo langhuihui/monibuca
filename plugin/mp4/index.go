@@ -12,6 +12,7 @@ import (
 	v5 "m7s.live/m7s/v5/pkg"
 	"m7s.live/m7s/v5/pkg/codec"
 	"m7s.live/m7s/v5/pkg/util"
+	"m7s.live/m7s/v5/plugin/mp4/pb"
 	pkg "m7s.live/m7s/v5/plugin/mp4/pkg"
 	rtmp "m7s.live/m7s/v5/plugin/rtmp/pkg"
 )
@@ -66,13 +67,14 @@ func (m *TrackContext) Push(ctx *MediaContext, dt uint32, dur uint32, data []byt
 }
 
 type MP4Plugin struct {
+	pb.UnimplementedApiServer
 	m7s.Plugin
 }
 
 const defaultConfig m7s.DefaultYaml = `publish:
   speed: 1`
 
-var _ = m7s.InstallPlugin[MP4Plugin](defaultConfig, pkg.NewPuller, pkg.NewRecorder)
+var _ = m7s.InstallPlugin[MP4Plugin](defaultConfig, &pb.Api_ServiceDesc, pb.RegisterApiHandler, pkg.NewPuller, pkg.NewRecorder)
 
 func (p *MP4Plugin) RegisterHandler() map[string]http.HandlerFunc {
 	return map[string]http.HandlerFunc{
