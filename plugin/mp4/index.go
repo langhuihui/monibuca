@@ -92,12 +92,25 @@ func (p *MP4Plugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	w.Header().Set("Transfer-Encoding", "chunked")
-	w.Header().Set("Content-Type", "video/mp4")
-	w.WriteHeader(http.StatusOK)
+	var ctx MediaContext
+	ctx.conn, err = sub.CheckWebSocket(w, r)
+	if err != nil {
+		return
+	}
+	wto := p.GetCommonConf().WriteTimeout
+	if ctx.conn == nil {
+		w.Header().Set("Transfer-Encoding", "chunked")
+		w.Header().Set("Content-Type", "video/mp4")
+		w.WriteHeader(http.StatusOK)
+		if hijacker, ok := w.(http.Hijacker); ok && wto > 0 {
+			ctx.conn, _, _ = hijacker.Hijack()
+			ctx.conn.SetWriteDeadline(time.Now().Add(wto))
+		}
+	}
+
 	initSegment := mp4.CreateEmptyInit()
 	initSegment.Moov.Mvhd.NextTrackID = 1
-	var ctx MediaContext
+
 	ctx.wto = p.GetCommonConf().WriteTimeout
 	var ftyp *mp4.FtypBox
 	var offsetAudio, offsetVideo = 1, 5
@@ -165,8 +178,7 @@ func (p *MP4Plugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			stsd.AddChild(pcmu)
 		}
 	}
-	if hijacker, ok := w.(http.Hijacker); ok && ctx.wto > 0 {
-		ctx.conn, _, _ = hijacker.Hijack()
+	if ctx.conn != nil {
 		ctx.Writer = ctx.conn
 	} else {
 		ctx.Writer = w

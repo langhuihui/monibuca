@@ -1,0 +1,5 @@
+global:
+  loglevel: info
+flv:
+  pull:
+      live/test: /Users/dexter/Movies/jb-demo.flv

@@ -56,24 +56,33 @@ func (plugin *FLVPlugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	w.Header().Set("Content-Type", "video/x-flv")
-	w.Header().Set("Transfer-Encoding", "identity")
-	w.WriteHeader(http.StatusOK)
+	var conn net.Conn
+	conn, err = live.Subscriber.CheckWebSocket(w, r)
+	if err != nil {
+		return
+	}
 	wto := plugin.GetCommonConf().WriteTimeout
-	if hijacker, ok := w.(http.Hijacker); ok && wto > 0 {
-		conn, _, _ := hijacker.Hijack()
-		conn.SetWriteDeadline(time.Now().Add(wto))
-		live.WriteFlvTag = func(flv net.Buffers) (err error) {
+	if conn == nil {
+		w.Header().Set("Content-Type", "video/x-flv")
+		w.Header().Set("Transfer-Encoding", "identity")
+		w.WriteHeader(http.StatusOK)
+		if hijacker, ok := w.(http.Hijacker); ok && wto > 0 {
+			conn, _, _ = hijacker.Hijack()
 			conn.SetWriteDeadline(time.Now().Add(wto))
-			_, err = flv.WriteTo(conn)
-			return
 		}
-	} else {
+	}
+	if conn == nil {
 		live.WriteFlvTag = func(flv net.Buffers) (err error) {
 			_, err = flv.WriteTo(w)
 			return
 		}
 		w.(http.Flusher).Flush()
+	} else {
+		live.WriteFlvTag = func(flv net.Buffers) (err error) {
+			conn.SetWriteDeadline(time.Now().Add(wto))
+			_, err = flv.WriteTo(conn)
+			return
+		}
 	}
 	err = live.Run()
 }

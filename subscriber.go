@@ -1,14 +1,19 @@
 package m7s
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
+	"net"
+	"net/http"
 	"net/url"
 	"reflect"
 	"runtime"
 	"strings"
 	"time"
 
+	"github.com/gobwas/ws"
+	"github.com/gobwas/ws/wsutil"
 	"m7s.live/m7s/v5/pkg/task"
 
 	. "m7s.live/m7s/v5/pkg"
@@ -116,6 +121,50 @@ func (s *Subscriber) Dispose() {
 	} else if waitStream, ok := s.Plugin.Server.Waiting.Get(s.StreamPath); ok {
 		waitStream.Remove(s)
 	}
+}
+
+type PlayController struct {
+	task.Task
+	conn       net.Conn
+	Subscriber *Subscriber
+}
+
+func (pc *PlayController) Go() (err error) {
+	for err == nil {
+		var b []byte
+		b, err = wsutil.ReadClientBinary(pc.conn)
+		if pc.Subscriber.Publisher == nil {
+			continue
+		}
+		if len(b) >= 3 && [3]byte(b[:3]) == [3]byte{'c', 'm', 'd'} {
+			switch b[3] {
+			case 1: // pause
+				pc.Subscriber.Publisher.Pause()
+			case 2: // resume
+				pc.Subscriber.Publisher.Resume()
+			case 3: // seek
+				pc.Subscriber.Publisher.Seek(time.Duration(binary.BigEndian.Uint32(b[4:8])))
+			case 4: // speed
+				pc.Subscriber.Publisher.Speed = float64(binary.BigEndian.Uint32(b[4:8])) / 100
+			}
+		}
+	}
+	return
+}
+
+func (s *Subscriber) CheckWebSocket(w http.ResponseWriter, r *http.Request) (conn net.Conn, err error) {
+	if r.Header.Get("Upgrade") == "websocket" {
+		conn, _, _, err = ws.UpgradeHTTP(r, w)
+		if err != nil {
+			return
+		}
+		var playController = &PlayController{
+			Subscriber: s,
+			conn:       conn,
+		}
+		s.AddTask(playController)
+	}
+	return
 }
 
 func (s *Subscriber) createAudioReader(dataType reflect.Type, startAudioTs time.Duration) (awi int) {
