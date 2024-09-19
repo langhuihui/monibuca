@@ -1,11 +1,13 @@
 package mp4
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/deepch/vdk/codec/h265parser"
 	"m7s.live/m7s/v5"
@@ -134,12 +136,18 @@ func (p *RecordReader) Run() (err error) {
 	pullJob := &p.PullJob
 	publisher := pullJob.Publisher
 	allocator := util.NewScalableMemoryAllocator(1 << 10)
-	var ts int64
-	var tsOffset int64
+	var ts, tsOffset int64
 	defer allocator.Recycle()
+	publisher.OnSeek = func(seekTime time.Duration) {
+		targetTime := p.PullStartTime.Add(time.Duration(ts) * time.Millisecond).Add(seekTime)
+		p.Stop(errors.New("seek"))
+		pullJob.Args.Set("start", targetTime.Local().Format("2006-01-02T15:04:05"))
+		newRecordReader := &RecordReader{}
+		pullJob.AddTask(newRecordReader)
+	}
 	for i, stream := range p.Streams {
 		tsOffset = ts
-		p.File, err = os.Open(filepath.Join(p.PullJob.RemoteURL, fmt.Sprintf("%d.mp4", stream.ID)))
+		p.File, err = os.Open(filepath.Join(pullJob.RemoteURL, fmt.Sprintf("%d.mp4", stream.ID)))
 		if err != nil {
 			return
 		}

@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 )
 
 type shutdown interface {
@@ -37,6 +38,7 @@ func (m *RootManager[K, T]) Init() {
 	m.handler = m
 	m.Logger = slog.New(slog.NewTextHandler(os.Stdout, nil))
 	m.state = TASK_STATE_STARTED
+	m.StartTime = time.Now()
 	m.AddTask(&OSSignal{root: m})
 }
 

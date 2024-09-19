@@ -3,6 +3,7 @@ package plugin_gb28181
 import (
 	"errors"
 	"fmt"
+	myip "github.com/husanpao/ip"
 	"net"
 	"net/http"
 	"os"
@@ -240,6 +241,8 @@ func (gb *GB28181Plugin) StoreDevice(id string, req *sip.Request) (d *Device) {
 		if servIp[0:strings.LastIndex(servIp, ".")] == source[0:strings.LastIndex(source, ".")] {
 			host = servIp
 		}
+	} else if servIp == gb.Realm {
+		host = myip.InternalIPv4()
 	}
 	hostname, portStr, _ := net.SplitHostPort(source)
 	port, _ := strconv.Atoi(portStr)

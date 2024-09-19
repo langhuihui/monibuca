@@ -31,6 +31,7 @@ const threshold = 10 * time.Millisecond
 
 type SpeedControl struct {
 	speed          float64
+	pausedTime     time.Duration
 	beginTime      time.Time
 	beginTimestamp time.Duration
 	Delta          time.Duration
@@ -42,7 +43,7 @@ func (s *SpeedControl) speedControl(speed float64, ts time.Duration) {
 		s.beginTime = time.Now()
 		s.beginTimestamp = ts
 	} else {
-		elapsed := time.Since(s.beginTime)
+		elapsed := time.Since(s.beginTime) - s.pausedTime
 		if speed == 0 {
 			s.Delta = ts - elapsed
 			return
@@ -121,11 +122,14 @@ type Publisher struct {
 	PubSubBase
 	config.Publish
 	State                  PublisherState
+	Paused                 *util.Promise
+	pauseTime              time.Time
 	AudioTrack, VideoTrack AVTracks
 	audioReady, videoReady *util.Promise
 	DataTrack              *DataTrack
 	Subscribers            SubscriberCollection
 	GOP                    int
+	OnSeek                 func(time.Duration)
 	dumpFile               *os.File
 }
 
@@ -203,6 +207,9 @@ func (p *PublishTimeout) Dispose() {
 }
 
 func (p *PublishTimeout) Tick(any) {
+	if p.Publisher.Paused != nil {
+		return
+	}
 	switch p.Publisher.State {
 	case PublisherStateInit:
 		if p.Publisher.PublishTimeout > 0 {
@@ -230,6 +237,9 @@ func (p *PublishNoDataTimeout) GetTickInterval() time.Duration {
 }
 
 func (p *PublishNoDataTimeout) Tick(any) {
+	if p.Publisher.Paused != nil {
+		return
+	}
 	if p.Publisher.VideoTrack.CheckTimeout(p.Publisher.PublishTimeout) {
 		p.Error("video timeout", "writeTime", p.Publisher.VideoTrack.LastValue.WriteTime)
 		p.Publisher.Stop(ErrPublishTimeout)
@@ -578,16 +588,19 @@ func (p *Publisher) WaitTrack() (err error) {
 }
 
 func (p *Publisher) Pause() {
-	//p.AudioTrack.Pause()
-	//p.VideoTrack.Pause()
+	p.Paused = util.NewPromise(p)
+	p.pauseTime = time.Now()
 }
 
 func (p *Publisher) Resume() {
-	//p.AudioTrack.Resume()
-	//p.VideoTrack.Resume()
+	p.Paused.Resolve()
+	p.Paused = nil
+	p.VideoTrack.pausedTime += time.Since(p.pauseTime)
+	p.AudioTrack.pausedTime += time.Since(p.pauseTime)
 }
 
-func (p *Publisher) FastForward() {
-	//p.AudioTrack.FastForward()
-	//p.VideoTrack.FastForward()
+func (p *Publisher) Seek(ts time.Duration) {
+	if p.OnSeek != nil {
+		p.OnSeek(ts)
+	}
 }

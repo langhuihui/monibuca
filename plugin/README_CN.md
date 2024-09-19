@@ -5,7 +5,7 @@
 ### 开发工具
 - Visual Studio Code
 - Goland
-- 
+- Cursor
 ### 安装gRPC
 ```shell
 $ go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.28
@@ -57,25 +57,94 @@ var _ = m7s.InstallPlugin[MyPlugin](defaultConfig)
 ### 初始化回调
 ```go
 func (config *MyPlugin) OnInit() (err error) {
-    for streamPath, url := range p.GetCommonConf().PullOnStart {
-        go p.Pull(streamPath, url)
-    }
+    // 初始化一些东西
     return
 }
 ```
 用于插件的初始化，此时插件的配置已经加载完成，可以在这里做一些初始化工作。返回错误则插件初始化失败，插件将进入禁用状态。
-这个示例中遍历配置文件中的`PullOnStart`，拉取配置文件中配置的流。实现开启自动拉流效果。
+
 ### 接受 TCP 请求回调
 
 ```go
-func (config *MyPlugin) OnTCPConnect(conn *net.TCPConn) {
+func (config *MyPlugin) OnTCPConnect(conn *net.TCPConn) task.ITask {
 	
 }
 ```
 当配置了 tcp 监听端口后，收到 tcp 连接请求时，会调用此回调。
 
-示例代码中根据配置文件中的`PushList`，将发布的流推送到远端。
-## 4. 实现gRPC服务
+### 接受 UDP 请求回调
+```go
+func (config *MyPlugin) OnUDPConnect(conn *net.UDPConn) task.ITask {
+
+}
+```
+当配置了 udp 监听端口后，收到 udp 连接请求时，会调用此回调。
+
+### 接受 QUIC 请求回调
+```go
+func (config *MyPlugin) OnQUICConnect(quic.Connection) task.ITask {
+
+}
+```
+当配置了 quic 监听端口后，收到 quic 连接请求时，会调用此回调。
+
+## 4. HTTP 接口回调
+### 延续 v4 的回调
+```go
+func (config *MyPlugin) API_test1(rw http.ResponseWriter, r *http.Request) {
+	        // do something
+}
+```
+可以通过`http://ip:port/myplugin/api/test1`来访问`API_test1`方法。
+
+### 通过配置映射表
+这种方式可以实现带参数的路由，例如：
+```go
+func (config *MyPlugin) RegisterHandler() map[string]http.HandlerFunc {
+	return map[string]http.HandlerFunc{
+		"/test1/{streamPath...}": config.test1,
+	}
+}
+func (config *MyPlugin) test1(rw http.ResponseWriter, r *http.Request) {
+	        streamPath := r.PathValue("streamPath")
+          // do something
+}
+```
+## 5. 实现推拉流客户端
+
+### 实现推流客户端
+推流客户端就是想要实现一个 IPusher，然后将创建 IPusher 的方法传入 InstallPlugin 中。
+```go
+type Pusher struct {
+  pullCtx m7s.PullJob
+}
+
+func (c *Pusher) GetPullJob() *m7s.PullJob {
+	return &c.pullCtx
+}
+
+func NewPusher(_ config.Push) m7s.IPusher {
+	return &Pusher{}
+}
+var _ = m7s.InstallPlugin[MyPlugin](NewPusher)
+
+```
+
+### 实现拉流客户端
+拉流客户端就是想要实现一个 IPuller，然后将创建 IPuller 的方法传入 InstallPlugin 中。
+下面这个 Puller 继承了 m7s.HTTPFilePuller，可以实现基本的文件和 HTTP拉流。具体拉流逻辑需要覆盖 Run 方法。
+```go
+type Puller struct {
+	m7s.HTTPFilePuller
+}
+
+func NewPuller(_ config.Pull) m7s.IPuller {
+	return &Puller{}
+}
+var _ = m7s.InstallPlugin[MyPlugin](NewPuller)
+```
+
+## 6. 实现gRPC服务
 实现 gRPC 可以自动生成对应的 restFul 接口，方便调用。
 ### 在`pb`目录下创建`myplugin.proto`文件
 ```proto
@@ -169,7 +238,7 @@ func (config *MyPlugin)  API_test1(rw http.ResponseWriter, r *http.Request) {
 }
 ```
 就可以通过 get 请求`/myplugin/api/test1`来调用`API_test1`方法。
-}
+
 ## 5. 发布流
 
 ```go
@@ -217,7 +286,7 @@ IAVFrame interface {
 ### 6. 订阅流
 ```go
 var suber *m7s.Subscriber
-suber, err = p.Subscribe(streamPath, connectInfo)
+suber, err = p.Subscribe(ctx,streamPath)
 go m7s.PlayBlock(suber, handleAudio, handleVideo)
 ```
 这里需要注意的是 handleAudio, handleVideo 是处理音视频数据的回调函数，需要自己实现。
