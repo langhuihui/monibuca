@@ -23,7 +23,6 @@ const (
 
 type (
 	IDevice interface {
-		task.ITask
 		Pull()
 	}
 	Device struct {
@@ -56,6 +55,11 @@ func (d *Device) Start() (err error) {
 		}
 	}
 	return
+}
+
+func (d *Device) ChangeStatus(status byte) {
+	d.Status = status
+	d.Update()
 }
 
 func (d *Device) Update() {

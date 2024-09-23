@@ -460,6 +460,8 @@ func (s *Server) Summary(context.Context, *emptypb.Empty) (res *pb.SummaryRespon
 	res.PullCount = int32(s.Pulls.Length)
 	res.PushCount = int32(s.Pushs.Length)
 	res.SubscribeCount = int32(s.Subscribers.Length)
+	res.RecordCount = int32(s.Records.Length)
+	res.TransformCount = int32(s.Transforms.Length)
 	res.NetWork = netWorks
 	s.lastSummary = res
 	s.lastSummaryTime = time.Now()

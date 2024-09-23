@@ -15,7 +15,7 @@ import (
 
 type Dialog struct {
 	task.Job
-	*Channel
+	Channel *Channel
 	gb28181.InviteOptions
 	gb      *GB28181Plugin
 	session *sipgo.DialogClientSession
@@ -68,10 +68,10 @@ func (d *Dialog) Start() (err error) {
 	}
 	sdpInfo := []string{
 		"v=0",
-		fmt.Sprintf("o=%s 0 0 IN IP4 %s", d.DeviceID, d.Device.mediaIp),
+		fmt.Sprintf("o=%s 0 0 IN IP4 %s", d.Channel.DeviceID, d.Channel.Device.mediaIp),
 		"s=" + util.Conditional(d.IsLive(), "Play", "Playback"),
-		"u=" + d.DeviceID + ":0",
-		"c=IN IP4 " + d.Device.mediaIp,
+		"u=" + d.Channel.DeviceID + ":0",
+		"c=IN IP4 " + d.Channel.Device.mediaIp,
 		d.String(),
 		fmt.Sprintf("m=video %d TCP/RTP/AVP 96", d.MediaPort),
 		"a=recvonly",
@@ -82,7 +82,7 @@ func (d *Dialog) Start() (err error) {
 	}
 	contentTypeHeader := sip.ContentTypeHeader("application/sdp")
 	fromHeader := d.Channel.Device.fromHDR
-	subjectHeader := sip.NewHeader("Subject", fmt.Sprintf("%s:%s,%s:0", d.DeviceID, ssrc, d.gb.Serial))
+	subjectHeader := sip.NewHeader("Subject", fmt.Sprintf("%s:%s,%s:0", d.Channel.DeviceID, ssrc, d.gb.Serial))
 	d.session, err = d.Channel.Device.dialogClient.Invite(d.gb, d.Channel.Device.Recipient, []byte(strings.Join(sdpInfo, "\r\n")+"\r\n"), &contentTypeHeader, subjectHeader, &fromHeader)
 	return
 }

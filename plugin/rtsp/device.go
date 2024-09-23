@@ -22,8 +22,7 @@ func (d *RTSPDevice) Start() (err error) {
 	if err != nil {
 		return
 	}
-	d.device.Status = m7s.DeviceStatusOnline
-	d.device.Update()
+	d.device.ChangeStatus(m7s.DeviceStatusOnline)
 	return d.TickTask.Start()
 }
 
@@ -32,7 +31,7 @@ func (d *RTSPDevice) GetTickInterval() time.Duration {
 }
 
 func (d *RTSPDevice) Pull() {
-	d.plugin.Pull(d.device.GetStreamPath(), config.Pull{URL: d.device.PullURL})
+	d.plugin.Pull(d.device.GetStreamPath(), config.Pull{URL: d.device.PullURL,MaxRetry: -1})
 }
 
 func (d *RTSPDevice) Tick(any) {
@@ -43,7 +42,6 @@ func (d *RTSPDevice) Tick(any) {
 }
 
 func (d *RTSPDevice) Dispose() {
-	d.device.Status = m7s.DeviceStatusOffline
-	d.device.Update()
+	d.device.ChangeStatus(m7s.DeviceStatusOffline)
 	d.TickTask.Dispose()
 }

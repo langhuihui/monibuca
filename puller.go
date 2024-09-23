@@ -3,15 +3,16 @@ package m7s
 import (
 	"fmt"
 	"io"
-	"m7s.live/m7s/v5/pkg"
-	"m7s.live/m7s/v5/pkg/config"
-	"m7s.live/m7s/v5/pkg/task"
-	"m7s.live/m7s/v5/pkg/util"
 	"net/http"
 	"net/url"
 	"os"
 	"strings"
 	"time"
+
+	"m7s.live/m7s/v5/pkg"
+	"m7s.live/m7s/v5/pkg/config"
+	"m7s.live/m7s/v5/pkg/task"
+	"m7s.live/m7s/v5/pkg/util"
 )
 
 type (
@@ -37,6 +38,7 @@ type (
 		Publisher     *Publisher
 		publishConfig *config.Publish
 		puller        IPuller
+		conf          *config.Pull	
 	}
 
 	HTTPFilePuller struct {
@@ -80,6 +82,7 @@ func (p *PullJob) Init(puller IPuller, plugin *Plugin, streamPath string, conf c
 	publishConfig.PublishTimeout = 0
 	p.publishConfig = &publishConfig
 	p.Args = conf.Args
+	p.conf = &conf
 	remoteURL := conf.URL
 	u, err := url.Parse(remoteURL)
 	if err == nil {
@@ -121,6 +124,13 @@ func (p *PullJob) Publish() (err error) {
 		streamPath += "?" + p.Args.Encode()
 	}
 	p.Publisher, err = p.Plugin.PublishWithConfig(p.puller.GetTask().Context, streamPath, *p.publishConfig)
+	if err == nil && p.conf.MaxRetry != 0 {
+		p.Publisher.OnDispose(func() {
+			if p.Publisher.StopReasonIs(pkg.ErrPublishDelayCloseTimeout) {
+				p.Stop(pkg.ErrPublishDelayCloseTimeout)
+			}
+		})
+	}
 	return
 }
 

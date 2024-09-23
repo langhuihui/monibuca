@@ -169,8 +169,7 @@ func (p *Publisher) Start() (err error) {
 	}); ok {
 		p.Device = device
 		if device.Status == DeviceStatusOnline {
-			device.Status = DeviceStatusPulling
-			device.Update()
+			device.ChangeStatus(DeviceStatusPulling)
 		}
 	}
 	p.audioReady = util.NewPromiseWithTimeout(p, time.Second*5)
@@ -215,8 +214,7 @@ func (p *PublishTimeout) Start() error {
 func (p *PublishTimeout) Dispose() {
 	p.Publisher.TimeoutTimer.Stop()
 	if p.Publisher.Device != nil && p.Publisher.Device.Status == DeviceStatusPulling && p.Publisher.Plugin.Server.Devices.Has(p.Publisher.Device.GetTaskID()) {
-		p.Publisher.Device.Status = DeviceStatusOnline
-		p.Publisher.Device.Update()
+		p.Publisher.Device.ChangeStatus(DeviceStatusOnline)
 	}
 }
 

@@ -3,7 +3,6 @@ package plugin_gb28181
 import (
 	"errors"
 	"fmt"
-	myip "github.com/husanpao/ip"
 	"net"
 	"net/http"
 	"os"
@@ -12,6 +11,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	myip "github.com/husanpao/ip"
 
 	"github.com/emiago/sipgo"
 	"github.com/emiago/sipgo/sip"
@@ -96,6 +97,24 @@ func (gb *GB28181Plugin) OnInit() (err error) {
 			return err
 		}
 	}
+	if gb.DB != nil {
+		gb.DB.AutoMigrate(&Device{})
+	}
+	return
+}
+
+func (p *GB28181Plugin) OnDeviceAdd(device *m7s.Device) (ret task.ITask) {
+	if device.Type != m7s.DeviceTypeGB {
+		return
+	}
+	deviceID, channelID, _ := strings.Cut(device.PullURL, "/")
+	if d, ok := p.devices.Get(deviceID); ok {
+		if channel, ok := d.channels.Get(channelID); ok {
+			channel.AbstractDevice = device
+			device.Handler = channel
+			device.ChangeStatus(m7s.DeviceStatusOnline)
+		}
+	}
 	return
 }
 
@@ -143,20 +162,26 @@ func (gb *GB28181Plugin) OnRegister(req *sip.Request, tx sip.ServerTransaction) 
 			res := sip.NewResponseFromRequest(req, sip.StatusUnauthorized, "Unathorized", nil)
 			res.AppendHeader(sip.NewHeader("WWW-Authenticate", chal.String()))
 
-			err = tx.Respond(res)
+			if err = tx.Respond(res); err != nil {
+				gb.Error("respond Unathorized", "error", err.Error())
+			}
 			return
 		}
 
 		cred, err = digest.ParseCredentials(h.Value())
 		if err != nil {
 			log.Error().Err(err).Msg("parsing creds failed")
-			err = tx.Respond(sip.NewResponseFromRequest(req, sip.StatusUnauthorized, "Bad credentials", nil))
+			if err = tx.Respond(sip.NewResponseFromRequest(req, sip.StatusUnauthorized, "Bad credentials", nil)); err != nil {
+				gb.Error("respond Bad credentials", "error", err.Error())
+			}
 			return
 		}
 
 		// Check registry
 		if cred.Username != gb.Username {
-			err = tx.Respond(sip.NewResponseFromRequest(req, sip.StatusNotFound, "Bad authorization header", nil))
+			if err = tx.Respond(sip.NewResponseFromRequest(req, sip.StatusNotFound, "Bad authorization header", nil)); err != nil {
+				gb.Error("respond Bad authorization header", "error", err.Error())
+			}
 			return
 		}
 
@@ -170,16 +195,22 @@ func (gb *GB28181Plugin) OnRegister(req *sip.Request, tx sip.ServerTransaction) 
 
 		if err != nil {
 			gb.Error("Calc digest failed")
-			err = tx.Respond(sip.NewResponseFromRequest(req, sip.StatusUnauthorized, "Bad credentials", nil))
+			if err = tx.Respond(sip.NewResponseFromRequest(req, sip.StatusUnauthorized, "Bad credentials", nil)); err != nil {
+				gb.Error("respond Bad credentials", "error", err.Error())
+			}
 			return
 		}
 
 		if cred.Response != digCred.Response {
-			err = tx.Respond(sip.NewResponseFromRequest(req, sip.StatusUnauthorized, "Unathorized", nil))
+			if err = tx.Respond(sip.NewResponseFromRequest(req, sip.StatusUnauthorized, "Unathorized", nil)); err != nil {
+				gb.Error("respond Unathorized", "error", err.Error())
+			}
 			return
 		}
 	}
-	err = tx.Respond(sip.NewResponseFromRequest(req, sip.StatusOK, "OK", nil))
+	if err = tx.Respond(sip.NewResponseFromRequest(req, sip.StatusOK, "OK", nil)); err != nil {
+		gb.Error("respond OK", "error", err.Error())
+	}
 	if isUnregister {
 		if d, ok := gb.devices.Get(id); ok {
 			d.Stop(errors.New("unregister"))
@@ -188,7 +219,7 @@ func (gb *GB28181Plugin) OnRegister(req *sip.Request, tx sip.ServerTransaction) 
 		if d, ok := gb.devices.Get(id); ok {
 			gb.RecoverDevice(d, req)
 		} else {
-			d = gb.StoreDevice(id, req)
+			gb.StoreDevice(id, req)
 		}
 	}
 }
@@ -208,7 +239,9 @@ func (gb *GB28181Plugin) OnMessage(req *sip.Request, tx sip.ServerTransaction) {
 			gb.Error("OnMessage", "error", err.Error())
 			return
 		}
-		err = d.onMessage(req, tx, temp)
+		if err = d.onMessage(req, tx, temp); err != nil {
+			gb.Error("onMessage", "error", err.Error())
+		}
 	} else {
 		_ = tx.Respond(sip.NewResponseFromRequest(req, sip.StatusNotFound, "Not Found", nil))
 	}
@@ -274,7 +307,7 @@ func (gb *GB28181Plugin) StoreDevice(id string, req *sip.Request) (d *Device) {
 			},
 			Params: sip.NewParams(),
 		},
-		devices: &gb.devices,
+		plugin: gb,
 	}
 	d.Logger = gb.With("id", id)
 	d.fromHDR.Params.Add("tag", sip.GenerateTagN(16))
@@ -284,11 +317,18 @@ func (gb *GB28181Plugin) StoreDevice(id string, req *sip.Request) (d *Device) {
 	d.Info("StoreDevice", "source", source, "desc", desc, "servIp", servIp, "publicIP", publicIP, "recipient", req.Recipient)
 
 	if gb.DB != nil {
-		//TODO
+		gb.DB.Save(d)
 	}
 	d.OnStart(func() {
 		gb.devices.Add(d)
 		d.channels.OnAdd(func(c *Channel) {
+			if absDevice, ok := gb.Server.Devices.Find(func(absDevice *m7s.Device) bool {
+				return absDevice.Type == m7s.DeviceTypeGB && absDevice.PullURL == fmt.Sprintf("%s/%s", d.ID, c.DeviceID)
+			}); ok {
+				c.AbstractDevice = absDevice
+				absDevice.Handler = c
+				absDevice.ChangeStatus(m7s.DeviceStatusOnline)
+			}
 			if gb.AutoInvite {
 				gb.Pull(fmt.Sprintf("%s/%s", d.ID, c.DeviceID), config.Pull{
 					URL: fmt.Sprintf("%s/%s", d.ID, c.DeviceID),
@@ -299,6 +339,11 @@ func (gb *GB28181Plugin) StoreDevice(id string, req *sip.Request) (d *Device) {
 	d.OnDispose(func() {
 		d.Status = DeviceOfflineStatus
 		if gb.devices.RemoveByKey(d.ID) {
+			for c := range d.channels.Range {
+				if c.AbstractDevice != nil {
+					c.AbstractDevice.ChangeStatus(m7s.DeviceStatusOffline)
+				}
+			}
 		}
 	})
 	gb.AddTask(d)

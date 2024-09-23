@@ -168,6 +168,8 @@ message SummaryResponse {
   int32 subscribeCount = 7;
   int32 pullCount = 8;
   int32 pushCount = 9;
+  int32 recordCount = 10;
+  int32 transformCount = 11;
 }
 
 message PluginInfo {

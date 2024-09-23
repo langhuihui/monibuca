@@ -2,10 +2,13 @@ package plugin_gb28181
 
 import (
 	"log/slog"
-	"m7s.live/m7s/v5/pkg/util"
-	gb28181 "m7s.live/m7s/v5/plugin/gb28181/pkg"
 	"sync/atomic"
 	"time"
+
+	"m7s.live/m7s/v5"
+	"m7s.live/m7s/v5/pkg/config"
+	"m7s.live/m7s/v5/pkg/util"
+	gb28181 "m7s.live/m7s/v5/plugin/gb28181/pkg"
 )
 
 type RecordRequest struct {
@@ -26,8 +29,13 @@ type Channel struct {
 	RecordReqs          util.Collection[int, *RecordRequest]
 	*slog.Logger
 	gb28181.ChannelInfo
+	AbstractDevice *m7s.Device
 }
 
 func (c *Channel) GetKey() string {
 	return c.DeviceID
+}
+
+func (c *Channel) Pull() {
+	c.Device.plugin.Pull(c.AbstractDevice.GetStreamPath(), config.Pull{URL: c.AbstractDevice.PullURL,MaxRetry: -1})
 }

@@ -1,15 +1,16 @@
 package plugin_gb28181
 
 import (
+	"net/http"
+	"strings"
+	"time"
+
 	"github.com/emiago/sipgo"
 	"github.com/emiago/sipgo/sip"
 	"m7s.live/m7s/v5"
 	"m7s.live/m7s/v5/pkg/task"
 	"m7s.live/m7s/v5/pkg/util"
 	gb28181 "m7s.live/m7s/v5/plugin/gb28181/pkg"
-	"net/http"
-	"strings"
-	"time"
 )
 
 type DeviceStatus string
@@ -23,8 +24,8 @@ const (
 )
 
 type Device struct {
-	task.Task
-	ID                  string
+	task.Task           `gorm:"-:all"`
+	ID                  string `gorm:"primaryKey"`
 	Name                string
 	Manufacturer        string
 	Model               string
@@ -33,7 +34,7 @@ type Device struct {
 	LastKeepaliveAt     time.Time
 	Status              DeviceStatus
 	SN                  int
-	Recipient           sip.Uri
+	Recipient           sip.Uri `gorm:"-:all"`
 	Transport           string
 	channels            util.Collection[string, *Channel]
 	mediaIp             string
@@ -44,7 +45,11 @@ type Device struct {
 	dialogClient        *sipgo.DialogClient
 	contactHDR          sip.ContactHeader
 	fromHDR             sip.FromHeader
-	devices             *util.Collection[string, *Device]
+	plugin              *GB28181Plugin
+}
+
+func (d *Device) TableName() string {
+	return "device_gb28181"
 }
 
 func (d *Device) GetKey() string {
@@ -150,7 +155,7 @@ func (d *Device) Go() (err error) {
 						//如果父ID并非本身所属设备，一般情况下这是因为下级设备上传了目录信息，该信息通常不需要处理。
 						// 暂时不考虑级联目录的实现
 						if d.ID != parentId {
-							if parent, ok := d.devices.Get(parentId); ok {
+							if parent, ok := d.plugin.devices.Get(parentId); ok {
 								parent.addOrUpdateChannel(c)
 								continue
 							} else {
