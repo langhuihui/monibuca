@@ -19,10 +19,10 @@ import (
 // Requires gRPC-Go v1.32.0 or later.
 const _ = grpc.SupportPackageIsVersion7
 
-// GlobalClient is the client API for Global service.
+// ApiClient is the client API for Api service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-type GlobalClient interface {
+type ApiClient interface {
 	SysInfo(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*SysInfoResponse, error)
 	Summary(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*SummaryResponse, error)
 	Shutdown(ctx context.Context, in *RequestWithId, opts ...grpc.CallOption) (*emptypb.Empty, error)
@@ -39,164 +39,204 @@ type GlobalClient interface {
 	GetConfig(ctx context.Context, in *GetConfigRequest, opts ...grpc.CallOption) (*GetConfigResponse, error)
 	GetFormily(ctx context.Context, in *GetConfigRequest, opts ...grpc.CallOption) (*GetConfigResponse, error)
 	ModifyConfig(ctx context.Context, in *ModifyConfigRequest, opts ...grpc.CallOption) (*SuccessResponse, error)
+	GetDeviceList(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*DeviceListResponse, error)
+	AddDevice(ctx context.Context, in *DeviceInfo, opts ...grpc.CallOption) (*SuccessResponse, error)
+	RemoveDevice(ctx context.Context, in *RequestWithId, opts ...grpc.CallOption) (*SuccessResponse, error)
+	UpdateDevice(ctx context.Context, in *DeviceInfo, opts ...grpc.CallOption) (*SuccessResponse, error)
 }
 
-type globalClient struct {
+type apiClient struct {
 	cc grpc.ClientConnInterface
 }
 
-func NewGlobalClient(cc grpc.ClientConnInterface) GlobalClient {
-	return &globalClient{cc}
+func NewApiClient(cc grpc.ClientConnInterface) ApiClient {
+	return &apiClient{cc}
 }
 
-func (c *globalClient) SysInfo(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*SysInfoResponse, error) {
+func (c *apiClient) SysInfo(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*SysInfoResponse, error) {
 	out := new(SysInfoResponse)
-	err := c.cc.Invoke(ctx, "/m7s.Global/SysInfo", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/global.api/SysInfo", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *globalClient) Summary(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*SummaryResponse, error) {
+func (c *apiClient) Summary(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*SummaryResponse, error) {
 	out := new(SummaryResponse)
-	err := c.cc.Invoke(ctx, "/m7s.Global/Summary", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/global.api/Summary", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *globalClient) Shutdown(ctx context.Context, in *RequestWithId, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+func (c *apiClient) Shutdown(ctx context.Context, in *RequestWithId, opts ...grpc.CallOption) (*emptypb.Empty, error) {
 	out := new(emptypb.Empty)
-	err := c.cc.Invoke(ctx, "/m7s.Global/Shutdown", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/global.api/Shutdown", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *globalClient) Restart(ctx context.Context, in *RequestWithId, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+func (c *apiClient) Restart(ctx context.Context, in *RequestWithId, opts ...grpc.CallOption) (*emptypb.Empty, error) {
 	out := new(emptypb.Empty)
-	err := c.cc.Invoke(ctx, "/m7s.Global/Restart", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/global.api/Restart", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *globalClient) TaskTree(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*TaskTreeResponse, error) {
+func (c *apiClient) TaskTree(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*TaskTreeResponse, error) {
 	out := new(TaskTreeResponse)
-	err := c.cc.Invoke(ctx, "/m7s.Global/TaskTree", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/global.api/TaskTree", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *globalClient) StreamList(ctx context.Context, in *StreamListRequest, opts ...grpc.CallOption) (*StreamListResponse, error) {
+func (c *apiClient) StreamList(ctx context.Context, in *StreamListRequest, opts ...grpc.CallOption) (*StreamListResponse, error) {
 	out := new(StreamListResponse)
-	err := c.cc.Invoke(ctx, "/m7s.Global/StreamList", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/global.api/StreamList", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *globalClient) WaitList(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*StreamWaitListResponse, error) {
+func (c *apiClient) WaitList(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*StreamWaitListResponse, error) {
 	out := new(StreamWaitListResponse)
-	err := c.cc.Invoke(ctx, "/m7s.Global/WaitList", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/global.api/WaitList", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *globalClient) StreamInfo(ctx context.Context, in *StreamSnapRequest, opts ...grpc.CallOption) (*StreamInfoResponse, error) {
+func (c *apiClient) StreamInfo(ctx context.Context, in *StreamSnapRequest, opts ...grpc.CallOption) (*StreamInfoResponse, error) {
 	out := new(StreamInfoResponse)
-	err := c.cc.Invoke(ctx, "/m7s.Global/StreamInfo", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/global.api/StreamInfo", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *globalClient) GetSubscribers(ctx context.Context, in *SubscribersRequest, opts ...grpc.CallOption) (*SubscribersResponse, error) {
+func (c *apiClient) GetSubscribers(ctx context.Context, in *SubscribersRequest, opts ...grpc.CallOption) (*SubscribersResponse, error) {
 	out := new(SubscribersResponse)
-	err := c.cc.Invoke(ctx, "/m7s.Global/GetSubscribers", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/global.api/GetSubscribers", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *globalClient) AudioTrackSnap(ctx context.Context, in *StreamSnapRequest, opts ...grpc.CallOption) (*TrackSnapShotResponse, error) {
+func (c *apiClient) AudioTrackSnap(ctx context.Context, in *StreamSnapRequest, opts ...grpc.CallOption) (*TrackSnapShotResponse, error) {
 	out := new(TrackSnapShotResponse)
-	err := c.cc.Invoke(ctx, "/m7s.Global/AudioTrackSnap", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/global.api/AudioTrackSnap", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *globalClient) VideoTrackSnap(ctx context.Context, in *StreamSnapRequest, opts ...grpc.CallOption) (*TrackSnapShotResponse, error) {
+func (c *apiClient) VideoTrackSnap(ctx context.Context, in *StreamSnapRequest, opts ...grpc.CallOption) (*TrackSnapShotResponse, error) {
 	out := new(TrackSnapShotResponse)
-	err := c.cc.Invoke(ctx, "/m7s.Global/VideoTrackSnap", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/global.api/VideoTrackSnap", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *globalClient) ChangeSubscribe(ctx context.Context, in *ChangeSubscribeRequest, opts ...grpc.CallOption) (*SuccessResponse, error) {
+func (c *apiClient) ChangeSubscribe(ctx context.Context, in *ChangeSubscribeRequest, opts ...grpc.CallOption) (*SuccessResponse, error) {
 	out := new(SuccessResponse)
-	err := c.cc.Invoke(ctx, "/m7s.Global/ChangeSubscribe", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/global.api/ChangeSubscribe", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *globalClient) StopSubscribe(ctx context.Context, in *RequestWithId, opts ...grpc.CallOption) (*SuccessResponse, error) {
+func (c *apiClient) StopSubscribe(ctx context.Context, in *RequestWithId, opts ...grpc.CallOption) (*SuccessResponse, error) {
 	out := new(SuccessResponse)
-	err := c.cc.Invoke(ctx, "/m7s.Global/StopSubscribe", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/global.api/StopSubscribe", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *globalClient) GetConfig(ctx context.Context, in *GetConfigRequest, opts ...grpc.CallOption) (*GetConfigResponse, error) {
+func (c *apiClient) GetConfig(ctx context.Context, in *GetConfigRequest, opts ...grpc.CallOption) (*GetConfigResponse, error) {
 	out := new(GetConfigResponse)
-	err := c.cc.Invoke(ctx, "/m7s.Global/GetConfig", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/global.api/GetConfig", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *globalClient) GetFormily(ctx context.Context, in *GetConfigRequest, opts ...grpc.CallOption) (*GetConfigResponse, error) {
+func (c *apiClient) GetFormily(ctx context.Context, in *GetConfigRequest, opts ...grpc.CallOption) (*GetConfigResponse, error) {
 	out := new(GetConfigResponse)
-	err := c.cc.Invoke(ctx, "/m7s.Global/GetFormily", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/global.api/GetFormily", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *globalClient) ModifyConfig(ctx context.Context, in *ModifyConfigRequest, opts ...grpc.CallOption) (*SuccessResponse, error) {
+func (c *apiClient) ModifyConfig(ctx context.Context, in *ModifyConfigRequest, opts ...grpc.CallOption) (*SuccessResponse, error) {
 	out := new(SuccessResponse)
-	err := c.cc.Invoke(ctx, "/m7s.Global/ModifyConfig", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/global.api/ModifyConfig", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-// GlobalServer is the server API for Global service.
-// All implementations must embed UnimplementedGlobalServer
+func (c *apiClient) GetDeviceList(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*DeviceListResponse, error) {
+	out := new(DeviceListResponse)
+	err := c.cc.Invoke(ctx, "/global.api/GetDeviceList", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *apiClient) AddDevice(ctx context.Context, in *DeviceInfo, opts ...grpc.CallOption) (*SuccessResponse, error) {
+	out := new(SuccessResponse)
+	err := c.cc.Invoke(ctx, "/global.api/AddDevice", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *apiClient) RemoveDevice(ctx context.Context, in *RequestWithId, opts ...grpc.CallOption) (*SuccessResponse, error) {
+	out := new(SuccessResponse)
+	err := c.cc.Invoke(ctx, "/global.api/RemoveDevice", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *apiClient) UpdateDevice(ctx context.Context, in *DeviceInfo, opts ...grpc.CallOption) (*SuccessResponse, error) {
+	out := new(SuccessResponse)
+	err := c.cc.Invoke(ctx, "/global.api/UpdateDevice", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ApiServer is the server API for Api service.
+// All implementations must embed UnimplementedApiServer
 // for forward compatibility
-type GlobalServer interface {
+type ApiServer interface {
 	SysInfo(context.Context, *emptypb.Empty) (*SysInfoResponse, error)
 	Summary(context.Context, *emptypb.Empty) (*SummaryResponse, error)
 	Shutdown(context.Context, *RequestWithId) (*emptypb.Empty, error)
@@ -213,432 +253,536 @@ type GlobalServer interface {
 	GetConfig(context.Context, *GetConfigRequest) (*GetConfigResponse, error)
 	GetFormily(context.Context, *GetConfigRequest) (*GetConfigResponse, error)
 	ModifyConfig(context.Context, *ModifyConfigRequest) (*SuccessResponse, error)
-	mustEmbedUnimplementedGlobalServer()
+	GetDeviceList(context.Context, *emptypb.Empty) (*DeviceListResponse, error)
+	AddDevice(context.Context, *DeviceInfo) (*SuccessResponse, error)
+	RemoveDevice(context.Context, *RequestWithId) (*SuccessResponse, error)
+	UpdateDevice(context.Context, *DeviceInfo) (*SuccessResponse, error)
+	mustEmbedUnimplementedApiServer()
 }
 
-// UnimplementedGlobalServer must be embedded to have forward compatible implementations.
-type UnimplementedGlobalServer struct {
+// UnimplementedApiServer must be embedded to have forward compatible implementations.
+type UnimplementedApiServer struct {
 }
 
-func (UnimplementedGlobalServer) SysInfo(context.Context, *emptypb.Empty) (*SysInfoResponse, error) {
+func (UnimplementedApiServer) SysInfo(context.Context, *emptypb.Empty) (*SysInfoResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SysInfo not implemented")
 }
-func (UnimplementedGlobalServer) Summary(context.Context, *emptypb.Empty) (*SummaryResponse, error) {
+func (UnimplementedApiServer) Summary(context.Context, *emptypb.Empty) (*SummaryResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Summary not implemented")
 }
-func (UnimplementedGlobalServer) Shutdown(context.Context, *RequestWithId) (*emptypb.Empty, error) {
+func (UnimplementedApiServer) Shutdown(context.Context, *RequestWithId) (*emptypb.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Shutdown not implemented")
 }
-func (UnimplementedGlobalServer) Restart(context.Context, *RequestWithId) (*emptypb.Empty, error) {
+func (UnimplementedApiServer) Restart(context.Context, *RequestWithId) (*emptypb.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Restart not implemented")
 }
-func (UnimplementedGlobalServer) TaskTree(context.Context, *emptypb.Empty) (*TaskTreeResponse, error) {
+func (UnimplementedApiServer) TaskTree(context.Context, *emptypb.Empty) (*TaskTreeResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method TaskTree not implemented")
 }
-func (UnimplementedGlobalServer) StreamList(context.Context, *StreamListRequest) (*StreamListResponse, error) {
+func (UnimplementedApiServer) StreamList(context.Context, *StreamListRequest) (*StreamListResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StreamList not implemented")
 }
-func (UnimplementedGlobalServer) WaitList(context.Context, *emptypb.Empty) (*StreamWaitListResponse, error) {
+func (UnimplementedApiServer) WaitList(context.Context, *emptypb.Empty) (*StreamWaitListResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method WaitList not implemented")
 }
-func (UnimplementedGlobalServer) StreamInfo(context.Context, *StreamSnapRequest) (*StreamInfoResponse, error) {
+func (UnimplementedApiServer) StreamInfo(context.Context, *StreamSnapRequest) (*StreamInfoResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StreamInfo not implemented")
 }
-func (UnimplementedGlobalServer) GetSubscribers(context.Context, *SubscribersRequest) (*SubscribersResponse, error) {
+func (UnimplementedApiServer) GetSubscribers(context.Context, *SubscribersRequest) (*SubscribersResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetSubscribers not implemented")
 }
-func (UnimplementedGlobalServer) AudioTrackSnap(context.Context, *StreamSnapRequest) (*TrackSnapShotResponse, error) {
+func (UnimplementedApiServer) AudioTrackSnap(context.Context, *StreamSnapRequest) (*TrackSnapShotResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method AudioTrackSnap not implemented")
 }
-func (UnimplementedGlobalServer) VideoTrackSnap(context.Context, *StreamSnapRequest) (*TrackSnapShotResponse, error) {
+func (UnimplementedApiServer) VideoTrackSnap(context.Context, *StreamSnapRequest) (*TrackSnapShotResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method VideoTrackSnap not implemented")
 }
-func (UnimplementedGlobalServer) ChangeSubscribe(context.Context, *ChangeSubscribeRequest) (*SuccessResponse, error) {
+func (UnimplementedApiServer) ChangeSubscribe(context.Context, *ChangeSubscribeRequest) (*SuccessResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ChangeSubscribe not implemented")
 }
-func (UnimplementedGlobalServer) StopSubscribe(context.Context, *RequestWithId) (*SuccessResponse, error) {
+func (UnimplementedApiServer) StopSubscribe(context.Context, *RequestWithId) (*SuccessResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StopSubscribe not implemented")
 }
-func (UnimplementedGlobalServer) GetConfig(context.Context, *GetConfigRequest) (*GetConfigResponse, error) {
+func (UnimplementedApiServer) GetConfig(context.Context, *GetConfigRequest) (*GetConfigResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetConfig not implemented")
 }
-func (UnimplementedGlobalServer) GetFormily(context.Context, *GetConfigRequest) (*GetConfigResponse, error) {
+func (UnimplementedApiServer) GetFormily(context.Context, *GetConfigRequest) (*GetConfigResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetFormily not implemented")
 }
-func (UnimplementedGlobalServer) ModifyConfig(context.Context, *ModifyConfigRequest) (*SuccessResponse, error) {
+func (UnimplementedApiServer) ModifyConfig(context.Context, *ModifyConfigRequest) (*SuccessResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ModifyConfig not implemented")
 }
-func (UnimplementedGlobalServer) mustEmbedUnimplementedGlobalServer() {}
+func (UnimplementedApiServer) GetDeviceList(context.Context, *emptypb.Empty) (*DeviceListResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetDeviceList not implemented")
+}
+func (UnimplementedApiServer) AddDevice(context.Context, *DeviceInfo) (*SuccessResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AddDevice not implemented")
+}
+func (UnimplementedApiServer) RemoveDevice(context.Context, *RequestWithId) (*SuccessResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RemoveDevice not implemented")
+}
+func (UnimplementedApiServer) UpdateDevice(context.Context, *DeviceInfo) (*SuccessResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpdateDevice not implemented")
+}
+func (UnimplementedApiServer) mustEmbedUnimplementedApiServer() {}
 
-// UnsafeGlobalServer may be embedded to opt out of forward compatibility for this service.
-// Use of this interface is not recommended, as added methods to GlobalServer will
+// UnsafeApiServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to ApiServer will
 // result in compilation errors.
-type UnsafeGlobalServer interface {
-	mustEmbedUnimplementedGlobalServer()
+type UnsafeApiServer interface {
+	mustEmbedUnimplementedApiServer()
 }
 
-func RegisterGlobalServer(s grpc.ServiceRegistrar, srv GlobalServer) {
-	s.RegisterService(&Global_ServiceDesc, srv)
+func RegisterApiServer(s grpc.ServiceRegistrar, srv ApiServer) {
+	s.RegisterService(&Api_ServiceDesc, srv)
 }
 
-func _Global_SysInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Api_SysInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(emptypb.Empty)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(GlobalServer).SysInfo(ctx, in)
+		return srv.(ApiServer).SysInfo(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/m7s.Global/SysInfo",
+		FullMethod: "/global.api/SysInfo",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(GlobalServer).SysInfo(ctx, req.(*emptypb.Empty))
+		return srv.(ApiServer).SysInfo(ctx, req.(*emptypb.Empty))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Global_Summary_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Api_Summary_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(emptypb.Empty)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(GlobalServer).Summary(ctx, in)
+		return srv.(ApiServer).Summary(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/m7s.Global/Summary",
+		FullMethod: "/global.api/Summary",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(GlobalServer).Summary(ctx, req.(*emptypb.Empty))
+		return srv.(ApiServer).Summary(ctx, req.(*emptypb.Empty))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Global_Shutdown_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Api_Shutdown_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RequestWithId)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(GlobalServer).Shutdown(ctx, in)
+		return srv.(ApiServer).Shutdown(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/m7s.Global/Shutdown",
+		FullMethod: "/global.api/Shutdown",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(GlobalServer).Shutdown(ctx, req.(*RequestWithId))
+		return srv.(ApiServer).Shutdown(ctx, req.(*RequestWithId))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Global_Restart_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Api_Restart_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RequestWithId)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(GlobalServer).Restart(ctx, in)
+		return srv.(ApiServer).Restart(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/m7s.Global/Restart",
+		FullMethod: "/global.api/Restart",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(GlobalServer).Restart(ctx, req.(*RequestWithId))
+		return srv.(ApiServer).Restart(ctx, req.(*RequestWithId))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Global_TaskTree_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Api_TaskTree_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(emptypb.Empty)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(GlobalServer).TaskTree(ctx, in)
+		return srv.(ApiServer).TaskTree(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/m7s.Global/TaskTree",
+		FullMethod: "/global.api/TaskTree",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(GlobalServer).TaskTree(ctx, req.(*emptypb.Empty))
+		return srv.(ApiServer).TaskTree(ctx, req.(*emptypb.Empty))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Global_StreamList_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Api_StreamList_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(StreamListRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(GlobalServer).StreamList(ctx, in)
+		return srv.(ApiServer).StreamList(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/m7s.Global/StreamList",
+		FullMethod: "/global.api/StreamList",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(GlobalServer).StreamList(ctx, req.(*StreamListRequest))
+		return srv.(ApiServer).StreamList(ctx, req.(*StreamListRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Global_WaitList_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Api_WaitList_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(emptypb.Empty)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(GlobalServer).WaitList(ctx, in)
+		return srv.(ApiServer).WaitList(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/m7s.Global/WaitList",
+		FullMethod: "/global.api/WaitList",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(GlobalServer).WaitList(ctx, req.(*emptypb.Empty))
+		return srv.(ApiServer).WaitList(ctx, req.(*emptypb.Empty))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Global_StreamInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Api_StreamInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(StreamSnapRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(GlobalServer).StreamInfo(ctx, in)
+		return srv.(ApiServer).StreamInfo(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/m7s.Global/StreamInfo",
+		FullMethod: "/global.api/StreamInfo",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(GlobalServer).StreamInfo(ctx, req.(*StreamSnapRequest))
+		return srv.(ApiServer).StreamInfo(ctx, req.(*StreamSnapRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Global_GetSubscribers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Api_GetSubscribers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(SubscribersRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(GlobalServer).GetSubscribers(ctx, in)
+		return srv.(ApiServer).GetSubscribers(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/m7s.Global/GetSubscribers",
+		FullMethod: "/global.api/GetSubscribers",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(GlobalServer).GetSubscribers(ctx, req.(*SubscribersRequest))
+		return srv.(ApiServer).GetSubscribers(ctx, req.(*SubscribersRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Global_AudioTrackSnap_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Api_AudioTrackSnap_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(StreamSnapRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(GlobalServer).AudioTrackSnap(ctx, in)
+		return srv.(ApiServer).AudioTrackSnap(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/m7s.Global/AudioTrackSnap",
+		FullMethod: "/global.api/AudioTrackSnap",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(GlobalServer).AudioTrackSnap(ctx, req.(*StreamSnapRequest))
+		return srv.(ApiServer).AudioTrackSnap(ctx, req.(*StreamSnapRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Global_VideoTrackSnap_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Api_VideoTrackSnap_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(StreamSnapRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(GlobalServer).VideoTrackSnap(ctx, in)
+		return srv.(ApiServer).VideoTrackSnap(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/m7s.Global/VideoTrackSnap",
+		FullMethod: "/global.api/VideoTrackSnap",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(GlobalServer).VideoTrackSnap(ctx, req.(*StreamSnapRequest))
+		return srv.(ApiServer).VideoTrackSnap(ctx, req.(*StreamSnapRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Global_ChangeSubscribe_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Api_ChangeSubscribe_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ChangeSubscribeRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(GlobalServer).ChangeSubscribe(ctx, in)
+		return srv.(ApiServer).ChangeSubscribe(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/m7s.Global/ChangeSubscribe",
+		FullMethod: "/global.api/ChangeSubscribe",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(GlobalServer).ChangeSubscribe(ctx, req.(*ChangeSubscribeRequest))
+		return srv.(ApiServer).ChangeSubscribe(ctx, req.(*ChangeSubscribeRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Global_StopSubscribe_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Api_StopSubscribe_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RequestWithId)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(GlobalServer).StopSubscribe(ctx, in)
+		return srv.(ApiServer).StopSubscribe(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/m7s.Global/StopSubscribe",
+		FullMethod: "/global.api/StopSubscribe",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(GlobalServer).StopSubscribe(ctx, req.(*RequestWithId))
+		return srv.(ApiServer).StopSubscribe(ctx, req.(*RequestWithId))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Global_GetConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Api_GetConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetConfigRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(GlobalServer).GetConfig(ctx, in)
+		return srv.(ApiServer).GetConfig(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/m7s.Global/GetConfig",
+		FullMethod: "/global.api/GetConfig",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(GlobalServer).GetConfig(ctx, req.(*GetConfigRequest))
+		return srv.(ApiServer).GetConfig(ctx, req.(*GetConfigRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Global_GetFormily_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Api_GetFormily_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetConfigRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(GlobalServer).GetFormily(ctx, in)
+		return srv.(ApiServer).GetFormily(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/m7s.Global/GetFormily",
+		FullMethod: "/global.api/GetFormily",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(GlobalServer).GetFormily(ctx, req.(*GetConfigRequest))
+		return srv.(ApiServer).GetFormily(ctx, req.(*GetConfigRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Global_ModifyConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Api_ModifyConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ModifyConfigRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(GlobalServer).ModifyConfig(ctx, in)
+		return srv.(ApiServer).ModifyConfig(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/m7s.Global/ModifyConfig",
+		FullMethod: "/global.api/ModifyConfig",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(GlobalServer).ModifyConfig(ctx, req.(*ModifyConfigRequest))
+		return srv.(ApiServer).ModifyConfig(ctx, req.(*ModifyConfigRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-// Global_ServiceDesc is the grpc.ServiceDesc for Global service.
+func _Api_GetDeviceList_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(emptypb.Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).GetDeviceList(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/global.api/GetDeviceList",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).GetDeviceList(ctx, req.(*emptypb.Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Api_AddDevice_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeviceInfo)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).AddDevice(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/global.api/AddDevice",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).AddDevice(ctx, req.(*DeviceInfo))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Api_RemoveDevice_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RequestWithId)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).RemoveDevice(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/global.api/RemoveDevice",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).RemoveDevice(ctx, req.(*RequestWithId))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Api_UpdateDevice_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeviceInfo)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).UpdateDevice(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/global.api/UpdateDevice",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).UpdateDevice(ctx, req.(*DeviceInfo))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// Api_ServiceDesc is the grpc.ServiceDesc for Api service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
-var Global_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "m7s.Global",
-	HandlerType: (*GlobalServer)(nil),
+var Api_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "global.api",
+	HandlerType: (*ApiServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
 			MethodName: "SysInfo",
-			Handler:    _Global_SysInfo_Handler,
+			Handler:    _Api_SysInfo_Handler,
 		},
 		{
 			MethodName: "Summary",
-			Handler:    _Global_Summary_Handler,
+			Handler:    _Api_Summary_Handler,
 		},
 		{
 			MethodName: "Shutdown",
-			Handler:    _Global_Shutdown_Handler,
+			Handler:    _Api_Shutdown_Handler,
 		},
 		{
 			MethodName: "Restart",
-			Handler:    _Global_Restart_Handler,
+			Handler:    _Api_Restart_Handler,
 		},
 		{
 			MethodName: "TaskTree",
-			Handler:    _Global_TaskTree_Handler,
+			Handler:    _Api_TaskTree_Handler,
 		},
 		{
 			MethodName: "StreamList",
-			Handler:    _Global_StreamList_Handler,
+			Handler:    _Api_StreamList_Handler,
 		},
 		{
 			MethodName: "WaitList",
-			Handler:    _Global_WaitList_Handler,
+			Handler:    _Api_WaitList_Handler,
 		},
 		{
 			MethodName: "StreamInfo",
-			Handler:    _Global_StreamInfo_Handler,
+			Handler:    _Api_StreamInfo_Handler,
 		},
 		{
 			MethodName: "GetSubscribers",
-			Handler:    _Global_GetSubscribers_Handler,
+			Handler:    _Api_GetSubscribers_Handler,
 		},
 		{
 			MethodName: "AudioTrackSnap",
-			Handler:    _Global_AudioTrackSnap_Handler,
+			Handler:    _Api_AudioTrackSnap_Handler,
 		},
 		{
 			MethodName: "VideoTrackSnap",
-			Handler:    _Global_VideoTrackSnap_Handler,
+			Handler:    _Api_VideoTrackSnap_Handler,
 		},
 		{
 			MethodName: "ChangeSubscribe",
-			Handler:    _Global_ChangeSubscribe_Handler,
+			Handler:    _Api_ChangeSubscribe_Handler,
 		},
 		{
 			MethodName: "StopSubscribe",
-			Handler:    _Global_StopSubscribe_Handler,
+			Handler:    _Api_StopSubscribe_Handler,
 		},
 		{
 			MethodName: "GetConfig",
-			Handler:    _Global_GetConfig_Handler,
+			Handler:    _Api_GetConfig_Handler,
 		},
 		{
 			MethodName: "GetFormily",
-			Handler:    _Global_GetFormily_Handler,
+			Handler:    _Api_GetFormily_Handler,
 		},
 		{
 			MethodName: "ModifyConfig",
-			Handler:    _Global_ModifyConfig_Handler,
+			Handler:    _Api_ModifyConfig_Handler,
+		},
+		{
+			MethodName: "GetDeviceList",
+			Handler:    _Api_GetDeviceList_Handler,
+		},
+		{
+			MethodName: "AddDevice",
+			Handler:    _Api_AddDevice_Handler,
+		},
+		{
+			MethodName: "RemoveDevice",
+			Handler:    _Api_RemoveDevice_Handler,
+		},
+		{
+			MethodName: "UpdateDevice",
+			Handler:    _Api_UpdateDevice_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

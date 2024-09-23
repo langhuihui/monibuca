@@ -19,86 +19,86 @@ import (
 // Requires gRPC-Go v1.32.0 or later.
 const _ = grpc.SupportPackageIsVersion7
 
-// RtmpClient is the client API for Rtmp service.
+// ApiClient is the client API for Api service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-type RtmpClient interface {
+type ApiClient interface {
 	PushOut(ctx context.Context, in *PushRequest, opts ...grpc.CallOption) (*pb.SuccessResponse, error)
 }
 
-type rtmpClient struct {
+type apiClient struct {
 	cc grpc.ClientConnInterface
 }
 
-func NewRtmpClient(cc grpc.ClientConnInterface) RtmpClient {
-	return &rtmpClient{cc}
+func NewApiClient(cc grpc.ClientConnInterface) ApiClient {
+	return &apiClient{cc}
 }
 
-func (c *rtmpClient) PushOut(ctx context.Context, in *PushRequest, opts ...grpc.CallOption) (*pb.SuccessResponse, error) {
+func (c *apiClient) PushOut(ctx context.Context, in *PushRequest, opts ...grpc.CallOption) (*pb.SuccessResponse, error) {
 	out := new(pb.SuccessResponse)
-	err := c.cc.Invoke(ctx, "/m7s.rtmp/PushOut", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/rtmp.api/PushOut", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-// RtmpServer is the server API for Rtmp service.
-// All implementations must embed UnimplementedRtmpServer
+// ApiServer is the server API for Api service.
+// All implementations must embed UnimplementedApiServer
 // for forward compatibility
-type RtmpServer interface {
+type ApiServer interface {
 	PushOut(context.Context, *PushRequest) (*pb.SuccessResponse, error)
-	mustEmbedUnimplementedRtmpServer()
+	mustEmbedUnimplementedApiServer()
 }
 
-// UnimplementedRtmpServer must be embedded to have forward compatible implementations.
-type UnimplementedRtmpServer struct {
+// UnimplementedApiServer must be embedded to have forward compatible implementations.
+type UnimplementedApiServer struct {
 }
 
-func (UnimplementedRtmpServer) PushOut(context.Context, *PushRequest) (*pb.SuccessResponse, error) {
+func (UnimplementedApiServer) PushOut(context.Context, *PushRequest) (*pb.SuccessResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PushOut not implemented")
 }
-func (UnimplementedRtmpServer) mustEmbedUnimplementedRtmpServer() {}
+func (UnimplementedApiServer) mustEmbedUnimplementedApiServer() {}
 
-// UnsafeRtmpServer may be embedded to opt out of forward compatibility for this service.
-// Use of this interface is not recommended, as added methods to RtmpServer will
+// UnsafeApiServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to ApiServer will
 // result in compilation errors.
-type UnsafeRtmpServer interface {
-	mustEmbedUnimplementedRtmpServer()
+type UnsafeApiServer interface {
+	mustEmbedUnimplementedApiServer()
 }
 
-func RegisterRtmpServer(s grpc.ServiceRegistrar, srv RtmpServer) {
-	s.RegisterService(&Rtmp_ServiceDesc, srv)
+func RegisterApiServer(s grpc.ServiceRegistrar, srv ApiServer) {
+	s.RegisterService(&Api_ServiceDesc, srv)
 }
 
-func _Rtmp_PushOut_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Api_PushOut_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(PushRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(RtmpServer).PushOut(ctx, in)
+		return srv.(ApiServer).PushOut(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/m7s.rtmp/PushOut",
+		FullMethod: "/rtmp.api/PushOut",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RtmpServer).PushOut(ctx, req.(*PushRequest))
+		return srv.(ApiServer).PushOut(ctx, req.(*PushRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-// Rtmp_ServiceDesc is the grpc.ServiceDesc for Rtmp service.
+// Api_ServiceDesc is the grpc.ServiceDesc for Api service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
-var Rtmp_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "m7s.rtmp",
-	HandlerType: (*RtmpServer)(nil),
+var Api_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "rtmp.api",
+	HandlerType: (*ApiServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
 			MethodName: "PushOut",
-			Handler:    _Rtmp_PushOut_Handler,
+			Handler:    _Api_PushOut_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

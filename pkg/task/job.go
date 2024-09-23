@@ -182,6 +182,9 @@ func (mt *Job) run() {
 			switch tt := child.(type) {
 			case IChannelTask:
 				tt.Tick(rev.Interface())
+				if tt.IsStopped() {
+					mt.onChildDispose(child)
+				}
 			}
 			if !ok {
 				if mt.onChildDispose(child); child.checkRetry(child.StopReason()) {

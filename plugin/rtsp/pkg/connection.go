@@ -1,11 +1,13 @@
 package rtsp
 
 import (
+	"crypto/tls"
 	"encoding/binary"
 	"net"
 	"net/url"
 	"runtime"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -107,6 +109,38 @@ const (
 	StateSetup
 	StatePlay
 )
+
+func (c *NetConnection) Connect(remoteURL string) (err error) {
+	rtspURL, err := url.Parse(remoteURL)
+	if err != nil {
+		return
+	}
+	istls := rtspURL.Scheme == "rtsps"
+	if strings.Count(rtspURL.Host, ":") == 0 {
+		if istls {
+			rtspURL.Host += ":443"
+		} else {
+			rtspURL.Host += ":554"
+		}
+	}
+	var conn net.Conn
+	if istls {
+		var tlsconn *tls.Conn
+		tlsconn, err = tls.Dial("tcp", rtspURL.Host, &tls.Config{})
+		conn = tlsconn
+	} else {
+		conn, err = net.Dial("tcp", rtspURL.Host)
+	}
+	if err != nil {
+		return
+	}
+	c.conn = conn
+	c.URL = rtspURL
+	c.UserAgent = "monibuca" + m7s.Version
+	c.auth = util.NewAuth(c.URL.User)
+	c.Backchannel = true
+	return
+}
 
 func (c *NetConnection) WriteRequest(req *util.Request) (err error) {
 	if req.Proto == "" {

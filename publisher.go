@@ -130,6 +130,7 @@ type Publisher struct {
 	Subscribers            SubscriberCollection
 	GOP                    int
 	OnSeek                 func(time.Duration)
+	Device                 *Device
 	dumpFile               *os.File
 }
 
@@ -163,6 +164,15 @@ func (p *Publisher) Start() (err error) {
 	}
 	s.Streams.Set(p)
 	p.Info("publish")
+	if device, ok := s.Devices.Find(func(device *Device) bool {
+		return device.GetStreamPath() == p.StreamPath
+	}); ok {
+		p.Device = device
+		if device.Status == DeviceStatusOnline {
+			device.Status = DeviceStatusPulling
+			device.Update()
+		}
+	}
 	p.audioReady = util.NewPromiseWithTimeout(p, time.Second*5)
 	p.videoReady = util.NewPromiseWithTimeout(p, time.Second*5)
 	if p.Dump {
@@ -204,6 +214,10 @@ func (p *PublishTimeout) Start() error {
 
 func (p *PublishTimeout) Dispose() {
 	p.Publisher.TimeoutTimer.Stop()
+	if p.Publisher.Device != nil && p.Publisher.Device.Status == DeviceStatusPulling && p.Publisher.Plugin.Server.Devices.Has(p.Publisher.Device.GetTaskID()) {
+		p.Publisher.Device.Status = DeviceStatusOnline
+		p.Publisher.Device.Update()
+	}
 }
 
 func (p *PublishTimeout) Tick(any) {

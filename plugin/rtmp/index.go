@@ -11,7 +11,7 @@ import (
 )
 
 type RTMPPlugin struct {
-	pb.UnimplementedRtmpServer
+	pb.UnimplementedApiServer
 	m7s.Plugin
 	ChunkSize int `default:"1024"`
 	KeepAlive bool
@@ -19,7 +19,7 @@ type RTMPPlugin struct {
 }
 
 var _ = m7s.InstallPlugin[RTMPPlugin](m7s.DefaultYaml(`tcp:
-  listenaddr: :1935`), &pb.Rtmp_ServiceDesc, pb.RegisterRtmpHandler, NewPusher, NewPuller)
+  listenaddr: :1935`), &pb.Api_ServiceDesc, pb.RegisterApiHandler, NewPusher, NewPuller)
 
 type RTMPServer struct {
 	NetConnection

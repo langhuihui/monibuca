@@ -1,11 +1,7 @@
 package rtsp
 
 import (
-	"crypto/tls"
 	"m7s.live/m7s/v5/pkg/config"
-	"net"
-	"net/url"
-	"strings"
 
 	"m7s.live/m7s/v5"
 	"m7s.live/m7s/v5/pkg/util"
@@ -24,43 +20,11 @@ type Client struct {
 }
 
 func (c *Client) Start() (err error) {
-	var rtspURL *url.URL
 	if c.direction == DIRECTION_PULL {
-		rtspURL, err = url.Parse(c.pullCtx.RemoteURL)
+		err = c.NetConnection.Connect(c.pullCtx.RemoteURL)
 	} else {
-		rtspURL, err = url.Parse(c.pushCtx.RemoteURL)
+		err = c.NetConnection.Connect(c.pushCtx.RemoteURL)
 	}
-	if err != nil {
-		return
-	}
-	//ps := strings.Split(u.Path, "/")
-	//if len(ps) < 3 {
-	//	return errors.New("illegal rtsp url")
-	//}
-	istls := rtspURL.Scheme == "rtsps"
-	if strings.Count(rtspURL.Host, ":") == 0 {
-		if istls {
-			rtspURL.Host += ":443"
-		} else {
-			rtspURL.Host += ":554"
-		}
-	}
-	var conn net.Conn
-	if istls {
-		var tlsconn *tls.Conn
-		tlsconn, err = tls.Dial("tcp", rtspURL.Host, &tls.Config{})
-		conn = tlsconn
-	} else {
-		conn, err = net.Dial("tcp", rtspURL.Host)
-	}
-	if err != nil {
-		return
-	}
-	c.conn = conn
-	c.URL = rtspURL
-	c.UserAgent = "monibuca" + m7s.Version
-	c.auth = util.NewAuth(c.URL.User)
-	c.Backchannel = true
 	return
 }
 

@@ -79,6 +79,7 @@ type (
 		Post(func() error) *Task
 	}
 	IChannelTask interface {
+		ITask
 		Tick(any)
 	}
 	TaskStarter interface {

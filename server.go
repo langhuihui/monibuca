@@ -61,7 +61,7 @@ type (
 		baseTsAudio, baseTsVideo time.Duration
 	}
 	Server struct {
-		pb.UnimplementedGlobalServer
+		pb.UnimplementedApiServer
 		Plugin
 		ServerConfig
 		Plugins         util.Collection[string, *Plugin]
@@ -216,14 +216,14 @@ func (s *Server) Start() (err error) {
 	if tcpConf.ListenAddr != "" {
 		var opts []grpc.ServerOption
 		s.grpcServer = grpc.NewServer(opts...)
-		pb.RegisterGlobalServer(s.grpcServer, s)
+		pb.RegisterApiServer(s.grpcServer, s)
 
 		s.grpcClientConn, err = grpc.DialContext(s.Context, tcpConf.ListenAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		if err != nil {
 			s.Error("failed to dial", "error", err)
 			return
 		}
-		if err = pb.RegisterGlobalHandler(s.Context, mux, s.grpcClientConn); err != nil {
+		if err = pb.RegisterApiHandler(s.Context, mux, s.grpcClientConn); err != nil {
 			s.Error("register handler faild", "error", err)
 			return
 		}
@@ -238,6 +238,7 @@ func (s *Server) Start() (err error) {
 	s.AddTaskLazy(&s.Pulls)
 	s.AddTaskLazy(&s.Pushs)
 	s.AddTaskLazy(&s.Transforms)
+	s.AddTaskLazy(&s.Devices)
 	for _, plugin := range plugins {
 		plugin.Init(s, cg[strings.ToLower(plugin.Name)])
 	}
@@ -254,6 +255,15 @@ func (s *Server) Start() (err error) {
 				for streamPath, conf := range plugin.config.Pull {
 					plugin.handler.Pull(streamPath, conf)
 				}
+			}
+		}
+		if s.DB != nil {
+			s.DB.AutoMigrate(&Device{})
+			var devices []*Device
+			s.DB.Find(&devices)
+			for _, device := range devices {
+				device.server = s
+				s.Devices.Add(device)
 			}
 		}
 		return nil

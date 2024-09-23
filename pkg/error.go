@@ -18,6 +18,7 @@ var (
 	ErrUnsupportCodec           = errors.New("unsupport codec")
 	ErrMuted                    = errors.New("muted")
 	ErrNoTrack                  = errors.New("no track")
+	ErrNoDB                     = errors.New("no db")
 	ErrLost                     = errors.New("lost")
 
 	ErrRecordSamePath = errors.New("record same path")

@@ -118,6 +118,10 @@ func (c *Collection[K, T]) RemoveByKey(key K) bool {
 // 	item = reflect.New(reflect.TypeOf(item).Elem()).Interface().(T)
 // 	return
 // }
+func (c *Collection[K, T]) Has(key K) bool {
+	_, ok := c.Get(key)
+	return ok
+}
 
 func (c *Collection[K, T]) Get(key K) (item T, ok bool) {
 	if c.L != nil {

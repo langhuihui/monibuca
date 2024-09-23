@@ -82,6 +82,10 @@ type (
 	IQUICPlugin interface {
 		OnQUICConnect(quic.Connection) task.ITask
 	}
+
+	IDevicePlugin interface {
+		OnDeviceAdd(device *Device)  task.ITask
+	}
 )
 
 var plugins []PluginMeta
@@ -414,6 +418,9 @@ func (p *Plugin) OnSubscribe(sub *Subscriber) {
 			conf.URL = reg.Replace(sub.StreamPath, conf.URL)
 			p.handler.Pull(sub.StreamPath, conf)
 		}
+	}
+	for device := range p.Server.Devices.Range {
+		device.Handler.Pull()
 	}
 	//if !avoidTrans {
 	//	for reg, conf := range plugin.GetCommonConf().OnSub.Transform {

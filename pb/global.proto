@@ -3,10 +3,10 @@ import "google/api/annotations.proto";
 import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";
 import "google/protobuf/any.proto";
-package m7s;
+package global;
 option go_package="m7s.live/m7s/v5/pb";
 
-service Global {
+service api {
   rpc SysInfo (google.protobuf.Empty) returns (SysInfoResponse) {
     option (google.api.http) = {
       get: "/api/sysinfo"
@@ -89,6 +89,29 @@ service Global {
     option (google.api.http) = {
       post: "/api/config/modify/{name}"
       body: "yaml"
+    };
+  }
+  rpc GetDeviceList (google.protobuf.Empty) returns (DeviceListResponse) {
+    option (google.api.http) = {
+      get: "/api/device/list"
+    };
+  }
+  rpc AddDevice (DeviceInfo) returns (SuccessResponse) {
+    option (google.api.http) = {
+      post: "/api/device/add"
+      body: "*"
+    };
+  }
+  rpc RemoveDevice (RequestWithId) returns (SuccessResponse) {
+    option (google.api.http) = {
+      post: "/api/device/remove/{id}"
+      body: "*"
+    };
+  }
+  rpc UpdateDevice (DeviceInfo) returns (SuccessResponse) {
+    option (google.api.http) = {
+      post: "/api/device/update"
+      body: "*"
     };
   }
 }
@@ -260,7 +283,7 @@ message VideoTrackInfo {
 
 message SuccessResponse {
   int32 code = 1;
-  string msg = 2;
+  string message = 2;
 }
 
 message RequestWithId {
@@ -298,4 +321,21 @@ message SubscribersResponse {
   int32 pageNum = 2;
   int32 pageSize = 3;
   repeated SubscriberSnapShot list = 4;
+}
+
+message DeviceListResponse {
+  int32 code = 1;
+  string message = 2;
+  repeated DeviceInfo data = 3;
+}
+
+message DeviceInfo {
+  uint32 ID = 1;
+  google.protobuf.Timestamp createTime = 2;
+  google.protobuf.Timestamp updateTime = 3; // 更新时间
+  uint32 parentID = 4; // 父设备ID
+  string name = 5; // 设备名称
+  uint32 type = 6; // 设备类型
+  uint32 status = 7; // 设备状态
+  string pullURL = 8; // 拉流地址
 }

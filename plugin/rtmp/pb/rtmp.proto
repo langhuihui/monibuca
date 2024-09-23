@@ -2,11 +2,11 @@ syntax = "proto3";
 import "google/api/annotations.proto";
 //import "google/protobuf/empty.proto";
 import "global.proto";
-package m7s;
+package rtmp;
 option go_package="m7s.live/m7s/v5/plugin/rtmp/pb";
 
-service rtmp {
-  rpc PushOut (PushRequest) returns (SuccessResponse) {
+service api {
+  rpc PushOut (PushRequest) returns (global.SuccessResponse) {
     option (google.api.http) = {
       post: "/rtmp/api/push/{streamPath=**}"
       body: "remoteURL"
