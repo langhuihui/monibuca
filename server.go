@@ -21,6 +21,8 @@ import (
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	myip "github.com/husanpao/ip"
 	"github.com/phsym/console-slog"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"gopkg.in/yaml.v3"
@@ -80,6 +82,22 @@ type (
 		lastSummaryTime time.Time
 		lastSummary     *pb.SummaryResponse
 		conf            any
+		prometheusDesc  prometheusDesc
+	}
+	prometheusDesc struct {
+		CPU struct {
+			UserTime, Usage, SystemTime, IdleTime *prometheus.Desc
+		}
+		Memory struct {
+			Total, Used, UsedPercent, Free *prometheus.Desc
+		}
+		Disk struct {
+			Total, Used, UsedPercent, Free *prometheus.Desc
+		}
+		Net struct {
+			BytesSent, BytesRecv, PacketsSent, PacketsRecv, ErrsSent, ErrsRecv, DroppedSent, DroppedRecv *prometheus.Desc
+		}
+		BPS, FPS *prometheus.Desc
 	}
 	CheckSubWaitTimeout struct {
 		task.TickTask
@@ -92,6 +110,31 @@ type (
 	}
 	RawConfig = map[string]map[string]any
 )
+
+func (d *prometheusDesc) init() {
+	d.CPU.UserTime = prometheus.NewDesc("cpu_user_time", "CPU user time", nil, nil)
+	d.CPU.Usage = prometheus.NewDesc("cpu_usage", "CPU usage", nil, nil)
+	d.CPU.SystemTime = prometheus.NewDesc("cpu_system_time", "CPU system time", nil, nil)
+	d.CPU.IdleTime = prometheus.NewDesc("cpu_idle_time", "CPU idle time", nil, nil)
+	d.Memory.Total = prometheus.NewDesc("memory_total", "Memory total", nil, nil)
+	d.Memory.Used = prometheus.NewDesc("memory_used", "Memory used", nil, nil)
+	d.Memory.UsedPercent = prometheus.NewDesc("memory_used_percent", "Memory used percent", nil, nil)
+	d.Memory.Free = prometheus.NewDesc("memory_free", "Memory free", nil, nil)
+	d.Disk.Total = prometheus.NewDesc("disk_total", "Disk total", nil, nil)
+	d.Disk.Used = prometheus.NewDesc("disk_used", "Disk used", nil, nil)
+	d.Disk.UsedPercent = prometheus.NewDesc("disk_used_percent", "Disk used percent", nil, nil)
+	d.Disk.Free = prometheus.NewDesc("disk_free", "Disk free", nil, nil)
+	d.Net.BytesSent = prometheus.NewDesc("net_bytes_sent", "Network bytes sent", nil, nil)
+	d.Net.BytesRecv = prometheus.NewDesc("net_bytes_recv", "Network bytes received", nil, nil)
+	d.Net.PacketsSent = prometheus.NewDesc("net_packets_sent", "Network packets sent", nil, nil)
+	d.Net.PacketsRecv = prometheus.NewDesc("net_packets_recv", "Network packets received", nil, nil)
+	d.Net.ErrsSent = prometheus.NewDesc("net_errs_sent", "Network errors sent", nil, nil)
+	d.Net.ErrsRecv = prometheus.NewDesc("net_errs_recv", "Network errors received", nil, nil)
+	d.Net.DroppedSent = prometheus.NewDesc("net_dropped_sent", "Network dropped sent", nil, nil)
+	d.Net.DroppedRecv = prometheus.NewDesc("net_dropped_recv", "Network dropped received", nil, nil)
+	d.BPS = prometheus.NewDesc("bps", "Bytes Per Second", []string{"streamPath", "pluginName", "trackType"}, nil)
+	d.FPS = prometheus.NewDesc("fps", "Frames Per Second", []string{"streamPath", "pluginName", "trackType"}, nil)
+}
 
 func (w *WaitStream) GetKey() string {
 	return w.StreamPath
@@ -110,6 +153,7 @@ func NewServer(conf any) (s *Server) {
 		"arch":      sysruntime.GOARCH,
 		"cpus":      int32(sysruntime.NumCPU()),
 	}
+	s.prometheusDesc.init()
 	return
 }
 
@@ -147,10 +191,16 @@ func (s *Server) GetKey() uint32 {
 	return s.ID
 }
 
+type errLogger struct {
+}
+
+func (l errLogger) Println(v ...interface{}) {
+	slog.Error("Exporter promhttp err: ", v...)
+}
+
 func (s *Server) Start() (err error) {
 	s.Server = s
 	s.handler = s
-	//s.config.HTTP.ListenAddrTLS = ":8443"
 	httpConf, tcpConf := &s.config.HTTP, &s.config.TCP
 	httpConf.ListenAddr = ":8080"
 	tcpConf.ListenAddr = ":50051"
@@ -192,6 +242,7 @@ func (s *Server) Start() (err error) {
 		s.Error("SetCrashOutput", "error", err)
 		return
 	}
+
 	s.registerHandler(map[string]http.HandlerFunc{
 		"/api/config/json/{name}":             s.api_Config_JSON_,
 		"/api/stream/annexb/{streamPath...}":  s.api_Stream_AnnexB_,
@@ -239,9 +290,25 @@ func (s *Server) Start() (err error) {
 	s.AddTaskLazy(&s.Pushs)
 	s.AddTaskLazy(&s.Transforms)
 	s.AddTaskLazy(&s.Devices)
+	promReg := prometheus.NewPedanticRegistry()
+	promReg.MustRegister(s)
 	for _, plugin := range plugins {
-		plugin.Init(s, cg[strings.ToLower(plugin.Name)])
+		p := plugin.Init(s, cg[strings.ToLower(plugin.Name)])
+		if !p.Disabled {
+			if collector, ok := p.handler.(prometheus.Collector); ok {
+				promReg.MustRegister(collector)
+			}
+		}
 	}
+	promhttpHandler := promhttp.HandlerFor(prometheus.Gatherers{
+		prometheus.DefaultGatherer,
+		promReg,
+	},
+		promhttp.HandlerOpts{
+			ErrorLog:      errLogger{},
+			ErrorHandling: promhttp.ContinueOnError,
+		})
+	s.handle("/api/metrics", promhttpHandler)
 	if grpcServer != nil {
 		s.AddTask(grpcServer, s.Logger)
 	}
@@ -331,4 +398,21 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	for _, api := range s.apiList {
 		_, _ = fmt.Fprintf(w, "%s\n", api)
 	}
+}
+
+func (s *Server) Describe(ch chan<- *prometheus.Desc) {
+	ch <- s.prometheusDesc.BPS
+	ch <- s.prometheusDesc.FPS
+}
+
+func (s *Server) Collect(ch chan<- prometheus.Metric) {
+	s.Call(func() error {
+		for stream := range s.Streams.Range {
+			ch <- prometheus.MustNewConstMetric(s.prometheusDesc.BPS, prometheus.GaugeValue, float64(stream.VideoTrack.AVTrack.BPS), stream.StreamPath, stream.Plugin.Meta.Name, "video")
+			ch <- prometheus.MustNewConstMetric(s.prometheusDesc.FPS, prometheus.GaugeValue, float64(stream.VideoTrack.AVTrack.FPS), stream.StreamPath, stream.Plugin.Meta.Name, "video")
+			ch <- prometheus.MustNewConstMetric(s.prometheusDesc.BPS, prometheus.GaugeValue, float64(stream.AudioTrack.AVTrack.BPS), stream.StreamPath, stream.Plugin.Meta.Name, "audio")
+			ch <- prometheus.MustNewConstMetric(s.prometheusDesc.FPS, prometheus.GaugeValue, float64(stream.AudioTrack.AVTrack.FPS), stream.StreamPath, stream.Plugin.Meta.Name, "audio")
+		}
+		return nil
+	})
 }

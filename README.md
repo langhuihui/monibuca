@@ -21,22 +21,27 @@ func main() {
 
 ```
 
+## with sqlite
+
+```shell
+go build -tags sqlite -o monibuca_sqlite
+./monibuca_sqlite -c config.yaml
+```
 
 ## More Example
 
 see example directory
 
+# Prometheus
+
+```yaml
+scrape_configs:
+  - job_name: "monibuca"
+    metrics_path: "/api/metrics"
+    static_configs:
+      - targets: ["localhost:8080"]
+```
+
 # Create Plugin
 
-```go
-
-import (
-	"m7s.live/m7s/v5"
-)
-
-type MyPlugin struct {
-	m7s.Plugin
-}
-
-var _ = m7s.InstallPlugin[MyPlugin]()
-```
+see [plugin](./plugin/README.md)
