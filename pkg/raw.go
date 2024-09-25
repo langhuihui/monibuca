@@ -57,6 +57,7 @@ func (r *RawAudio) Demux(ctx codec.ICodecCtx) (any, error) {
 
 func (r *RawAudio) Mux(ctx codec.ICodecCtx, frame *AVFrame) {
 	r.InitRecycleIndexes(0)
+	r.FourCC = ctx.FourCC()
 	r.Memory = frame.Raw.(util.Memory)
 	r.Timestamp = frame.Timestamp
 }
@@ -158,6 +159,7 @@ func (h *H26xFrame) Demux(ctx codec.ICodecCtx) (any, error) {
 }
 
 func (h *H26xFrame) Mux(ctx codec.ICodecCtx, frame *AVFrame) {
+	h.FourCC = ctx.FourCC()
 	h.Nalus = frame.Raw.(Nalus)
 	h.Timestamp = frame.Timestamp
 	h.CTS = frame.CTS

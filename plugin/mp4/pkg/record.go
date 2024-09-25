@@ -52,7 +52,7 @@ func (task *writeTrailerTask) Start() (err error) {
 }
 
 func init() {
-	m7s.Servers.AddTaskLazy(&writeTrailerQueueTask)
+	m7s.Servers.AddTask(&writeTrailerQueueTask)
 }
 
 func NewRecorder() m7s.IRecorder {

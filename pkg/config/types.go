@@ -1,9 +1,10 @@
 package config
 
 import (
-	"m7s.live/m7s/v5/pkg/util"
 	"net/url"
 	"time"
+
+	"m7s.live/m7s/v5/pkg/util"
 )
 
 type (
@@ -56,13 +57,14 @@ type (
 		Fragment time.Duration `desc:"分片时长"`   // 分片时长
 		Append   bool          `desc:"是否追加录制"` // 是否追加录制
 	}
+	TransfromOutput struct {
+		Target     string `desc:"转码目标"` // 转码目标
+		StreamPath string
+		Conf       any
+	}
 	Transform struct {
 		Input  any
-		Output []struct {
-			Target     string `desc:"转码目标"` // 转码目标
-			StreamPath string
-			Conf       any
-		}
+		Output []TransfromOutput
 	}
 	OnPublish struct {
 		Push      map[Regexp]Push

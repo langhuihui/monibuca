@@ -246,12 +246,12 @@ func (s *Server) Start() (err error) {
 			return
 		}
 	}
-	s.AddTaskLazy(&s.Records)
-	s.AddTaskLazy(&s.Streams)
-	s.AddTaskLazy(&s.Pulls)
-	s.AddTaskLazy(&s.Pushs)
-	s.AddTaskLazy(&s.Transforms)
-	s.AddTaskLazy(&s.Devices)
+	s.AddTask(&s.Records)
+	s.AddTask(&s.Streams)
+	s.AddTask(&s.Pulls)
+	s.AddTask(&s.Pushs)
+	s.AddTask(&s.Transforms)
+	s.AddTask(&s.Devices)
 	promReg := prometheus.NewPedanticRegistry()
 	promReg.MustRegister(s)
 	for _, plugin := range plugins {

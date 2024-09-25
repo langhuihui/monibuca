@@ -20,7 +20,7 @@ type (
 		Plugin      *Plugin
 		Publisher   *Publisher
 		Subscriber  *Subscriber
-		transformer ITransformer
+		Transformer ITransformer
 	}
 	DefaultTransformer struct {
 		task.Job
@@ -49,12 +49,12 @@ func (p *TransformJob) GetKey() string {
 }
 
 func (p *TransformJob) Subscribe() (err error) {
-	p.Subscriber, err = p.Plugin.Subscribe(p.transformer, p.StreamPath)
+	p.Subscriber, err = p.Plugin.Subscribe(p.Transformer, p.StreamPath)
 	return
 }
 
 func (p *TransformJob) Publish(streamPath string) (err error) {
-	p.Publisher, err = p.Plugin.Publish(p.transformer, streamPath)
+	p.Publisher, err = p.Plugin.Publish(p.Transformer, streamPath)
 	return
 }
 
@@ -62,7 +62,7 @@ func (p *TransformJob) Init(transformer ITransformer, plugin *Plugin, streamPath
 	p.Plugin = plugin
 	p.Config = conf
 	p.StreamPath = streamPath
-	p.transformer = transformer
+	p.Transformer = transformer
 	p.Description = map[string]any{
 		"streamPath": streamPath,
 		"conf":       conf,
@@ -89,7 +89,7 @@ func (p *TransformJob) Start() (err error) {
 			})
 		}
 	}
-	p.AddTask(p.transformer, p.Logger)
+	p.AddTask(p.Transformer, p.Logger)
 	return
 }
 

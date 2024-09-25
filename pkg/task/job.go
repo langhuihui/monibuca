@@ -79,23 +79,8 @@ func (mt *Job) RangeSubTask(callback func(task ITask) bool) {
 	}
 }
 
-func (mt *Job) AddTaskLazy(t IJob) {
-	task := t.GetTask()
-	task.parent = mt
-	task.handler = t
-}
-
 func (mt *Job) AddTask(t ITask, opt ...any) (task *Task) {
-	mt.lazyRun.Do(func() {
-		if mt.parent != nil && mt.Context == nil {
-			mt.parent.AddTask(mt.handler) //from lazy
-		}
-		mt.childrenDisposed = make(chan struct{})
-		mt.addSub = make(chan ITask, 10)
-		go mt.run()
-	})
-	if task = t.GetTask(); task.Context == nil {
-		task.parentCtx = mt.Context
+	if task = t.GetTask(); t != task.handler { // first add
 		for _, o := range opt {
 			switch v := o.(type) {
 			case context.Context:
@@ -108,10 +93,29 @@ func (mt *Job) AddTask(t ITask, opt ...any) (task *Task) {
 				task.Logger = v
 			}
 		}
-		if task.parentCtx == nil {
-			panic("context is nil")
-		}
 		task.parent = mt
+		task.handler = t
+		switch t.(type) {
+		case TaskStarter, TaskBlock, TaskGo:
+			// need start now
+		default:
+			// lazy start
+			return
+		}
+	}
+
+	mt.lazyRun.Do(func() {
+		if mt.parent != nil && mt.Context == nil {
+			mt.parent.AddTask(mt.handler) // second add, lazy start
+		}
+		mt.childrenDisposed = make(chan struct{})
+		mt.addSub = make(chan ITask, 10)
+		go mt.run()
+	})
+	if task.Context == nil {
+		if task.parentCtx == nil {
+			task.parentCtx = mt.Context
+		}
 		task.level = mt.level + 1
 		if task.ID == 0 {
 			task.ID = GetNextTaskID()

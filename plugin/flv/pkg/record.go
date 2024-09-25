@@ -23,7 +23,7 @@ type WriteFlvMetaTagQueueTask struct {
 var writeMetaTagQueueTask WriteFlvMetaTagQueueTask
 
 func init() {
-	m7s.Servers.AddTaskLazy(&writeMetaTagQueueTask)
+	m7s.Servers.AddTask(&writeMetaTagQueueTask)
 }
 
 type writeMetaTagTask struct {
