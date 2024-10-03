@@ -20,13 +20,13 @@ func main() {
 }
 
 ```
+## build tags
 
-## with sqlite
+| Build Tag | Description |
+|-----------|-------------|
+| disable_rm | Disables the memory pool |
+| sqlite | Enables the sqlite DB |
 
-```shell
-go build -tags sqlite -o monibuca_sqlite
-./monibuca_sqlite -c config.yaml
-```
 
 ## More Example
 

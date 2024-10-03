@@ -1,6 +1,8 @@
 package m7s
 
 import (
+	"context"
+
 	"m7s.live/m7s/v5/pkg"
 	"m7s.live/m7s/v5/pkg/config"
 	"m7s.live/m7s/v5/pkg/task"
@@ -33,8 +35,23 @@ type (
 	Transforms struct {
 		Transformed util.Collection[string, *TransformedMap]
 		task.Manager[string, *TransformJob]
+		PublishEvent chan *Publisher
+	}
+	TransformsPublishEvent struct {
+		task.ChannelTask
+		Transforms *Transforms
 	}
 )
+
+func (t *TransformsPublishEvent) GetSignal() any {
+	return t.Transforms.PublishEvent
+}
+
+func (t *TransformsPublishEvent) Tick(pub any) {
+	if m, ok := t.Transforms.Transformed.Get(pub.(*Publisher).StreamPath); ok {
+		m.TransformJob.TransformPublished(pub.(*Publisher))
+	}
+}
 
 func (t *TransformedMap) GetKey() string {
 	return t.StreamPath
@@ -54,7 +71,7 @@ func (p *TransformJob) Subscribe() (err error) {
 }
 
 func (p *TransformJob) Publish(streamPath string) (err error) {
-	p.Publisher, err = p.Plugin.Publish(p.Transformer, streamPath)
+	p.Publisher, err = p.Plugin.Publish(context.WithValue(p.Transformer, Owner, p.Transformer), streamPath)
 	return
 }
 

@@ -3,10 +3,11 @@ package pkg
 import (
 	"fmt"
 	"log/slog"
-	"m7s.live/m7s/v5/pkg/task"
-	"m7s.live/m7s/v5/pkg/util"
 	"sync"
 	"time"
+
+	"m7s.live/m7s/v5/pkg/task"
+	"m7s.live/m7s/v5/pkg/util"
 )
 
 type RingWriter struct {
@@ -66,7 +67,7 @@ func (rb *RingWriter) reduce(size int) {
 	r := rb.Unlink(size)
 	rb.Size -= size
 	for range size {
-		if r.Value.TryLock() {
+		if r.Value.StartWrite() {
 			rb.poolSize++
 			r.Value.Reset()
 			r.Value.Unlock()

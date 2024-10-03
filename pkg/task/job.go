@@ -98,7 +98,7 @@ func (mt *Job) AddTask(t ITask, opt ...any) (task *Task) {
 		switch t.(type) {
 		case TaskStarter, TaskBlock, TaskGo:
 			// need start now
-		default:
+		case IJob:
 			// lazy start
 			return
 		}
@@ -137,18 +137,19 @@ func (mt *Job) AddTask(t ITask, opt ...any) (task *Task) {
 	return
 }
 
-func (mt *Job) Call(callback func() error) {
-	mt.Post(callback).WaitStarted()
+func (mt *Job) Call(callback func() error, args ...any) {
+	mt.Post(callback, args...).WaitStarted()
 }
 
-func (mt *Job) Post(callback func() error) *Task {
+func (mt *Job) Post(callback func() error, args ...any) *Task {
 	task := CreateTaskByCallBack(callback, nil)
-	return mt.AddTask(task)
-}
-
-func (mt *Job) addChild(task ITask) int {
-	mt.children = append(mt.children, task)
-	return len(mt.children) - 1
+	description := make(Description)
+	if len(args) > 0 {
+		description["ownerType"] = args[0]
+	} else {
+		description = nil
+	}
+	return mt.AddTask(task, description)
 }
 
 func (mt *Job) run() {

@@ -22,7 +22,7 @@ import (
 )
 
 var AVFrameType = reflect.TypeOf((*AVFrame)(nil))
-
+var Owner task.TaskContextKey = "owner"
 type PubSubBase struct {
 	task.Job
 	Plugin       *Plugin

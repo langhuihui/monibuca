@@ -75,8 +75,8 @@ type (
 		RangeSubTask(func(yield ITask) bool)
 		OnChildDispose(func(ITask))
 		Blocked() bool
-		Call(func() error)
-		Post(func() error) *Task
+		Call(func() error, ...any)
+		Post(func() error, ...any) *Task
 	}
 	IChannelTask interface {
 		ITask
@@ -99,8 +99,9 @@ type (
 		RetryCount    int
 		RetryInterval time.Duration
 	}
-	Description = map[string]any
-	Task        struct {
+	Description    = map[string]any
+	TaskContextKey string
+	Task           struct {
 		ID        uint32
 		StartTime time.Time
 		*slog.Logger

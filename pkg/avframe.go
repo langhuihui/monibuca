@@ -94,13 +94,15 @@ func (frame *AVFrame) Demux(codecCtx codec.ICodecCtx) (err error) {
 	return
 }
 
-func (df *DataFrame) StartWrite() bool {
+func (df *DataFrame) StartWrite() (success bool) {
+	if df.discard {
+		return
+	}
 	if df.TryLock() {
 		return true
-	} else {
-		df.discard = true
-		return false
 	}
+	df.discard = true
+	return
 }
 
 func (df *DataFrame) Ready() {

@@ -119,16 +119,12 @@ func (avcc *RTMPVideo) Parse(t *AVTrack) (err error) {
 }
 
 func (avcc *RTMPVideo) ConvertCtx(from codec.ICodecCtx) (to codec.ICodecCtx, seq IAVFrame, err error) {
-	var b util.Buffer
 	var enhanced = true //TODO
 	switch fourCC := from.FourCC(); fourCC {
 	case codec.FourCC_H264:
 		h264ctx := from.GetBase().(*codec.H264Ctx)
-		b = make(util.Buffer, h264ctx.RecordInfo.Len()+5)
-		b[0] = 0x17
-		h264ctx.RecordInfo.Marshal(b[5:])
 		var seqFrame RTMPData
-		seqFrame.AppendOne(b)
+		seqFrame.AppendOne(append([]byte{0x17, 0, 0, 0, 0}, h264ctx.Record...))
 		//if t.Enabled(context.TODO(), TraceLevel) {
 		//	c := t.FourCC().String()
 		//	size := seqFrame.GetSize()
@@ -138,14 +134,14 @@ func (avcc *RTMPVideo) ConvertCtx(from codec.ICodecCtx) (to codec.ICodecCtx, seq
 		return h264ctx, seqFrame.WrapVideo(), err
 	case codec.FourCC_H265:
 		h265ctx := from.GetBase().(*codec.H265Ctx)
-		b = make(util.Buffer, h265ctx.RecordInfo.Len()+5)
+		b := make(util.Buffer, len(h265ctx.Record)+5)
 		if enhanced {
 			b[0] = 0b1001_0000 | byte(PacketTypeSequenceStart)
 			copy(b[1:], codec.FourCC_H265[:])
 		} else {
 			b[0], b[1], b[2], b[3], b[4] = 0x1C, 0, 0, 0, 0
 		}
-		h265ctx.RecordInfo.Marshal(b[5:], h265parser.SPSInfo{})
+		copy(b[5:], h265ctx.Record)
 		var ctx H265Ctx
 		ctx.Enhanced = enhanced
 		ctx.H265Ctx = *h265ctx

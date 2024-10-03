@@ -1,0 +1,22 @@
+syntax = "proto3";
+import "google/api/annotations.proto";
+//import "google/protobuf/empty.proto";
+import "global.proto";
+package sei;
+option go_package="m7s.live/m7s/v5/plugin/sei/pb";
+
+service api {
+  rpc insert (InsertRequest) returns (global.SuccessResponse) {
+    option (google.api.http) = {
+      post: "/sei/api/insert/{streamPath=**}"
+      body: "data"
+    };
+  }
+}
+
+message InsertRequest {
+  string streamPath = 1;
+  bytes data = 2;
+  uint32 type = 3;
+  string targetStreamPath = 4;
+}

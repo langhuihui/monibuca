@@ -2,4 +2,4 @@ global:
   loglevel: trace
 flv:
   pull:
-    live/test: dump.flv
+    live/test: record/live/test/sei.flv

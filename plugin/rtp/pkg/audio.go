@@ -5,12 +5,13 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
-	"github.com/bluenviron/mediacommon/pkg/bits"
-	"github.com/deepch/vdk/codec/aacparser"
 	"io"
 	"strings"
 	"time"
 	"unsafe"
+
+	"github.com/bluenviron/mediacommon/pkg/bits"
+	"github.com/deepch/vdk/codec/aacparser"
 
 	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v3"
@@ -216,10 +217,26 @@ func (r *RTPAudio) Parse(t *AVTrack) (err error) {
 		var ctx PCMUCtx
 		ctx.parseFmtpLine(r.RTPCodecParameters)
 		t.ICodecCtx = &ctx
+	case "audio/MP4A-LATM":
+		var ctx *AACCtx
+		if t.ICodecCtx != nil {
+			// ctx = t.ICodecCtx.(*AACCtx)
+		} else {
+			ctx = &AACCtx{}
+			ctx.parseFmtpLine(r.RTPCodecParameters)
+			if conf, ok := ctx.Fmtp["config"]; ok {
+				if ctx.AACCtx.ConfigBytes, err = hex.DecodeString(conf); err == nil {
+					if ctx.CodecData, err = aacparser.NewCodecDataFromMPEG4AudioConfigBytes(ctx.AACCtx.ConfigBytes); err != nil {
+						return
+					}
+				}
+			}
+			t.ICodecCtx = ctx
+		}
 	case "audio/MPEG4-GENERIC":
 		var ctx *AACCtx
 		if t.ICodecCtx != nil {
-			ctx = t.ICodecCtx.(*AACCtx)
+			// ctx = t.ICodecCtx.(*AACCtx)
 		} else {
 			ctx = &AACCtx{}
 			ctx.parseFmtpLine(r.RTPCodecParameters)
@@ -239,10 +256,80 @@ func (r *RTPAudio) Parse(t *AVTrack) (err error) {
 	return
 }
 
+func payloadLengthInfoDecode(buf []byte) (int, int, error) {
+	lb := len(buf)
+	l := 0
+	n := 0
+
+	for {
+		if (lb - n) == 0 {
+			return 0, 0, fmt.Errorf("not enough bytes")
+		}
+
+		b := buf[n]
+		n++
+		l += int(b)
+
+		if b != 255 {
+			break
+		}
+	}
+
+	return l, n, nil
+}
+
 func (r *RTPAudio) Demux(codexCtx codec.ICodecCtx) (any, error) {
 	var data AudioData
-	switch codexCtx.(type) {
-	case *AACCtx:
+	switch r.MimeType {
+	case "audio/MP4A-LATM":
+		var fragments util.Memory
+		var fragmentsExpected int
+		var fragmentsSize int
+		for _, packet := range r.Packets {
+			buf := packet.Payload
+			if fragments.Size == 0 {
+				pl, n, err := payloadLengthInfoDecode(buf)
+				if err != nil {
+					return nil, err
+				}
+
+				buf = buf[n:]
+				bl := len(buf)
+
+				if pl <= bl {
+					data.AppendOne(buf[:pl])
+					// there could be other data, due to otherDataPresent. Ignore it.
+				} else {
+					if pl > 5*1024 {
+						fragments = util.Memory{} // discard pending fragments
+						return nil, fmt.Errorf("access unit size (%d) is too big, maximum is %d",
+							pl, 5*1024)
+					}
+
+					fragments.AppendOne(buf)
+					fragmentsSize = pl
+					fragmentsExpected = pl - bl
+					continue
+				}
+			} else {
+				bl := len(buf)
+
+				if fragmentsExpected > bl {
+					fragments.AppendOne(buf)
+					fragmentsExpected -= bl
+					continue
+				}
+
+				fragments.AppendOne(buf[:fragmentsExpected])
+				// there could be other data, due to otherDataPresent. Ignore it.
+				data.Append(fragments.Buffers...)
+				if fragments.Size != fragmentsSize {
+					return nil, fmt.Errorf("fragmented AU size is not correct %d != %d", data.Size, fragmentsSize)
+				}
+				fragments = util.Memory{}
+			}
+		}
+	case "audio/MPEG4-GENERIC":
 		var fragments util.Memory
 		for _, packet := range r.Packets {
 			if len(packet.Payload) < 2 {

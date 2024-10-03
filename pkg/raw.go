@@ -48,7 +48,17 @@ func (r *RawAudio) Parse(track *AVTrack) (err error) {
 }
 
 func (r *RawAudio) ConvertCtx(ctx codec.ICodecCtx) (codec.ICodecCtx, IAVFrame, error) {
-	return ctx.GetBase(), nil, nil
+	c := ctx.GetBase()
+	if c.FourCC().Is(codec.FourCC_MP4A) {
+		seq := &RawAudio{
+			FourCC: codec.FourCC_MP4A,
+			Timestamp: r.Timestamp,
+		}
+		seq.SetAllocator(r.GetAllocator())
+		seq.Memory.Append(c.GetRecord())
+		return c, seq, nil
+	}
+	return c, nil, nil
 }
 
 func (r *RawAudio) Demux(ctx codec.ICodecCtx) (any, error) {
@@ -111,8 +121,10 @@ func (h *H26xFrame) Parse(track *AVTrack) (err error) {
 				}
 			case h264parser.NALU_PPS:
 				ctx.RecordInfo.PPS = [][]byte{nalu.ToBytes()}
-				ctx.Record = make([]byte, ctx.RecordInfo.Len())
-				ctx.RecordInfo.Marshal(ctx.Record)
+				ctx.CodecData, err = h264parser.NewCodecDataFromSPSAndPPS(ctx.SPS(), ctx.PPS())
+				if err != nil {
+					return
+				}
 			case codec.NALU_IDR_Picture:
 				track.Value.IDR = true
 			}
@@ -135,8 +147,7 @@ func (h *H26xFrame) Parse(track *AVTrack) (err error) {
 				}
 			case h265parser.NAL_UNIT_PPS:
 				ctx.RecordInfo.PPS = [][]byte{nalu.ToBytes()}
-				ctx.Record = make([]byte, ctx.RecordInfo.Len())
-				ctx.RecordInfo.Marshal(ctx.Record, ctx.SPSInfo)
+				ctx.CodecData, err = h265parser.NewCodecDataFromVPSAndSPSAndPPS(ctx.VPS(), ctx.SPS(), ctx.PPS())
 			case h265parser.NAL_UNIT_CODED_SLICE_BLA_W_LP,
 				h265parser.NAL_UNIT_CODED_SLICE_BLA_W_RADL,
 				h265parser.NAL_UNIT_CODED_SLICE_BLA_N_LP,
@@ -151,6 +162,25 @@ func (h *H26xFrame) Parse(track *AVTrack) (err error) {
 }
 
 func (h *H26xFrame) ConvertCtx(ctx codec.ICodecCtx) (codec.ICodecCtx, IAVFrame, error) {
+	switch c := ctx.GetBase().(type) {
+	case *codec.H264Ctx:
+		return c, &H26xFrame{
+			FourCC: codec.FourCC_H264,
+			Nalus: []util.Memory{
+				util.NewMemory(c.SPS()),
+				util.NewMemory(c.PPS()),
+			},
+		}, nil
+	case *codec.H265Ctx:
+		return c, &H26xFrame{
+			FourCC: codec.FourCC_H265,
+			Nalus: []util.Memory{
+				util.NewMemory(c.VPS()),
+				util.NewMemory(c.SPS()),
+				util.NewMemory(c.PPS()),
+			},
+		}, nil
+	}
 	return ctx.GetBase(), nil, nil
 }
 
