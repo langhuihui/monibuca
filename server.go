@@ -96,7 +96,6 @@ type (
 	RawConfig = map[string]map[string]any
 )
 
-
 func (w *WaitStream) GetKey() string {
 	return w.StreamPath
 }
@@ -114,6 +113,7 @@ func NewServer(conf any) (s *Server) {
 		"arch":      sysruntime.GOARCH,
 		"cpus":      int32(sysruntime.NumCPU()),
 	}
+	s.Transforms.PublishEvent = make(chan *Publisher, 1)
 	s.prometheusDesc.init()
 	return
 }
@@ -277,6 +277,10 @@ func (s *Server) Start() (err error) {
 	s.Streams.OnStart(func() {
 		s.Streams.AddTask(&CheckSubWaitTimeout{s: s})
 	})
+	s.Transforms.OnStart(func() {
+		publishEvent := &TransformsPublishEvent{Transforms: &s.Transforms}
+		s.Transforms.AddTask(publishEvent)
+	})
 	s.Info("server started")
 	s.Post(func() error {
 		for plugin := range s.Plugins.Range {
@@ -296,7 +300,7 @@ func (s *Server) Start() (err error) {
 			}
 		}
 		return nil
-	})
+	}, "serverStart")
 	return
 }
 

@@ -188,12 +188,7 @@ func (p *Publisher) Start() (err error) {
 	for plugin := range s.Plugins.Range {
 		plugin.OnPublish(p)
 	}
-	s.Transforms.Post(func() error {
-		if m, ok := s.Transforms.Transformed.Get(p.StreamPath); ok {
-			m.TransformJob.TransformPublished(p)
-		}
-		return nil
-	})
+	s.Transforms.PublishEvent <- p
 	p.AddTask(&PublishTimeout{Publisher: p})
 	if p.PublishTimeout > 0 {
 		p.AddTask(&PublishNoDataTimeout{Publisher: p})

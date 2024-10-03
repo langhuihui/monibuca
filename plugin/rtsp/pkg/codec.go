@@ -4,10 +4,11 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"github.com/pion/sdp/v3"
 	"strconv"
 	"strings"
 	"unicode"
+
+	"github.com/pion/sdp/v3"
 )
 
 const (
@@ -29,6 +30,7 @@ const (
 	CodecPCMU = "PCMU" // payloadType: 0
 	CodecPCMA = "PCMA" // payloadType: 8
 	CodecAAC  = "MPEG4-GENERIC"
+	CodecLATM = "MP4A-LATM"
 	CodecOpus = "OPUS" // payloadType: 111
 	CodecG722 = "G722"
 	CodecMP3  = "MPA" // payload: 14, aka MPEG-1 Layer III
@@ -115,7 +117,7 @@ func FFmpegCodecName(name string) string {
 		return "pcm_s16be"
 	case CodecPCML:
 		return "pcm_s16le"
-	case CodecAAC:
+	case CodecAAC, CodecLATM:
 		return "aac"
 	case CodecOpus:
 		return "opus"

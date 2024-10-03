@@ -1,0 +1,13 @@
+global:
+  loglevel: debug
+
+sei:
+  # loglevel: trace
+  onpub:
+    transform:
+      .+:
+        output:
+          - target: $0/sei
+flv:
+  pull:
+    live/test: /Users/dexter/Movies/jb-demo.flv

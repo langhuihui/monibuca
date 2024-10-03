@@ -1,0 +1,7 @@
+global:
+  loglevel: debug
+rtsp:
+  pull:
+    live/test: rtsp://154.12.27.148:30002/main
+
+  

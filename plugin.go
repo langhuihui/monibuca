@@ -84,7 +84,7 @@ type (
 	}
 
 	IDevicePlugin interface {
-		OnDeviceAdd(device *Device)  task.ITask
+		OnDeviceAdd(device *Device) task.ITask
 	}
 )
 
@@ -383,7 +383,12 @@ func (p *Plugin) OnPublish(pub *Publisher) {
 			}
 		}
 	}
-	if p.Meta.Transformer != nil {
+	var owner = pub.Value(Owner)
+	var isTransformer bool
+	if owner != nil {
+		_, isTransformer = owner.(ITransformer)
+	}
+	if p.Meta.Transformer != nil && !isTransformer {
 		for r, tranConf := range onPublish.Transform {
 			if group := r.FindStringSubmatch(pub.StreamPath); group != nil {
 				for j, to := range tranConf.Output {

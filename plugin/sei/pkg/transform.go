@@ -1,6 +1,7 @@
 package sei
 
 import (
+	"github.com/deepch/vdk/codec/h265parser"
 	"m7s.live/m7s/v5"
 	"m7s.live/m7s/v5/pkg"
 	"m7s.live/m7s/v5/pkg/codec"
@@ -9,8 +10,7 @@ import (
 
 type Transformer struct {
 	m7s.DefaultTransformer
-	data      chan util.Buffer
-	allocator *util.ScalableMemoryAllocator
+	data chan util.Buffer
 }
 
 func (t *Transformer) AddSEI(tp byte, data []byte) {
@@ -32,8 +32,7 @@ func (t *Transformer) AddSEI(tp byte, data []byte) {
 
 func NewTransform() m7s.ITransformer {
 	ret := &Transformer{
-		data:      make(chan util.Buffer, 10),
-		allocator: util.NewScalableMemoryAllocator(1 << util.MinPowerOf2),
+		data: make(chan util.Buffer, 10),
 	}
 	return ret
 }
@@ -47,12 +46,11 @@ func (t *Transformer) Run() (err error) {
 	if err != nil {
 		return
 	}
-	m7s.PlayBlock(t.TransformJob.Subscriber, func(audio *pkg.RawAudio) (err error) {
+	return m7s.PlayBlock(t.TransformJob.Subscriber, func(audio *pkg.RawAudio) (err error) {
 		copyAudio := &pkg.RawAudio{
 			FourCC:    audio.FourCC,
 			Timestamp: audio.Timestamp,
 		}
-		copyAudio.SetAllocator(t.allocator)
 		audio.Memory.Range(func(b []byte) {
 			copy(copyAudio.NextN(len(b)), b)
 		})
@@ -63,28 +61,47 @@ func (t *Transformer) Run() (err error) {
 			CTS:       video.CTS,
 			Timestamp: video.Timestamp,
 		}
-		copyVideo.SetAllocator(t.allocator)
-		if len(t.data) > 0 {
-			for seiFrame := range t.data {
+
+		var seis [][]byte
+		continueLoop := true
+		for continueLoop {
+			select {
+			case seiFrame := <-t.data:
+				seis = append(seis, seiFrame)
+			default:
+				continueLoop = false
+			}
+		}
+		seiCount := len(seis)
+		for _, nalu := range video.Nalus {
+			mem := copyVideo.NextN(nalu.Size)
+			copy(mem, nalu.ToBytes())
+			if seiCount > 0 {
 				switch video.FourCC {
 				case codec.FourCC_H264:
-					var seiNalu util.Memory
-					seiNalu.Append([]byte{byte(codec.NALU_SEI)}, seiFrame)
-					copyVideo.Nalus = append(copyVideo.Nalus, seiNalu)
-				}
-				for _, nalu := range video.Nalus {
-					mem := copyVideo.NextN(nalu.Size)
-					copy(mem, nalu.ToBytes())
-					copyVideo.Nalus.Append(mem)
+					switch codec.ParseH264NALUType(mem[0]) {
+					case codec.NALU_IDR_Picture, codec.NALU_Non_IDR_Picture:
+						for _, sei := range seis {
+							copyVideo.Nalus.Append(append([]byte{byte(codec.NALU_SEI)}, sei...))
+						}
+					}
+				case codec.FourCC_H265:
+					if naluType := codec.ParseH265NALUType(mem[0]); naluType < 21 {
+						for _, sei := range seis {
+							copyVideo.Nalus.Append(append([]byte{byte(0b10000000 | byte(h265parser.NAL_UNIT_PREFIX_SEI<<1))}, sei...))
+						}
+					}
 				}
 			}
+			copyVideo.Nalus.Append(mem)
+		}
+		if seiCount > 0 {
+			t.Info("insert sei", "count", seiCount)
 		}
 		return t.TransformJob.Publisher.WriteVideo(copyVideo)
 	})
-	return
 }
 
 func (t *Transformer) Dispose() {
 	close(t.data)
-	t.allocator.Recycle()
 }

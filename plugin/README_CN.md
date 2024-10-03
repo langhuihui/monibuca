@@ -197,7 +197,7 @@ message MyResponse {
 ```shell
 protoc -I. -I$ProjectFileDir$/pb --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative --grpc-gateway_out=. --grpc-gateway_opt=paths=source_relative  myplugin.proto
 ```
-把其中的 $ProjectFileDir$ 替换成包含全局 pb 的目录，全局 pb 文件就在 monibuca 项目的 pb 目录下。
+把其中的 `$ProjectFileDir$` 替换成包含全局 pb 的目录，全局 pb 文件就在 monibuca 项目的 pb 目录下。
 
 ### 实现gRPC服务
 创建 api.go 文件
@@ -291,3 +291,16 @@ go m7s.PlayBlock(suber, handleAudio, handleVideo)
 ```
 这里需要注意的是 handleAudio, handleVideo 是处理音视频数据的回调函数，需要自己实现。
 handleAudio/Video 的入参是一个你需要接受到的音视频格式类型,返回 error，如果返回的 error 不是 nil，则订阅中止。
+
+## 7. 接入 Prometheus
+只需要实现 Collector 接口，系统会自动收集所有插件的指标信息。
+```go
+func (p *MyPlugin) Describe(ch chan<- *prometheus.Desc) {
+  
+}
+
+func (p *MyPlugin) Collect(ch chan<- prometheus.Metric) {
+  
+}
+
+```
