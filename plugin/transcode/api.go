@@ -12,7 +12,6 @@ import (
 	"strings"
 
 	"m7s.live/m7s/v5/pkg/config"
-	transcode "m7s.live/m7s/v5/plugin/transcode/pkg"
 )
 
 type OverlayConfig struct {
@@ -21,10 +20,12 @@ type OverlayConfig struct {
 	OverlayImage    string `json:"image"`            // 图片 base64  可为空 如果图片和视频流都有，则使用图片
 	OverlayPosition string `json:"overlay_position"` //位置 x,y
 	Text            string `json:"text"`             // 文字
+	TimeOffset      int64  `json:"time_offset"`      // 时间偏移
+	TimeFormat      string `json:"time_format"`      // 时间格式
 	FontName        string `json:"font_name"`        //字体文件名
-	FontSize        int    `json:"font_size"`
-	FontColor       string `json:"font_color"`    // r,g,b 颜色
-	TextPosition    string `json:"text_position"` //x,y 文字在图片上的位置
+	FontSize        string `json:"font_size"`        //字体大小
+	FontColor       string `json:"font_color"`       // r,g,b 颜色
+	TextPosition    string `json:"text_position"`    //x,y 文字在图片上的位置
 	imagePath       string `json:"-"`
 }
 
@@ -72,24 +73,54 @@ func createTmpImage(image string) (string, error) {
 	return filePath, nil
 }
 
-func rgbToHex(FontColor string) (string, error) {
+func parseFontColor(FontColor string) (string, error) {
 	rgb := strings.Split(FontColor, ",")
-	if len(rgb) == 3 {
+	rgbLen := len(rgb)
+	switch rgbLen {
+	case 3:
 		r, _ := strconv.Atoi(rgb[0])
 		g, _ := strconv.Atoi(rgb[1])
 		b, _ := strconv.Atoi(rgb[2])
-		FontColor = fmt.Sprintf("#%02x%02x%02x", r, g, b)
+		FontColor = fmt.Sprintf(":fontcolor=#%02x%02x%02x", r, g, b)
 		return FontColor, nil
-	} else {
+	case 0:
+		FontColor = ":fontcolor=black"
+		return FontColor, nil
+	default:
 		return "", fmt.Errorf("FontColor 格式不正确")
-
 	}
 }
 
+// fontfile
+func parseFontFile(fontFile string) (string, error) {
+	if fontFile == "" {
+		return "", nil
+	}
+	//判断文件是否存在
+	if _, err := os.Stat(fontFile); os.IsNotExist(err) {
+		return "", fmt.Errorf("fontFile 文件不存在")
+	}
+	return fmt.Sprintf(":fontfile=%s", fontFile), nil
+}
+
+// fontsize
+func parseFontSize(fontSize string) (string, error) {
+	if fontSize == "" {
+		return "", nil
+	}
+	size, err := strconv.Atoi(fontSize)
+	if err != nil {
+		return "", fmt.Errorf("fontSize 格式不正确")
+	}
+	if size < 0 {
+		return "", fmt.Errorf("fontSize 不能小于0")
+	}
+	return fmt.Sprintf(":fontsize=%d", size), nil
+}
 func parseCoordinates(coordString string) (string, error) {
 
 	if coordString == "" {
-		return "", nil
+		return "x=0:y=0", nil
 	}
 	coords := strings.Split(coordString, ",")
 
@@ -123,9 +154,12 @@ func (t *TranscodePlugin) api_transcode_start(w http.ResponseWriter, r *http.Req
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	var inputs []string
-	var filters string
+	inputs := []string{""}
+	var filters []string
+	lastOverlay := "[0:v]"
+	out := ""
 	//循环判断
+	var vIdx = 0
 	for _, overlayConfig := range transReq.OverlayConfigs {
 		if overlayConfig.OverlayImage == "" && overlayConfig.Text == "" && overlayConfig.OverlayStream == "" {
 			http.Error(w, "image_base64 and text is required", http.StatusBadRequest)
@@ -139,9 +173,20 @@ func (t *TranscodePlugin) api_transcode_start(w http.ResponseWriter, r *http.Req
 		overlayConfig.imagePath = filePath
 
 		// 将 r,g,b 颜色字符串转换为十六进制颜色
-		overlayConfig.FontColor, err = rgbToHex(overlayConfig.FontColor)
+		overlayConfig.FontColor, err = parseFontColor(overlayConfig.FontColor)
 		if err != nil {
 			http.Error(w, "FontColor 格式不正确", http.StatusBadRequest)
+			return
+		}
+		overlayConfig.FontName, err = parseFontFile(overlayConfig.FontName)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		// 字体大小
+		overlayConfig.FontSize, err = parseFontSize(overlayConfig.FontSize)
+		if err != nil {
+			http.Error(w, "FontSize 格式不正确", http.StatusBadRequest)
 			return
 		}
 
@@ -161,25 +206,49 @@ func (t *TranscodePlugin) api_transcode_start(w http.ResponseWriter, r *http.Req
 			http.Error(w, "TextPosition 格式不正确", http.StatusBadRequest)
 			return
 		}
+		overlayConfig.TextPosition = ":" + overlayConfig.TextPosition
+		//[1:v]crop=400:300:10:10[overlay];
 		if overlayConfig.imagePath != "" {
 			inputs = append(inputs, overlayConfig.imagePath)
 		} else if overlayConfig.OverlayStream != "" {
 			inputs = append(inputs, overlayConfig.OverlayStream)
 		}
-		filters += ""
+		// 生成 filter_complex
+		if overlayConfig.imagePath != "" || overlayConfig.OverlayStream != "" {
+			vIdx++
+			if overlayConfig.OverlayRegion != "" {
+				filters = append(filters, fmt.Sprintf("[%d:v]%s[overlay%d];", vIdx, overlayConfig.OverlayRegion, vIdx))
+			}
+			if overlayConfig.OverlayPosition != "" {
+				if overlayConfig.OverlayRegion != "" {
+					filters = append(filters, fmt.Sprintf("%s[overlay%d]overlay=%s[tmp%d]", lastOverlay, vIdx, overlayConfig.OverlayPosition, vIdx))
+
+				} else {
+					filters = append(filters, fmt.Sprintf("%s[%d:v]overlay=%s[tmp%d]", lastOverlay, vIdx, overlayConfig.OverlayPosition, vIdx))
+				}
+			}
+			lastOverlay = fmt.Sprintf("[tmp%d]", vIdx)
+			out = lastOverlay
+		}
+		if overlayConfig.Text != "" {
+			text := overlayConfig.Text
+			if overlayConfig.TimeOffset != 0 {
+				text = fmt.Sprintf("%%{pts+%d} %s", overlayConfig.TimeOffset, text)
+			}
+			if overlayConfig.TimeFormat != "" {
+				text = fmt.Sprintf("%%{pts:%s} %s", overlayConfig.TimeFormat, text)
+			}
+			filters = append(filters, fmt.Sprintf("[tmp%d]drawtext=text='%s'%s%s%s%s[out%d]", vIdx, text, overlayConfig.FontName, overlayConfig.FontSize, overlayConfig.FontColor, overlayConfig.TextPosition, vIdx))
+			out = fmt.Sprintf("[out%d]", vIdx)
+		}
 
 	}
 
-	//ffmpeg -i input_video.mp4 -i input_image.png -filter_complex "[1:v]drawtext=fontfile=/path/to/font.ttf:fontsize=24:fontcolor=white:x=10:y=10:text='Your Text Here'[img];[0:v][img]overlay=x=100:y=100:enable='between(t,0,5)'" output_video.mp4
+	//把 overlayconfig 转为
 
-	// trans := transcode.NewTransform()
-	// trans.(*transcode.Transformer).Start()
+	// transformer := t.Meta.Transformer()
 
-	//把 overlayconfig 转为 filter_complex
-
-	transformer := t.Meta.Transformer()
-
-	transcode := transformer.(*transcode.Transformer)
+	// transcode := transformer.(*transcode.Transformer)
 	var cfg config.Transform
 
 	// 解析URL路径
@@ -195,16 +264,18 @@ func (t *TranscodePlugin) api_transcode_start(w http.ResponseWriter, r *http.Req
 	// 去掉开头的斜杠
 	streamPath = strings.TrimPrefix(streamPath, "/")
 
-	conf := strings.Join(inputs, " ") + filters + transReq.Scale + transReq.Encodec
+	conf := strings.Join(inputs, " -i ") + fmt.Sprintf(" -filter_complex  %s ", strings.Join(filters, ";")) + fmt.Sprintf(" -map %s ", out) + transReq.Scale + transReq.Decodec
 	cfg.Output = []config.TransfromOutput{
 		{
 			Target:     targetURL,
 			StreamPath: streamPath,
-			Conf:       conf,
+			//Conf:       "-log_level debug  -c:v copy -an",
+			Conf: conf,
 		},
 	}
 
 	t.Transform(transReq.SrcStream, cfg)
-	fmt.Println(transcode, cfg)
+	// fmt.Println(transcode, cfg)
+	// fmt.Println(conf)
 	w.Write([]byte("ok"))
 }
