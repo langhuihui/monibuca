@@ -36,6 +36,7 @@ type OnDemandTrans struct {
 	Encodec        string           `json:"encodec"`
 	Decodec        string           `json:"decodec"`
 	Scale          string           `json:"scale"`
+	LogLevel       string           `json:"log_level"`
 }
 
 func createTmpImage(image string) (string, error) {
@@ -139,10 +140,10 @@ func parseCrop(cropString string) (string, error) {
 	if len(cropValues) != 4 {
 		return "", fmt.Errorf("裁剪参数格式不正确，应该是 x,y,w,h")
 	}
-	x := strings.TrimSpace(cropValues[0])
-	y := strings.TrimSpace(cropValues[1])
-	w := strings.TrimSpace(cropValues[2])
-	h := strings.TrimSpace(cropValues[3])
+	w := strings.TrimSpace(cropValues[0])
+	h := strings.TrimSpace(cropValues[1])
+	x := strings.TrimSpace(cropValues[2])
+	y := strings.TrimSpace(cropValues[3])
 	return fmt.Sprintf("crop=%s:%s:%s:%s", x, y, w, h), nil
 }
 
@@ -217,7 +218,7 @@ func (t *TranscodePlugin) api_transcode_start(w http.ResponseWriter, r *http.Req
 		if overlayConfig.imagePath != "" || overlayConfig.OverlayStream != "" {
 			vIdx++
 			if overlayConfig.OverlayRegion != "" {
-				filters = append(filters, fmt.Sprintf("[%d:v]%s[overlay%d];", vIdx, overlayConfig.OverlayRegion, vIdx))
+				filters = append(filters, fmt.Sprintf("[%d:v]%s[overlay%d]", vIdx, overlayConfig.OverlayRegion, vIdx))
 			}
 			if overlayConfig.OverlayPosition != "" {
 				if overlayConfig.OverlayRegion != "" {
@@ -231,14 +232,21 @@ func (t *TranscodePlugin) api_transcode_start(w http.ResponseWriter, r *http.Req
 			out = lastOverlay
 		}
 		if overlayConfig.Text != "" {
-			text := overlayConfig.Text
+			timeText := ""
 			if overlayConfig.TimeOffset != 0 {
-				text = fmt.Sprintf("%%{pts+%d} %s", overlayConfig.TimeOffset, text)
+				//%{pts\\:gmtime\\:1577836800\\:%Y-%m-%d %H\\\\\\:%M\\\\\\:%S}
+				timeText = fmt.Sprintf("%%{pts\\:gmtime\\:%d}", overlayConfig.TimeOffset)
+			} else {
+				timeText = fmt.Sprintf(`%%{localtime}`)
 			}
 			if overlayConfig.TimeFormat != "" {
-				text = fmt.Sprintf("%%{pts:%s} %s", overlayConfig.TimeFormat, text)
+				timeText = strings.ReplaceAll(timeText, "}", "\\:"+overlayConfig.TimeFormat+"}")
 			}
-			filters = append(filters, fmt.Sprintf("[tmp%d]drawtext=text='%s'%s%s%s%s[out%d]", vIdx, text, overlayConfig.FontName, overlayConfig.FontSize, overlayConfig.FontColor, overlayConfig.TextPosition, vIdx))
+
+			if timeText != "" {
+				timeText = strings.ReplaceAll(overlayConfig.Text, "$T", timeText)
+			}
+			filters = append(filters, fmt.Sprintf("[tmp%d]drawtext=text='%s'%s%s%s%s[out%d]", vIdx, timeText, overlayConfig.FontName, overlayConfig.FontSize, overlayConfig.FontColor, overlayConfig.TextPosition, vIdx))
 			out = fmt.Sprintf("[out%d]", vIdx)
 		}
 
@@ -264,7 +272,7 @@ func (t *TranscodePlugin) api_transcode_start(w http.ResponseWriter, r *http.Req
 	// 去掉开头的斜杠
 	streamPath = strings.TrimPrefix(streamPath, "/")
 
-	conf := strings.Join(inputs, " -i ") + fmt.Sprintf(" -filter_complex  %s ", strings.Join(filters, ";")) + fmt.Sprintf(" -map %s ", out) + transReq.Scale + transReq.Decodec
+	conf := strings.Join(inputs, " -i ") + fmt.Sprintf(" %s ", transReq.LogLevel) + fmt.Sprintf(" -filter_complex  %s ", strings.Join(filters, ";")) + fmt.Sprintf(" -map %s ", out) + transReq.Scale + transReq.Decodec
 	cfg.Output = []config.TransfromOutput{
 		{
 			Target:     targetURL,
