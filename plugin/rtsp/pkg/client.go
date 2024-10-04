@@ -53,7 +53,6 @@ func NewPusher() m7s.IPusher {
 }
 
 func (c *Client) Run() (err error) {
-	c.BufReader = util.NewBufReader(c.conn)
 	c.MemoryAllocator = util.NewScalableMemoryAllocator(1 << 12)
 	if err = c.Options(); err != nil {
 		return

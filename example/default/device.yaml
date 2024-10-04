@@ -1,7 +1,14 @@
 global:
+  http:
+    listenaddr: :8081
+  tcp:
+    listenaddr: :50052
   device:
-    - name: default
+    - id: 1
+      name: default
       description: Example device
-      stream:
-        - rtsp://xxx.xxx.xxx.xxx:554/live/test
+      pullurl: rtsp://localhost/live/test
+
+rtsp:
+  tcp: :8554
 

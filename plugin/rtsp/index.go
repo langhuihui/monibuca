@@ -25,7 +25,7 @@ func (p *RTSPPlugin) OnTCPConnect(conn *net.TCPConn) task.ITask {
 }
 
 func (p *RTSPPlugin) OnDeviceAdd(device *m7s.Device) task.ITask {
-	if device.Type != m7s.DeviceTypeRTSP {
+	if device.Type != "rtsp" {
 		return nil
 	}
 	ret := &RTSPDevice{device: device, plugin: p}

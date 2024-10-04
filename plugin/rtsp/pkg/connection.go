@@ -135,6 +135,7 @@ func (c *NetConnection) Connect(remoteURL string) (err error) {
 		return
 	}
 	c.conn = conn
+	c.BufReader = util.NewBufReader(conn)
 	c.URL = rtspURL
 	c.UserAgent = "monibuca" + m7s.Version
 	c.auth = util.NewAuth(c.URL.User)

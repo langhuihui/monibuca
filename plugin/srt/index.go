@@ -21,7 +21,9 @@ type SRTPlugin struct {
 	Passphrase string
 }
 
-var _ = m7s.InstallPlugin[SRTPlugin](pkg.NewPuller, pkg.NewPusher)
+const defaultConfig = m7s.DefaultYaml(`listenaddr: :6000`)
+
+var _ = m7s.InstallPlugin[SRTPlugin](defaultConfig,pkg.NewPuller, pkg.NewPusher)
 
 func (p *SRTPlugin) OnInit() error {
 	var t SRTServer

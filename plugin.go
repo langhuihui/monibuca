@@ -425,7 +425,9 @@ func (p *Plugin) OnSubscribe(sub *Subscriber) {
 		}
 	}
 	for device := range p.Server.Devices.Range {
-		device.Handler.Pull()
+		if device.Status == DeviceStatusOnline && device.GetStreamPath() == sub.StreamPath {
+			device.Handler.Pull()
+		}
 	}
 	//if !avoidTrans {
 	//	for reg, conf := range plugin.GetCommonConf().OnSub.Transform {

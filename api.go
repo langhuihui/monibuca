@@ -553,9 +553,10 @@ func (s *Server) GetDeviceList(ctx context.Context, req *emptypb.Empty) (res *pb
 			Name:       device.Name,
 			CreateTime: timestamppb.New(device.CreatedAt),
 			UpdateTime: timestamppb.New(device.UpdatedAt),
-			Type:       uint32(device.Type),
+			Type:       device.Type,
 			PullURL:    device.PullURL,
 			ParentID:   uint32(device.ParentID),
+			Status:     uint32(device.Status),
 			ID:         uint32(device.ID),
 		})
 	}
@@ -566,7 +567,7 @@ func (s *Server) AddDevice(ctx context.Context, req *pb.DeviceInfo) (res *pb.Suc
 	device := &Device{
 		server:   s,
 		Name:     req.Name,
-		Type:     byte(req.Type),
+		Type:    	req.Type,
 		PullURL:  req.PullURL,
 		ParentID: uint(req.ParentID),
 	}
@@ -590,7 +591,7 @@ func (s *Server) UpdateDevice(ctx context.Context, req *pb.DeviceInfo) (res *pb.
 	target.Name = req.Name
 	target.PullURL = req.PullURL
 	target.ParentID = uint(req.ParentID)
-	target.Type = byte(req.Type)
+	target.Type = req.Type
 	s.DB.Save(target)
 	res = &pb.SuccessResponse{}
 	return

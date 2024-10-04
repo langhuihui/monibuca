@@ -1,5 +1,10 @@
 global:
-  loglevel: trace
+  # loglevel: trace
+  disableall: true
+rtsp:
+  enable: true
+  listenaddr: :554
 flv:
+  enable: true
   pull:
-    live/test: record/live/test/sei.flv
+    live/test: /Users/dexter/Movies/jb-demo.flv

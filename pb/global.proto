@@ -337,7 +337,7 @@ message DeviceInfo {
   google.protobuf.Timestamp updateTime = 3; // 更新时间
   uint32 parentID = 4; // 父设备ID
   string name = 5; // 设备名称
-  uint32 type = 6; // 设备类型
+  string type = 6; // 设备类型
   uint32 status = 7; // 设备状态
   string pullURL = 8; // 拉流地址
 }

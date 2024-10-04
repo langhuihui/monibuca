@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime/debug"
@@ -59,7 +60,7 @@ type (
 			ID       uint
 			ParentID uint
 			Name     string
-			Type     byte
+			Type     string
 			PullURL  string
 		}
 	}
@@ -284,10 +285,7 @@ func (s *Server) Start() (err error) {
 	s.Streams.OnStart(func() {
 		s.Streams.AddTask(&CheckSubWaitTimeout{s: s})
 	})
-	s.Transforms.OnStart(func() {
-		publishEvent := &TransformsPublishEvent{Transforms: &s.Transforms}
-		s.Transforms.AddTask(publishEvent)
-	})
+	s.Transforms.AddTask(&TransformsPublishEvent{Transforms: &s.Transforms})
 	s.Info("server started")
 	s.Post(func() error {
 		for plugin := range s.Plugins.Range {
@@ -309,10 +307,34 @@ func (s *Server) Start() (err error) {
 				d.ParentID = device.ParentID
 				d.server = s
 				d.Type = device.Type
+				if d.Type == "" {
+					if strings.HasPrefix(d.PullURL, "srt://") {
+						d.Type = "srt"
+					} else if strings.HasPrefix(d.PullURL, "rtsp://") {
+						d.Type = "rtsp"
+					} else if strings.HasPrefix(d.PullURL, "rtmp://") {
+						d.Type = "rtmp"
+					} else if strings.HasPrefix(d.PullURL, "srt://") {
+						d.Type = "srt"
+					} else {
+						u, err := url.Parse(d.PullURL)
+						if err != nil {
+							s.Error("parse pull url failed", "error", err)
+							continue
+						}
+						if strings.HasSuffix(u.Path, ".m3u8") {
+							d.Type = "hls"
+						} else if strings.HasSuffix(u.Path, ".flv") {
+							d.Type = "flv"
+						} else if strings.HasSuffix(u.Path, ".mp4") {
+							d.Type = "mp4"
+						}
+					}
+				}
 				if s.DB != nil {
 					s.DB.Save(&d)
 				} else {
-					s.Devices.Add(&d)
+					s.Devices.Add(&d, s.Logger.With("device", device.ID, "type", device.Type, "name", device.Name))
 				}
 			}
 		}
@@ -321,7 +343,7 @@ func (s *Server) Start() (err error) {
 			s.DB.Find(&devices)
 			for _, device := range devices {
 				device.server = s
-				s.Devices.Add(device)
+				s.Devices.Add(device, s.Logger.With("device", device.ID, "type", device.Type, "name", device.Name))
 			}
 		}
 		return nil

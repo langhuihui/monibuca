@@ -13,14 +13,6 @@ const (
 	DeviceStatusPulling
 )
 
-const (
-	DeviceTypeGroup byte = iota
-	DeviceTypeGB
-	DeviceTypeRTSP
-	DeviceTypeRTMP
-	DeviceTypeWebRTC
-)
-
 type (
 	IDevice interface {
 		Pull()
@@ -32,7 +24,7 @@ type (
 		Name     string
 		PullURL  string
 		ParentID uint
-		Type     byte
+		Type     string
 		Status   byte
 		Handler  IDevice `gorm:"-:all"`
 	}
@@ -42,7 +34,7 @@ type (
 )
 
 func (d *Device) GetStreamPath() string {
-	return fmt.Sprintf("device/%d/%d", d.Type, d.ID)
+	return fmt.Sprintf("device/%s/%d", d.Type, d.ID)
 }
 
 func (d *Device) Start() (err error) {
@@ -58,10 +50,16 @@ func (d *Device) Start() (err error) {
 }
 
 func (d *Device) ChangeStatus(status byte) {
+	if d.Status == status {
+		return
+	}
+	d.Info("device status changed", "from", d.Status, "to", status)
 	d.Status = status
 	d.Update()
 }
 
 func (d *Device) Update() {
-	d.server.DB.Save(d)
+	if d.server.DB != nil {
+		d.server.DB.Save(d)
+	}
 }

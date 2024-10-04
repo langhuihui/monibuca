@@ -6,6 +6,7 @@ import (
 	"m7s.live/m7s/v5"
 	"m7s.live/m7s/v5/pkg/config"
 	"m7s.live/m7s/v5/pkg/task"
+	"m7s.live/m7s/v5/pkg/util"
 	. "m7s.live/m7s/v5/plugin/rtsp/pkg"
 )
 
@@ -17,12 +18,11 @@ type RTSPDevice struct {
 }
 
 func (d *RTSPDevice) Start() (err error) {
-	d.conn.NetConnection = new(NetConnection)
-	err = d.conn.Connect(d.device.PullURL)
-	if err != nil {
-		return
+	d.conn.NetConnection = &NetConnection{
+		MemoryAllocator: util.NewScalableMemoryAllocator(1 << 12),
+		UserAgent:       "monibuca" + m7s.Version,
 	}
-	d.device.ChangeStatus(m7s.DeviceStatusOnline)
+	d.conn.Logger = d.plugin.Logger
 	return d.TickTask.Start()
 }
 
@@ -31,13 +31,20 @@ func (d *RTSPDevice) GetTickInterval() time.Duration {
 }
 
 func (d *RTSPDevice) Pull() {
-	d.plugin.Pull(d.device.GetStreamPath(), config.Pull{URL: d.device.PullURL,MaxRetry: -1})
+	d.plugin.Pull(d.device.GetStreamPath(), config.Pull{URL: d.device.PullURL, MaxRetry: -1, RetryInterval: time.Second * 5})
 }
 
 func (d *RTSPDevice) Tick(any) {
+	if d.device.Status != m7s.DeviceStatusOnline {
+		err := d.conn.Connect(d.device.PullURL)
+		if err != nil {
+			return
+		}
+		d.device.ChangeStatus(m7s.DeviceStatusOnline)
+	}
 	err := d.conn.Options()
 	if err != nil {
-		d.Stop(err)
+		d.device.ChangeStatus(m7s.DeviceStatusOffline)
 	}
 }
 

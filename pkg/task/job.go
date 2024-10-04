@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"reflect"
+	"runtime/debug"
 	"slices"
 	"sync"
 	"sync/atomic"
@@ -155,12 +156,14 @@ func (mt *Job) Post(callback func() error, args ...any) *Task {
 func (mt *Job) run() {
 	cases := []reflect.SelectCase{{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(mt.addSub)}}
 	defer func() {
-		err := recover()
-		if err != nil {
-			if mt.Logger != nil {
-				mt.Logger.Error("job panic", "err", err)
+		if !ThrowPanic {
+			err := recover()
+			if err != nil {
+				if mt.Logger != nil {
+					mt.Logger.Error("job panic", "err", err, "stack", string(debug.Stack()))
+				}
+				mt.Stop(errors.Join(err.(error), ErrPanic))
 			}
-			mt.Stop(errors.Join(err.(error), ErrPanic))
 		}
 		stopReason := mt.StopReason()
 		for _, task := range mt.children {

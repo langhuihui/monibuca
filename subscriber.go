@@ -23,6 +23,7 @@ import (
 
 var AVFrameType = reflect.TypeOf((*AVFrame)(nil))
 var Owner task.TaskContextKey = "owner"
+
 type PubSubBase struct {
 	task.Job
 	Plugin       *Plugin
@@ -321,10 +322,14 @@ func (handler *SubscribeHandler[A, V]) Start() (err error) {
 	}
 	checkPublisherChange := func() {
 		if prePublisher != s.Publisher {
-			if s.Publisher == nil {
-				s.Info("publisher gone", "prePublisher", prePublisher.ID)
+			if prePublisher != nil {
+				if s.Publisher == nil {
+					s.Info("publisher gone", "prePublisher", prePublisher.ID)
+				} else {
+					s.Info("publisher changed", "prePublisher", prePublisher.ID, "publisher", s.Publisher.ID)
+				}
 			} else {
-				s.Info("publisher changed", "prePublisher", prePublisher.ID, "publisher", s.Publisher.ID)
+				s.Info("publisher recover", "publisher", s.Publisher.ID)
 			}
 			if s.AudioReader != nil {
 				startAudioTs = time.Duration(s.AudioReader.AbsTime) * time.Millisecond

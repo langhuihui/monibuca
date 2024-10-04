@@ -257,14 +257,16 @@ func (task *Task) checkRetry(err error) bool {
 
 func (task *Task) start() bool {
 	var err error
-	defer func() {
-		if r := recover(); r != nil {
-			err = errors.New(fmt.Sprint(r))
-			if task.Logger != nil {
-				task.Error("panic", "error", err, "stack", string(debug.Stack()))
+	if !ThrowPanic {
+		defer func() {
+			if r := recover(); r != nil {
+				err = errors.New(fmt.Sprint(r))
+				if task.Logger != nil {
+					task.Error("panic", "error", err, "stack", string(debug.Stack()))
+				}
 			}
-		}
-	}()
+		}()
+	}
 	for {
 		task.StartTime = time.Now()
 		if task.Logger != nil {
