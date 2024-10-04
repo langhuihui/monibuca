@@ -3,10 +3,11 @@ package pkg
 import (
 	"encoding/binary"
 	"fmt"
-	"github.com/deepch/vdk/codec/h264parser"
-	"github.com/deepch/vdk/codec/h265parser"
 	"io"
 	"time"
+
+	"github.com/deepch/vdk/codec/h264parser"
+	"github.com/deepch/vdk/codec/h265parser"
 
 	"m7s.live/m7s/v5/pkg/codec"
 	"m7s.live/m7s/v5/pkg/util"
@@ -129,6 +130,9 @@ func (a *AnnexB) Demux(codecCtx codec.ICodecCtx) (ret any, err error) {
 				startCode = 3
 			}
 			if startCode > 0 {
+				if reader.Offset() == 3 {
+					startCode = 3
+				}
 				reader.Unread(startCode)
 				if reader.Offset() > 0 {
 					gotNalu()

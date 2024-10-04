@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+
 	"m7s.live/m7s/v5"
 	_ "m7s.live/m7s/v5/plugin/console"
 	_ "m7s.live/m7s/v5/plugin/debug"
@@ -14,10 +15,11 @@ import (
 	_ "m7s.live/m7s/v5/plugin/preview"
 	_ "m7s.live/m7s/v5/plugin/rtmp"
 	_ "m7s.live/m7s/v5/plugin/rtsp"
+	_ "m7s.live/m7s/v5/plugin/sei"
+	_ "m7s.live/m7s/v5/plugin/srt"
 	_ "m7s.live/m7s/v5/plugin/stress"
 	_ "m7s.live/m7s/v5/plugin/transcode"
 	_ "m7s.live/m7s/v5/plugin/webrtc"
-	_ "m7s.live/m7s/v5/plugin/sei"
 )
 
 func main() {

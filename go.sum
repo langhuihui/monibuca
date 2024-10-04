@@ -17,6 +17,8 @@ github.com/allegro/bigcache v1.2.1-0.20190218064605-e24eb225f156 h1:eMwmnE/GDgah
 github.com/allegro/bigcache v1.2.1-0.20190218064605-e24eb225f156/go.mod h1:Cb/ax3seSYIx7SuZdm2G2xzfwmv3TPSk2ucNfQESPXM=
 github.com/asavie/xdp v0.3.3 h1:b5Aa3EkMJYBeUO5TxPTIAa4wyUqYcsQr2s8f6YLJXhE=
 github.com/asavie/xdp v0.3.3/go.mod h1:Vv5p+3mZiDh7ImdSvdon3E78wXyre7df5V58ATdIYAY=
+github.com/benburkert/openpgp v0.0.0-20160410205803-c2471f86866c h1:8XZeJrs4+ZYhJeJ2aZxADI2tGADS15AzIF8MQ8XAhT4=
+github.com/benburkert/openpgp v0.0.0-20160410205803-c2471f86866c/go.mod h1:x1vxHcL/9AVzuk5HOloOEPrtJY0MaalYr78afXZ+pWI=
 github.com/beorn7/perks v1.0.1 h1:VlbKKnNfV8bJzeqoa4cOKqO6bYr3WgKZxO8Z16+hsOM=
 github.com/beorn7/perks v1.0.1/go.mod h1:G2ZrVWU2WbWT9wwq4/hrbKbnv/1ERSJQ0ibhJ6rlkpw=
 github.com/bluenviron/mediacommon v1.9.2 h1:EHcvoC5YMXRcFE010bTNf07ZiSlB/e/AdZyG7GsEYN0=
@@ -40,6 +42,8 @@ github.com/cloudwego/goref v0.0.0-20240724113447-685d2a9523c8/go.mod h1:IMGV1p8M
 github.com/coreos/go-systemd/v22 v22.5.0/go.mod h1:Y58oyj3AT4RCenI/lSvhwexgC+NSVTIJ3seZv2GcEnc=
 github.com/creack/pty v1.1.20 h1:VIPb/a2s17qNeQgDnkfZC35RScx+blkKF8GV68n80J4=
 github.com/creack/pty v1.1.20/go.mod h1:MOBLtS5ELjhRRrroQr9kyvTxUAFNvYEK993ew/Vr4O4=
+github.com/datarhei/gosrt v0.7.0 h1:1/IY66HVVgqGA9zkmL5l6jUFuI8t/76WkuamSkJqHqs=
+github.com/datarhei/gosrt v0.7.0/go.mod h1:wTDoyog1z4au8Fd/QJBQAndzvccuxjqUL/qMm0EyJxE=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc h1:U9qPSI2PIWSS1VwoXQT9A3Wy9MM3WgvqSxFWenqJduM=

@@ -42,6 +42,7 @@ require (
 	github.com/VictoriaMetrics/fastcache v1.12.2 // indirect
 	github.com/VictoriaMetrics/metrics v1.35.1 // indirect
 	github.com/VictoriaMetrics/metricsql v0.76.0 // indirect
+	github.com/benburkert/openpgp v0.0.0-20160410205803-c2471f86866c // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/c0deltin/duckdb-driver v0.1.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
@@ -119,6 +120,7 @@ require (
 	github.com/alchemy/rotoslog v0.2.2
 	github.com/bluenviron/mediacommon v1.9.2
 	github.com/chromedp/chromedp v0.9.5
+	github.com/datarhei/gosrt v0.7.0
 	github.com/go-task/slim-sprig v0.0.0-20230315185526-52ccab3ef572 // indirect
 	github.com/google/pprof v0.0.0-20240409012703-83162a5b38cd // indirect
 	github.com/gorilla/websocket v1.5.1

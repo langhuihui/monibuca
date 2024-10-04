@@ -1,5 +1,8 @@
 global:
   loglevel: debug
+srt:
+  listenaddr: :6000
+  passphrase: foobarfoobar
 gb28181:
   autoinvite: true
   sip:

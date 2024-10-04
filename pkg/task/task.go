@@ -280,12 +280,16 @@ func (task *Task) start() bool {
 			for _, listener := range task.afterStartListeners {
 				listener()
 			}
-			task.ResetRetryCount()
-			if runHandler, ok := task.handler.(TaskBlock); ok {
-				task.state = TASK_STATE_RUNNING
-				err = runHandler.Run()
-				if err == nil {
-					err = ErrTaskComplete
+			if task.IsStopped() {
+				err = task.StopReason()
+			} else {
+				task.ResetRetryCount()
+				if runHandler, ok := task.handler.(TaskBlock); ok {
+					task.state = TASK_STATE_RUNNING
+					err = runHandler.Run()
+					if err == nil {
+						err = ErrTaskComplete
+					}
 				}
 			}
 		}

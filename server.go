@@ -55,6 +55,13 @@ type (
 		PulseInterval  time.Duration            `default:"5s" desc:"心跳事件间隔"`    //心跳事件间隔
 		DisableAll     bool                     `default:"false" desc:"禁用所有插件"` //禁用所有插件
 		StreamAlias    map[config.Regexp]string `desc:"流别名"`
+		Device         []struct {
+			ID       uint
+			ParentID uint
+			Name     string
+			Type     byte
+			PullURL  string
+		}
 	}
 	WaitStream struct {
 		*slog.Logger
@@ -292,6 +299,24 @@ func (s *Server) Start() (err error) {
 		}
 		if s.DB != nil {
 			s.DB.AutoMigrate(&Device{})
+		}
+		for _, device := range s.Device {
+			if device.ID != 0 {
+				var d Device
+				d.ID = device.ID
+				d.Name = device.Name
+				d.PullURL = device.PullURL
+				d.ParentID = device.ParentID
+				d.server = s
+				d.Type = device.Type
+				if s.DB != nil {
+					s.DB.Save(&d)
+				} else {
+					s.Devices.Add(&d)
+				}
+			}
+		}
+		if s.DB != nil {
 			var devices []*Device
 			s.DB.Find(&devices)
 			for _, device := range devices {
