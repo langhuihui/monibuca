@@ -24,7 +24,7 @@ type Receiver struct {
 
 func (s *Sender) GetMedia() (medias []*Media, err error) {
 	if s.SubAudio && s.Publisher.PubAudio && s.Publisher.HasAudioTrack() {
-		audioTrack := s.Publisher.GetAudioTrack(reflect.TypeOf((*mrtp.RTPAudio)(nil)))
+		audioTrack := s.Publisher.GetAudioTrack(reflect.TypeOf((*mrtp.Audio)(nil)))
 		if err = audioTrack.WaitReady(); err != nil {
 			return
 		}
@@ -88,7 +88,7 @@ func (s *Sender) sendRTP(pack *mrtp.RTPData, channel int) (err error) {
 }
 
 func (s *Sender) Send() (err error) {
-	s.Stream.AddTask(m7s.CreatePlayTask(s.Subscriber, func(audio *mrtp.RTPAudio) error {
+	s.Stream.AddTask(m7s.CreatePlayTask(s.Subscriber, func(audio *mrtp.Audio) error {
 		return s.sendRTP(&audio.RTPData, s.AudioChannelID)
 	}, func(video *mrtp.Video) error {
 		return s.sendRTP(&video.RTPData, s.VideoChannelID)
@@ -135,7 +135,7 @@ func (r *Receiver) SetMedia(medias []*Media) (err error) {
 }
 
 func (r *Receiver) Receive() (err error) {
-	audioFrame, videoFrame := &mrtp.RTPAudio{}, &mrtp.Video{}
+	audioFrame, videoFrame := &mrtp.Audio{}, &mrtp.Video{}
 	audioFrame.SetAllocator(r.MemoryAllocator)
 	audioFrame.RTPCodecParameters = r.AudioCodecParameters
 	videoFrame.SetAllocator(r.MemoryAllocator)
@@ -168,10 +168,10 @@ func (r *Receiver) Receive() (err error) {
 					if err = r.WriteAudio(audioFrame); err != nil {
 						return
 					}
-					audioFrame = &mrtp.RTPAudio{}
+					audioFrame = &mrtp.Audio{}
 					audioFrame.AddRecycleBytes(buf)
 					audioFrame.Packets = []*rtp.Packet{packet}
-					audioFrame.RTPCodecParameters = r.VideoCodecParameters
+					audioFrame.RTPCodecParameters = r.AudioCodecParameters
 					audioFrame.SetAllocator(r.MemoryAllocator)
 				}
 			case r.VideoChannelID:

@@ -23,7 +23,7 @@ type SRTPlugin struct {
 
 const defaultConfig = m7s.DefaultYaml(`listenaddr: :6000`)
 
-var _ = m7s.InstallPlugin[SRTPlugin](defaultConfig,pkg.NewPuller, pkg.NewPusher)
+var _ = m7s.InstallPlugin[SRTPlugin](defaultConfig, pkg.NewPuller, pkg.NewPusher)
 
 func (p *SRTPlugin) OnInit() error {
 	var t SRTServer
@@ -67,6 +67,10 @@ func (t *SRTServer) Start() error {
 		t.AddTask(&sender)
 	}
 	return nil
+}
+
+func (t *SRTServer) OnStop() {
+	t.server.Shutdown()
 }
 
 func (t *SRTServer) Run() error {

@@ -150,6 +150,7 @@ func (rb *RingWriter) Step() (normal bool) {
 		// do not remove only idr
 		if next == rb.IDRingList.Back().Value {
 			if rb.Size < rb.SizeRange[1] {
+				rb.SLogger.Debug("only idr")
 				rb.glow(5)
 				next = rb.Next()
 			}
@@ -160,7 +161,7 @@ func (rb *RingWriter) Step() (normal bool) {
 				rb.IDRingList.Remove(oldIDR)
 				rb.Unlock()
 			} else {
-				rb.SLogger.Log(nil, task.TraceLevel, "not enough buffer")
+				rb.SLogger.Debug("not enough buffer")
 				rb.glow(5)
 				next = rb.Next()
 			}

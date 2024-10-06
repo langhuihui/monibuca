@@ -35,6 +35,7 @@ type (
 		ID                     uint `gorm:"primarykey"`
 		StartTime, EndTime     time.Time
 		FilePath               string
+		StreamPath             string
 		AudioCodec, VideoCodec string
 	}
 )

@@ -21,8 +21,9 @@ message ReqRecordList {
 message RecordFile {
   uint32 id = 1;
   string filePath = 2;
-  google.protobuf.Timestamp startTime = 3;
-  google.protobuf.Timestamp endTime = 4;
+  string streamPath = 3;
+  google.protobuf.Timestamp startTime = 4;
+  google.protobuf.Timestamp endTime = 5;
 }
 
 message ResponseList {

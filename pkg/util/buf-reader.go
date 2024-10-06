@@ -41,8 +41,6 @@ func NewBufReaderWithBufLen(reader io.Reader, bufLen int) (r *BufReader) {
 
 func NewBufReaderBuffersChan(feedChan chan net.Buffers) (r *BufReader) {
 	r = &BufReader{
-		Allocator: NewScalableMemoryAllocator(defaultBufSize),
-		BufLen:    defaultBufSize,
 		feedData: func() error {
 			data, ok := <-feedChan
 			if !ok {
@@ -63,8 +61,6 @@ func NewBufReaderBuffersChan(feedChan chan net.Buffers) (r *BufReader) {
 
 func NewBufReaderChan(feedChan chan []byte) (r *BufReader) {
 	r = &BufReader{
-		Allocator: NewScalableMemoryAllocator(defaultBufSize),
-		BufLen:    defaultBufSize,
 		feedData: func() error {
 			data, ok := <-feedChan
 			if !ok {
@@ -87,7 +83,9 @@ func NewBufReader(reader io.Reader) (r *BufReader) {
 
 func (r *BufReader) Recycle() {
 	r.buf = MemoryReader{}
-	r.Allocator.Recycle()
+	if r.Allocator != nil {
+		r.Allocator.Recycle()
+	}
 }
 
 func (r *BufReader) Buffered() int {

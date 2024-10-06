@@ -38,7 +38,7 @@ type (
 		Publisher     *Publisher
 		publishConfig *config.Publish
 		puller        IPuller
-		conf          *config.Pull	
+		conf          *config.Pull
 	}
 
 	HTTPFilePuller struct {
@@ -186,7 +186,7 @@ func (p *RecordFilePuller) Start() (err error) {
 		return
 	}
 
-	tx := p.PullJob.Plugin.DB.Find(&p.Streams, "end_time>? AND file_path=?", p.PullStartTime, p.PullJob.RemoteURL)
+	tx := p.PullJob.Plugin.DB.Find(&p.Streams, "end_time>? AND stream_path=?", p.PullStartTime, p.PullJob.RemoteURL)
 	if tx.Error != nil {
 		return tx.Error
 	}

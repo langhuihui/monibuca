@@ -26,7 +26,8 @@ func main() {
 |-----------|-------------|
 | disable_rm | Disables the memory pool |
 | sqlite | Enables the sqlite DB |
-
+| duckdb | Enables the duckdb DB |
+| taskpanic | Throws panic, for testing |
 
 ## More Example
 

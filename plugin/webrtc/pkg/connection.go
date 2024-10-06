@@ -69,7 +69,7 @@ func (IO *Connection) Receive() {
 			}
 			mem := util.NewScalableMemoryAllocator(1 << 12)
 			defer mem.Recycle()
-			frame := &mrtp.RTPAudio{}
+			frame := &mrtp.Audio{}
 			frame.RTPCodecParameters = &codecP
 			frame.SetAllocator(mem)
 			for {
@@ -91,7 +91,7 @@ func (IO *Connection) Receive() {
 					frame.Packets = append(frame.Packets, &packet)
 				} else {
 					err = IO.Publisher.WriteAudio(frame)
-					frame = &mrtp.RTPAudio{}
+					frame = &mrtp.Audio{}
 					frame.AddRecycleBytes(buf)
 					frame.Packets = []*rtp.Packet{&packet}
 					frame.RTPCodecParameters = &codecP

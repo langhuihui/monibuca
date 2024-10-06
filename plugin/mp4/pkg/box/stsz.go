@@ -21,10 +21,6 @@ type SampleSizeBox struct {
 	EntrySizelist []uint32
 }
 
-func NewSampleSizeBox() *SampleSizeBox {
-	return &SampleSizeBox{}
-}
-
 func (stsz *SampleSizeBox) Size() uint64 {
 	if stsz.SampleSize == 0 {
 		return FullBoxLen + 8 + 4*uint64(stsz.SampleCount)

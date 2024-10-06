@@ -13,6 +13,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/shirou/gopsutil/v3/cpu"
+
 	"m7s.live/m7s/v5/pkg/task"
 
 	"m7s.live/m7s/v5/pkg/config"
@@ -121,7 +123,7 @@ func NewServer(conf any) (s *Server) {
 		"arch":      sysruntime.GOARCH,
 		"cpus":      int32(sysruntime.NumCPU()),
 	}
-	s.Transforms.PublishEvent = make(chan *Publisher, 1)
+	s.Transforms.PublishEvent = make(chan *Publisher, 10)
 	s.prometheusDesc.init()
 	return
 }
@@ -356,6 +358,13 @@ func (c *CheckSubWaitTimeout) GetTickInterval() time.Duration {
 }
 
 func (c *CheckSubWaitTimeout) Tick(any) {
+	percents, err := cpu.Percent(time.Second, false)
+	if err == nil {
+		for _, cpu := range percents {
+			c.Info("tick", "cpu", cpu, "streams", c.s.Streams.Length, "subscribers", c.s.Subscribers.Length, "waits", c.s.Waiting.Length)
+		}
+	}
+
 	for waits := range c.s.Waiting.Range {
 		for sub := range waits.Range {
 			select {

@@ -186,7 +186,7 @@ func (conf *WebRTCPlugin) Play_(w http.ResponseWriter, r *http.Request) {
 		if videoSender == nil {
 			suber.SubVideo = false
 		}
-		conn.AddTask(m7s.CreatePlayTask(suber, func(frame *mrtp.RTPAudio) (err error) {
+		conn.AddTask(m7s.CreatePlayTask(suber, func(frame *mrtp.Audio) (err error) {
 			for _, p := range frame.Packets {
 				if err = audioTLSRTP.WriteRTP(p); err != nil {
 					return

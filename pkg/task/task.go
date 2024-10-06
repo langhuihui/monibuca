@@ -228,7 +228,7 @@ func (task *Task) GetSignal() any {
 }
 
 func (task *Task) checkRetry(err error) bool {
-	if errors.Is(err, ErrTaskComplete) {
+	if errors.Is(err, ErrTaskComplete) || errors.Is(err, ErrExit) {
 		return false
 	}
 	if task.retry.MaxRetry < 0 || task.retry.RetryCount < task.retry.MaxRetry {
@@ -349,9 +349,21 @@ func (task *Task) ResetRetryCount() {
 }
 
 func (task *Task) run(handler func() error) {
-	if err := handler(); err == nil {
-		task.Stop(ErrTaskComplete)
-	} else {
-		task.Stop(err)
-	}
+	var err error
+	defer func() {
+		if !ThrowPanic {
+			if r := recover(); r != nil {
+				err = errors.New(fmt.Sprint(r))
+				if task.Logger != nil {
+					task.Error("panic", "error", err, "stack", string(debug.Stack()))
+				}
+			}
+		}
+		if err == nil {
+			task.Stop(ErrTaskComplete)
+		} else {
+			task.Stop(err)
+		}
+	}()
+	err = handler()
 }

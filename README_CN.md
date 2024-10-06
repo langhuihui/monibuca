@@ -24,7 +24,8 @@ func main() {
 |-----------|-------------|
 | disable_rm | 禁用内存池 |
 | sqlite | 启用 sqlite |
-
+| duckdb | 启用 duckdb |
+| taskpanic | 抛出 panic，用于测试 |
 ## 更多示例
 
 查看 example 目录

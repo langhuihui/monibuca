@@ -2,7 +2,7 @@ package mp4
 
 import (
 	"fmt"
-	"github.com/VictoriaMetrics/VictoriaMetrics/lib/fs"
+	"io"
 	"os"
 	"path/filepath"
 	"time"
@@ -44,9 +44,11 @@ func (task *writeTrailerTask) Start() (err error) {
 			task.Error("rewrite with moov", "err", err)
 			return
 		}
+		_, err = task.muxer.File.Seek(0, io.SeekStart)
+		_, err = temp.Seek(0, io.SeekStart)
+		_, err = io.Copy(task.muxer.File, temp)
 		err = task.muxer.File.Close()
 		err = temp.Close()
-		fs.MustCopyFile(temp.Name(), task.muxer.File.Name())
 		return os.Remove(temp.Name())
 	}
 }
@@ -67,44 +69,54 @@ type Recorder struct {
 
 func (r *Recorder) writeTailer(end time.Time) {
 	r.stream.EndTime = end
-	r.RecordJob.Plugin.DB.Save(&r.stream)
+	if r.RecordJob.Plugin.DB != nil {
+		r.RecordJob.Plugin.DB.Save(&r.stream)
+	}
 	writeTrailerQueueTask.AddTask(&writeTrailerTask{
 		muxer: r.muxer,
 	}, r.Logger)
 }
 
+var CustomFileName = func(job *m7s.RecordJob) string {
+	if job.Fragment == 0 {
+		return fmt.Sprintf("%s.mp4", job.FilePath)
+	}
+	return filepath.Join(job.FilePath, time.Now().Local().Format("2006-01-02T15:04:05")+".mp4")
+}
+
 func (r *Recorder) createStream(start time.Time) (err error) {
 	recordJob := &r.RecordJob
 	sub := recordJob.Subscriber
-	r.stream = m7s.RecordStream{
-		StartTime: start,
-		FilePath:  recordJob.FilePath,
+	var file *os.File
+	r.stream.FilePath = CustomFileName(&r.RecordJob)
+	dir := filepath.Dir(r.stream.FilePath)
+	if err = os.MkdirAll(dir, 0755); err != nil {
+		return
 	}
+	if file, err = os.Create(r.stream.FilePath); err != nil {
+		return
+	}
+	r.muxer, err = NewFileMuxer(file)
+	r.stream.StreamPath = sub.StreamPath
+	r.stream.StartTime = start
 	if sub.Publisher.HasAudioTrack() {
 		r.stream.AudioCodec = sub.Publisher.AudioTrack.ICodecCtx.FourCC().String()
 	}
 	if sub.Publisher.HasVideoTrack() {
 		r.stream.VideoCodec = sub.Publisher.VideoTrack.ICodecCtx.FourCC().String()
 	}
-	recordJob.Plugin.DB.Save(&r.stream)
-	var file *os.File
-	if r.RecordJob.Fragment == 0 {
-		if file, err = os.Create(fmt.Sprintf("%d.mp4", r.RecordJob.FilePath)); err != nil {
-			return
-		}
-	} else {
-		if file, err = os.Create(filepath.Join(r.RecordJob.FilePath, fmt.Sprintf("%d.mp4", r.stream.ID))); err != nil {
-			return
-		}
+	if recordJob.Plugin.DB != nil {
+		recordJob.Plugin.DB.Save(&r.stream)
 	}
-	r.muxer, err = NewFileMuxer(file)
 	return
 }
 
 func (r *Recorder) Start() (err error) {
-	err = r.RecordJob.Plugin.DB.AutoMigrate(&r.stream)
-	if err != nil {
-		return
+	if r.RecordJob.Plugin.DB != nil {
+		err = r.RecordJob.Plugin.DB.AutoMigrate(&r.stream)
+		if err != nil {
+			return
+		}
 	}
 	return r.DefaultRecorder.Start()
 }

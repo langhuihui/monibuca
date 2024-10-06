@@ -3,7 +3,7 @@ global:
   disableall: true
 rtsp:
   enable: true
-  listenaddr: :554
+  tcp: :8554
 flv:
   enable: true
   pull:

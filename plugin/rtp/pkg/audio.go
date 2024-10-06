@@ -199,11 +199,11 @@ func (r *RTPData) ConvertCtx(from codec.ICodecCtx) (to codec.ICodecCtx, seq IAVF
 	return
 }
 
-type RTPAudio struct {
+type Audio struct {
 	RTPData
 }
 
-func (r *RTPAudio) Parse(t *AVTrack) (err error) {
+func (r *Audio) Parse(t *AVTrack) (err error) {
 	switch r.MimeType {
 	case webrtc.MimeTypeOpus:
 		var ctx OPUSCtx
@@ -278,7 +278,7 @@ func payloadLengthInfoDecode(buf []byte) (int, int, error) {
 	return l, n, nil
 }
 
-func (r *RTPAudio) Demux(codexCtx codec.ICodecCtx) (any, error) {
+func (r *Audio) Demux(codexCtx codec.ICodecCtx) (any, error) {
 	var data AudioData
 	switch r.MimeType {
 	case "audio/MP4A-LATM":
@@ -389,7 +389,7 @@ func (r *RTPAudio) Demux(codexCtx codec.ICodecCtx) (any, error) {
 	return data, nil
 }
 
-func (r *RTPAudio) Mux(codexCtx codec.ICodecCtx, from *AVFrame) {
+func (r *Audio) Mux(codexCtx codec.ICodecCtx, from *AVFrame) {
 	data := from.Raw.(AudioData)
 	var ctx *RTPCtx
 	var lastPacket *rtp.Packet
@@ -435,7 +435,7 @@ func (r *RTPAudio) Mux(codexCtx codec.ICodecCtx, from *AVFrame) {
 	lastPacket.Header.Marker = true
 }
 
-func (r *RTPAudio) readAUHeaders(ctx *AACCtx, buf []byte, headersLen int) ([]uint64, error) {
+func (r *Audio) readAUHeaders(ctx *AACCtx, buf []byte, headersLen int) ([]uint64, error) {
 	firstRead := false
 
 	count := 0

@@ -47,7 +47,7 @@ func (p *MP4Plugin) List(ctx context.Context, req *pb.ReqRecordList) (resp *pb.R
 	if req.FilePath == "" {
 		p.DB.Find(&streams, "end_time>? AND start_time<?", startTime, endTime)
 	} else {
-		p.DB.Find(&streams, "end_time>? AND start_time<? AND file_path=?", startTime, endTime, req.FilePath)
+		p.DB.Find(&streams, "end_time>? AND start_time<? AND file_path like ?", startTime, endTime, req.FilePath+"%")
 	}
 	resp = &pb.ResponseList{}
 	for _, stream := range streams {

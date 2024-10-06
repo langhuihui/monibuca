@@ -118,6 +118,8 @@ func (t *Transformer) Start() (err error) {
 			args = append(args, "-f", "flv", to.Target)
 		case "rtsp":
 			args = append(args, "-f", "rtsp", to.Target)
+		case "srt":
+			args = append(args, "-f", "mpegts", to.Target)
 		default:
 			args = append(args, to.Target)
 		}

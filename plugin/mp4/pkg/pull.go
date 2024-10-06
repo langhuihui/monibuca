@@ -2,10 +2,8 @@ package mp4
 
 import (
 	"errors"
-	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -147,7 +145,7 @@ func (p *RecordReader) Run() (err error) {
 	}
 	for i, stream := range p.Streams {
 		tsOffset = ts
-		p.File, err = os.Open(filepath.Join(pullJob.RemoteURL, fmt.Sprintf("%d.mp4", stream.ID)))
+		p.File, err = os.Open(stream.FilePath)
 		if err != nil {
 			return
 		}

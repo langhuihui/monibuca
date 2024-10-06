@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strings"
 	"time"
 
 	"m7s.live/m7s/v5"
@@ -145,6 +144,13 @@ type Recorder struct {
 	m7s.DefaultRecorder
 }
 
+var CustomFileName = func(job *m7s.RecordJob) string {
+	if job.Fragment == 0 || job.Append {
+		return fmt.Sprintf("%s.flv", job.FilePath)
+	}
+	return filepath.Join(job.FilePath, time.Now().Local().Format("2006-01-02T15:04:05")+".flv")
+}
+
 func (r *Recorder) Run() (err error) {
 	var file *os.File
 	var filepositions []uint64
@@ -155,11 +161,7 @@ func (r *Recorder) Run() (err error) {
 	suber := ctx.Subscriber
 	noFragment := ctx.Fragment == 0 || ctx.Append
 	if noFragment {
-		filePath := ctx.FilePath
-		if !strings.HasSuffix(filePath, ".flv") {
-			filePath += ".flv"
-		}
-		if file, err = os.OpenFile(filePath, os.O_CREATE|os.O_RDWR|util.Conditional(ctx.Append, os.O_APPEND, os.O_TRUNC), 0666); err != nil {
+		if file, err = os.OpenFile(CustomFileName(ctx), os.O_CREATE|os.O_RDWR|util.Conditional(ctx.Append, os.O_APPEND, os.O_TRUNC), 0666); err != nil {
 			return
 		}
 		defer writeMetaTag(file, suber, filepositions, times, &duration)
@@ -194,7 +196,7 @@ func (r *Recorder) Run() (err error) {
 	} else if ctx.Fragment == 0 {
 		_, err = file.Write(FLVHead)
 	} else {
-		if file, err = os.OpenFile(filepath.Join(ctx.FilePath, fmt.Sprintf("%d.flv", time.Now().Unix())), os.O_CREATE|os.O_RDWR, 0666); err != nil {
+		if file, err = os.OpenFile(CustomFileName(ctx), os.O_CREATE|os.O_RDWR, 0666); err != nil {
 			return
 		}
 		_, err = file.Write(FLVHead)
@@ -206,7 +208,7 @@ func (r *Recorder) Run() (err error) {
 			filepositions = []uint64{0}
 			times = []float64{0}
 			offset = 0
-			if file, err = os.OpenFile(filepath.Join(ctx.FilePath, fmt.Sprintf("%d.flv", time.Now().Unix())), os.O_CREATE|os.O_RDWR, 0666); err != nil {
+			if file, err = os.OpenFile(CustomFileName(ctx), os.O_CREATE|os.O_RDWR, 0666); err != nil {
 				return
 			}
 			_, err = file.Write(FLVHead)
