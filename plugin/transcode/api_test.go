@@ -52,7 +52,7 @@ func Test_parseCrop(t *testing.T) {
 			args: args{
 				cropString: "100,100,200,200",
 			},
-			want: "crop=100:100:200:200",
+			want: "crop=200:200:100:100",
 		},
 	}
 	for _, tt := range tests {
@@ -84,7 +84,7 @@ func Test_rgbToHex(t *testing.T) {
 			args: args{
 				FontColor: "255,255,255",
 			},
-			want: "#ffffff",
+			want: ":fontcolor=#ffffff",
 		},
 	}
 	for _, tt := range tests {

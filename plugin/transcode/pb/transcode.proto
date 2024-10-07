@@ -1,0 +1,51 @@
+syntax = "proto3";
+import "google/api/annotations.proto";
+import "google/protobuf/empty.proto";
+import "global.proto";
+
+package transcode;
+option go_package="m7s.live/m7s/v5/plugin/transcode/pb";
+
+service api {
+  rpc launch (TransRequest) returns (global.SuccessResponse) {
+    option (google.api.http) = {
+      post: "/transcode/api/launch"
+      body: "*"
+    };
+  }
+  rpc close (CloseRequest) returns (global.SuccessResponse) {
+    option (google.api.http) = {
+      post: "/transcode/api/close"
+      body: "*"
+    };
+  }
+}
+
+message OverlayConfig {
+  string overlay_stream = 1;   // 叠加流 可为空
+  string overlay_region = 2;           // x,y,w,h 可为空,所有区域
+  string overlay_image = 3;            // 图片 base64  可为空 如果图片和视频流都有，则使用图片
+  string overlay_position = 4; // 位置 x,y
+  string text = 5;             // 文字
+  int64 time_offset = 6;       // 时间偏移
+  string time_format = 7;      // 时间格式
+  string font_name = 8;        // 字体文件名
+  string font_size = 9;        // 字体大小
+  string font_color = 10;      // r,g,b 颜色
+  string text_position = 11;   // x,y 文字在图片上的位置
+}
+
+message TransRequest {
+  string src_stream = 1;                    // 原始流
+  string dst_stream = 2;                    // 输出流
+  string encodec = 3;
+  string decodec = 4;
+  string scale = 5;
+  string log_level = 6;
+  repeated OverlayConfig overlay_configs = 7;
+}
+
+message CloseRequest {
+  string src_stream = 1;                    // 原始流
+  string dst_stream = 2;                    // 输出流
+}

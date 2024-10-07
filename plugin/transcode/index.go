@@ -1,20 +1,14 @@
 package plugin_transcode
 
 import (
-	"net/http"
-
 	"m7s.live/m7s/v5"
+	"m7s.live/m7s/v5/plugin/transcode/pb"
 	transcode "m7s.live/m7s/v5/plugin/transcode/pkg"
 )
 
-var _ = m7s.InstallPlugin[TranscodePlugin](transcode.NewTransform)
+var _ = m7s.InstallPlugin[TranscodePlugin](transcode.NewTransform, pb.RegisterApiHandler, &pb.Api_ServiceDesc)
 
 type TranscodePlugin struct {
+	pb.UnimplementedApiServer
 	m7s.Plugin
-}
-
-func (t *TranscodePlugin) RegisterHandler() map[string]http.HandlerFunc {
-	return map[string]http.HandlerFunc{
-		"/api/start": t.api_transcode_start,
-	}
 }
