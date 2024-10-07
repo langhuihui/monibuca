@@ -197,7 +197,7 @@ message TaskTreeResponse {
   map<string, string> description = 5;
   repeated TaskTreeResponse children = 6;
   uint32 state = 7;
-  bool blocked = 8;
+  TaskTreeResponse blocked = 8;
 }
 
 message StreamListRequest {

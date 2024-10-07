@@ -22,7 +22,7 @@ func (conf *SEIPlugin) Insert(ctx context.Context, req *pb.InsertRequest) (*glob
 		return nil, pkg.ErrNotFound
 	}
 	var transformer *sei.Transformer
-	if tm, ok := conf.Server.Transforms.Transformed.Get(targetStreamPath); ok {
+	if tm, ok := conf.Server.Transforms.Get(targetStreamPath); ok {
 		transformer, ok = tm.TransformJob.Transformer.(*sei.Transformer)
 		if !ok {
 			return nil, errors.New("targetStreamPath is not a sei transformer")

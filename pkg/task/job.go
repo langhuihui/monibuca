@@ -27,7 +27,7 @@ type Job struct {
 	lazyRun               sync.Once
 	childrenDisposed      chan struct{}
 	childDisposeListeners []func(ITask)
-	blocked               bool
+	blocked               ITask
 }
 
 func (*Job) GetTaskType() TaskType {
@@ -38,7 +38,7 @@ func (mt *Job) getJob() *Job {
 	return mt
 }
 
-func (mt *Job) Blocked() bool {
+func (mt *Job) Blocked() ITask {
 	return mt.blocked
 }
 
@@ -146,7 +146,7 @@ func (mt *Job) Post(callback func() error, args ...any) *Task {
 	task := CreateTaskByCallBack(callback, nil)
 	description := make(Description)
 	if len(args) > 0 {
-		description["ownerType"] = args[0]
+		description[OwnerTypeKey] = args[0]
 	} else {
 		description = nil
 	}
@@ -174,15 +174,14 @@ func (mt *Job) run() {
 		close(mt.childrenDisposed)
 	}()
 	for {
-		mt.blocked = false
+		mt.blocked = nil
 		if chosen, rev, ok := reflect.Select(cases); chosen == 0 {
-			mt.blocked = true
 			if !ok {
 				return
 			}
-			if child := rev.Interface().(ITask); child.getParent() != mt || child.start() {
-				mt.children = append(mt.children, child)
-				cases = append(cases, reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(child.GetSignal())})
+			if mt.blocked = rev.Interface().(ITask); mt.blocked.getParent() != mt || mt.blocked.start() {
+				mt.children = append(mt.children, mt.blocked)
+				cases = append(cases, reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(mt.blocked.GetSignal())})
 			}
 		} else {
 			taskIndex := chosen - 1

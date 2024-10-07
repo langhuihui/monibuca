@@ -46,6 +46,9 @@ type (
 
 func NewTransform() m7s.ITransformer {
 	ret := &Transformer{}
+	ret.Description = map[string]any{
+		task.OwnerTypeKey: "Transcode",
+	}
 	ret.WriteFlvTag = func(flv net.Buffers) (err error) {
 		var buffer []byte
 		for _, b := range flv {

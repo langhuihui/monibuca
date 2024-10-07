@@ -20,7 +20,7 @@ import (
 type (
 	H26xCtx struct {
 		RTPCtx
-		dtsEst *util.DTSEstimator
+		dtsEst util.DTSEstimator
 	}
 	H264Ctx struct {
 		H26xCtx
@@ -68,7 +68,6 @@ func (r *Video) Parse(t *AVTrack) (err error) {
 			ctx = t.ICodecCtx.(*H264Ctx)
 		} else {
 			ctx = &H264Ctx{}
-			ctx.dtsEst = util.NewDTSEstimator()
 			ctx.parseFmtpLine(r.RTPCodecParameters)
 			var sps, pps []byte
 			//packetization-mode=1; sprop-parameter-sets=J2QAKaxWgHgCJ+WagICAgQ==,KO48sA==; profile-level-id=640029
@@ -91,6 +90,7 @@ func (r *Video) Parse(t *AVTrack) (err error) {
 			return
 		}
 		pts := r.Packets[0].Timestamp
+
 		dts := ctx.dtsEst.Feed(pts)
 		r.DTS = time.Duration(dts) * time.Millisecond / 90
 		r.CTS = time.Duration(pts-dts) * time.Millisecond / 90
@@ -114,7 +114,6 @@ func (r *Video) Parse(t *AVTrack) (err error) {
 			ctx = t.ICodecCtx.(*H265Ctx)
 		} else {
 			ctx = &H265Ctx{}
-			ctx.dtsEst = util.NewDTSEstimator()
 			ctx.parseFmtpLine(r.RTPCodecParameters)
 			var vps, sps, pps []byte
 			if sprop_sps, ok := ctx.Fmtp["sprop-sps"]; ok {

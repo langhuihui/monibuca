@@ -7,17 +7,17 @@ rtsp:
   pull:
     live/test: rtsp://127.0.0.1:8554/live/test
 
-#transcode:
-#  onpub:
-#    transform:
-#      ^live.+:
-#        output:
-#          - target: rtmp://localhost/trans/$0/small
-#            conf: -loglevel debug -c:a aac -c:v h264 -vf scale=320:240
-
-mp4:
+transcode:
   onpub:
-    record:
-      ^live/.+:
-        fragment: 30s
-        filepath: record/mp4
+    transform:
+      ^live.+:
+        output:
+          - target: rtmp://localhost/trans/$0/small
+            conf: -loglevel debug -c:a aac -c:v h264 -vf scale=320:240
+
+#mp4:
+#  onpub:
+#    record:
+#      ^live/.+:
+#        fragment: 30s
+#        filepath: record/mp4

@@ -155,7 +155,9 @@ func (s *Server) TaskTree(context.Context, *emptypb.Empty) (res *pb.TaskTreeResp
 			}
 		})}
 		if job, ok := m.(task.IJob); ok {
-			res.Blocked = job.Blocked()
+			if blockedTask := job.Blocked(); blockedTask != nil {
+				res.Blocked = fillData(blockedTask)
+			}
 			for t := range job.RangeSubTask {
 				res.Children = append(res.Children, fillData(t))
 			}
@@ -567,7 +569,7 @@ func (s *Server) AddDevice(ctx context.Context, req *pb.DeviceInfo) (res *pb.Suc
 	device := &Device{
 		server:   s,
 		Name:     req.Name,
-		Type:    	req.Type,
+		Type:     req.Type,
 		PullURL:  req.PullURL,
 		ParentID: uint(req.ParentID),
 	}

@@ -2,6 +2,7 @@ package m7s
 
 import (
 	"context"
+	"slices"
 
 	"m7s.live/m7s/v5/pkg"
 	"m7s.live/m7s/v5/pkg/config"
@@ -30,11 +31,12 @@ type (
 	}
 	TransformedMap struct {
 		StreamPath   string
+		Target       string
 		TransformJob *TransformJob
 	}
 	Transforms struct {
-		Transformed util.Collection[string, *TransformedMap]
-		task.Manager[string, *TransformJob]
+		task.Work
+		util.Collection[string, *TransformedMap]
 		PublishEvent chan *Publisher
 	}
 	TransformsPublishEvent struct {
@@ -48,21 +50,20 @@ func (t *TransformsPublishEvent) GetSignal() any {
 }
 
 func (t *TransformsPublishEvent) Tick(pub any) {
-	if m, ok := t.Transforms.Transformed.Get(pub.(*Publisher).StreamPath); ok {
-		m.TransformJob.TransformPublished(pub.(*Publisher))
+	incomingPublisher := pub.(*Publisher)
+	for job := range t.Transforms.Search(func(m *TransformedMap) bool {
+		return m.StreamPath == incomingPublisher.StreamPath
+	}) {
+		job.TransformJob.TransformPublished(incomingPublisher)
 	}
 }
 
 func (t *TransformedMap) GetKey() string {
-	return t.StreamPath
+	return t.Target
 }
 
 func (r *DefaultTransformer) GetTransformJob() *TransformJob {
 	return &r.TransformJob
-}
-
-func (p *TransformJob) GetKey() string {
-	return p.StreamPath
 }
 
 func (p *TransformJob) Subscribe() (err error) {
@@ -84,24 +85,23 @@ func (p *TransformJob) Init(transformer ITransformer, plugin *Plugin, streamPath
 		"streamPath": streamPath,
 		"conf":       conf,
 	}
-	plugin.Server.Transforms.Add(p, plugin.Logger.With("streamPath", streamPath))
+
+	plugin.Server.Transforms.AddTask(p, plugin.Logger.With("streamPath", streamPath))
 	return p
 }
 
 func (p *TransformJob) Start() (err error) {
 	s := p.Plugin.Server
-	if _, ok := s.Transforms.Get(p.GetKey()); ok {
+	if slices.ContainsFunc(p.Config.Output, func(to config.TransfromOutput) bool {
+		return s.Transforms.Has(to.Target)
+	}) {
 		return pkg.ErrTransformSame
 	}
-
-	if _, ok := s.Transforms.Transformed.Get(p.GetKey()); ok {
-		return pkg.ErrStreamExist
-	}
-
 	for _, to := range p.Config.Output {
-		if to.StreamPath != "" {
-			s.Transforms.Transformed.Set(&TransformedMap{
+		if to.Target != "" {
+			s.Transforms.Set(&TransformedMap{
 				StreamPath:   to.StreamPath,
+				Target:       to.Target,
 				TransformJob: p,
 			})
 		}
@@ -112,15 +112,13 @@ func (p *TransformJob) Start() (err error) {
 
 func (p *TransformJob) TransformPublished(pub *Publisher) {
 	p.Publisher = pub
-	pub.OnDispose(func() {
-		p.Stop(pub.StopReason())
-	})
+	// pub.OnDispose(func() {
+	// 	p.Stop(pub.StopReason())
+	// })
 }
 
 func (p *TransformJob) Dispose() {
 	for _, to := range p.Config.Output {
-		if to.StreamPath != "" {
-			p.Plugin.Server.Transforms.Transformed.RemoveByKey(to.StreamPath)
-		}
+		p.Plugin.Server.Transforms.RemoveByKey(to.Target)
 	}
 }

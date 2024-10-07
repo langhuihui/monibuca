@@ -9,12 +9,6 @@ type DTSEstimator struct {
 	interval uint32
 }
 
-// NewDTSEstimator allocates a DTSEstimator.
-func NewDTSEstimator() *DTSEstimator {
-	result := &DTSEstimator{}
-	return result
-}
-
 func (d *DTSEstimator) Clone() *DTSEstimator {
 	return &DTSEstimator{
 		d.hasB,
@@ -48,7 +42,7 @@ func (d *DTSEstimator) add(pts uint32) {
 func (d *DTSEstimator) Feed(pts uint32) uint32 {
 	interval := Conditional(pts > d.prevPTS, pts-d.prevPTS, d.prevPTS-pts)
 	if interval > 10*d.interval {
-		*d = *NewDTSEstimator()
+		*d = DTSEstimator{}
 	}
 	d.interval = interval
 	d.add(pts)

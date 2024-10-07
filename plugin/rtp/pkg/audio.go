@@ -398,7 +398,7 @@ func (r *Audio) Mux(codexCtx codec.ICodecCtx, from *AVFrame) {
 		ctx = &c.RTPCtx
 		pts := uint32(from.Timestamp * time.Duration(ctx.ClockRate) / time.Second)
 		//AU_HEADER_LENGTH,因为单位是bit, 除以8就是auHeader的字节长度；又因为单个auheader字节长度2字节，所以再除以2就是auheader的个数。
-		auHeaderLen := []byte{0x00, 0x10, (byte)((r.Size & 0x1fe0) >> 5), (byte)((r.Size & 0x1f) << 3)} // 3 = 16-13, 5 = 8-3
+		auHeaderLen := []byte{0x00, 0x10, (byte)((data.Size & 0x1fe0) >> 5), (byte)((data.Size & 0x1f) << 3)} // 3 = 16-13, 5 = 8-3
 		for reader := data.NewReader(); reader.Length > 0; {
 			payloadLen := MTUSize
 			if reader.Length+4 < MTUSize {

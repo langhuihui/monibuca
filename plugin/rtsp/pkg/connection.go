@@ -139,6 +139,9 @@ func (c *NetConnection) Connect(remoteURL string) (err error) {
 	c.URL = rtspURL
 	c.UserAgent = "monibuca" + m7s.Version
 	c.auth = util.NewAuth(c.URL.User)
+	if c.Description != nil {
+		c.Description["remoteAddr"] = conn.RemoteAddr().String()
+	}
 	// c.Backchannel = true
 	return
 }

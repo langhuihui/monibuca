@@ -1,10 +1,12 @@
 global:
   # loglevel: trace
   disableall: true
+console:
+  enable: true
 rtsp:
   enable: true
   tcp: :8554
 flv:
   enable: true
   pull:
-    live/test: /Users/dexter/Movies/jb-demo.flv
+    live/test: /Users/dexter/Movies/frame_counter_4k_60fps.flv

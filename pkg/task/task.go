@@ -14,6 +14,7 @@ import (
 )
 
 const TraceLevel = slog.Level(-8)
+const OwnerTypeKey = "ownerType"
 
 var (
 	ErrAutoStop     = errors.New("auto stop")
@@ -74,7 +75,7 @@ type (
 		AddTask(ITask, ...any) *Task
 		RangeSubTask(func(yield ITask) bool)
 		OnChildDispose(func(ITask))
-		Blocked() bool
+		Blocked() ITask
 		Call(func() error, ...any)
 		Post(func() error, ...any) *Task
 	}
@@ -144,7 +145,7 @@ func (task *Task) GetTaskID() uint32 {
 }
 func (task *Task) GetOwnerType() string {
 	if task.Description != nil {
-		if ownerType, ok := task.Description["ownerType"]; ok {
+		if ownerType, ok := task.Description[OwnerTypeKey]; ok {
 			return ownerType.(string)
 		}
 	}

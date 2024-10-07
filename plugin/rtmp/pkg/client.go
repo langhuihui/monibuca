@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"m7s.live/m7s/v5/pkg/config"
+	"m7s.live/m7s/v5/pkg/task"
 	"net"
 	"net/url"
 	"strings"
@@ -85,6 +86,9 @@ func NewPuller(_ config.Pull) m7s.IPuller {
 		chunkSize: 4096,
 	}
 	ret.NetConnection = &NetConnection{}
+	ret.Description = task.Description{
+		task.OwnerTypeKey: "RTMPPuller",
+	}
 	return ret
 }
 
@@ -94,6 +98,9 @@ func NewPusher() m7s.IPusher {
 		chunkSize: 4096,
 	}
 	ret.NetConnection = &NetConnection{}
+	ret.Description = task.Description{
+		task.OwnerTypeKey: "RTMPPusher",
+	}
 	return ret
 }
 
