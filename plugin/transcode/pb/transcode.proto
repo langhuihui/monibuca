@@ -33,6 +33,7 @@ message OverlayConfig {
   string font_size = 9;        // 字体大小
   string font_color = 10;      // r,g,b 颜色
   string text_position = 11;   // x,y 文字在图片上的位置
+  string line_spacing = 12;  //文字间距
 }
 
 message TransRequest {

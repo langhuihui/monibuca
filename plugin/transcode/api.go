@@ -235,7 +235,10 @@ func (t *TranscodePlugin) Launch(ctx context.Context, transReq *pb.TransRequest)
 			if timeText != "" {
 				timeText = strings.ReplaceAll(overlayConfig.Text, "$T", timeText)
 			}
-			filters = append(filters, fmt.Sprintf("%sdrawtext=text='%s'%s%s%s%s[out%d]", lastOverlay, timeText, overlayConfig.FontName, overlayConfig.FontSize, overlayConfig.FontColor, overlayConfig.TextPosition, tIdx))
+			if overlayConfig.LineSpacing != "" {
+				overlayConfig.LineSpacing = fmt.Sprintf(":line_spacing=%s", overlayConfig.LineSpacing)
+			}
+			filters = append(filters, fmt.Sprintf("%sdrawtext=text='%s'%s%s%s%s%s[out%d]", lastOverlay, timeText, overlayConfig.FontName, overlayConfig.FontSize, overlayConfig.FontColor, overlayConfig.TextPosition, overlayConfig.LineSpacing, tIdx))
 			lastOverlay = fmt.Sprintf("[out%d]", tIdx)
 			out = lastOverlay
 		}
@@ -261,6 +264,10 @@ func (t *TranscodePlugin) Launch(ctx context.Context, transReq *pb.TransRequest)
 	filterStr := ""
 	if len(filters) != 0 {
 		filterStr = fmt.Sprintf(" -filter_complex  %s ", strings.Join(filters, ";")) + fmt.Sprintf(" -map %s ", out)
+	}
+
+	if transReq.Scale != "" {
+		transReq.Scale = fmt.Sprintf(" -s %s ", transReq.Scale)
 	}
 	conf = strings.Join(inputs, " -i ") + fmt.Sprintf(" %s ", transReq.LogLevel) + fmt.Sprintf(" %s ", filterStr) + transReq.Scale + transReq.Decodec
 
