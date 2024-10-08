@@ -17,7 +17,9 @@ import (
 )
 
 func createTmpImage(image string) (string, error) {
-
+	if image == "" {
+		return "", nil
+	}
 	//通过前缀判断base64图片类型
 	var imageType string
 	switch {
@@ -146,12 +148,12 @@ func (t *TranscodePlugin) Launch(ctx context.Context, transReq *pb.TransRequest)
 		filters []string
 		out     string
 		conf    string
+		vIdx    int //视频
+		tIdx    int //文字
 	)
 
 	inputs := []string{""}
 	lastOverlay := "[0:v]"
-	//循环判断
-	var vIdx = 0
 	for _, overlayConfig := range transReq.OverlayConfigs {
 		if overlayConfig.OverlayImage == "" && overlayConfig.Text == "" && overlayConfig.OverlayStream == "" {
 			err = fmt.Errorf("image_base64 and text is required")
@@ -199,6 +201,7 @@ func (t *TranscodePlugin) Launch(ctx context.Context, transReq *pb.TransRequest)
 		} else if overlayConfig.OverlayStream != "" {
 			inputs = append(inputs, overlayConfig.OverlayStream)
 		}
+
 		// 生成 filter_complex
 		if overlayConfig.OverlayImage != "" || overlayConfig.OverlayStream != "" {
 			vIdx++
@@ -217,6 +220,7 @@ func (t *TranscodePlugin) Launch(ctx context.Context, transReq *pb.TransRequest)
 			out = lastOverlay
 		}
 		if overlayConfig.Text != "" {
+			tIdx++
 			timeText := ""
 			if overlayConfig.TimeOffset != 0 {
 				//%{pts\\:gmtime\\:1577836800\\:%Y-%m-%d %H\\\\\\:%M\\\\\\:%S}
@@ -231,8 +235,9 @@ func (t *TranscodePlugin) Launch(ctx context.Context, transReq *pb.TransRequest)
 			if timeText != "" {
 				timeText = strings.ReplaceAll(overlayConfig.Text, "$T", timeText)
 			}
-			filters = append(filters, fmt.Sprintf("[tmp%d]drawtext=text='%s'%s%s%s%s[out%d]", vIdx, timeText, overlayConfig.FontName, overlayConfig.FontSize, overlayConfig.FontColor, overlayConfig.TextPosition, vIdx))
-			out = fmt.Sprintf("[out%d]", vIdx)
+			filters = append(filters, fmt.Sprintf("%sdrawtext=text='%s'%s%s%s%s[out%d]", lastOverlay, timeText, overlayConfig.FontName, overlayConfig.FontSize, overlayConfig.FontColor, overlayConfig.TextPosition, tIdx))
+			lastOverlay = fmt.Sprintf("[out%d]", tIdx)
+			out = lastOverlay
 		}
 
 	}
