@@ -86,9 +86,7 @@ func NewPuller(_ config.Pull) m7s.IPuller {
 		chunkSize: 4096,
 	}
 	ret.NetConnection = &NetConnection{}
-	ret.Description = task.Description{
-		task.OwnerTypeKey: "RTMPPuller",
-	}
+	ret.SetDescription(task.OwnerTypeKey, "RTMPPuller")
 	return ret
 }
 
@@ -98,9 +96,7 @@ func NewPusher() m7s.IPusher {
 		chunkSize: 4096,
 	}
 	ret.NetConnection = &NetConnection{}
-	ret.Description = task.Description{
-		task.OwnerTypeKey: "RTMPPusher",
-	}
+	ret.SetDescription(task.OwnerTypeKey, "RTMPPusher")
 	return ret
 }
 
@@ -138,7 +134,7 @@ func (c *Client) Run() (err error) {
 			case Response_Result, Response_OnStatus:
 				switch response := msg.MsgData.(type) {
 				case *ResponseMessage:
-					c.Description = response.Properties
+					c.SetDescriptions(response.Properties)
 					if response.Infomation["code"] == NetConnection_Connect_Success {
 						err = c.SendMessage(RTMP_MSG_AMF0_COMMAND, &CommandMessage{"createStream", 2})
 						if err == nil {

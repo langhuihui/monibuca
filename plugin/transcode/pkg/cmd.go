@@ -14,11 +14,9 @@ type CommandTask struct {
 }
 
 func (ct *CommandTask) Start() (err error) {
-	ct.Description = task.Description{
-		"cmd": ct.Cmd.String(),
-	}
+	ct.SetDescription("cmd", ct.Cmd.String())
 	if ct.logFileName != "" {
-		ct.Description["log"] = ct.logFileName
+		ct.SetDescription("log", ct.logFileName)
 		ct.logFile, err = os.OpenFile(ct.logFileName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 		if err != nil {
 			ct.Error("Could not create transcode log", "err", err)
@@ -35,12 +33,13 @@ func (ct *CommandTask) Start() (err error) {
 	}
 	ct.Info("start exec", "cmd", ct.Cmd.String())
 	err = ct.Cmd.Start()
-	ct.Description["pid"] = ct.Cmd.Process.Pid
+	ct.SetDescription("pid", ct.Cmd.Process.Pid)
 	return
 }
 
 func (ct *CommandTask) Dispose() {
-	_ = ct.Cmd.Process.Kill()
+	err := ct.Cmd.Process.Kill()
+	ct.Info("kill", "err", err)
 	if ct.logFile != nil {
 		_ = ct.logFile.Close()
 	}

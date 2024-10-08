@@ -3,11 +3,12 @@ package plugin_rtmp
 import (
 	"errors"
 	"io"
+	"net"
+
 	"m7s.live/m7s/v5"
 	"m7s.live/m7s/v5/pkg/task"
 	"m7s.live/m7s/v5/plugin/rtmp/pb"
 	. "m7s.live/m7s/v5/plugin/rtmp/pkg"
-	"net"
 )
 
 type RTMPPlugin struct {
@@ -55,7 +56,7 @@ func (task *RTMPServer) Go() (err error) {
 				task.Debug("recv cmd", "commandName", cmd.CommandName, "streamID", msg.MessageStreamID)
 				switch cmd := msg.MsgData.(type) {
 				case *CallMessage: //connect
-					task.Description = cmd.Object
+					task.SetDescriptions(cmd.Object)
 					app := cmd.Object["app"]                       // 客户端要连接到的服务应用名
 					objectEncoding := cmd.Object["objectEncoding"] // AMF编码方法
 					switch v := objectEncoding.(type) {
@@ -147,9 +148,7 @@ func (task *RTMPServer) Go() (err error) {
 					if err != nil {
 						task.Error("sendMessage publish", "error", err)
 					} else {
-						publisher.OnDispose(func() {
-							task.Stop(publisher.StopReason())
-						})
+						task.Depend(publisher)
 					}
 				case *PlayMessage:
 					streamPath := task.AppName + "/" + cmd.StreamName

@@ -13,7 +13,7 @@ transcode:
       ^live.+:
         output:
           - target: rtmp://localhost/trans/$0/small
-            conf: -loglevel debug -c:a aac -c:v h264 -vf scale=320:240
+            conf: -loglevel debug -c:a aac -c:v h264_videotoolbox -vf scale=320:240
 
 #mp4:
 #  onpub:

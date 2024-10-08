@@ -27,12 +27,12 @@ func (p *PushJob) GetKey() string {
 func (p *PushJob) Init(pusher IPusher, plugin *Plugin, streamPath string, conf config.Push) *PushJob {
 	p.Connection.Init(plugin, streamPath, conf.URL, conf.Proxy, conf.Header)
 	p.pusher = pusher
-	p.Description = map[string]any{
+	p.SetDescriptions(task.Description{
 		"plugin":     plugin.Meta.Name,
 		"streamPath": streamPath,
 		"url":        conf.URL,
 		"maxRetry":   conf.MaxRetry,
-	}
+	})
 	pusher.SetRetry(conf.MaxRetry, conf.RetryInterval)
 	plugin.Server.Pushs.Add(p, plugin.Logger.With("pushURL", conf.URL, "streamPath", streamPath))
 	return p

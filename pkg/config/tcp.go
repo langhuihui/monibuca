@@ -46,18 +46,14 @@ type TCP struct {
 
 func (config *TCP) CreateTCPWork(logger *slog.Logger, handler TCPHandler) *ListenTCPWork {
 	ret := &ListenTCPWork{TCP: config, handler: handler}
-	ret.Description = task.Description{
-		"listenAddr": config.ListenAddr,
-	}
+	ret.SetDescription("listenAddr", config.ListenAddr)
 	ret.Logger = logger.With("addr", config.ListenAddr)
 	return ret
 }
 
 func (config *TCP) CreateTCPTLSWork(logger *slog.Logger, handler TCPHandler) *ListenTCPTLSWork {
 	ret := &ListenTCPTLSWork{ListenTCPWork{TCP: config, handler: handler}}
-	ret.Description = task.Description{
-		"listenAddr": config.ListenAddrTLS,
-	}
+	ret.SetDescription("listenAddr", config.ListenAddrTLS)
 	ret.Logger = logger.With("addr", config.ListenAddrTLS)
 	return ret
 }

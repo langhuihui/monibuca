@@ -88,11 +88,11 @@ func (s *Sender) sendRTP(pack *mrtp.RTPData, channel int) (err error) {
 }
 
 func (s *Sender) Send() (err error) {
-	s.Stream.AddTask(m7s.CreatePlayTask(s.Subscriber, func(audio *mrtp.Audio) error {
+	go m7s.PlayBlock(s.Subscriber, func(audio *mrtp.Audio) error {
 		return s.sendRTP(&audio.RTPData, s.AudioChannelID)
 	}, func(video *mrtp.Video) error {
 		return s.sendRTP(&video.RTPData, s.VideoChannelID)
-	}))
+	})
 	for err == nil {
 		_, _, err = s.NetConnection.Receive(true)
 	}

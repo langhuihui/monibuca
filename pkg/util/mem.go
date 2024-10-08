@@ -145,6 +145,7 @@ func (sma *ScalableMemoryAllocator) Recycle() {
 	for _, child := range sma.children {
 		child.Recycle()
 	}
+	sma.children = nil
 }
 
 // Borrow = Malloc + Free = Find, must use the memory at once

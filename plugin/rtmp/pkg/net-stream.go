@@ -69,5 +69,5 @@ func (ns *NetStream) BeginPlay(tid uint64) (err error) {
 
 func (ns *NetStream) Subscribe(suber *m7s.Subscriber) {
 	audio, video := ns.CreateSender(false)
-	ns.AddTask(m7s.CreatePlayTask(suber, audio.HandleAudio, video.HandleVideo))
+	go m7s.PlayBlock(suber, audio.HandleAudio, video.HandleVideo)
 }

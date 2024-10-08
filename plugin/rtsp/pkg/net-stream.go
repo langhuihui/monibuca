@@ -235,7 +235,7 @@ func (c *Stream) Teardown() (err error) {
 	return c.WriteRequest(&util.Request{Method: MethodTeardown, URL: c.URL})
 }
 
-func (ns *Stream) Dispose() {
-	_ = ns.Teardown()
-	ns.NetConnection.Dispose()
-}
+//func (ns *Stream) Dispose() {
+//	//_ = ns.Teardown()
+//	ns.NetConnection.Dispose()
+//}

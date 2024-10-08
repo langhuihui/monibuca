@@ -1,7 +1,9 @@
 global:
-  # loglevel: trace
+  loglevel: debug
   disableall: true
 console:
+  enable: true
+debug:
   enable: true
 rtsp:
   enable: true

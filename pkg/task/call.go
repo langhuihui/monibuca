@@ -20,7 +20,7 @@ func (t *CallBackTask) Dispose() {
 	}
 }
 
-func CreateTaskByCallBack(start func() error, dispose func()) ITask {
+func CreateTaskByCallBack(start func() error, dispose func()) *CallBackTask {
 	var task CallBackTask
 	task.startHandler = func() error {
 		err := start()

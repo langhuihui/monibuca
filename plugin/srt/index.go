@@ -73,6 +73,6 @@ func (t *SRTServer) OnStop() {
 	t.server.Shutdown()
 }
 
-func (t *SRTServer) Run() error {
+func (t *SRTServer) Go() error {
 	return t.server.ListenAndServe()
 }

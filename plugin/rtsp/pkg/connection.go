@@ -139,9 +139,8 @@ func (c *NetConnection) Connect(remoteURL string) (err error) {
 	c.URL = rtspURL
 	c.UserAgent = "monibuca" + m7s.Version
 	c.auth = util.NewAuth(c.URL.User)
-	if c.Description != nil {
-		c.Description["remoteAddr"] = conn.RemoteAddr().String()
-	}
+	c.SetDescription("remoteAddr", conn.RemoteAddr().String())
+	c.MemoryAllocator = util.NewScalableMemoryAllocator(1 << 12)
 	// c.Backchannel = true
 	return
 }
@@ -188,6 +187,7 @@ func (c *NetConnection) ReadRequest() (req *util.Request, err error) {
 	if err != nil {
 		return
 	}
+	c.SetDescription("lastReq", req.Method)
 	c.Debug("<-", "req", req.String())
 	return
 }
@@ -229,6 +229,7 @@ func (c *NetConnection) WriteResponse(res *util.Response) (err error) {
 		return err
 	}
 	resStr := res.String()
+	c.SetDescription("lastRes", res.Request.Method)
 	c.Debug("->", "res", resStr)
 	_, err = c.conn.Write([]byte(resStr))
 	return

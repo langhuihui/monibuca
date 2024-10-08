@@ -150,9 +150,9 @@ func (s *Server) TaskTree(context.Context, *emptypb.Empty) (res *pb.TaskTreeResp
 	var fillData func(m task.ITask) *pb.TaskTreeResponse
 	fillData = func(m task.ITask) (res *pb.TaskTreeResponse) {
 		res = &pb.TaskTreeResponse{Id: m.GetTaskID(), State: uint32(m.GetState()), Type: uint32(m.GetTaskType()), Owner: m.GetOwnerType(), StartTime: timestamppb.New(m.GetTask().StartTime), Description: maps.Collect(func(yield func(key, value string) bool) {
-			for k, v := range m.GetTask().Description {
-				yield(k, fmt.Sprintf("%+v", v))
-			}
+			m.GetTask().Description.Range(func(key, value any) bool {
+				return yield(key.(string), fmt.Sprintf("%+v", value))
+			})
 		})}
 		if job, ok := m.(task.IJob); ok {
 			if blockedTask := job.Blocked(); blockedTask != nil {
@@ -172,7 +172,12 @@ func (s *Server) GetSubscribers(context.Context, *pb.SubscribersRequest) (res *p
 	s.Streams.Call(func() error {
 		var subscribers []*pb.SubscriberSnapShot
 		for subscriber := range s.Subscribers.Range {
-			meta, _ := json.Marshal(subscriber.Description)
+			metaData := make(task.Description)
+			subscriber.Description.Range(func(key, value any) bool {
+				metaData[key.(string)] = value
+				return true
+			})
+			meta, _ := json.Marshal(metaData)
 			snap := &pb.SubscriberSnapShot{
 				Id:        subscriber.ID,
 				StartTime: timestamppb.New(subscriber.StartTime),

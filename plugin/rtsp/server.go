@@ -88,9 +88,7 @@ func (task *RTSPServer) Go() (err error) {
 			if err = task.WriteResponse(res); err != nil {
 				return
 			}
-			receiver.Publisher.OnDispose(func() {
-				task.Stop(receiver.Publisher.StopReason())
-			})
+			task.Depend(receiver.Publisher)
 		case MethodDescribe:
 			sendMode = true
 			sender = &Sender{}

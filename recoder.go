@@ -64,13 +64,13 @@ func (p *RecordJob) Init(recorder IRecorder, plugin *Plugin, streamPath string, 
 	p.FilePath = conf.FilePath
 	p.StreamPath = streamPath
 	p.recorder = recorder
-	p.Description = map[string]any{
+	p.SetDescriptions(task.Description{
 		"plugin":     plugin.Meta.Name,
 		"streamPath": streamPath,
 		"filePath":   conf.FilePath,
 		"append":     conf.Append,
 		"fragment":   conf.Fragment,
-	}
+	})
 	plugin.Server.Records.Add(p, plugin.Logger.With("filePath", conf.FilePath, "streamPath", streamPath))
 	return p
 }
@@ -84,7 +84,7 @@ func (p *RecordJob) Start() (err error) {
 	if p.Fragment == 0 || p.Append {
 		dir = filepath.Dir(p.FilePath)
 	}
-	p.Description["filePath"] = p.FilePath
+	p.SetDescription("filePath", p.FilePath)
 	if err = os.MkdirAll(dir, 0755); err != nil {
 		return
 	}

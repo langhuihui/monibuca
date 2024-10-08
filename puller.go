@@ -102,13 +102,13 @@ func (p *PullJob) Init(puller IPuller, plugin *Plugin, streamPath string, conf c
 	}
 	p.Connection.Init(plugin, streamPath, remoteURL, conf.Proxy, conf.Header)
 	p.puller = puller
-	p.Description = map[string]any{
+	p.SetDescriptions(task.Description{
 		"plugin":     plugin.Meta.Name,
 		"streamPath": streamPath,
 		"url":        conf.URL,
 		"args":       conf.Args,
 		"maxRetry":   conf.MaxRetry,
-	}
+	})
 	puller.SetRetry(conf.MaxRetry, conf.RetryInterval)
 	plugin.Server.Pulls.Add(p, plugin.Logger.With("pullURL", conf.URL, "streamPath", streamPath))
 	return p

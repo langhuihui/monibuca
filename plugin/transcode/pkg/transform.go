@@ -1,6 +1,7 @@
 package transcode
 
 import (
+	"bufio"
 	"fmt"
 	"m7s.live/m7s/v5"
 	"m7s.live/m7s/v5/pkg/config"
@@ -46,9 +47,8 @@ type (
 
 func NewTransform() m7s.ITransformer {
 	ret := &Transformer{}
-	ret.Description = map[string]any{
-		task.OwnerTypeKey: "Transcode",
-	}
+	ret.SetDescription(task.OwnerTypeKey, "Transcode")
+	var bufferFull time.Time
 	ret.WriteFlvTag = func(flv net.Buffers) (err error) {
 		var buffer []byte
 		for _, b := range flv {
@@ -56,8 +56,12 @@ func NewTransform() m7s.ITransformer {
 		}
 		select {
 		case ret.rBuf <- buffer:
+			bufferFull = time.Now()
 		default:
 			ret.Warn("pipe input buffer full")
+			if time.Since(bufferFull) > time.Second*5 {
+				ret.Stop(bufio.ErrBufferFull)
+			}
 		}
 		return
 	}
@@ -68,7 +72,6 @@ type Transformer struct {
 	m7s.DefaultTransformer
 	TransRule
 	rBuf chan []byte
-	*util.BufReader
 	flv.Live
 }
 
@@ -127,23 +130,19 @@ func (t *Transformer) Start() (err error) {
 			args = append(args, to.Target)
 		}
 	}
-	t.Description = task.Description{
-		"cmd":    args,
-		"config": t.TransRule,
-	}
+	t.SetDescription("cmd", args)
+	t.SetDescription("config", t.TransRule)
 	t.rBuf = make(chan []byte, 100)
-	t.BufReader = util.NewBufReaderChan(t.rBuf)
 	t.Subscriber = t.TransformJob.Subscriber
 	//t.BufReader.Dump, err = os.OpenFile("dump.flv", os.O_CREATE|os.O_WRONLY, 0644)
 	var cmdTask CommandTask
 	cmdTask.logFileName = fmt.Sprintf("logs/transcode_%s_%s.log", strings.ReplaceAll(t.TransformJob.StreamPath, "/", "_"), time.Now().Format("20060102150405"))
 	cmdTask.Cmd = exec.CommandContext(t, "ffmpeg", args...)
-	cmdTask.Cmd.Stdin = t.BufReader
+	cmdTask.Cmd.Stdin = util.NewBufReaderChan(t.rBuf)
 	t.AddTask(&cmdTask)
 	return
 }
 
 func (t *Transformer) Dispose() {
 	close(t.rBuf)
-	t.BufReader.Recycle()
 }

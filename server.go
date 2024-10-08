@@ -116,14 +116,14 @@ func NewServer(conf any) (s *Server) {
 	}
 	s.ID = task.GetNextTaskID()
 	s.Meta = &serverMeta
-	s.Description = map[string]any{
+	s.SetDescriptions(task.Description{
 		"version":   Version,
 		"goVersion": sysruntime.Version(),
 		"os":        sysruntime.GOOS,
 		"arch":      sysruntime.GOARCH,
 		"cpus":      int32(sysruntime.NumCPU()),
-	}
-	s.Transforms.PublishEvent = make(chan *Publisher, 10)
+	})
+	//s.Transforms.PublishEvent = make(chan *Publisher, 10)
 	s.prometheusDesc.init()
 	return
 }
@@ -230,10 +230,10 @@ func (s *Server) Start() (err error) {
 		}
 	}
 	if httpConf.ListenAddrTLS != "" {
-		s.stopOnError(httpConf.CreateHTTPSWork(s.Logger))
+		s.AddDependTask(httpConf.CreateHTTPSWork(s.Logger))
 	}
 	if httpConf.ListenAddr != "" {
-		s.stopOnError(httpConf.CreateHTTPWork(s.Logger))
+		s.AddDependTask(httpConf.CreateHTTPWork(s.Logger))
 	}
 	var grpcServer *GRPCServer
 	if tcpConf.ListenAddr != "" {

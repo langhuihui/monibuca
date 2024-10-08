@@ -5,7 +5,6 @@ import (
 	"m7s.live/m7s/v5/pkg/task"
 
 	"m7s.live/m7s/v5"
-	"m7s.live/m7s/v5/pkg/util"
 )
 
 const (
@@ -42,9 +41,7 @@ func NewPuller(_ config.Pull) m7s.IPuller {
 		direction: DIRECTION_PULL,
 	}
 	client.NetConnection = &NetConnection{}
-	client.Description = map[string]any{
-		task.OwnerTypeKey: "RTSPPuller",
-	}
+	client.SetDescription(task.OwnerTypeKey, "RTSPPuller")
 	return client
 }
 
@@ -53,14 +50,11 @@ func NewPusher() m7s.IPusher {
 		direction: DIRECTION_PUSH,
 	}
 	client.NetConnection = &NetConnection{}
-	client.Description = map[string]any{
-		task.OwnerTypeKey: "RTSPPusher",
-	}
+	client.SetDescription(task.OwnerTypeKey, "RTSPPusher")
 	return client
 }
 
 func (c *Client) Run() (err error) {
-	c.MemoryAllocator = util.NewScalableMemoryAllocator(1 << 12)
 	if err = c.Options(); err != nil {
 		return
 	}

@@ -16,9 +16,7 @@ type Puller struct {
 
 func NewPuller(_ config.Pull) m7s.IPuller {
 	p := &Puller{}
-	p.Description = map[string]any{
-		task.OwnerTypeKey: "FlvPuller",
-	}
+	p.SetDescription(task.OwnerTypeKey, "FlvPuller")
 	return p
 }
 

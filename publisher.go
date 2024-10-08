@@ -2,6 +2,7 @@ package m7s
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"os"
 	"path/filepath"
@@ -110,6 +111,7 @@ func (t *AVTracks) Dispose() {
 	t.Lock()
 	defer t.Unlock()
 	for track := range t.Range {
+		track.Ready(ErrDiscard)
 		if track == t.AVTrack || track.RingWriter != t.AVTrack.RingWriter {
 			track.Dispose()
 		}
@@ -188,7 +190,7 @@ func (p *Publisher) Start() (err error) {
 	for plugin := range s.Plugins.Range {
 		plugin.OnPublish(p)
 	}
-	s.Transforms.PublishEvent <- p
+	//s.Transforms.PublishEvent <- p
 	p.AddTask(&PublishTimeout{Publisher: p})
 	if p.PublishTimeout > 0 {
 		p.AddTask(&PublishNoDataTimeout{Publisher: p})
@@ -572,8 +574,14 @@ func (p *Publisher) takeOver(old *Publisher) {
 	}
 	old.Stop(ErrKick)
 	p.Info("takeOver", "old", old.ID)
-	for subscriber := range old.SubscriberRange {
-		p.AddSubscriber(subscriber)
+	if old.Subscribers.Length > 0 {
+		p.Info(fmt.Sprintf("subscriber +%d", old.Subscribers.Length))
+		for subscriber := range old.SubscriberRange {
+			subscriber.Publisher = p
+			if subscriber.BufferTime > p.BufferTime {
+				p.BufferTime = subscriber.BufferTime
+			}
+		}
 	}
 	old.AudioTrack.Dispose()
 	old.VideoTrack.Dispose()

@@ -122,9 +122,9 @@ func (plugin *PluginMeta) Init(s *Server, userConfig map[string]any) (p *Plugin)
 		}
 	}
 	p.Config.ParseUserFile(userConfig)
-	p.Description = map[string]any{"version": plugin.Version}
+	p.SetDescription("version", plugin.Version)
 	if userConfig != nil {
-		p.Description["userConfig"] = userConfig
+		p.SetDescription("userConfig", userConfig)
 	}
 	finalConfig, _ := yaml.Marshal(p.Config.GetMap())
 	p.Logger.Handler().(*MultiLogHandler).SetLevel(ParseLevel(p.config.LogLevel))
@@ -288,12 +288,10 @@ func (p *Plugin) Start() (err error) {
 		}
 	}
 	s.Plugins.Add(p)
-	err = p.listen()
-	if err != nil {
+	if err = p.listen(); err != nil {
 		return
 	}
-	err = p.handler.OnInit()
-	if err != nil {
+	if err = p.handler.OnInit(); err != nil {
 		return
 	}
 	return
@@ -304,36 +302,26 @@ func (p *Plugin) Dispose() {
 	p.Server.Plugins.Remove(p)
 }
 
-func (p *Plugin) stopOnError(t task.ITask) {
-	p.AddTask(t).OnDispose(func() {
-		p.Stop(t.StopReason())
-	})
-}
-
 func (p *Plugin) listen() (err error) {
 	httpConf := &p.config.HTTP
 
 	if httpConf.ListenAddrTLS != "" && (httpConf.ListenAddrTLS != p.Server.config.HTTP.ListenAddrTLS) {
-		p.stopOnError(httpConf.CreateHTTPSWork(p.Logger))
+		p.AddDependTask(httpConf.CreateHTTPSWork(p.Logger))
 	}
 
 	if httpConf.ListenAddr != "" && (httpConf.ListenAddr != p.Server.config.HTTP.ListenAddr) {
-		p.stopOnError(httpConf.CreateHTTPWork(p.Logger))
+		p.AddDependTask(httpConf.CreateHTTPWork(p.Logger))
 	}
 
 	if tcphandler, ok := p.handler.(ITCPPlugin); ok {
 		tcpConf := &p.config.TCP
 		if tcpConf.ListenAddr != "" && tcpConf.AutoListen {
-			task := tcpConf.CreateTCPWork(p.Logger, tcphandler.OnTCPConnect)
-			err = p.AddTask(task).WaitStarted()
-			if err != nil {
+			if err = p.AddTask(tcpConf.CreateTCPWork(p.Logger, tcphandler.OnTCPConnect)).WaitStarted(); err != nil {
 				return
 			}
 		}
 		if tcpConf.ListenAddrTLS != "" && tcpConf.AutoListen {
-			task := tcpConf.CreateTCPTLSWork(p.Logger, tcphandler.OnTCPConnect)
-			err = p.AddTask(task).WaitStarted()
-			if err != nil {
+			if err = p.AddTask(tcpConf.CreateTCPTLSWork(p.Logger, tcphandler.OnTCPConnect)).WaitStarted(); err != nil {
 				return
 			}
 		}
@@ -342,9 +330,7 @@ func (p *Plugin) listen() (err error) {
 	if udpHandler, ok := p.handler.(IUDPPlugin); ok {
 		udpConf := &p.config.UDP
 		if udpConf.ListenAddr != "" && udpConf.AutoListen {
-			task := udpConf.CreateUDPWork(p.Logger, udpHandler.OnUDPConnect)
-			err = p.AddTask(task).WaitStarted()
-			if err != nil {
+			if err = p.AddTask(udpConf.CreateUDPWork(p.Logger, udpHandler.OnUDPConnect)).WaitStarted(); err != nil {
 				return
 			}
 		}
@@ -353,8 +339,7 @@ func (p *Plugin) listen() (err error) {
 	if quicHandler, ok := p.handler.(IQUICPlugin); ok {
 		quicConf := &p.config.Quic
 		if quicConf.ListenAddr != "" && quicConf.AutoListen {
-			task := quicConf.CreateQUICWork(p.Logger, quicHandler.OnQUICConnect)
-			err = p.AddTask(task).WaitStarted()
+			err = p.AddTask(quicConf.CreateQUICWork(p.Logger, quicHandler.OnQUICConnect)).WaitStarted()
 		}
 	}
 	return

@@ -3,6 +3,7 @@ package m7s
 import (
 	"context"
 	"slices"
+	"time"
 
 	"m7s.live/m7s/v5/pkg"
 	"m7s.live/m7s/v5/pkg/config"
@@ -37,7 +38,7 @@ type (
 	Transforms struct {
 		task.Work
 		util.Collection[string, *TransformedMap]
-		PublishEvent chan *Publisher
+		//PublishEvent chan *Publisher
 	}
 	TransformsPublishEvent struct {
 		task.ChannelTask
@@ -45,18 +46,18 @@ type (
 	}
 )
 
-func (t *TransformsPublishEvent) GetSignal() any {
-	return t.Transforms.PublishEvent
-}
-
-func (t *TransformsPublishEvent) Tick(pub any) {
-	incomingPublisher := pub.(*Publisher)
-	for job := range t.Transforms.Search(func(m *TransformedMap) bool {
-		return m.StreamPath == incomingPublisher.StreamPath
-	}) {
-		job.TransformJob.TransformPublished(incomingPublisher)
-	}
-}
+//func (t *TransformsPublishEvent) GetSignal() any {
+//	return t.Transforms.PublishEvent
+//}
+//
+//func (t *TransformsPublishEvent) Tick(pub any) {
+//	incomingPublisher := pub.(*Publisher)
+//	for job := range t.Transforms.Search(func(m *TransformedMap) bool {
+//		return m.StreamPath == incomingPublisher.StreamPath
+//	}) {
+//		job.TransformJob.TransformPublished(incomingPublisher)
+//	}
+//}
 
 func (t *TransformedMap) GetKey() string {
 	return t.Target
@@ -68,6 +69,9 @@ func (r *DefaultTransformer) GetTransformJob() *TransformJob {
 
 func (p *TransformJob) Subscribe() (err error) {
 	p.Subscriber, err = p.Plugin.Subscribe(p.Transformer, p.StreamPath)
+	if err == nil {
+		p.Transformer.Depend(p.Subscriber)
+	}
 	return
 }
 
@@ -81,11 +85,11 @@ func (p *TransformJob) Init(transformer ITransformer, plugin *Plugin, streamPath
 	p.Config = conf
 	p.StreamPath = streamPath
 	p.Transformer = transformer
-	p.Description = map[string]any{
+	p.SetDescriptions(task.Description{
 		"streamPath": streamPath,
 		"conf":       conf,
-	}
-
+	})
+	transformer.SetRetry(-1, time.Second*2)
 	plugin.Server.Transforms.AddTask(p, plugin.Logger.With("streamPath", streamPath))
 	return p
 }
@@ -106,19 +110,19 @@ func (p *TransformJob) Start() (err error) {
 			})
 		}
 	}
+	p.Info("transform +1", "count", s.Transforms.Length)
 	p.AddTask(p.Transformer, p.Logger)
 	return
 }
 
 func (p *TransformJob) TransformPublished(pub *Publisher) {
-	p.Publisher = pub
-	// pub.OnDispose(func() {
-	// 	p.Stop(pub.StopReason())
-	// })
+
 }
 
 func (p *TransformJob) Dispose() {
+	transList := &p.Plugin.Server.Transforms
+	p.Info("transform -1", "count", transList.Length)
 	for _, to := range p.Config.Output {
-		p.Plugin.Server.Transforms.RemoveByKey(to.Target)
+		transList.RemoveByKey(to.Target)
 	}
 }

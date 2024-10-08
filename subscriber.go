@@ -36,11 +36,11 @@ func (ps *PubSubBase) Init(streamPath string, conf any) {
 	if u, err := url.Parse(streamPath); err == nil {
 		ps.StreamPath, ps.Args = u.Path, u.Query()
 	}
-	ps.Description = map[string]any{
+	ps.SetDescriptions(task.Description{
 		"streamPath": ps.StreamPath,
 		"args":       ps.Args,
 		"plugin":     ps.Plugin.Meta.Name,
-	}
+	})
 	// args to config
 	if len(ps.Args) != 0 {
 		ignores, cc := make(map[string]struct{}), make(map[string]any)
@@ -88,7 +88,7 @@ func (s *Subscriber) Start() (err error) {
 	s.Info("subscribe")
 	if publisher, ok := server.Streams.Get(s.StreamPath); ok {
 		publisher.AddSubscriber(s)
-		return publisher.WaitTrack()
+		return
 	} else {
 		for reg, streamPath := range server.StreamAlias {
 			if g := reg.FindStringSubmatch(s.StreamPath); len(g) > 0 {
@@ -96,9 +96,9 @@ func (s *Subscriber) Start() (err error) {
 					streamPath = strings.ReplaceAll(streamPath, fmt.Sprintf("$%d", i), gg)
 				}
 				if publisher, ok = server.Streams.Get(streamPath); ok {
-					s.Description["alias"] = streamPath
+					s.SetDescription("alias", streamPath)
 					publisher.AddSubscriber(s)
-					return publisher.WaitTrack()
+					return
 				}
 			}
 		}
@@ -223,20 +223,20 @@ func (s *Subscriber) createVideoReader(dataType reflect.Type, startVideoTs time.
 }
 
 type SubscribeHandler[A any, V any] struct {
-	task.Task
+	//task.Task
 	s                          *Subscriber
 	OnAudio                    func(A) error
 	OnVideo                    func(V) error
 	ProcessAudio, ProcessVideo chan func(*AVFrame)
 }
 
-func CreatePlayTask[A any, V any](s *Subscriber, onAudio func(A) error, onVideo func(V) error) task.ITask {
-	return &SubscribeHandler[A, V]{
-		s:       s,
-		OnAudio: onAudio,
-		OnVideo: onVideo,
-	}
-}
+//func Play[A any, V any](s *Subscriber, onAudio func(A) error, onVideo func(V) error) {
+//	s.AddTask(&SubscribeHandler[A, V]{
+//		s:       s,
+//		OnAudio: onAudio,
+//		OnVideo: onVideo,
+//	})
+//}
 
 func PlayBlock[A any, V any](s *Subscriber, onAudio func(A) error, onVideo func(V) error) (err error) {
 	handler := &SubscribeHandler[A, V]{
@@ -244,12 +244,13 @@ func PlayBlock[A any, V any](s *Subscriber, onAudio func(A) error, onVideo func(
 		OnAudio: onAudio,
 		OnVideo: onVideo,
 	}
-	err = handler.Start()
+	err = handler.Run()
 	s.Stop(err)
 	return
 }
 
-func (handler *SubscribeHandler[A, V]) Start() (err error) {
+func (handler *SubscribeHandler[A, V]) Run() (err error) {
+	handler.s.SetDescription("play", time.Now())
 	var a1, v1 reflect.Type
 	s := handler.s
 	startAudioTs, startVideoTs := s.StartAudioTS, s.StartVideoTS
@@ -271,6 +272,7 @@ func (handler *SubscribeHandler[A, V]) Start() (err error) {
 		if s.VideoReader != nil {
 			s.VideoReader.StopRead()
 		}
+		handler.s.SetDescription("stopPlay", time.Now())
 	}()
 	sendAudioFrame := func() (err error) {
 		if awi >= 0 {
