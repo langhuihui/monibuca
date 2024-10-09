@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/shirou/gopsutil/v3/cpu"
+	"google.golang.org/protobuf/proto"
 
 	"m7s.live/m7s/v5/pkg/task"
 
@@ -179,7 +180,15 @@ func (s *Server) Start() (err error) {
 	s.LogHandler.SetLevel(slog.LevelDebug)
 	s.LogHandler.Add(defaultLogHandler)
 	s.Logger = slog.New(&s.LogHandler).With("server", s.ID)
-	mux := runtime.NewServeMux(runtime.WithMarshalerOption("text/plain", &pb.TextPlain{}), runtime.WithRoutingErrorHandler(func(_ context.Context, _ *runtime.ServeMux, _ runtime.Marshaler, w http.ResponseWriter, r *http.Request, _ int) {
+	mux := runtime.NewServeMux(runtime.WithMarshalerOption("text/plain", &pb.TextPlain{}), runtime.WithForwardResponseOption(func(ctx context.Context, w http.ResponseWriter, m proto.Message) error {
+		header := w.Header()
+		header.Set("Access-Control-Allow-Credentials", "true")
+		header.Set("Cross-Origin-Resource-Policy", "cross-origin")
+		header.Set("Access-Control-Allow-Headers", "Content-Type,Access-Token")
+		header.Set("Access-Control-Allow-Private-Network", "true")
+		header.Set("Access-Control-Allow-Origin", "*")
+		return nil
+	}), runtime.WithRoutingErrorHandler(func(_ context.Context, _ *runtime.ServeMux, _ runtime.Marshaler, w http.ResponseWriter, r *http.Request, _ int) {
 		httpConf.GetHttpMux().ServeHTTP(w, r)
 	}))
 	httpConf.SetMux(mux)
