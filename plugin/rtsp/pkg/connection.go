@@ -44,17 +44,18 @@ type NetConnection struct {
 
 	// internal
 
-	auth      *util.Auth
-	conn      net.Conn
-	keepalive int
-	sequence  int
-	Session   string
-	sdp       string
-	uri       string
-	writing   atomic.Bool
-	state     State
-	stateMu   sync.Mutex
-	SDP       string
+	auth        *util.Auth
+	conn        net.Conn
+	keepalive   int
+	sequence    int
+	Session     string
+	sdp         string
+	uri         string
+	writing     atomic.Bool
+	state       State
+	stateMu     sync.Mutex
+	SDP         string
+	keepaliveTS time.Time
 }
 
 func (c *NetConnection) StartWrite() {
@@ -264,7 +265,7 @@ func (c *NetConnection) Receive(sendMode bool) (channelID byte, buf []byte, err 
 	var size int
 	if magic[0] != '$' {
 		magicWord := string(magic)
-		c.Warn("not magic", "magic", magicWord)
+		//c.Warn("not magic", "magic", magicWord)
 		switch magicWord {
 		case "RTSP":
 			var res *util.Response
@@ -363,14 +364,13 @@ func (c *NetConnection) Receive(sendMode bool) (channelID byte, buf []byte, err 
 		}
 	}
 
-	//if keepaliveDT != 0 && ts.After(keepaliveTS) {
-	//	req := &tcp.Request{Method: MethodOptions, URL: c.URL}
-	//	if err = c.WriteRequest(req); err != nil {
-	//		return
-	//	}
-	//
-	//	keepaliveTS = ts.Add(keepaliveDT)
-	//}
+	if ts.After(c.keepaliveTS) {
+		req := &util.Request{Method: MethodOptions, URL: c.URL}
+		if err = c.WriteRequest(req); err != nil {
+			return
+		}
+		c.keepaliveTS = ts.Add(25 * time.Second)
+	}
 	return
 }
 

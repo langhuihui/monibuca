@@ -72,8 +72,10 @@ func (r *AVRingReader) ReadFrame(conf *config.Subscribe) (err error) {
 		idr := r.Track.GetIDR()
 		if idr != nil {
 			startRing = idr
-		} else {
+		} else if r.Track.ICodecCtx != nil {
 			r.Warn("no IDRring", "track", r.Track.FourCC().String())
+		} else {
+			r.Warn("no codec")
 		}
 		switch conf.SubMode {
 		case SUBMODE_REAL:
