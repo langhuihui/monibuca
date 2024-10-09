@@ -186,11 +186,8 @@ func (s *Subscriber) createAudioReader(dataType reflect.Type, startAudioTs time.
 		if err := at.WaitReady(); err != nil {
 			return
 		}
-		ar := NewAVRingReader(at)
-		s.AudioReader = ar
-		ar.StartTs = startAudioTs
-		ar.Logger = s.Logger.With("reader", dataType.String())
-		ar.Info("start read")
+		s.AudioReader = NewAVRingReader(at, dataType.String())
+		s.AudioReader.StartTs = startAudioTs
 	}
 	return
 }
@@ -213,11 +210,8 @@ func (s *Subscriber) createVideoReader(dataType reflect.Type, startVideoTs time.
 		if err := vt.WaitReady(); err != nil {
 			return
 		}
-		vr := NewAVRingReader(vt)
-		vr.StartTs = startVideoTs
-		s.VideoReader = vr
-		vr.Logger = s.Logger.With("reader", dataType.String())
-		vr.Info("start read")
+		s.VideoReader = NewAVRingReader(vt, dataType.String())
+		s.VideoReader.StartTs = startVideoTs
 	}
 	return
 }

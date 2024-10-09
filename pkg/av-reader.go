@@ -42,10 +42,11 @@ func (r *AVRingReader) DecConfChanged() bool {
 	return r.LastCodecCtx != r.Track.ICodecCtx
 }
 
-func NewAVRingReader(t *AVTrack) *AVRingReader {
+func NewAVRingReader(t *AVTrack, dataType string) *AVRingReader {
 	t.Debug("create reader")
 	return &AVRingReader{
-		Track: t,
+		Track:  t,
+		Logger: t.With("reader", dataType),
 	}
 }
 
@@ -167,7 +168,11 @@ func (r *AVRingReader) ReadFrame(conf *config.Subscribe) (err error) {
 		}
 	}
 	r.Delay = r.Track.LastValue.Sequence - r.Value.Sequence
-	r.Log(context.TODO(), task.TraceLevel, r.Track.FourCC().String(), "ts", r.Value.Timestamp, "delay", r.Delay)
+	if r.Track.ICodecCtx != nil {
+		r.Log(context.TODO(), task.TraceLevel, r.Track.FourCC().String(), "ts", r.Value.Timestamp, "delay", r.Delay)
+	} else {
+		r.Warn("no codec")
+	}
 	return
 }
 

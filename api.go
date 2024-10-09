@@ -68,7 +68,7 @@ func (s *Server) api_Stream_AnnexB_(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rw.Header().Set("Content-Type", "application/octet-stream")
-	reader := pkg.NewAVRingReader(publisher.VideoTrack.AVTrack)
+	reader := pkg.NewAVRingReader(publisher.VideoTrack.AVTrack, "Origin")
 	err = reader.StartRead(publisher.VideoTrack.GetIDR())
 	if err != nil {
 		http.Error(rw, err.Error(), http.StatusInternalServerError)

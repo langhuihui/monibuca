@@ -1,7 +1,6 @@
 package m7s
 
 import (
-	"context"
 	"fmt"
 	"math"
 	"os"
@@ -67,11 +66,11 @@ type AVTracks struct {
 }
 
 func (t *AVTracks) Set(track *AVTrack) {
+	t.Lock()
+	defer t.Unlock()
 	t.AVTrack = track
 	track.BaseTs = t.baseTs
-	t.Lock()
 	t.Add(track)
-	t.Unlock()
 }
 
 func (t *AVTracks) SetMinBuffer(start time.Duration) {
@@ -101,7 +100,7 @@ func (t *AVTracks) CheckTimeout(timeout time.Duration) bool {
 }
 
 func (t *AVTracks) CreateSubTrack(dataType reflect.Type) (track *AVTrack) {
-	track = NewAVTrack(dataType, t.AVTrack, util.NewPromise(context.TODO()))
+	track = NewAVTrack(dataType, t.AVTrack)
 	track.WrapIndex = t.Length
 	t.Add(track)
 	return
