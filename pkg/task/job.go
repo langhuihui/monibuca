@@ -92,9 +92,7 @@ func (mt *Job) AddTask(t ITask, opt ...any) (task *Task) {
 			case context.Context:
 				task.parentCtx = v
 			case Description:
-				for k, v := range v {
-					task.Description.Store(k, v)
-				}
+				task.SetDescriptions(v)
 			case RetryConfig:
 				task.retry = v
 			case *slog.Logger:

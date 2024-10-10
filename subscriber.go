@@ -3,7 +3,6 @@ package m7s
 import (
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"net"
 	"net/http"
 	"net/url"
@@ -63,6 +62,8 @@ type SubscriberCollection = util.Collection[uint32, *Subscriber]
 type Subscriber struct {
 	PubSubBase
 	config.Subscribe
+	AliasStreamPath            string
+	AliasKey                   config.Regexp
 	Publisher                  *Publisher
 	waitPublishDone            *util.Promise
 	AudioReader, VideoReader   *AVRingReader
@@ -82,26 +83,59 @@ func createSubscriber(p *Plugin, streamPath string, conf config.Subscribe) *Subs
 	return subscriber
 }
 
-func (s *Subscriber) Start() (err error) {
+func (s *Subscriber) setAlias(key config.Regexp, streamPath string) {
+	s.AliasKey = key
+	s.AliasStreamPath = s.StreamPath
+	s.StreamPath = streamPath
+	s.SetDescription("streamPath", streamPath)
+	s.SetDescription("alias", s.AliasStreamPath)
+}
+
+func (s *Subscriber) removeAlias() {
 	server := s.Plugin.Server
-	server.Subscribers.Add(s)
-	s.Info("subscribe")
+	if s.Publisher != nil {
+		s.Publisher.RemoveSubscriber(s)
+	} else {
+		if waitStream, ok := server.Waiting.Get(s.StreamPath); ok {
+			waitStream.Remove(s)
+		}
+	}
+	s.StreamPath = s.AliasStreamPath
+	s.AliasStreamPath = ""
+	s.AliasKey = config.Regexp{}
+	s.RemoveDescription("alias")
+	s.SetDescription("streamPath", s.StreamPath)
 	if publisher, ok := server.Streams.Get(s.StreamPath); ok {
 		publisher.AddSubscriber(s)
 		return
 	} else {
-		for reg, streamPath := range server.StreamAlias {
-			if g := reg.FindStringSubmatch(s.StreamPath); len(g) > 0 {
-				for i, gg := range g {
-					streamPath = strings.ReplaceAll(streamPath, fmt.Sprintf("$%d", i), gg)
-				}
-				if publisher, ok = server.Streams.Get(streamPath); ok {
-					s.SetDescription("alias", streamPath)
-					publisher.AddSubscriber(s)
-					return
-				}
-			}
+		if waitStream, ok := server.Waiting.Get(s.StreamPath); ok {
+			waitStream.Add(s)
+		} else {
+			server.createWait(s.StreamPath).Add(s)
 		}
+		for plugin := range server.Plugins.Range {
+			plugin.OnSubscribe(s)
+		}
+	}
+}
+
+func (s *Subscriber) Start() (err error) {
+	server := s.Plugin.Server
+	server.Subscribers.Add(s)
+	s.Info("subscribe")
+
+	for reg, streamPath := range server.StreamAlias {
+		if streamPath = reg.Replace(s.StreamPath, streamPath); streamPath != "" {
+			s.setAlias(reg, streamPath)
+			break
+		}
+	}
+
+	if publisher, ok := server.Streams.Get(s.StreamPath); ok {
+		publisher.AddSubscriber(s)
+		return
+	} else {
 		if waitStream, ok := server.Waiting.Get(s.StreamPath); ok {
 			waitStream.Add(s)
 		} else {

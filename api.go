@@ -4,10 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"maps"
 	"net"
 	"net/http"
+	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -94,7 +93,7 @@ func (s *Server) api_Stream_AnnexB_(rw http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) getStreamInfo(pub *Publisher) (res *pb.StreamInfoResponse, err error) {
-	tmp, _ := json.Marshal(pub.Description)
+	tmp, _ := json.Marshal(pub.GetDescriptions())
 	res = &pb.StreamInfoResponse{
 		Meta:        string(tmp),
 		Path:        pub.StreamPath,
@@ -149,11 +148,7 @@ func (s *Server) StreamInfo(ctx context.Context, req *pb.StreamSnapRequest) (res
 func (s *Server) TaskTree(context.Context, *emptypb.Empty) (res *pb.TaskTreeResponse, err error) {
 	var fillData func(m task.ITask) *pb.TaskTreeResponse
 	fillData = func(m task.ITask) (res *pb.TaskTreeResponse) {
-		res = &pb.TaskTreeResponse{Id: m.GetTaskID(), State: uint32(m.GetState()), Type: uint32(m.GetTaskType()), Owner: m.GetOwnerType(), StartTime: timestamppb.New(m.GetTask().StartTime), Description: maps.Collect(func(yield func(key, value string) bool) {
-			m.GetTask().Description.Range(func(key, value any) bool {
-				return yield(key.(string), fmt.Sprintf("%+v", value))
-			})
-		})}
+		res = &pb.TaskTreeResponse{Id: m.GetTaskID(), State: uint32(m.GetState()), Type: uint32(m.GetTaskType()), Owner: m.GetOwnerType(), StartTime: timestamppb.New(m.GetTask().StartTime), Description: m.GetDescriptions()}
 		if job, ok := m.(task.IJob); ok {
 			if blockedTask := job.Blocked(); blockedTask != nil {
 				res.Blocked = fillData(blockedTask)
@@ -172,12 +167,7 @@ func (s *Server) GetSubscribers(context.Context, *pb.SubscribersRequest) (res *p
 	s.Streams.Call(func() error {
 		var subscribers []*pb.SubscriberSnapShot
 		for subscriber := range s.Subscribers.Range {
-			metaData := make(task.Description)
-			subscriber.Description.Range(func(key, value any) bool {
-				metaData[key.(string)] = value
-				return true
-			})
-			meta, _ := json.Marshal(metaData)
+			meta, _ := json.Marshal(subscriber.GetDescriptions())
 			snap := &pb.SubscriberSnapShot{
 				Id:        subscriber.ID,
 				StartTime: timestamppb.New(subscriber.StartTime),
@@ -614,4 +604,51 @@ func (s *Server) RemoveDevice(ctx context.Context, req *pb.RequestWithId) (res *
 	res = &pb.SuccessResponse{}
 	return
 
+}
+
+func (s *Server) SetStreamAlias(ctx context.Context, req *pb.SetStreamAliasRequest) (res *pb.SuccessResponse, err error) {
+	s.Streams.Call(func() error {
+		reg := config.Regexp{
+			Regexp: regexp.MustCompile(req.Alias),
+		}
+		if req.StreamPath != "" {
+			s.StreamAlias[reg] = req.StreamPath
+			for publisher := range s.Streams.Range {
+				if streamPath := reg.Replace(publisher.StreamPath, req.StreamPath); streamPath != "" {
+					if publisher2, ok := s.Streams.Get(streamPath); ok {
+						for subscriber := range publisher.Subscribers.Range {
+							publisher.RemoveSubscriber(subscriber)
+							subscriber.setAlias(reg, streamPath)
+							publisher2.AddSubscriber(subscriber)
+						}
+					}
+				}
+			}
+			for waitStream := range s.Waiting.Range {
+				if streamPath := reg.Replace(waitStream.StreamPath, req.StreamPath); streamPath != "" {
+					if publisher2, ok := s.Streams.Get(streamPath); ok {
+						for subscriber := range waitStream.Range {
+							waitStream.Remove(subscriber)
+							subscriber.setAlias(reg, streamPath)
+							publisher2.AddSubscriber(subscriber)
+						}
+					}
+				}
+			}
+		} else {
+			for reg := range s.StreamAlias {
+				if reg.String() == req.Alias {
+					for subscriber := range s.Subscribers.Range {
+						if subscriber.AliasKey == reg {
+							subscriber.removeAlias()
+						}
+					}
+					delete(s.StreamAlias, reg)
+					break
+				}
+			}
+		}
+		return nil
+	})
+	return
 }

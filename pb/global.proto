@@ -68,7 +68,12 @@ service api {
       body: "*"
     };
   }
-
+  rpc SetStreamAlias (SetStreamAliasRequest) returns (SuccessResponse) {
+    option (google.api.http) = {
+      post: "/api/stream/alias/{streamPath=**}"
+      body: "*"
+    };
+  }
   rpc StopSubscribe (RequestWithId) returns (SuccessResponse) {
     option (google.api.http) = {
       post: "/api/subscribe/stop/{id}"
@@ -340,4 +345,9 @@ message DeviceInfo {
   string type = 6; // 设备类型
   uint32 status = 7; // 设备状态
   string pullURL = 8; // 拉流地址
+}
+
+message SetStreamAliasRequest {
+  string streamPath = 1;
+  string alias = 2;
 }

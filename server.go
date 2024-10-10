@@ -124,6 +124,7 @@ func NewServer(conf any) (s *Server) {
 		"arch":      sysruntime.GOARCH,
 		"cpus":      int32(sysruntime.NumCPU()),
 	})
+	s.StreamAlias = make(map[config.Regexp]string)
 	//s.Transforms.PublishEvent = make(chan *Publisher, 10)
 	s.prometheusDesc.init()
 	return
@@ -209,7 +210,7 @@ func (s *Server) Start() (err error) {
 	}
 	if configYaml != nil {
 		if err = yaml.Unmarshal(configYaml, &cg); err != nil {
-			s.Error("parsing yml error:", err)
+			s.Error("parsing yml", "error", err)
 		}
 	}
 	s.Config.Parse(&s.config, "GLOBAL")
@@ -296,7 +297,7 @@ func (s *Server) Start() (err error) {
 	s.Streams.OnStart(func() {
 		s.Streams.AddTask(&CheckSubWaitTimeout{s: s})
 	})
-	s.Transforms.AddTask(&TransformsPublishEvent{Transforms: &s.Transforms})
+	// s.Transforms.AddTask(&TransformsPublishEvent{Transforms: &s.Transforms})
 	s.Info("server started")
 	s.Post(func() error {
 		for plugin := range s.Plugins.Range {

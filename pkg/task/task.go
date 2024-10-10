@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"reflect"
 	"runtime/debug"
 	"strings"
@@ -63,6 +64,9 @@ type (
 		IsStopped() bool
 		GetTaskType() TaskType
 		GetOwnerType() string
+		GetDescriptions() map[string]string
+		SetDescription(key string, value any)
+		SetDescriptions(value Description)
 		SetRetry(maxRetry int, retryInterval time.Duration)
 		Depend(ITask)
 		OnStart(func())
@@ -113,7 +117,7 @@ type (
 		handler                                                            ITask
 		retry                                                              RetryConfig
 		afterStartListeners, beforeDisposeListeners, afterDisposeListeners []func()
-		Description                                                        sync.Map
+		description                                                        sync.Map
 		startup, shutdown                                                  *util.Promise
 		parent                                                             *Job
 		parentCtx                                                          context.Context
@@ -146,7 +150,7 @@ func (task *Task) GetTaskID() uint32 {
 	return task.ID
 }
 func (task *Task) GetOwnerType() string {
-	if ownerType, ok := task.Description.Load(OwnerTypeKey); ok {
+	if ownerType, ok := task.description.Load(OwnerTypeKey); ok {
 		return ownerType.(string)
 	}
 	return strings.TrimSuffix(reflect.TypeOf(task.handler).Elem().Name(), "Task")
@@ -330,13 +334,25 @@ func (task *Task) reset() {
 	task.startup = util.NewPromise(task.Context)
 }
 
+func (task *Task) GetDescriptions() map[string]string {
+	return maps.Collect(func(yield func(key, value string) bool) {
+		task.description.Range(func(key, value any) bool {
+			return yield(key.(string), fmt.Sprintf("%+v", value))
+		})
+	})
+}
+
 func (task *Task) SetDescription(key string, value any) {
-	task.Description.Store(key, value)
+	task.description.Store(key, value)
+}
+
+func (task *Task) RemoveDescription(key string) {
+	task.description.Delete(key)
 }
 
 func (task *Task) SetDescriptions(value Description) {
 	for k, v := range value {
-		task.Description.Store(k, v)
+		task.description.Store(k, v)
 	}
 }
 

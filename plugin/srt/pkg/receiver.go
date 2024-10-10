@@ -12,7 +12,6 @@ import (
 	mpegts "m7s.live/m7s/v5/plugin/hls/pkg/ts"
 )
 
-
 type Receiver struct {
 	task.Task
 	Publisher *m7s.Publisher
@@ -31,7 +30,9 @@ func (r *Receiver) readPES() {
 	var videoFrame *pkg.AnnexB
 	var err error
 	defer func() {
-		r.Stop(err)
+		if err != nil {
+			r.Stop(err)
+		}
 	}()
 	for pes := range r.TSStream.PESChan {
 		if r.Err() != nil {

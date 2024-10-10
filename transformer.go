@@ -40,10 +40,10 @@ type (
 		util.Collection[string, *TransformedMap]
 		//PublishEvent chan *Publisher
 	}
-	TransformsPublishEvent struct {
-		task.ChannelTask
-		Transforms *Transforms
-	}
+	// TransformsPublishEvent struct {
+	// 	task.ChannelTask
+	// 	Transforms *Transforms
+	// }
 )
 
 //func (t *TransformsPublishEvent) GetSignal() any {

@@ -54,7 +54,7 @@ func NewAVTrack(args ...any) (t *AVTrack) {
 		case *AVTrack:
 			t.Logger = v.Logger.With("subtrack", t.FrameType.String())
 			t.RingWriter = v.RingWriter
-			t.ready = util.NewPromiseWithTimeout(v.ready.Context, time.Second*5)
+			t.ready = util.NewPromiseWithTimeout(context.TODO(), time.Second*5)
 		case *config.Publish:
 			t.RingWriter = NewRingWriter(v.RingSize)
 			t.BufferRange[0] = v.BufferTime

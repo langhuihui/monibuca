@@ -38,7 +38,7 @@ func (cfg *MonitorPlugin) saveTask(task task.ITask) {
 	th.TaskType = byte(task.GetTaskType())
 	th.Reason = task.StopReason().Error()
 	th.Level = task.GetLevel()
-	b, _ := json.Marshal(task.GetTask().Description)
+	b, _ := json.Marshal(task.GetDescriptions())
 	th.Description = string(b)
 	cfg.DB.Create(&th)
 }
