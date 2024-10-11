@@ -12,6 +12,7 @@ import (
 
 	globalPB "m7s.live/m7s/v5/pb"
 	"m7s.live/m7s/v5/plugin/transcode/pb"
+	transcode "m7s.live/m7s/v5/plugin/transcode/pkg"
 
 	"m7s.live/m7s/v5/pkg/config"
 )
@@ -281,9 +282,10 @@ func (t *TranscodePlugin) Launch(ctx context.Context, transReq *pb.TransRequest)
 			Conf:       conf,
 		},
 	}
-	cfg.Input = map[string]any{
-		"args":  transReq.GlobalOptions,
-		"codec": transReq.Decodec,
+	cfg.Input = transcode.DecodeConfig{
+		Mode:  transcode.TRANS_MODE_RTMP,
+		Args:  transReq.GlobalOptions,
+		Codec: transReq.Decodec,
 	}
 
 	t.Transform(transReq.SrcStream, cfg)
