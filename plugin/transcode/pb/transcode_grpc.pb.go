@@ -11,6 +11,7 @@ import (
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
+	emptypb "google.golang.org/protobuf/types/known/emptypb"
 	pb "m7s.live/m7s/v5/pb"
 )
 
@@ -22,6 +23,8 @@ const _ = grpc.SupportPackageIsVersion9
 const (
 	Api_Launch_FullMethodName = "/transcode.api/launch"
 	Api_Close_FullMethodName  = "/transcode.api/close"
+	Api_List_FullMethodName   = "/transcode.api/list"
+	Api_Exist_FullMethodName  = "/transcode.api/exist"
 )
 
 // ApiClient is the client API for Api service.
@@ -29,7 +32,9 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type ApiClient interface {
 	Launch(ctx context.Context, in *TransRequest, opts ...grpc.CallOption) (*pb.SuccessResponse, error)
-	Close(ctx context.Context, in *CloseRequest, opts ...grpc.CallOption) (*pb.SuccessResponse, error)
+	Close(ctx context.Context, in *TransTwin, opts ...grpc.CallOption) (*pb.SuccessResponse, error)
+	List(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*TransListResponse, error)
+	Exist(ctx context.Context, in *TransTwin, opts ...grpc.CallOption) (*pb.SuccessResponse, error)
 }
 
 type apiClient struct {
@@ -50,10 +55,30 @@ func (c *apiClient) Launch(ctx context.Context, in *TransRequest, opts ...grpc.C
 	return out, nil
 }
 
-func (c *apiClient) Close(ctx context.Context, in *CloseRequest, opts ...grpc.CallOption) (*pb.SuccessResponse, error) {
+func (c *apiClient) Close(ctx context.Context, in *TransTwin, opts ...grpc.CallOption) (*pb.SuccessResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(pb.SuccessResponse)
 	err := c.cc.Invoke(ctx, Api_Close_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *apiClient) List(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*TransListResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TransListResponse)
+	err := c.cc.Invoke(ctx, Api_List_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *apiClient) Exist(ctx context.Context, in *TransTwin, opts ...grpc.CallOption) (*pb.SuccessResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(pb.SuccessResponse)
+	err := c.cc.Invoke(ctx, Api_Exist_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +90,9 @@ func (c *apiClient) Close(ctx context.Context, in *CloseRequest, opts ...grpc.Ca
 // for forward compatibility.
 type ApiServer interface {
 	Launch(context.Context, *TransRequest) (*pb.SuccessResponse, error)
-	Close(context.Context, *CloseRequest) (*pb.SuccessResponse, error)
+	Close(context.Context, *TransTwin) (*pb.SuccessResponse, error)
+	List(context.Context, *emptypb.Empty) (*TransListResponse, error)
+	Exist(context.Context, *TransTwin) (*pb.SuccessResponse, error)
 	mustEmbedUnimplementedApiServer()
 }
 
@@ -79,8 +106,14 @@ type UnimplementedApiServer struct{}
 func (UnimplementedApiServer) Launch(context.Context, *TransRequest) (*pb.SuccessResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Launch not implemented")
 }
-func (UnimplementedApiServer) Close(context.Context, *CloseRequest) (*pb.SuccessResponse, error) {
+func (UnimplementedApiServer) Close(context.Context, *TransTwin) (*pb.SuccessResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Close not implemented")
+}
+func (UnimplementedApiServer) List(context.Context, *emptypb.Empty) (*TransListResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method List not implemented")
+}
+func (UnimplementedApiServer) Exist(context.Context, *TransTwin) (*pb.SuccessResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Exist not implemented")
 }
 func (UnimplementedApiServer) mustEmbedUnimplementedApiServer() {}
 func (UnimplementedApiServer) testEmbeddedByValue()             {}
@@ -122,7 +155,7 @@ func _Api_Launch_Handler(srv interface{}, ctx context.Context, dec func(interfac
 }
 
 func _Api_Close_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(CloseRequest)
+	in := new(TransTwin)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -134,7 +167,43 @@ func _Api_Close_Handler(srv interface{}, ctx context.Context, dec func(interface
 		FullMethod: Api_Close_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ApiServer).Close(ctx, req.(*CloseRequest))
+		return srv.(ApiServer).Close(ctx, req.(*TransTwin))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Api_List_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(emptypb.Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).List(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_List_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).List(ctx, req.(*emptypb.Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Api_Exist_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TransTwin)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).Exist(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_Exist_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).Exist(ctx, req.(*TransTwin))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -153,6 +222,14 @@ var Api_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "close",
 			Handler:    _Api_Close_Handler,
+		},
+		{
+			MethodName: "list",
+			Handler:    _Api_List_Handler,
+		},
+		{
+			MethodName: "exist",
+			Handler:    _Api_Exist_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

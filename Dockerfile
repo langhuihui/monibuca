@@ -5,7 +5,7 @@ FROM golang:1.23.1-bullseye AS builder
 LABEL stage=gobuilder
 
 # Env 
-ENV CGO_ENABLE 0
+ENV CGO_ENABLED 0
 ENV GOOS linux 
 ENV GOARCH amd64
 #ENV GOPROXY https://goproxy.cn,direct

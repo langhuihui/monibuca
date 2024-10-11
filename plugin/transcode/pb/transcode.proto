@@ -13,10 +13,22 @@ service api {
       body: "*"
     };
   }
-  rpc close (CloseRequest) returns (global.SuccessResponse) {
+  rpc close (TransTwin) returns (global.SuccessResponse) {
     option (google.api.http) = {
       post: "/transcode/api/close"
       body: "*"
+    };
+  }
+
+  rpc list (google.protobuf.Empty) returns (TransListResponse) {
+    option (google.api.http) = {
+      get: "/transcode/api/list"
+    };
+  }
+
+  rpc exist (TransTwin) returns (global.SuccessResponse) {
+    option (google.api.http) = {
+      get: "/transcode/api/exist"
     };
   }
 }
@@ -46,7 +58,13 @@ message TransRequest {
   repeated OverlayConfig overlay_configs = 8;
 }
 
-message CloseRequest {
-  string src_stream = 1;                    // 原始流
-  string dst_stream = 2;                    // 输出流
+message TransTwin {
+  string src_stream = 1 [json_name = "src_stream"];                  // 原始流
+  string dst_stream = 2 [json_name = "dst_stream"];                  // 输出流
+}
+
+message TransListResponse {
+  int32 code = 1;
+  string message = 2;
+  repeated TransTwin data = 3;
 }

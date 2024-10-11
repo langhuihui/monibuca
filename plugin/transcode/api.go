@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"google.golang.org/protobuf/types/known/emptypb"
 	"net/url"
 	"os"
 	"path"
@@ -292,10 +293,47 @@ func (t *TranscodePlugin) Launch(ctx context.Context, transReq *pb.TransRequest)
 	return
 }
 
-func (t *TranscodePlugin) Close(ctx context.Context, closeReq *pb.CloseRequest) (response *globalPB.SuccessResponse, err error) {
+type TranscodeingStream struct {
+	SrcStream  string
+	DestStream string
+}
+
+func (t *TranscodePlugin) Close(ctx context.Context, closeReq *pb.TransTwin) (response *globalPB.SuccessResponse, err error) {
 	response = &globalPB.SuccessResponse{}
 	if item, ok := t.Server.Transforms.Get(closeReq.DstStream); ok {
 		item.TransformJob.Stop(fmt.Errorf("manual closed"))
 	}
 	return
+}
+
+func (t *TranscodePlugin) List(context.Context, *emptypb.Empty) (*pb.TransListResponse, error) {
+	data := make([]*pb.TransTwin, 0)
+	t.Server.Transforms.Call(func() error {
+		for transformedMap := range t.Server.Transforms.Range {
+			if _, ok := transformedMap.TransformJob.Transformer.(*transcode.Transformer); ok {
+				data = append(data, &pb.TransTwin{
+					SrcStream: transformedMap.TransformJob.StreamPath,
+					DstStream: transformedMap.Target,
+				})
+			}
+		}
+		return nil
+	})
+	return &pb.TransListResponse{
+		Code:    0,
+		Message: "success",
+		Data:    data,
+	}, nil
+}
+
+func (t *TranscodePlugin) Exist(ctx context.Context, req *pb.TransTwin) (*globalPB.SuccessResponse, error) {
+	response := &globalPB.SuccessResponse{}
+	if _, ok := t.Server.Transforms.Get(req.DstStream); ok {
+		response.Code = 0
+		response.Message = "success"
+	} else {
+		response.Code = 1
+		response.Message = "fail"
+	}
+	return response, nil
 }
