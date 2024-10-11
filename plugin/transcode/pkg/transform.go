@@ -88,7 +88,8 @@ func (t *Transformer) Start() (err error) {
 			t.From.Args = v
 		}
 	}
-	args := append([]string{"-f", "flv"}, strings.Fields(t.From.Args)...)
+	args := strings.Fields(t.From.Args)
+	args = append(args, []string{"-f", "flv"}...)
 	if t.From.Codec != "" {
 		args = append(args, "-c:v", t.From.Codec)
 	}
