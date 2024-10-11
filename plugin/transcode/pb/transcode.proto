@@ -33,17 +33,17 @@ message OverlayConfig {
   string font_size = 9;        // 字体大小
   string font_color = 10;      // r,g,b 颜色
   string text_position = 11;   // x,y 文字在图片上的位置
-  string line_spacing = 12;  //文字间距
+  string line_spacing = 12;   //文字行间距
 }
 
 message TransRequest {
-  string src_stream = 1;                    // 原始流
-  string dst_stream = 2;                    // 输出流
-  string encodec = 3;
-  string decodec = 4;
-  string scale = 5;
-  string log_level = 6;
-  repeated OverlayConfig overlay_configs = 7;
+  string global_options = 1;                  // 全局参数
+  string src_stream = 2;                    // 原始流
+  string dst_stream = 3;                    // 输出流
+  string encodec = 4;
+  string decodec = 5;
+  string scale = 6;
+  repeated OverlayConfig overlay_configs = 8;
 }
 
 message CloseRequest {

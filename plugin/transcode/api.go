@@ -269,7 +269,10 @@ func (t *TranscodePlugin) Launch(ctx context.Context, transReq *pb.TransRequest)
 	if transReq.Scale != "" {
 		transReq.Scale = fmt.Sprintf(" -s %s ", transReq.Scale)
 	}
-	conf = strings.Join(inputs, " -i ") + fmt.Sprintf(" %s ", transReq.LogLevel) + fmt.Sprintf(" %s ", filterStr) + transReq.Scale + transReq.Decodec
+	if transReq.GlobalOptions != "" {
+		transReq.GlobalOptions = fmt.Sprintf(" %s ", transReq.GlobalOptions)
+	}
+	conf = strings.Join(inputs, " -i ") + fmt.Sprintf(" %s ", filterStr) + transReq.Scale + transReq.Encodec
 
 	cfg.Output = []config.TransfromOutput{
 		{
@@ -277,6 +280,10 @@ func (t *TranscodePlugin) Launch(ctx context.Context, transReq *pb.TransRequest)
 			StreamPath: streamPath,
 			Conf:       conf,
 		},
+	}
+	cfg.Input = map[string]any{
+		"args":  transReq.GlobalOptions,
+		"codec": transReq.Decodec,
 	}
 
 	t.Transform(transReq.SrcStream, cfg)
