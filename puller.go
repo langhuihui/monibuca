@@ -15,6 +15,8 @@ import (
 	"m7s.live/m7s/v5/pkg/util"
 )
 
+const StartKey = "start"
+
 type (
 	Connection struct {
 		task.Job
@@ -182,7 +184,7 @@ func (p *RecordFilePuller) Start() (err error) {
 	if err = p.PullJob.Publish(); err != nil {
 		return
 	}
-	if p.PullStartTime, err = util.TimeQueryParse(p.PullJob.Args.Get("start")); err != nil {
+	if p.PullStartTime, err = util.TimeQueryParse(p.PullJob.Args.Get(StartKey)); err != nil {
 		return
 	}
 

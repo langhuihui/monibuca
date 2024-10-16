@@ -1,8 +1,10 @@
 package mp4
 
 import (
+	"errors"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/deepch/vdk/codec/h265parser"
 	"m7s.live/m7s/v5"
@@ -18,8 +20,9 @@ type HTTPReader struct {
 
 func (p *HTTPReader) Run() (err error) {
 	pullJob := &p.PullJob
-	var demuxer *Demuxer
+	publisher := pullJob.Publisher
 	allocator := util.NewScalableMemoryAllocator(1 << 10)
+	var demuxer *Demuxer
 	defer allocator.Recycle()
 	switch v := p.ReadCloser.(type) {
 	case io.ReadSeeker:
@@ -32,7 +35,16 @@ func (p *HTTPReader) Run() (err error) {
 	if err = demuxer.Demux(); err != nil {
 		return
 	}
-	publisher := pullJob.Publisher
+	publisher.OnSeek = func(seekTime time.Duration) {
+		p.Stop(errors.New("seek"))
+		pullJob.Args.Set(m7s.StartKey, seekTime.String())
+		newHTTPReader := &HTTPReader{}
+		pullJob.AddTask(newHTTPReader)
+	}
+	if pullJob.Args.Get(m7s.StartKey) != "" {
+		seekTime, _ := time.ParseDuration(pullJob.Args.Get(m7s.StartKey))
+		demuxer.SeekTime(uint64(seekTime.Milliseconds()))
+	}
 	for _, track := range demuxer.Tracks {
 		switch track.Cid {
 		case box.MP4_CODEC_H264:

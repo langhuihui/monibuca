@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"regexp"
 	"runtime"
+	"slices"
 	"strings"
 	"time"
 
@@ -612,7 +613,11 @@ func (s *Server) SetStreamAlias(ctx context.Context, req *pb.SetStreamAliasReque
 			Regexp: regexp.MustCompile(req.Alias),
 		}
 		if req.StreamPath != "" {
-			s.StreamAlias[reg] = req.StreamPath
+			s.StreamAlias = append(s.StreamAlias, StreamAlias{
+				Alias:      reg,
+				Path:       req.StreamPath,
+				AutoRemove: req.AutoRemove,
+			})
 			for publisher := range s.Streams.Range {
 				if streamPath := reg.Replace(publisher.StreamPath, req.StreamPath); streamPath != "" {
 					if publisher2, ok := s.Streams.Get(streamPath); ok {
@@ -636,14 +641,14 @@ func (s *Server) SetStreamAlias(ctx context.Context, req *pb.SetStreamAliasReque
 				}
 			}
 		} else {
-			for reg := range s.StreamAlias {
-				if reg.String() == req.Alias {
+			for i, alias := range s.StreamAlias {
+				if alias.Alias.String() == req.Alias {
 					for subscriber := range s.Subscribers.Range {
-						if subscriber.AliasKey == reg {
+						if subscriber.AliasKey == alias.Alias {
 							subscriber.removeAlias()
 						}
 					}
-					delete(s.StreamAlias, reg)
+					s.StreamAlias = slices.Delete(s.StreamAlias, i, i+1)
 					break
 				}
 			}

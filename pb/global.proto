@@ -350,4 +350,5 @@ message DeviceInfo {
 message SetStreamAliasRequest {
   string streamPath = 1;
   string alias = 2;
+  bool autoRemove = 3;
 }

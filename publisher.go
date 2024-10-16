@@ -550,8 +550,15 @@ func (p *Publisher) Dispose() {
 		}
 		w.Info("takeOver", "pId", p.ID)
 		for subscriber := range p.SubscriberRange {
-			subscriber.Publisher = nil
-			w.Add(subscriber)
+			if subscriber.AliasStreamPath != "" {
+				subscriber.removeAlias()
+			} else {
+				subscriber.Publisher = nil
+				w.Add(subscriber)
+			}
+		}
+		if w.Length == 0 {
+			s.Waiting.Remove(w)
 		}
 		p.AudioTrack.Dispose()
 		p.VideoTrack.Dispose()
@@ -562,6 +569,14 @@ func (p *Publisher) Dispose() {
 		p.dumpFile.Close()
 	}
 	p.State = PublisherStateDisposed
+	var remainAlias []StreamAlias
+	for _, alias := range s.StreamAlias {
+		if alias.Path == p.StreamPath && alias.AutoRemove {
+			continue
+		}
+		remainAlias = append(remainAlias, alias)
+	}
+	s.StreamAlias = remainAlias
 }
 
 func (p *Publisher) takeOver(old *Publisher) {

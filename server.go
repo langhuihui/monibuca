@@ -52,13 +52,18 @@ var (
 )
 
 type (
+	StreamAlias struct {
+		Path       string
+		Alias      config.Regexp
+		AutoRemove bool
+	}
 	ServerConfig struct {
-		EnableSubEvent bool                     `default:"true" desc:"启用订阅事件,禁用可以提高性能"` //启用订阅事件,禁用可以提高性能
-		SettingDir     string                   `default:".m7s" desc:""`
-		FatalDir       string                   `default:"fatal" desc:""`
-		PulseInterval  time.Duration            `default:"5s" desc:"心跳事件间隔"`    //心跳事件间隔
-		DisableAll     bool                     `default:"false" desc:"禁用所有插件"` //禁用所有插件
-		StreamAlias    map[config.Regexp]string `desc:"流别名"`
+		EnableSubEvent bool          `default:"true" desc:"启用订阅事件,禁用可以提高性能"` //启用订阅事件,禁用可以提高性能
+		SettingDir     string        `default:".m7s" desc:""`
+		FatalDir       string        `default:"fatal" desc:""`
+		PulseInterval  time.Duration `default:"5s" desc:"心跳事件间隔"`    //心跳事件间隔
+		DisableAll     bool          `default:"false" desc:"禁用所有插件"` //禁用所有插件
+		StreamAlias    []StreamAlias `desc:"流别名"`
 		Device         []struct {
 			ID       uint
 			ParentID uint
@@ -124,7 +129,6 @@ func NewServer(conf any) (s *Server) {
 		"arch":      sysruntime.GOARCH,
 		"cpus":      int32(sysruntime.NumCPU()),
 	})
-	s.StreamAlias = make(map[config.Regexp]string)
 	//s.Transforms.PublishEvent = make(chan *Publisher, 10)
 	s.prometheusDesc.init()
 	return

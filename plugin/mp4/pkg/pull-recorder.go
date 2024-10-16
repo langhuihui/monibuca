@@ -39,7 +39,7 @@ func (p *RecordReader) Run() (err error) {
 	publisher.OnSeek = func(seekTime time.Duration) {
 		targetTime := p.PullStartTime.Add(time.Duration(ts) * time.Millisecond).Add(seekTime)
 		p.Stop(errors.New("seek"))
-		pullJob.Args.Set("start", targetTime.Local().Format("2006-01-02T15:04:05"))
+		pullJob.Args.Set(m7s.StartKey, targetTime.Local().Format("2006-01-02T15:04:05"))
 		newRecordReader := &RecordReader{}
 		pullJob.AddTask(newRecordReader)
 	}

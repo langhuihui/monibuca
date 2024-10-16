@@ -88,7 +88,11 @@ func (r *Recorder) createStream(start time.Time) (err error) {
 	recordJob := &r.RecordJob
 	sub := recordJob.Subscriber
 	var file *os.File
-	r.stream.FilePath = CustomFileName(&r.RecordJob)
+	r.stream = m7s.RecordStream{
+		StartTime:  start,
+		StreamPath: sub.StreamPath,
+		FilePath:   CustomFileName(&r.RecordJob),
+	}
 	dir := filepath.Dir(r.stream.FilePath)
 	if err = os.MkdirAll(dir, 0755); err != nil {
 		return
@@ -97,8 +101,6 @@ func (r *Recorder) createStream(start time.Time) (err error) {
 		return
 	}
 	r.muxer, err = NewFileMuxer(file)
-	r.stream.StreamPath = sub.StreamPath
-	r.stream.StartTime = start
 	if sub.Publisher.HasAudioTrack() {
 		r.stream.AudioCodec = sub.Publisher.AudioTrack.ICodecCtx.FourCC().String()
 	}
