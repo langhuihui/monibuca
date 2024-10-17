@@ -62,8 +62,6 @@ type SubscriberCollection = util.Collection[uint32, *Subscriber]
 type Subscriber struct {
 	PubSubBase
 	config.Subscribe
-	AliasStreamPath            string
-	AliasKey                   config.Regexp
 	Publisher                  *Publisher
 	waitPublishDone            *util.Promise
 	AudioReader, VideoReader   *AVRingReader
@@ -83,67 +81,41 @@ func createSubscriber(p *Plugin, streamPath string, conf config.Subscribe) *Subs
 	return subscriber
 }
 
-func (s *Subscriber) setAlias(key config.Regexp, streamPath string) {
-	s.AliasKey = key
-	s.AliasStreamPath = s.StreamPath
-	s.StreamPath = streamPath
-	s.SetDescription("streamPath", streamPath)
-	s.SetDescription("alias", s.AliasStreamPath)
-}
-
-func (s *Subscriber) removeAlias() {
-	server := s.Plugin.Server
-	if s.Publisher != nil {
-		s.Publisher.RemoveSubscriber(s)
-	} else {
-		if waitStream, ok := server.Waiting.Get(s.StreamPath); ok {
-			waitStream.Remove(s)
-		}
-	}
-	s.StreamPath = s.AliasStreamPath
-	s.AliasStreamPath = ""
-	s.AliasKey = config.Regexp{}
-	s.RemoveDescription("alias")
-	s.SetDescription("streamPath", s.StreamPath)
-	if publisher, ok := server.Streams.Get(s.StreamPath); ok {
-		publisher.AddSubscriber(s)
-		return
-	} else {
-		if waitStream, ok := server.Waiting.Get(s.StreamPath); ok {
-			waitStream.Add(s)
-		} else {
-			server.createWait(s.StreamPath).Add(s)
-		}
-		for plugin := range server.Plugins.Range {
-			plugin.OnSubscribe(s)
-		}
-	}
-}
-
 func (s *Subscriber) Start() (err error) {
 	server := s.Plugin.Server
 	server.Subscribers.Add(s)
 	s.Info("subscribe")
 
-	for _, alias := range server.StreamAlias {
-		if streamPath := alias.Alias.Replace(s.StreamPath, alias.Path); streamPath != "" {
-			s.setAlias(alias.Alias, streamPath)
-			break
+	if alias, ok := server.AliasStreams.Get(s.StreamPath); ok {
+		if alias.Publisher != nil {
+			alias.Publisher.AddSubscriber(s)
+			return
+		} else {
+			server.OnSubscribe(alias.StreamPath, s.Args)
+		}
+	} else {
+		for _, alias := range server.StreamAlias {
+			if streamPath := alias.Alias.Replace(s.StreamPath, alias.Path); streamPath != "" {
+				server.AliasStreams.Set(&AliasStream{
+					StreamPath: streamPath,
+					Alias:      s.StreamPath,
+				})
+				if publisher, ok := server.Streams.Get(streamPath); ok {
+					publisher.AddSubscriber(s)
+					return
+				} else {
+					server.OnSubscribe(streamPath, s.Args)
+				}
+				break
+			}
 		}
 	}
-
 	if publisher, ok := server.Streams.Get(s.StreamPath); ok {
 		publisher.AddSubscriber(s)
 		return
 	} else {
-		if waitStream, ok := server.Waiting.Get(s.StreamPath); ok {
-			waitStream.Add(s)
-		} else {
-			server.createWait(s.StreamPath).Add(s)
-		}
-		for plugin := range server.Plugins.Range {
-			plugin.OnSubscribe(s)
-		}
+		server.Waiting.Wait(s)
+		server.OnSubscribe(s.StreamPath, s.Args)
 	}
 	return
 }
@@ -153,8 +125,8 @@ func (s *Subscriber) Dispose() {
 	s.Info("unsubscribe", "reason", s.StopReason())
 	if s.Publisher != nil {
 		s.Publisher.RemoveSubscriber(s)
-	} else if waitStream, ok := s.Plugin.Server.Waiting.Get(s.StreamPath); ok {
-		waitStream.Remove(s)
+	} else {
+		s.Plugin.Server.Waiting.Leave(s)
 	}
 }
 

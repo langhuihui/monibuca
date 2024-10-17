@@ -6,9 +6,8 @@ import (
 	"errors"
 	"net"
 	"net/http"
-	"regexp"
+	"net/url"
 	"runtime"
-	"slices"
 	"strings"
 	"time"
 
@@ -608,48 +607,51 @@ func (s *Server) RemoveDevice(ctx context.Context, req *pb.RequestWithId) (res *
 }
 
 func (s *Server) SetStreamAlias(ctx context.Context, req *pb.SetStreamAliasRequest) (res *pb.SuccessResponse, err error) {
+	res = &pb.SuccessResponse{}
 	s.Streams.Call(func() error {
-		reg := config.Regexp{
-			Regexp: regexp.MustCompile(req.Alias),
-		}
 		if req.StreamPath != "" {
-			s.StreamAlias = append(s.StreamAlias, StreamAlias{
-				Alias:      reg,
-				Path:       req.StreamPath,
-				AutoRemove: req.AutoRemove,
-			})
-			for publisher := range s.Streams.Range {
-				if streamPath := reg.Replace(publisher.StreamPath, req.StreamPath); streamPath != "" {
-					if publisher2, ok := s.Streams.Get(streamPath); ok {
-						for subscriber := range publisher.Subscribers.Range {
-							publisher.RemoveSubscriber(subscriber)
-							subscriber.setAlias(reg, streamPath)
-							publisher2.AddSubscriber(subscriber)
+			u, err := url.Parse(req.StreamPath)
+			if err != nil {
+				return err
+			}
+			req.StreamPath = strings.TrimPrefix(u.Path, "/")
+			publisher, canReplace := s.Streams.Get(req.StreamPath)
+			if !canReplace {
+				defer s.OnSubscribe(req.StreamPath, u.Query())
+			}
+			if aliasStream, ok := s.AliasStreams.Get(req.Alias); ok { //modify alias
+				aliasStream.AutoRemove = req.AutoRemove
+				if aliasStream.StreamPath != req.StreamPath {
+					aliasStream.StreamPath = req.StreamPath
+					if canReplace {
+						if aliasStream.Publisher != nil {
+							aliasStream.TransferSubscribers(publisher) // replace stream
+						} else {
+							s.Waiting.WakeUp(req.Alias, publisher)
 						}
 					}
 				}
-			}
-			for waitStream := range s.Waiting.Range {
-				if streamPath := reg.Replace(waitStream.StreamPath, req.StreamPath); streamPath != "" {
-					if publisher2, ok := s.Streams.Get(streamPath); ok {
-						for subscriber := range waitStream.Range {
-							waitStream.Remove(subscriber)
-							subscriber.setAlias(reg, streamPath)
-							publisher2.AddSubscriber(subscriber)
-						}
+			} else { // create alias
+				s.AliasStreams.Add(&AliasStream{
+					AutoRemove: req.AutoRemove,
+					StreamPath: req.StreamPath,
+					Alias:      req.Alias,
+				})
+				if canReplace {
+					if aliasStream, ok := s.Streams.Get(req.Alias); ok {
+						aliasStream.TransferSubscribers(publisher) // replace stream
+					} else {
+						s.Waiting.WakeUp(req.Alias, publisher)
 					}
 				}
 			}
 		} else {
-			for i, alias := range s.StreamAlias {
-				if alias.Alias.String() == req.Alias {
-					for subscriber := range s.Subscribers.Range {
-						if subscriber.AliasKey == alias.Alias {
-							subscriber.removeAlias()
-						}
+			if aliasStream, ok := s.AliasStreams.Get(req.Alias); ok {
+				s.AliasStreams.Remove(aliasStream)
+				if aliasStream.Publisher != nil {
+					if publisher, hasTarget := s.Streams.Get(req.Alias); hasTarget { // restore stream
+						aliasStream.TransferSubscribers(publisher)
 					}
-					s.StreamAlias = slices.Delete(s.StreamAlias, i, i+1)
-					break
 				}
 			}
 		}

@@ -352,6 +352,8 @@ func (p *Plugin) OnInit() error {
 func (p *Plugin) OnStop() {
 
 }
+
+// TODO: use alias stream
 func (p *Plugin) OnPublish(pub *Publisher) {
 	onPublish := p.config.OnPub
 	if p.Meta.Pusher != nil {
@@ -391,7 +393,7 @@ func (p *Plugin) OnPublish(pub *Publisher) {
 		}
 	}
 }
-func (p *Plugin) OnSubscribe(sub *Subscriber) {
+func (p *Plugin) OnSubscribe(streamPath string, args url.Values) {
 	//	var avoidTrans bool
 	//AVOID:
 	//	for trans := range server.Transforms.Range {
@@ -404,13 +406,13 @@ func (p *Plugin) OnSubscribe(sub *Subscriber) {
 	//	}
 	for reg, conf := range p.config.OnSub.Pull {
 		if p.Meta.Puller != nil {
-			conf.Args = sub.Args
-			conf.URL = reg.Replace(sub.StreamPath, conf.URL)
-			p.handler.Pull(sub.StreamPath, conf)
+			conf.Args = args
+			conf.URL = reg.Replace(streamPath, conf.URL)
+			p.handler.Pull(streamPath, conf)
 		}
 	}
 	for device := range p.Server.Devices.Range {
-		if device.Status == DeviceStatusOnline && device.GetStreamPath() == sub.StreamPath {
+		if device.Status == DeviceStatusOnline && device.GetStreamPath() == streamPath {
 			device.Handler.Pull()
 		}
 	}

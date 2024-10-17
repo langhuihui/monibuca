@@ -135,6 +135,17 @@ type Publisher struct {
 	dumpFile               *os.File
 }
 
+type AliasStream struct {
+	*Publisher
+	AutoRemove bool
+	StreamPath string
+	Alias      string
+}
+
+func (a *AliasStream) GetKey() string {
+	return a.Alias
+}
+
 func (p *Publisher) SubscriberRange(yield func(sub *Subscriber) bool) {
 	p.Subscribers.Range(yield)
 }
@@ -180,12 +191,19 @@ func (p *Publisher) Start() (err error) {
 		os.MkdirAll(filepath.Dir(f), 0666)
 		p.dumpFile, _ = os.OpenFile(filepath.Join("./dump", p.StreamPath), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
 	}
-	if waiting, ok := s.Waiting.Get(p.StreamPath); ok {
-		for subscriber := range waiting.Range {
-			p.AddSubscriber(subscriber)
+
+	s.Waiting.WakeUp(p.StreamPath, p)
+
+	for alias := range s.AliasStreams.Range {
+		if alias.StreamPath == p.StreamPath && alias.Publisher == nil {
+			alias.Publisher = p
+			s.Waiting.WakeUp(alias.Alias, p)
+		} else if alias.Publisher.StreamPath != alias.StreamPath {
+			alias.Publisher.TransferSubscribers(p)
+			alias.Publisher = p
 		}
-		s.Waiting.Remove(waiting)
 	}
+
 	for plugin := range s.Plugins.Range {
 		plugin.OnPublish(p)
 	}
@@ -540,43 +558,52 @@ func (p *Publisher) Dispose() {
 	if !p.StopReasonIs(ErrKick) {
 		s.Streams.Remove(p)
 	}
-	if p.Subscribers.Length > 0 {
-		w := s.createWait(p.StreamPath)
-		if p.HasAudioTrack() {
-			w.baseTsAudio = p.AudioTrack.LastTs
-		}
-		if p.HasVideoTrack() {
-			w.baseTsVideo = p.VideoTrack.LastTs
-		}
-		w.Info("takeOver", "pId", p.ID)
-		for subscriber := range p.SubscriberRange {
-			if subscriber.AliasStreamPath != "" {
-				subscriber.removeAlias()
-			} else {
-				subscriber.Publisher = nil
-				w.Add(subscriber)
+	for alias := range s.AliasStreams.Range {
+		if alias.Alias == p.StreamPath {
+			if alias.AutoRemove {
+				s.AliasStreams.Remove(alias)
+			}
+			for subscriber := range p.SubscriberRange {
+				if subscriber.StreamPath == alias.StreamPath {
+					if originStream, ok := s.Streams.Get(alias.StreamPath); ok {
+						p.Subscribers.Remove(subscriber)
+						originStream.AddSubscriber(subscriber)
+					}
+				}
 			}
 		}
-		if w.Length == 0 {
-			s.Waiting.Remove(w)
+	}
+
+	if p.Subscribers.Length > 0 {
+		for subscriber := range p.SubscriberRange {
+			s.Waiting.Wait(subscriber)
 		}
-		p.AudioTrack.Dispose()
-		p.VideoTrack.Dispose()
 		p.Subscribers.Clear()
 	}
+	p.AudioTrack.Dispose()
+	p.VideoTrack.Dispose()
 	p.Info("unpublish", "remain", s.Streams.Length, "reason", p.StopReason())
 	if p.dumpFile != nil {
 		p.dumpFile.Close()
 	}
 	p.State = PublisherStateDisposed
-	var remainAlias []StreamAlias
-	for _, alias := range s.StreamAlias {
-		if alias.Path == p.StreamPath && alias.AutoRemove {
-			continue
-		}
-		remainAlias = append(remainAlias, alias)
+
+}
+
+func (p *Publisher) TransferSubscribers(newPublisher *Publisher) {
+	for subscriber := range p.SubscriberRange {
+		newPublisher.AddSubscriber(subscriber)
 	}
-	s.StreamAlias = remainAlias
+	p.Subscribers.Clear()
+	p.BufferTime = p.Plugin.GetCommonConf().Publish.BufferTime
+	p.AudioTrack.SetMinBuffer(p.BufferTime)
+	p.VideoTrack.SetMinBuffer(p.BufferTime)
+	if p.State == PublisherStateSubscribed {
+		p.State = PublisherStateWaitSubscriber
+		if p.DelayCloseTimeout > 0 {
+			p.TimeoutTimer.Reset(p.DelayCloseTimeout)
+		}
+	}
 }
 
 func (p *Publisher) takeOver(old *Publisher) {

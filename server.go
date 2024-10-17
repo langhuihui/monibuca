@@ -73,10 +73,8 @@ type (
 		}
 	}
 	WaitStream struct {
-		*slog.Logger
 		StreamPath string
 		SubscriberCollection
-		baseTsAudio, baseTsVideo time.Duration
 	}
 	Server struct {
 		pb.UnimplementedApiServer
@@ -84,7 +82,8 @@ type (
 		ServerConfig
 		Plugins         util.Collection[string, *Plugin]
 		Streams         task.Manager[string, *Publisher]
-		Waiting         util.Collection[string, *WaitStream]
+		AliasStreams    util.Collection[string, *AliasStream]
+		Waiting         WaitManager
 		Pulls           task.Manager[string, *PullJob]
 		Pushs           task.Manager[string, *PushJob]
 		Records         task.Manager[string, *RecordJob]
@@ -185,6 +184,7 @@ func (s *Server) Start() (err error) {
 	s.LogHandler.SetLevel(slog.LevelDebug)
 	s.LogHandler.Add(defaultLogHandler)
 	s.Logger = slog.New(&s.LogHandler).With("server", s.ID)
+	s.Waiting.Logger = s.Logger
 	mux := runtime.NewServeMux(runtime.WithMarshalerOption("text/plain", &pb.TextPlain{}), runtime.WithForwardResponseOption(func(ctx context.Context, w http.ResponseWriter, m proto.Message) error {
 		header := w.Header()
 		header.Set("Access-Control-Allow-Credentials", "true")
@@ -378,16 +378,7 @@ func (c *CheckSubWaitTimeout) Tick(any) {
 			c.Info("tick", "cpu", cpu, "streams", c.s.Streams.Length, "subscribers", c.s.Subscribers.Length, "waits", c.s.Waiting.Length)
 		}
 	}
-
-	for waits := range c.s.Waiting.Range {
-		for sub := range waits.Range {
-			select {
-			case <-sub.TimeoutTimer.C:
-				sub.Stop(ErrSubscribeTimeout)
-			default:
-			}
-		}
-	}
+	c.s.Waiting.checkTimeout()
 }
 
 func (gRPC *GRPCServer) Dispose() {
@@ -412,14 +403,10 @@ func (s *Server) Dispose() {
 	}
 }
 
-func (s *Server) createWait(streamPath string) *WaitStream {
-	newPublisher := &WaitStream{
-		StreamPath: streamPath,
-		Logger:     s.Logger.With("streamPath", streamPath),
+func (s *Server) OnSubscribe(streamPath string, args url.Values) {
+	for plugin := range s.Plugins.Range {
+		plugin.OnSubscribe(streamPath, args)
 	}
-	s.Info("createWait")
-	s.Waiting.Set(newPublisher)
-	return newPublisher
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
