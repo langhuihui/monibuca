@@ -70,7 +70,7 @@ service api {
   }
   rpc SetStreamAlias (SetStreamAliasRequest) returns (SuccessResponse) {
     option (google.api.http) = {
-      post: "/api/stream/alias/{streamPath=**}"
+      post: "/api/stream/alias"
       body: "*"
     };
   }

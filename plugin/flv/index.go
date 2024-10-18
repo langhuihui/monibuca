@@ -8,6 +8,7 @@ import (
 
 	"m7s.live/m7s/v5"
 
+	"m7s.live/m7s/v5/pkg/task"
 	. "m7s.live/m7s/v5/plugin/flv/pkg"
 )
 
@@ -85,4 +86,11 @@ func (plugin *FLVPlugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	err = live.Run()
+}
+
+func (plugin *FLVPlugin) OnDeviceAdd(device *m7s.Device) (ret task.ITask) {
+	d := &FLVDevice{}
+	d.Device = device
+	d.Plugin = &plugin.Plugin
+	return d
 }

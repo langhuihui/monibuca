@@ -558,23 +558,6 @@ func request_Api_SetStreamAlias_0(ctx context.Context, marshaler runtime.Marshal
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 
-	var (
-		val string
-		ok  bool
-		err error
-		_   = err
-	)
-
-	val, ok = pathParams["streamPath"]
-	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "streamPath")
-	}
-
-	protoReq.StreamPath, err = runtime.String(val)
-	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "streamPath", err)
-	}
-
 	msg, err := client.SetStreamAlias(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
 
@@ -586,23 +569,6 @@ func local_request_Api_SetStreamAlias_0(ctx context.Context, marshaler runtime.M
 
 	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && err != io.EOF {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
-	}
-
-	var (
-		val string
-		ok  bool
-		err error
-		_   = err
-	)
-
-	val, ok = pathParams["streamPath"]
-	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "streamPath")
-	}
-
-	protoReq.StreamPath, err = runtime.String(val)
-	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "streamPath", err)
 	}
 
 	msg, err := server.SetStreamAlias(ctx, &protoReq)
@@ -1278,7 +1244,7 @@ func RegisterApiHandlerServer(ctx context.Context, mux *runtime.ServeMux, server
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/global.Api/SetStreamAlias", runtime.WithHTTPPathPattern("/api/stream/alias/{streamPath=**}"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/global.Api/SetStreamAlias", runtime.WithHTTPPathPattern("/api/stream/alias"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1806,7 +1772,7 @@ func RegisterApiHandlerClient(ctx context.Context, mux *runtime.ServeMux, client
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/global.Api/SetStreamAlias", runtime.WithHTTPPathPattern("/api/stream/alias/{streamPath=**}"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/global.Api/SetStreamAlias", runtime.WithHTTPPathPattern("/api/stream/alias"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -2026,7 +1992,7 @@ var (
 
 	pattern_Api_ChangeSubscribe_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 3, 0, 4, 1, 5, 4}, []string{"api", "subscribe", "change", "id", "streamPath"}, ""))
 
-	pattern_Api_SetStreamAlias_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 3, 0, 4, 1, 5, 3}, []string{"api", "stream", "alias", "streamPath"}, ""))
+	pattern_Api_SetStreamAlias_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "stream", "alias"}, ""))
 
 	pattern_Api_StopSubscribe_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"api", "subscribe", "stop", "id"}, ""))
 

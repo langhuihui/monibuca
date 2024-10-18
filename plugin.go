@@ -412,7 +412,7 @@ func (p *Plugin) OnSubscribe(streamPath string, args url.Values) {
 		}
 	}
 	for device := range p.Server.Devices.Range {
-		if device.Status == DeviceStatusOnline && device.GetStreamPath() == streamPath {
+		if device.Status == DeviceStatusOnline && device.GetStreamPath() == streamPath && !device.PullOnStart {
 			device.Handler.Pull()
 		}
 	}

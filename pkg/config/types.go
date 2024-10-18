@@ -45,6 +45,7 @@ type (
 		Proxy         string        `desc:"代理地址"`                                 // 代理地址
 		Header        http.Header
 		Args          url.Values
+		PubConf       *Publish
 	}
 	Push struct {
 		URL           string        `desc:"推送地址"`                    // 推送地址
@@ -52,6 +53,7 @@ type (
 		RetryInterval time.Duration `default:"5s" desc:"重试间隔"`       // 重试间隔
 		Proxy         string        `desc:"代理地址"`                    // 代理地址
 		Header        http.Header
+		SubConf       *Subscribe
 	}
 	Record struct {
 		FilePath string        `desc:"录制文件路径"` // 录制文件路径

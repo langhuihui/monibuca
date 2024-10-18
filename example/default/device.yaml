@@ -7,7 +7,9 @@ global:
     - id: 1
       name: default
       description: Example device
-      pullurl: rtsp://localhost/live/test
+      pullconfig:
+        pull:
+          url: rtsp://localhost/live/test
 
 rtsp:
   tcp: :8554

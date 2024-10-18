@@ -83,9 +83,11 @@ func (p *PullJob) GetPullJob() *PullJob {
 }
 
 func (p *PullJob) Init(puller IPuller, plugin *Plugin, streamPath string, conf config.Pull) *PullJob {
-	publishConfig := plugin.config.Publish
-	publishConfig.PublishTimeout = 0
-	p.publishConfig = &publishConfig
+	if conf.PubConf != nil {
+		p.publishConfig = conf.PubConf
+	} else {
+		p.publishConfig = &plugin.config.Publish
+	}
 	p.Args = conf.Args
 	p.conf = &conf
 	remoteURL := conf.URL

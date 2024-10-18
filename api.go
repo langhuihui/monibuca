@@ -13,6 +13,7 @@ import (
 
 	"m7s.live/m7s/v5/pkg/task"
 
+	"github.com/mcuadros/go-defaults"
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/disk"
 	"github.com/shirou/gopsutil/v3/mem"
@@ -551,13 +552,13 @@ func (s *Server) GetDeviceList(ctx context.Context, req *emptypb.Empty) (res *pb
 			CreateTime:  timestamppb.New(device.CreatedAt),
 			UpdateTime:  timestamppb.New(device.UpdatedAt),
 			Type:        device.Type,
-			PullURL:     device.PullURL,
+			PullURL:     device.PullConfig.URL,
 			ParentID:    uint32(device.ParentID),
 			Status:      uint32(device.Status),
 			ID:          uint32(device.ID),
 			PullOnStart: device.PullOnStart,
-			StopOnIdle:  device.StopOnIdle,
-			Audio:       device.Audio,
+			StopOnIdle:  device.PullConfig.PubConf.DelayCloseTimeout > 0,
+			Audio:       device.PullConfig.PubConf.PubAudio,
 			Description: device.Description,
 		})
 	}
@@ -569,13 +570,15 @@ func (s *Server) AddDevice(ctx context.Context, req *pb.DeviceInfo) (res *pb.Suc
 		server:      s,
 		Name:        req.Name,
 		Type:        req.Type,
-		PullURL:     req.PullURL,
 		ParentID:    uint(req.ParentID),
 		PullOnStart: req.PullOnStart,
-		StopOnIdle:  req.StopOnIdle,
-		Audio:       req.Audio,
 		Description: req.Description,
 	}
+	device.PullConfig.PubConf = &config.Publish{}
+	defaults.SetDefaults(&device.PullConfig)
+	device.PullConfig.URL = req.PullURL
+	device.PullConfig.PubConf.PubAudio = req.Audio
+	device.PullConfig.PubConf.DelayCloseTimeout = util.Conditional(req.StopOnIdle, 5*time.Second, 0)
 	if s.DB == nil {
 		err = pkg.ErrNoDB
 		return
@@ -592,14 +595,14 @@ func (s *Server) UpdateDevice(ctx context.Context, req *pb.DeviceInfo) (res *pb.
 		return
 	}
 	target := &Device{}
-	target.ID = uint(req.ID)
+	s.DB.First(target, req.ID)
 	target.Name = req.Name
-	target.PullURL = req.PullURL
+	target.PullConfig.URL = req.PullURL
 	target.ParentID = uint(req.ParentID)
 	target.Type = req.Type
 	target.PullOnStart = req.PullOnStart
-	target.StopOnIdle = req.StopOnIdle
-	target.Audio = req.Audio
+	target.PullConfig.PubConf.DelayCloseTimeout = util.Conditional(req.StopOnIdle, 5*time.Second, 0)
+	target.PullConfig.PubConf.PubAudio = req.Audio
 	target.Description = req.Description
 	s.DB.Save(target)
 	res = &pb.SuccessResponse{}
