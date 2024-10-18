@@ -93,6 +93,9 @@ func (p *RecordReader) Run() (err error) {
 				return
 			}
 			ts = int64(sample.DTS + uint64(tsOffset))
+			if p.MaxTS > 0 && ts > p.MaxTS {
+				return
+			}
 			switch track.Cid {
 			case box.MP4_CODEC_H264:
 				keyFrame := codec.ParseH264NALUType(sample.Data[5]) == codec.NALU_IDR_Picture

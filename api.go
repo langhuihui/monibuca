@@ -547,14 +547,18 @@ func (s *Server) GetDeviceList(ctx context.Context, req *emptypb.Empty) (res *pb
 	res = &pb.DeviceListResponse{}
 	for device := range s.Devices.Range {
 		res.Data = append(res.Data, &pb.DeviceInfo{
-			Name:       device.Name,
-			CreateTime: timestamppb.New(device.CreatedAt),
-			UpdateTime: timestamppb.New(device.UpdatedAt),
-			Type:       device.Type,
-			PullURL:    device.PullURL,
-			ParentID:   uint32(device.ParentID),
-			Status:     uint32(device.Status),
-			ID:         uint32(device.ID),
+			Name:        device.Name,
+			CreateTime:  timestamppb.New(device.CreatedAt),
+			UpdateTime:  timestamppb.New(device.UpdatedAt),
+			Type:        device.Type,
+			PullURL:     device.PullURL,
+			ParentID:    uint32(device.ParentID),
+			Status:      uint32(device.Status),
+			ID:          uint32(device.ID),
+			PullOnStart: device.PullOnStart,
+			StopOnIdle:  device.StopOnIdle,
+			Audio:       device.Audio,
+			Description: device.Description,
 		})
 	}
 	return
@@ -562,11 +566,15 @@ func (s *Server) GetDeviceList(ctx context.Context, req *emptypb.Empty) (res *pb
 
 func (s *Server) AddDevice(ctx context.Context, req *pb.DeviceInfo) (res *pb.SuccessResponse, err error) {
 	device := &Device{
-		server:   s,
-		Name:     req.Name,
-		Type:     req.Type,
-		PullURL:  req.PullURL,
-		ParentID: uint(req.ParentID),
+		server:      s,
+		Name:        req.Name,
+		Type:        req.Type,
+		PullURL:     req.PullURL,
+		ParentID:    uint(req.ParentID),
+		PullOnStart: req.PullOnStart,
+		StopOnIdle:  req.StopOnIdle,
+		Audio:       req.Audio,
+		Description: req.Description,
 	}
 	if s.DB == nil {
 		err = pkg.ErrNoDB
@@ -589,6 +597,10 @@ func (s *Server) UpdateDevice(ctx context.Context, req *pb.DeviceInfo) (res *pb.
 	target.PullURL = req.PullURL
 	target.ParentID = uint(req.ParentID)
 	target.Type = req.Type
+	target.PullOnStart = req.PullOnStart
+	target.StopOnIdle = req.StopOnIdle
+	target.Audio = req.Audio
+	target.Description = req.Description
 	s.DB.Save(target)
 	res = &pb.SuccessResponse{}
 	return
@@ -651,6 +663,18 @@ func (s *Server) SetStreamAlias(ctx context.Context, req *pb.SetStreamAliasReque
 				if aliasStream.Publisher != nil {
 					if publisher, hasTarget := s.Streams.Get(req.Alias); hasTarget { // restore stream
 						aliasStream.TransferSubscribers(publisher)
+					}
+				} else {
+					var args url.Values
+					for sub := range aliasStream.Publisher.SubscriberRange {
+						if sub.StreamPath == req.Alias {
+							aliasStream.Publisher.RemoveSubscriber(sub)
+							s.Waiting.Wait(sub)
+							args = sub.Args
+						}
+					}
+					if args != nil {
+						s.OnSubscribe(req.Alias, args)
 					}
 				}
 			}

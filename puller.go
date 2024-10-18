@@ -15,7 +15,10 @@ import (
 	"m7s.live/m7s/v5/pkg/util"
 )
 
-const StartKey = "start"
+const (
+	StartKey = "start"
+	EndKey   = "end"
+)
 
 type (
 	Connection struct {
@@ -51,11 +54,11 @@ type (
 
 	RecordFilePuller struct {
 		task.Task
-		PullJob       PullJob
-		PullStartTime time.Time
-		Streams       []RecordStream
-		File          *os.File
-		offsetTime    time.Duration
+		PullJob                    PullJob
+		PullStartTime, PullEndTime time.Time
+		Streams                    []RecordStream
+		File                       *os.File
+		MaxTS                      int64
 	}
 )
 
@@ -187,11 +190,22 @@ func (p *RecordFilePuller) Start() (err error) {
 	if p.PullStartTime, err = util.TimeQueryParse(p.PullJob.Args.Get(StartKey)); err != nil {
 		return
 	}
-
-	tx := p.PullJob.Plugin.DB.Find(&p.Streams, "end_time>? AND stream_path=?", p.PullStartTime, p.PullJob.RemoteURL)
-	if tx.Error != nil {
-		return tx.Error
+	if p.PullJob.Args.Get(EndKey) != "" {
+		if p.PullEndTime, err = util.TimeQueryParse(p.PullJob.Args.Get(EndKey)); err != nil {
+			return
+		}
+		tx := p.PullJob.Plugin.DB.Find(&p.Streams, "end_time>? AND end_time<? AND stream_path=?", p.PullStartTime, p.PullEndTime, p.PullJob.RemoteURL)
+		if tx.Error != nil {
+			return tx.Error
+		}
+		p.MaxTS = p.PullEndTime.Sub(p.PullStartTime).Milliseconds()
+	} else {
+		tx := p.PullJob.Plugin.DB.Find(&p.Streams, "end_time>? AND stream_path=?", p.PullStartTime, p.PullJob.RemoteURL)
+		if tx.Error != nil {
+			return tx.Error
+		}
 	}
+
 	if len(p.Streams) == 0 {
 		return fmt.Errorf("stream not found")
 	}

@@ -94,8 +94,8 @@ func (s *Subscriber) Start() (err error) {
 			server.OnSubscribe(alias.StreamPath, s.Args)
 		}
 	} else {
-		for _, alias := range server.StreamAlias {
-			if streamPath := alias.Alias.Replace(s.StreamPath, alias.Path); streamPath != "" {
+		for reg, alias := range server.StreamAlias {
+			if streamPath := reg.Replace(s.StreamPath, alias); streamPath != "" {
 				server.AliasStreams.Set(&AliasStream{
 					StreamPath: streamPath,
 					Alias:      s.StreamPath,

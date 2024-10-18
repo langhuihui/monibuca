@@ -8,6 +8,18 @@
 - [x] 支持 MP4 文件拉流
 - [x] 支持下载指定时间段 MP4 文件（拼装）
 
+### 录制
+支持正则表达式替换录制文件名
+配置示例：
+```yaml
+mp4:
+  onpub:
+    record:
+      ^live/(.+)$:
+        fragment: 10s
+        filepath: record/$1
+```
+
 ### MP4 文件拉流
 
 mp4 文件拉流是指读取 MP4 文件，然后转换成 m7s 的流，从而可以订阅该流从而观看该 MP4 文件视频。
@@ -37,7 +49,13 @@ mp4:
       vod/test: live/test
 ```
 
-此时如果有人订阅了 vod/test 流，那么就会从数据库中查询streamPath 为 `live/test` 录制文件，并且根据拉流参数中的 start 参数筛选录制文件。
+此时如果有人订阅了 vod/test 流，那么就会从数据库中查询streamPath 为 `live/test` 录制文件，并且根据拉流参数中的 start 和 end（可选） 参数筛选录制文件。
+
+例如使用 ffplay 播放：
+
+```shell
+ffplay rtmp://localhost/vod/test?start=2021-01-01T00:00:00
+```
 
 如果需要配置一个更通用的录制拉流，可以使用正则表达式：
 

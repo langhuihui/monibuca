@@ -52,25 +52,14 @@ var (
 )
 
 type (
-	StreamAlias struct {
-		Path       string
-		Alias      config.Regexp
-		AutoRemove bool
-	}
 	ServerConfig struct {
-		EnableSubEvent bool          `default:"true" desc:"启用订阅事件,禁用可以提高性能"` //启用订阅事件,禁用可以提高性能
-		SettingDir     string        `default:".m7s" desc:""`
-		FatalDir       string        `default:"fatal" desc:""`
-		PulseInterval  time.Duration `default:"5s" desc:"心跳事件间隔"`    //心跳事件间隔
-		DisableAll     bool          `default:"false" desc:"禁用所有插件"` //禁用所有插件
-		StreamAlias    []StreamAlias `desc:"流别名"`
-		Device         []struct {
-			ID       uint
-			ParentID uint
-			Name     string
-			Type     string
-			PullURL  string
-		}
+		EnableSubEvent bool                     `default:"true" desc:"启用订阅事件,禁用可以提高性能"` //启用订阅事件,禁用可以提高性能
+		SettingDir     string                   `default:".m7s" desc:""`
+		FatalDir       string                   `default:"fatal" desc:""`
+		PulseInterval  time.Duration            `default:"5s" desc:"心跳事件间隔"`    //心跳事件间隔
+		DisableAll     bool                     `default:"false" desc:"禁用所有插件"` //禁用所有插件
+		StreamAlias    map[config.Regexp]string `desc:"流别名"`
+		Device         []*Device
 	}
 	WaitStream struct {
 		StreamPath string
@@ -314,15 +303,9 @@ func (s *Server) Start() (err error) {
 		if s.DB != nil {
 			s.DB.AutoMigrate(&Device{})
 		}
-		for _, device := range s.Device {
-			if device.ID != 0 {
-				var d Device
-				d.ID = device.ID
-				d.Name = device.Name
-				d.PullURL = device.PullURL
-				d.ParentID = device.ParentID
+		for _, d := range s.Device {
+			if d.ID != 0 {
 				d.server = s
-				d.Type = device.Type
 				if d.Type == "" {
 					if strings.HasPrefix(d.PullURL, "srt://") {
 						d.Type = "srt"
@@ -348,18 +331,18 @@ func (s *Server) Start() (err error) {
 					}
 				}
 				if s.DB != nil {
-					s.DB.Save(&d)
+					s.DB.Save(d)
 				} else {
-					s.Devices.Add(&d, s.Logger.With("device", device.ID, "type", device.Type, "name", device.Name))
+					s.Devices.Add(d, s.Logger.With("device", d.ID, "type", d.Type, "name", d.Name))
 				}
 			}
 		}
 		if s.DB != nil {
 			var devices []*Device
 			s.DB.Find(&devices)
-			for _, device := range devices {
-				device.server = s
-				s.Devices.Add(device, s.Logger.With("device", device.ID, "type", device.Type, "name", device.Name))
+			for _, d := range devices {
+				d.server = s
+				s.Devices.Add(d, s.Logger.With("device", d.ID, "type", d.Type, "name", d.Name))
 			}
 		}
 		return nil

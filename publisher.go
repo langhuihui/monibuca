@@ -195,7 +195,10 @@ func (p *Publisher) Start() (err error) {
 	s.Waiting.WakeUp(p.StreamPath, p)
 
 	for alias := range s.AliasStreams.Range {
-		if alias.StreamPath == p.StreamPath && alias.Publisher == nil {
+		if alias.StreamPath != p.StreamPath {
+			continue
+		}
+		if alias.Publisher == nil {
 			alias.Publisher = p
 			s.Waiting.WakeUp(alias.Alias, p)
 		} else if alias.Publisher.StreamPath != alias.StreamPath {

@@ -2,6 +2,7 @@ package m7s
 
 import (
 	"fmt"
+	"time"
 
 	"gorm.io/gorm"
 	"m7s.live/m7s/v5/pkg/config"
@@ -20,19 +21,21 @@ type (
 		Pull()
 	}
 	Device struct {
-		server    *Server `gorm:"-:all"`
-		task.Work `gorm:"-:all"`
-		gorm.Model
-		Name       string
-		StreamPath string
-		PullURL    string
-		PullMode   byte          // 0: 按需拉流, 1: 自动拉流
-		Record     config.Record `gorm:"embedded;embeddedPrefix:record_"`
-		Audio      bool
-		ParentID   uint
-		Type       string
-		Status     byte
-		Handler    IDevice `gorm:"-:all"`
+		server                         *Server `gorm:"-:all"`
+		task.Work                      `gorm:"-:all" yaml:"-"`
+		ID                             uint           `gorm:"primarykey"`
+		CreatedAt, UpdatedAt           time.Time      `yaml:"-"`
+		DeletedAt                      gorm.DeletedAt `gorm:"index" yaml:"-"`
+		Name                           string
+		StreamPath                     string
+		PullURL                        string
+		PullOnStart, StopOnIdle, Audio bool
+		Record                         config.Record `gorm:"embedded;embeddedPrefix:record_"`
+		ParentID                       uint
+		Type                           string
+		Status                         byte
+		Description                    string
+		Handler                        IDevice `gorm:"-:all" yaml:"-"`
 	}
 	DeviceManager struct {
 		task.Manager[uint32, *Device]
