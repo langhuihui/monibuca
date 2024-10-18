@@ -83,10 +83,12 @@ func (p *PullJob) GetPullJob() *PullJob {
 }
 
 func (p *PullJob) Init(puller IPuller, plugin *Plugin, streamPath string, conf config.Pull) *PullJob {
-	publishConfig := plugin.config.Publish
-	publishConfig.PublishTimeout = 0
-	p.publishConfig = &publishConfig
-	p.Args = conf.Args
+	if conf.PubConf != nil {
+		p.publishConfig = conf.PubConf
+	} else {
+		p.publishConfig = &plugin.config.Publish
+	}
+	p.Args = url.Values(conf.Args)
 	p.conf = &conf
 	remoteURL := conf.URL
 	u, err := url.Parse(remoteURL)
@@ -105,7 +107,7 @@ func (p *PullJob) Init(puller IPuller, plugin *Plugin, streamPath string, conf c
 			}
 		}
 	}
-	p.Connection.Init(plugin, streamPath, remoteURL, conf.Proxy, conf.Header)
+	p.Connection.Init(plugin, streamPath, remoteURL, conf.Proxy, http.Header(conf.Header))
 	p.puller = puller
 	p.SetDescriptions(task.Description{
 		"plugin":     plugin.Meta.Name,

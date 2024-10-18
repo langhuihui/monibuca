@@ -13,10 +13,12 @@ import (
 
 	"m7s.live/m7s/v5/pkg/task"
 
+	"github.com/mcuadros/go-defaults"
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/disk"
 	"github.com/shirou/gopsutil/v3/mem"
 	. "github.com/shirou/gopsutil/v3/net"
+	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"gopkg.in/yaml.v3"
@@ -547,18 +549,20 @@ func (s *Server) GetDeviceList(ctx context.Context, req *emptypb.Empty) (res *pb
 	res = &pb.DeviceListResponse{}
 	for device := range s.Devices.Range {
 		res.Data = append(res.Data, &pb.DeviceInfo{
-			Name:        device.Name,
-			CreateTime:  timestamppb.New(device.CreatedAt),
-			UpdateTime:  timestamppb.New(device.UpdatedAt),
-			Type:        device.Type,
-			PullURL:     device.PullURL,
-			ParentID:    uint32(device.ParentID),
-			Status:      uint32(device.Status),
-			ID:          uint32(device.ID),
-			PullOnStart: device.PullOnStart,
-			StopOnIdle:  device.StopOnIdle,
-			Audio:       device.Audio,
-			Description: device.Description,
+			Name:           device.Name,
+			CreateTime:     timestamppb.New(device.CreatedAt),
+			UpdateTime:     timestamppb.New(device.UpdatedAt),
+			Type:           device.Type,
+			PullURL:        device.URL,
+			ParentID:       uint32(device.ParentID),
+			Status:         uint32(device.Status),
+			ID:             uint32(device.ID),
+			PullOnStart:    device.PullOnStart,
+			StopOnIdle:     device.PubConf.DelayCloseTimeout > 0,
+			Audio:          device.PubConf.PubAudio,
+			RecordPath:     device.Record.FilePath,
+			RecordFragment: durationpb.New(device.Record.Fragment),
+			Description:    device.Description,
 		})
 	}
 	return
@@ -569,13 +573,18 @@ func (s *Server) AddDevice(ctx context.Context, req *pb.DeviceInfo) (res *pb.Suc
 		server:      s,
 		Name:        req.Name,
 		Type:        req.Type,
-		PullURL:     req.PullURL,
 		ParentID:    uint(req.ParentID),
 		PullOnStart: req.PullOnStart,
-		StopOnIdle:  req.StopOnIdle,
-		Audio:       req.Audio,
 		Description: req.Description,
 	}
+	device.PubConf = config.NewPublish()
+	defaults.SetDefaults(&device.Pull)
+	defaults.SetDefaults(&device.Record)
+	device.URL = req.PullURL
+	device.PubConf.PubAudio = req.Audio
+	device.PubConf.DelayCloseTimeout = util.Conditional(req.StopOnIdle, 5*time.Second, 0)
+	device.Record.FilePath = req.RecordPath
+	device.Record.Fragment = req.RecordFragment.AsDuration()
 	if s.DB == nil {
 		err = pkg.ErrNoDB
 		return
@@ -592,15 +601,17 @@ func (s *Server) UpdateDevice(ctx context.Context, req *pb.DeviceInfo) (res *pb.
 		return
 	}
 	target := &Device{}
-	target.ID = uint(req.ID)
+	s.DB.First(target, req.ID)
 	target.Name = req.Name
-	target.PullURL = req.PullURL
+	target.URL = req.PullURL
 	target.ParentID = uint(req.ParentID)
 	target.Type = req.Type
 	target.PullOnStart = req.PullOnStart
-	target.StopOnIdle = req.StopOnIdle
-	target.Audio = req.Audio
+	target.PubConf.DelayCloseTimeout = util.Conditional(req.StopOnIdle, 5*time.Second, 0)
+	target.PubConf.PubAudio = req.Audio
 	target.Description = req.Description
+	target.Record.FilePath = req.RecordPath
+	target.Record.Fragment = req.RecordFragment.AsDuration()
 	s.DB.Save(target)
 	res = &pb.SuccessResponse{}
 	return

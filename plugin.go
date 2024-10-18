@@ -406,13 +406,13 @@ func (p *Plugin) OnSubscribe(streamPath string, args url.Values) {
 	//	}
 	for reg, conf := range p.config.OnSub.Pull {
 		if p.Meta.Puller != nil {
-			conf.Args = args
+			conf.Args = config.HTTPValus(args)
 			conf.URL = reg.Replace(streamPath, conf.URL)
 			p.handler.Pull(streamPath, conf)
 		}
 	}
 	for device := range p.Server.Devices.Range {
-		if device.Status == DeviceStatusOnline && device.GetStreamPath() == streamPath {
+		if device.Status == DeviceStatusOnline && device.GetStreamPath() == streamPath && !device.PullOnStart {
 			device.Handler.Pull()
 		}
 	}

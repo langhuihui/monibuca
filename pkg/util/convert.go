@@ -4,25 +4,33 @@ import (
 	"encoding/binary"
 	"errors"
 	"io"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
 )
 
-func TimeQueryParse(query string) (t time.Time, err error) {
+var unixTimeReg = regexp.MustCompile(`^\d+$`)
+
+func TimeQueryParse(query string) (time.Time, error) {
+	if unixTimeReg.MatchString(query) {
+		unixTime, err := strconv.ParseInt(query, 10, 64)
+		if err != nil {
+			return time.Time{}, err
+		}
+		return time.Unix(unixTime, 0), nil
+	}
 	if !strings.Contains(query, "T") {
 		query = time.Now().Format("2006-01-02") + "T" + query
 	}
-	t, err = time.ParseInLocation("2006-01-02T15:04:05", query, time.Local)
-	return
+	return time.ParseInLocation("2006-01-02T15:04:05", query, time.Local)
 }
 
-func TimeQueryParseRefer(query string, refer time.Time) (t time.Time, err error) {
+func TimeQueryParseRefer(query string, refer time.Time) (time.Time, error) {
 	if !strings.Contains(query, "T") {
 		query = refer.Format("2006-01-02") + "T" + query
 	}
-	t, err = time.ParseInLocation("2006-01-02T15:04:05", query, time.Local)
-	return
+	return time.ParseInLocation("2006-01-02T15:04:05", query, time.Local)
 }
 
 /*

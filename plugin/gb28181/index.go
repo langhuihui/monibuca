@@ -104,10 +104,7 @@ func (gb *GB28181Plugin) OnInit() (err error) {
 }
 
 func (p *GB28181Plugin) OnDeviceAdd(device *m7s.Device) (ret task.ITask) {
-	if device.Type != "gb28181" {
-		return
-	}
-	deviceID, channelID, _ := strings.Cut(device.PullURL, "/")
+	deviceID, channelID, _ := strings.Cut(device.URL, "/")
 	if d, ok := p.devices.Get(deviceID); ok {
 		if channel, ok := d.channels.Get(channelID); ok {
 			channel.AbstractDevice = device
@@ -323,7 +320,7 @@ func (gb *GB28181Plugin) StoreDevice(id string, req *sip.Request) (d *Device) {
 		gb.devices.Add(d)
 		d.channels.OnAdd(func(c *Channel) {
 			if absDevice, ok := gb.Server.Devices.Find(func(absDevice *m7s.Device) bool {
-				return absDevice.Type == "gb28181" && absDevice.PullURL == fmt.Sprintf("%s/%s", d.ID, c.DeviceID)
+				return absDevice.Type == "gb28181" && absDevice.URL == fmt.Sprintf("%s/%s", d.ID, c.DeviceID)
 			}); ok {
 				c.AbstractDevice = absDevice
 				absDevice.Handler = c

@@ -2,6 +2,7 @@ syntax = "proto3";
 import "google/api/annotations.proto";
 import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";
+import "google/protobuf/duration.proto";
 import "google/protobuf/any.proto";
 package global;
 option go_package="m7s.live/m7s/v5/pb";
@@ -70,7 +71,7 @@ service api {
   }
   rpc SetStreamAlias (SetStreamAliasRequest) returns (SuccessResponse) {
     option (google.api.http) = {
-      post: "/api/stream/alias/{streamPath=**}"
+      post: "/api/stream/alias"
       body: "*"
     };
   }
@@ -349,6 +350,8 @@ message DeviceInfo {
   bool stopOnIdle = 10; // 空闲时停止拉流
   bool audio = 11; // 是否拉取音频
   string description = 12; // 设备描述
+  string recordPath = 13; // 录制路径
+  google.protobuf.Duration recordFragment = 14; // 录制片段长度
 }
 
 message SetStreamAliasRequest {

@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"m7s.live/m7s/v5"
-	"m7s.live/m7s/v5/pkg/config"
 	"m7s.live/m7s/v5/pkg/util"
 	gb28181 "m7s.live/m7s/v5/plugin/gb28181/pkg"
 )
@@ -37,5 +36,5 @@ func (c *Channel) GetKey() string {
 }
 
 func (c *Channel) Pull() {
-	c.Device.plugin.Pull(c.AbstractDevice.GetStreamPath(), config.Pull{URL: c.AbstractDevice.PullURL,MaxRetry: -1})
+	c.Device.plugin.Pull(c.AbstractDevice.GetStreamPath(), c.AbstractDevice.Pull)
 }

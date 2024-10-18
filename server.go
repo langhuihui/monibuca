@@ -306,26 +306,26 @@ func (s *Server) Start() (err error) {
 		for _, d := range s.Device {
 			if d.ID != 0 {
 				d.server = s
+				if d.PubConf == nil {
+					d.PubConf = config.NewPublish()
+				}
 				if d.Type == "" {
-					if strings.HasPrefix(d.PullURL, "srt://") {
-						d.Type = "srt"
-					} else if strings.HasPrefix(d.PullURL, "rtsp://") {
-						d.Type = "rtsp"
-					} else if strings.HasPrefix(d.PullURL, "rtmp://") {
-						d.Type = "rtmp"
-					} else if strings.HasPrefix(d.PullURL, "srt://") {
-						d.Type = "srt"
-					} else {
-						u, err := url.Parse(d.PullURL)
-						if err != nil {
-							s.Error("parse pull url failed", "error", err)
-							continue
-						}
-						if strings.HasSuffix(u.Path, ".m3u8") {
+					u, err := url.Parse(d.URL)
+					if err != nil {
+						s.Error("parse pull url failed", "error", err)
+						continue
+					}
+					switch u.Scheme {
+					case "srt", "rtsp", "rtmp":
+						d.Type = u.Scheme
+					default:
+						ext := filepath.Ext(u.Path)
+						switch ext {
+						case ".m3u8":
 							d.Type = "hls"
-						} else if strings.HasSuffix(u.Path, ".flv") {
+						case ".flv":
 							d.Type = "flv"
-						} else if strings.HasSuffix(u.Path, ".mp4") {
+						case ".mp4":
 							d.Type = "mp4"
 						}
 					}

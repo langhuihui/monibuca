@@ -1,10 +1,13 @@
 package config
 
 import (
+	"database/sql/driver"
+	"fmt"
 	"net/http"
-	"net/url"
 	"time"
 
+	"github.com/mcuadros/go-defaults"
+	"gopkg.in/yaml.v3"
 	"m7s.live/m7s/v5/pkg/util"
 )
 
@@ -38,13 +41,15 @@ type (
 		Key             string        `desc:"订阅鉴权key"`                                      // 订阅鉴权key
 		Internal        bool          `default:"false" desc:"是否内部订阅"`                       // 是否内部订阅
 	}
-	Pull struct {
+	HTTPValus map[string][]string
+	Pull      struct {
 		URL           string        `desc:"拉流地址"`
 		MaxRetry      int           `default:"-1" desc:"断开后自动重试次数,0:不重试,-1:无限重试"` // 断开后自动重拉,0 表示不自动重拉，-1 表示无限重拉，高于0 的数代表最大重拉次数
 		RetryInterval time.Duration `default:"5s" desc:"重试间隔"`                    // 重试间隔
 		Proxy         string        `desc:"代理地址"`                                 // 代理地址
-		Header        http.Header
-		Args          url.Values
+		Header        HTTPValus
+		Args          HTTPValus
+		PubConf       *Publish `gorm:"-:all"`
 	}
 	Push struct {
 		URL           string        `desc:"推送地址"`                    // 推送地址
@@ -52,6 +57,7 @@ type (
 		RetryInterval time.Duration `default:"5s" desc:"重试间隔"`       // 重试间隔
 		Proxy         string        `desc:"代理地址"`                    // 代理地址
 		Header        http.Header
+		SubConf       *Subscribe
 	}
 	Record struct {
 		FilePath string        `desc:"录制文件路径"` // 录制文件路径
@@ -97,6 +103,25 @@ type (
 	}
 )
 
+func NewPublish() *Publish {
+	p := &Publish{}
+	defaults.SetDefaults(p)
+	p.RingSize = util.Range[int]{20, 1024}
+	return p
+}
+
 func (p *Record) GetRecordConfig() *Record {
 	return p
+}
+
+func (v *HTTPValus) Scan(value any) error {
+	bytes, ok := value.([]byte)
+	if !ok {
+		return fmt.Errorf("failed to unmarshal yaml value: %v", value)
+	}
+	return yaml.Unmarshal(bytes, v)
+}
+
+func (v HTTPValus) Value() (driver.Value, error) {
+	return yaml.Marshal(v)
 }

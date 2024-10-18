@@ -18,7 +18,7 @@ import (
 	"m7s.live/m7s/v5/pkg/util"
 )
 
-const Timeout = time.Second * 5
+const Timeout = time.Second * 10
 
 func NewNetConnection(conn net.Conn) *NetConnection {
 	return &NetConnection{

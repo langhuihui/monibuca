@@ -1,14 +1,21 @@
 global:
-  http:
-    listenaddr: :8081
-  tcp:
-    listenaddr: :50052
+  disableall: true
+  http: :8081
+  tcp: :50052
   device:
     - id: 1
       name: default
       description: Example device
-      pullurl: rtsp://localhost/live/test
-
+      pullonstart: true
+      pull:
+        url: rtsp://localhost/live/test
+console:
+  enable: true
+preview:
+  enable: true
+flv:
+  enable: true
 rtsp:
+  enable: true
   tcp: :8554
 
