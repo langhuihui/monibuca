@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"m7s.live/m7s/v5/pkg/task"
+	"m7s.live/v5/pkg/task"
 
 	"github.com/mcuadros/go-defaults"
 	"github.com/shirou/gopsutil/v3/cpu"
@@ -22,10 +22,10 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"gopkg.in/yaml.v3"
-	"m7s.live/m7s/v5/pb"
-	"m7s.live/m7s/v5/pkg"
-	"m7s.live/m7s/v5/pkg/config"
-	"m7s.live/m7s/v5/pkg/util"
+	"m7s.live/v5/pb"
+	"m7s.live/v5/pkg"
+	"m7s.live/v5/pkg/config"
+	"m7s.live/v5/pkg/util"
 )
 
 var localIP string

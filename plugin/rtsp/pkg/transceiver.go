@@ -5,8 +5,8 @@ import (
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v3"
-	"m7s.live/m7s/v5"
-	mrtp "m7s.live/m7s/v5/plugin/rtp/pkg"
+	"m7s.live/v5"
+	mrtp "m7s.live/v5/plugin/rtp/pkg"
 	"reflect"
 )
 

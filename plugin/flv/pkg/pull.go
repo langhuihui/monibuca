@@ -2,12 +2,12 @@ package flv
 
 import (
 	"errors"
-	"m7s.live/m7s/v5/pkg/config"
-	"m7s.live/m7s/v5/pkg/task"
+	"m7s.live/v5/pkg/config"
+	"m7s.live/v5/pkg/task"
 
-	"m7s.live/m7s/v5"
-	"m7s.live/m7s/v5/pkg/util"
-	rtmp "m7s.live/m7s/v5/plugin/rtmp/pkg"
+	"m7s.live/v5"
+	"m7s.live/v5/pkg/util"
+	rtmp "m7s.live/v5/plugin/rtmp/pkg"
 )
 
 type Puller struct {

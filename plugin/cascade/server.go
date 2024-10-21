@@ -6,11 +6,11 @@ import (
 	"strconv"
 	"strings"
 
-	"m7s.live/m7s/v5"
-	"m7s.live/m7s/v5/pkg/task"
+	"m7s.live/v5"
+	"m7s.live/v5/pkg/task"
 
 	"github.com/quic-go/quic-go"
-	cascade "m7s.live/m7s/v5/plugin/cascade/pkg"
+	cascade "m7s.live/v5/plugin/cascade/pkg"
 )
 
 type CascadeServerPlugin struct {

@@ -1,8 +1,8 @@
 package transcode
 
 import (
-	"m7s.live/m7s/v5"
-	"m7s.live/m7s/v5/pkg/task"
+	"m7s.live/v5"
+	"m7s.live/v5/pkg/task"
 )
 
 func NewPuller() m7s.IPuller {

@@ -5,8 +5,8 @@ import (
 	"errors"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
-	"m7s.live/m7s/v5/plugin/monitor/pb"
-	monitor "m7s.live/m7s/v5/plugin/monitor/pkg"
+	"m7s.live/v5/plugin/monitor/pb"
+	monitor "m7s.live/v5/plugin/monitor/pkg"
 	"slices"
 )
 

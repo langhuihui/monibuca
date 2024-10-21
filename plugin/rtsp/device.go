@@ -3,9 +3,9 @@ package plugin_rtsp
 import (
 	"time"
 
-	"m7s.live/m7s/v5"
-	"m7s.live/m7s/v5/pkg/util"
-	. "m7s.live/m7s/v5/plugin/rtsp/pkg"
+	"m7s.live/v5"
+	"m7s.live/v5/pkg/util"
+	. "m7s.live/v5/plugin/rtsp/pkg"
 )
 
 type RTSPDevice struct {
@@ -34,7 +34,7 @@ func (d *RTSPDevice) Tick(any) {
 			return
 		}
 		d.Device.ChangeStatus(m7s.DeviceStatusOnline)
-	case m7s.DeviceStatusOnline,m7s.DeviceStatusPulling:
+	case m7s.DeviceStatusOnline, m7s.DeviceStatusPulling:
 		t := time.Now()
 		err := d.conn.Options()
 		d.Device.RTT = time.Since(t)

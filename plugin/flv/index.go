@@ -6,10 +6,10 @@ import (
 	"strings"
 	"time"
 
-	"m7s.live/m7s/v5"
+	"m7s.live/v5"
 
-	"m7s.live/m7s/v5/pkg/task"
-	. "m7s.live/m7s/v5/plugin/flv/pkg"
+	"m7s.live/v5/pkg/task"
+	. "m7s.live/v5/plugin/flv/pkg"
 )
 
 type FLVPlugin struct {

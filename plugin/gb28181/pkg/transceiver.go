@@ -5,11 +5,11 @@ import (
 	"os"
 
 	"github.com/pion/rtp"
-	"m7s.live/m7s/v5"
-	"m7s.live/m7s/v5/pkg"
-	"m7s.live/m7s/v5/pkg/task"
-	"m7s.live/m7s/v5/pkg/util"
-	rtp2 "m7s.live/m7s/v5/plugin/rtp/pkg"
+	"m7s.live/v5"
+	"m7s.live/v5/pkg"
+	"m7s.live/v5/pkg/task"
+	"m7s.live/v5/pkg/util"
+	rtp2 "m7s.live/v5/plugin/rtp/pkg"
 )
 
 const (

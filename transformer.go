@@ -5,10 +5,10 @@ import (
 	"slices"
 	"time"
 
-	"m7s.live/m7s/v5/pkg"
-	"m7s.live/m7s/v5/pkg/config"
-	"m7s.live/m7s/v5/pkg/task"
-	"m7s.live/m7s/v5/pkg/util"
+	"m7s.live/v5/pkg"
+	"m7s.live/v5/pkg/config"
+	"m7s.live/v5/pkg/task"
+	"m7s.live/v5/pkg/util"
 )
 
 type (

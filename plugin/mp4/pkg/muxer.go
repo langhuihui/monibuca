@@ -6,7 +6,7 @@ import (
 	"io"
 	"os"
 
-	. "m7s.live/m7s/v5/plugin/mp4/pkg/box"
+	. "m7s.live/v5/plugin/mp4/pkg/box"
 )
 
 const (

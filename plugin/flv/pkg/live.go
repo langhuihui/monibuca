@@ -2,9 +2,9 @@ package flv
 
 import (
 	"encoding/binary"
-	"m7s.live/m7s/v5"
-	. "m7s.live/m7s/v5/pkg"
-	rtmp "m7s.live/m7s/v5/plugin/rtmp/pkg"
+	"m7s.live/v5"
+	. "m7s.live/v5/pkg"
+	rtmp "m7s.live/v5/plugin/rtmp/pkg"
 	"net"
 )
 

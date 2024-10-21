@@ -7,10 +7,10 @@ import (
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
 	. "github.com/pion/webrtc/v3"
-	"m7s.live/m7s/v5"
-	"m7s.live/m7s/v5/pkg/task"
-	"m7s.live/m7s/v5/pkg/util"
-	mrtp "m7s.live/m7s/v5/plugin/rtp/pkg"
+	"m7s.live/v5"
+	"m7s.live/v5/pkg/task"
+	"m7s.live/v5/pkg/util"
+	mrtp "m7s.live/v5/plugin/rtp/pkg"
 )
 
 type Connection struct {

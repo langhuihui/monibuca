@@ -12,7 +12,7 @@ import (
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
-	pb "m7s.live/m7s/v5/pb"
+	pb "m7s.live/v5/pb"
 )
 
 // This is a compile-time assertion to ensure that this generated file

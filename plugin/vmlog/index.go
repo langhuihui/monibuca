@@ -8,7 +8,7 @@ import (
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/fs"
 	"github.com/VictoriaMetrics/VictoriaMetrics/lib/logger"
 	"log/slog"
-	"m7s.live/m7s/v5"
+	"m7s.live/v5"
 	"net/http"
 	//"m7s.live/m7s/v5/plugin/logrotate/pb"
 )

@@ -11,7 +11,7 @@ import (
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
-	pb "m7s.live/m7s/v5/pb"
+	pb "m7s.live/v5/pb"
 )
 
 // This is a compile-time assertion to ensure that this generated file

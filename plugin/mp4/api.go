@@ -5,17 +5,17 @@ import (
 	"fmt"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"io"
-	"m7s.live/m7s/v5/plugin/mp4/pb"
+	"m7s.live/v5/plugin/mp4/pb"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
-	"m7s.live/m7s/v5"
-	"m7s.live/m7s/v5/pkg/util"
-	mp4 "m7s.live/m7s/v5/plugin/mp4/pkg"
-	"m7s.live/m7s/v5/plugin/mp4/pkg/box"
+	"m7s.live/v5"
+	"m7s.live/v5/pkg/util"
+	mp4 "m7s.live/v5/plugin/mp4/pkg"
+	"m7s.live/v5/plugin/mp4/pkg/box"
 )
 
 type ContentPart struct {

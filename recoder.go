@@ -1,14 +1,14 @@
 package m7s
 
 import (
-	"m7s.live/m7s/v5/pkg/config"
+	"m7s.live/v5/pkg/config"
 	"os"
 	"path/filepath"
 	"time"
 
-	"m7s.live/m7s/v5/pkg/task"
+	"m7s.live/v5/pkg/task"
 
-	"m7s.live/m7s/v5/pkg"
+	"m7s.live/v5/pkg"
 )
 
 type (

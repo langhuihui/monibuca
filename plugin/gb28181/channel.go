@@ -5,9 +5,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"m7s.live/m7s/v5"
-	"m7s.live/m7s/v5/pkg/util"
-	gb28181 "m7s.live/m7s/v5/plugin/gb28181/pkg"
+	"m7s.live/v5"
+	"m7s.live/v5/pkg/util"
+	gb28181 "m7s.live/v5/plugin/gb28181/pkg"
 )
 
 type RecordRequest struct {

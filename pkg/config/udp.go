@@ -6,7 +6,7 @@ import (
 	"net"
 	"time"
 
-	"m7s.live/m7s/v5/pkg/task"
+	"m7s.live/v5/pkg/task"
 )
 
 type UDP struct {

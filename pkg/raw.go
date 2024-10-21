@@ -6,8 +6,8 @@ import (
 	"github.com/deepch/vdk/codec/h264parser"
 	"github.com/deepch/vdk/codec/h265parser"
 	"io"
-	"m7s.live/m7s/v5/pkg/codec"
-	"m7s.live/m7s/v5/pkg/util"
+	"m7s.live/v5/pkg/codec"
+	"m7s.live/v5/pkg/util"
 	"time"
 )
 
@@ -51,7 +51,7 @@ func (r *RawAudio) ConvertCtx(ctx codec.ICodecCtx) (codec.ICodecCtx, IAVFrame, e
 	c := ctx.GetBase()
 	if c.FourCC().Is(codec.FourCC_MP4A) {
 		seq := &RawAudio{
-			FourCC: codec.FourCC_MP4A,
+			FourCC:    codec.FourCC_MP4A,
 			Timestamp: r.Timestamp,
 		}
 		seq.SetAllocator(r.GetAllocator())

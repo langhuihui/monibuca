@@ -6,11 +6,11 @@ import (
 	"reflect"
 	"time"
 
-	"m7s.live/m7s/v5/pkg/codec"
-	"m7s.live/m7s/v5/pkg/config"
-	"m7s.live/m7s/v5/pkg/task"
+	"m7s.live/v5/pkg/codec"
+	"m7s.live/v5/pkg/config"
+	"m7s.live/v5/pkg/task"
 
-	"m7s.live/m7s/v5/pkg/util"
+	"m7s.live/v5/pkg/util"
 )
 
 type (

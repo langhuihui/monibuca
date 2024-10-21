@@ -2,10 +2,10 @@ package gb28181
 
 import (
 	"io"
-	"m7s.live/m7s/v5/pkg"
-	"m7s.live/m7s/v5/pkg/codec"
-	"m7s.live/m7s/v5/pkg/util"
-	mpegts "m7s.live/m7s/v5/plugin/hls/pkg/ts"
+	"m7s.live/v5/pkg"
+	"m7s.live/v5/pkg/codec"
+	"m7s.live/v5/pkg/util"
+	mpegts "m7s.live/v5/plugin/hls/pkg/ts"
 	"time"
 )
 

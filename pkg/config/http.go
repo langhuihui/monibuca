@@ -5,7 +5,7 @@ import (
 	"crypto/subtle"
 	"crypto/tls"
 	"log/slog"
-	"m7s.live/m7s/v5/pkg/task"
+	"m7s.live/v5/pkg/task"
 	"net/http"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"

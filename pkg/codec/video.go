@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 
-	"m7s.live/m7s/v5/pkg/util"
+	"m7s.live/v5/pkg/util"
 )
 
 type FourCC [4]byte

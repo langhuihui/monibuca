@@ -13,7 +13,7 @@ import (
 	"runtime"
 	"strings"
 
-	"m7s.live/m7s/v5/pkg/task"
+	"m7s.live/v5/pkg/task"
 
 	"github.com/quic-go/quic-go"
 
@@ -22,10 +22,10 @@ import (
 	"google.golang.org/grpc"
 	"gopkg.in/yaml.v3"
 	"gorm.io/gorm"
-	. "m7s.live/m7s/v5/pkg"
-	"m7s.live/m7s/v5/pkg/config"
-	"m7s.live/m7s/v5/pkg/db"
-	"m7s.live/m7s/v5/pkg/util"
+	. "m7s.live/v5/pkg"
+	"m7s.live/v5/pkg/config"
+	"m7s.live/v5/pkg/db"
+	"m7s.live/v5/pkg/util"
 )
 
 type (

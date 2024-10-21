@@ -16,9 +16,9 @@ import (
 	"github.com/shirou/gopsutil/v3/cpu"
 	"google.golang.org/protobuf/proto"
 
-	"m7s.live/m7s/v5/pkg/task"
+	"m7s.live/v5/pkg/task"
 
-	"m7s.live/m7s/v5/pkg/config"
+	"m7s.live/v5/pkg/config"
 
 	sysruntime "runtime"
 
@@ -31,10 +31,10 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"gopkg.in/yaml.v3"
 	"gorm.io/gorm"
-	"m7s.live/m7s/v5/pb"
-	. "m7s.live/m7s/v5/pkg"
-	"m7s.live/m7s/v5/pkg/db"
-	"m7s.live/m7s/v5/pkg/util"
+	"m7s.live/v5/pb"
+	. "m7s.live/v5/pkg"
+	"m7s.live/v5/pkg/db"
+	"m7s.live/v5/pkg/util"
 )
 
 var (

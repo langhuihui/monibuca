@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/deepch/vdk/codec/aacparser"
-	"m7s.live/m7s/v5/pkg/codec"
-	"m7s.live/m7s/v5/pkg/util"
+	"m7s.live/v5/pkg/codec"
+	"m7s.live/v5/pkg/util"
 )
 
 var _ IAVFrame = (*ADTS)(nil)

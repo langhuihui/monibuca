@@ -2,10 +2,10 @@ package plugin_monitor
 
 import (
 	"encoding/json"
-	"m7s.live/m7s/v5"
-	"m7s.live/m7s/v5/pkg/task"
-	"m7s.live/m7s/v5/plugin/monitor/pb"
-	monitor "m7s.live/m7s/v5/plugin/monitor/pkg"
+	"m7s.live/v5"
+	"m7s.live/v5/pkg/task"
+	"m7s.live/v5/plugin/monitor/pb"
+	monitor "m7s.live/v5/plugin/monitor/pkg"
 	"os"
 	"strings"
 	"time"

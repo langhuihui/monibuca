@@ -5,7 +5,7 @@ import (
 	_ "embed"
 	"github.com/pion/logging"
 	"io"
-	"m7s.live/m7s/v5/pkg/config"
+	"m7s.live/v5/pkg/config"
 	"net"
 	"net/http"
 	"regexp"
@@ -14,9 +14,9 @@ import (
 
 	"github.com/pion/interceptor"
 	. "github.com/pion/webrtc/v3"
-	"m7s.live/m7s/v5"
-	. "m7s.live/m7s/v5/pkg"
-	. "m7s.live/m7s/v5/plugin/webrtc/pkg"
+	"m7s.live/v5"
+	. "m7s.live/v5/pkg"
+	. "m7s.live/v5/plugin/webrtc/pkg"
 )
 
 var (

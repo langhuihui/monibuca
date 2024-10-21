@@ -5,7 +5,7 @@ import (
 	"github.com/go-delve/delve/pkg/config"
 	"github.com/go-delve/delve/service/debugger"
 	"io"
-	"m7s.live/m7s/v5"
+	"m7s.live/v5"
 	"net/http"
 	"net/http/pprof"
 	"os"

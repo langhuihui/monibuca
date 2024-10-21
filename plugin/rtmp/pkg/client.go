@@ -3,13 +3,13 @@ package rtmp
 import (
 	"crypto/tls"
 	"errors"
-	"m7s.live/m7s/v5/pkg/config"
-	"m7s.live/m7s/v5/pkg/task"
+	"m7s.live/v5/pkg/config"
+	"m7s.live/v5/pkg/task"
 	"net"
 	"net/url"
 	"strings"
 
-	"m7s.live/m7s/v5"
+	"m7s.live/v5"
 )
 
 func (c *Client) Start() (err error) {

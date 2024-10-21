@@ -3,7 +3,7 @@ package pkg
 import (
 	"context"
 	"log/slog"
-	"m7s.live/m7s/v5/pkg/task"
+	"m7s.live/v5/pkg/task"
 	"slices"
 )
 

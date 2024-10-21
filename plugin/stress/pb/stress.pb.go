@@ -11,7 +11,7 @@ import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
-	pb "m7s.live/m7s/v5/pb"
+	pb "m7s.live/v5/pb"
 	reflect "reflect"
 	sync "sync"
 )

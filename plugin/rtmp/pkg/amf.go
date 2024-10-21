@@ -5,7 +5,7 @@ import (
 	"io"
 	"reflect"
 
-	"m7s.live/m7s/v5/pkg/util"
+	"m7s.live/v5/pkg/util"
 )
 
 // Action Message Format -- AMF 0

@@ -6,7 +6,7 @@ import (
 	"log/slog"
 
 	"github.com/quic-go/quic-go"
-	"m7s.live/m7s/v5/pkg/task"
+	"m7s.live/v5/pkg/task"
 )
 
 type QuicConfig interface {

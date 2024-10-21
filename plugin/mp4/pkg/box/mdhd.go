@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/yapingcat/gomedia/go-codec"
-	"m7s.live/m7s/v5/pkg/util"
+	"m7s.live/v5/pkg/util"
 )
 
 // aligned(8) class MediaHeaderBox extends FullBox(‘mdhd’, version, 0) {

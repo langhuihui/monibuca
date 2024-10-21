@@ -7,12 +7,12 @@ import (
 	"path/filepath"
 	"time"
 
-	"m7s.live/m7s/v5"
-	"m7s.live/m7s/v5/pkg"
-	"m7s.live/m7s/v5/pkg/codec"
-	"m7s.live/m7s/v5/pkg/task"
-	"m7s.live/m7s/v5/plugin/mp4/pkg/box"
-	rtmp "m7s.live/m7s/v5/plugin/rtmp/pkg"
+	"m7s.live/v5"
+	"m7s.live/v5/pkg"
+	"m7s.live/v5/pkg/codec"
+	"m7s.live/v5/pkg/task"
+	"m7s.live/v5/plugin/mp4/pkg/box"
+	rtmp "m7s.live/v5/plugin/rtmp/pkg"
 )
 
 type WriteTrailerQueueTask struct {

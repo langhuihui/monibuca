@@ -3,10 +3,10 @@ package plugin_cascade
 import (
 	"crypto/tls"
 	"fmt"
-	"m7s.live/m7s/v5"
-	"m7s.live/m7s/v5/pkg/config"
-	"m7s.live/m7s/v5/pkg/task"
-	"m7s.live/m7s/v5/plugin/cascade/pkg"
+	"m7s.live/v5"
+	"m7s.live/v5/pkg/config"
+	"m7s.live/v5/pkg/task"
+	"m7s.live/v5/plugin/cascade/pkg"
 	"time"
 
 	"github.com/quic-go/quic-go"
