@@ -4,7 +4,7 @@ go 1.21
 
 require (
 	go.uber.org/zap v1.27.0
-	m7s.live/engine/v4 v4.15.3-0.20240829115103-f231a0cd71c1
+	m7s.live/engine/v4 v4.15.3-0.20241010014441-fd751796397a
 	m7s.live/plugin/debug/v4 v4.0.3
 	m7s.live/plugin/fmp4/v4 v4.0.6
 	m7s.live/plugin/gb28181/v4 v4.4.6-0.20240819083701-5690be3b64f7
@@ -18,7 +18,7 @@ require (
 	m7s.live/plugin/record/v4 v4.4.8-0.20240818073213-699868b602da
 	m7s.live/plugin/room/v4 v4.1.1
 	m7s.live/plugin/rtmp/v4 v4.3.1
-	m7s.live/plugin/rtsp/v4 v4.3.5
+	m7s.live/plugin/rtsp/v4 v4.3.6-0.20240927020532-4dc893e9fb60
 	m7s.live/plugin/snap/v4 v4.0.8
 	m7s.live/plugin/webrtc/v4 v4.2.6
 	m7s.live/plugin/webtransport/v4 v4.0.11
@@ -97,6 +97,6 @@ require (
 	golang.org/x/text v0.14.0 // indirect
 	golang.org/x/tools v0.19.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	m7s.live/plugin/ps/v4 v4.1.6-0.20240801064700-6bc9100fbc96 // indirect
+	m7s.live/plugin/ps/v4 v4.1.6-0.20240913054305-b03e0471fff9 // indirect
 
 )
