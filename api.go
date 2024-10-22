@@ -101,30 +101,38 @@ func (s *Server) api_Stream_AnnexB_(rw http.ResponseWriter, r *http.Request) {
 func (s *Server) getStreamInfo(pub *Publisher) (res *pb.StreamInfoResponse, err error) {
 	tmp, _ := json.Marshal(pub.GetDescriptions())
 	res = &pb.StreamInfoResponse{
-		Meta:        string(tmp),
-		Path:        pub.StreamPath,
-		State:       int32(pub.State),
-		StartTime:   timestamppb.New(pub.StartTime),
-		Subscribers: int32(pub.Subscribers.Length),
-		PluginName:  pub.Plugin.Meta.Name,
+		Data: &pb.StreamInfo{
+			Meta:        string(tmp),
+			Path:        pub.StreamPath,
+			State:       int32(pub.State),
+			StartTime:   timestamppb.New(pub.StartTime),
+			Subscribers: int32(pub.Subscribers.Length),
+			PluginName:  pub.Plugin.Meta.Name,
+			Type:        pub.Type,
+			Speed:       float32(pub.Speed),
+			StopOnIdle:  pub.DelayCloseTimeout > 0,
+			IsPaused:    pub.Paused != nil,
+			Gop:         int32(pub.GOP),
+			BufferTime:  durationpb.New(pub.BufferTime),
+		},
 	}
 
 	if t := pub.AudioTrack.AVTrack; t != nil {
 		if t.ICodecCtx != nil {
-			res.AudioTrack = &pb.AudioTrackInfo{
+			res.Data.AudioTrack = &pb.AudioTrackInfo{
 				Codec: t.FourCC().String(),
 				Meta:  t.GetInfo(),
 				Bps:   uint32(t.BPS),
 				Fps:   uint32(t.FPS),
 				Delta: pub.AudioTrack.Delta.String(),
 			}
-			res.AudioTrack.SampleRate = uint32(t.ICodecCtx.(pkg.IAudioCodecCtx).GetSampleRate())
-			res.AudioTrack.Channels = uint32(t.ICodecCtx.(pkg.IAudioCodecCtx).GetChannels())
+			res.Data.AudioTrack.SampleRate = uint32(t.ICodecCtx.(pkg.IAudioCodecCtx).GetSampleRate())
+			res.Data.AudioTrack.Channels = uint32(t.ICodecCtx.(pkg.IAudioCodecCtx).GetChannels())
 		}
 	}
 	if t := pub.VideoTrack.AVTrack; t != nil {
 		if t.ICodecCtx != nil {
-			res.VideoTrack = &pb.VideoTrackInfo{
+			res.Data.VideoTrack = &pb.VideoTrackInfo{
 				Codec: t.FourCC().String(),
 				Meta:  t.GetInfo(),
 				Bps:   uint32(t.BPS),
@@ -132,8 +140,8 @@ func (s *Server) getStreamInfo(pub *Publisher) (res *pb.StreamInfoResponse, err 
 				Delta: pub.VideoTrack.Delta.String(),
 				Gop:   uint32(pub.GOP),
 			}
-			res.VideoTrack.Width = uint32(t.ICodecCtx.(pkg.IVideoCodecCtx).Width())
-			res.VideoTrack.Height = uint32(t.ICodecCtx.(pkg.IVideoCodecCtx).Height())
+			res.Data.VideoTrack.Width = uint32(t.ICodecCtx.(pkg.IVideoCodecCtx).Width())
+			res.Data.VideoTrack.Height = uint32(t.ICodecCtx.(pkg.IVideoCodecCtx).Height())
 		}
 	}
 	return
@@ -175,9 +183,14 @@ func (s *Server) GetSubscribers(context.Context, *pb.SubscribersRequest) (res *p
 		for subscriber := range s.Subscribers.Range {
 			meta, _ := json.Marshal(subscriber.GetDescriptions())
 			snap := &pb.SubscriberSnapShot{
-				Id:        subscriber.ID,
-				StartTime: timestamppb.New(subscriber.StartTime),
-				Meta:      string(meta),
+				Id:         subscriber.ID,
+				StartTime:  timestamppb.New(subscriber.StartTime),
+				Meta:       string(meta),
+				Type:       subscriber.Type,
+				PluginName: subscriber.Plugin.Meta.Name,
+				SubMode:    int32(subscriber.SubMode),
+				SyncMode:   int32(subscriber.SyncMode),
+				BufferTime: durationpb.New(subscriber.BufferTime),
 			}
 			if ar := subscriber.AudioReader; ar != nil {
 				snap.AudioReader = &pb.RingReaderSnapShot{
@@ -198,7 +211,7 @@ func (s *Server) GetSubscribers(context.Context, *pb.SubscribersRequest) (res *p
 			subscribers = append(subscribers, snap)
 		}
 		res = &pb.SubscribersResponse{
-			List:  subscribers,
+			Data:  subscribers,
 			Total: int32(s.Subscribers.Length),
 		}
 		return nil
@@ -386,13 +399,13 @@ func (s *Server) StopSubscribe(ctx context.Context, req *pb.RequestWithId) (res 
 // /api/stream/list
 func (s *Server) StreamList(_ context.Context, req *pb.StreamListRequest) (res *pb.StreamListResponse, err error) {
 	s.Streams.Call(func() error {
-		var streams []*pb.StreamInfoResponse
+		var streams []*pb.StreamInfo
 		for publisher := range s.Streams.Range {
 			info, err := s.getStreamInfo(publisher)
 			if err != nil {
 				continue
 			}
-			streams = append(streams, info)
+			streams = append(streams, info.Data)
 		}
 		res = &pb.StreamListResponse{Data: streams, Total: int32(s.Streams.Length), PageNum: req.PageNum, PageSize: req.PageSize}
 		return nil

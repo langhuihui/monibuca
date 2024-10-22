@@ -223,7 +223,7 @@ message StreamListResponse {
   int32 total = 3;
   int32 pageNum = 4;
   int32 pageSize = 5;
-  repeated StreamInfoResponse data = 6;
+  repeated StreamInfo data = 6;
 }
 
 message StreamWaitListResponse {
@@ -235,6 +235,12 @@ message StreamSnapRequest {
 }
 
 message StreamInfoResponse {
+  int32 code = 1;
+  string message = 2;
+  StreamInfo data = 3;
+}
+
+message StreamInfo {
   string path = 1;
   int32 state = 2;
   int32 subscribers = 3;
@@ -244,6 +250,11 @@ message StreamInfoResponse {
   string pluginName = 7;
   string type = 8;
   string meta = 9;
+  bool isPaused = 10;
+  int32 gop = 11;
+  float speed = 12;
+  google.protobuf.Duration bufferTime = 13;
+  bool stopOnIdle = 14;
 }
 
 message Wrap {
@@ -331,13 +342,20 @@ message SubscriberSnapShot {
   RingReaderSnapShot audioReader = 3;
   RingReaderSnapShot videoReader = 4;
   string meta = 5;
+  google.protobuf.Duration bufferTime = 6;
+  int32 subMode = 7;
+  int32 syncMode = 8;
+  string pluginName = 9;
+  string type = 10;
 }
 
 message SubscribersResponse {
-  int32 total = 1;
-  int32 pageNum = 2;
-  int32 pageSize = 3;
-  repeated SubscriberSnapShot list = 4;
+  int32 code = 1;
+  string message = 2;
+  int32 total = 3;
+  int32 pageNum = 4;
+  int32 pageSize = 5;
+  repeated SubscriberSnapShot data = 6;
 }
 
 message DeviceListResponse {
