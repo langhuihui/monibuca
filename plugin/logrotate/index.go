@@ -7,9 +7,9 @@ import (
 	"github.com/alchemy/rotoslog"
 
 	"github.com/phsym/console-slog"
-	"m7s.live/v5"
-	"m7s.live/v5/pkg"
-	"m7s.live/v5/plugin/logrotate/pb"
+	"m7s.live/pro"
+	"m7s.live/pro/pkg"
+	"m7s.live/pro/plugin/logrotate/pb"
 )
 
 type LogRotatePlugin struct {

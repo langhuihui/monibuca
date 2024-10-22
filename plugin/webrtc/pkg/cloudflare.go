@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/pion/webrtc/v3"
-	"m7s.live/v5"
+	"m7s.live/pro"
 )
 
 type (

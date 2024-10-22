@@ -3,16 +3,16 @@ package plugin_stress
 import (
 	"context"
 	"fmt"
-	"m7s.live/v5/pkg/config"
+	"m7s.live/pro/pkg/config"
 
 	"google.golang.org/protobuf/types/known/emptypb"
-	"m7s.live/v5"
-	gpb "m7s.live/v5/pb"
-	"m7s.live/v5/pkg"
-	hdl "m7s.live/v5/plugin/flv/pkg"
-	rtmp "m7s.live/v5/plugin/rtmp/pkg"
-	rtsp "m7s.live/v5/plugin/rtsp/pkg"
-	"m7s.live/v5/plugin/stress/pb"
+	"m7s.live/pro"
+	gpb "m7s.live/pro/pb"
+	"m7s.live/pro/pkg"
+	hdl "m7s.live/pro/plugin/flv/pkg"
+	rtmp "m7s.live/pro/plugin/rtmp/pkg"
+	rtsp "m7s.live/pro/plugin/rtsp/pkg"
+	"m7s.live/pro/plugin/stress/pb"
 )
 
 func (r *StressPlugin) pull(count int, format, url string, puller m7s.Puller) (err error) {

@@ -3,7 +3,7 @@ package mp4
 import (
 	"io"
 
-	. "m7s.live/v5/plugin/mp4/pkg/box"
+	. "m7s.live/pro/plugin/mp4/pkg/box"
 )
 
 type (

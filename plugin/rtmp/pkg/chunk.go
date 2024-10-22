@@ -3,7 +3,7 @@ package rtmp
 import (
 	"encoding/binary"
 
-	"m7s.live/v5/pkg/util"
+	"m7s.live/pro/pkg/util"
 )
 
 // RTMP协议中基本的数据单元称为消息(Message).

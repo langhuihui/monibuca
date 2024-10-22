@@ -4,9 +4,9 @@ import (
 	"strings"
 
 	srt "github.com/datarhei/gosrt"
-	"m7s.live/v5"
-	"m7s.live/v5/pkg/task"
-	pkg "m7s.live/v5/plugin/srt/pkg"
+	"m7s.live/pro"
+	"m7s.live/pro/pkg/task"
+	pkg "m7s.live/pro/plugin/srt/pkg"
 )
 
 type SRTServer struct {

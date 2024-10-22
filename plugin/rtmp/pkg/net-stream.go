@@ -1,7 +1,7 @@
 package rtmp
 
 import (
-	"m7s.live/v5"
+	"m7s.live/pro"
 )
 
 type NetStream struct {

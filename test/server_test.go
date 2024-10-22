@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"m7s.live/v5"
-	"m7s.live/v5/pkg"
+	"m7s.live/pro"
+	"m7s.live/pro/pkg"
 )
 
 func TestRestart(b *testing.T) {

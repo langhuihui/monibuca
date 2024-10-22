@@ -5,11 +5,11 @@ import (
 	"time"
 
 	srt "github.com/datarhei/gosrt"
-	"m7s.live/v5"
-	"m7s.live/v5/pkg"
-	"m7s.live/v5/pkg/codec"
-	"m7s.live/v5/pkg/task"
-	mpegts "m7s.live/v5/plugin/hls/pkg/ts"
+	"m7s.live/pro"
+	"m7s.live/pro/pkg"
+	"m7s.live/pro/pkg/codec"
+	"m7s.live/pro/pkg/task"
+	mpegts "m7s.live/pro/plugin/hls/pkg/ts"
 )
 
 type Receiver struct {

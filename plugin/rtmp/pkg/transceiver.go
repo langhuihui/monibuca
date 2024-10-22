@@ -2,10 +2,10 @@ package rtmp
 
 import (
 	"errors"
-	"m7s.live/v5/pkg"
+	"m7s.live/pro/pkg"
 	"runtime"
 
-	"m7s.live/v5"
+	"m7s.live/pro"
 )
 
 type Sender struct {

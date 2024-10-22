@@ -1,4 +1,4 @@
-module m7s.live/v5
+module m7s.live/pro
 
 go 1.23
 

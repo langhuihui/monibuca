@@ -8,7 +8,7 @@ import (
 	"github.com/gobwas/ws"
 	"github.com/gobwas/ws/wsutil"
 	"github.com/quic-go/quic-go"
-	"m7s.live/v5/pkg/task"
+	"m7s.live/pro/pkg/task"
 )
 
 type Http2Quic struct {

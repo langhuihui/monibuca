@@ -10,7 +10,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"m7s.live/v5/pkg/util"
+	"m7s.live/pro/pkg/util"
 )
 
 var idG atomic.Uint32

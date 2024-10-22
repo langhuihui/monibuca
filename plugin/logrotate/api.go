@@ -9,8 +9,8 @@ import (
 
 	"github.com/phsym/console-slog"
 	"google.golang.org/protobuf/types/known/emptypb"
-	"m7s.live/v5/pkg/util"
-	"m7s.live/v5/plugin/logrotate/pb"
+	"m7s.live/pro/pkg/util"
+	"m7s.live/pro/plugin/logrotate/pb"
 )
 
 func (h *LogRotatePlugin) List(context.Context, *emptypb.Empty) (*pb.ResponseFileInfo, error) {

@@ -5,7 +5,7 @@ import (
 	"errors"
 	"strings"
 
-	"m7s.live/v5/pkg/util"
+	"m7s.live/pro/pkg/util"
 )
 
 // https://zhuanlan.zhihu.com/p/196743129

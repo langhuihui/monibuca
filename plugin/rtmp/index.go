@@ -5,10 +5,10 @@ import (
 	"io"
 	"net"
 
-	"m7s.live/v5"
-	"m7s.live/v5/pkg/task"
-	"m7s.live/v5/plugin/rtmp/pb"
-	. "m7s.live/v5/plugin/rtmp/pkg"
+	"m7s.live/pro"
+	"m7s.live/pro/pkg/task"
+	"m7s.live/pro/plugin/rtmp/pb"
+	. "m7s.live/pro/plugin/rtmp/pkg"
 )
 
 type RTMPPlugin struct {

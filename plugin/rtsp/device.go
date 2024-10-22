@@ -3,9 +3,9 @@ package plugin_rtsp
 import (
 	"time"
 
-	"m7s.live/v5"
-	"m7s.live/v5/pkg/util"
-	. "m7s.live/v5/plugin/rtsp/pkg"
+	"m7s.live/pro"
+	"m7s.live/pro/pkg/util"
+	. "m7s.live/pro/plugin/rtsp/pkg"
 )
 
 type RTSPDevice struct {

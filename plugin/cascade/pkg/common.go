@@ -1,7 +1,7 @@
 package cascade
 
 import (
-	"m7s.live/v5/pkg/util"
+	"m7s.live/pro/pkg/util"
 )
 
 var ENDFLAG = []byte{0}

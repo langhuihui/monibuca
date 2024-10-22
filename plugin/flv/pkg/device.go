@@ -1,7 +1,7 @@
 package flv
 
 import (
-	"m7s.live/v5"
+	"m7s.live/pro"
 )
 
 type FLVDevice = m7s.HTTPDevice

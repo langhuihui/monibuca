@@ -3,9 +3,9 @@ package pkg
 import (
 	"context"
 	"log/slog"
-	"m7s.live/v5/pkg/codec"
-	"m7s.live/v5/pkg/config"
-	"m7s.live/v5/pkg/task"
+	"m7s.live/pro/pkg/codec"
+	"m7s.live/pro/pkg/config"
+	"m7s.live/pro/pkg/task"
 	"time"
 )
 

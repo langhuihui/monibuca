@@ -3,10 +3,10 @@ package plugin_rtsp
 import (
 	"net"
 
-	"m7s.live/v5/pkg/task"
+	"m7s.live/pro/pkg/task"
 
-	"m7s.live/v5"
-	. "m7s.live/v5/plugin/rtsp/pkg"
+	"m7s.live/pro"
+	. "m7s.live/pro/plugin/rtsp/pkg"
 )
 
 const defaultConfig = m7s.DefaultYaml(`tcp:

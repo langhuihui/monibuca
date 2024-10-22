@@ -9,8 +9,8 @@ import (
 	"github.com/deepch/vdk/codec/h264parser"
 	"github.com/deepch/vdk/codec/h265parser"
 
-	"m7s.live/v5/pkg/codec"
-	"m7s.live/v5/pkg/util"
+	"m7s.live/pro/pkg/codec"
+	"m7s.live/pro/pkg/util"
 )
 
 var _ IAVFrame = (*AnnexB)(nil)

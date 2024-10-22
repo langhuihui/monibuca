@@ -4,11 +4,11 @@ import (
 	"context"
 	"errors"
 
-	globalPB "m7s.live/v5/pb"
-	"m7s.live/v5/pkg"
-	"m7s.live/v5/pkg/config"
-	pb "m7s.live/v5/plugin/sei/pb"
-	sei "m7s.live/v5/plugin/sei/pkg"
+	globalPB "m7s.live/pro/pb"
+	"m7s.live/pro/pkg"
+	"m7s.live/pro/pkg/config"
+	pb "m7s.live/pro/plugin/sei/pb"
+	sei "m7s.live/pro/plugin/sei/pkg"
 )
 
 func (conf *SEIPlugin) Insert(ctx context.Context, req *pb.InsertRequest) (*globalPB.SuccessResponse, error) {

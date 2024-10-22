@@ -5,8 +5,8 @@ import (
 	"io"
 	"net"
 
-	"m7s.live/v5/pkg/util"
-	rtmp "m7s.live/v5/plugin/rtmp/pkg"
+	"m7s.live/pro/pkg/util"
+	rtmp "m7s.live/pro/plugin/rtmp/pkg"
 )
 
 const (

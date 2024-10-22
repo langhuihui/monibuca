@@ -19,12 +19,12 @@ import (
 	"github.com/icholy/digest"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
-	"m7s.live/v5"
-	"m7s.live/v5/pkg/config"
-	"m7s.live/v5/pkg/task"
-	"m7s.live/v5/pkg/util"
-	"m7s.live/v5/plugin/gb28181/pb"
-	gb28181 "m7s.live/v5/plugin/gb28181/pkg"
+	"m7s.live/pro"
+	"m7s.live/pro/pkg/config"
+	"m7s.live/pro/pkg/task"
+	"m7s.live/pro/pkg/util"
+	"m7s.live/pro/plugin/gb28181/pb"
+	gb28181 "m7s.live/pro/plugin/gb28181/pkg"
 )
 
 type SipConfig struct {

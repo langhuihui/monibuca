@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/chromedp/chromedp"
-	"m7s.live/v5"
+	"m7s.live/pro"
 )
 
 func TestPublish(t *testing.T) {

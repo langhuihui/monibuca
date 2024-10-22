@@ -1,10 +1,10 @@
 package m7s
 
 import (
-	"m7s.live/v5/pkg"
-	"m7s.live/v5/pkg/task"
+	"m7s.live/pro/pkg"
+	"m7s.live/pro/pkg/task"
 
-	"m7s.live/v5/pkg/config"
+	"m7s.live/pro/pkg/config"
 )
 
 type IPusher interface {

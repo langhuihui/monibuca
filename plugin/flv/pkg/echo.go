@@ -4,8 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"m7s.live/v5/pkg/util"
-	rtmp "m7s.live/v5/plugin/rtmp/pkg"
+	"m7s.live/pro/pkg/util"
+	rtmp "m7s.live/pro/plugin/rtmp/pkg"
 )
 
 func Echo(r io.Reader) (err error) {

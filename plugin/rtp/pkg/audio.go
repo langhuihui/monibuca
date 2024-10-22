@@ -15,9 +15,9 @@ import (
 
 	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v3"
-	. "m7s.live/v5/pkg"
-	"m7s.live/v5/pkg/codec"
-	"m7s.live/v5/pkg/util"
+	. "m7s.live/pro/pkg"
+	"m7s.live/pro/pkg/codec"
+	"m7s.live/pro/pkg/util"
 )
 
 type RTPData struct {

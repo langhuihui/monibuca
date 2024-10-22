@@ -3,7 +3,7 @@ package flv
 import (
 	"errors"
 	"io"
-	"m7s.live/v5/pkg/util"
+	"m7s.live/pro/pkg/util"
 	"net"
 	"os"
 	"testing"

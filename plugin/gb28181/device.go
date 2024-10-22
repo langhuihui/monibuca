@@ -7,10 +7,10 @@ import (
 
 	"github.com/emiago/sipgo"
 	"github.com/emiago/sipgo/sip"
-	"m7s.live/v5"
-	"m7s.live/v5/pkg/task"
-	"m7s.live/v5/pkg/util"
-	gb28181 "m7s.live/v5/plugin/gb28181/pkg"
+	"m7s.live/pro"
+	"m7s.live/pro/pkg/task"
+	"m7s.live/pro/pkg/util"
+	gb28181 "m7s.live/pro/plugin/gb28181/pkg"
 )
 
 type DeviceStatus string

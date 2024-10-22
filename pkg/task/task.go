@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"m7s.live/v5/pkg/util"
+	"m7s.live/pro/pkg/util"
 )
 
 const TraceLevel = slog.Level(-8)

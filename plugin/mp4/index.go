@@ -8,13 +8,13 @@ import (
 	"time"
 
 	"github.com/Eyevinn/mp4ff/mp4"
-	"m7s.live/v5"
-	v5 "m7s.live/v5/pkg"
-	"m7s.live/v5/pkg/codec"
-	"m7s.live/v5/pkg/util"
-	"m7s.live/v5/plugin/mp4/pb"
-	pkg "m7s.live/v5/plugin/mp4/pkg"
-	rtmp "m7s.live/v5/plugin/rtmp/pkg"
+	"m7s.live/pro"
+	v5 "m7s.live/pro/pkg"
+	"m7s.live/pro/pkg/codec"
+	"m7s.live/pro/pkg/util"
+	"m7s.live/pro/plugin/mp4/pb"
+	pkg "m7s.live/pro/plugin/mp4/pkg"
+	rtmp "m7s.live/pro/plugin/rtmp/pkg"
 )
 
 type MediaContext struct {

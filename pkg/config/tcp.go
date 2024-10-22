@@ -8,7 +8,7 @@ import (
 	"runtime"
 	"time"
 
-	"m7s.live/v5/pkg/task"
+	"m7s.live/pro/pkg/task"
 )
 
 //go:embed local.monibuca.com_bundle.pem

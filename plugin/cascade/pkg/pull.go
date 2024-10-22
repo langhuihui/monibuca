@@ -4,8 +4,8 @@ import (
 	"fmt"
 
 	"github.com/quic-go/quic-go"
-	"m7s.live/v5"
-	flv "m7s.live/v5/plugin/flv/pkg"
+	"m7s.live/pro"
+	flv "m7s.live/pro/plugin/flv/pkg"
 )
 
 type Puller struct {

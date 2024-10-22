@@ -2,10 +2,10 @@ package sei
 
 import (
 	"github.com/deepch/vdk/codec/h265parser"
-	"m7s.live/v5"
-	"m7s.live/v5/pkg"
-	"m7s.live/v5/pkg/codec"
-	"m7s.live/v5/pkg/util"
+	"m7s.live/pro"
+	"m7s.live/pro/pkg"
+	"m7s.live/pro/pkg/codec"
+	"m7s.live/pro/pkg/util"
 )
 
 type Transformer struct {

@@ -9,10 +9,10 @@ import (
 
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
-	"m7s.live/v5"
-	"m7s.live/v5/pkg/util"
-	"m7s.live/v5/plugin/gb28181/pb"
-	gb28181 "m7s.live/v5/plugin/gb28181/pkg"
+	"m7s.live/pro"
+	"m7s.live/pro/pkg/util"
+	"m7s.live/pro/plugin/gb28181/pb"
+	gb28181 "m7s.live/pro/plugin/gb28181/pkg"
 )
 
 func (gb *GB28181Plugin) List(context.Context, *emptypb.Empty) (ret *pb.ResponseList, err error) {
