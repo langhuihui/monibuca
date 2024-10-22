@@ -77,6 +77,7 @@ func (p *TransformJob) Subscribe() (err error) {
 
 func (p *TransformJob) Publish(streamPath string) (err error) {
 	p.Publisher, err = p.Plugin.Publish(context.WithValue(p.Transformer, Owner, p.Transformer), streamPath)
+	p.Publisher.Type = PublishTypeTransform
 	return
 }
 

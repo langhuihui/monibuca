@@ -38,16 +38,20 @@ func (s *Server) SysInfo(context.Context, *emptypb.Empty) (res *pb.SysInfoRespon
 		}
 	}
 	res = &pb.SysInfoResponse{
-		Version:   Version,
-		LocalIP:   localIP,
-		StartTime: timestamppb.New(s.StartTime),
-		GoVersion: runtime.Version(),
-		Os:        runtime.GOOS,
-		Arch:      runtime.GOARCH,
-		Cpus:      int32(runtime.NumCPU()),
+		Code:    0,
+		Message: "success",
+		Data: &pb.SysInfoData{
+			Version:   Version,
+			LocalIP:   localIP,
+			StartTime: timestamppb.New(s.StartTime),
+			GoVersion: runtime.Version(),
+			Os:        runtime.GOOS,
+			Arch:      runtime.GOARCH,
+			Cpus:      int32(runtime.NumCPU()),
+		},
 	}
 	for p := range s.Plugins.Range {
-		res.Plugins = append(res.Plugins, &pb.PluginInfo{
+		res.Data.Plugins = append(res.Data.Plugins, &pb.PluginInfo{
 			Name:     p.Meta.Name,
 			Version:  p.Meta.Version,
 			Disabled: p.Disabled,
@@ -102,7 +106,7 @@ func (s *Server) getStreamInfo(pub *Publisher) (res *pb.StreamInfoResponse, err 
 		State:       int32(pub.State),
 		StartTime:   timestamppb.New(pub.StartTime),
 		Subscribers: int32(pub.Subscribers.Length),
-		Type:        pub.Plugin.Meta.Name,
+		PluginName:  pub.Plugin.Meta.Name,
 	}
 
 	if t := pub.AudioTrack.AVTrack; t != nil {
@@ -390,7 +394,7 @@ func (s *Server) StreamList(_ context.Context, req *pb.StreamListRequest) (res *
 			}
 			streams = append(streams, info)
 		}
-		res = &pb.StreamListResponse{List: streams, Total: int32(s.Streams.Length), PageNum: req.PageNum, PageSize: req.PageSize}
+		res = &pb.StreamListResponse{Data: streams, Total: int32(s.Streams.Length), PageNum: req.PageNum, PageSize: req.PageSize}
 		return nil
 	})
 	return

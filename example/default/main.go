@@ -5,6 +5,7 @@ import (
 	"flag"
 
 	"m7s.live/pro"
+	_ "m7s.live/pro/plugin/admin"
 	_ "m7s.live/pro/plugin/console"
 	_ "m7s.live/pro/plugin/debug"
 	_ "m7s.live/pro/plugin/flv"

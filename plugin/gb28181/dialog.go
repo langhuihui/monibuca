@@ -35,6 +35,9 @@ func (d *Dialog) Start() (err error) {
 	if err != nil {
 		return
 	}
+	if !d.IsLive() {
+		d.pullCtx.Publisher.Type = m7s.PublishTypeVod
+	}
 	sss := strings.Split(d.pullCtx.RemoteURL, "/")
 	deviceId, channelId := sss[0], sss[1]
 	if len(sss) == 2 {

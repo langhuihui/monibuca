@@ -26,6 +26,7 @@ var Owner task.TaskContextKey = "owner"
 type PubSubBase struct {
 	task.Job
 	Plugin       *Plugin
+	Type         string
 	StreamPath   string
 	Args         url.Values
 	TimeoutTimer *time.Timer

@@ -184,7 +184,7 @@ message PluginInfo {
   bool disabled = 3;
 }
 
-message SysInfoResponse {
+message SysInfoData  {
   google.protobuf.Timestamp startTime = 1;
   string localIP = 2;
   string version = 3;
@@ -193,6 +193,12 @@ message SysInfoResponse {
   string arch = 6;
   int32 cpus = 7;
   repeated PluginInfo plugins = 8;
+}
+
+message SysInfoResponse {
+  int32 code = 1;
+  string message = 2;
+  SysInfoData data = 3;
 }
 
 message TaskTreeResponse {
@@ -212,10 +218,12 @@ message StreamListRequest {
 }
 
 message StreamListResponse {
-  int32 total = 1;
-  int32 pageNum = 2;
-  int32 pageSize = 3;
-  repeated StreamInfoResponse list = 4;
+  int32 code = 1;
+  string message = 2;
+  int32 total = 3;
+  int32 pageNum = 4;
+  int32 pageSize = 5;
+  repeated StreamInfoResponse data = 6;
 }
 
 message StreamWaitListResponse {
@@ -233,8 +241,9 @@ message StreamInfoResponse {
   AudioTrackInfo audioTrack = 4;
   VideoTrackInfo videoTrack = 5;
   google.protobuf.Timestamp startTime = 6;
-  string type = 7;
-  string meta = 8;
+  string pluginName = 7;
+  string type = 8;
+  string meta = 9;
 }
 
 message Wrap {

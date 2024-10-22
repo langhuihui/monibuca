@@ -104,6 +104,7 @@ func (gb *GB28181Plugin) api_ps_replay(w http.ResponseWriter, r *http.Request) {
 		}
 		var pub *m7s.Publisher
 		if pub, err = gb.Publish(gb.Context, streamPath); err == nil {
+			pub.Type = m7s.PublishTypeReplay
 			go gb.replayPS(pub, f)
 			util.ReturnOK(w, r)
 		} else {

@@ -27,6 +27,14 @@ const (
 	PublisherStateDisposed
 )
 
+const (
+	PublishTypePull      = "pull"
+	PublishTypeServer    = "server"
+	PublishTypeVod       = "vod"
+	PublishTypeTransform = "transform"
+	PublishTypeReplay    = "replay"
+)
+
 const threshold = 10 * time.Millisecond
 
 type SpeedControl struct {
@@ -157,6 +165,7 @@ func (p *Publisher) GetKey() string {
 // createPublisher -> Start -> WriteAudio/WriteVideo -> Dispose
 func createPublisher(p *Plugin, streamPath string, conf config.Publish) (publisher *Publisher) {
 	publisher = &Publisher{Publish: conf}
+	publisher.Type = PublishTypeServer
 	publisher.ID = task.GetNextTaskID()
 	publisher.Plugin = p
 	publisher.TimeoutTimer = time.NewTimer(p.config.PublishTimeout)

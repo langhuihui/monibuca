@@ -393,15 +393,16 @@ func (s *Server) OnSubscribe(streamPath string, args url.Values) {
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path == "/favicon.ico" {
-		http.ServeFile(w, r, "favicon.ico")
-		return
-	}
-	_, _ = fmt.Fprintf(w, "visit:%s\nMonibuca Engine %s StartTime:%s\n", r.URL.Path, Version, s.StartTime)
-	for plugin := range s.Plugins.Range {
-		_, _ = fmt.Fprintf(w, "Plugin %s Version:%s\n", plugin.Meta.Name, plugin.Meta.Version)
-	}
-	for _, api := range s.apiList {
-		_, _ = fmt.Fprintf(w, "%s\n", api)
-	}
+	http.Redirect(w, r, "/admin", http.StatusPermanentRedirect)
+	// if r.URL.Path == "/favicon.ico" {
+	// 	http.ServeFile(w, r, "favicon.ico")
+	// 	return
+	// }
+	// _, _ = fmt.Fprintf(w, "visit:%s\nMonibuca Engine %s StartTime:%s\n", r.URL.Path, Version, s.StartTime)
+	// for plugin := range s.Plugins.Range {
+	// 	_, _ = fmt.Fprintf(w, "Plugin %s Version:%s\n", plugin.Meta.Name, plugin.Meta.Version)
+	// }
+	// for _, api := range s.apiList {
+	// 	_, _ = fmt.Fprintf(w, "%s\n", api)
+	// }
 }

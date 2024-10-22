@@ -6,7 +6,7 @@ import (
 	"os"
 	"time"
 
-	"m7s.live/m7s/v5"
+	m7s "m7s.live/pro"
 )
 
 type AdminPlugin struct {

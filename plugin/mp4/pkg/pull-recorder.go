@@ -33,6 +33,7 @@ func NewPuller(conf config.Pull) m7s.IPuller {
 func (p *RecordReader) Run() (err error) {
 	pullJob := &p.PullJob
 	publisher := pullJob.Publisher
+	publisher.Type = m7s.PublishTypeVod
 	allocator := util.NewScalableMemoryAllocator(1 << 10)
 	var ts, tsOffset int64
 	defer allocator.Recycle()
