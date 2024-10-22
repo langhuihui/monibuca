@@ -1,0 +1,1 @@
+window.__PRODUCTION__M7S_ADMIN__CONF__={"VITE_GLOB_APP_TITLE":"M7S_ADMIN","VITE_GLOB_APP_SHORT_NAME":"m7s_admin","VITE_GLOB_HTTP_REFRESH_TIME":"5000"};Object.freeze(window.__PRODUCTION__M7S_ADMIN__CONF__);Object.defineProperty(window,"__PRODUCTION__M7S_ADMIN__CONF__",{configurable:false,writable:false,});

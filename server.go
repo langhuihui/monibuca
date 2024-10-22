@@ -342,6 +342,9 @@ func (s *Server) Start() (err error) {
 			s.DB.Find(&devices)
 			for _, d := range devices {
 				d.server = s
+				if d.PubConf == nil {
+					d.PubConf = config.NewPublish()
+				}
 				s.Devices.Add(d, s.Logger.With("device", d.ID, "type", d.Type, "name", d.Name))
 			}
 		}
