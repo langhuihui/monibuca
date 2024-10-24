@@ -217,3 +217,9 @@ func (p *RecordFilePuller) Start() (err error) {
 	p.Info("vod", "streams", p.Streams)
 	return
 }
+
+func (p *RecordFilePuller) Dispose() {
+	if p.File != nil {
+		p.File.Close()
+	}
+}

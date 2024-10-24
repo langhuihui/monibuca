@@ -11,3 +11,7 @@ gb28181:
   onsub:
     pull:
       .* : $0
+mp4:
+  onsub:
+    pull:
+      ^vod/(.+)$: live/$1

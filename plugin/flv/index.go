@@ -10,7 +10,6 @@ import (
 	"github.com/gobwas/ws/wsutil"
 	m7s "m7s.live/pro"
 
-	"m7s.live/pro/pkg/task"
 	"m7s.live/pro/pkg/util"
 	. "m7s.live/pro/plugin/flv/pkg"
 )
@@ -79,7 +78,7 @@ func (plugin *FLVPlugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	err = live.Run()
 }
 
-func (plugin *FLVPlugin) OnDeviceAdd(device *m7s.Device) (ret task.ITask) {
+func (plugin *FLVPlugin) OnDeviceAdd(device *m7s.Device) any {
 	d := &FLVDevice{}
 	d.Device = device
 	d.Plugin = &plugin.Plugin

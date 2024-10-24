@@ -103,16 +103,15 @@ func (gb *GB28181Plugin) OnInit() (err error) {
 	return
 }
 
-func (p *GB28181Plugin) OnDeviceAdd(device *m7s.Device) (ret task.ITask) {
+func (p *GB28181Plugin) OnDeviceAdd(device *m7s.Device) any {
 	deviceID, channelID, _ := strings.Cut(device.URL, "/")
 	if d, ok := p.devices.Get(deviceID); ok {
 		if channel, ok := d.channels.Get(channelID); ok {
 			channel.AbstractDevice = device
-			device.Handler = channel
-			device.ChangeStatus(m7s.DeviceStatusOnline)
+			return channel
 		}
 	}
-	return
+	return nil
 }
 
 func (gb *GB28181Plugin) RegisterHandler() map[string]http.HandlerFunc {

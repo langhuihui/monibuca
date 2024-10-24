@@ -4,6 +4,7 @@ import (
 	"database/sql/driver"
 	"fmt"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/mcuadros/go-defaults"
@@ -48,8 +49,8 @@ type (
 		RetryInterval time.Duration `default:"5s" desc:"重试间隔"`                    // 重试间隔
 		Proxy         string        `desc:"代理地址"`                                 // 代理地址
 		Header        HTTPValus
-		Args          HTTPValus
-		PubConf       *Publish `gorm:"-:all"`
+		Args          HTTPValus `gorm:"-:all"` // 拉流参数
+		PubConf       *Publish  `gorm:"-:all"`
 	}
 	Push struct {
 		URL           string        `desc:"推送地址"`                    // 推送地址
@@ -124,4 +125,8 @@ func (v *HTTPValus) Scan(value any) error {
 
 func (v HTTPValus) Value() (driver.Value, error) {
 	return yaml.Marshal(v)
+}
+
+func (v HTTPValus) Get(key string) string {
+	return url.Values(v).Get(key)
 }

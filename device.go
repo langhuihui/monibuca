@@ -66,8 +66,21 @@ func (d *Device) Start() (err error) {
 	for plugin := range d.server.Plugins.Range {
 		if devicePlugin, ok := plugin.handler.(IDevicePlugin); ok && strings.EqualFold(d.Type, plugin.Meta.Name) {
 			deviceTask := devicePlugin.OnDeviceAdd(d)
-			if deviceTask != nil {
-				d.AddTask(deviceTask)
+			if deviceTask == nil {
+				continue
+			}
+			if deviceTask, ok := deviceTask.(IDevice); ok {
+				d.Handler = deviceTask
+			}
+			if t, ok := deviceTask.(task.ITask); ok {
+				if ticker, ok := t.(task.IChannelTask); ok {
+					t.OnStart(func() {
+						ticker.Tick(nil)
+					})
+				}
+				d.AddTask(t)
+			} else {
+				d.ChangeStatus(DeviceStatusOnline)
 			}
 		}
 	}
@@ -104,7 +117,7 @@ func (d *Device) Update() {
 
 func (d *HTTPDevice) Start() (err error) {
 	d.url, err = url.Parse(d.Device.URL)
-	return
+	return d.DeviceTask.Start()
 }
 
 func (d *HTTPDevice) GetTickInterval() time.Duration {

@@ -393,6 +393,11 @@ func (s *Server) OnSubscribe(streamPath string, args url.Values) {
 	for plugin := range s.Plugins.Range {
 		plugin.OnSubscribe(streamPath, args)
 	}
+	for device := range s.Devices.Range {
+		if device.Status == DeviceStatusOnline && device.GetStreamPath() == streamPath && !device.PullOnStart {
+			device.Handler.Pull()
+		}
+	}
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {

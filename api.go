@@ -664,30 +664,35 @@ func (s *Server) SetStreamAlias(ctx context.Context, req *pb.SetStreamAliasReque
 			if !canReplace {
 				defer s.OnSubscribe(req.StreamPath, u.Query())
 			}
-			if aliasStream, ok := s.AliasStreams.Get(req.Alias); ok { //modify alias
-				aliasStream.AutoRemove = req.AutoRemove
-				if aliasStream.StreamPath != req.StreamPath {
-					aliasStream.StreamPath = req.StreamPath
+			if aliasInfo, ok := s.AliasStreams.Get(req.Alias); ok { //modify alias
+				aliasInfo.AutoRemove = req.AutoRemove
+				if aliasInfo.StreamPath != req.StreamPath {
+					aliasInfo.StreamPath = req.StreamPath
 					if canReplace {
-						if aliasStream.Publisher != nil {
-							aliasStream.TransferSubscribers(publisher) // replace stream
+						if aliasInfo.Publisher != nil {
+							aliasInfo.TransferSubscribers(publisher) // replace stream
 						} else {
 							s.Waiting.WakeUp(req.Alias, publisher)
 						}
 					}
 				}
 			} else { // create alias
-				s.AliasStreams.Add(&AliasStream{
+				aliasInfo := &AliasStream{
 					AutoRemove: req.AutoRemove,
 					StreamPath: req.StreamPath,
 					Alias:      req.Alias,
-				})
+				}
+				s.AliasStreams.Add(aliasInfo)
+				aliasStream, ok := s.Streams.Get(aliasInfo.Alias)
 				if canReplace {
-					if aliasStream, ok := s.Streams.Get(req.Alias); ok {
+					aliasInfo.Publisher = publisher
+					if ok {
 						aliasStream.TransferSubscribers(publisher) // replace stream
 					} else {
 						s.Waiting.WakeUp(req.Alias, publisher)
 					}
+				} else {
+					aliasInfo.Publisher = aliasStream
 				}
 			}
 		} else {

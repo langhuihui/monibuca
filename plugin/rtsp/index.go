@@ -24,11 +24,10 @@ func (p *RTSPPlugin) OnTCPConnect(conn *net.TCPConn) task.ITask {
 	return ret
 }
 
-func (p *RTSPPlugin) OnDeviceAdd(device *m7s.Device) task.ITask {
+func (p *RTSPPlugin) OnDeviceAdd(device *m7s.Device) any {
 	ret := &RTSPDevice{}
 	ret.Device = device
 	ret.Plugin = &p.Plugin
 	ret.Logger = p.With("device", device.Name)
-	device.Handler = ret
 	return ret
 }

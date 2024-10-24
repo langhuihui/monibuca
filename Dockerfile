@@ -1,5 +1,5 @@
 # Compile Stage 
-FROM golang:1.23.1-bullseye AS builder
+FROM golang:1.23.2-bullseye AS builder
 
 
 LABEL stage=gobuilder
@@ -22,7 +22,7 @@ RUN go build -tags sqlite -o ./build/monibuca ./example/default/main.go
 RUN cp -r /monibuca/example/default/config.yaml /monibuca/build
 
 # Running Stage 
-FROM alpine:latest
+FROM alpine:3.20
 
 WORKDIR /monibuca 
 COPY --from=builder /monibuca/build /monibuca/

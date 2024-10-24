@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/deepch/vdk/codec/h265parser"
 	m7s "m7s.live/pro"
 	"m7s.live/pro/pkg/codec"
 	"m7s.live/pro/pkg/config"
@@ -27,7 +26,10 @@ func NewPuller(conf config.Pull) m7s.IPuller {
 	if strings.HasPrefix(conf.URL, "http") || strings.HasSuffix(conf.URL, ".mp4") {
 		return &HTTPReader{}
 	}
-	return &RecordReader{}
+	if conf.Args.Get(m7s.StartKey) != "" {
+		return &RecordReader{}
+	}
+	return nil
 }
 
 func (p *RecordReader) Run() (err error) {
@@ -46,6 +48,9 @@ func (p *RecordReader) Run() (err error) {
 	}
 	for i, stream := range p.Streams {
 		tsOffset = ts
+		if p.File != nil {
+			p.File.Close()
+		}
 		p.File, err = os.Open(stream.FilePath)
 		if err != nil {
 			return
@@ -76,7 +81,8 @@ func (p *RecordReader) Run() (err error) {
 			}
 			startTimestamp := p.PullStartTime.Sub(stream.StartTime).Milliseconds()
 			if _, err = p.demuxer.SeekTime(uint64(startTimestamp)); err != nil {
-				return
+				tsOffset = 0
+				continue
 			}
 			tsOffset = -startTimestamp
 		}
@@ -88,10 +94,10 @@ func (p *RecordReader) Run() (err error) {
 			if publisher.Paused != nil {
 				publisher.Paused.Await()
 			}
-			if _, err = p.demuxer.reader.Seek(int64(sample.Offset), io.SeekStart); err != nil {
+			if _, err = p.demuxer.reader.Seek(sample.Offset, io.SeekStart); err != nil {
 				return
 			}
-			sample.Data = allocator.Malloc(int(sample.Size))
+			sample.Data = allocator.Malloc(sample.Size)
 			if _, err = io.ReadFull(p.demuxer.reader, sample.Data); err != nil {
 				allocator.Free(sample.Data)
 				return
@@ -102,32 +108,21 @@ func (p *RecordReader) Run() (err error) {
 			}
 			switch track.Cid {
 			case box.MP4_CODEC_H264:
-				keyFrame := codec.ParseH264NALUType(sample.Data[5]) == codec.NALU_IDR_Picture
 				var videoFrame rtmp.RTMPVideo
 				videoFrame.SetAllocator(allocator)
 				videoFrame.CTS = uint32(sample.PTS - sample.DTS)
 				videoFrame.Timestamp = uint32(ts)
-				videoFrame.AppendOne([]byte{util.Conditional[byte](keyFrame, 0x17, 0x27), 0x01, byte(videoFrame.CTS >> 24), byte(videoFrame.CTS >> 8), byte(videoFrame.CTS)})
+				videoFrame.AppendOne([]byte{util.Conditional[byte](sample.KeyFrame, 0x17, 0x27), 0x01, byte(videoFrame.CTS >> 24), byte(videoFrame.CTS >> 8), byte(videoFrame.CTS)})
 				videoFrame.AddRecycleBytes(sample.Data)
 				err = publisher.WriteVideo(&videoFrame)
 			case box.MP4_CODEC_H265:
-				var keyFrame bool
-				switch codec.ParseH265NALUType(sample.Data[5]) {
-				case h265parser.NAL_UNIT_CODED_SLICE_BLA_W_LP,
-					h265parser.NAL_UNIT_CODED_SLICE_BLA_W_RADL,
-					h265parser.NAL_UNIT_CODED_SLICE_BLA_N_LP,
-					h265parser.NAL_UNIT_CODED_SLICE_IDR_W_RADL,
-					h265parser.NAL_UNIT_CODED_SLICE_IDR_N_LP,
-					h265parser.NAL_UNIT_CODED_SLICE_CRA:
-					keyFrame = true
-				}
 				var videoFrame rtmp.RTMPVideo
 				videoFrame.SetAllocator(allocator)
 				videoFrame.CTS = uint32(sample.PTS - sample.DTS)
 				videoFrame.Timestamp = uint32(ts)
 				var head []byte
 				var b0 byte = 0b1010_0000
-				if keyFrame {
+				if sample.KeyFrame {
 					b0 = 0b1001_0000
 				}
 				if videoFrame.CTS == 0 {

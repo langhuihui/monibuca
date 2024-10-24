@@ -84,7 +84,7 @@ type (
 	}
 
 	IDevicePlugin interface {
-		OnDeviceAdd(device *Device) task.ITask
+		OnDeviceAdd(device *Device) any
 	}
 )
 
@@ -411,11 +411,7 @@ func (p *Plugin) OnSubscribe(streamPath string, args url.Values) {
 			p.handler.Pull(streamPath, conf)
 		}
 	}
-	for device := range p.Server.Devices.Range {
-		if device.Status == DeviceStatusOnline && device.GetStreamPath() == streamPath && !device.PullOnStart {
-			device.Handler.Pull()
-		}
-	}
+
 	//if !avoidTrans {
 	//	for reg, conf := range plugin.GetCommonConf().OnSub.Transform {
 	//		if plugin.Meta.Transformer != nil {
@@ -488,6 +484,9 @@ func (p *Plugin) Subscribe(ctx context.Context, streamPath string) (subscriber *
 
 func (p *Plugin) Pull(streamPath string, conf config.Pull) {
 	puller := p.Meta.Puller(conf)
+	if puller == nil {
+		return
+	}
 	puller.GetPullJob().Init(puller, p, streamPath, conf)
 }
 
