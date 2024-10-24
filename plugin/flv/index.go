@@ -6,9 +6,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gobwas/ws"
+	"github.com/gobwas/ws/wsutil"
 	m7s "m7s.live/pro"
 
 	"m7s.live/pro/pkg/task"
+	"m7s.live/pro/pkg/util"
 	. "m7s.live/pro/plugin/flv/pkg"
 )
 
@@ -41,6 +44,13 @@ func (plugin *FLVPlugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	conn, err = live.Subscriber.CheckWebSocket(w, r)
 	if err != nil {
+		return
+	}
+	if conn != nil {
+		live.WriteFlvTag = func(flv net.Buffers) (err error) {
+			return wsutil.WriteServerMessage(conn, ws.OpBinary, util.ConcatBuffers(flv))
+		}
+		err = live.Run()
 		return
 	}
 	wto := plugin.GetCommonConf().WriteTimeout

@@ -50,15 +50,16 @@ func (s *SpeedControl) speedControl(speed float64, ts time.Duration) {
 		s.speed = speed
 		s.beginTime = time.Now()
 		s.beginTimestamp = ts
+		s.pausedTime = 0
 	} else {
 		elapsed := time.Since(s.beginTime) - s.pausedTime
 		if speed == 0 {
 			s.Delta = ts - elapsed
 			return
 		}
-		should := time.Duration(float64(ts) / speed)
+		should := time.Duration(float64(ts-s.beginTimestamp) / speed)
 		s.Delta = should - elapsed
-		//fmt.Println(speed, elapsed, should, s.Delta)
+		// fmt.Println(speed, elapsed, should, s.Delta)
 		if s.Delta > threshold {
 			time.Sleep(s.Delta)
 		}
@@ -532,7 +533,7 @@ func (p *Publisher) WriteAudio(data IAVFrame) (err error) {
 		}
 	}
 	t.Step()
-	p.AudioTrack.speedControl(p.Publish.Speed, t.LastTs)
+	p.AudioTrack.speedControl(p.Speed, t.LastTs)
 	return
 }
 
@@ -569,6 +570,9 @@ func (p *Publisher) Dispose() {
 	s := p.Plugin.Server
 	if !p.StopReasonIs(ErrKick) {
 		s.Streams.Remove(p)
+	}
+	if p.Paused != nil {
+		p.Paused.Reject(p.StopReason())
 	}
 	for alias := range s.AliasStreams.Range {
 		if alias.Alias == p.StreamPath {

@@ -580,6 +580,8 @@ func (s *Server) GetDeviceList(ctx context.Context, req *emptypb.Empty) (res *pb
 			RecordPath:     device.Record.FilePath,
 			RecordFragment: durationpb.New(device.Record.Fragment),
 			Description:    device.Description,
+			Rtt:            uint32(device.RTT),
+			StreamPath:     device.GetStreamPath(),
 		})
 	}
 	return

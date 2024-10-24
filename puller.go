@@ -1,7 +1,6 @@
 package m7s
 
 import (
-	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -187,6 +186,9 @@ func (p *RecordFilePuller) GetPullJob() *PullJob {
 }
 
 func (p *RecordFilePuller) Start() (err error) {
+	if p.PullJob.Plugin.DB == nil {
+		return pkg.ErrNoDB
+	}
 	if err = p.PullJob.Publish(); err != nil {
 		return
 	}
@@ -210,7 +212,7 @@ func (p *RecordFilePuller) Start() (err error) {
 	}
 
 	if len(p.Streams) == 0 {
-		return fmt.Errorf("stream not found")
+		return pkg.ErrNotFound
 	}
 	p.Info("vod", "streams", p.Streams)
 	return

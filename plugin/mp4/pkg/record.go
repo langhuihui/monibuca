@@ -81,7 +81,7 @@ var CustomFileName = func(job *m7s.RecordJob) string {
 	if job.Fragment == 0 {
 		return fmt.Sprintf("%s.mp4", job.FilePath)
 	}
-	return filepath.Join(job.FilePath, time.Now().Local().Format("2006-01-02T15:04:05")+".mp4")
+	return filepath.Join(job.FilePath, fmt.Sprintf("%d.mp4", time.Now().Unix()))
 }
 
 func (r *Recorder) createStream(start time.Time) (err error) {

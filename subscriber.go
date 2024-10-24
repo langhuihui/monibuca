@@ -145,6 +145,7 @@ func (pc *PlayController) Go() (err error) {
 			continue
 		}
 		if len(b) >= 3 && [3]byte(b[:3]) == [3]byte{'c', 'm', 'd'} {
+			pc.Info("control", "cmd", b[3])
 			switch b[3] {
 			case 1: // pause
 				pc.Subscriber.Publisher.Pause()

@@ -374,11 +374,14 @@ message DeviceInfo {
   uint32 status = 7; // 设备状态
   string pullURL = 8; // 拉流地址
   bool pullOnStart = 9; // 启动时拉流
+  
   bool stopOnIdle = 10; // 空闲时停止拉流
   bool audio = 11; // 是否拉取音频
   string description = 12; // 设备描述
   string recordPath = 13; // 录制路径
   google.protobuf.Duration recordFragment = 14; // 录制片段长度
+  uint32 rtt = 15; // 平均RTT
+  string streamPath = 16; // 流路径
 }
 
 message SetStreamAliasRequest {

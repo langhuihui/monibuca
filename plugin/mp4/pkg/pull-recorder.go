@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/deepch/vdk/codec/h265parser"
-	"m7s.live/pro"
+	m7s "m7s.live/pro"
 	"m7s.live/pro/pkg/codec"
 	"m7s.live/pro/pkg/config"
 	"m7s.live/pro/pkg/util"
@@ -84,6 +84,9 @@ func (p *RecordReader) Run() (err error) {
 		for track, sample := range p.demuxer.ReadSample {
 			if p.IsStopped() {
 				break
+			}
+			if publisher.Paused != nil {
+				publisher.Paused.Await()
 			}
 			if _, err = p.demuxer.reader.Seek(int64(sample.Offset), io.SeekStart); err != nil {
 				return
