@@ -575,13 +575,13 @@ func (p *Publisher) Dispose() {
 		p.Paused.Reject(p.StopReason())
 	}
 	for alias := range s.AliasStreams.Range {
-		if alias.Alias == p.StreamPath {
+		if alias.StreamPath == p.StreamPath {
 			if alias.AutoRemove {
 				s.AliasStreams.Remove(alias)
 			}
 			for subscriber := range p.SubscriberRange {
-				if subscriber.StreamPath == alias.StreamPath {
-					if originStream, ok := s.Streams.Get(alias.StreamPath); ok {
+				if subscriber.StreamPath == alias.Alias {
+					if originStream, ok := s.Streams.Get(alias.Alias); ok {
 						p.Subscribers.Remove(subscriber)
 						originStream.AddSubscriber(subscriber)
 					}
