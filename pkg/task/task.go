@@ -295,6 +295,9 @@ func (task *Task) start() bool {
 			task.state = TASK_STATE_STARTED
 			task.startup.Fulfill(err)
 			for _, listener := range task.afterStartListeners {
+				if task.IsStopped() {
+					break
+				}
 				listener()
 			}
 			if task.IsStopped() {

@@ -65,9 +65,9 @@ func (d *Device) GetStreamPath() string {
 func (d *Device) Start() (err error) {
 	for plugin := range d.server.Plugins.Range {
 		if devicePlugin, ok := plugin.handler.(IDevicePlugin); ok && strings.EqualFold(d.Type, plugin.Meta.Name) {
-			task := devicePlugin.OnDeviceAdd(d)
-			if task != nil {
-				d.AddTask(task)
+			deviceTask := devicePlugin.OnDeviceAdd(d)
+			if deviceTask != nil {
+				d.AddTask(deviceTask)
 			}
 		}
 	}

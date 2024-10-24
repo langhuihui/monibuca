@@ -580,7 +580,7 @@ func (s *Server) GetDeviceList(ctx context.Context, req *emptypb.Empty) (res *pb
 			RecordPath:     device.Record.FilePath,
 			RecordFragment: durationpb.New(device.Record.Fragment),
 			Description:    device.Description,
-			Rtt:            uint32(device.RTT),
+			Rtt:            uint32(device.RTT.Milliseconds()),
 			StreamPath:     device.GetStreamPath(),
 		})
 	}
@@ -595,6 +595,7 @@ func (s *Server) AddDevice(ctx context.Context, req *pb.DeviceInfo) (res *pb.Suc
 		ParentID:    uint(req.ParentID),
 		PullOnStart: req.PullOnStart,
 		Description: req.Description,
+		StreamPath:  req.StreamPath,
 	}
 	device.PubConf = config.NewPublish()
 	defaults.SetDefaults(&device.Pull)
@@ -631,6 +632,8 @@ func (s *Server) UpdateDevice(ctx context.Context, req *pb.DeviceInfo) (res *pb.
 	target.Description = req.Description
 	target.Record.FilePath = req.RecordPath
 	target.Record.Fragment = req.RecordFragment.AsDuration()
+	target.RTT = time.Duration(int(req.Rtt)) * time.Millisecond
+	target.StreamPath = req.StreamPath
 	s.DB.Save(target)
 	res = &pb.SuccessResponse{}
 	return
