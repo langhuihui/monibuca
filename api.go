@@ -14,10 +14,10 @@ import (
 	"m7s.live/pro/pkg/task"
 
 	"github.com/mcuadros/go-defaults"
-	"github.com/shirou/gopsutil/v3/cpu"
-	"github.com/shirou/gopsutil/v3/disk"
-	"github.com/shirou/gopsutil/v3/mem"
-	. "github.com/shirou/gopsutil/v3/net"
+	"github.com/shirou/gopsutil/v4/cpu"
+	"github.com/shirou/gopsutil/v4/disk"
+	"github.com/shirou/gopsutil/v4/mem"
+	. "github.com/shirou/gopsutil/v4/net"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -456,7 +456,7 @@ func (s *Server) Summary(context.Context, *emptypb.Empty) (res *pb.SummaryRespon
 			Usage: float32(d.UsedPercent),
 		},
 	}
-	if cc, _ := cpu.Percent(time.Second, false); len(cc) > 0 {
+	if cc, _ := cpu.Percent(0, false); len(cc) > 0 {
 		res.CpuUsage = float32(cc[0])
 	}
 	netWorks := []*pb.NetWorkInfo{}

@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/shirou/gopsutil/v3/cpu"
+	"github.com/shirou/gopsutil/v4/cpu"
 	"google.golang.org/protobuf/proto"
 
 	"m7s.live/pro/pkg/task"
