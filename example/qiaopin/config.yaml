@@ -1,0 +1,51 @@
+global:
+  loglevel: trace
+  http: :8080
+  tcp: :50052
+rtsp:
+  tcp:
+    listenaddr: :8554
+#  pull:
+   #live/kqnmg3ikb: rtsp://192.168.4.101:8554/main
+  #  live/h264:  rtsp://localhost:6554/h264.mp4
+  #  live/h265:  rtsp://localhost:6554/h265.mp4
+#
+
+
+webrtc:
+  enable: false
+rtmp:
+  tcp:
+    listenaddr: :11935
+
+
+logrotate:
+ level: trace
+ #formatter: 2006-01-02T15:04 # 分钟
+ formatter: 2006-01-02T15  # 小时
+mp4:
+  # enable: false
+  delpart: 0 # -1表示不删除，0表示第0个，1表示第1个，比如 live/test ，0 就是删除 live，以此类推。如果大于分段，则不删除
+  #  pull:
+  #    record/test: record/live/test?start=2024-09-12T10:25:00
+  publish:
+    delayclosetimeout: 1s
+  onpub:
+    record:
+      ^live.*:
+        fragment: 10s
+        filepath: record/$0
+#
+#transcode:
+#  onpub:
+#    transform:
+#     live/kqnmg3ikb:
+#       output:
+#         - target: "srt://push.arbor3d.cn:9000?streamid=#!::h=push.arbor3d.cn,r=live/fnewr85ca,txSecret=f5ee9cb891501d63328571c86f279ab0,txTime=68DFF300"
+#           conf: -c:v hevc_nvmpi -b:v 3M -maxrate 4M -bufsize 2M -g 30 -an -s 2560x1280 -r 24
+#     live/test:
+#       input:
+#        mode: rtmp
+#       output:
+#        - target: "rtmp://127.0.0.1:11935/live/test/h265"
+#          conf: -c:v hevc -b:v 3M -maxrate 4M -bufsize 2M -g 30 -an -s 320x240 -r 24
