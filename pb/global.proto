@@ -368,6 +368,7 @@ message SuccessResponse {
 
 message RequestWithId {
   uint32 id = 1;
+  string streamPath = 2;
 }
 
 message RequestWithId64 {

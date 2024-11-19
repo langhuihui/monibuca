@@ -1,6 +1,7 @@
 package m7s
 
 import (
+	"gorm.io/gorm"
 	"time"
 
 	"m7s.live/v5/pkg/config"
@@ -33,9 +34,19 @@ type (
 	RecordStream struct {
 		ID                     uint `gorm:"primarykey"`
 		StartTime, EndTime     time.Time
+		EventId                string `json:"eventId" desc:"事件编号" gorm:"type:varchar(255);comment:事件编号"`
+		RecordMode             string `json:"recordMode" desc:"事件类型,0=连续录像模式，1=事件录像模式" gorm:"type:varchar(255);comment:事件类型,0=连续录像模式，1=事件录像模式;default:'0'"`
+		EventName              string `json:"eventName" desc:"事件名称" gorm:"type:varchar(255);comment:事件名称"`
+		BeforeDuration         string `json:"beforeDuration" desc:"事件前缓存时长" gorm:"type:varchar(255);comment:事件前缓存时长;default:'30s'"`
+		AfterDuration          string `json:"afterDuration" desc:"事件后缓存时长" gorm:"type:varchar(255);comment:事件后缓存时长;default:'30s'"`
+		Filename               string `json:"fileName" desc:"文件名" gorm:"type:varchar(255);comment:文件名"`
+		EventDesc              string `json:"eventDesc" desc:"事件描述" gorm:"type:varchar(255);comment:事件描述"`
+		Type                   string `json:"type" desc:"录像文件类型" gorm:"type:varchar(255);comment:录像文件类型,flv,mp4,raw,fmp4,hls"`
+		EventLevel             string `json:"eventLevel" desc:"事件级别" gorm:"type:varchar(255);comment:事件级别,0表示重要事件，无法删除且表示无需自动删除,1表示非重要事件,达到自动删除时间后，自动删除;default:'1'"`
 		FilePath               string
 		StreamPath             string
 		AudioCodec, VideoCodec string
+		DeletedAt              gorm.DeletedAt `gorm:"index" yaml:"-"`
 	}
 )
 

@@ -110,7 +110,7 @@ func (d *Device) ChangeStatus(status byte) {
 
 func (d *Device) Update() {
 	if d.server.DB != nil {
-		d.server.DB.Save(d)
+		d.server.DB.Omit("deleted_at").Save(d)
 	}
 }
 

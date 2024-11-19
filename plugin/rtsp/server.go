@@ -94,7 +94,12 @@ func (task *RTSPServer) Go() (err error) {
 			sendMode = true
 			sender = &Sender{}
 			sender.NetConnection = task.NetConnection
-			sender.Subscriber, err = task.conf.Subscribe(task, strings.TrimPrefix(task.URL.Path, "/"))
+			rawQuery := req.URL.RawQuery
+			streamPath := strings.TrimPrefix(task.URL.Path, "/")
+			if rawQuery != "" {
+				streamPath += "?" + rawQuery
+			}
+			sender.Subscriber, err = task.conf.Subscribe(task, streamPath)
 			if err != nil {
 				res := &util.Response{
 					StatusCode: http.StatusBadRequest,
