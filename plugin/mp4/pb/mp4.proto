@@ -22,6 +22,12 @@ service api {
       body: "*"
     };
   }
+  rpc EventStart (ReqEventRecord) returns (ResponseEventRecord) {
+    option (google.api.http) = {
+      post: "/mp4/api/event/start"
+      body: "*"
+    };
+  }
 }
 
 message ReqRecordList {
@@ -29,8 +35,9 @@ message ReqRecordList {
   string range = 2;
   string start = 3;
   string end = 4;
-  uint32 page = 5;
+  uint32 pageNum = 5;
   uint32 pageSize = 6;
+  string recordMode = 7;
 }
 
 message RecordFile {
@@ -44,8 +51,8 @@ message RecordFile {
 message ResponseList {
   int32 code = 1;
   string message = 2;
-  uint32 total = 3;
-  uint32 page = 4;
+  uint32 totalCount = 3;
+  uint32 pageNum = 4;
   uint32 pageSize = 5;
   repeated RecordFile data = 6;
 }
@@ -75,4 +82,22 @@ message ResponseDelete {
   int32 code = 1;
   string message = 2;
   repeated RecordFile data = 3;
+}
+
+message ReqEventRecord {
+  string streamPath = 1;
+  string eventId = 2;
+  string recordMode = 3;//0=连续录像模式，1=事件录像模式
+  string eventName = 4;
+  string beforeDuration = 5;
+  string afterDuration = 6;
+  string eventDesc = 7;
+  string eventLevel = 8;//事件级别,0表示重要事件，无法删除且表示无需自动删除,1表示非重要事件,达到自动删除时间后，自动删除
+  string fragment = 9;
+}
+
+message ResponseEventRecord {
+  int32 code = 1;
+  string message = 2;
+  uint32 id = 3;
 }

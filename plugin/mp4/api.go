@@ -32,18 +32,45 @@ func (p *MP4Plugin) List(ctx context.Context, req *pb.ReqRecordList) (resp *pb.R
 		err = pkg.ErrNoDB
 		return
 	}
+
+	offset := (req.PageNum - 1) * req.PageSize // 计算偏移量
+	var totalCount int64                       //总条数
+
+	// 查询总记录数
+	countQuery := p.DB.Model(m7s.RecordStream{})
+	// 查询当前页的数据
+	query := p.DB.Model(m7s.RecordStream{}).Limit(int(req.PageSize)).Offset(int(offset))
 	startTime, endTime, err := util.TimeRangeQueryParse(url.Values{"range": []string{req.Range}, "start": []string{req.Start}, "end": []string{req.End}})
 	if err != nil {
 		return
 	}
 	if req.StreamPath == "" {
-		p.DB.Find(&streams, "end_time>? AND start_time<?", startTime, endTime)
+		countQuery = countQuery.Where("end_time>? AND start_time<?", startTime, endTime)
+		query = query.Where("end_time>? AND start_time<?", startTime, endTime)
+		//p.DB.Find(&streams, "end_time>? AND start_time<?", startTime, endTime)
 	} else if strings.Contains(req.StreamPath, "*") {
-		p.DB.Find(&streams, "end_time>? AND start_time<? AND stream_path like ?", startTime, endTime, strings.ReplaceAll(req.StreamPath, "*", "%"))
+		countQuery = countQuery.Where("end_time>? AND start_time<? AND stream_path like ?", startTime, endTime, strings.ReplaceAll(req.StreamPath, "*", "%"))
+		query = query.Where("end_time>? AND start_time<? AND stream_path like ?", startTime, endTime, strings.ReplaceAll(req.StreamPath, "*", "%"))
+		//p.DB.Find(&streams, "end_time>? AND start_time<? AND stream_path like ?", startTime, endTime, strings.ReplaceAll(req.StreamPath, "*", "%"))
 	} else {
-		p.DB.Find(&streams, "end_time>? AND start_time<? AND stream_path=?", startTime, endTime, req.StreamPath)
+		countQuery = countQuery.Where("end_time>? AND start_time<? AND stream_path=?", startTime, endTime, req.StreamPath)
+		query = query.Where("end_time>? AND start_time<? AND stream_path=?", startTime, endTime, req.StreamPath)
+		//p.DB.Find(&streams, "end_time>? AND start_time<? AND stream_path=?", startTime, endTime, req.StreamPath)
 	}
-	resp = &pb.ResponseList{}
+	if req.RecordMode != "" {
+		countQuery = countQuery.Where(" record_mode=?", req.RecordMode)
+		query = query.Where(" record_mode=?", req.RecordMode)
+	}
+	err = countQuery.Count(&totalCount).Error
+	if err != nil {
+		return
+	}
+	query.Find(&streams)
+	resp = &pb.ResponseList{
+		PageSize:   req.PageSize,
+		PageNum:    req.PageNum,
+		TotalCount: uint32(totalCount),
+	}
 	for _, stream := range streams {
 		resp.Data = append(resp.Data, &pb.RecordFile{
 			Id:         uint32(stream.ID),
@@ -128,7 +155,7 @@ func (p *MP4Plugin) download(w http.ResponseWriter, r *http.Request) {
 	}
 	p.Info("download", "streamPath", streamPath, "start", startTime, "end", endTime)
 	var streams []m7s.RecordStream
-	p.DB.Find(&streams, "end_time>? AND start_time<? AND stream_path=?", startTime, endTime, streamPath)
+	p.DB.Find(&streams, "end_time>? AND start_time<? AND stream_path=? AND record_mode=0", startTime, endTime, streamPath)
 	muxer := mp4.NewMuxer(0)
 	var n int
 	n, err = w.Write(box.MakeFtypBox(box.TypeISOM, 0x200, box.TypeISOM, box.TypeISO2, box.TypeAVC1, box.TypeMP41))
@@ -237,4 +264,56 @@ func (p *MP4Plugin) download(w http.ResponseWriter, r *http.Request) {
 		totalWritten += written
 		part.Close()
 	}
+}
+
+func (p *MP4Plugin) EventStart(ctx context.Context, req *pb.ReqEventRecord) (res *pb.ResponseEventRecord, err error) {
+	recordStream := &m7s.RecordStream{
+		StreamPath:     req.StreamPath,
+		EventId:        req.EventId,
+		EventLevel:     req.EventLevel,
+		EventDesc:      req.EventDesc,
+		EventName:      req.EventName,
+		RecordMode:     "1",
+		BeforeDuration: req.BeforeDuration,
+		AfterDuration:  req.AfterDuration,
+	}
+	if req.BeforeDuration == "" {
+		recordStream.BeforeDuration = p.BeforeDuration.String()
+	}
+	if req.AfterDuration == "" {
+		recordStream.AfterDuration = p.AfterDuration.String()
+	}
+	now := time.Now()
+	beforeDuration, err := time.ParseDuration(recordStream.BeforeDuration)
+	if err != nil {
+		p.Info("error", err)
+	}
+	afterDuration, err := time.ParseDuration(recordStream.AfterDuration)
+	if err != nil {
+		p.Info("error", err)
+	}
+	startTime := now.Add(-beforeDuration)
+	endTime := now.Add(afterDuration)
+	recordStream.StartTime = startTime
+	recordStream.EndTime = endTime
+	//tmpFragment, _ := time.ParseDuration(recordStream.Fragment)
+	//if stream, ok := p.Server.Streams.Get(req.StreamPath); ok {
+	//	recordConf := &config.Record{
+	//		Append:   false,
+	//		Fragment: tmpFragment,
+	//		FilePath: filepath.Join(p.EventRecordFilePath, stream.StreamPath, time.Now().Local().Format("2006-01-02-15-04-05")),
+	//	}
+	//	p.Record(stream, *recordConf)
+	//
+	//	//for r, recConf := range p.GetCommonConf().OnPub.Record {
+	//	//	if recConf.FilePath = r.Replace(stream.StreamPath, recConf.FilePath); recConf.FilePath != "" {
+	//	//		recConf.Fragment = tmpFragment
+	//	//	}
+	//	//}
+	//}
+	err = p.DB.Save(recordStream).Error
+	res = &pb.ResponseEventRecord{
+		Id: uint32(recordStream.ID),
+	}
+	return res, err
 }

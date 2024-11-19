@@ -10,7 +10,7 @@ import (
 
 func init() {
 	Factory["mysql"] = func(s string) gorm.Dialector {
-		sqlDB, err := sql.Open("mysql", s)
+		sqlDB, _ := sql.Open("mysql", s)
 		return mysql.New(mysql.Config{
 			Conn: sqlDB,
 		})

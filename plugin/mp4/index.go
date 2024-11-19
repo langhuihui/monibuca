@@ -4,6 +4,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -69,11 +70,18 @@ func (m *TrackContext) Push(ctx *MediaContext, dt uint32, dur uint32, data []byt
 type MP4Plugin struct {
 	pb.UnimplementedApiServer
 	m7s.Plugin
+	BeforeDuration           time.Duration `default:"30s" desc:"事件录像提前时长，不配置则默认30s"`
+	AfterDuration            time.Duration `default:"30s" desc:"事件录像结束时长，不配置则默认30s"`
+	RecordFileExpireDays     int           `desc:"录像自动删除的天数,0或未设置表示不自动删除"`
+	DiskMaxPercent           float64       `default:"90" desc:"硬盘使用百分之上限值，超上限后触发报警，并停止当前所有磁盘写入动作。"`
+	AutoOverWriteDiskPercent float64       `default:"80" desc:"自动覆盖功能磁盘占用上限值，超过上限时连续录像自动删除日有录像，事件录像自动删除非重要事件录像，删除规则为删除距离当日最久日期的连续录像或非重要事件录像。"`
+	ExceptionPostUrl         string        `desc:"第三方异常上报地址"`
 }
 
 const defaultConfig m7s.DefaultYaml = `publish:
   speed: 1`
 
+var exceptionChannel = make(chan *Exception)
 var _ = m7s.InstallPlugin[MP4Plugin](defaultConfig, &pb.Api_ServiceDesc, pb.RegisterApiHandler, pkg.NewPuller, pkg.NewRecorder)
 
 func (p *MP4Plugin) RegisterHandler() map[string]http.HandlerFunc {
@@ -81,7 +89,59 @@ func (p *MP4Plugin) RegisterHandler() map[string]http.HandlerFunc {
 		"/download/{streamPath...}": p.download,
 	}
 }
+func (p *MP4Plugin) OnInit() (err error) {
+	if p.DB != nil {
+		err = p.DB.AutoMigrate(&Exception{})
+	}
+	go func() {
+		for {
+			p.deleteOldestFile()
+			// 等待 1 分钟后继续执行
+			<-time.After(1 * time.Minute)
+		}
+	}()
+	go func() { //处理所有异常，录像中断异常、录像读取异常、录像导出文件中断、磁盘容量低于阈值异常、磁盘异常
+		for exception := range exceptionChannel {
+			p.SendToThirdPartyAPI(exception)
+		}
+	}()
 
+	if p.RecordFileExpireDays > 0 { //当有设置录像文件自动删除时间时，则开始运行录像自动删除的进程
+		//主要逻辑为
+		//搜索event_records表中event_level值为1的（非重要）数据，并将其create_time与当前时间比对，大于RecordFileExpireDays则进行删除，数据库标记is_delete为1，磁盘上删除录像文件
+		go func() {
+			for {
+				var eventRecords []m7s.RecordStream
+				expireTime := time.Now().AddDate(0, 0, -p.RecordFileExpireDays)
+				// 创建包含查询条件的 EventRecord 对象
+				queryRecord := m7s.RecordStream{
+					EventLevel: "1", // 查询条件：event_level = 1
+				}
+				p.Info("RecordFileExpireDays is set to auto delete oldestfile", "expireTime", expireTime.Format("2006-01-02 15:04:05"))
+				err = p.DB.Where(&queryRecord).Where("end_time < ?", expireTime).Find(&eventRecords).Error
+				if err == nil {
+					if len(eventRecords) > 0 {
+						for _, record := range eventRecords {
+							p.Info("RecordFileExpireDays is set to auto delete oldestfile", "ID", record.ID, "create time", record.EndTime, "filepath", record.FilePath)
+							err = os.Remove(record.FilePath)
+							if err != nil {
+								p.Error("RecordFileExpireDays set to auto delete oldestfile", "delete file from disk error:", err.Error())
+							}
+							err = p.DB.Delete(&record).Error
+							if err != nil {
+								p.Error("RecordFileExpireDays set to auto delete oldestfile", "delete record from db error:", err.Error())
+							}
+						}
+					}
+				}
+
+				// 等待 1 分钟后继续执行
+				<-time.After(1 * time.Minute)
+			}
+		}()
+	}
+	return
+}
 func (p *MP4Plugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	streamPath := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/"), ".mp4")
 	if r.URL.RawQuery != "" {

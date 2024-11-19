@@ -729,6 +729,7 @@ func (s *Server) UpdateDevice(ctx context.Context, req *pb.DeviceInfo) (res *pb.
 	target.URL = req.PullURL
 	target.ParentID = uint(req.ParentID)
 	target.Type = req.Type
+	target.PubConf = config.NewPublish()
 	target.PullOnStart = req.PullOnStart
 	target.PubConf.DelayCloseTimeout = util.Conditional(req.StopOnIdle, 5*time.Second, 0)
 	target.PubConf.PubAudio = req.Audio
@@ -747,18 +748,39 @@ func (s *Server) RemoveDevice(ctx context.Context, req *pb.RequestWithId) (res *
 		err = pkg.ErrNoDB
 		return
 	}
-	tx := s.DB.Delete(&Device{
-		ID: uint(req.Id),
-	})
-	err = tx.Error
-	s.Devices.Call(func() error {
-		if device, ok := s.Devices.Get(uint(req.Id)); ok {
-			device.Stop(task.ErrStopByUser)
-		}
-		return nil
-	})
 	res = &pb.SuccessResponse{}
-	return
+	if req.Id > 0 {
+		tx := s.DB.Delete(&Device{
+			ID: uint(req.Id),
+		})
+		err = tx.Error
+		s.Devices.Call(func() error {
+			if device, ok := s.Devices.Get(uint(req.Id)); ok {
+				device.Stop(task.ErrStopByUser)
+			}
+			return nil
+		})
+		return
+	} else if req.StreamPath != "" {
+		var deviceList []Device
+		s.DB.Find(&deviceList, "stream_path=?", req.StreamPath)
+		if len(deviceList) > 0 {
+			for _, device := range deviceList {
+				tx := s.DB.Delete(&Device{}, device.ID)
+				err = tx.Error
+				s.Devices.Call(func() error {
+					if device, ok := s.Devices.Get(uint(device.ID)); ok {
+						device.Stop(task.ErrStopByUser)
+					}
+					return nil
+				})
+			}
+		}
+		return
+	} else {
+		res.Message = "parameter wrong"
+		return
+	}
 }
 
 func (s *Server) SetStreamAlias(ctx context.Context, req *pb.SetStreamAliasRequest) (res *pb.SuccessResponse, err error) {
