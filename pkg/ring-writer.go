@@ -115,7 +115,7 @@ func (rb *RingWriter) GetHistoryIDR(bufTime time.Duration) *util.Ring[AVFrame] {
 	rb.RLock()
 	defer rb.RUnlock()
 	for item := rb.IDRingList.Back(); item != nil; item = item.Prev() {
-		if item.Value.Value.Timestamp-rb.LastValue.Timestamp > bufTime {
+		if rb.LastValue.Timestamp-item.Value.Value.Timestamp >= bufTime {
 			return item.Value
 		}
 	}
