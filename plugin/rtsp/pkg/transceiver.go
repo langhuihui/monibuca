@@ -2,13 +2,15 @@ package rtsp
 
 import (
 	"fmt"
+	"reflect"
+	"time"
+
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v3"
 	"m7s.live/v5"
 	"m7s.live/v5/pkg"
 	mrtp "m7s.live/v5/plugin/rtp/pkg"
-	"reflect"
 )
 
 type Sender struct {
@@ -138,7 +140,50 @@ func (r *Receiver) Receive() (err error) {
 	audioFrame.RTPCodecParameters = r.AudioCodecParameters
 	videoFrame.SetAllocator(r.MemoryAllocator)
 	videoFrame.RTPCodecParameters = r.VideoCodecParameters
+	var rtcpTS time.Time
+	sdes := &rtcp.SourceDescription{
+		Chunks: []rtcp.SourceDescriptionChunk{
+			{
+				Source: 0, // Set appropriate SSRC
+				Items: []rtcp.SourceDescriptionItem{
+					{Type: rtcp.SDESCNAME, Text: "monibuca"}, // Set appropriate CNAME
+				},
+			},
+		},
+	}
+	rr := &rtcp.ReceiverReport{
+		Reports: []rtcp.ReceptionReport{
+			{
+				SSRC:               0, // Set appropriate SSRC
+				FractionLost:       0, // Set appropriate fraction lost
+				TotalLost:          0, // Set total packets lost
+				LastSequenceNumber: 0, // Set last sequence number
+				Jitter:             0, // Set jitter
+				LastSenderReport:   0, // Set last SR timestamp
+				Delay:              0, // Set delay since last SR
+			},
+		},
+	}
 	return r.NetConnection.Receive(false, func(channelID byte, buf []byte) error {
+		if time.Since(rtcpTS) > 5*time.Second {
+			rtcpTS = time.Now()
+			// Serialize RTCP packets
+			rawRR, err := rr.Marshal()
+			if err != nil {
+				return err
+			}
+			rawSDES, err := sdes.Marshal()
+			if err != nil {
+				return err
+			}
+			length := len(rawRR) + len(rawSDES)
+			rtcp := append([]byte{'$', 0x03, byte(length >> 8), byte(length)}, rawRR...)
+			rtcp = append(rtcp, rawSDES...)
+			// Send RTCP packets
+			if _, err = r.NetConnection.Write(rtcp); err != nil {
+				return err
+			}
+		}
 		switch int(channelID) {
 		case r.AudioChannelID:
 			if !r.PubAudio {
@@ -148,6 +193,10 @@ func (r *Receiver) Receive() (err error) {
 			if err = packet.Unmarshal(buf); err != nil {
 				return err
 			}
+			rr.SSRC = packet.SSRC
+			sdes.Chunks[0].Source = packet.SSRC
+			rr.Reports[0].SSRC = packet.SSRC
+			rr.Reports[0].LastSequenceNumber = uint32(packet.SequenceNumber)
 			if len(audioFrame.Packets) == 0 || packet.Timestamp == audioFrame.Packets[0].Timestamp {
 				audioFrame.AddRecycleBytes(buf)
 				audioFrame.Packets = append(audioFrame.Packets, packet)
@@ -171,6 +220,9 @@ func (r *Receiver) Receive() (err error) {
 			if err = packet.Unmarshal(buf); err != nil {
 				return err
 			}
+			rr.Reports[0].SSRC = packet.SSRC
+			sdes.Chunks[0].Source = packet.SSRC
+			rr.Reports[0].LastSequenceNumber = uint32(packet.SequenceNumber)
 			if len(videoFrame.Packets) == 0 || packet.Timestamp == videoFrame.Packets[0].Timestamp {
 				videoFrame.AddRecycleBytes(buf)
 				videoFrame.Packets = append(videoFrame.Packets, packet)
@@ -201,7 +253,14 @@ func (r *Receiver) Receive() (err error) {
 			return err
 		}
 		r.Stream.Debug("rtcp", "type", msg.Header.Type, "length", msg.Header.Length)
-		// TODO: rtcp msg
+		if msg.Header.Type == rtcp.TypeSenderReport {
+			for _, report := range msg.Packets {
+				if report, ok := report.(*rtcp.SenderReport); ok {
+					rr.Reports[0].LastSenderReport = uint32(report.NTPTime)
+				}
+			}
+
+		}
 		return pkg.ErrDiscard
 	})
 }

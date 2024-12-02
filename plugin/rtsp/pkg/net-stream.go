@@ -223,11 +223,13 @@ func (c *Stream) SetupMedia(media *Media, index int) (byte, error) {
 }
 
 func (c *Stream) Play() (err error) {
-	return c.WriteRequest(&util.Request{Method: MethodPlay, URL: c.URL})
+	_, err = c.Do(&util.Request{Method: MethodPlay, URL: c.URL})
+	return
 }
 
 func (c *Stream) Record() (err error) {
-	return c.WriteRequest(&util.Request{Method: MethodRecord, URL: c.URL})
+	_, err = c.Do(&util.Request{Method: MethodRecord, URL: c.URL})
+	return
 }
 
 func (c *Stream) Teardown() (err error) {

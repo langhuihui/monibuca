@@ -36,5 +36,8 @@ func (c *Channel) GetKey() string {
 }
 
 func (c *Channel) Pull() {
-	c.Device.plugin.Pull(c.AbstractDevice.GetStreamPath(), c.AbstractDevice.Pull)
+	pubConf := c.Device.plugin.GetCommonConf().Publish
+	pubConf.PubAudio = c.AbstractDevice.Audio
+	pubConf.DelayCloseTimeout = util.Conditional(c.AbstractDevice.StopOnIdle, time.Second*5, 0)
+	c.Device.plugin.Pull(c.AbstractDevice.GetStreamPath(), c.AbstractDevice.Pull, &pubConf)
 }

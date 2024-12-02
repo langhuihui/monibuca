@@ -3,7 +3,6 @@ package m7s
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"net"
 	"net/http"
 	"net/url"
@@ -58,7 +57,7 @@ type (
 		task.IJob
 		OnInit() error
 		OnStop()
-		Pull(string, config.Pull)
+		Pull(string, config.Pull, *config.Publish)
 		Transform(*Publisher, config.Transform)
 		OnPublish(*Publisher)
 	}
@@ -176,7 +175,7 @@ func InstallPlugin[C iPlugin](options ...any) error {
 	if _, after, found := strings.Cut(configDir, "@"); found {
 		meta.Version = after
 	} else {
-		meta.Version = pluginFilePath
+		meta.Version = "dev"
 	}
 	for _, option := range options {
 		switch v := option.(type) {
@@ -366,7 +365,7 @@ func (p *Plugin) OnPublish(pub *Publisher) {
 	if p.Meta.Recorder != nil {
 		for r, recConf := range onPublish.Record {
 			if recConf.FilePath = r.Replace(pub.StreamPath, recConf.FilePath); recConf.FilePath != "" {
-				p.Record(pub, recConf)
+				p.Record(pub, recConf, nil)
 			}
 		}
 	}
@@ -408,7 +407,7 @@ func (p *Plugin) OnSubscribe(streamPath string, args url.Values) {
 		if p.Meta.Puller != nil {
 			conf.Args = config.HTTPValus(args)
 			conf.URL = reg.Replace(streamPath, conf.URL)
-			p.handler.Pull(streamPath, conf)
+			p.handler.Pull(streamPath, conf, nil)
 		}
 	}
 
@@ -482,12 +481,12 @@ func (p *Plugin) Subscribe(ctx context.Context, streamPath string) (subscriber *
 	return p.SubscribeWithConfig(ctx, streamPath, p.config.Subscribe)
 }
 
-func (p *Plugin) Pull(streamPath string, conf config.Pull) {
+func (p *Plugin) Pull(streamPath string, conf config.Pull, pubConf *config.Publish) {
 	puller := p.Meta.Puller(conf)
 	if puller == nil {
 		return
 	}
-	puller.GetPullJob().Init(puller, p, streamPath, conf)
+	puller.GetPullJob().Init(puller, p, streamPath, conf, pubConf)
 }
 
 func (p *Plugin) Push(pub *Publisher, conf config.Push) {
@@ -496,9 +495,9 @@ func (p *Plugin) Push(pub *Publisher, conf config.Push) {
 	job.Depend(pub)
 }
 
-func (p *Plugin) Record(pub *Publisher, conf config.Record) {
+func (p *Plugin) Record(pub *Publisher, conf config.Record, subConf *config.Subscribe) {
 	recorder := p.Meta.Recorder()
-	job := recorder.GetRecordJob().Init(recorder, p, pub.StreamPath, conf)
+	job := recorder.GetRecordJob().Init(recorder, p, pub.StreamPath, conf, subConf)
 	job.Depend(pub)
 }
 
@@ -556,10 +555,6 @@ func (p *Plugin) handle(pattern string, handler http.Handler) {
 		p.Server.config.HTTP.Handle(pattern, handler, last)
 	}
 	p.Server.apiList = append(p.Server.apiList, pattern)
-}
-
-func (p *Plugin) AddLogHandler(handler slog.Handler) {
-	p.Server.LogHandler.Add(handler)
 }
 
 func (p *Plugin) SaveConfig() (err error) {

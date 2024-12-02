@@ -3,6 +3,7 @@ package plugin_stress
 import (
 	"context"
 	"fmt"
+
 	"m7s.live/v5/pkg/config"
 	"m7s.live/v5/pkg/task"
 
@@ -20,7 +21,7 @@ func (r *StressPlugin) pull(count int, format, url string, puller m7s.Puller) (e
 		for j := i; j < count; j++ {
 			conf := config.Pull{URL: fmt.Sprintf(format, url, j)}
 			p := puller(conf)
-			ctx := p.GetPullJob().Init(p, &r.Plugin, fmt.Sprintf("stress/%d", j), conf)
+			ctx := p.GetPullJob().Init(p, &r.Plugin, fmt.Sprintf("stress/%d", j), conf, nil)
 			if err = ctx.WaitStarted(); err != nil {
 				return
 			}

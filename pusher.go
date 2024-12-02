@@ -1,6 +1,8 @@
 package m7s
 
 import (
+	"net/http"
+
 	"m7s.live/v5/pkg"
 	"m7s.live/v5/pkg/task"
 
@@ -25,7 +27,7 @@ func (p *PushJob) GetKey() string {
 }
 
 func (p *PushJob) Init(pusher IPusher, plugin *Plugin, streamPath string, conf config.Push) *PushJob {
-	p.Connection.Init(plugin, streamPath, conf.URL, conf.Proxy, conf.Header)
+	p.Connection.Init(plugin, streamPath, conf.URL, conf.Proxy, http.Header(conf.Header))
 	p.pusher = pusher
 	p.SetDescriptions(task.Description{
 		"plugin":     plugin.Meta.Name,

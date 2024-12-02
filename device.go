@@ -10,6 +10,7 @@ import (
 	"gorm.io/gorm"
 	"m7s.live/v5/pkg/config"
 	"m7s.live/v5/pkg/task"
+	"m7s.live/v5/pkg/util"
 )
 
 const (
@@ -24,22 +25,22 @@ type (
 		Pull()
 	}
 	Device struct {
-		server               *Server `gorm:"-:all"`
-		task.Work            `gorm:"-:all" yaml:"-"`
-		ID                   uint           `gorm:"primarykey"`
-		CreatedAt, UpdatedAt time.Time      `yaml:"-"`
-		DeletedAt            gorm.DeletedAt `gorm:"index" yaml:"-"`
-		Name                 string
-		StreamPath           string
-		PullOnStart          bool
-		config.Pull          `gorm:"embedded;embeddedPrefix:pull_"`
-		config.Record        `gorm:"embedded;embeddedPrefix:record_"`
-		ParentID             uint
-		Type                 string
-		Status               byte
-		Description          string
-		RTT                  time.Duration
-		Handler              IDevice `gorm:"-:all" yaml:"-"`
+		server                         *Server `gorm:"-:all"`
+		task.Work                      `gorm:"-:all" yaml:"-"`
+		ID                             uint           `gorm:"primarykey"`
+		CreatedAt, UpdatedAt           time.Time      `yaml:"-"`
+		DeletedAt                      gorm.DeletedAt `yaml:"-"`
+		Name                           string
+		StreamPath                     string
+		PullOnStart, Audio, StopOnIdle bool
+		config.Pull                    `gorm:"embedded;embeddedPrefix:pull_"`
+		config.Record                  `gorm:"embedded;embeddedPrefix:record_"`
+		ParentID                       uint
+		Type                           string
+		Status                         byte
+		Description                    string
+		RTT                            time.Duration
+		Handler                        IDevice `gorm:"-:all" yaml:"-"`
 	}
 	DeviceManager struct {
 		task.Manager[uint, *Device]
@@ -126,7 +127,10 @@ func (d *DeviceTask) Dispose() {
 }
 
 func (d *DeviceTask) Pull() {
-	d.Plugin.handler.Pull(d.Device.GetStreamPath(), d.Device.Pull)
+	var pubConf = d.Plugin.config.Publish
+	pubConf.PubAudio = d.Device.Audio
+	pubConf.DelayCloseTimeout = util.Conditional(d.Device.StopOnIdle, time.Second*5, 0)
+	d.Plugin.handler.Pull(d.Device.GetStreamPath(), d.Device.Pull, &pubConf)
 }
 
 func (d *HTTPDevice) Start() (err error) {

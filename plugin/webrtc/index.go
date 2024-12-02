@@ -3,14 +3,15 @@ package plugin_webrtc
 import (
 	"embed"
 	_ "embed"
-	"github.com/pion/logging"
 	"io"
-	"m7s.live/v5/pkg/config"
 	"net"
 	"net/http"
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/pion/logging"
+	"m7s.live/v5/pkg/config"
 
 	"github.com/pion/interceptor"
 	. "github.com/pion/webrtc/v3"
@@ -30,10 +31,10 @@ type WebRTCPlugin struct {
 	m7s.Plugin
 	ICEServers []ICEServer   `desc:"ice服务器配置"`
 	Port       string        `default:"tcp:9000" desc:"监听端口"`
-	PLI        time.Duration `default:"2s" desc:"发送PLI请求间隔"`          // 视频流丢包后，发送PLI请求
-	EnableOpus bool          `default:"true" desc:"是否启用opus编码"`       // 是否启用opus编码
-	EnableVP9  bool          `default:"false" desc:"是否启用vp9编码"`       // 是否启用vp9编码
-	EnableAv1  bool          `default:"false" desc:"是否启用av1编码"`       // 是否启用av1编码
+	PLI        time.Duration `default:"2s" desc:"发送PLI请求间隔"`         // 视频流丢包后，发送PLI请求
+	EnableOpus bool          `default:"true" desc:"是否启用opus编码"`      // 是否启用opus编码
+	EnableVP9  bool          `default:"false" desc:"是否启用vp9编码"`      // 是否启用vp9编码
+	EnableAv1  bool          `default:"false" desc:"是否启用av1编码"`      // 是否启用av1编码
 	EnableDC   bool          `default:"true" desc:"是否启用DataChannel"` // 在不支持编码格式的情况下是否启用DataChannel传输
 	m          MediaEngine
 	s          SettingEngine
@@ -148,7 +149,7 @@ func (p *WebRTCPlugin) testPage(w http.ResponseWriter, r *http.Request) {
 	io.Copy(w, f)
 }
 
-func (p *WebRTCPlugin) Pull(streamPath string, conf config.Pull) {
+func (p *WebRTCPlugin) Pull(streamPath string, conf config.Pull, pubConf *config.Publish) {
 	if strings.HasPrefix(conf.URL, "https://rtc.live.cloudflare.com") {
 		cfClient := NewCFClient(DIRECTION_PULL)
 		var err error
@@ -160,6 +161,6 @@ func (p *WebRTCPlugin) Pull(streamPath string, conf config.Pull) {
 			p.Error("pull", "error", err)
 			return
 		}
-		cfClient.GetPullJob().Init(cfClient, &p.Plugin, streamPath, conf)
+		cfClient.GetPullJob().Init(cfClient, &p.Plugin, streamPath, conf, pubConf)
 	}
 }

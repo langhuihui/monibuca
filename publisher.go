@@ -196,7 +196,7 @@ func (p *Publisher) Start() (err error) {
 		if device.Status == DeviceStatusOnline {
 			device.ChangeStatus(DeviceStatusPulling)
 			if mp4Plugin, ok := s.Plugins.Get("MP4"); ok && device.FilePath != "" {
-				mp4Plugin.Record(p, device.Record)
+				mp4Plugin.Record(p, device.Record, nil)
 			}
 		}
 	}
@@ -252,9 +252,6 @@ func (p *PublishTimeout) Start() error {
 
 func (p *PublishTimeout) Dispose() {
 	p.Publisher.TimeoutTimer.Stop()
-	if p.Publisher.Device != nil && p.Publisher.Device.Status == DeviceStatusPulling && p.Publisher.Plugin.Server.Devices.Has(p.Publisher.Device.GetKey()) {
-		p.Publisher.Device.ChangeStatus(DeviceStatusOnline)
-	}
 }
 
 func (p *PublishTimeout) Tick(any) {
@@ -630,7 +627,9 @@ func (p *Publisher) Dispose() {
 		p.dumpFile.Close()
 	}
 	p.State = PublisherStateDisposed
-
+	if p.Device != nil && p.Device.Status == DeviceStatusPulling && s.Devices.Has(p.Device.GetKey()) {
+		p.Device.ChangeStatus(DeviceStatusOnline)
+	}
 }
 
 func (p *Publisher) TransferSubscribers(newPublisher *Publisher) {

@@ -32,7 +32,7 @@ func (config *LogRotatePlugin) OnInit() (err error) {
 	}
 	config.handler, err = rotoslog.NewHandler(rotoslog.LogHandlerBuilder(builder), rotoslog.LogDir(config.Path), rotoslog.MaxFileSize(config.Size), rotoslog.DateTimeLayout(config.Formatter), rotoslog.MaxRotatedFiles(config.MaxFiles))
 	if err == nil {
-		config.AddLogHandler(config.handler)
+		config.Server.LogHandler.Add(config.handler)
 	}
 	return
 }

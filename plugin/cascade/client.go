@@ -3,11 +3,12 @@ package plugin_cascade
 import (
 	"crypto/tls"
 	"fmt"
+	"time"
+
 	"m7s.live/v5"
 	"m7s.live/v5/pkg/config"
 	"m7s.live/v5/pkg/task"
-	"m7s.live/v5/plugin/cascade/pkg"
-	"time"
+	cascade "m7s.live/v5/plugin/cascade/pkg"
 
 	"github.com/quic-go/quic-go"
 )
@@ -90,11 +91,11 @@ func (c *CascadeClientPlugin) OnInit() (err error) {
 	return
 }
 
-func (c *CascadeClientPlugin) Pull(streamPath string, conf config.Pull) {
+func (c *CascadeClientPlugin) Pull(streamPath string, conf config.Pull, pub *config.Publish) {
 	puller := &cascade.Puller{
 		Connection: c.conn,
 	}
-	puller.GetPullJob().Init(puller, &c.Plugin, streamPath, conf)
+	puller.GetPullJob().Init(puller, &c.Plugin, streamPath, conf, pub)
 }
 
 //func (c *CascadeClientPlugin) Start() {

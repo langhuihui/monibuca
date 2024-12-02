@@ -348,11 +348,17 @@ message AudioTrackInfo {
   uint32 channels =7;
 }
 
-message TrackSnapShotResponse {
+message TrackSnapShotData {
   repeated TrackSnapShot ring = 1;
   uint32 ringDataSize = 2;
   map<uint32, uint32> reader = 3;
   repeated MemoryBlockGroup memory = 4;
+}
+
+message TrackSnapShotResponse {
+  int32 code = 1;
+  string message = 2;
+  TrackSnapShotData data = 3;
 }
 
 message VideoTrackInfo {

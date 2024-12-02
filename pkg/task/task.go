@@ -111,8 +111,9 @@ type (
 	Description    = map[string]any
 	TaskContextKey string
 	Task           struct {
-		ID        uint32
-		StartTime time.Time
+		ID          uint32
+		StartTime   time.Time
+		StartReason string
 		*slog.Logger
 		context.Context
 		context.CancelCauseFunc
@@ -293,7 +294,7 @@ func (task *Task) start() bool {
 	for {
 		task.StartTime = time.Now()
 		if tt := task.handler.GetTaskType(); task.Logger != nil && tt != TASK_TYPE_CALL {
-			task.Debug("task start", "taskId", task.ID, "taskType", tt, "ownerType", task.GetOwnerType())
+			task.Debug("task start", "taskId", task.ID, "taskType", tt, "ownerType", task.GetOwnerType(), "reason", task.StartReason)
 		}
 		task.state = TASK_STATE_STARTING
 		if v, ok := task.handler.(TaskStarter); ok {

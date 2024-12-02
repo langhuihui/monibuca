@@ -342,7 +342,7 @@ func (gb *GB28181Plugin) StoreDevice(id string, req *sip.Request) (d *Device) {
 			if gb.AutoInvite {
 				gb.Pull(fmt.Sprintf("%s/%s", d.ID, c.DeviceID), config.Pull{
 					URL: fmt.Sprintf("%s/%s", d.ID, c.DeviceID),
-				})
+				}, nil)
 			}
 		})
 	})
@@ -360,11 +360,11 @@ func (gb *GB28181Plugin) StoreDevice(id string, req *sip.Request) (d *Device) {
 	return
 }
 
-func (gb *GB28181Plugin) Pull(streamPath string, conf config.Pull) {
+func (gb *GB28181Plugin) Pull(streamPath string, conf config.Pull, pubConf *config.Publish) {
 	dialog := Dialog{
 		gb: gb,
 	}
-	dialog.GetPullJob().Init(&dialog, &gb.Plugin, streamPath, conf)
+	dialog.GetPullJob().Init(&dialog, &gb.Plugin, streamPath, conf, pubConf)
 }
 
 func (gb *GB28181Plugin) GetPullableList() []string {

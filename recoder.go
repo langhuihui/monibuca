@@ -1,8 +1,9 @@
 package m7s
 
 import (
-	"gorm.io/gorm"
 	"time"
+
+	"gorm.io/gorm"
 
 	"m7s.live/v5/pkg/config"
 
@@ -22,6 +23,7 @@ type (
 		StreamPath string // 对应本地流
 		Plugin     *Plugin
 		Subscriber *Subscriber
+		SubConf    *config.Subscribe
 		Fragment   time.Duration
 		Append     bool
 		FilePath   string
@@ -63,19 +65,24 @@ func (p *RecordJob) GetKey() string {
 }
 
 func (p *RecordJob) Subscribe() (err error) {
-	p.Subscriber, err = p.Plugin.Subscribe(p.recorder.GetTask().Context, p.StreamPath)
+	if p.SubConf != nil {
+		p.Subscriber, err = p.Plugin.SubscribeWithConfig(p.recorder.GetTask().Context, p.StreamPath, *p.SubConf)
+	} else {
+		p.Subscriber, err = p.Plugin.Subscribe(p.recorder.GetTask().Context, p.StreamPath)
+	}
 	if p.Subscriber != nil {
 		p.Subscriber.Internal = true
 	}
 	return
 }
 
-func (p *RecordJob) Init(recorder IRecorder, plugin *Plugin, streamPath string, conf config.Record) *RecordJob {
+func (p *RecordJob) Init(recorder IRecorder, plugin *Plugin, streamPath string, conf config.Record, subConf *config.Subscribe) *RecordJob {
 	p.Plugin = plugin
 	p.Fragment = conf.Fragment
 	p.Append = conf.Append
 	p.FilePath = conf.FilePath
 	p.StreamPath = streamPath
+	p.SubConf = subConf
 	p.recorder = recorder
 	p.SetDescriptions(task.Description{
 		"plugin":     plugin.Meta.Name,

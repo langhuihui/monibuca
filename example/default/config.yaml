@@ -1,5 +1,8 @@
 global:
   loglevel: debug
+  # db:
+  #   dbtype: mysql
+  #   dsn: root:Monibuca#!4@tcp(sh-cynosdbmysql-grp-kxt43lv6.sql.tencentcdb.com:28520)/lkm7s_v5?parseTime=true
 srt:
   listenaddr: :6000
   passphrase: foobarfoobar
@@ -14,10 +17,22 @@ gb28181:
 mp4:
   publish:
     delayclosetimeout: 3s
+
   onsub:
     pull:
       ^vod/(.+)$: $1
-hls:
-  onpub:
-    transform:
-      .* : 5s x 3
+# llhls:
+#   onpub:
+#     transform:
+#       .* : 1s x 7
+# flv:
+#   pull:
+#     live/test: https://livecb.alicdn.com/mediaplatform/afb241b3-408c-42dd-b665-04d22b64f9df.flv?auth_key=1734575216-0-0-c62721303ce751c8e5b2c95a2ec242a0&F=pc&source=34675810_null_live_detail&ali_flv_retain=2
+# hls:
+#   onpub:
+#     transform:
+#       .* : 5s x 3
+rtsp:
+#  pull:
+    # live/test: rtsp://admin:1qaz2wsx3EDC@giroro.tpddns.cn:1554/Streaming/Channels/101
+#    live/test: rtsp://admin:1qaz2wsx3EDC@localhost:8554/live/test

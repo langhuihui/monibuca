@@ -3,7 +3,6 @@ package config
 import (
 	"database/sql/driver"
 	"fmt"
-	"net/http"
 	"net/url"
 	"time"
 
@@ -57,15 +56,13 @@ type (
 		Proxy         string        `desc:"代理地址"`                                 // 代理地址
 		Header        HTTPValus
 		Args          HTTPValus `gorm:"-:all"` // 拉流参数
-		PubConf       *Publish  `gorm:"-:all"`
 	}
 	Push struct {
 		URL           string        `desc:"推送地址"`                    // 推送地址
 		MaxRetry      int           `desc:"断开后自动重试次数,0:不重试,-1:无限重试"` // 断开后自动重推,0 表示不自动重推，-1 表示无限重推，高于0 的数代表最大重推次数
 		RetryInterval time.Duration `default:"5s" desc:"重试间隔"`       // 重试间隔
 		Proxy         string        `desc:"代理地址"`                    // 代理地址
-		Header        http.Header
-		SubConf       *Subscribe
+		Header        HTTPValus
 	}
 	Record struct {
 		FilePath string        `desc:"录制文件路径"` // 录制文件路径

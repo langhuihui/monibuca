@@ -261,7 +261,7 @@ func (s *Server) GetSubscribers(context.Context, *pb.SubscribersRequest) (res *p
 func (s *Server) AudioTrackSnap(_ context.Context, req *pb.StreamSnapRequest) (res *pb.TrackSnapShotResponse, err error) {
 	s.Streams.Call(func() error {
 		if pub, ok := s.Streams.Get(req.StreamPath); ok && pub.HasAudioTrack() {
-			res = &pb.TrackSnapShotResponse{}
+			data := &pb.TrackSnapShotData{}
 			if pub.AudioTrack.Allocator != nil {
 				for _, memlist := range pub.AudioTrack.Allocator.GetChildren() {
 					var list []*pb.MemoryBlock
@@ -271,38 +271,33 @@ func (s *Server) AudioTrackSnap(_ context.Context, req *pb.StreamSnapRequest) (r
 							E: uint32(block.End),
 						})
 					}
-					res.Memory = append(res.Memory, &pb.MemoryBlockGroup{List: list, Size: uint32(memlist.Size)})
+					data.Memory = append(data.Memory, &pb.MemoryBlockGroup{List: list, Size: uint32(memlist.Size)})
 				}
-			}
-			res.Reader = make(map[uint32]uint32)
-			for sub := range pub.SubscriberRange {
-				if sub.AudioReader == nil {
-					continue
-				}
-				res.Reader[uint32(sub.ID)] = sub.AudioReader.Value.Sequence
 			}
 			pub.AudioTrack.Ring.Do(func(v *pkg.AVFrame) {
-				if v.TryRLock() {
-					if len(v.Wraps) > 0 {
-						var snap pb.TrackSnapShot
-						snap.Sequence = v.Sequence
-						snap.Timestamp = uint32(v.Timestamp / time.Millisecond)
-						snap.WriteTime = timestamppb.New(v.WriteTime)
-						snap.Wrap = make([]*pb.Wrap, len(v.Wraps))
-						snap.KeyFrame = v.IDR
-						res.RingDataSize += uint32(v.Wraps[0].GetSize())
-						for i, wrap := range v.Wraps {
-							snap.Wrap[i] = &pb.Wrap{
-								Timestamp: uint32(wrap.GetTimestamp() / time.Millisecond),
-								Size:      uint32(wrap.GetSize()),
-								Data:      wrap.String(),
-							}
+				if len(v.Wraps) > 0 {
+					var snap pb.TrackSnapShot
+					snap.Sequence = v.Sequence
+					snap.Timestamp = uint32(v.Timestamp / time.Millisecond)
+					snap.WriteTime = timestamppb.New(v.WriteTime)
+					snap.Wrap = make([]*pb.Wrap, len(v.Wraps))
+					snap.KeyFrame = v.IDR
+					data.RingDataSize += uint32(v.Wraps[0].GetSize())
+					for i, wrap := range v.Wraps {
+						snap.Wrap[i] = &pb.Wrap{
+							Timestamp: uint32(wrap.GetTimestamp() / time.Millisecond),
+							Size:      uint32(wrap.GetSize()),
+							Data:      wrap.String(),
 						}
-						res.Ring = append(res.Ring, &snap)
 					}
-					v.RUnlock()
+					data.Ring = append(data.Ring, &snap)
 				}
 			})
+			res = &pb.TrackSnapShotResponse{
+				Code:    0,
+				Message: "success",
+				Data:    data,
+			}
 		} else {
 			err = pkg.ErrNotFound
 		}
@@ -342,7 +337,7 @@ func (s *Server) api_VideoTrack_SSE(rw http.ResponseWriter, r *http.Request) {
 func (s *Server) VideoTrackSnap(ctx context.Context, req *pb.StreamSnapRequest) (res *pb.TrackSnapShotResponse, err error) {
 	s.Streams.Call(func() error {
 		if pub, ok := s.Streams.Get(req.StreamPath); ok && pub.HasVideoTrack() {
-			res = &pb.TrackSnapShotResponse{}
+			data := &pb.TrackSnapShotData{}
 			if pub.VideoTrack.Allocator != nil {
 				for _, memlist := range pub.VideoTrack.Allocator.GetChildren() {
 					var list []*pb.MemoryBlock
@@ -352,15 +347,8 @@ func (s *Server) VideoTrackSnap(ctx context.Context, req *pb.StreamSnapRequest) 
 							E: uint32(block.End),
 						})
 					}
-					res.Memory = append(res.Memory, &pb.MemoryBlockGroup{List: list, Size: uint32(memlist.Size)})
+					data.Memory = append(data.Memory, &pb.MemoryBlockGroup{List: list, Size: uint32(memlist.Size)})
 				}
-			}
-			res.Reader = make(map[uint32]uint32)
-			for sub := range pub.SubscriberRange {
-				if sub.VideoReader == nil {
-					continue
-				}
-				res.Reader[sub.ID] = sub.VideoReader.Value.Sequence
 			}
 			pub.VideoTrack.Ring.Do(func(v *pkg.AVFrame) {
 				//if v.TryRLock() {
@@ -371,7 +359,7 @@ func (s *Server) VideoTrackSnap(ctx context.Context, req *pb.StreamSnapRequest) 
 					snap.WriteTime = timestamppb.New(v.WriteTime)
 					snap.Wrap = make([]*pb.Wrap, len(v.Wraps))
 					snap.KeyFrame = v.IDR
-					res.RingDataSize += uint32(v.Wraps[0].GetSize())
+					data.RingDataSize += uint32(v.Wraps[0].GetSize())
 					for i, wrap := range v.Wraps {
 						snap.Wrap[i] = &pb.Wrap{
 							Timestamp: uint32(wrap.GetTimestamp() / time.Millisecond),
@@ -379,11 +367,16 @@ func (s *Server) VideoTrackSnap(ctx context.Context, req *pb.StreamSnapRequest) 
 							Data:      wrap.String(),
 						}
 					}
-					res.Ring = append(res.Ring, &snap)
+					data.Ring = append(data.Ring, &snap)
 				}
 				//v.RUnlock()
 				//}
 			})
+			res = &pb.TrackSnapShotResponse{
+				Code:    0,
+				Message: "success",
+				Data:    data,
+			}
 		} else {
 			err = pkg.ErrNotFound
 		}
@@ -678,8 +671,8 @@ func (s *Server) GetDeviceList(ctx context.Context, req *emptypb.Empty) (res *pb
 			Status:         uint32(device.Status),
 			ID:             uint32(device.ID),
 			PullOnStart:    device.PullOnStart,
-			StopOnIdle:     device.PubConf.DelayCloseTimeout > 0,
-			Audio:          device.PubConf.PubAudio,
+			StopOnIdle:     device.StopOnIdle,
+			Audio:          device.Audio,
 			RecordPath:     device.Record.FilePath,
 			RecordFragment: durationpb.New(device.Record.Fragment),
 			Description:    device.Description,
@@ -700,12 +693,11 @@ func (s *Server) AddDevice(ctx context.Context, req *pb.DeviceInfo) (res *pb.Suc
 		Description: req.Description,
 		StreamPath:  req.StreamPath,
 	}
-	device.PubConf = config.NewPublish()
 	defaults.SetDefaults(&device.Pull)
 	defaults.SetDefaults(&device.Record)
 	device.URL = req.PullURL
-	device.PubConf.PubAudio = req.Audio
-	device.PubConf.DelayCloseTimeout = util.Conditional(req.StopOnIdle, 5*time.Second, 0)
+	device.Audio = req.Audio
+	device.StopOnIdle = req.StopOnIdle
 	device.Record.FilePath = req.RecordPath
 	device.Record.Fragment = req.RecordFragment.AsDuration()
 	if s.DB == nil {
@@ -729,10 +721,9 @@ func (s *Server) UpdateDevice(ctx context.Context, req *pb.DeviceInfo) (res *pb.
 	target.URL = req.PullURL
 	target.ParentID = uint(req.ParentID)
 	target.Type = req.Type
-	target.PubConf = config.NewPublish()
 	target.PullOnStart = req.PullOnStart
-	target.PubConf.DelayCloseTimeout = util.Conditional(req.StopOnIdle, 5*time.Second, 0)
-	target.PubConf.PubAudio = req.Audio
+	target.StopOnIdle = req.StopOnIdle
+	target.Audio = req.Audio
 	target.Description = req.Description
 	target.Record.FilePath = req.RecordPath
 	target.Record.Fragment = req.RecordFragment.AsDuration()

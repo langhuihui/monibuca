@@ -295,7 +295,7 @@ func (s *Server) Start() (err error) {
 		for plugin := range s.Plugins.Range {
 			if plugin.Meta.Puller != nil {
 				for streamPath, conf := range plugin.config.Pull {
-					plugin.handler.Pull(streamPath, conf)
+					plugin.handler.Pull(streamPath, conf, nil)
 				}
 			}
 			if plugin.Meta.Transformer != nil {
@@ -311,9 +311,6 @@ func (s *Server) Start() (err error) {
 		for _, d := range s.Device {
 			if d.ID != 0 {
 				d.server = s
-				if d.PubConf == nil {
-					d.PubConf = config.NewPublish()
-				}
 				if d.Type == "" {
 					u, err := url.Parse(d.URL)
 					if err != nil {
@@ -349,9 +346,6 @@ func (s *Server) Start() (err error) {
 				d.server = s
 				d.Logger = s.Logger.With("device", d.ID, "type", d.Type, "name", d.Name)
 				d.ChangeStatus(DeviceStatusOffline)
-				if d.PubConf == nil {
-					d.PubConf = config.NewPublish()
-				}
 				s.Devices.Add(d)
 			}
 		}

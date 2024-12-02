@@ -3,8 +3,10 @@ package task
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"reflect"
+	"runtime"
 	"runtime/debug"
 	"slices"
 	"sync"
@@ -109,7 +111,10 @@ func (mt *Job) AddTask(t ITask, opt ...any) (task *Task) {
 			return
 		}
 	}
-
+	_, file, line, ok := runtime.Caller(1)
+	if ok {
+		task.StartReason = fmt.Sprintf("%s:%d", file, line)
+	}
 	mt.lazyRun.Do(func() {
 		if mt.eventLoopLock.TryLock() {
 			defer mt.eventLoopLock.Unlock()

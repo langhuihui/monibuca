@@ -2,7 +2,6 @@ package rtp
 
 import (
 	"encoding/base64"
-	"errors"
 	"fmt"
 	"io"
 	"slices"
@@ -22,7 +21,7 @@ import (
 type (
 	H26xCtx struct {
 		RTPCtx
-		seq uint16
+		seq    uint16
 		dtsEst util.DTSEstimator
 	}
 	H264Ctx struct {
@@ -410,7 +409,7 @@ func (r *Video) Demux(ictx codec.ICodecCtx) (any, error) {
 					if nalu.Size > 0 {
 						nalu.AppendOne(packet.Payload[offset:])
 					} else {
-						return nil, errors.New("fu have no start")
+						continue
 					}
 					if util.Bit1(b1, 1) {
 						gotNalu()
