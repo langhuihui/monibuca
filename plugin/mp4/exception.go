@@ -87,7 +87,7 @@ func (p *DeleteRecordTask) getDiskOutOfSpace(max float64) bool {
 func (p *DeleteRecordTask) deleteOldestFile() {
 	//当当前磁盘使用量大于AutoOverWriteDiskPercent自动覆盖磁盘使用量配置时，自动删除最旧的文件
 	//连续录像删除最旧的文件
-	if p.getDiskOutOfSpace(p.AutoOverWriteDiskPercent) {
+	for p.getDiskOutOfSpace(p.AutoOverWriteDiskPercent) {
 		queryRecord := m7s.RecordStream{
 			EventLevel: "1", // 查询条件：event_level = 1,非重要事件
 		}
@@ -110,6 +110,7 @@ func (p *DeleteRecordTask) deleteOldestFile() {
 		} else {
 			p.Error("deleteOldestFile", "search record from db error", err)
 		}
+		time.Sleep(time.Second * 3)
 	}
 }
 
