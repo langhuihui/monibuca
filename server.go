@@ -69,24 +69,25 @@ type (
 		pb.UnimplementedApiServer
 		Plugin
 		ServerConfig
-		Plugins         util.Collection[string, *Plugin]
-		Streams         task.Manager[string, *Publisher]
-		AliasStreams    util.Collection[string, *AliasStream]
-		Waiting         WaitManager
-		Pulls           task.Manager[string, *PullJob]
-		Pushs           task.Manager[string, *PushJob]
-		Records         task.Manager[string, *RecordJob]
-		Transforms      Transforms
-		Devices         DeviceManager
-		Subscribers     SubscriberCollection
-		LogHandler      MultiLogHandler
-		apiList         []string
-		grpcServer      *grpc.Server
-		grpcClientConn  *grpc.ClientConn
-		lastSummaryTime time.Time
-		lastSummary     *pb.SummaryResponse
-		conf            any
-		prometheusDesc  prometheusDesc
+		Plugins           util.Collection[string, *Plugin]
+		Streams           task.Manager[string, *Publisher]
+		AliasStreams      util.Collection[string, *AliasStream]
+		Waiting           WaitManager
+		Pulls             task.Manager[string, *PullJob]
+		Pushs             task.Manager[string, *PushJob]
+		Records           task.Manager[string, *RecordJob]
+		Transforms        Transforms
+		Devices           DeviceManager
+		Subscribers       SubscriberCollection
+		LogHandler        MultiLogHandler
+		apiList           []string
+		grpcServer        *grpc.Server
+		grpcClientConn    *grpc.ClientConn
+		lastSummaryTime   time.Time
+		lastSummary       *pb.SummaryResponse
+		conf              any
+		configFileContent []byte
+		prometheusDesc    prometheusDesc
 	}
 	CheckSubWaitTimeout struct {
 		task.TickTask
@@ -194,6 +195,8 @@ func (s *Server) Start() (err error) {
 		}
 		if configYaml, err = os.ReadFile(v); err != nil {
 			s.Warn("read config file failed", "error", err.Error())
+		} else {
+			s.configFileContent = configYaml
 		}
 	case []byte:
 		configYaml = v

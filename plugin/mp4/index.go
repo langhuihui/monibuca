@@ -91,14 +91,13 @@ func (p *MP4Plugin) RegisterHandler() map[string]http.HandlerFunc {
 func (p *MP4Plugin) OnInit() (err error) {
 	if p.DB != nil {
 		err = p.DB.AutoMigrate(&Exception{})
+		var deleteRecordTask DeleteRecordTask
+		deleteRecordTask.DB = p.DB
+		deleteRecordTask.DiskMaxPercent = p.DiskMaxPercent
+		deleteRecordTask.AutoOverWriteDiskPercent = p.AutoOverWriteDiskPercent
+		deleteRecordTask.RecordFileExpireDays = p.RecordFileExpireDays
+		p.AddTask(&deleteRecordTask)
 	}
-	var deleteRecordTask DeleteRecordTask
-	deleteRecordTask.DB = p.DB
-	deleteRecordTask.DiskMaxPercent = p.DiskMaxPercent
-	deleteRecordTask.AutoOverWriteDiskPercent = p.AutoOverWriteDiskPercent
-	deleteRecordTask.RecordFileExpireDays = p.RecordFileExpireDays
-	p.AddTask(&deleteRecordTask)
-
 	// go func() { //处理所有异常，录像中断异常、录像读取异常、录像导出文件中断、磁盘容量低于阈值异常、磁盘异常
 	// 	for exception := range exceptionChannel {
 	// 		p.SendToThirdPartyAPI(exception)

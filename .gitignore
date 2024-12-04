@@ -13,3 +13,4 @@ bin
 *.flv
 pullcf.yaml
 admin.zip
+example/default/default

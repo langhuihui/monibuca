@@ -75,7 +75,7 @@ func (p *DeleteRecordTask) getDiskOutOfSpace(max float64) bool {
 	if err != nil {
 		p.Error("getDiskOutOfSpace", "error", err)
 	}
-	p.Info("getDiskOutOfSpace", "current path", exePath, "disk UsedPercent", d.UsedPercent, "total disk space", d.Total,
+	p.Debug("getDiskOutOfSpace", "current path", exePath, "disk UsedPercent", d.UsedPercent, "total disk space", d.Total,
 		"disk free", d.Free, "disk usage", d.Used, "AutoOverWriteDiskPercent", p.AutoOverWriteDiskPercent, "DiskMaxPercent", p.DiskMaxPercent)
 	if d.UsedPercent >= max {
 		return true
@@ -133,7 +133,7 @@ func (t *DeleteRecordTask) Tick(any) {
 	//搜索event_records表中event_level值为1的（非重要）数据，并将其create_time与当前时间比对，大于RecordFileExpireDays则进行删除，数据库标记is_delete为1，磁盘上删除录像文件
 	var eventRecords []m7s.RecordStream
 	expireTime := time.Now().AddDate(0, 0, -t.RecordFileExpireDays)
-	t.Info("RecordFileExpireDays is set to auto delete oldestfile", "expireTime", expireTime.Format("2006-01-02 15:04:05"))
+	t.Debug("RecordFileExpireDays is set to auto delete oldestfile", "expireTime", expireTime.Format("2006-01-02 15:04:05"))
 	err := t.DB.Find(&eventRecords, "end_time < ? AND event_level=1", expireTime).Error
 	if err == nil {
 		for _, record := range eventRecords {

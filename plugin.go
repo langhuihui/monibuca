@@ -305,40 +305,56 @@ func (p *Plugin) listen() (err error) {
 	httpConf := &p.config.HTTP
 
 	if httpConf.ListenAddrTLS != "" && (httpConf.ListenAddrTLS != p.Server.config.HTTP.ListenAddrTLS) {
+		p.SetDescription("httpTLS", strings.TrimPrefix(httpConf.ListenAddrTLS, ":"))
 		p.AddDependTask(httpConf.CreateHTTPSWork(p.Logger))
 	}
 
 	if httpConf.ListenAddr != "" && (httpConf.ListenAddr != p.Server.config.HTTP.ListenAddr) {
+		p.SetDescription("http", strings.TrimPrefix(httpConf.ListenAddr, ":"))
 		p.AddDependTask(httpConf.CreateHTTPWork(p.Logger))
 	}
 
 	if tcphandler, ok := p.handler.(ITCPPlugin); ok {
 		tcpConf := &p.config.TCP
-		if tcpConf.ListenAddr != "" && tcpConf.AutoListen {
-			if err = p.AddTask(tcpConf.CreateTCPWork(p.Logger, tcphandler.OnTCPConnect)).WaitStarted(); err != nil {
-				return
+		if tcpConf.ListenAddr != "" {
+			if tcpConf.AutoListen {
+				if err = p.AddTask(tcpConf.CreateTCPWork(p.Logger, tcphandler.OnTCPConnect)).WaitStarted(); err != nil {
+					return
+				}
 			}
+			p.SetDescription("tcp", strings.TrimPrefix(tcpConf.ListenAddr, ":"))
 		}
-		if tcpConf.ListenAddrTLS != "" && tcpConf.AutoListen {
-			if err = p.AddTask(tcpConf.CreateTCPTLSWork(p.Logger, tcphandler.OnTCPConnect)).WaitStarted(); err != nil {
-				return
+		if tcpConf.ListenAddrTLS != "" {
+			if tcpConf.AutoListen {
+				if err = p.AddTask(tcpConf.CreateTCPTLSWork(p.Logger, tcphandler.OnTCPConnect)).WaitStarted(); err != nil {
+					return
+				}
 			}
+			p.SetDescription("tcpTLS", strings.TrimPrefix(tcpConf.ListenAddrTLS, ":"))
 		}
 	}
 
 	if udpHandler, ok := p.handler.(IUDPPlugin); ok {
 		udpConf := &p.config.UDP
-		if udpConf.ListenAddr != "" && udpConf.AutoListen {
-			if err = p.AddTask(udpConf.CreateUDPWork(p.Logger, udpHandler.OnUDPConnect)).WaitStarted(); err != nil {
-				return
+		if udpConf.ListenAddr != "" {
+			if udpConf.AutoListen {
+				if err = p.AddTask(udpConf.CreateUDPWork(p.Logger, udpHandler.OnUDPConnect)).WaitStarted(); err != nil {
+					return
+				}
 			}
+			p.SetDescription("udp", strings.TrimPrefix(udpConf.ListenAddr, ":"))
 		}
 	}
 
 	if quicHandler, ok := p.handler.(IQUICPlugin); ok {
 		quicConf := &p.config.Quic
-		if quicConf.ListenAddr != "" && quicConf.AutoListen {
-			err = p.AddTask(quicConf.CreateQUICWork(p.Logger, quicHandler.OnQUICConnect)).WaitStarted()
+		if quicConf.ListenAddr != "" {
+			if quicConf.AutoListen {
+				if err = p.AddTask(quicConf.CreateQUICWork(p.Logger, quicHandler.OnQUICConnect)).WaitStarted(); err != nil {
+					return
+				}
+			}
+			p.SetDescription("quic", strings.TrimPrefix(quicConf.ListenAddr, ":"))
 		}
 	}
 	return

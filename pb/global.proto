@@ -20,12 +20,12 @@ service api {
   }
   rpc Shutdown (RequestWithId) returns (SuccessResponse) {
     option (google.api.http) = {
-      post: "/api/shutdown/{id}"
+      post: "/api/shutdown"
     };
   }
   rpc Restart (RequestWithId) returns (SuccessResponse) {
     option (google.api.http) = {
-      post: "/api/restart/{id}"
+      post: "/api/restart"
     };
   }
   rpc TaskTree (google.protobuf.Empty) returns (TaskTreeResponse) {
@@ -126,6 +126,17 @@ service api {
       body: "*"
     };
   }
+  rpc GetConfigFile (google.protobuf.Empty) returns (GetConfigFileResponse) {
+    option (google.api.http) = {
+      get: "/api/config/file"
+    };
+  }
+  rpc UpdateConfigFile (UpdateConfigFileRequest) returns (SuccessResponse) {
+    option (google.api.http) = {
+      post: "/api/config/file/update"
+      body: "*"
+    };
+  }
   rpc GetConfig (GetConfigRequest) returns (GetConfigResponse) {
     option (google.api.http) = {
       get: "/api/config/get/{name}"
@@ -188,10 +199,26 @@ message FormilyResponse {
   map<string, Formily> properties = 2;
 }
 
-message GetConfigResponse {
+message ConfigData {
   string file = 1;
   string modified = 2;
   string merged = 3;
+}
+
+message GetConfigFileResponse {
+  uint32 code = 1;
+  string message = 2;
+  string data = 3;
+}
+
+message GetConfigResponse {
+  uint32 code = 1;
+  string message = 2;
+  ConfigData data = 3;
+}
+
+message UpdateConfigFileRequest {
+  string content = 1;
 }
 
 message ModifyConfigRequest {
@@ -230,8 +257,8 @@ message SummaryResponse {
 
 message PluginInfo {
   string name = 1;
-  string version = 2;
-  bool disabled = 3;
+  bool disabled = 2;
+  map<string, string> description = 3;
 }
 
 message SysInfoData  {

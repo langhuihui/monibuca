@@ -45,6 +45,8 @@ type ApiClient interface {
 	SetStreamAlias(ctx context.Context, in *SetStreamAliasRequest, opts ...grpc.CallOption) (*SuccessResponse, error)
 	StopPublish(ctx context.Context, in *StreamSnapRequest, opts ...grpc.CallOption) (*SuccessResponse, error)
 	StopSubscribe(ctx context.Context, in *RequestWithId, opts ...grpc.CallOption) (*SuccessResponse, error)
+	GetConfigFile(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*GetConfigFileResponse, error)
+	UpdateConfigFile(ctx context.Context, in *UpdateConfigFileRequest, opts ...grpc.CallOption) (*SuccessResponse, error)
 	GetConfig(ctx context.Context, in *GetConfigRequest, opts ...grpc.CallOption) (*GetConfigResponse, error)
 	GetFormily(ctx context.Context, in *GetConfigRequest, opts ...grpc.CallOption) (*GetConfigResponse, error)
 	ModifyConfig(ctx context.Context, in *ModifyConfigRequest, opts ...grpc.CallOption) (*SuccessResponse, error)
@@ -261,6 +263,24 @@ func (c *apiClient) StopSubscribe(ctx context.Context, in *RequestWithId, opts .
 	return out, nil
 }
 
+func (c *apiClient) GetConfigFile(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*GetConfigFileResponse, error) {
+	out := new(GetConfigFileResponse)
+	err := c.cc.Invoke(ctx, "/global.api/GetConfigFile", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *apiClient) UpdateConfigFile(ctx context.Context, in *UpdateConfigFileRequest, opts ...grpc.CallOption) (*SuccessResponse, error) {
+	out := new(SuccessResponse)
+	err := c.cc.Invoke(ctx, "/global.api/UpdateConfigFile", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *apiClient) GetConfig(ctx context.Context, in *GetConfigRequest, opts ...grpc.CallOption) (*GetConfigResponse, error) {
 	out := new(GetConfigResponse)
 	err := c.cc.Invoke(ctx, "/global.api/GetConfig", in, out, opts...)
@@ -359,6 +379,8 @@ type ApiServer interface {
 	SetStreamAlias(context.Context, *SetStreamAliasRequest) (*SuccessResponse, error)
 	StopPublish(context.Context, *StreamSnapRequest) (*SuccessResponse, error)
 	StopSubscribe(context.Context, *RequestWithId) (*SuccessResponse, error)
+	GetConfigFile(context.Context, *emptypb.Empty) (*GetConfigFileResponse, error)
+	UpdateConfigFile(context.Context, *UpdateConfigFileRequest) (*SuccessResponse, error)
 	GetConfig(context.Context, *GetConfigRequest) (*GetConfigResponse, error)
 	GetFormily(context.Context, *GetConfigRequest) (*GetConfigResponse, error)
 	ModifyConfig(context.Context, *ModifyConfigRequest) (*SuccessResponse, error)
@@ -439,6 +461,12 @@ func (UnimplementedApiServer) StopPublish(context.Context, *StreamSnapRequest) (
 }
 func (UnimplementedApiServer) StopSubscribe(context.Context, *RequestWithId) (*SuccessResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StopSubscribe not implemented")
+}
+func (UnimplementedApiServer) GetConfigFile(context.Context, *emptypb.Empty) (*GetConfigFileResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetConfigFile not implemented")
+}
+func (UnimplementedApiServer) UpdateConfigFile(context.Context, *UpdateConfigFileRequest) (*SuccessResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpdateConfigFile not implemented")
 }
 func (UnimplementedApiServer) GetConfig(context.Context, *GetConfigRequest) (*GetConfigResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetConfig not implemented")
@@ -873,6 +901,42 @@ func _Api_StopSubscribe_Handler(srv interface{}, ctx context.Context, dec func(i
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Api_GetConfigFile_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(emptypb.Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).GetConfigFile(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/global.api/GetConfigFile",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).GetConfigFile(ctx, req.(*emptypb.Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Api_UpdateConfigFile_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateConfigFileRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).UpdateConfigFile(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/global.api/UpdateConfigFile",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).UpdateConfigFile(ctx, req.(*UpdateConfigFileRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Api_GetConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetConfigRequest)
 	if err := dec(in); err != nil {
@@ -1111,6 +1175,14 @@ var Api_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "StopSubscribe",
 			Handler:    _Api_StopSubscribe_Handler,
+		},
+		{
+			MethodName: "GetConfigFile",
+			Handler:    _Api_GetConfigFile_Handler,
+		},
+		{
+			MethodName: "UpdateConfigFile",
+			Handler:    _Api_UpdateConfigFile_Handler,
 		},
 		{
 			MethodName: "GetConfig",

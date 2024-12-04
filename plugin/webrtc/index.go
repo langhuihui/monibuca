@@ -3,6 +3,7 @@ package plugin_webrtc
 import (
 	"embed"
 	_ "embed"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -99,24 +100,33 @@ func (p *WebRTCPlugin) OnInit() (err error) {
 			IP:   net.IP{0, 0, 0, 0},
 			Port: tcpport,
 		})
+		p.OnDispose(func() {
+			_ = tcpl.Close()
+		})
 		if err != nil {
 			p.Error("webrtc listener tcp", "error", err)
 		}
+		p.SetDescription("tcp", fmt.Sprintf("%d", tcpport))
 		p.Info("webrtc start listen", "port", tcpport)
 		p.s.SetICETCPMux(NewICETCPMux(nil, tcpl, 4096))
 		p.s.SetNetworkTypes([]NetworkType{NetworkTypeTCP4, NetworkTypeTCP6})
 	case UDPRangePort:
 		p.s.SetEphemeralUDPPortRange(uint16(v[0]), uint16(v[1]))
+		p.SetDescription("udp", fmt.Sprintf("%d-%d", v[0], v[1]))
 	case UDPPort:
 		// 创建共享WEBRTC端口 默认9000
 		udpListener, err := net.ListenUDP("udp", &net.UDPAddr{
 			IP:   net.IP{0, 0, 0, 0},
 			Port: int(v),
 		})
+		p.OnDispose(func() {
+			_ = udpListener.Close()
+		})
 		if err != nil {
 			p.Error("webrtc listener udp", "error", err)
 			return err
 		}
+		p.SetDescription("udp", fmt.Sprintf("%d", v))
 		p.Info("webrtc start listen", "port", v)
 		p.s.SetICEUDPMux(NewICEUDPMux(nil, udpListener))
 		p.s.SetNetworkTypes([]NetworkType{NetworkTypeUDP4, NetworkTypeUDP6})

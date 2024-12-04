@@ -77,22 +77,26 @@ func (gb *GB28181Plugin) OnInit() (err error) {
 		gb.devices.L = new(sync.RWMutex)
 
 		if gb.MediaPort.Valid() {
+			gb.SetDescription("tcp", fmt.Sprintf("%d-%d", gb.MediaPort[0], gb.MediaPort[1]))
 			gb.tcpPorts = make(chan uint16, gb.MediaPort.Size())
 			for i := range gb.MediaPort.Size() {
 				gb.tcpPorts <- gb.MediaPort[0] + i
 			}
 		} else {
+			gb.SetDescription("tcp", fmt.Sprintf("%d", gb.MediaPort[0]))
 			tcpConfig := &gb.GetCommonConf().TCP
 			tcpConfig.ListenAddr = fmt.Sprintf(":%d", gb.MediaPort[0])
 		}
 		for _, addr := range gb.Sip.ListenAddr {
 			netWork, addr, _ := strings.Cut(addr, ":")
+			gb.SetDescription(netWork, strings.TrimPrefix(addr, ":"))
 			go gb.server.ListenAndServe(gb, netWork, addr)
 		}
 		if len(gb.Sip.ListenTLSAddr) > 0 {
 			if tslConfig, err := config.GetTLSConfig(gb.Sip.CertFile, gb.Sip.KeyFile); err == nil {
 				for _, addr := range gb.Sip.ListenTLSAddr {
 					netWork, addr, _ := strings.Cut(addr, ":")
+					gb.SetDescription(netWork+"TLS", strings.TrimPrefix(addr, ":"))
 					go gb.server.ListenAndServeTLS(gb, netWork, addr, tslConfig)
 				}
 			} else {

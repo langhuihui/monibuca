@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"runtime/debug"
 	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -16,6 +17,13 @@ import (
 )
 
 var idG atomic.Uint32
+var sourceFilePathPrefix string
+
+func init() {
+	if _, file, _, ok := runtime.Caller(0); ok {
+		sourceFilePathPrefix = strings.TrimSuffix(file, "pkg/task/job.go")
+	}
+}
 
 func GetNextTaskID() uint32 {
 	return idG.Add(1)
@@ -112,9 +120,11 @@ func (mt *Job) AddTask(t ITask, opt ...any) (task *Task) {
 		}
 	}
 	_, file, line, ok := runtime.Caller(1)
+
 	if ok {
-		task.StartReason = fmt.Sprintf("%s:%d", file, line)
+		task.StartReason = fmt.Sprintf("%s:%d", strings.TrimPrefix(file, sourceFilePathPrefix), line)
 	}
+
 	mt.lazyRun.Do(func() {
 		if mt.eventLoopLock.TryLock() {
 			defer mt.eventLoopLock.Unlock()

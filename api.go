@@ -7,6 +7,8 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"reflect"
 	"runtime"
 	"strings"
@@ -54,9 +56,9 @@ func (s *Server) SysInfo(context.Context, *emptypb.Empty) (res *pb.SysInfoRespon
 	}
 	for p := range s.Plugins.Range {
 		res.Data.Plugins = append(res.Data.Plugins, &pb.PluginInfo{
-			Name:     p.Meta.Name,
-			Version:  p.Meta.Version,
-			Disabled: p.Disabled,
+			Name:        p.Meta.Name,
+			Disabled:    p.Disabled,
+			Description: p.GetDescriptions(),
 		})
 	}
 	return
@@ -385,19 +387,16 @@ func (s *Server) VideoTrackSnap(ctx context.Context, req *pb.StreamSnapRequest) 
 	return
 }
 
+// Restart stops the server with a restart error and returns
+// a success response. This method is used to restart the server
+// gracefully.
 func (s *Server) Restart(ctx context.Context, req *pb.RequestWithId) (res *pb.SuccessResponse, err error) {
-	if s, ok := Servers.Get(req.Id); ok {
-		s.Stop(pkg.ErrRestart)
-	}
+	s.Stop(pkg.ErrRestart)
 	return &pb.SuccessResponse{}, err
 }
 
 func (s *Server) Shutdown(ctx context.Context, req *pb.RequestWithId) (res *pb.SuccessResponse, err error) {
-	if s, ok := Servers.Get(req.Id); ok {
-		s.Stop(task.ErrStopByUser)
-	} else {
-		return nil, pkg.ErrNotFound
-	}
+	s.Stop(task.ErrStopByUser)
 	return &pb.SuccessResponse{}, err
 }
 
@@ -601,8 +600,27 @@ func (s *Server) api_Config_JSON_(rw http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (s *Server) GetConfigFile(_ context.Context, req *emptypb.Empty) (res *pb.GetConfigFileResponse, err error) {
+	res = &pb.GetConfigFileResponse{}
+	res.Data = string(s.configFileContent)
+	return
+}
+
+func (s *Server) UpdateConfigFile(_ context.Context, req *pb.UpdateConfigFileRequest) (res *pb.SuccessResponse, err error) {
+	if s.configFileContent != nil {
+		s.configFileContent = []byte(req.Content)
+		os.WriteFile(filepath.Join(ExecDir, s.conf.(string)), s.configFileContent, 0644)
+		res = &pb.SuccessResponse{}
+	} else {
+		err = pkg.ErrNotFound
+	}
+	return
+}
+
 func (s *Server) GetConfig(_ context.Context, req *pb.GetConfigRequest) (res *pb.GetConfigResponse, err error) {
-	res = &pb.GetConfigResponse{}
+	res = &pb.GetConfigResponse{
+		Data: &pb.ConfigData{},
+	}
 	var conf *config.Config
 	if req.Name == "global" {
 		conf = &s.Config
@@ -619,19 +637,19 @@ func (s *Server) GetConfig(_ context.Context, req *pb.GetConfigRequest) (res *pb
 	if err != nil {
 		return
 	}
-	res.File = string(mm)
+	res.Data.File = string(mm)
 
 	mm, err = yaml.Marshal(conf.Modify)
 	if err != nil {
 		return
 	}
-	res.Modified = string(mm)
+	res.Data.Modified = string(mm)
 
 	mm, err = yaml.Marshal(conf.GetMap())
 	if err != nil {
 		return
 	}
-	res.Merged = string(mm)
+	res.Data.Merged = string(mm)
 	return
 }
 
