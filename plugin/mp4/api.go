@@ -7,16 +7,19 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/mcuadros/go-defaults"
+	"m7s.live/v5/pkg/config"
+
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
-	"m7s.live/v5/pkg"
-	"m7s.live/v5/plugin/mp4/pb"
-
 	m7s "m7s.live/v5"
+	"m7s.live/v5/pkg"
 	"m7s.live/v5/pkg/util"
+	"m7s.live/v5/plugin/mp4/pb"
 	mp4 "m7s.live/v5/plugin/mp4/pkg"
 	"m7s.live/v5/plugin/mp4/pkg/box"
 )
@@ -284,53 +287,75 @@ func (p *MP4Plugin) download(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *MP4Plugin) EventStart(ctx context.Context, req *pb.ReqEventRecord) (res *pb.ResponseEventRecord, err error) {
-	recordStream := &m7s.RecordStream{
-		StreamPath:     req.StreamPath,
-		EventId:        req.EventId,
-		EventLevel:     req.EventLevel,
-		EventDesc:      req.EventDesc,
-		EventName:      req.EventName,
-		RecordMode:     "1",
-		BeforeDuration: req.BeforeDuration,
-		AfterDuration:  req.AfterDuration,
+	beforeDuration := p.BeforeDuration
+	afterDuration := p.AfterDuration
+
+	if req.BeforeDuration != "" {
+		beforeDuration, err = time.ParseDuration(req.BeforeDuration)
+		if err != nil {
+			p.Info("error", err)
+		}
 	}
-	if req.BeforeDuration == "" {
-		recordStream.BeforeDuration = p.BeforeDuration.String()
+	if req.AfterDuration != "" {
+		afterDuration, err = time.ParseDuration(req.AfterDuration)
+		if err != nil {
+			p.Info("error", err)
+		}
 	}
-	if req.AfterDuration == "" {
-		recordStream.AfterDuration = p.AfterDuration.String()
+	recorder := p.Meta.Recorder()
+	recorderJobs := p.Server.Records
+	var tmpJob *m7s.RecordJob
+	if recorderJobs.Length > 0 {
+		for job := range recorderJobs.Range {
+			if job.StreamPath == req.StreamPath {
+				tmpJob = job
+			}
+		}
 	}
-	now := time.Now()
-	beforeDuration, err := time.ParseDuration(recordStream.BeforeDuration)
-	if err != nil {
-		p.Info("error", err)
-	}
-	afterDuration, err := time.ParseDuration(recordStream.AfterDuration)
-	if err != nil {
-		p.Info("error", err)
-	}
-	startTime := now.Add(-beforeDuration)
-	endTime := now.Add(afterDuration)
-	recordStream.StartTime = startTime
-	recordStream.EndTime = endTime
-	//tmpFragment, _ := time.ParseDuration(recordStream.Fragment)
-	//if stream, ok := p.Server.Streams.Get(req.StreamPath); ok {
-	//	recordConf := &config.Record{
-	//		Append:   false,
-	//		Fragment: tmpFragment,
-	//		FilePath: filepath.Join(p.EventRecordFilePath, stream.StreamPath, time.Now().Local().Format("2006-01-02-15-04-05")),
-	//	}
-	//	p.Record(stream, *recordConf)
-	//
-	//	//for r, recConf := range p.GetCommonConf().OnPub.Record {
-	//	//	if recConf.FilePath = r.Replace(stream.StreamPath, recConf.FilePath); recConf.FilePath != "" {
-	//	//		recConf.Fragment = tmpFragment
-	//	//	}
-	//	//}
-	//}
-	err = p.DB.Save(recordStream).Error
-	res = &pb.ResponseEventRecord{
-		Id: uint32(recordStream.ID),
+	if tmpJob == nil { //为空表示没有正在进行的录制，也就是没有自动录像，则进行正常的事件录像
+		if stream, ok := p.Server.Streams.Get(req.StreamPath); ok {
+			recordConf := config.Record{
+				Append:   false,
+				Fragment: 0,
+				FilePath: filepath.Join(p.EventRecordFilePath, stream.StreamPath, time.Now().Local().Format("2006-01-02-15-04-05")),
+			}
+			recordJob := recorder.GetRecordJob()
+			recordJob.EventId = req.EventId
+			recordJob.EventLevel = req.EventLevel
+			recordJob.EventName = req.EventName
+			recordJob.EventDesc = req.EventDesc
+			recordJob.AfterDuration = afterDuration
+			recordJob.BeforeDuration = beforeDuration
+			recordJob.RecordMode = "1"
+			var subconfig config.Subscribe
+			defaults.SetDefaults(&subconfig)
+			subconfig.BufferTime = beforeDuration
+			job := recorder.GetRecordJob().Init(recorder, &p.Plugin, stream.StreamPath, recordConf, &subconfig)
+			job.Depend(stream)
+		}
+	} else {
+		if tmpJob.AfterDuration != 0 { //当前有事件录像正在录制，则更新该录像的结束时间
+			tmpJob.AfterDuration = time.Duration(tmpJob.Subscriber.VideoReader.AbsTime)*time.Millisecond + afterDuration
+		} else { //当前有自动录像正在录制，则生成事件录像的记录，而不去生成事件录像的文件
+			recordStream := &m7s.RecordStream{
+				StreamPath:     req.StreamPath,
+				EventId:        req.EventId,
+				EventLevel:     req.EventLevel,
+				EventDesc:      req.EventDesc,
+				EventName:      req.EventName,
+				RecordMode:     "1",
+				BeforeDuration: beforeDuration,
+				AfterDuration:  afterDuration,
+			}
+			now := time.Now()
+			startTime := now.Add(-beforeDuration)
+			endTime := now.Add(afterDuration)
+			recordStream.StartTime = startTime
+			recordStream.EndTime = endTime
+			if p.DB != nil {
+				p.DB.Save(&recordStream)
+			}
+		}
 	}
 	return res, err
 }

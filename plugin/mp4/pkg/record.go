@@ -85,7 +85,6 @@ func (t *eventRecordCheck) Run() (err error) {
 	t.DB.Find(&eventRecordStreams, "record_mode=1 AND event_level=0 AND stream_path=?", t.streamPath) //搜索事件录像，且为重要事件（无法自动删除）
 	if len(eventRecordStreams) > 0 {
 		for _, recordStream := range eventRecordStreams {
-			t.Info("abc", recordStream.StartTime)
 			var unimportantEventRecordStreams []m7s.RecordStream
 			query := `(start_time BETWEEN ? AND ?)
 							OR (end_time BETWEEN ? AND ?) 
@@ -143,9 +142,16 @@ func (r *Recorder) createStream(start time.Time) (err error) {
 	sub := recordJob.Subscriber
 	var file *os.File
 	r.stream = m7s.RecordStream{
-		StartTime:  start,
-		StreamPath: sub.StreamPath,
-		FilePath:   CustomFileName(&r.RecordJob),
+		StartTime:      start,
+		StreamPath:     sub.StreamPath,
+		FilePath:       CustomFileName(&r.RecordJob),
+		EventId:        recordJob.EventId,
+		EventDesc:      recordJob.EventDesc,
+		EventName:      recordJob.EventName,
+		EventLevel:     recordJob.EventLevel,
+		BeforeDuration: recordJob.BeforeDuration,
+		AfterDuration:  recordJob.AfterDuration,
+		RecordMode:     recordJob.RecordMode,
 	}
 	dir := filepath.Dir(r.stream.FilePath)
 	if err = os.MkdirAll(dir, 0755); err != nil {
@@ -187,11 +193,24 @@ func (r *Recorder) Run() (err error) {
 	recordJob := &r.RecordJob
 	sub := recordJob.Subscriber
 	var audioTrack, videoTrack *Track
-	err = r.createStream(time.Now())
+	startTime := time.Now()
+	if recordJob.BeforeDuration > 0 {
+		startTime = startTime.Add(-recordJob.BeforeDuration)
+	}
+	err = r.createStream(startTime)
 	if err != nil {
 		return
 	}
 	var at, vt *pkg.AVTrack
+
+	checkEventRecordStop := func(absTime uint32) (err error) {
+		if duration := int64(absTime); time.Duration(duration)*time.Millisecond >= recordJob.AfterDuration+recordJob.BeforeDuration {
+			now := time.Now()
+			r.writeTailer(now)
+			r.RecordJob.Stop(task.ErrStopByUser)
+		}
+		return
+	}
 
 	checkFragment := func(absTime uint32) (err error) {
 		if duration := int64(absTime); time.Duration(duration)*time.Millisecond >= recordJob.Fragment {
@@ -215,10 +234,18 @@ func (r *Recorder) Run() (err error) {
 	}
 
 	return m7s.PlayBlock(sub, func(audio *pkg.RawAudio) error {
-		if sub.VideoReader == nil && recordJob.Fragment != 0 {
-			err := checkFragment(sub.AudioReader.AbsTime)
-			if err != nil {
-				return err
+		if sub.VideoReader == nil {
+			if recordJob.AfterDuration != 0 {
+				err := checkEventRecordStop(sub.VideoReader.AbsTime)
+				if err != nil {
+					return err
+				}
+			}
+			if recordJob.Fragment != 0 {
+				err := checkFragment(sub.AudioReader.AbsTime)
+				if err != nil {
+					return err
+				}
 			}
 		}
 		if at == nil {
@@ -249,10 +276,18 @@ func (r *Recorder) Run() (err error) {
 			DTS:  uint64(dts),
 		})
 	}, func(video *rtmp.RTMPVideo) error {
-		if sub.VideoReader.Value.IDR && recordJob.Fragment != 0 {
-			err := checkFragment(sub.VideoReader.AbsTime)
-			if err != nil {
-				return err
+		if sub.VideoReader.Value.IDR {
+			if recordJob.AfterDuration != 0 {
+				err := checkEventRecordStop(sub.VideoReader.AbsTime)
+				if err != nil {
+					return err
+				}
+			}
+			if recordJob.Fragment != 0 {
+				err := checkFragment(sub.VideoReader.AbsTime)
+				if err != nil {
+					return err
+				}
 			}
 		}
 		offset := 5

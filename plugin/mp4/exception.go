@@ -135,7 +135,7 @@ func (t *DeleteRecordTask) Tick(any) {
 	var eventRecords []m7s.RecordStream
 	expireTime := time.Now().AddDate(0, 0, -t.RecordFileExpireDays)
 	t.Debug("RecordFileExpireDays is set to auto delete oldestfile", "expireTime", expireTime.Format("2006-01-02 15:04:05"))
-	err := t.DB.Find(&eventRecords, "end_time < ? AND event_level=1", expireTime).Error
+	err := t.DB.Find(&eventRecords, "end_time < ? AND event_level=1 AND end_time != '1970-01-01 00:00:00'", expireTime).Error
 	if err == nil {
 		for _, record := range eventRecords {
 			t.Info("RecordFileExpireDays is set to auto delete oldestfile", "ID", record.ID, "create time", record.EndTime, "filepath", record.FilePath)
