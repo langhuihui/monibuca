@@ -92,7 +92,7 @@ func (p *DeleteRecordTask) deleteOldestFile() {
 			EventLevel: "1", // 查询条件：event_level = 1,非重要事件
 		}
 		var eventRecords []m7s.RecordStream
-		err := p.DB.Where(&queryRecord).Order("end_time ASC").Limit(1).Find(&eventRecords).Error
+		err := p.DB.Where(&queryRecord).Where("end_time != '1970-01-01 00:00:00'").Order("end_time ASC").Limit(1).Find(&eventRecords).Error
 		if err == nil {
 			if len(eventRecords) > 0 {
 				for _, record := range eventRecords {

@@ -161,24 +161,39 @@ service api {
   rpc GetPullProxyList (google.protobuf.Empty) returns (PullProxyListResponse) {
     option (google.api.http) = {
       get: "/api/proxy/pull/list"
+      additional_bindings {
+        get: "/api/device/list"
+      }
     };
   }
   rpc AddPullProxy (PullProxyInfo) returns (SuccessResponse) {
     option (google.api.http) = {
       post: "/api/proxy/pull/add"
       body: "*"
+      additional_bindings {
+        post: "/api/device/add"
+        body: "*"
+      }
     };
   }
   rpc RemovePullProxy (RequestWithId) returns (SuccessResponse) {
     option (google.api.http) = {
       post: "/api/proxy/pull/remove/{id}"
       body: "*"
+      additional_bindings {
+        post: "/api/device/add/{id}"
+        body: "*"
+      }
     };
   }
   rpc UpdatePullProxy (PullProxyInfo) returns (SuccessResponse) {
     option (google.api.http) = {
       post: "/api/proxy/pull/update"
       body: "*"
+      additional_bindings {
+        post: "/api/device/update"
+        body: "*"
+      }
     };
   }
   rpc GetPushProxyList (google.protobuf.Empty) returns (PushProxyListResponse) {

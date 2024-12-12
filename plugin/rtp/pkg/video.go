@@ -430,6 +430,9 @@ func (r *Video) Demux(ictx codec.ICodecCtx) (any, error) {
 			}
 		}
 		for _, packet := range r.Packets {
+			if len(packet.Payload) == 0 {
+				continue
+			}
 			b0 := packet.Payload[0]
 			if t := codec.ParseH265NALUType(b0); t < H265_NALU_AP {
 				nalu.AppendOne(packet.Payload)
