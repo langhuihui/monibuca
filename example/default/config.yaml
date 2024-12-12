@@ -35,7 +35,10 @@ cascadeserver:
 #   onpub:
 #     transform:
 #       .* : 5s x 3
-rtsp:
+#rtsp:
 #  pull:
     # live/test: rtsp://admin:1qaz2wsx3EDC@giroro.tpddns.cn:1554/Streaming/Channels/101
 #    live/test: rtsp://admin:1qaz2wsx3EDC@localhost:8554/live/test
+
+snap:
+  watermarktext: "Monibuca"
