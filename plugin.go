@@ -565,7 +565,7 @@ func (p *Plugin) PublishWithConfig(ctx context.Context, streamPath string, conf 
 				return
 			}
 		} else if conf.Key != "" {
-			if err = p.auth(streamPath, conf.Key, publisher.Args.Get("secret"), publisher.Args.Get("expire")); err != nil {
+			if err = p.auth(publisher.StreamPath, conf.Key, publisher.Args.Get("secret"), publisher.Args.Get("expire")); err != nil {
 				p.Warn("auth failed", "error", err)
 				return
 			}
@@ -592,7 +592,7 @@ func (p *Plugin) SubscribeWithConfig(ctx context.Context, streamPath string, con
 				return
 			}
 		} else if conf.Key != "" {
-			if err = p.auth(streamPath, conf.Key, subscriber.Args.Get("secret"), subscriber.Args.Get("expire")); err != nil {
+			if err = p.auth(subscriber.StreamPath, conf.Key, subscriber.Args.Get("secret"), subscriber.Args.Get("expire")); err != nil {
 				p.Warn("auth failed", "error", err)
 				return
 			}
