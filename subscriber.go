@@ -84,7 +84,11 @@ func createSubscriber(p *Plugin, streamPath string, conf config.Subscribe) *Subs
 	subscriber := &Subscriber{Subscribe: conf, waitPublishDone: make(chan struct{})}
 	subscriber.ID = task.GetNextTaskID()
 	subscriber.Plugin = p
-	subscriber.Type = SubscribeTypeServer
+	if conf.SubType != "" {
+		subscriber.Type = conf.SubType
+	} else {
+		subscriber.Type = SubscribeTypeServer
+	}
 	subscriber.Logger = p.Logger.With("streamPath", streamPath, "sId", subscriber.ID)
 	subscriber.Init(streamPath, &subscriber.Subscribe)
 	if subscriber.Subscribe.BufferTime > 0 {

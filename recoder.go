@@ -79,12 +79,11 @@ func (p *RecordJob) GetKey() string {
 
 func (p *RecordJob) Subscribe() (err error) {
 	if p.SubConf != nil {
+		p.SubConf.SubType = SubscribeTypeVod
 		p.Subscriber, err = p.Plugin.SubscribeWithConfig(p.recorder.GetTask().Context, p.StreamPath, *p.SubConf)
 	} else {
-		p.Subscriber, err = p.Plugin.Subscribe(p.recorder.GetTask().Context, p.StreamPath)
-	}
-	if p.Subscriber != nil {
-		p.Subscriber.Type = SubscribeTypeVod
+		p.SubConf = &config.Subscribe{SubType: SubscribeTypeVod}
+		p.Subscriber, err = p.Plugin.SubscribeWithConfig(p.recorder.GetTask().Context, p.StreamPath, *p.SubConf)
 	}
 	return
 }

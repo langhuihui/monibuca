@@ -374,12 +374,12 @@ func (s *Server) api_VideoTrack_SSE(rw http.ResponseWriter, r *http.Request) {
 	}
 	suber, err := s.SubscribeWithConfig(r.Context(), streamPath, config.Subscribe{
 		SubVideo: true,
+		SubType:  SubscribeTypeAPI,
 	})
 	if err != nil {
 		http.Error(rw, err.Error(), http.StatusBadRequest)
 		return
 	}
-	suber.Type = SubscribeTypeAPI
 	sse := util.NewSSE(rw, r.Context())
 	PlayBlock(suber, (func(frame *pkg.AVFrame) (err error))(nil), func(frame *pkg.AVFrame) (err error) {
 		var snap pb.TrackSnapShot
@@ -410,12 +410,12 @@ func (s *Server) api_AudioTrack_SSE(rw http.ResponseWriter, r *http.Request) {
 	}
 	suber, err := s.SubscribeWithConfig(r.Context(), streamPath, config.Subscribe{
 		SubAudio: true,
+		SubType:  SubscribeTypeAPI,
 	})
 	if err != nil {
 		http.Error(rw, err.Error(), http.StatusBadRequest)
 		return
 	}
-	suber.Type = SubscribeTypeAPI
 	sse := util.NewSSE(rw, r.Context())
 	PlayBlock(suber, func(frame *pkg.AVFrame) (err error) {
 		var snap pb.TrackSnapShot

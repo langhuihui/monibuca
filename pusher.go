@@ -44,12 +44,11 @@ func (p *PushJob) Init(pusher IPusher, plugin *Plugin, streamPath string, conf c
 
 func (p *PushJob) Subscribe() (err error) {
 	if p.SubConf != nil {
+		p.SubConf.SubType = SubscribeTypePush
 		p.Subscriber, err = p.Plugin.SubscribeWithConfig(p.pusher.GetTask().Context, p.StreamPath, *p.SubConf)
 	} else {
+		p.SubConf = &config.Subscribe{SubType: SubscribeTypePush}
 		p.Subscriber, err = p.Plugin.Subscribe(p.pusher.GetTask().Context, p.StreamPath)
-	}
-	if p.Subscriber != nil {
-		p.Subscriber.Type = SubscribeTypePush
 	}
 	return
 }

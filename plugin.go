@@ -581,20 +581,22 @@ func (p *Plugin) Publish(ctx context.Context, streamPath string) (publisher *Pub
 
 func (p *Plugin) SubscribeWithConfig(ctx context.Context, streamPath string, conf config.Subscribe) (subscriber *Subscriber, err error) {
 	subscriber = createSubscriber(p, streamPath, conf)
-	if p.config.EnableAuth {
-		onAuthSub := p.Meta.OnAuthSub
-		if onAuthSub == nil {
-			onAuthSub = p.Server.Meta.OnAuthSub
-		}
-		if onAuthSub != nil {
-			if err = onAuthSub(subscriber).Await(); err != nil {
-				p.Warn("auth failed", "error", err)
-				return
+	if subscriber.Type == SubscribeTypeServer {
+		if p.config.EnableAuth {
+			onAuthSub := p.Meta.OnAuthSub
+			if onAuthSub == nil {
+				onAuthSub = p.Server.Meta.OnAuthSub
 			}
-		} else if conf.Key != "" {
-			if err = p.auth(subscriber.StreamPath, conf.Key, subscriber.Args.Get("secret"), subscriber.Args.Get("expire")); err != nil {
-				p.Warn("auth failed", "error", err)
-				return
+			if onAuthSub != nil {
+				if err = onAuthSub(subscriber).Await(); err != nil {
+					p.Warn("auth failed", "error", err)
+					return
+				}
+			} else if conf.Key != "" {
+				if err = p.auth(subscriber.StreamPath, conf.Key, subscriber.Args.Get("secret"), subscriber.Args.Get("expire")); err != nil {
+					p.Warn("auth failed", "error", err)
+					return
+				}
 			}
 		}
 	}

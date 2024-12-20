@@ -54,6 +54,7 @@ type (
 		WaitTimeout     time.Duration `default:"10s" desc:"等待流超时时间"`                        // 等待流超时
 		WriteBufferSize int           `desc:"写缓冲大小"`                                        // 写缓冲大小
 		Key             string        `desc:"订阅鉴权key"`                                      // 订阅鉴权key
+		SubType         string        `desc:"订阅类型"`                                                        // 订阅类型
 	}
 	HTTPValus map[string][]string
 	Pull      struct {
