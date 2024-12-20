@@ -57,7 +57,7 @@ func (w *WriteToFile) WriteHeader(statusCode int) {
 func (p *DebugPlugin) OnInit() error {
 	// 启用阻塞分析
 	runtime.SetBlockProfileRate(1) // 设置采样率为1纳秒
-	
+
 	if p.Profile != "" {
 		go func() {
 			file, err := os.Create(p.Profile)
@@ -290,13 +290,13 @@ func (p *DebugPlugin) GetCpu(ctx context.Context, empty *emptypb.Empty) (*pb.Cpu
 	if err := runtimePPROF.Lookup("block").WriteTo(blockBuf, 1); err != nil {
 		return nil, fmt.Errorf("could not write block profile: %v", err)
 	}
-	
+
 	// 解析阻塞分析数据
 	blockProfile, err := profile.Parse(bytes.NewReader(blockBuf.Bytes()))
 	if err != nil {
 		return nil, fmt.Errorf("could not parse block profile: %v", err)
 	}
-	
+
 	// 计算总阻塞时间
 	var totalBlockingTime uint64
 	for _, sample := range blockProfile.Sample {
@@ -384,6 +384,41 @@ func (p *DebugPlugin) GetHeapGraph(ctx context.Context, empty *emptypb.Empty) (*
 		return nil, err
 	}
 	return &pb.HeapGraphResponse{
+		Data: dot,
+	}, nil
+}
+
+func (p *DebugPlugin) GetCpuGraph(ctx context.Context, empty *emptypb.Empty) (*pb.CpuGraphResponse, error) {
+	// 创建临时文件用于存储CPU profile信息
+	f, err := os.CreateTemp("", "cpu")
+	if err != nil {
+		return nil, err
+	}
+	defer os.Remove(f.Name())
+	defer f.Close()
+
+	// 开始CPU profile收集
+	if err := runtimePPROF.StartCPUProfile(f); err != nil {
+		return nil, err
+	}
+
+	// 收集30秒的CPU数据
+	time.Sleep(1 * time.Second)
+	runtimePPROF.StopCPUProfile()
+
+	// 读取CPU profile信息
+	f.Seek(0, 0)
+	profile, err := profile.Parse(f)
+	if err != nil {
+		return nil, err
+	}
+
+	// 生成dot图
+	dot, err := debug.GetDotGraph(profile)
+	if err != nil {
+		return nil, err
+	}
+	return &pb.CpuGraphResponse{
 		Data: dot,
 	}, nil
 }

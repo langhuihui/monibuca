@@ -16,6 +16,11 @@ service api {
       get: "/debug/api/heap/graph"
     };
   }
+  rpc GetCpuGraph (google.protobuf.Empty) returns (CpuGraphResponse) {
+    option (google.api.http) = {
+      get: "/debug/api/cpu/graph"
+    };
+  }
   rpc GetCpu (google.protobuf.Empty) returns (CpuResponse) {
     option (google.api.http) = {
       get: "/debug/api/cpu"
@@ -65,6 +70,12 @@ message HeapResponse {
 }
 
 message HeapGraphResponse {
+  uint32 code = 1;
+  string message = 2;
+  string data = 3;
+}
+
+message CpuGraphResponse {
   uint32 code = 1;
   string message = 2;
   string data = 3;

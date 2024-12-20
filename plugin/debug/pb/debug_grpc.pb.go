@@ -22,6 +22,7 @@ const _ = grpc.SupportPackageIsVersion9
 const (
 	Api_GetHeap_FullMethodName      = "/debug.api/GetHeap"
 	Api_GetHeapGraph_FullMethodName = "/debug.api/GetHeapGraph"
+	Api_GetCpuGraph_FullMethodName  = "/debug.api/GetCpuGraph"
 	Api_GetCpu_FullMethodName       = "/debug.api/GetCpu"
 )
 
@@ -31,6 +32,7 @@ const (
 type ApiClient interface {
 	GetHeap(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*HeapResponse, error)
 	GetHeapGraph(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*HeapGraphResponse, error)
+	GetCpuGraph(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*CpuGraphResponse, error)
 	GetCpu(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*CpuResponse, error)
 }
 
@@ -62,6 +64,16 @@ func (c *apiClient) GetHeapGraph(ctx context.Context, in *emptypb.Empty, opts ..
 	return out, nil
 }
 
+func (c *apiClient) GetCpuGraph(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*CpuGraphResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CpuGraphResponse)
+	err := c.cc.Invoke(ctx, Api_GetCpuGraph_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *apiClient) GetCpu(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*CpuResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(CpuResponse)
@@ -78,6 +90,7 @@ func (c *apiClient) GetCpu(ctx context.Context, in *emptypb.Empty, opts ...grpc.
 type ApiServer interface {
 	GetHeap(context.Context, *emptypb.Empty) (*HeapResponse, error)
 	GetHeapGraph(context.Context, *emptypb.Empty) (*HeapGraphResponse, error)
+	GetCpuGraph(context.Context, *emptypb.Empty) (*CpuGraphResponse, error)
 	GetCpu(context.Context, *emptypb.Empty) (*CpuResponse, error)
 	mustEmbedUnimplementedApiServer()
 }
@@ -94,6 +107,9 @@ func (UnimplementedApiServer) GetHeap(context.Context, *emptypb.Empty) (*HeapRes
 }
 func (UnimplementedApiServer) GetHeapGraph(context.Context, *emptypb.Empty) (*HeapGraphResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetHeapGraph not implemented")
+}
+func (UnimplementedApiServer) GetCpuGraph(context.Context, *emptypb.Empty) (*CpuGraphResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetCpuGraph not implemented")
 }
 func (UnimplementedApiServer) GetCpu(context.Context, *emptypb.Empty) (*CpuResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetCpu not implemented")
@@ -155,6 +171,24 @@ func _Api_GetHeapGraph_Handler(srv interface{}, ctx context.Context, dec func(in
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Api_GetCpuGraph_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(emptypb.Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).GetCpuGraph(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_GetCpuGraph_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).GetCpuGraph(ctx, req.(*emptypb.Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Api_GetCpu_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(emptypb.Empty)
 	if err := dec(in); err != nil {
@@ -187,6 +221,10 @@ var Api_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetHeapGraph",
 			Handler:    _Api_GetHeapGraph_Handler,
+		},
+		{
+			MethodName: "GetCpuGraph",
+			Handler:    _Api_GetCpuGraph_Handler,
 		},
 		{
 			MethodName: "GetCpu",
