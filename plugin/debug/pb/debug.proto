@@ -16,6 +16,11 @@ service api {
       get: "/debug/api/heap/graph"
     };
   }
+  rpc GetCpu (google.protobuf.Empty) returns (CpuResponse) {
+    option (google.api.http) = {
+      get: "/debug/api/cpu"
+    };
+  }
 }
 
 message HeapObject {
@@ -63,4 +68,51 @@ message HeapGraphResponse {
   uint32 code = 1;
   string message = 2;
   string data = 3;
+}
+
+// CPU 采样响应数据
+message CpuResponse {
+  uint32 code = 1;
+  string message = 2;
+  CpuData data = 3;
+}
+
+message CpuData {
+  uint64 total_cpu_time_ns = 1;           // 总 CPU 时间（纳秒）
+  uint64 sampling_interval_ns = 2;        // 采样间隔（纳秒）
+  repeated FunctionProfile functions = 3; // 函数调用栈信息
+  repeated GoroutineProfile goroutines = 4; // 协程信息
+  repeated SystemCall system_calls = 5;     // 系统调用信息
+  RuntimeStats runtime_stats = 6;           // 运行时统计信息
+}
+
+// 函数调用栈信息
+message FunctionProfile {
+  string function_name = 1;       // 函数名称
+  uint64 cpu_time_ns = 2;         // 函数消耗的 CPU 时间（纳秒）
+  uint64 invocation_count = 3;    // 函数调用次数
+  repeated string call_stack = 4; // 调用栈（从调用者到被调用者）
+  bool is_inlined = 5;            // 是否是内联函数
+}
+// 协程信息
+message GoroutineProfile {
+  uint64 id = 1;                  // 协程 ID
+  string state = 2;               // 协程状态（如 running, blocked 等）
+  uint64 cpu_time_ns = 3;         // 协程消耗的 CPU 时间（纳秒）
+  repeated string call_stack = 4; // 协程的调用栈
+}
+
+// 系统调用信息
+message SystemCall {
+  string name = 1;                // 系统调用名称
+  uint64 cpu_time_ns = 2;         // 系统调用消耗的 CPU 时间（纳秒）
+  uint64 count = 3;               // 系统调用次数
+}
+
+// 运行时统计信息
+message RuntimeStats {
+  double gc_cpu_fraction = 1;     // 垃圾回收占用的 CPU 时间比例
+  uint64 gc_count = 2;            // 垃圾回收次数
+  uint64 gc_pause_time_ns = 3;    // 垃圾回收暂停时间（纳秒）
+  uint64 blocking_time_ns = 4;    // 阻塞时间（纳秒）
 }

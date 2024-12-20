@@ -1,6 +1,7 @@
 package plugin_debug
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -54,6 +55,9 @@ func (w *WriteToFile) WriteHeader(statusCode int) {
 }
 
 func (p *DebugPlugin) OnInit() error {
+	// 启用阻塞分析
+	runtime.SetBlockProfileRate(1) // 设置采样率为1纳秒
+	
 	if p.Profile != "" {
 		go func() {
 			file, err := os.Create(p.Profile)
@@ -247,6 +251,98 @@ func (p *DebugPlugin) GetHeap(ctx context.Context, empty *emptypb.Empty) (*pb.He
 	resp.Data.Stats.HeapReleased = ms.HeapReleased
 	resp.Data.Stats.HeapObjects = ms.HeapObjects
 	resp.Data.Stats.GcCPUFraction = ms.GCCPUFraction
+
+	return resp, nil
+}
+
+func (p *DebugPlugin) GetCpu(ctx context.Context, empty *emptypb.Empty) (*pb.CpuResponse, error) {
+	// 创建一个临时文件来存储CPU profile数据
+	f, err := os.CreateTemp("", "cpu_profile")
+	if err != nil {
+		return nil, fmt.Errorf("could not create CPU profile: %v", err)
+	}
+	defer os.Remove(f.Name())
+	defer f.Close()
+
+	// 开始CPU profiling
+	if err := runtimePPROF.StartCPUProfile(f); err != nil {
+		return nil, fmt.Errorf("could not start CPU profile: %v", err)
+	}
+
+	// 采样指定时间
+	time.Sleep(1 * time.Second)
+	runtimePPROF.StopCPUProfile()
+
+	// 读取profile数据
+	profileData, err := os.ReadFile(f.Name())
+	if err != nil {
+		return nil, fmt.Errorf("could not read CPU profile: %v", err)
+	}
+
+	// 解析profile数据
+	parsedProfile, err := profile.Parse(bytes.NewReader(profileData))
+	if err != nil {
+		return nil, fmt.Errorf("could not parse CPU profile: %v", err)
+	}
+
+	// 获取阻塞分析数据
+	blockBuf := &bytes.Buffer{}
+	if err := runtimePPROF.Lookup("block").WriteTo(blockBuf, 1); err != nil {
+		return nil, fmt.Errorf("could not write block profile: %v", err)
+	}
+	
+	// 解析阻塞分析数据
+	blockProfile, err := profile.Parse(bytes.NewReader(blockBuf.Bytes()))
+	if err != nil {
+		return nil, fmt.Errorf("could not parse block profile: %v", err)
+	}
+	
+	// 计算总阻塞时间
+	var totalBlockingTime uint64
+	for _, sample := range blockProfile.Sample {
+		totalBlockingTime += uint64(sample.Value[0])
+	}
+
+	// 构建响应
+	resp := &pb.CpuResponse{
+		Data: &pb.CpuData{
+			TotalCpuTimeNs:     uint64(parsedProfile.DurationNanos),
+			SamplingIntervalNs: uint64(parsedProfile.Period),
+			Functions:          make([]*pb.FunctionProfile, 0),
+			Goroutines:         make([]*pb.GoroutineProfile, 0),
+			SystemCalls:        make([]*pb.SystemCall, 0),
+			RuntimeStats:       &pb.RuntimeStats{},
+		},
+	}
+
+	// 收集函数调用信息
+	for _, sample := range parsedProfile.Sample {
+		functionProfile := &pb.FunctionProfile{
+			FunctionName:    sample.Location[0].Line[0].Function.Name,
+			CpuTimeNs:       uint64(sample.Value[0]),
+			InvocationCount: uint64(sample.Value[1]),
+			CallStack:       make([]string, 0),
+		}
+
+		// 收集调用栈信息
+		for _, loc := range sample.Location {
+			for _, line := range loc.Line {
+				functionProfile.CallStack = append(functionProfile.CallStack, line.Function.Name)
+			}
+		}
+
+		resp.Data.Functions = append(resp.Data.Functions, functionProfile)
+	}
+
+	// 收集运行时统计信息
+	var memStats runtime.MemStats
+	runtime.ReadMemStats(&memStats)
+	resp.Data.RuntimeStats = &pb.RuntimeStats{
+		GcCpuFraction:  memStats.GCCPUFraction,
+		GcCount:        uint64(memStats.NumGC),
+		GcPauseTimeNs:  memStats.PauseTotalNs,
+		BlockingTimeNs: totalBlockingTime, // 添加阻塞时间统计
+	}
 
 	return resp, nil
 }
