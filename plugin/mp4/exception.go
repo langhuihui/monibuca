@@ -89,7 +89,7 @@ func (p *DeleteRecordTask) deleteOldestFile() {
 	//连续录像删除最旧的文件
 	for p.getDiskOutOfSpace(p.AutoOverWriteDiskPercent) {
 		queryRecord := m7s.RecordStream{
-			EventLevel: "1", // 查询条件：event_level = 1,非重要事件
+			EventLevel: m7s.EventLevelLow, // 查询条件：event_level = 1,非重要事件
 		}
 		var eventRecords []m7s.RecordStream
 		err := p.DB.Where(&queryRecord).Where("end_time != '1970-01-01 00:00:00'").Order("end_time ASC").Limit(1).Find(&eventRecords).Error
@@ -135,7 +135,10 @@ func (t *DeleteRecordTask) Tick(any) {
 	var eventRecords []m7s.RecordStream
 	expireTime := time.Now().AddDate(0, 0, -t.RecordFileExpireDays)
 	t.Debug("RecordFileExpireDays is set to auto delete oldestfile", "expireTime", expireTime.Format("2006-01-02 15:04:05"))
-	err := t.DB.Find(&eventRecords, "end_time < ? AND event_level=1 AND end_time != '1970-01-01 00:00:00'", expireTime).Error
+	queryRecord := m7s.RecordStream{
+		EventLevel: m7s.EventLevelLow, // 查询条件：event_level = low,非重要事件
+	}
+	err := t.DB.Where(&queryRecord).Find(&eventRecords, "end_time < ? AND end_time != '1970-01-01 00:00:00'", expireTime).Error
 	if err == nil {
 		for _, record := range eventRecords {
 			t.Info("RecordFileExpireDays is set to auto delete oldestfile", "ID", record.ID, "create time", record.EndTime, "filepath", record.FilePath)

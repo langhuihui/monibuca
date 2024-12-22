@@ -208,7 +208,10 @@ func (p *RecordFilePuller) Start() (err error) {
 	if p.PullStartTime, p.PullEndTime, err = util.TimeRangeQueryParse(p.PullJob.Args); err != nil {
 		return
 	}
-	tx := p.PullJob.Plugin.DB.Find(&p.Streams, "end_time>=? AND start_time<=? AND stream_path=? AND record_mode=0", p.PullStartTime, p.PullEndTime, p.PullJob.RemoteURL)
+	queryRecord := RecordStream{
+		Mode: EventLevelHigh,
+	}
+	tx := p.PullJob.Plugin.DB.Where(&queryRecord).Find(&p.Streams, "end_time>=? AND start_time<=? AND stream_path=?", p.PullStartTime, p.PullEndTime, p.PullJob.RemoteURL)
 	if tx.Error != nil {
 		return tx.Error
 	}

@@ -15,9 +15,12 @@ import (
 const (
 	RecordModeAuto  RecordMode = "auto"
 	RecordModeEvent RecordMode = "event"
+	EventLevelLow   EventLevel = "low"
+	EventLevelHigh  EventLevel = "high"
 )
 
 type (
+	EventLevel = string
 	RecordMode = string
 	IRecorder  interface {
 		task.ITask
@@ -39,7 +42,7 @@ type (
 		BeforeDuration time.Duration `json:"beforeDuration" desc:"事件前缓存时长"`
 		AfterDuration  time.Duration `json:"afterDuration" desc:"事件后缓存时长"`
 		EventDesc      string        `json:"eventDesc" desc:"事件描述"`
-		EventLevel     string        `json:"eventLevel" desc:"事件级别"`
+		EventLevel     EventLevel    `json:"eventLevel" desc:"事件级别"`
 		EventName      string        `json:"eventName" desc:"事件名称"`
 	}
 	DefaultRecorder struct {
@@ -57,7 +60,7 @@ type (
 		Filename               string        `json:"fileName" desc:"文件名" gorm:"type:varchar(255);comment:文件名"`
 		EventDesc              string        `json:"eventDesc" desc:"事件描述" gorm:"type:varchar(255);comment:事件描述"`
 		Type                   string        `json:"type" desc:"录像文件类型" gorm:"type:varchar(255);comment:录像文件类型,flv,mp4,raw,fmp4,hls"`
-		EventLevel             string        `json:"eventLevel" desc:"事件级别" gorm:"type:varchar(255);comment:事件级别,0表示重要事件，无法删除且表示无需自动删除,1表示非重要事件,达到自动删除时间后，自动删除;default:'1'"`
+		EventLevel             EventLevel    `json:"eventLevel" desc:"事件级别" gorm:"type:varchar(255);comment:事件级别,high表示重要事件，无法删除且表示无需自动删除,low表示非重要事件,达到自动删除时间后，自动删除;default:'low'"`
 		FilePath               string
 		StreamPath             string
 		AudioCodec, VideoCodec string
