@@ -184,7 +184,10 @@ func (p *MP4Plugin) download(w http.ResponseWriter, r *http.Request) {
 	p.Info("download", "streamPath", streamPath, "start", startTime, "end", endTime)
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s_%s_%s.mp4", streamPath, startTime.Format("20060102150405"), endTime.Format("20060102150405")))
 
-	p.DB.Find(&streams, "end_time>? AND start_time<? AND stream_path=? AND record_mode=0", startTime, endTime, streamPath)
+	queryRecord := m7s.RecordStream{
+		Mode: m7s.RecordModeAuto,
+	}
+	p.DB.Where(&queryRecord).Find(&streams, "end_time>? AND start_time<? AND stream_path=?", startTime, endTime, streamPath)
 	muxer := mp4.NewMuxer(0)
 	var n int
 	n, err = w.Write(box.MakeFtypBox(box.TypeISOM, 0x200, box.TypeISOM, box.TypeISO2, box.TypeAVC1, box.TypeMP41))

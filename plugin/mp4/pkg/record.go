@@ -82,18 +82,23 @@ type eventRecordCheck struct {
 
 func (t *eventRecordCheck) Run() (err error) {
 	var eventRecordStreams []m7s.RecordStream
-	t.DB.Find(&eventRecordStreams, "record_mode=1 AND event_level=0 AND stream_path=?", t.streamPath) //搜索事件录像，且为重要事件（无法自动删除）
+	queryRecord := m7s.RecordStream{
+		EventLevel: m7s.EventLevelHigh,
+		Mode:       m7s.RecordModeEvent,
+	}
+	t.DB.Where(&queryRecord).Find(&eventRecordStreams, "stream_path=?", t.streamPath) //搜索事件录像，且为重要事件（无法自动删除）
 	if len(eventRecordStreams) > 0 {
 		for _, recordStream := range eventRecordStreams {
 			var unimportantEventRecordStreams []m7s.RecordStream
+			queryRecord.EventLevel = m7s.EventLevelLow
 			query := `(start_time BETWEEN ? AND ?)
 							OR (end_time BETWEEN ? AND ?) 
 							OR (? BETWEEN start_time AND end_time) 
-							OR (? BETWEEN start_time AND end_time) AND event_level=1 AND stream_path=? `
-			t.DB.Where(query, recordStream.StartTime, recordStream.EndTime, recordStream.StartTime, recordStream.EndTime, recordStream.StartTime, recordStream.EndTime, recordStream.StreamPath).Find(&unimportantEventRecordStreams)
+							OR (? BETWEEN start_time AND end_time) AND stream_path=? `
+			t.DB.Where(&queryRecord).Where(query, recordStream.StartTime, recordStream.EndTime, recordStream.StartTime, recordStream.EndTime, recordStream.StartTime, recordStream.EndTime, recordStream.StreamPath).Find(&unimportantEventRecordStreams)
 			if len(unimportantEventRecordStreams) > 0 {
 				for _, unimportantEventRecordStream := range unimportantEventRecordStreams {
-					unimportantEventRecordStream.EventLevel = "0"
+					unimportantEventRecordStream.EventLevel = m7s.EventLevelHigh
 					t.DB.Save(&unimportantEventRecordStream)
 				}
 			}
