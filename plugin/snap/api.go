@@ -33,22 +33,15 @@ func parseRGBA(rgba string) (color.RGBA, error) {
 	return color.RGBA{uint8(r), uint8(g), uint8(b), uint8(a * 255)}, nil
 }
 
-func (t *SnapPlugin) doSnap(rw http.ResponseWriter, r *http.Request) {
-	streamPath := r.PathValue("streamPath")
-	targetStreamPath := streamPath
-
-	if !t.Server.Streams.Has(streamPath) {
-		http.Error(rw, pkg.ErrNotFound.Error(), http.StatusNotFound)
-		return
-	}
-
+// snap 方法负责实际的截图操作
+func (t *SnapPlugin) snap(streamPath string) (*bytes.Buffer, error) {
 	buf := new(bytes.Buffer)
 	transformer := snap.NewTransform().(*snap.Transformer)
 	transformer.TransformJob.Init(transformer, &t.Plugin, streamPath, config.Transform{
 		Output: []config.TransfromOutput{
 			{
-				Target:     targetStreamPath,
-				StreamPath: targetStreamPath,
+				Target:     streamPath,
+				StreamPath: streamPath,
 				Conf:       buf,
 			},
 		},
@@ -56,42 +49,37 @@ func (t *SnapPlugin) doSnap(rw http.ResponseWriter, r *http.Request) {
 
 	transformer.TriggerSnap()
 	if err := transformer.Run(); err != nil {
-		http.Error(rw, err.Error(), http.StatusInternalServerError)
-		return
+		return nil, err
 	}
 
 	// 如果设置了水印文字，添加水印
-	if t.WatermarkText != "" {
+	if t.SnapWatermark.Text != "" {
 		// 读取字体文件
-		fontBytes, err := os.ReadFile(t.WatermarkFontPath)
+		fontBytes, err := os.ReadFile(t.SnapWatermark.FontPath)
 		if err != nil {
 			t.Error("read font file error", err)
-			http.Error(rw, err.Error(), http.StatusInternalServerError)
-			return
+			return nil, err
 		}
 
 		// 解析字体
 		font, err := truetype.Parse(fontBytes)
 		if err != nil {
 			t.Error("parse font error", err)
-			http.Error(rw, err.Error(), http.StatusInternalServerError)
-			return
+			return nil, err
 		}
 
 		// 解码图片
 		img, _, err := image.Decode(bytes.NewReader(buf.Bytes()))
 		if err != nil {
 			t.Error("decode image error", err)
-			http.Error(rw, err.Error(), http.StatusInternalServerError)
-			return
+			return nil, err
 		}
 
-		// 解���颜色
-		rgba, err := parseRGBA(t.WatermarkFontColor)
+		// 解码颜色
+		rgba, err := parseRGBA(t.SnapWatermark.FontColor)
 		if err != nil {
 			t.Error("parse color error", err)
-			http.Error(rw, err.Error(), http.StatusInternalServerError)
-			return
+			return nil, err
 		}
 		// 确保alpha通道正确
 		if rgba.A == 0 {
@@ -100,9 +88,9 @@ func (t *SnapPlugin) doSnap(rw http.ResponseWriter, r *http.Request) {
 
 		// 添加水印
 		result, err := watermark.DrawWatermarkSingle(img, watermark.TextConfig{
-			Text:       t.WatermarkText,
+			Text:       t.SnapWatermark.Text,
 			Font:       font,
-			FontSize:   float64(t.WatermarkFontSize),
+			FontSize:   t.SnapWatermark.FontSize,
 			Spacing:    10,
 			RowSpacing: 10,
 			ColSpacing: 20,
@@ -112,22 +100,37 @@ func (t *SnapPlugin) doSnap(rw http.ResponseWriter, r *http.Request) {
 			Color:      rgba,
 			IsGrid:     false,
 			Angle:      0,
-			OffsetX:    t.WatermarkOffsetX,
-			OffsetY:    t.WatermarkOffsetY,
-		}, true)
+			OffsetX:    t.SnapWatermark.OffsetX,
+			OffsetY:    t.SnapWatermark.OffsetY,
+		}, false)
 		if err != nil {
 			t.Error("add watermark error", err)
-			http.Error(rw, err.Error(), http.StatusInternalServerError)
-			return
+			return nil, err
 		}
 
 		// 清空原buffer并写入新图片
 		buf.Reset()
 		if err := imaging.Encode(buf, result, imaging.JPEG); err != nil {
 			t.Error("encode image error", err)
-			http.Error(rw, err.Error(), http.StatusInternalServerError)
-			return
+			return nil, err
 		}
+	}
+
+	return buf, nil
+}
+
+func (t *SnapPlugin) doSnap(rw http.ResponseWriter, r *http.Request) {
+	streamPath := r.PathValue("streamPath")
+
+	if !t.Server.Streams.Has(streamPath) {
+		http.Error(rw, pkg.ErrNotFound.Error(), http.StatusNotFound)
+		return
+	}
+
+	buf, err := t.snap(streamPath)
+	if err != nil {
+		http.Error(rw, err.Error(), http.StatusInternalServerError)
+		return
 	}
 
 	rw.Header().Set("Content-Type", "image/jpeg")
