@@ -10,7 +10,7 @@ import (
 	"m7s.live/v5/pkg/task"
 )
 
-// 定时截图任务结构体
+// SnapTimerTask 定时截图任务结构体
 type SnapTimerTask struct {
 	task.TickTask
 	Interval time.Duration // 截图时间间隔
@@ -18,12 +18,12 @@ type SnapTimerTask struct {
 	Plugin   *SnapPlugin   // 插件实例引用
 }
 
-// 设置定时间隔
+// GetTickInterval 设置定时间隔
 func (t *SnapTimerTask) GetTickInterval() time.Duration {
 	return t.Interval // 使用配置的间隔时间
 }
 
-// 执行定时截图
+// Tick 执行定时截图
 func (t *SnapTimerTask) Tick(any) {
 	for publisher := range t.Plugin.Server.Streams.Range {
 		// 检查流是否匹配过滤器

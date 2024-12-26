@@ -33,7 +33,7 @@ type SnapPlugin struct {
 	filterRegex  *regexp.Regexp
 }
 
-// 在插件初始化时添加定时任务
+// OnInit 在插件初始化时添加定时任务
 func (p *SnapPlugin) OnInit() (err error) {
 	// 创建保存目录
 	if err = os.MkdirAll(p.SnapSavePath, 0755); err != nil {

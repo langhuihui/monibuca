@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -127,6 +128,7 @@ type Transformer struct {
 	snapChan     chan struct{}
 	snapInterval time.Duration
 	savePath     string
+	filterRegex  *regexp.Regexp
 }
 
 func (t *Transformer) TriggerSnap() {
@@ -144,6 +146,12 @@ func (t *Transformer) Start() (err error) {
 	t.snapInterval = t.TransformJob.Plugin.Config.Get("SnapInterval").GetValue().(time.Duration)
 	t.savePath = t.TransformJob.Plugin.Config.Get("SnapSavePath").GetValue().(string)
 	t.Info("savpath", t.savePath)
+
+	// 获取过滤器配置
+	if t.TransformJob.Plugin.Config.Has("Filter") {
+		filterStr := t.TransformJob.Plugin.Config.Get("Filter").GetValue().(string)
+		t.filterRegex = regexp.MustCompile(filterStr)
+	}
 
 	// 检查保存路径
 	if err := os.MkdirAll(t.savePath, 0755); err != nil {
@@ -187,6 +195,15 @@ func (t *Transformer) Run() (err error) {
 func (t *Transformer) Go() error {
 	// 1. 通过 TransformJob 获取 Subscriber
 	subscriber := t.TransformJob.Subscriber
+
+	// 检查流名称是否匹配过滤器
+	if t.filterRegex != nil && !t.filterRegex.MatchString(subscriber.StreamPath) {
+		t.Info("stream path not match filter, skip",
+			"stream", subscriber.StreamPath,
+			"filter", t.filterRegex.String(),
+		)
+		return nil
+	}
 
 	// 2. 设置数据处理回调
 	handleVideo := func(video *pkg.AVFrame) error {
