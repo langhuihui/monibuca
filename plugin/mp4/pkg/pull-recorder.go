@@ -90,11 +90,15 @@ func (p *RecordReader) Run() (err error) {
 				}
 			}
 			startTimestamp := pullStartTime.Sub(stream.StartTime).Milliseconds()
-			if _, err = p.demuxer.SeekTime(uint64(startTimestamp)); err != nil {
+			if startTimestamp < 0 {
+				startTimestamp = 0
+			}
+			var startSample *box.Sample
+			if startSample, err = p.demuxer.SeekTime(uint64(startTimestamp)); err != nil {
 				tsOffset = 0
 				continue
 			}
-			tsOffset = -startTimestamp
+			tsOffset = -int64(startSample.DTS)
 		}
 
 		for track, sample := range p.demuxer.ReadSample {
