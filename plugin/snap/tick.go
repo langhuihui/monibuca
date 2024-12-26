@@ -32,22 +32,47 @@ func (t *SnapTimerTask) Tick(any) {
 		}
 
 		if publisher.HasVideoTrack() {
-
+			streamPath := publisher.StreamPath
 			go func() {
-				buf, err := t.Plugin.snap(publisher.StreamPath)
+				buf, err := t.Plugin.snap(streamPath)
 				if err != nil {
 					t.Error("take snapshot failed", "error", err.Error())
 					return
 				}
-				filename := fmt.Sprintf("%s_%s.jpg", publisher.StreamPath, time.Now().Format("20060102150405"))
+				now := time.Now()
+				filename := fmt.Sprintf("%s_%s.jpg", streamPath, now.Format("20060102150405"))
 				filename = strings.ReplaceAll(filename, "/", "_")
 				savePath := filepath.Join(t.SavePath, filename)
 				// 保存到本地
 				err = os.WriteFile(savePath, buf.Bytes(), 0644)
 				if err != nil {
 					t.Error("take snapshot failed", "error", err.Error())
+					return
+				}
+				t.Info("take snapshot success", "path", savePath)
+
+				// 保存记录到数据库
+				if t.Plugin.DB != nil {
+					record := SnapRecord{
+						StreamName: streamPath,
+						SnapMode:   t.Plugin.SnapMode,
+						SnapTime:   now,
+						SnapPath:   savePath,
+					}
+					if err := t.Plugin.DB.Create(&record).Error; err != nil {
+						t.Error("save snapshot record failed",
+							"error", err.Error(),
+							"record", record,
+						)
+					} else {
+						t.Info("save snapshot record success",
+							"stream", streamPath,
+							"path", savePath,
+							"time", now,
+						)
+					}
 				} else {
-					t.Info("take snapshot success", "path", savePath)
+					t.Warn("database not initialized, skip saving record")
 				}
 			}()
 		}

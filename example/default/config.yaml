@@ -55,8 +55,8 @@ snap:
     fontcolor: "rgba(255,165,0,1)"
     offsetx: 10
     offsety: 10
-  snapmode: 1
+  snapmode: 0
   snaptimeinterval: 1s
   snapsavepath: "./snaps"
-  snapiframeinterval: 0
+  snapiframeinterval: 3
   filter: "^live/.*"

@@ -8,8 +8,10 @@ import (
 	_ "image/jpeg"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/disintegration/imaging"
 	"github.com/golang/freetype/truetype"
@@ -57,28 +59,28 @@ func (t *SnapPlugin) snap(streamPath string) (*bytes.Buffer, error) {
 		// 读取字体文件
 		fontBytes, err := os.ReadFile(t.SnapWatermark.FontPath)
 		if err != nil {
-			t.Error("read font file error", err)
+			t.Error("read font file failed", "error", err.Error())
 			return nil, err
 		}
 
 		// 解析字体
 		font, err := truetype.Parse(fontBytes)
 		if err != nil {
-			t.Error("parse font error", err)
+			t.Error("parse font failed", "error", err.Error())
 			return nil, err
 		}
 
 		// 解码图片
 		img, _, err := image.Decode(bytes.NewReader(buf.Bytes()))
 		if err != nil {
-			t.Error("decode image error", err)
+			t.Error("decode image failed", "error", err.Error())
 			return nil, err
 		}
 
 		// 解码颜色
 		rgba, err := parseRGBA(t.SnapWatermark.FontColor)
 		if err != nil {
-			t.Error("parse color error", err)
+			t.Error("parse color failed", "error", err.Error())
 			return nil, err
 		}
 		// 确保alpha通道正确
@@ -104,14 +106,14 @@ func (t *SnapPlugin) snap(streamPath string) (*bytes.Buffer, error) {
 			OffsetY:    t.SnapWatermark.OffsetY,
 		}, false)
 		if err != nil {
-			t.Error("add watermark error", err)
+			t.Error("add watermark failed", "error", err.Error())
 			return nil, err
 		}
 
 		// 清空原buffer并写入新图片
 		buf.Reset()
 		if err := imaging.Encode(buf, result, imaging.JPEG); err != nil {
-			t.Error("encode image error", err)
+			t.Error("encode image failed", "error", err.Error())
 			return nil, err
 		}
 	}
@@ -133,17 +135,97 @@ func (t *SnapPlugin) doSnap(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 保存截图并记录到数据库
+	if t.DB != nil {
+		now := time.Now()
+		filename := fmt.Sprintf("%s_%s.jpg", streamPath, now.Format("20060102150405"))
+		filename = strings.ReplaceAll(filename, "/", "_")
+		savePath := filepath.Join(t.SnapSavePath, filename)
+
+		// 保存到本地
+		err = os.WriteFile(savePath, buf.Bytes(), 0644)
+		if err != nil {
+			t.Error("save snapshot failed", "error", err.Error())
+		} else {
+			// 保存记录到数据库
+			record := SnapRecord{
+				StreamName: streamPath,
+				SnapMode:   2, // HTTP请求截图模式
+				SnapTime:   now,
+				SnapPath:   savePath,
+			}
+			if err := t.DB.Create(&record).Error; err != nil {
+				t.Error("save snapshot record failed", "error", err.Error())
+			}
+		}
+	}
+
 	rw.Header().Set("Content-Type", "image/jpeg")
 	rw.Header().Set("Content-Length", strconv.Itoa(buf.Len()))
 
 	if _, err := buf.WriteTo(rw); err != nil {
-		t.Error("write response error", err.Error())
+		t.Error("write response failed", "error", err.Error())
 		return
 	}
+}
+
+func (t *SnapPlugin) querySnap(rw http.ResponseWriter, r *http.Request) {
+	if t.DB == nil {
+		http.Error(rw, "database not initialized", http.StatusInternalServerError)
+		return
+	}
+
+	streamPath := r.URL.Query().Get("streamPath")
+	if streamPath == "" {
+		http.Error(rw, "streamPath is required", http.StatusBadRequest)
+		return
+	}
+
+	snapTimeStr := r.URL.Query().Get("snapTime")
+	if snapTimeStr == "" {
+		http.Error(rw, "snapTime is required", http.StatusBadRequest)
+		return
+	}
+
+	snapTimeUnix, err := strconv.ParseInt(snapTimeStr, 10, 64)
+	if err != nil {
+		http.Error(rw, "invalid snapTime format, should be unix timestamp", http.StatusBadRequest)
+		return
+	}
+
+	targetTime := time.Unix(snapTimeUnix, 0)
+	var record SnapRecord
+
+	// 查询小于等于目标时间的最近一条记录
+	if err := t.DB.Where("stream_name = ? AND snap_time <= ?", streamPath, targetTime).
+		Order("snap_time DESC").
+		First(&record).Error; err != nil {
+		http.Error(rw, "snapshot not found", http.StatusNotFound)
+		return
+	}
+
+	// 计算时间差（秒）
+	timeDiff := targetTime.Sub(record.SnapTime).Seconds()
+	if timeDiff > float64(t.SnapQueryTimeDelta) {
+		http.Error(rw, "no snapshot found within time delta", http.StatusNotFound)
+		return
+	}
+
+	// 读取图片文件
+	imgData, err := os.ReadFile(record.SnapPath)
+	if err != nil {
+		http.Error(rw, "failed to read snapshot file", http.StatusNotFound)
+		return
+	}
+
+	rw.Header().Set("Content-Type", "image/jpeg")
+	rw.Header().Set("Content-Length", strconv.Itoa(len(imgData)))
+	rw.Write(imgData)
 }
 
 func (config *SnapPlugin) RegisterHandler() map[string]http.HandlerFunc {
 	return map[string]http.HandlerFunc{
 		"/{streamPath...}": config.doSnap,
+		"/query":           config.querySnap,
 	}
 }

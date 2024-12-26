@@ -96,7 +96,7 @@ func processWithFFmpeg(annexb pkg.AnnexB, output io.Writer) error {
 }
 
 // 保存截图到文件
-func saveSnapshot(annexb pkg.AnnexB, savePath string) error {
+func saveSnapshot(annexb pkg.AnnexB, savePath string, plugin *m7s.Plugin, streamPath string, snapMode int) error {
 	var buf bytes.Buffer
 	if err := processWithFFmpeg(annexb, &buf); err != nil {
 		return fmt.Errorf("process with ffmpeg error: %w", err)
@@ -108,10 +108,38 @@ func saveSnapshot(annexb pkg.AnnexB, savePath string) error {
 		if err != nil {
 			return fmt.Errorf("add watermark error: %w", err)
 		}
-		return os.WriteFile(savePath, imgData, 0644)
+		err = os.WriteFile(savePath, imgData, 0644)
+		if err != nil {
+			return err
+		}
+	} else {
+		err := os.WriteFile(savePath, buf.Bytes(), 0644)
+		if err != nil {
+			return err
+		}
 	}
 
-	return os.WriteFile(savePath, buf.Bytes(), 0644)
+	// 保存记录到数据库
+	if plugin != nil && plugin.DB != nil {
+		record := struct {
+			ID         uint      `gorm:"primarykey"`
+			StreamName string    `gorm:"index"` // 流名称
+			SnapMode   int       // 截图模式
+			SnapTime   time.Time `gorm:"index"` // 截图时间
+			SnapPath   string    // 截图路径
+			CreatedAt  time.Time
+		}{
+			StreamName: streamPath,
+			SnapMode:   snapMode,
+			SnapTime:   time.Now(),
+			SnapPath:   savePath,
+		}
+		if err := plugin.DB.Create(&record).Error; err != nil {
+			return fmt.Errorf("save snapshot record failed: %w", err)
+		}
+	}
+
+	return nil
 }
 
 func NewTransform() m7s.ITransformer {
@@ -284,7 +312,7 @@ func (t *Transformer) Go() error {
 		savePath := filepath.Join(t.savePath, filename)
 
 		// 保存截图（带水印）
-		if err := saveSnapshot(annexb, savePath); err != nil {
+		if err := saveSnapshot(annexb, savePath, t.TransformJob.Plugin, subscriber.StreamPath, t.snapMode); err != nil {
 			t.Error("save snapshot failed",
 				"error", err.Error(),
 				"stream", subscriber.StreamPath,

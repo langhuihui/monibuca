@@ -32,6 +32,7 @@ type SnapPlugin struct {
 	Filter             string        `default:".*" desc:"截图流过滤器，支持正则表达式"`
 	SnapIFrameInterval int           `default:"3" desc:"间隔多少帧截图"`
 	SnapMode           int           `default:"1" desc:"截图模式 0:间隔时间 1:间隔关键帧"`
+	SnapQueryTimeDelta int           `default:"3" desc:"查询截图时允许的最大时间差（秒）"`
 	filterRegex        *regexp.Regexp
 }
 
@@ -44,6 +45,15 @@ func (p *SnapPlugin) OnInit() (err error) {
 			"valid_range", "0-1",
 		)
 		return fmt.Errorf("invalid snap mode: %d, valid range is 0-1", p.SnapMode)
+	}
+
+	// 初始化数据库
+	if p.DB != nil {
+		err = p.DB.AutoMigrate(&SnapRecord{})
+		if err != nil {
+			p.Error("failed to migrate database", "error", err.Error())
+			return
+		}
 	}
 
 	// 创建保存目录
@@ -103,6 +113,11 @@ func (p *SnapPlugin) OnInit() (err error) {
 			"font", snap.GlobalWatermarkConfig.FontPath,
 			"size", snap.GlobalWatermarkConfig.FontSize,
 		)
+	}
+
+	//如果截图模式不是时间模式，则不加定时任务
+	if p.SnapMode != 0 {
+		return
 	}
 
 	// 如果间隔时间小于0，则不添加定时任务;等于0则走onpub的transform
