@@ -27,14 +27,25 @@ type SnapPlugin struct {
 		OffsetY   int     `default:"0" desc:"水印位置Y"`
 	} `desc:"水印配置"`
 	// 定时任务相关配置
-	SnapInterval time.Duration `default:"1m" desc:"截图间隔"`
-	SnapSavePath string        `default:"snaps" desc:"截图保存路径"`
-	Filter       string        `default:".*" desc:"截图流过滤器，支持正则表达式"`
-	filterRegex  *regexp.Regexp
+	SnapTimeInterval   time.Duration `default:"1m" desc:"截图间隔"`
+	SnapSavePath       string        `default:"snaps" desc:"截图保存路径"`
+	Filter             string        `default:".*" desc:"截图流过滤器，支持正则表达式"`
+	SnapIFrameInterval int           `default:"3" desc:"间隔多少帧截图"`
+	SnapMode           int           `default:"1" desc:"截图模式 0:间隔时间 1:间隔关键帧"`
+	filterRegex        *regexp.Regexp
 }
 
 // OnInit 在插件初始化时添加定时任务
 func (p *SnapPlugin) OnInit() (err error) {
+	// 检查 SnapMode 的值范围
+	if p.SnapMode < 0 || p.SnapMode > 1 {
+		p.Error("invalid snap mode",
+			"mode", p.SnapMode,
+			"valid_range", "0-1",
+		)
+		return fmt.Errorf("invalid snap mode: %d, valid range is 0-1", p.SnapMode)
+	}
+
 	// 创建保存目录
 	if err = os.MkdirAll(p.SnapSavePath, 0755); err != nil {
 		return
@@ -94,13 +105,13 @@ func (p *SnapPlugin) OnInit() (err error) {
 		)
 	}
 
-	// 如果间隔时间为0，则不添加定时任务，走onpub的transform
-	if p.SnapInterval == 0 {
+	// 如果间隔时间小于0，则不添加定时任务;等于0则走onpub的transform
+	if p.SnapTimeInterval <= 0 {
 		return
 	}
 	// 添加定时任务
 	p.AddTask(&SnapTimerTask{
-		Interval: p.SnapInterval,
+		Interval: p.SnapTimeInterval,
 		SavePath: p.SnapSavePath,
 		Plugin:   p,
 	})

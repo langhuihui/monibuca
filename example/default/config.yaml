@@ -45,7 +45,7 @@ cascadeserver:
 #    live/test: rtsp://admin:1qaz2wsx3EDC@localhost:8554/live/test
 
 snap:
-  enabled: false
+  enable: false
   snapwatermark:
     text: "Monibuca"
     fontpath: "/System/Library/Fonts/STHeiti Light.ttc" # mac字体路径
@@ -55,6 +55,8 @@ snap:
     fontcolor: "rgba(255,165,0,1)"
     offsetx: 10
     offsety: 10
-  snapinterval: 1s
+  snapmode: 1
+  snaptimeinterval: 1s
   snapsavepath: "./snaps"
+  snapiframeinterval: 0
   filter: "^live/.*"

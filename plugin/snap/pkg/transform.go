@@ -124,11 +124,14 @@ func NewTransform() m7s.ITransformer {
 
 type Transformer struct {
 	m7s.DefaultTransformer
-	ffmpeg       *exec.Cmd
-	snapChan     chan struct{}
-	snapInterval time.Duration
-	savePath     string
-	filterRegex  *regexp.Regexp
+	ffmpeg            *exec.Cmd
+	snapChan          chan struct{}
+	snapTimeInterval  time.Duration
+	savePath          string
+	filterRegex       *regexp.Regexp
+	snapMode          int // 截图模式：0-时间间隔，1-帧间隔
+	snapFrameCount    int // 当前帧计数
+	snapFrameInterval int // 帧间隔
 }
 
 func (t *Transformer) TriggerSnap() {
@@ -142,10 +145,39 @@ func (t *Transformer) TriggerSnap() {
 }
 
 func (t *Transformer) Start() (err error) {
-	// 获取配置
-	t.snapInterval = t.TransformJob.Plugin.Config.Get("SnapInterval").GetValue().(time.Duration)
-	t.savePath = t.TransformJob.Plugin.Config.Get("SnapSavePath").GetValue().(string)
-	t.Info("savpath", t.savePath)
+	// 获取配置，带默认值检查
+	if t.TransformJob.Plugin.Config.Has("SnapTimeInterval") {
+		t.snapTimeInterval = t.TransformJob.Plugin.Config.Get("SnapTimeInterval").GetValue().(time.Duration)
+	} else {
+		t.snapTimeInterval = time.Minute // 默认1分钟
+	}
+
+	if t.TransformJob.Plugin.Config.Has("SnapSavePath") {
+		t.savePath = t.TransformJob.Plugin.Config.Get("SnapSavePath").GetValue().(string)
+	} else {
+		t.savePath = "snaps" // 默认保存路径
+	}
+
+	if t.TransformJob.Plugin.Config.Has("SnapMode") {
+		t.snapMode = t.TransformJob.Plugin.Config.Get("SnapMode").GetValue().(int)
+	} else {
+		t.snapMode = 1 // 默认使用关键帧模式
+	}
+
+	if t.TransformJob.Plugin.Config.Has("SnapIFrameInterval") {
+		t.snapFrameInterval = t.TransformJob.Plugin.Config.Get("SnapIFrameInterval").GetValue().(int)
+	} else {
+		t.snapFrameInterval = 3 // 默认每3个I帧截图一次
+	}
+
+	t.snapFrameCount = 0
+
+	t.Info("snap transformer started",
+		"stream", t.TransformJob.StreamPath,
+		"save_path", t.savePath,
+		"mode", t.snapMode,
+		"frame_interval", t.snapFrameInterval,
+	)
 
 	// 获取过滤器配置
 	if t.TransformJob.Plugin.Config.Has("Filter") {
@@ -158,9 +190,10 @@ func (t *Transformer) Start() (err error) {
 		return fmt.Errorf("create save path failed: %w", err)
 	}
 
-	if t.snapInterval != 0 {
+	// 如果是时间间隔模式且间隔时间不为0，则跳过订阅模式
+	if t.snapMode == 0 && t.snapTimeInterval != 0 {
 		t.Info("snap interval is set, skipping subscriber mode",
-			"interval", t.snapInterval,
+			"interval", t.snapTimeInterval,
 			"save_path", t.savePath,
 		)
 		return nil
@@ -171,10 +204,6 @@ func (t *Transformer) Start() (err error) {
 		return fmt.Errorf("subscribe stream failed: %w", err)
 	}
 
-	t.Info("snap transformer started",
-		"stream", t.TransformJob.StreamPath,
-		"save_path", t.savePath,
-	)
 	return nil
 }
 
@@ -208,52 +237,72 @@ func (t *Transformer) Go() error {
 	// 2. 设置数据处理回调
 	handleVideo := func(video *pkg.AVFrame) error {
 		// 处理视频数据
-		if video.IDR {
-			t.Debug("received IDR frame",
-				"stream", subscriber.StreamPath,
-				"timestamp", video.Timestamp,
-			)
+		if !video.IDR {
+			return nil
+		}
 
-			// 获取视频帧
-			annexb, _, err := getVideoFrame(subscriber.StreamPath, t.TransformJob.Plugin.Server)
-			if err != nil {
-				t.Error("get video frame failed",
-					"error", err.Error(),
-					"stream", subscriber.StreamPath,
-				)
-				return nil
+		shouldSnap := false
+		if t.snapMode == 0 { // 时间间隔模式
+			shouldSnap = true
+		} else { // 帧间隔模式
+			t.snapFrameCount++
+			if t.snapFrameCount >= t.snapFrameInterval {
+				shouldSnap = true
+				t.snapFrameCount = 0
 			}
+		}
 
-			t.Debug("got video frame",
+		if !shouldSnap {
+			return nil
+		}
+
+		t.Debug("received IDR frame",
+			"stream", subscriber.StreamPath,
+			"timestamp", video.Timestamp,
+			"mode", t.snapMode,
+			"frame_count", t.snapFrameCount,
+		)
+
+		// 获取视频帧
+		annexb, _, err := getVideoFrame(subscriber.StreamPath, t.TransformJob.Plugin.Server)
+		if err != nil {
+			t.Error("get video frame failed",
+				"error", err.Error(),
 				"stream", subscriber.StreamPath,
-				"timestamp", video.Timestamp,
 			)
+			return nil
+		}
 
-			// 生成文件名
-			filename := fmt.Sprintf("%s_%s.jpg", subscriber.StreamPath, time.Now().Format("20060102150405"))
-			filename = strings.ReplaceAll(filename, "/", "_")
-			savePath := filepath.Join(t.savePath, filename)
+		t.Debug("got video frame",
+			"stream", subscriber.StreamPath,
+			"timestamp", video.Timestamp,
+		)
 
-			// 保存截图（带水印）
-			if err := saveSnapshot(annexb, savePath); err != nil {
-				t.Error("save snapshot failed",
-					"error", err.Error(),
-					"stream", subscriber.StreamPath,
-					"path", savePath,
-				)
-			} else {
-				fileInfo, err := os.Stat(savePath)
-				size := int64(0)
-				if err == nil {
-					size = fileInfo.Size()
-				}
-				t.Info("take snapshot success",
-					"stream", subscriber.StreamPath,
-					"path", savePath,
-					"size", size,
-					"watermark", GlobalWatermarkConfig.Text != "",
-				)
+		// 生成文件名
+		filename := fmt.Sprintf("%s_%s.jpg", subscriber.StreamPath, time.Now().Format("20060102150405"))
+		filename = strings.ReplaceAll(filename, "/", "_")
+		savePath := filepath.Join(t.savePath, filename)
+
+		// 保存截图（带水印）
+		if err := saveSnapshot(annexb, savePath); err != nil {
+			t.Error("save snapshot failed",
+				"error", err.Error(),
+				"stream", subscriber.StreamPath,
+				"path", savePath,
+			)
+		} else {
+			fileInfo, err := os.Stat(savePath)
+			size := int64(0)
+			if err == nil {
+				size = fileInfo.Size()
 			}
+			t.Info("take snapshot success",
+				"stream", subscriber.StreamPath,
+				"path", savePath,
+				"size", size,
+				"watermark", GlobalWatermarkConfig.Text != "",
+				"mode", t.snapMode,
+			)
 		}
 		return nil
 	}
@@ -266,6 +315,8 @@ func (t *Transformer) Go() error {
 	// 3. 开始接收数据
 	t.Info("starting stream processing",
 		"stream", subscriber.StreamPath,
+		"mode", t.snapMode,
+		"frame_interval", t.snapFrameInterval,
 	)
 	go m7s.PlayBlock(subscriber, handleAudio, handleVideo)
 	return nil
