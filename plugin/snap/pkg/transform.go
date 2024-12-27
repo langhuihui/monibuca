@@ -174,6 +174,14 @@ func (t *Transformer) Start() (err error) {
 		t.snapMode = 1 // 默认使用关键帧模式
 	}
 
+	// 检查snapmode是否有效
+	if t.snapMode != 0 && t.snapMode != 1 {
+		t.Debug("invalid snap mode, skip snapshot",
+			"mode", t.snapMode,
+		)
+		return nil
+	}
+
 	if t.TransformJob.Plugin.Config.Has("SnapIFrameInterval") {
 		t.snapFrameInterval = t.TransformJob.Plugin.Config.Get("SnapIFrameInterval").GetValue().(int)
 	} else {
