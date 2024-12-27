@@ -16,8 +16,6 @@ import (
 	"github.com/disintegration/imaging"
 	"github.com/golang/freetype/truetype"
 	"m7s.live/v5/pkg"
-	"m7s.live/v5/pkg/config"
-	snap "m7s.live/v5/plugin/snap/pkg"
 	snap_pkg "m7s.live/v5/plugin/snap/pkg"
 	"m7s.live/v5/plugin/snap/pkg/watermark"
 )
@@ -39,20 +37,16 @@ func parseRGBA(rgba string) (color.RGBA, error) {
 // snap 方法负责实际的截图操作
 func (p *SnapPlugin) snap(streamPath string) (*bytes.Buffer, error) {
 	buf := new(bytes.Buffer)
-	transformer := snap.NewTransform().(*snap.Transformer)
-	transformer.TransformJob.Init(transformer, &p.Plugin, streamPath, config.Transform{
-		Output: []config.TransfromOutput{
-			{
-				Target:     streamPath,
-				StreamPath: streamPath,
-				Conf:       buf,
-			},
-		},
-	}).WaitStarted()
-
-	if err := transformer.Run(); err != nil {
-		return nil, err
-	}
+	//transformer := snap.NewTransform().(*snap.Transformer)
+	//transformer.TransformJob.Init(transformer, &p.Plugin, streamPath, config.Transform{
+	//	Output: []config.TransfromOutput{
+	//		{
+	//			Target:     streamPath,
+	//			StreamPath: streamPath,
+	//			Conf:       buf,
+	//		},
+	//	},
+	//}).WaitStarted()
 
 	// 如果设置了水印文字，添加水印
 	if p.SnapWatermark.Text != "" {
@@ -216,7 +210,7 @@ func (p *SnapPlugin) doSnap(rw http.ResponseWriter, r *http.Request) {
 	// 保存截图并记录到数据库
 	if p.DB != nil {
 		now := time.Now()
-		filename := fmt.Sprintf("%s_%s.jpg", streamPath, now.Format("20060102150405"))
+		filename := fmt.Sprintf("%s_%s.jpg", streamPath, now.Format("20060102150405.000"))
 		filename = strings.ReplaceAll(filename, "/", "_")
 		savePath := filepath.Join(p.SnapSavePath, filename)
 
@@ -228,7 +222,7 @@ func (p *SnapPlugin) doSnap(rw http.ResponseWriter, r *http.Request) {
 				savePath = ""
 			}
 			// 保存记录到数据库
-			record := SnapRecord{
+			record := snap_pkg.SnapRecord{
 				StreamName: streamPath,
 				SnapMode:   2, // HTTP请求截图模式
 				SnapTime:   now,
@@ -274,12 +268,12 @@ func (p *SnapPlugin) querySnap(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	targetTime := time.Unix(snapTimeUnix, 0)
-	var record SnapRecord
+	targetTime := time.Unix(snapTimeUnix+1, 0)
+	var record snap_pkg.SnapRecord
 
 	// 查询小于等于目标时间的最近一条记录
 	if err := p.DB.Where("stream_name = ? AND snap_time <= ?", streamPath, targetTime).
-		Order("snap_time DESC").
+		Order("id DESC").
 		First(&record).Error; err != nil {
 		http.Error(rw, "snapshot not found", http.StatusNotFound)
 		return
@@ -287,7 +281,7 @@ func (p *SnapPlugin) querySnap(rw http.ResponseWriter, r *http.Request) {
 
 	// 计算时间差（秒）
 	timeDiff := targetTime.Sub(record.SnapTime).Seconds()
-	if timeDiff > float64(p.SnapQueryTimeDelta) {
+	if timeDiff > float64(time.Duration(p.SnapQueryTimeDelta)*time.Second) {
 		http.Error(rw, "no snapshot found within time delta", http.StatusNotFound)
 		return
 	}

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"image/color"
+	snap_pkg "m7s.live/v5/plugin/snap/pkg"
 
 	m7s "m7s.live/v5"
 	snap "m7s.live/v5/plugin/snap/pkg"
@@ -50,7 +51,7 @@ func (p *SnapPlugin) OnInit() (err error) {
 
 	// 初始化数据库
 	if p.DB != nil {
-		err = p.DB.AutoMigrate(&SnapRecord{})
+		err = p.DB.AutoMigrate(&snap_pkg.SnapRecord{})
 		if err != nil {
 			p.Error("failed to migrate database", "error", err.Error())
 			return

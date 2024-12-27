@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	snap_pkg "m7s.live/v5/plugin/snap/pkg"
+
 	"m7s.live/v5/pkg/task"
 )
 
@@ -40,7 +42,7 @@ func (t *SnapTimerTask) Tick(any) {
 					return
 				}
 				now := time.Now()
-				filename := fmt.Sprintf("%s_%s.jpg", streamPath, now.Format("20060102150405"))
+				filename := fmt.Sprintf("%s_%s.jpg", streamPath, now.Format("20060102150405.000"))
 				filename = strings.ReplaceAll(filename, "/", "_")
 				savePath := filepath.Join(t.SavePath, filename)
 				// 保存到本地
@@ -53,7 +55,7 @@ func (t *SnapTimerTask) Tick(any) {
 
 				// 保存记录到数据库
 				if t.Plugin.DB != nil {
-					record := SnapRecord{
+					record := snap_pkg.SnapRecord{
 						StreamName: streamPath,
 						SnapMode:   t.Plugin.SnapMode,
 						SnapTime:   now,

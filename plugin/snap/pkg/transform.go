@@ -121,14 +121,7 @@ func saveSnapshot(annexb pkg.AnnexB, savePath string, plugin *m7s.Plugin, stream
 
 	// 保存记录到数据库
 	if plugin != nil && plugin.DB != nil {
-		record := struct {
-			ID         uint      `gorm:"primarykey"`
-			StreamName string    `gorm:"index"` // 流名称
-			SnapMode   int       // 截图模式
-			SnapTime   time.Time `gorm:"index"` // 截图时间
-			SnapPath   string    // 截图路径
-			CreatedAt  time.Time
-		}{
+		record := SnapRecord{
 			StreamName: streamPath,
 			SnapMode:   snapMode,
 			SnapTime:   time.Now(),
@@ -220,10 +213,6 @@ func (t *Transformer) Start() (err error) {
 	return t.TransformJob.Subscribe()
 }
 
-func (t *Transformer) Run() (err error) {
-	return nil
-}
-
 func (t *Transformer) Go() error {
 	// 1. 通过 TransformJob 获取 Subscriber
 	subscriber := t.TransformJob.Subscriber
@@ -282,7 +271,7 @@ func (t *Transformer) Go() error {
 		)
 
 		// 生成文件名
-		filename := fmt.Sprintf("%s_%s.jpg", subscriber.StreamPath, time.Now().Format("20060102150405"))
+		filename := fmt.Sprintf("%s_%s.jpg", subscriber.StreamPath, time.Now().Format("20060102150405.000"))
 		filename = strings.ReplaceAll(filename, "/", "_")
 		savePath := filepath.Join(t.savePath, filename)
 
@@ -321,8 +310,7 @@ func (t *Transformer) Go() error {
 		"mode", t.snapMode,
 		"frame_interval", t.snapFrameInterval,
 	)
-	go m7s.PlayBlock(subscriber, handleAudio, handleVideo)
-	return nil
+	return m7s.PlayBlock(subscriber, handleAudio, handleVideo)
 }
 
 func (t *Transformer) Dispose() {
