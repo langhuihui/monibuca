@@ -54,9 +54,13 @@ snap:
     fontsize: 36
     fontcolor: "rgba(255,165,0,1)"
     offsetx: 10
-    offsety: 10
-  snapmode: 0
+    offsety: 10  
+  snapmode: 1
   snaptimeinterval: 1s
   snapsavepath: "./snaps"
   snapiframeinterval: 3
+  snapquerytimedelta: 3  # 查询截图时允许的最大时间差（秒）
   filter: "^live/.*"
+  onpub:
+    transform:
+      .* : $0

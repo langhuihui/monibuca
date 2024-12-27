@@ -36,10 +36,10 @@ func parseRGBA(rgba string) (color.RGBA, error) {
 }
 
 // snap 方法负责实际的截图操作
-func (t *SnapPlugin) snap(streamPath string) (*bytes.Buffer, error) {
+func (p *SnapPlugin) snap(streamPath string) (*bytes.Buffer, error) {
 	buf := new(bytes.Buffer)
 	transformer := snap.NewTransform().(*snap.Transformer)
-	transformer.TransformJob.Init(transformer, &t.Plugin, streamPath, config.Transform{
+	transformer.TransformJob.Init(transformer, &p.Plugin, streamPath, config.Transform{
 		Output: []config.TransfromOutput{
 			{
 				Target:     streamPath,
@@ -49,38 +49,37 @@ func (t *SnapPlugin) snap(streamPath string) (*bytes.Buffer, error) {
 		},
 	}).WaitStarted()
 
-	transformer.TriggerSnap()
 	if err := transformer.Run(); err != nil {
 		return nil, err
 	}
 
 	// 如果设置了水印文字，添加水印
-	if t.SnapWatermark.Text != "" {
+	if p.SnapWatermark.Text != "" {
 		// 读取字体文件
-		fontBytes, err := os.ReadFile(t.SnapWatermark.FontPath)
+		fontBytes, err := os.ReadFile(p.SnapWatermark.FontPath)
 		if err != nil {
-			t.Error("read font file failed", "error", err.Error())
+			p.Error("read font file failed", "error", err.Error())
 			return nil, err
 		}
 
 		// 解析字体
 		font, err := truetype.Parse(fontBytes)
 		if err != nil {
-			t.Error("parse font failed", "error", err.Error())
+			p.Error("parse font failed", "error", err.Error())
 			return nil, err
 		}
 
 		// 解码图片
 		img, _, err := image.Decode(bytes.NewReader(buf.Bytes()))
 		if err != nil {
-			t.Error("decode image failed", "error", err.Error())
+			p.Error("decode image failed", "error", err.Error())
 			return nil, err
 		}
 
 		// 解码颜色
-		rgba, err := parseRGBA(t.SnapWatermark.FontColor)
+		rgba, err := parseRGBA(p.SnapWatermark.FontColor)
 		if err != nil {
-			t.Error("parse color failed", "error", err.Error())
+			p.Error("parse color failed", "error", err.Error())
 			return nil, err
 		}
 		// 确保alpha通道正确
@@ -90,9 +89,9 @@ func (t *SnapPlugin) snap(streamPath string) (*bytes.Buffer, error) {
 
 		// 添加水印
 		result, err := watermark.DrawWatermarkSingle(img, watermark.TextConfig{
-			Text:       t.SnapWatermark.Text,
+			Text:       p.SnapWatermark.Text,
 			Font:       font,
-			FontSize:   t.SnapWatermark.FontSize,
+			FontSize:   p.SnapWatermark.FontSize,
 			Spacing:    10,
 			RowSpacing: 10,
 			ColSpacing: 20,
@@ -102,18 +101,18 @@ func (t *SnapPlugin) snap(streamPath string) (*bytes.Buffer, error) {
 			Color:      rgba,
 			IsGrid:     false,
 			Angle:      0,
-			OffsetX:    t.SnapWatermark.OffsetX,
-			OffsetY:    t.SnapWatermark.OffsetY,
+			OffsetX:    p.SnapWatermark.OffsetX,
+			OffsetY:    p.SnapWatermark.OffsetY,
 		}, false)
 		if err != nil {
-			t.Error("add watermark failed", "error", err.Error())
+			p.Error("add watermark failed", "error", err.Error())
 			return nil, err
 		}
 
 		// 清空原buffer并写入新图片
 		buf.Reset()
 		if err := imaging.Encode(buf, result, imaging.JPEG); err != nil {
-			t.Error("encode image failed", "error", err.Error())
+			p.Error("encode image failed", "error", err.Error())
 			return nil, err
 		}
 	}
@@ -121,31 +120,31 @@ func (t *SnapPlugin) snap(streamPath string) (*bytes.Buffer, error) {
 	return buf, nil
 }
 
-func (t *SnapPlugin) doSnap(rw http.ResponseWriter, r *http.Request) {
+func (p *SnapPlugin) doSnap(rw http.ResponseWriter, r *http.Request) {
 	streamPath := r.PathValue("streamPath")
 
-	if !t.Server.Streams.Has(streamPath) {
+	if !p.Server.Streams.Has(streamPath) {
 		http.Error(rw, pkg.ErrNotFound.Error(), http.StatusNotFound)
 		return
 	}
 
-	buf, err := t.snap(streamPath)
+	buf, err := p.snap(streamPath)
 	if err != nil {
 		http.Error(rw, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	// 保存截图并记录到数据库
-	if t.DB != nil {
+	if p.DB != nil {
 		now := time.Now()
 		filename := fmt.Sprintf("%s_%s.jpg", streamPath, now.Format("20060102150405"))
 		filename = strings.ReplaceAll(filename, "/", "_")
-		savePath := filepath.Join(t.SnapSavePath, filename)
+		savePath := filepath.Join(p.SnapSavePath, filename)
 
 		// 保存到本地
 		err = os.WriteFile(savePath, buf.Bytes(), 0644)
 		if err != nil {
-			t.Error("save snapshot failed", "error", err.Error())
+			p.Error("save snapshot failed", "error", err.Error())
 		} else {
 			// 保存记录到数据库
 			record := SnapRecord{
@@ -154,8 +153,8 @@ func (t *SnapPlugin) doSnap(rw http.ResponseWriter, r *http.Request) {
 				SnapTime:   now,
 				SnapPath:   savePath,
 			}
-			if err := t.DB.Create(&record).Error; err != nil {
-				t.Error("save snapshot record failed", "error", err.Error())
+			if err := p.DB.Create(&record).Error; err != nil {
+				p.Error("save snapshot record failed", "error", err.Error())
 			}
 		}
 	}
@@ -164,13 +163,13 @@ func (t *SnapPlugin) doSnap(rw http.ResponseWriter, r *http.Request) {
 	rw.Header().Set("Content-Length", strconv.Itoa(buf.Len()))
 
 	if _, err := buf.WriteTo(rw); err != nil {
-		t.Error("write response failed", "error", err.Error())
+		p.Error("write response failed", "error", err.Error())
 		return
 	}
 }
 
-func (t *SnapPlugin) querySnap(rw http.ResponseWriter, r *http.Request) {
-	if t.DB == nil {
+func (p *SnapPlugin) querySnap(rw http.ResponseWriter, r *http.Request) {
+	if p.DB == nil {
 		http.Error(rw, "database not initialized", http.StatusInternalServerError)
 		return
 	}
@@ -197,7 +196,7 @@ func (t *SnapPlugin) querySnap(rw http.ResponseWriter, r *http.Request) {
 	var record SnapRecord
 
 	// 查询小于等于目标时间的最近一条记录
-	if err := t.DB.Where("stream_name = ? AND snap_time <= ?", streamPath, targetTime).
+	if err := p.DB.Where("stream_name = ? AND snap_time <= ?", streamPath, targetTime).
 		Order("snap_time DESC").
 		First(&record).Error; err != nil {
 		http.Error(rw, "snapshot not found", http.StatusNotFound)
@@ -206,7 +205,7 @@ func (t *SnapPlugin) querySnap(rw http.ResponseWriter, r *http.Request) {
 
 	// 计算时间差（秒）
 	timeDiff := targetTime.Sub(record.SnapTime).Seconds()
-	if timeDiff > float64(t.SnapQueryTimeDelta) {
+	if timeDiff > float64(p.SnapQueryTimeDelta) {
 		http.Error(rw, "no snapshot found within time delta", http.StatusNotFound)
 		return
 	}
@@ -223,9 +222,9 @@ func (t *SnapPlugin) querySnap(rw http.ResponseWriter, r *http.Request) {
 	rw.Write(imgData)
 }
 
-func (config *SnapPlugin) RegisterHandler() map[string]http.HandlerFunc {
+func (p *SnapPlugin) RegisterHandler() map[string]http.HandlerFunc {
 	return map[string]http.HandlerFunc{
-		"/{streamPath...}": config.doSnap,
-		"/query":           config.querySnap,
+		"/{streamPath...}": p.doSnap,
+		"/query":           p.querySnap,
 	}
 }

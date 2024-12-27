@@ -142,10 +142,10 @@ func saveSnapshot(annexb pkg.AnnexB, savePath string, plugin *m7s.Plugin, stream
 	return nil
 }
 
+var _ task.TaskGo = (*Transformer)(nil)
+
 func NewTransform() m7s.ITransformer {
-	ret := &Transformer{
-		snapChan: make(chan struct{}, 1),
-	}
+	ret := &Transformer{}
 	ret.SetDescription(task.OwnerTypeKey, "Snap")
 	return ret
 }
@@ -153,23 +153,12 @@ func NewTransform() m7s.ITransformer {
 type Transformer struct {
 	m7s.DefaultTransformer
 	ffmpeg            *exec.Cmd
-	snapChan          chan struct{}
 	snapTimeInterval  time.Duration
 	savePath          string
 	filterRegex       *regexp.Regexp
 	snapMode          int // 截图模式：0-时间间隔，1-帧间隔
 	snapFrameCount    int // 当前帧计数
 	snapFrameInterval int // 帧间隔
-}
-
-func (t *Transformer) TriggerSnap() {
-	select {
-	case t.snapChan <- struct{}{}:
-	default:
-		// 如果通道已满，移除旧的请求
-		<-t.snapChan
-		t.snapChan <- struct{}{}
-	}
 }
 
 func (t *Transformer) Start() (err error) {
@@ -227,24 +216,19 @@ func (t *Transformer) Start() (err error) {
 		return nil
 	}
 
-	// 订阅流
-	if err = t.TransformJob.Subscribe(); err != nil {
-		return fmt.Errorf("subscribe stream failed: %w", err)
-	}
-
-	return nil
+	// 使用 TransformJob 的 Subscribe 方法
+	return t.TransformJob.Subscribe()
 }
 
 func (t *Transformer) Run() (err error) {
-	// 等待截图触发信号
-	<-t.snapChan
-
 	// 获取视频帧
 	annexb, _, err := getVideoFrame(t.TransformJob.StreamPath, t.TransformJob.Plugin.Server)
 	if err != nil {
 		return err
 	}
-
+	if len(t.TransformJob.Config.Output) == 0 {
+		return nil
+	}
 	// 处理视频帧并生成截图
 	return processWithFFmpeg(annexb, t.TransformJob.Config.Output[0].Conf.(io.Writer))
 }
@@ -354,12 +338,6 @@ func (t *Transformer) Dispose() {
 	t.Info("disposing snap transformer",
 		"stream", t.TransformJob.StreamPath,
 	)
-
-	// 关闭截图触发通道
-	if t.snapChan != nil {
-		close(t.snapChan)
-		t.snapChan = nil
-	}
 
 	// 清理 FFmpeg 进程
 	if t.ffmpeg != nil {
