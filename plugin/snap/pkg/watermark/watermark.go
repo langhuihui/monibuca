@@ -6,6 +6,8 @@ import (
 	"image/color"
 	"image/draw"
 	"math"
+	"regexp"
+	"time"
 
 	"github.com/disintegration/imaging"
 	"github.com/golang/freetype"
@@ -66,7 +68,24 @@ func DrawWatermark(baseImg image.Image, config TextConfig, isDebug bool) (image.
 	}
 }
 
+// formatTimeString 处理文本中的时间格式化
+func formatTimeString(text string) string {
+	// 使用正则表达式匹配 $T{format} 格式的字符串
+	re := regexp.MustCompile(`\$T\{([^}]+)\}`)
+	now := time.Now()
+
+	// 替换所有匹配的时间格式
+	return re.ReplaceAllStringFunc(text, func(match string) string {
+		format := re.FindStringSubmatch(match)[1]
+		return now.Format(format)
+	})
+}
+
 func DrawWatermarkSingle(baseImg image.Image, config TextConfig, isDebug bool) (image.Image, error) {
+	// 处理时间格式化
+	formattedText := formatTimeString(config.Text)
+	config.Text = formattedText
+
 	bounds := baseImg.Bounds()
 	// width, height := bounds.Dx(), bounds.Dy()
 
@@ -195,6 +214,10 @@ func normalizeAngle(angle float64) float64 {
 
 // DrawWatermark 绘制水印网格并旋转
 func DrawWatermarkGrid(baseImg image.Image, config TextConfig, isDebug bool) (image.Image, error) {
+	// 处理时间格式化
+	formattedText := formatTimeString(config.Text)
+	config.Text = formattedText
+
 	bounds := baseImg.Bounds()
 	width, height := bounds.Dx(), bounds.Dy()
 
