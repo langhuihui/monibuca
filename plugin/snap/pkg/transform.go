@@ -17,8 +17,8 @@ import (
 	"m7s.live/v5/pkg/task"
 )
 
-// 获取视频帧数据
-func getVideoFrame(streamPath string, server *m7s.Server) (pkg.AnnexB, *pkg.AVTrack, error) {
+// GetVideoFrame 获取视频帧数据
+func GetVideoFrame(streamPath string, server *m7s.Server) (pkg.AnnexB, *pkg.AVTrack, error) {
 	// 获取发布者
 	publisher, ok := server.Streams.Get(streamPath)
 	if !ok || publisher.VideoTrack.AVTrack == nil {
@@ -59,8 +59,8 @@ func getVideoFrame(streamPath string, server *m7s.Server) (pkg.AnnexB, *pkg.AVTr
 	return annexb, &track, nil
 }
 
-// 使用 FFmpeg 处理视频帧并生成截图
-func processWithFFmpeg(annexb pkg.AnnexB, output io.Writer) error {
+// ProcessWithFFmpeg 使用 FFmpeg 处理视频帧并生成截图
+func ProcessWithFFmpeg(annexb pkg.AnnexB, output io.Writer) error {
 	// 创建ffmpeg命令
 	cmd := exec.Command("ffmpeg", "-hide_banner", "-i", "pipe:0", "-vframes", "1", "-f", "mjpeg", "pipe:1")
 
@@ -98,7 +98,7 @@ func processWithFFmpeg(annexb pkg.AnnexB, output io.Writer) error {
 // 保存截图到文件
 func saveSnapshot(annexb pkg.AnnexB, savePath string, plugin *m7s.Plugin, streamPath string, snapMode int) error {
 	var buf bytes.Buffer
-	if err := processWithFFmpeg(annexb, &buf); err != nil {
+	if err := ProcessWithFFmpeg(annexb, &buf); err != nil {
 		return fmt.Errorf("process with ffmpeg error: %w", err)
 	}
 
@@ -221,16 +221,7 @@ func (t *Transformer) Start() (err error) {
 }
 
 func (t *Transformer) Run() (err error) {
-	// 获取视频帧
-	annexb, _, err := getVideoFrame(t.TransformJob.StreamPath, t.TransformJob.Plugin.Server)
-	if err != nil {
-		return err
-	}
-	if len(t.TransformJob.Config.Output) == 0 {
-		return nil
-	}
-	// 处理视频帧并生成截图
-	return processWithFFmpeg(annexb, t.TransformJob.Config.Output[0].Conf.(io.Writer))
+	return nil
 }
 
 func (t *Transformer) Go() error {
@@ -276,7 +267,7 @@ func (t *Transformer) Go() error {
 		)
 
 		// 获取视频帧
-		annexb, _, err := getVideoFrame(subscriber.StreamPath, t.TransformJob.Plugin.Server)
+		annexb, _, err := GetVideoFrame(subscriber.StreamPath, t.TransformJob.Plugin.Server)
 		if err != nil {
 			t.Error("get video frame failed",
 				"error", err.Error(),

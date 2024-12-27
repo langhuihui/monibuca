@@ -46,6 +46,7 @@ cascadeserver:
 
 snap:
   enable: false
+  snapsavemanual: false  # 手动截图是否保存文件
   snapwatermark:
     text: "Monibuca"
     fontpath: "/System/Library/Fonts/STHeiti Light.ttc" # mac字体路径

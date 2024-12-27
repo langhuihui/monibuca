@@ -33,6 +33,7 @@ type SnapPlugin struct {
 	SnapIFrameInterval int           `default:"3" desc:"间隔多少帧截图"`
 	SnapMode           int           `default:"1" desc:"截图模式 0:间隔时间 1:间隔关键帧"`
 	SnapQueryTimeDelta int           `default:"3" desc:"查询截图时允许的最大时间差（秒）"`
+	SnapSaveManual     bool          `default:"false" desc:"手动截图是否保存文件"`
 	filterRegex        *regexp.Regexp
 }
 
