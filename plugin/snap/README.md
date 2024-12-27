@@ -76,6 +76,31 @@ GET /query?streamPath={streamPath}&snapTime={timestamp}
 - 字体大小
 - 位置偏移
 
+### 时间格式化水印
+
+水印文本支持时间格式化功能，使用 `$T{format}` 语法，其中 `format` 为 Go 的时间格式化字符串。
+
+常用时间格式示例：
+- `$T{2006-01-02}` - 显示当前日期，如：2024-01-20
+- `$T{15:04:05}` - 显示当前时间，如：14:30:45
+- `$T{2006-01-02 15:04:05}` - 显示完整的日期时间，如：2024-01-20 14:30:45
+- `$T{01/02/2006}` - 显示美式日期，如：01/20/2024
+- `$T{Mon 02 Jan}` - 显示简短日期，如：Sat 20 Jan
+
+配置示例：
+```yaml
+snap:
+  snapwatermark:
+    text: "测试水印 $T{2006-01-02 15:04:05}"
+    fontpath: "/path/to/font.ttf"
+    fontcolor: "rgba(255,0,0,0.5)"
+    fontsize: 48
+    offsetx: 20
+    offsety: 20
+  snapmode: 0
+  snaptimeinterval: 1m
+```
+
 ## 数据库记录
 
 每次截图都会在数据库中记录以下信息：

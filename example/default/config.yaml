@@ -48,7 +48,7 @@ snap:
   enable: false
   snapsavemanual: false  # 手动截图是否保存文件
   snapwatermark:
-    text: "Monibuca"
+    text: "Monibuca$T{2006-01-02 15:04:05}"
     fontpath: "/System/Library/Fonts/STHeiti Light.ttc" # mac字体路径
     # fontpath: "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc" # linux字体路径 思源黑体
     # fontpath: "C:/Windows/Fonts/msyh.ttf" # windows字体路径 微软雅黑
