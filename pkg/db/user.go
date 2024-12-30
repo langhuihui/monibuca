@@ -31,7 +31,7 @@ func (u *User) BeforeCreate(tx *gorm.DB) error {
 
 // BeforeUpdate hook to hash password before updating
 func (u *User) BeforeUpdate(tx *gorm.DB) error {
-	if tx.Statement.Changed("Password") {
+	if u.Password != "" {
 		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(u.Password), bcrypt.DefaultCost)
 		if err != nil {
 			return err
