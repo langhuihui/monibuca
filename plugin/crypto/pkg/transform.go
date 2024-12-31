@@ -157,8 +157,9 @@ func (t *Transform) Go() error {
 					}
 				}
 				if needEncrypt {
-					if encBytes, err := t.cryptor.Encrypt(mem); err == nil {
-						copyVideo.Nalus.Append(encBytes)
+					encBytes, err := t.cryptor.Encrypt(mem[2:])
+					if err == nil {
+						copyVideo.Nalus.Append(append([]byte{mem[0], mem[1]}, encBytes...))
 					} else {
 						copyVideo.Nalus.Append(mem)
 					}
