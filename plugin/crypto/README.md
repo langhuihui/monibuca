@@ -14,6 +14,9 @@ crypto:
   secret:
     key: "your key"    # 加密密钥
     iv: "your iv"      # 加密向量（仅 aes_ctr 和 xor_c 需要）
+  onpub:
+    transform:
+      .* : $0          # 哪些流需要加密，正则表达式，这里是所有流
 ```
 
 ### 加密算法说明
