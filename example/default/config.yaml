@@ -65,3 +65,15 @@ snap:
   onpub:
     transform:
       .* : $0
+
+crypto:
+  enable: false
+  isstatic: false
+  algo: aes_ctr # 加密算法 支持 aes_ctr xor_c
+  encryptlen: 1024
+  secret:
+    key: your key
+    iv: your iv
+  onpub:
+    transform:
+      .* : $0

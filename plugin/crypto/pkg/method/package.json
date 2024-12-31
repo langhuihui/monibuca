@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "aes-js": "^3.1.2",
+    "crypto-js": "^4.1.1"
+  }
+}
