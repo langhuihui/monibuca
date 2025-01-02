@@ -83,7 +83,7 @@ func (p *PullJob) GetPullJob() *PullJob {
 
 func (p *PullJob) Init(puller IPuller, plugin *Plugin, streamPath string, conf config.Pull, pubConf *config.Publish) *PullJob {
 	if pubConf == nil {
-		p.PublishConfig = p.Plugin.GetCommonConf().Publish
+		p.PublishConfig = plugin.GetCommonConf().Publish
 	} else {
 		p.PublishConfig = *pubConf
 	}

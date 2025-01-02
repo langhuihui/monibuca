@@ -191,6 +191,9 @@ func (l errLogger) Println(v ...interface{}) {
 }
 
 func (s *Server) Start() (err error) {
+	if err = util.CreateShutdownScript(); err != nil {
+		s.Error("create shutdown script error:", err)
+	}
 	s.Server = s
 	s.handler = s
 	httpConf, tcpConf := &s.config.HTTP, &s.config.TCP
