@@ -17,7 +17,7 @@ snap:
   snapsavepath: "snaps"  # 截图保存路径
   filter: ".*"           # 截图流过滤器，支持正则表达式
   snapiframeinterval: 3  # 间隔多少帧截图
-  snapmode: 1            # 截图模式：0-时间间隔，1-关键帧间隔
+  snapmode: 1            # 截图模式：0-时间间隔，1-关键帧间隔 2-HTTP请求模式（手动触发）
   snapquerytimedelta: 3  # 查询截图时允许的最大时间差（秒）
 ```
 

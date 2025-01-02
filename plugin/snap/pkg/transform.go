@@ -222,6 +222,13 @@ func (t *Transformer) Start() (err error) {
 }
 
 func (t *Transformer) Go() error {
+	// 检查snapmode是否有效
+	if t.snapMode != 0 && t.snapMode != 1 {
+		t.Debug("invalid snap mode, skip snapshot",
+			"mode", t.snapMode,
+		)
+		return nil
+	}
 	// 1. 通过 TransformJob 获取 Subscriber
 	subscriber := t.TransformJob.Subscriber
 
