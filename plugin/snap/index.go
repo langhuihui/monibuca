@@ -49,6 +49,21 @@ func (p *SnapPlugin) OnInit() (err error) {
 		)
 		return fmt.Errorf("invalid snap mode: %d, valid range is 0-1", p.Mode)
 	}
+	// 检查 interval 是否大于0
+	if p.TimeInterval < 0 {
+		p.Error("invalid snap time interval",
+			"interval", p.TimeInterval,
+			"valid_range", ">=0",
+		)
+		return fmt.Errorf("invalid snap time interval: %d, valid range is >=0", p.TimeInterval)
+	}
+	if p.IFrameInterval < 0 {
+		p.Error("invalid snap i-frame interval",
+			"interval", p.IFrameInterval,
+			"valid_range", ">=0",
+		)
+		return fmt.Errorf("invalid snap i-frame interval: %d, valid range is >=0", p.IFrameInterval)
+	}
 
 	// 初始化数据库
 	if p.DB != nil {
