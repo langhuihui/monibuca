@@ -57,7 +57,7 @@ func (t *SnapTimerTask) Tick(any) {
 				if t.Plugin.DB != nil {
 					record := snap_pkg.SnapRecord{
 						StreamName: streamPath,
-						SnapMode:   t.Plugin.SnapMode,
+						SnapMode:   t.Plugin.Mode,
 						SnapTime:   now,
 						SnapPath:   savePath,
 					}

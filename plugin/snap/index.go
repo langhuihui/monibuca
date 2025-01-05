@@ -19,7 +19,7 @@ var _ = m7s.InstallPlugin[SnapPlugin](snap.NewTransform)
 
 type SnapPlugin struct {
 	m7s.Plugin
-	SnapWatermark struct {
+	Watermark struct {
 		Text      string  `default:"" desc:"水印文字内容"`
 		FontPath  string  `default:"" desc:"水印字体文件路径"`
 		FontColor string  `default:"rgba(255,165,0,1)" desc:"水印字体颜色，支持rgba格式"`
@@ -28,25 +28,25 @@ type SnapPlugin struct {
 		OffsetY   int     `default:"0" desc:"水印位置Y"`
 	} `desc:"水印配置"`
 	// 定时任务相关配置
-	SnapTimeInterval   time.Duration `default:"1m" desc:"截图间隔"`
-	SnapSavePath       string        `default:"snaps" desc:"截图保存路径"`
-	Filter             string        `default:".*" desc:"截图流过滤器，支持正则表达式"`
-	SnapIFrameInterval int           `default:"3" desc:"间隔多少帧截图"`
-	SnapMode           int           `default:"1" desc:"截图模式 0:间隔时间 1:间隔关键帧"`
-	SnapQueryTimeDelta int           `default:"3" desc:"查询截图时允许的最大时间差（秒）"`
-	SnapSaveManual     bool          `default:"false" desc:"手动截图是否保存文件"`
-	filterRegex        *regexp.Regexp
+	TimeInterval     time.Duration `default:"1m" desc:"截图间隔"`
+	SavePath         string        `default:"snaps" desc:"截图保存路径"`
+	Filter           string        `default:".*" desc:"截图流过滤器，支持正则表达式"`
+	IFrameInterval   int           `default:"3" desc:"间隔多少帧截图"`
+	Mode             int           `default:"1" desc:"截图模式 0:间隔时间 1:间隔关键帧"`
+	QueryTimeDelta   int           `default:"3" desc:"查询截图时允许的最大时间差（秒）"`
+	IsManualModeSave bool          `default:"false" desc:"手动截图是否保存文件"`
+	filterRegex      *regexp.Regexp
 }
 
 // OnInit 在插件初始化时添加定时任务
 func (p *SnapPlugin) OnInit() (err error) {
-	// 检查 SnapMode 的值范围
-	if p.SnapMode < 0 || p.SnapMode > 1 {
+	// 检查 Mode 的值范围
+	if p.Mode < 0 || p.Mode > 1 {
 		p.Error("invalid snap mode",
-			"mode", p.SnapMode,
+			"mode", p.Mode,
 			"valid_range", "0-1",
 		)
-		return fmt.Errorf("invalid snap mode: %d, valid range is 0-1", p.SnapMode)
+		return fmt.Errorf("invalid snap mode: %d, valid range is 0-1", p.Mode)
 	}
 
 	// 初始化数据库
@@ -59,7 +59,7 @@ func (p *SnapPlugin) OnInit() (err error) {
 	}
 
 	// 创建保存目录
-	if err = os.MkdirAll(p.SnapSavePath, 0755); err != nil {
+	if err = os.MkdirAll(p.SavePath, 0755); err != nil {
 		return
 	}
 
@@ -71,23 +71,23 @@ func (p *SnapPlugin) OnInit() (err error) {
 
 	// 初始化全局水印配置
 	snap.GlobalWatermarkConfig = snap.WatermarkConfig{
-		Text:      p.SnapWatermark.Text,
-		FontPath:  p.SnapWatermark.FontPath,
-		FontSize:  p.SnapWatermark.FontSize,
+		Text:      p.Watermark.Text,
+		FontPath:  p.Watermark.FontPath,
+		FontSize:  p.Watermark.FontSize,
 		FontColor: color.RGBA{}, // 将在下面解析
-		OffsetX:   p.SnapWatermark.OffsetX,
-		OffsetY:   p.SnapWatermark.OffsetY,
+		OffsetX:   p.Watermark.OffsetX,
+		OffsetY:   p.Watermark.OffsetY,
 	}
 
-	if p.SnapWatermark.Text != "" {
+	if p.Watermark.Text != "" {
 		// 判断字体是否存在
-		if _, err := os.Stat(p.SnapWatermark.FontPath); os.IsNotExist(err) {
-			p.Error("watermark font file not found", "path", p.SnapWatermark.FontPath)
+		if _, err := os.Stat(p.Watermark.FontPath); os.IsNotExist(err) {
+			p.Error("watermark font file not found", "path", p.Watermark.FontPath)
 			return fmt.Errorf("watermark font file not found: %w", err)
 		}
 		// 解析颜色
-		if p.SnapWatermark.FontColor != "" {
-			rgba := p.SnapWatermark.FontColor
+		if p.Watermark.FontColor != "" {
+			rgba := p.Watermark.FontColor
 			rgba = strings.TrimPrefix(rgba, "rgba(")
 			rgba = strings.TrimSuffix(rgba, ")")
 			parts := strings.Split(rgba, ",")
@@ -118,18 +118,18 @@ func (p *SnapPlugin) OnInit() (err error) {
 	}
 
 	//如果截图模式不是时间模式，则不加定时任务
-	if p.SnapMode != 0 {
+	if p.Mode != 0 {
 		return
 	}
 
 	// 如果间隔时间小于0，则不添加定时任务;等于0则走onpub的transform
-	if p.SnapTimeInterval <= 0 {
+	if p.TimeInterval <= 0 {
 		return
 	}
 	// 添加定时任务
 	p.AddTask(&SnapTimerTask{
-		Interval: p.SnapTimeInterval,
-		SavePath: p.SnapSavePath,
+		Interval: p.TimeInterval,
+		SavePath: p.SavePath,
 		Plugin:   p,
 	})
 

@@ -49,9 +49,9 @@ func (p *SnapPlugin) snap(streamPath string) (*bytes.Buffer, error) {
 	//}).WaitStarted()
 
 	// 如果设置了水印文字，添加水印
-	if p.SnapWatermark.Text != "" {
+	if p.Watermark.Text != "" {
 		// 读取字体文件
-		fontBytes, err := os.ReadFile(p.SnapWatermark.FontPath)
+		fontBytes, err := os.ReadFile(p.Watermark.FontPath)
 		if err != nil {
 			p.Error("read font file failed", "error", err.Error())
 			return nil, err
@@ -72,7 +72,7 @@ func (p *SnapPlugin) snap(streamPath string) (*bytes.Buffer, error) {
 		}
 
 		// 解码颜色
-		rgba, err := parseRGBA(p.SnapWatermark.FontColor)
+		rgba, err := parseRGBA(p.Watermark.FontColor)
 		if err != nil {
 			p.Error("parse color failed", "error", err.Error())
 			return nil, err
@@ -84,9 +84,9 @@ func (p *SnapPlugin) snap(streamPath string) (*bytes.Buffer, error) {
 
 		// 添加水印
 		result, err := watermark.DrawWatermarkSingle(img, watermark.TextConfig{
-			Text:       p.SnapWatermark.Text,
+			Text:       p.Watermark.Text,
 			Font:       font,
-			FontSize:   p.SnapWatermark.FontSize,
+			FontSize:   p.Watermark.FontSize,
 			Spacing:    10,
 			RowSpacing: 10,
 			ColSpacing: 20,
@@ -96,8 +96,8 @@ func (p *SnapPlugin) snap(streamPath string) (*bytes.Buffer, error) {
 			Color:      rgba,
 			IsGrid:     false,
 			Angle:      0,
-			OffsetX:    p.SnapWatermark.OffsetX,
-			OffsetY:    p.SnapWatermark.OffsetY,
+			OffsetX:    p.Watermark.OffsetX,
+			OffsetY:    p.Watermark.OffsetY,
 		}, false)
 		if err != nil {
 			p.Error("add watermark failed", "error", err.Error())
@@ -138,9 +138,9 @@ func (p *SnapPlugin) doSnap(rw http.ResponseWriter, r *http.Request) {
 	}
 
 	// 如果设置了水印文字，添加水印
-	if p.SnapWatermark.Text != "" {
+	if p.Watermark.Text != "" {
 		// 读取字体文件
-		fontBytes, err := os.ReadFile(p.SnapWatermark.FontPath)
+		fontBytes, err := os.ReadFile(p.Watermark.FontPath)
 		if err != nil {
 			p.Error("read font file failed", "error", err.Error())
 			http.Error(rw, err.Error(), http.StatusInternalServerError)
@@ -164,7 +164,7 @@ func (p *SnapPlugin) doSnap(rw http.ResponseWriter, r *http.Request) {
 		}
 
 		// 解码颜色
-		rgba, err := parseRGBA(p.SnapWatermark.FontColor)
+		rgba, err := parseRGBA(p.Watermark.FontColor)
 		if err != nil {
 			p.Error("parse color failed", "error", err.Error())
 			http.Error(rw, err.Error(), http.StatusInternalServerError)
@@ -177,9 +177,9 @@ func (p *SnapPlugin) doSnap(rw http.ResponseWriter, r *http.Request) {
 
 		// 添加水印
 		result, err := watermark.DrawWatermarkSingle(img, watermark.TextConfig{
-			Text:       p.SnapWatermark.Text,
+			Text:       p.Watermark.Text,
 			Font:       font,
-			FontSize:   p.SnapWatermark.FontSize,
+			FontSize:   p.Watermark.FontSize,
 			Spacing:    10,
 			RowSpacing: 10,
 			ColSpacing: 20,
@@ -189,8 +189,8 @@ func (p *SnapPlugin) doSnap(rw http.ResponseWriter, r *http.Request) {
 			Color:      rgba,
 			IsGrid:     false,
 			Angle:      0,
-			OffsetX:    p.SnapWatermark.OffsetX,
-			OffsetY:    p.SnapWatermark.OffsetY,
+			OffsetX:    p.Watermark.OffsetX,
+			OffsetY:    p.Watermark.OffsetY,
 		}, false)
 		if err != nil {
 			p.Error("add watermark failed", "error", err.Error())
@@ -207,20 +207,23 @@ func (p *SnapPlugin) doSnap(rw http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// 保存截图并记录到数据库
-	if p.DB != nil {
+	if p.SavePath != "" && p.IsManualModeSave {
+		//判断 SavePath 是否存在
+		if _, err := os.Stat(p.SavePath); os.IsNotExist(err) {
+			os.MkdirAll(p.SavePath, 0755)
+		}
 		now := time.Now()
 		filename := fmt.Sprintf("%s_%s.jpg", streamPath, now.Format("20060102150405.000"))
 		filename = strings.ReplaceAll(filename, "/", "_")
-		savePath := filepath.Join(p.SnapSavePath, filename)
-
-		if p.SnapSavePath != "" {
-			// 保存到本地
-			err = os.WriteFile(savePath, buf.Bytes(), 0644)
-			if err != nil {
-				p.Error("save snapshot failed", "error", err.Error())
-				savePath = ""
-			}
+		savePath := filepath.Join(p.SavePath, filename)
+		// 保存到本地
+		err = os.WriteFile(savePath, buf.Bytes(), 0644)
+		if err != nil {
+			p.Error("save snapshot failed", "error", err.Error())
+			savePath = ""
+		}
+		// 保存截图并记录到数据库
+		if p.DB != nil {
 			// 保存记录到数据库
 			record := snap_pkg.SnapRecord{
 				StreamName: streamPath,
@@ -281,7 +284,7 @@ func (p *SnapPlugin) querySnap(rw http.ResponseWriter, r *http.Request) {
 
 	// 计算时间差（秒）
 	timeDiff := targetTime.Sub(record.SnapTime).Seconds()
-	if timeDiff > float64(time.Duration(p.SnapQueryTimeDelta)*time.Second) {
+	if timeDiff > float64(time.Duration(p.QueryTimeDelta)*time.Second) {
 		http.Error(rw, "no snapshot found within time delta", http.StatusNotFound)
 		return
 	}

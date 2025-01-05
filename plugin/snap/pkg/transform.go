@@ -156,20 +156,20 @@ type Transformer struct {
 
 func (t *Transformer) Start() (err error) {
 	// 获取配置，带默认值检查
-	if t.TransformJob.Plugin.Config.Has("SnapTimeInterval") {
-		t.snapTimeInterval = t.TransformJob.Plugin.Config.Get("SnapTimeInterval").GetValue().(time.Duration)
+	if t.TransformJob.Plugin.Config.Has("TimeInterval") {
+		t.snapTimeInterval = t.TransformJob.Plugin.Config.Get("TimeInterval").GetValue().(time.Duration)
 	} else {
 		t.snapTimeInterval = time.Minute // 默认1分钟
 	}
 
-	if t.TransformJob.Plugin.Config.Has("SnapSavePath") {
-		t.savePath = t.TransformJob.Plugin.Config.Get("SnapSavePath").GetValue().(string)
+	if t.TransformJob.Plugin.Config.Has("SavePath") {
+		t.savePath = t.TransformJob.Plugin.Config.Get("SavePath").GetValue().(string)
 	} else {
 		t.savePath = "snaps" // 默认保存路径
 	}
 
-	if t.TransformJob.Plugin.Config.Has("SnapMode") {
-		t.snapMode = t.TransformJob.Plugin.Config.Get("SnapMode").GetValue().(int)
+	if t.TransformJob.Plugin.Config.Has("Mode") {
+		t.snapMode = t.TransformJob.Plugin.Config.Get("Mode").GetValue().(int)
 	} else {
 		t.snapMode = 1 // 默认使用关键帧模式
 	}
@@ -182,8 +182,8 @@ func (t *Transformer) Start() (err error) {
 		return nil
 	}
 
-	if t.TransformJob.Plugin.Config.Has("SnapIFrameInterval") {
-		t.snapFrameInterval = t.TransformJob.Plugin.Config.Get("SnapIFrameInterval").GetValue().(int)
+	if t.TransformJob.Plugin.Config.Has("IFrameInterval") {
+		t.snapFrameInterval = t.TransformJob.Plugin.Config.Get("IFrameInterval").GetValue().(int)
 	} else {
 		t.snapFrameInterval = 3 // 默认每3个I帧截图一次
 	}

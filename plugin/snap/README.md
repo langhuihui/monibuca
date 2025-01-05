@@ -56,11 +56,11 @@ GET /query?streamPath={streamPath}&snapTime={timestamp}
 ## 截图模式说明
 
 ### 时间间隔模式 (snapmode: 0)
-- 按照配置的 `snaptimeinterval` 定时对流进行截图
+- 按照配置的 `timeinterval` 定时对流进行截图
 - 适合需要固定时间间隔截图的场景
 
 ### 关键帧间隔模式 (snapmode: 1)
-- 按照配置的 `snapiframeinterval` 对关键帧进行截图
+- 按照配置的 `iframeinterval` 对关键帧进行截图
 - 适合需要按视频内容变化进行截图的场景
 
 ### HTTP请求模式 (snapmode: 2)
@@ -90,15 +90,15 @@ GET /query?streamPath={streamPath}&snapTime={timestamp}
 配置示例：
 ```yaml
 snap:
-  snapwatermark:
+  watermark:
     text: "测试水印 $T{2006-01-02 15:04:05}"
     fontpath: "/path/to/font.ttf"
     fontcolor: "rgba(255,0,0,0.5)"
     fontsize: 48
     offsetx: 20
     offsety: 20
-  snapmode: 0
-  snaptimeinterval: 1m
+  mode: 0
+  timeinterval: 1m
 ```
 
 ## 数据库记录
@@ -115,24 +115,24 @@ snap:
 1. 基础配置示例：
 ```yaml
 snap:
-  snaptimeinterval: 30s
-  snapsavepath: "./snapshots"
-  snapmode: 1
-  snapiframeinterval: 5
+  timeinterval: 30s
+  savepath: "./snapshots"
+  mode: 1
+  iframeinterval: 5
 ```
 
 2. 带水印的配置示例：
 ```yaml
 snap:
-  snapwatermark:
+  watermark:
     text: "测试水印"
     fontpath: "/path/to/font.ttf"
     fontcolor: "rgba(255,0,0,0.5)"
     fontsize: 48
     offsetx: 20
     offsety: 20
-  snapmode: 0
-  snaptimeinterval: 1m
+  mode: 0
+  timeinterval: 1m
 ```
 
 3. API调用示例：
