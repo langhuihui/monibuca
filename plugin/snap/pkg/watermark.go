@@ -28,12 +28,12 @@ type WatermarkConfig struct {
 	FontColor color.RGBA     // 字体颜色
 	OffsetX   int            // X轴偏移
 	OffsetY   int            // Y轴偏移
-	font      *truetype.Font // 缓存的字体对象
+	Font      *truetype.Font // 缓存的字体对象，改为导出字段
 }
 
 // LoadFont 加载字体文件
 func (w *WatermarkConfig) LoadFont() error {
-	if w.font != nil {
+	if w.Font != nil {
 		return nil
 	}
 
@@ -42,7 +42,7 @@ func (w *WatermarkConfig) LoadFont() error {
 	fontCacheLock.RUnlock()
 
 	if exists {
-		w.font = cachedFont
+		w.Font = cachedFont
 		return nil
 	}
 
@@ -62,7 +62,7 @@ func (w *WatermarkConfig) LoadFont() error {
 	fontCache[w.FontPath] = font
 	fontCacheLock.Unlock()
 
-	w.font = font
+	w.Font = font
 	return nil
 }
 
@@ -91,7 +91,7 @@ func AddWatermark(imgData []byte, config WatermarkConfig) ([]byte, error) {
 	// 添加水印
 	result, err := watermark.DrawWatermarkSingle(img, watermark.TextConfig{
 		Text:       config.Text,
-		Font:       config.font,
+		Font:       config.Font,
 		FontSize:   config.FontSize,
 		Spacing:    10,
 		RowSpacing: 10,

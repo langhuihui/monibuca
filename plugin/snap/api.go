@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/disintegration/imaging"
-	"github.com/golang/freetype/truetype"
 	"m7s.live/v5/pkg"
 	snap_pkg "m7s.live/v5/plugin/snap/pkg"
 	"m7s.live/v5/plugin/snap/pkg/watermark"
@@ -36,79 +35,51 @@ func parseRGBA(rgba string) (color.RGBA, error) {
 
 // snap 方法负责实际的截图操作
 func (p *SnapPlugin) snap(streamPath string) (*bytes.Buffer, error) {
+	// 获取视频帧
+	annexb, _, err := snap_pkg.GetVideoFrame(streamPath, p.Server)
+	if err != nil {
+		return nil, err
+	}
+
+	// 处理视频帧生成图片
 	buf := new(bytes.Buffer)
-	//transformer := snap.NewTransform().(*snap.Transformer)
-	//transformer.TransformJob.Init(transformer, &p.Plugin, streamPath, config.Transform{
-	//	Output: []config.TransfromOutput{
-	//		{
-	//			Target:     streamPath,
-	//			StreamPath: streamPath,
-	//			Conf:       buf,
-	//		},
-	//	},
-	//}).WaitStarted()
+	if err := snap_pkg.ProcessWithFFmpeg(annexb, buf); err != nil {
+		return nil, err
+	}
 
 	// 如果设置了水印文字，添加水印
-	if p.Watermark.Text != "" {
-		// 读取字体文件
-		fontBytes, err := os.ReadFile(p.Watermark.FontPath)
-		if err != nil {
-			p.Error("read font file failed", "error", err.Error())
-			return nil, err
-		}
-
-		// 解析字体
-		font, err := truetype.Parse(fontBytes)
-		if err != nil {
-			p.Error("parse font failed", "error", err.Error())
-			return nil, err
-		}
-
+	if p.Watermark.Text != "" && snap_pkg.GlobalWatermarkConfig.Font != nil {
 		// 解码图片
 		img, _, err := image.Decode(bytes.NewReader(buf.Bytes()))
 		if err != nil {
-			p.Error("decode image failed", "error", err.Error())
-			return nil, err
-		}
-
-		// 解码颜色
-		rgba, err := parseRGBA(p.Watermark.FontColor)
-		if err != nil {
-			p.Error("parse color failed", "error", err.Error())
-			return nil, err
-		}
-		// 确保alpha通道正确
-		if rgba.A == 0 {
-			rgba.A = 255 // 如果完全透明，改为不透明
+			return nil, fmt.Errorf("decode image failed: %w", err)
 		}
 
 		// 添加水印
 		result, err := watermark.DrawWatermarkSingle(img, watermark.TextConfig{
-			Text:       p.Watermark.Text,
-			Font:       font,
-			FontSize:   p.Watermark.FontSize,
-			Spacing:    10,
+			Text:       snap_pkg.GlobalWatermarkConfig.Text,
+			Font:       snap_pkg.GlobalWatermarkConfig.Font,
+			FontSize:   snap_pkg.GlobalWatermarkConfig.FontSize,
+			Spacing:    2,
 			RowSpacing: 10,
 			ColSpacing: 20,
 			Rows:       1,
 			Cols:       1,
 			DPI:        72,
-			Color:      rgba,
+			Color:      snap_pkg.GlobalWatermarkConfig.FontColor,
 			IsGrid:     false,
 			Angle:      0,
-			OffsetX:    p.Watermark.OffsetX,
-			OffsetY:    p.Watermark.OffsetY,
+			OffsetX:    snap_pkg.GlobalWatermarkConfig.OffsetX,
+			OffsetY:    snap_pkg.GlobalWatermarkConfig.OffsetY,
 		}, false)
 		if err != nil {
-			p.Error("add watermark failed", "error", err.Error())
-			return nil, err
+			return nil, fmt.Errorf("add watermark failed: %w", err)
 		}
 
 		// 清空原buffer并写入新图片
 		buf.Reset()
 		if err := imaging.Encode(buf, result, imaging.JPEG); err != nil {
-			p.Error("encode image failed", "error", err.Error())
-			return nil, err
+			return nil, fmt.Errorf("encode image failed: %w", err)
 		}
 	}
 
@@ -123,108 +94,30 @@ func (p *SnapPlugin) doSnap(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 获取视频帧
-	annexb, _, err := snap_pkg.GetVideoFrame(streamPath, p.Server)
+	// 调用 snap 进行截图
+	buf, err := p.snap(streamPath)
 	if err != nil {
+		p.Error("snap failed", "error", err.Error())
 		http.Error(rw, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	// 处理视频帧生成图片
-	buf := new(bytes.Buffer)
-	if err := snap_pkg.ProcessWithFFmpeg(annexb, buf); err != nil {
-		http.Error(rw, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	// 如果设置了水印文字，添加水印
-	if p.Watermark.Text != "" {
-		// 读取字体文件
-		fontBytes, err := os.ReadFile(p.Watermark.FontPath)
-		if err != nil {
-			p.Error("read font file failed", "error", err.Error())
-			http.Error(rw, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		// 解析字体
-		font, err := truetype.Parse(fontBytes)
-		if err != nil {
-			p.Error("parse font failed", "error", err.Error())
-			http.Error(rw, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		// 解码图片
-		img, _, err := image.Decode(bytes.NewReader(buf.Bytes()))
-		if err != nil {
-			p.Error("decode image failed", "error", err.Error())
-			http.Error(rw, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		// 解码颜色
-		rgba, err := parseRGBA(p.Watermark.FontColor)
-		if err != nil {
-			p.Error("parse color failed", "error", err.Error())
-			http.Error(rw, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		// 确保alpha通道正确
-		if rgba.A == 0 {
-			rgba.A = 255 // 如果完全透明，改为不透明
-		}
-
-		// 添加水印
-		result, err := watermark.DrawWatermarkSingle(img, watermark.TextConfig{
-			Text:       p.Watermark.Text,
-			Font:       font,
-			FontSize:   p.Watermark.FontSize,
-			Spacing:    10,
-			RowSpacing: 10,
-			ColSpacing: 20,
-			Rows:       1,
-			Cols:       1,
-			DPI:        72,
-			Color:      rgba,
-			IsGrid:     false,
-			Angle:      0,
-			OffsetX:    p.Watermark.OffsetX,
-			OffsetY:    p.Watermark.OffsetY,
-		}, false)
-		if err != nil {
-			p.Error("add watermark failed", "error", err.Error())
-			http.Error(rw, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		// 清空原buffer并写入新图片
-		buf.Reset()
-		if err := imaging.Encode(buf, result, imaging.JPEG); err != nil {
-			p.Error("encode image failed", "error", err.Error())
-			http.Error(rw, err.Error(), http.StatusInternalServerError)
-			return
-		}
-	}
-
+	// 处理保存逻辑
+	var savePath string
 	if p.SavePath != "" && p.IsManualModeSave {
-		//判断 SavePath 是否存在
-		if _, err := os.Stat(p.SavePath); os.IsNotExist(err) {
-			os.MkdirAll(p.SavePath, 0755)
-		}
 		now := time.Now()
 		filename := fmt.Sprintf("%s_%s.jpg", streamPath, now.Format("20060102150405.000"))
 		filename = strings.ReplaceAll(filename, "/", "_")
-		savePath := filepath.Join(p.SavePath, filename)
+		savePath = filepath.Join(p.SavePath, filename)
+
 		// 保存到本地
-		err = os.WriteFile(savePath, buf.Bytes(), 0644)
-		if err != nil {
+		if err := os.WriteFile(savePath, buf.Bytes(), 0644); err != nil {
 			p.Error("save snapshot failed", "error", err.Error())
 			savePath = ""
 		}
-		// 保存截图并记录到数据库
-		if p.DB != nil {
-			// 保存记录到数据库
+
+		// 保存截图记录到数据库
+		if p.DB != nil && savePath != "" {
 			record := snap_pkg.SnapRecord{
 				StreamName: streamPath,
 				SnapMode:   2, // HTTP请求截图模式
@@ -235,15 +128,13 @@ func (p *SnapPlugin) doSnap(rw http.ResponseWriter, r *http.Request) {
 				p.Error("save snapshot record failed", "error", err.Error())
 			}
 		}
-
 	}
 
+	// 返回图片
 	rw.Header().Set("Content-Type", "image/jpeg")
 	rw.Header().Set("Content-Length", strconv.Itoa(buf.Len()))
-
 	if _, err := buf.WriteTo(rw); err != nil {
 		p.Error("write response failed", "error", err.Error())
-		return
 	}
 }
 

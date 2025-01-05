@@ -4,15 +4,21 @@ import (
 	"fmt"
 	"os"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
 	"image/color"
+
 	snap_pkg "m7s.live/v5/plugin/snap/pkg"
 
 	m7s "m7s.live/v5"
 	snap "m7s.live/v5/plugin/snap/pkg"
+)
+
+const (
+	SnapModeTimeInterval = iota
+	SnapModeIFrameInterval
+	SnapModeManual
 )
 
 var _ = m7s.InstallPlugin[SnapPlugin](snap.NewTransform)
@@ -41,7 +47,7 @@ type SnapPlugin struct {
 // OnInit 在插件初始化时添加定时任务
 func (p *SnapPlugin) OnInit() (err error) {
 	// 检查 Mode 的值范围
-	if p.Mode < 0 || p.Mode > 1 {
+	if p.Mode < SnapModeTimeInterval || p.Mode > SnapModeManual {
 		p.Error("invalid snap mode",
 			"mode", p.Mode,
 			"valid_range", "0-1",
@@ -92,11 +98,13 @@ func (p *SnapPlugin) OnInit() (err error) {
 			rgba = strings.TrimSuffix(rgba, ")")
 			parts := strings.Split(rgba, ",")
 			if len(parts) == 4 {
-				r, _ := strconv.Atoi(strings.TrimSpace(parts[0]))
-				g, _ := strconv.Atoi(strings.TrimSpace(parts[1]))
-				b, _ := strconv.Atoi(strings.TrimSpace(parts[2]))
-				a, _ := strconv.ParseFloat(strings.TrimSpace(parts[3]), 64)
-				snap.GlobalWatermarkConfig.FontColor = color.RGBA{uint8(r), uint8(g), uint8(b), uint8(a * 255)}
+				fontColor, err := parseRGBA(p.Watermark.FontColor)
+				if err == nil {
+					snap.GlobalWatermarkConfig.FontColor = fontColor
+				} else {
+					p.Error("parse color failed", "error", err.Error())
+					snap.GlobalWatermarkConfig.FontColor = color.RGBA{uint8(255), uint8(255), uint8(255), uint8(255)}
+				}
 			}
 		}
 	}
