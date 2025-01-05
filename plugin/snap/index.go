@@ -15,23 +15,18 @@ import (
 	snap "m7s.live/v5/plugin/snap/pkg"
 )
 
-const (
-	SnapModeTimeInterval = iota
-	SnapModeIFrameInterval
-	SnapModeManual
-)
-
 var _ = m7s.InstallPlugin[SnapPlugin](snap.NewTransform)
 
 type SnapPlugin struct {
 	m7s.Plugin
 	Watermark struct {
-		Text      string  `default:"" desc:"水印文字内容"`
-		FontPath  string  `default:"" desc:"水印字体文件路径"`
-		FontColor string  `default:"rgba(255,165,0,1)" desc:"水印字体颜色，支持rgba格式"`
-		FontSize  float64 `default:"36" desc:"水印字体大小"`
-		OffsetX   int     `default:"0" desc:"水印位置X"`
-		OffsetY   int     `default:"0" desc:"水印位置Y"`
+		Text        string  `default:"" desc:"水印文字内容"`
+		FontPath    string  `default:"" desc:"水印字体文件路径"`
+		FontColor   string  `default:"rgba(255,165,0,1)" desc:"水印字体颜色，支持rgba格式"`
+		FontSize    float64 `default:"36" desc:"水印字体大小"`
+		FontSpacing float64 `default:"2" desc:"水印字体间距"`
+		OffsetX     int     `default:"0" desc:"水印位置X"`
+		OffsetY     int     `default:"0" desc:"水印位置Y"`
 	} `desc:"水印配置"`
 	// 定时任务相关配置
 	TimeInterval     time.Duration `default:"1m" desc:"截图间隔"`
@@ -47,7 +42,7 @@ type SnapPlugin struct {
 // OnInit 在插件初始化时添加定时任务
 func (p *SnapPlugin) OnInit() (err error) {
 	// 检查 Mode 的值范围
-	if p.Mode < SnapModeTimeInterval || p.Mode > SnapModeManual {
+	if p.Mode < snap.SnapModeTimeInterval || p.Mode > snap.SnapModeManual {
 		p.Error("invalid snap mode",
 			"mode", p.Mode,
 			"valid_range", "0-1",
@@ -77,12 +72,13 @@ func (p *SnapPlugin) OnInit() (err error) {
 
 	// 初始化全局水印配置
 	snap.GlobalWatermarkConfig = snap.WatermarkConfig{
-		Text:      p.Watermark.Text,
-		FontPath:  p.Watermark.FontPath,
-		FontSize:  p.Watermark.FontSize,
-		FontColor: color.RGBA{}, // 将在下面解析
-		OffsetX:   p.Watermark.OffsetX,
-		OffsetY:   p.Watermark.OffsetY,
+		Text:        p.Watermark.Text,
+		FontPath:    p.Watermark.FontPath,
+		FontSize:    p.Watermark.FontSize,
+		FontSpacing: p.Watermark.FontSpacing,
+		FontColor:   color.RGBA{}, // 将在下面解析
+		OffsetX:     p.Watermark.OffsetX,
+		OffsetY:     p.Watermark.OffsetY,
 	}
 
 	if p.Watermark.Text != "" {
@@ -126,7 +122,7 @@ func (p *SnapPlugin) OnInit() (err error) {
 	}
 
 	//如果截图模式不是时间模式，则不加定时任务
-	if p.Mode != 0 {
+	if p.Mode != snap_pkg.SnapModeTimeInterval {
 		return
 	}
 

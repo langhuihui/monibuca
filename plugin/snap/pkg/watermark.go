@@ -22,13 +22,14 @@ var (
 
 // WatermarkConfig 水印配置
 type WatermarkConfig struct {
-	Text      string         // 水印文字
-	FontPath  string         // 字体文件路径
-	FontSize  float64        // 字体大小
-	FontColor color.RGBA     // 字体颜色
-	OffsetX   int            // X轴偏移
-	OffsetY   int            // Y轴偏移
-	Font      *truetype.Font // 缓存的字体对象，改为导出字段
+	Text        string         // 水印文字
+	FontPath    string         // 字体文件路径
+	FontSize    float64        // 字体大小
+	FontColor   color.RGBA     // 字体颜色
+	FontSpacing float64        // 字体间距
+	OffsetX     int            // X轴偏移
+	OffsetY     int            // Y轴偏移
+	Font        *truetype.Font // 缓存的字体对象
 }
 
 // LoadFont 加载字体文件

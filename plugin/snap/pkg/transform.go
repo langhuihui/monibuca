@@ -17,6 +17,12 @@ import (
 	"m7s.live/v5/pkg/task"
 )
 
+const (
+	SnapModeTimeInterval = iota
+	SnapModeIFrameInterval
+	SnapModeManual
+)
+
 // GetVideoFrame 获取视频帧数据
 func GetVideoFrame(streamPath string, server *m7s.Server) (pkg.AnnexB, *pkg.AVTrack, error) {
 	// 获取发布者
@@ -171,11 +177,11 @@ func (t *Transformer) Start() (err error) {
 	if t.TransformJob.Plugin.Config.Has("Mode") {
 		t.snapMode = t.TransformJob.Plugin.Config.Get("Mode").GetValue().(int)
 	} else {
-		t.snapMode = 1 // 默认使用关键帧模式
+		t.snapMode = SnapModeIFrameInterval // 默认使用关键帧模式
 	}
 
 	// 检查snapmode是否有效
-	if t.snapMode != 0 && t.snapMode != 1 {
+	if t.snapMode != SnapModeIFrameInterval && t.snapMode != SnapModeTimeInterval {
 		t.Debug("invalid snap mode, skip snapshot",
 			"mode", t.snapMode,
 		)
@@ -209,7 +215,7 @@ func (t *Transformer) Start() (err error) {
 	}
 
 	// 如果是时间间隔模式且间隔时间不为0，则跳过订阅模式
-	if t.snapMode == 0 && t.snapTimeInterval != 0 {
+	if t.snapMode == SnapModeTimeInterval && t.snapTimeInterval != 0 {
 		t.Info("snap interval is set, skipping subscriber mode",
 			"interval", t.snapTimeInterval,
 			"save_path", t.savePath,
@@ -223,9 +229,16 @@ func (t *Transformer) Start() (err error) {
 
 func (t *Transformer) Go() error {
 	// 检查snapmode是否有效
-	if t.snapMode != 0 && t.snapMode != 1 {
+	if t.snapMode != SnapModeIFrameInterval && t.snapMode != SnapModeTimeInterval {
 		t.Debug("invalid snap mode, skip snapshot",
 			"mode", t.snapMode,
+		)
+		return nil
+	}
+	if t.snapMode == SnapModeTimeInterval && t.snapTimeInterval != 0 {
+		t.Info("snap interval is set, skipping subscriber mode",
+			"interval", t.snapTimeInterval,
+			"save_path", t.savePath,
 		)
 		return nil
 	}

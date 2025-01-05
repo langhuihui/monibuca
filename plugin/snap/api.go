@@ -60,7 +60,7 @@ func (p *SnapPlugin) snap(streamPath string) (*bytes.Buffer, error) {
 			Text:       snap_pkg.GlobalWatermarkConfig.Text,
 			Font:       snap_pkg.GlobalWatermarkConfig.Font,
 			FontSize:   snap_pkg.GlobalWatermarkConfig.FontSize,
-			Spacing:    2,
+			Spacing:    snap_pkg.GlobalWatermarkConfig.FontSpacing,
 			RowSpacing: 10,
 			ColSpacing: 20,
 			Rows:       1,
