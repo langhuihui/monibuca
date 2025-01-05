@@ -94,7 +94,7 @@ func AddWatermark(imgData []byte, config WatermarkConfig) ([]byte, error) {
 		Text:       config.Text,
 		Font:       config.Font,
 		FontSize:   config.FontSize,
-		Spacing:    10,
+		Spacing:    config.FontSpacing,
 		RowSpacing: 10,
 		ColSpacing: 20,
 		Rows:       1,
