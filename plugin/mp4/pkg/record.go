@@ -319,6 +319,27 @@ func (r *Recorder) Run() (err error) {
 		switch ctx := vt.ICodecCtx.(type) {
 		case *codec.H264Ctx:
 			if bytes[1] == 0 {
+				// Check if video resolution has changed
+				if uint32(ctx.Width()) != videoTrack.Width || uint32(ctx.Height()) != videoTrack.Height {
+					r.Info("Video resolution changed, restarting recording",
+						"old", fmt.Sprintf("%dx%d", videoTrack.Width, videoTrack.Height),
+						"new", fmt.Sprintf("%dx%d", ctx.Width(), ctx.Height()))
+					now := time.Now()
+					r.writeTailer(now)
+					err = r.createStream(now)
+					if err != nil {
+						return nil
+					}
+					at, vt = nil, nil
+					if vr := sub.VideoReader; vr != nil {
+						vr.ResetAbsTime()
+						//seq := vt.SequenceFrame.(*rtmp.RTMPVideo)
+						//offset = int64(seq.Size + 15)
+					}
+					if ar := sub.AudioReader; ar != nil {
+						ar.ResetAbsTime()
+					}
+				}
 				return nil
 			}
 		case *rtmp.H265Ctx:
