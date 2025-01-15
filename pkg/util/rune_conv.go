@@ -2,7 +2,6 @@ package util
 
 import (
 	"encoding/base64"
-	"fmt"
 	"strings"
 	"unicode"
 
@@ -15,8 +14,8 @@ type StringSegment struct {
 	StrType int // 0: 英文/数字, 1: 中文, 2: 其他语言
 }
 
-// splitChineseString 将字符串切割成不同类型的片段
-func splitChineseString(s string) []StringSegment {
+// SplitRuneString 将字符串切割成不同类型的片段
+func SplitRuneString(s string) []StringSegment {
 	var segments []StringSegment
 	var builder strings.Builder
 	var currentType int // 当前正在构建的片段类型
@@ -85,9 +84,9 @@ func splitChineseString(s string) []StringSegment {
 	return segments
 }
 
-// ConvertChineseToPinyin 将字符串中的中文转换为拼音，其他语言转换为 base64
-func ConvertChineseToPinyin(s string) string {
-	segments := splitChineseString(s)
+// ConvertRuneToEn 将字符串中的中文转换为拼音，其他语言转换为 base64
+func ConvertRuneToEn(s string) string {
+	segments := SplitRuneString(s)
 	var result strings.Builder
 	a := pinyin.NewArgs()
 
@@ -108,36 +107,4 @@ func ConvertChineseToPinyin(s string) string {
 		}
 	}
 	return result.String()
-}
-
-func main() {
-	// 测试用例
-	testCases := []string{
-		"aa哈哈哈",
-		"hello世界",
-		"123你好",
-		"混合字符串abc中文123",
-		"纯中文测试",
-		"onlyEnglish",
-
-		"Hello世界こんにちは", // 添加包含其他语言的测试用例
-	}
-
-	// 测试 splitChineseString
-	fmt.Println("测试 splitChineseString 函数:")
-	for _, str := range testCases {
-		segments := splitChineseString(str)
-		fmt.Printf("原始字符串: %q\n", str)
-		for _, seg := range segments {
-			fmt.Printf("  片段: %q, 类型: %d\n", seg.Text, seg.StrType)
-		}
-		fmt.Println()
-	}
-
-	// 测试 ConvertChineseToPinyin
-	fmt.Println("\n测试 ConvertChineseToPinyin 函数:")
-	for _, str := range testCases {
-		converted := ConvertChineseToPinyin(str)
-		fmt.Printf("原始字符串: %q, 转换后: %q\n", str, converted)
-	}
 }
