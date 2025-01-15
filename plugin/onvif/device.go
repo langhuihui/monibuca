@@ -86,7 +86,7 @@ var authCfg = &AuthConfig{
 
 func GenStreamPath(device *donvif.Device, ifname string) string {
 	streamPath := strings.ReplaceAll(device.GetDeviceParams().Xaddr, ".", "_")
-	streamPath = "onvif/" + ifname + "/" + strings.ReplaceAll(streamPath, ":", "_")
+	streamPath = "onvif/" + util.ConvertRuneToEn(ifname) + "/" + strings.ReplaceAll(streamPath, ":", "_")
 	return streamPath
 }
 func NewDeviceStatus(ip, user, passwd, port, path string, channel int) (*DeviceStatus, int, error) {
@@ -359,15 +359,8 @@ func (d *DeviceStatus) GotoPtzPreset(presetToken string, speed *onvifTypes.PTZSp
 }
 
 func (d *DeviceStatus) PullStream(ifname string, channel int) error {
-	// // 从 engine 获取 RTSP 插件实例
-	rtspPlugin, ok := deviceList.plugin.Server.Plugins.Get("rtsp")
-	if !ok || rtspPlugin == nil {
-		d.Status = StatusPullRtspError
-		return fmt.Errorf("RTSP plugin not found")
-	}
-
 	// 生成流路径
-	streamPath := GenStreamPath(d.Device, util.ConvertRuneToEn(ifname))
+	streamPath := GenStreamPath(d.Device, ifname)
 	var rtspUrl string
 	var err error
 	if d.MediaUrl != "" {

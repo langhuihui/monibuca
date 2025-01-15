@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"m7s.live/v5/pkg/util"
 	"net/http"
 	"strconv"
 
@@ -165,7 +164,7 @@ func (o *OnvifPlugin) closeStream(resp *Response, w http.ResponseWriter, r *http
 	}
 	devParam, _ := parseDeviceParam(r)
 
-	streamPath := GenStreamPath(d.Device, util.ConvertRuneToEn(devParam.IFace))
+	streamPath := GenStreamPath(d.Device, devParam.IFace)
 
 	stream, _ := o.Server.Streams.Get(streamPath)
 	if stream == nil {
