@@ -15,6 +15,7 @@ import (
 	_ "m7s.live/v5/plugin/logrotate"
 	_ "m7s.live/v5/plugin/monitor"
 	_ "m7s.live/v5/plugin/mp4"
+	_ "m7s.live/v5/plugin/onvif"
 	_ "m7s.live/v5/plugin/preview"
 	_ "m7s.live/v5/plugin/rtmp"
 	_ "m7s.live/v5/plugin/rtsp"
