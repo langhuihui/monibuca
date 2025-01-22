@@ -31,10 +31,19 @@ type Puller struct {
 	memoryTs    sync.Map
 }
 
-func NewPuller(_ config.Pull) m7s.IPuller {
-	p := &Puller{}
-	p.SetDescription(task.OwnerTypeKey, "HLSPuller")
-	return p
+func NewPuller(conf config.Pull) m7s.IPuller {
+	if strings.HasPrefix(conf.URL, "http") || strings.HasSuffix(conf.URL, ".m3u8") {
+		p := &Puller{}
+		p.SetDescription(task.OwnerTypeKey, "HLSPuller")
+		return p
+	}
+	if conf.Args.Get(util.StartKey) != "" {
+		p := &RecordReader{}
+		p.Type = "hls"
+		p.SetDescription(task.OwnerTypeKey, "HLSRecordReader")
+		return p
+	}
+	return nil
 }
 
 func (p *Puller) GetPullJob() *m7s.PullJob {
