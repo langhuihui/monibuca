@@ -23,6 +23,11 @@ type Receiver struct {
 	Stream
 	AudioCodecParameters *webrtc.RTPCodecParameters
 	VideoCodecParameters *webrtc.RTPCodecParameters
+	audioTimestamp       uint32
+	lastVideoTimestamp   uint32
+	lastAudioPacketTS    uint32    // 上一个音频包的时间戳
+	audioTSCheckStart    time.Time // 开始检查音频时间戳的时间
+	useVideoTS           bool      // 是否使用视频时间戳
 }
 
 func (s *Sender) GetMedia() (medias []*Media, err error) {
@@ -202,6 +207,39 @@ func (r *Receiver) Receive() (err error) {
 			sdes.Chunks[0].Source = packet.SSRC
 			rr.Reports[0].SSRC = packet.SSRC
 			rr.Reports[0].LastSequenceNumber = uint32(packet.SequenceNumber)
+
+			now := time.Now()
+			// 检查音频时间戳是否变化
+			if r.lastAudioPacketTS == 0 {
+				r.lastAudioPacketTS = packet.Timestamp
+				r.audioTSCheckStart = now
+				r.Stream.Debug("check audio timestamp start", "firsttime", "timestamp", packet.Timestamp)
+			} else if !r.useVideoTS {
+				r.Stream.Debug("debug audio timestamp", "current", packet.Timestamp, "last", r.lastAudioPacketTS, "duration", now.Sub(r.audioTSCheckStart))
+				// 如果3秒内时间戳没有变化，切换到使用视频时间戳
+				if packet.Timestamp == r.lastAudioPacketTS && now.Sub(r.audioTSCheckStart) > 3*time.Second {
+					r.useVideoTS = true
+					r.Stream.Debug("switch to video timestamp due to unchanging audio timestamp")
+					packet.Timestamp = uint32(float64(r.lastVideoTimestamp) * 8000 / 90000)
+					audioFrame = &mrtp.Audio{}
+					audioFrame.AddRecycleBytes(buf)
+					audioFrame.Packets = []*rtp.Packet{packet}
+					audioFrame.RTPCodecParameters = r.AudioCodecParameters
+					audioFrame.SetAllocator(r.MemoryAllocator)
+					return nil
+				} else if packet.Timestamp != r.lastAudioPacketTS {
+					// 时间戳有变化，重置检查
+					r.lastAudioPacketTS = packet.Timestamp
+					r.audioTSCheckStart = now
+					r.Stream.Debug("check audio timestamp start", "reset audioTSCheckStart", "lastAudioPacketTS", r.lastAudioPacketTS)
+				}
+			}
+
+			// 如果检测到时间戳异常，使用视频时间戳
+			if r.useVideoTS {
+				packet.Timestamp = uint32(float64(r.lastVideoTimestamp) * 8000 / 90000)
+			}
+
 			if len(audioFrame.Packets) == 0 || packet.Timestamp == audioFrame.Packets[0].Timestamp {
 				audioFrame.AddRecycleBytes(buf)
 				audioFrame.Packets = append(audioFrame.Packets, packet)
@@ -228,6 +266,7 @@ func (r *Receiver) Receive() (err error) {
 			rr.Reports[0].SSRC = packet.SSRC
 			sdes.Chunks[0].Source = packet.SSRC
 			rr.Reports[0].LastSequenceNumber = uint32(packet.SequenceNumber)
+			r.lastVideoTimestamp = packet.Timestamp
 			if len(videoFrame.Packets) == 0 || packet.Timestamp == videoFrame.Packets[0].Timestamp {
 				videoFrame.AddRecycleBytes(buf)
 				videoFrame.Packets = append(videoFrame.Packets, packet)
