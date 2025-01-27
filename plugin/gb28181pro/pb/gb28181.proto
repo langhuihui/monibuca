@@ -1,0 +1,340 @@
+syntax = "proto3";
+import "google/api/annotations.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+//import "global.proto";
+package gb28181pro;
+option go_package="m7s.live/v5/plugin/gb28181pro/pb";
+
+// 基础响应消息
+message BaseResponse {
+  int32 code = 1;
+  string message = 2;
+}
+
+service api {
+  // 获取设备列表
+  rpc List (google.protobuf.Empty) returns (ResponseList) {
+    option (google.api.http) = {
+      get: "/gb28181/api/list"
+    };
+  }
+
+  // 使用ID查询国标设备
+  rpc GetDevice (GetDeviceRequest) returns (DeviceResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/devices/{deviceId}"
+    };
+  }
+
+  // 分页查询国标设备
+  rpc GetDevices (GetDevicesRequest) returns (DevicesPageInfo) {
+    option (google.api.http) = {
+      get: "/gb28181/api/devices"
+    };
+  }
+
+  // 分页查询通道
+  rpc GetChannels (GetChannelsRequest) returns (ChannelsPageInfo) {
+    option (google.api.http) = {
+      get: "/gb28181/api/devices/{deviceId}/channels"
+    };
+  }
+
+  // 同步设备通道
+  rpc SyncDevice (SyncDeviceRequest) returns (SyncStatus) {
+    option (google.api.http) = {
+      get: "/gb28181/api/devices/{deviceId}/sync"
+    };
+  }
+
+  // 移除设备
+  rpc DeleteDevice (DeleteDeviceRequest) returns (DeleteDeviceResponse) {
+    option (google.api.http) = {
+      delete: "/gb28181/api/devices/{deviceId}/delete"
+    };
+  }
+
+  // 分页查询子目录通道
+  rpc GetSubChannels (GetSubChannelsRequest) returns (ChannelsPageInfo) {
+    option (google.api.http) = {
+      get: "/gb28181/api/sub_channels/{deviceId}/{channelId}/channels"
+    };
+  }
+
+  // 开启/关闭通道的音频
+  rpc ChangeAudio (ChangeAudioRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      post: "/gb28181/api/channel/audio"
+      body: "*"
+    };
+  }
+
+  // 修改通道的码流类型
+  rpc UpdateChannelStreamIdentification (Channel) returns (BaseResponse) {
+    option (google.api.http) = {
+      post: "/gb28181/api/channel/stream/identification/update"
+      body: "*"
+    };
+  }
+
+  // 修改数据流传输模式
+  rpc UpdateTransport (UpdateTransportRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      post: "/gb28181/api/transport/{deviceId}/{streamMode}"
+    };
+  }
+
+  // 添加设备信息
+  rpc AddDevice (Device) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      post: "/gb28181/api/device/add"
+      body: "*"
+    };
+  }
+
+  // 更新设备信息
+  rpc UpdateDevice (Device) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      post: "/gb28181/api/device/update"
+      body: "*"
+    };
+  }
+
+  // 设备状态查询
+  rpc GetDeviceStatus (GetDeviceStatusRequest) returns (DeviceStatusResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/devices/{deviceId}/status"
+    };
+  }
+
+  // 设备报警查询
+  rpc GetDeviceAlarm (GetDeviceAlarmRequest) returns (DeviceAlarmResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/alarm/{deviceId}"
+    };
+  }
+
+  // 获取通道同步进度
+  rpc GetSyncStatus (GetSyncStatusRequest) returns (SyncStatus) {
+    option (google.api.http) = {
+      get: "/gb28181/api/{deviceId}/sync_status"
+    };
+  }
+
+  // 获取设备的订阅状态
+  rpc GetSubscribeInfo (GetSubscribeInfoRequest) returns (SubscribeInfoResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/{deviceId}/subscribe_info"
+    };
+  }
+
+  // 请求截图
+  rpc GetSnap (GetSnapRequest) returns (SnapResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/snap/{deviceId}/{channelId}"
+    };
+  }
+
+  // 国标通道编辑时的数据回显
+  rpc GetRawChannel (GetRawChannelRequest) returns (Channel) {
+    option (google.api.http) = {
+      get: "/gb28181/api/channel/raw"
+    };
+  }
+}
+
+// 请求和响应消息定义
+message GetDeviceRequest {
+  string deviceId = 1;
+}
+
+message GetDevicesRequest {
+  int32 page = 1;
+  int32 count = 2;
+  string query = 3;
+  bool status = 4;
+}
+
+message DevicesPageInfo {
+  int32 code = 1;
+  string message = 2;
+  int32 total = 3;
+  repeated Device list = 4;
+}
+
+message GetChannelsRequest {
+  string deviceId = 1;
+  int32 page = 2;
+  int32 count = 3;
+  string query = 4;
+  bool online = 5;
+  bool channelType = 6;
+}
+
+message ChannelsPageInfo {
+  int32 code = 1;
+  string message = 2;
+  int32 total = 3;
+  repeated Channel list = 4;
+}
+
+message SyncDeviceRequest {
+  string deviceId = 1;
+}
+
+message SyncStatus {
+  int32 code = 1;
+  string message = 2;
+  int32 total = 3;
+  int32 current = 4;
+  string errorMsg = 5;
+}
+
+message DeleteDeviceRequest {
+  string deviceId = 1;
+}
+
+message DeleteDeviceResponse {
+  int32 code = 1;
+  string message = 2;
+  string deviceId = 3;
+}
+
+message GetSubChannelsRequest {
+  string deviceId = 1;
+  string channelId = 2;
+  int32 page = 3;
+  int32 count = 4;
+  string query = 5;
+  bool online = 6;
+  bool channelType = 7;
+}
+
+message Channel {
+  string DeviceID      =1;
+  string ParentID     =2;
+  string  Name        =3;
+  string Manufacturer =4;
+  string Model =5;
+  string  Owner =6;
+  string CivilCode = 7;
+  string Address = 8;
+  int32 Port = 9;
+  int32 Parental = 10;
+  int32 SafetyWay = 11;
+  int32  RegisterWay = 12;
+  int32 Secrecy     =13;
+  string Status       =14;
+  google.protobuf.Timestamp gpsTime=15;
+  string Longitude = 16;
+  string Latitude = 17;
+}
+
+message Device {
+  string id = 1;
+  string name = 2;
+  string manufacturer = 3;
+  string model = 4;
+  string owner = 5;
+  google.protobuf.Timestamp gpsTime=6;
+  string longitude = 7;
+  string latitude = 8;
+  string status = 9;
+  google.protobuf.Timestamp registerTime=10;
+  google.protobuf.Timestamp updateTime=11;
+  repeated Channel channels = 12;
+}
+
+message ResponseList {
+  int32 code = 1;
+  string message = 2;
+  repeated Device data = 3;
+}
+
+// 新增的请求和响应消息定义
+message ChangeAudioRequest {
+  int32 channelId = 1;
+  bool audio = 2;
+}
+
+message UpdateTransportRequest {
+  string deviceId = 1;
+  string streamMode = 2; // UDP, TCP-ACTIVE, TCP-PASSIVE
+}
+
+message GetDeviceStatusRequest {
+  string deviceId = 1;
+}
+
+message DeviceStatusResponse {
+  int32 code = 1;
+  string message = 2;
+  string status = 3;
+}
+
+message GetDeviceAlarmRequest {
+  string deviceId = 1;
+  string startPriority = 2;
+  string endPriority = 3;
+  string alarmMethod = 4;
+  string alarmType = 5;
+  string startTime = 6;
+  string endTime = 7;
+}
+
+message DeviceAlarmResponse {
+  int32 code = 1;
+  string message = 2;
+  repeated AlarmInfo alarms = 3;
+}
+
+message AlarmInfo {
+  string deviceId = 1;
+  string alarmPriority = 2;
+  string alarmMethod = 3;
+  string alarmTime = 4;
+  string alarmDescription = 5;
+}
+
+message GetSyncStatusRequest {
+  string deviceId = 1;
+}
+
+message GetSubscribeInfoRequest {
+  string deviceId = 1;
+}
+
+message SubscribeInfoResponse {
+  int32 code = 1;
+  string message = 2;
+  map<string, int32> dialogState = 3;
+}
+
+message GetSnapRequest {
+  string deviceId = 1;
+  string channelId = 2;
+  string mark = 3;
+}
+
+message SnapResponse {
+  int32 code = 1;
+  string message = 2;
+  bytes imageData = 3;
+}
+
+message GetRawChannelRequest {
+  int32 id = 1;
+}
+
+message DeviceResponse {
+  int32 code = 1;
+  string message = 2;
+  Device data = 3;
+}
+
+message ChannelResponse {
+  int32 code = 1;
+  string message = 2;
+  Channel data = 3;
+}
