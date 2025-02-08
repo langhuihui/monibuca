@@ -5,7 +5,7 @@ import (
 	"io"
 )
 
-// aligned(8) class SampleToChunkBox extends FullBox(‘stsc’, version = 0, 0) {
+// aligned(8) class SampleToChunkBox extends FullBox('stsc', version = 0, 0) {
 //     unsigned int(32) entry_count;
 //     for (i=1; i <= entry_count; i++) {
 //         unsigned int(32) first_chunk;
@@ -14,59 +14,61 @@ import (
 //     }
 // }
 
-type SampleToChunkBox []STSCEntry
-
-func NewSampleToChunkBox() *SampleToChunkBox {
-	return &SampleToChunkBox{}
+type STSCBox struct {
+	FullBox
+	Entries []STSCEntry
 }
 
-func (stsc SampleToChunkBox) Size() uint64 {
-	return FullBoxLen + 4 + 12*uint64(len(stsc))
+func CreateSTSCBox(entries []STSCEntry) *STSCBox {
+	return &STSCBox{
+		FullBox: FullBox{
+			BaseBox: BaseBox{
+				typ:  TypeSTSC,
+				size: uint32(FullBoxLen + 4 + len(entries)*12),
+			},
+			Version: 0,
+			Flags:   [3]byte{0, 0, 0},
+		},
+		Entries: entries,
+	}
 }
 
-func (stsc *SampleToChunkBox) Decode(r io.Reader) (offset int, err error) {
-	var fullbox FullBox
-	if _, err = fullbox.Decode(r); err != nil {
-		return
+func (box *STSCBox) WriteTo(w io.Writer) (n int64, err error) {
+	buf := make([]byte, 4+len(box.Entries)*12)
+	// Write entry count
+	binary.BigEndian.PutUint32(buf[:4], uint32(len(box.Entries)))
+
+	// Write entries
+	for i, entry := range box.Entries {
+		binary.BigEndian.PutUint32(buf[4+i*12:], entry.FirstChunk)
+		binary.BigEndian.PutUint32(buf[4+i*12+4:], entry.SamplesPerChunk)
+		binary.BigEndian.PutUint32(buf[4+i*12+8:], entry.SampleDescriptionIndex)
 	}
-	tmp := make([]byte, 4)
-	if _, err = io.ReadFull(r, tmp); err != nil {
-		return
-	}
-	l := binary.BigEndian.Uint32(tmp)
-	*stsc = make([]STSCEntry, l)
-	buf := make([]byte, l*12)
-	if _, err = io.ReadFull(r, buf); err != nil {
-		return
-	}
-	offset = 8
-	idx := 0
-	for i := 0; i < int(l); i++ {
-		entry := &(*stsc)[i]
-		entry.FirstChunk = binary.BigEndian.Uint32(buf[idx:])
-		idx += 4
-		entry.SamplesPerChunk = binary.BigEndian.Uint32(buf[idx:])
-		idx += 4
-		entry.SampleDescriptionIndex = binary.BigEndian.Uint32(buf[idx:])
-		idx += 4
-	}
-	offset += idx
-	return
+
+	_, err = w.Write(buf)
+	return int64(len(buf)), err
 }
 
-func (stsc SampleToChunkBox) Encode() (int, []byte) {
-	fullbox := NewFullBox(TypeSTSC, 0)
-	fullbox.Box.Size = stsc.Size()
-	offset, buf := fullbox.Encode()
-	binary.BigEndian.PutUint32(buf[offset:], uint32(len(stsc)))
-	offset += 4
-	for _, entry := range stsc {
-		binary.BigEndian.PutUint32(buf[offset:], entry.FirstChunk)
-		offset += 4
-		binary.BigEndian.PutUint32(buf[offset:], entry.SamplesPerChunk)
-		offset += 4
-		binary.BigEndian.PutUint32(buf[offset:], entry.SampleDescriptionIndex)
-		offset += 4
+func (box *STSCBox) Unmarshal(buf []byte) (IBox, error) {
+	entryCount := binary.BigEndian.Uint32(buf[:4])
+	box.Entries = make([]STSCEntry, entryCount)
+
+	if len(buf) < 4+int(entryCount)*12 {
+		return nil, io.ErrShortBuffer
 	}
-	return offset, buf
+
+	idx := 4
+	for i := 0; i < int(entryCount); i++ {
+		box.Entries[i].FirstChunk = binary.BigEndian.Uint32(buf[idx:])
+		idx += 4
+		box.Entries[i].SamplesPerChunk = binary.BigEndian.Uint32(buf[idx:])
+		idx += 4
+		box.Entries[i].SampleDescriptionIndex = binary.BigEndian.Uint32(buf[idx:])
+		idx += 4
+	}
+	return box, nil
+}
+
+func init() {
+	RegisterBox[*STSCBox](TypeSTSC)
 }

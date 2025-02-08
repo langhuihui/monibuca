@@ -5,35 +5,43 @@ import (
 	"io"
 )
 
-// aligned(8) class MovieFragmentRandomAccessOffsetBox extends FullBox(‘mfro’, version, 0) {
+// aligned(8) class MovieFragmentRandomAccessOffsetBox extends FullBox('mfro', version, 0) {
 // 	unsigned int(32)  size;
 // }
 
-type MovieFragmentRandomAccessOffsetBox uint32
+type MovieFragmentRandomAccessOffsetBox struct {
+	FullBox
+	MfraSize uint32
+}
 
-func (mfro *MovieFragmentRandomAccessOffsetBox) Decode(r io.Reader) (offset int, err error) {
-	var fullbox FullBox
-	if offset, err = fullbox.Decode(r); err != nil {
-		return
+func CreateMfroBox(mfraSize uint32) *MovieFragmentRandomAccessOffsetBox {
+	return &MovieFragmentRandomAccessOffsetBox{
+		FullBox: FullBox{
+			BaseBox: BaseBox{
+				typ:  TypeMFRO,
+				size: uint32(FullBoxLen + 4),
+			},
+		},
+		MfraSize: mfraSize,
 	}
-	buf := make([]byte, 4)
-	if _, err = io.ReadFull(r, buf); err != nil {
+}
+
+func (box *MovieFragmentRandomAccessOffsetBox) WriteTo(w io.Writer) (n int64, err error) {
+	var tmp [4]byte
+	binary.BigEndian.PutUint32(tmp[:], box.MfraSize)
+	var nn int
+	nn, err = w.Write(tmp[:])
+	if err != nil {
 		return 0, err
 	}
-	*mfro = MovieFragmentRandomAccessOffsetBox(binary.BigEndian.Uint32(buf))
-	return offset + 4, nil
+	return int64(nn), nil
 }
 
-func (mfro *MovieFragmentRandomAccessOffsetBox) Encode() (int, []byte) {
-	fullbox := NewFullBox(TypeMFRO, 0)
-	fullbox.Box.Size = FullBoxLen + 4
-	offset, boxdata := fullbox.Encode()
-	binary.BigEndian.PutUint32(boxdata[offset:], uint32(*mfro))
-	return offset + 4, boxdata
+func (box *MovieFragmentRandomAccessOffsetBox) Unmarshal(buf []byte) (IBox, error) {
+	box.MfraSize = binary.BigEndian.Uint32(buf)
+	return box, nil
 }
 
-func MakeMfroBox(mfraSize uint32) []byte {
-	mfro := MovieFragmentRandomAccessOffsetBox(mfraSize + 16)
-	_, boxData := mfro.Encode()
-	return boxData
+func init() {
+	RegisterBox[*MovieFragmentRandomAccessOffsetBox](TypeMFRO)
 }

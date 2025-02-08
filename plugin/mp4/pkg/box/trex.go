@@ -5,7 +5,7 @@ import (
 	"io"
 )
 
-// aligned(8) class TrackExtendsBox extends FullBox(‘trex’, 0, 0){
+// aligned(8) class TrackExtendsBox extends FullBox('trex', 0, 0){
 // 	unsigned int(32) track_ID;
 // 	unsigned int(32) default_sample_description_index;
 // 	unsigned int(32) default_sample_duration;
@@ -14,7 +14,7 @@ import (
 // }
 
 type TrackExtendsBox struct {
-	Box                           *FullBox
+	FullBox
 	TrackID                       uint32
 	DefaultSampleDescriptionIndex uint32
 	DefaultSampleDuration         uint32
@@ -22,52 +22,45 @@ type TrackExtendsBox struct {
 	DefaultSampleFlags            uint32
 }
 
-func NewTrackExtendsBox(track uint32) *TrackExtendsBox {
+func CreateTrackExtendsBox(trackID uint32) *TrackExtendsBox {
 	return &TrackExtendsBox{
-		Box:     NewFullBox(TypeTREX, 0),
-		TrackID: track,
+		FullBox: FullBox{
+			BaseBox: BaseBox{
+				typ:  TypeTREX,
+				size: uint32(FullBoxLen + 20),
+			},
+		},
+		TrackID: trackID,
 	}
 }
 
-func (trex *TrackExtendsBox) Size() uint64 {
-	return trex.Box.Size() + 20
+func (box *TrackExtendsBox) WriteTo(w io.Writer) (n int64, err error) {
+	var tmp [20]byte
+	binary.BigEndian.PutUint32(tmp[0:], box.TrackID)
+	binary.BigEndian.PutUint32(tmp[4:], box.DefaultSampleDescriptionIndex)
+	binary.BigEndian.PutUint32(tmp[8:], box.DefaultSampleDuration)
+	binary.BigEndian.PutUint32(tmp[12:], box.DefaultSampleSize)
+	binary.BigEndian.PutUint32(tmp[16:], box.DefaultSampleFlags)
+
+	nn, err := w.Write(tmp[:])
+	n = int64(nn)
+	return
 }
 
-func (trex *TrackExtendsBox) Decode(r io.Reader) (offset int, err error) {
-	if offset, err = trex.Box.Decode(r); err != nil {
-		return 0, err
+func (box *TrackExtendsBox) Unmarshal(buf []byte) (IBox, error) {
+	if len(buf) < 20 {
+		return nil, io.ErrShortBuffer
 	}
 
-	buf := make([]byte, 20)
-	if _, err := io.ReadFull(r, buf); err != nil {
-		return 0, err
-	}
-	n := 0
-	trex.TrackID = binary.BigEndian.Uint32(buf[n:])
-	n += 4
-	trex.DefaultSampleDescriptionIndex = binary.BigEndian.Uint32(buf[n:])
-	n += 4
-	trex.DefaultSampleDuration = binary.BigEndian.Uint32(buf[n:])
-	n += 4
-	trex.DefaultSampleSize = binary.BigEndian.Uint32(buf[n:])
-	n += 4
-	trex.DefaultSampleFlags = binary.BigEndian.Uint32(buf[n:])
-	n += 4
-	return offset + 20, nil
+	box.TrackID = binary.BigEndian.Uint32(buf[0:])
+	box.DefaultSampleDescriptionIndex = binary.BigEndian.Uint32(buf[4:])
+	box.DefaultSampleDuration = binary.BigEndian.Uint32(buf[8:])
+	box.DefaultSampleSize = binary.BigEndian.Uint32(buf[12:])
+	box.DefaultSampleFlags = binary.BigEndian.Uint32(buf[16:])
+
+	return box, nil
 }
 
-func (trex *TrackExtendsBox) Encode() (int, []byte) {
-	trex.Box.Box.Size = trex.Size()
-	offset, buf := trex.Box.Encode()
-	binary.BigEndian.PutUint32(buf[offset:], trex.TrackID)
-	offset += 4
-	binary.BigEndian.PutUint32(buf[offset:], trex.DefaultSampleDescriptionIndex)
-	offset += 4
-	binary.BigEndian.PutUint32(buf[offset:], trex.DefaultSampleDuration)
-	offset += 4
-	binary.BigEndian.PutUint32(buf[offset:], trex.DefaultSampleSize)
-	offset += 4
-	binary.BigEndian.PutUint32(buf[offset:], trex.DefaultSampleFlags)
-	offset += 4
-	return offset, buf
+func init() {
+	RegisterBox[*TrackExtendsBox](TypeTREX)
 }

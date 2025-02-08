@@ -5,7 +5,7 @@ import (
 	"io"
 )
 
-// aligned(8) class TimeToSampleBox extends FullBox(’stts’, version = 0, 0) {
+// aligned(8) class TimeToSampleBox extends FullBox('stts', version = 0, 0) {
 //     unsigned int(32) entry_count;
 //     int i;
 //     for (i=0; i < entry_count; i++) {
@@ -14,50 +14,60 @@ import (
 //     }
 // }
 
-type TimeToSampleBox []STTSEntry
-
-func (stts TimeToSampleBox) Size() uint64 {
-	return FullBoxLen + 4 + 8*uint64(len(stts))
+type STTSBox struct {
+	FullBox
+	Entries []STTSEntry
 }
 
-func (stts *TimeToSampleBox) Decode(r io.Reader) (offset int, err error) {
-	var fullbox FullBox
-	if _, err = fullbox.Decode(r); err != nil {
-		return
+func CreateSTTSBox(entries []STTSEntry) *STTSBox {
+	return &STTSBox{
+		FullBox: FullBox{
+			BaseBox: BaseBox{
+
+				typ:  TypeSTTS,
+				size: uint32(FullBoxLen + 4 + len(entries)*8),
+			},
+			Version: 0,
+			Flags:   [3]byte{0, 0, 0},
+		},
+
+		Entries: entries,
 	}
-	entryCountBuf := make([]byte, 4)
-	if _, err = io.ReadFull(r, entryCountBuf); err != nil {
-		return
-	}
-	offset = 8
-	l := binary.BigEndian.Uint32(entryCountBuf)
-	*stts = make([]STTSEntry, l)
-	buf := make([]byte, l*8)
-	if _, err = io.ReadFull(r, buf); err != nil {
-		return
-	}
-	idx := 0
-	for i := 0; i < int(l); i++ {
-		(*stts)[i].SampleCount = binary.BigEndian.Uint32(buf[idx:])
-		idx += 4
-		(*stts)[i].SampleDelta = binary.BigEndian.Uint32(buf[idx:])
-		idx += 4
-	}
-	offset += idx
-	return
 }
 
-func (stts TimeToSampleBox) Encode() (int, []byte) {
-	fullbox := NewFullBox(TypeSTTS, 0)
-	fullbox.Box.Size = stts.Size()
-	offset, buf := fullbox.Encode()
-	binary.BigEndian.PutUint32(buf[offset:], uint32(len(stts)))
-	offset += 4
-	for _, entry := range stts {
-		binary.BigEndian.PutUint32(buf[offset:], entry.SampleCount)
-		offset += 4
-		binary.BigEndian.PutUint32(buf[offset:], entry.SampleDelta)
-		offset += 4
+func (box *STTSBox) WriteTo(w io.Writer) (n int64, err error) {
+	buf := make([]byte, 4+len(box.Entries)*8)
+	// Write entry count
+	binary.BigEndian.PutUint32(buf[:4], uint32(len(box.Entries)))
+
+	// Write entries
+	for i, entry := range box.Entries {
+		binary.BigEndian.PutUint32(buf[4+i*8:], entry.SampleCount)
+		binary.BigEndian.PutUint32(buf[4+i*8+4:], entry.SampleDelta)
 	}
-	return offset, buf
+
+	_, err = w.Write(buf)
+	return int64(len(buf)), err
+}
+
+func (box *STTSBox) Unmarshal(buf []byte) (IBox, error) {
+	entryCount := binary.BigEndian.Uint32(buf[:4])
+	box.Entries = make([]STTSEntry, entryCount)
+
+	if len(buf) < 4+int(entryCount)*8 {
+		return nil, io.ErrShortBuffer
+	}
+
+	idx := 4
+	for i := 0; i < int(entryCount); i++ {
+		box.Entries[i].SampleCount = binary.BigEndian.Uint32(buf[idx:])
+		idx += 4
+		box.Entries[i].SampleDelta = binary.BigEndian.Uint32(buf[idx:])
+		idx += 4
+	}
+	return box, nil
+}
+
+func init() {
+	RegisterBox[*STTSBox](TypeSTTS)
 }

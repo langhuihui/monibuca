@@ -3,9 +3,11 @@ package mp4
 import (
 	"encoding/binary"
 	"io"
+	"net"
 	"os"
 
 	"m7s.live/v5/pkg"
+	"m7s.live/v5/plugin/mp4/pkg/box"
 	. "m7s.live/v5/plugin/mp4/pkg/box"
 )
 
@@ -26,7 +28,7 @@ type (
 		Tracks         map[uint32]*Track
 		Flag
 		fragDuration uint32
-		moov         *BasicBox
+		moov         IBox
 		mdatOffset   uint64
 		mdatSize     uint64
 	}
@@ -55,46 +57,35 @@ func NewMuxer(flag Flag) *Muxer {
 }
 
 func (m *Muxer) WriteInitSegment(w io.Writer) (err error) {
-	var n int
-	var ftypBox []byte
+	var ftypBox *FileTypeBox
 	if m.isFragment() {
 		// 对于 FMP4,使用 iso5 作为主品牌,兼容 iso5, iso6, mp41
-		ftypBox = MakeFtypBox(TypeISO5, 0x200, TypeISO5, TypeISO6, TypeMP41)
+		ftypBox = CreateFTYPBox(TypeISO5, 0x200, TypeISO5, TypeISO6, TypeMP41)
 	} else {
 		// 对于普通 MP4,使用 isom 作为主品牌
-		ftypBox = MakeFtypBox(TypeISOM, 0x200, TypeISOM, TypeISO2, TypeAVC1, TypeMP41)
+		ftypBox = CreateFTYPBox(TypeISOM, 0x200, TypeISOM, TypeISO2, TypeAVC1, TypeMP41)
 	}
-	n, err = w.Write(ftypBox)
+	m.CurrentOffset, err = box.WriteTo(w, ftypBox)
 	if err != nil {
 		return
 	}
-	m.CurrentOffset = int64(n)
 	if !m.isFragment() {
-		n, err = w.Write((new(FreeBox)).Encode())
+		var n int64
+		freeBox := CreateFreeBox(nil)
+		n, err = box.WriteTo(w, freeBox)
 		if err != nil {
 			return
 		}
-		m.CurrentOffset += int64(n)
-		err = m.WriteEmptyMdat(w)
+		m.CurrentOffset += n
+		mdat := CreateDataBox(TypeMDAT, nil)
+		n, err = box.WriteTo(w, mdat)
 		if err != nil {
 			return
 		}
+		m.mdatOffset = uint64(m.CurrentOffset + 8)
+		m.mdatSize = 0
+		m.CurrentOffset += n
 	}
-	return
-}
-
-func (m *Muxer) WriteEmptyMdat(w io.Writer) (err error) {
-	// Write mdat box header with initial size
-	mdat := MediaDataBox(0)
-	mdatlen, mdatBox := mdat.Encode()
-	m.mdatOffset = uint64(m.CurrentOffset + 8)
-	m.mdatSize = 0
-	var n int
-	n, err = w.Write(mdatBox[0:mdatlen])
-	if err != nil {
-		return
-	}
-	m.CurrentOffset += int64(n)
 	return
 }
 
@@ -144,11 +135,12 @@ func (m *Muxer) WriteSample(w io.Writer, t *Track, sample Sample) (err error) {
 func (m *Muxer) reWriteMdatSize(w io.WriteSeeker) (err error) {
 	m.mdatSize = uint64(m.CurrentOffset) - (m.mdatOffset)
 	if m.mdatSize+BasicBoxLen > 0xFFFFFFFF {
-		_, mdatBox := MediaDataBox(m.mdatSize).Encode()
+		mdat := CreateBaseBox(TypeMDAT, m.mdatSize+BasicBoxLen)
+		// 覆盖FreeBox
 		if _, err = w.Seek(int64(m.mdatOffset-16), io.SeekStart); err != nil {
 			return
 		}
-		if _, err = w.Write(mdatBox); err != nil {
+		if _, err = box.WriteTo(w, mdat); err != nil {
 			return
 		}
 		if _, err = w.Seek(m.CurrentOffset, io.SeekStart); err != nil {
@@ -184,7 +176,7 @@ func (m *Muxer) ReWriteWithMoov(f io.WriteSeeker, r io.Reader) (err error) {
 	}
 	for _, track := range m.Tracks {
 		for i := range len(track.Samplelist) {
-			track.Samplelist[i].Offset += int64(m.moov.Size)
+			track.Samplelist[i].Offset += int64(m.moov.Size())
 		}
 	}
 	err = m.WriteMoov(f)
@@ -195,33 +187,28 @@ func (m *Muxer) ReWriteWithMoov(f io.WriteSeeker, r io.Reader) (err error) {
 	return
 }
 
-func (m *Muxer) makeMvex() []byte {
-	mvex := BasicBox{Type: TypeMVEX}
-	trexs := make([]byte, 0, 64)
+func (m *Muxer) makeMvex() *box.MovieExtendsBox {
+	trexs := make([]*box.TrackExtendsBox, 0, m.nextTrackId-1)
 	for i := uint32(1); i < m.nextTrackId; i++ {
 		if track := m.Tracks[i]; track != nil {
-			trex := NewTrackExtendsBox(track.TrackId)
+
+			trex := box.CreateTrackExtendsBox(track.TrackId)
 			trex.DefaultSampleDescriptionIndex = 1
-			trex.DefaultSampleDuration = 0
-			trex.DefaultSampleSize = 0
 			if track.Cid.IsVideo() {
 				trex.DefaultSampleFlags = 0x00010000 // NonSyncSampleFlags in mp4ff
 			} else {
 				trex.DefaultSampleFlags = 0x02000000 // SyncSampleFlags in mp4ff
 			}
-			_, boxData := trex.Encode()
-			trexs = append(trexs, boxData...)
+			trexs = append(trexs, trex)
 		}
 	}
-	mvex.Size = 8 + uint64(len(trexs))
-	offset, mvexBox := mvex.Encode()
-	copy(mvexBox[offset:], trexs)
-	return mvexBox
+	return box.CreateMovieExtendsBox(trexs)
 }
 
-func (m *Muxer) makeTrak(track *Track) []byte {
-	edts := []byte{}
+func (m *Muxer) makeTrak(track *Track) *ContainerBox {
+	var edts *ContainerBox
 	if m.isDash() || m.isFragment() {
+
 		// track.makeEmptyStblTable()
 	} else {
 		if len(track.Samplelist) > 0 {
@@ -229,73 +216,45 @@ func (m *Muxer) makeTrak(track *Track) []byte {
 			edts = track.makeEdtsBox()
 		}
 	}
-
 	tkhd := track.makeTkhdBox()
 	mdia := track.makeMdiaBox()
-
-	trak := BasicBox{Type: TypeTRAK}
-	trak.Size = 8 + uint64(len(tkhd)+len(edts)+len(mdia))
-	offset, trakBox := trak.Encode()
-	copy(trakBox[offset:], tkhd)
-	offset += len(tkhd)
-	copy(trakBox[offset:], edts)
-	offset += len(edts)
-	copy(trakBox[offset:], mdia)
-	return trakBox
+	return CreateContainerBox(TypeTRAK, tkhd, mdia, edts)
 }
 
 func (m *Muxer) GetMoovSize() int {
-	moovsize := FullBoxLen + 96
+	moovsize := uint64(FullBoxLen + 96)
 	if m.isDash() || m.isFragment() {
 		moovsize += 64
 	}
-	traks := make([][]byte, len(m.Tracks))
-	for i := uint32(1); i < m.nextTrackId; i++ {
-		traks[i-1] = m.makeTrak(m.Tracks[i])
-		moovsize += len(traks[i-1])
+	for _, track := range m.Tracks {
+		moovsize += uint64(m.makeTrak(track).Size())
 	}
-	return int(8 + uint64(moovsize))
+	return int(8 + moovsize)
 }
 
 func (m *Muxer) WriteMoov(w io.Writer) (err error) {
-	var mvhd []byte
-	var mvex []byte
-	if m.isDash() || m.isFragment() {
-		mvhd = MakeMvhdBox(m.nextTrackId, 0)
-		mvex = m.makeMvex()
-	} else {
-		maxdurtaion := uint32(0)
-		for _, track := range m.Tracks {
-			if maxdurtaion < track.Duration {
-				maxdurtaion = track.Duration
-			}
+	var mvhd *box.MovieHeaderBox
+	var mvex *box.MovieExtendsBox
+	var children []IBox
+	maxdurtaion := uint32(0)
+	for _, track := range m.Tracks {
+		children = append(children, m.makeTrak(track))
+		if maxdurtaion < track.Duration {
+			maxdurtaion = track.Duration
 		}
-		mvhd = MakeMvhdBox(m.nextTrackId, maxdurtaion)
 	}
-	moovsize := len(mvhd) + len(mvex)
-	traks := make([][]byte, len(m.Tracks))
-	for i := uint32(1); i < m.nextTrackId; i++ {
-		traks[i-1] = m.makeTrak(m.Tracks[i])
-		moovsize += len(traks[i-1])
+	if m.isDash() || m.isFragment() {
+		mvhd = box.CreateMovieHeaderBox(m.nextTrackId, 0)
+		mvex = m.makeMvex()
+		children = append(children, mvex)
+	} else {
+		mvhd = box.CreateMovieHeaderBox(m.nextTrackId, maxdurtaion)
 	}
-
-	moov := BasicBox{Type: TypeMOOV}
-	moov.Size = 8 + uint64(moovsize)
-	offset, moovBox := moov.Encode()
-	copy(moovBox[offset:], mvhd)
-	offset += len(mvhd)
-	for _, trak := range traks {
-		copy(moovBox[offset:], trak)
-		offset += len(trak)
-	}
-	if mvex != nil {
-		copy(moovBox[offset:], mvex)
-	}
-
-	// Write moov box
-	_, err = w.Write(moovBox)
-	m.moov = &moov
-	m.CurrentOffset += int64(moov.Size)
+	children = append(children, mvhd)
+	m.moov = box.CreateContainerBox(TypeMOOV, children...)
+	var n int64
+	n, err = box.WriteTo(w, m.moov)
+	m.CurrentOffset += n
 	return
 }
 
@@ -305,37 +264,27 @@ func (m *Muxer) WriteTrailer(file *os.File) (err error) {
 		if err = m.flushFragment(file); err != nil {
 			return err
 		}
-
+		var mfraChildren []box.IBox
+		var mfraSize uint32 = 0
 		// Write mfra box
-		mfraSize := 0
-		tfras := make([][]byte, len(m.Tracks))
+		tfras := make([]*box.TrackFragmentRandomAccessBox, len(m.Tracks))
 		for i := uint32(1); i < m.nextTrackId; i++ {
 			if track := m.Tracks[i]; track != nil && len(track.fragments) > 0 {
 				tfras[i-1] = track.makeTfraBox()
-				mfraSize += len(tfras[i-1])
+				mfraChildren = append(mfraChildren, tfras[i-1])
+				mfraSize += uint32(tfras[i-1].Size())
 			}
 		}
 
 		// Only write mfra if we have fragments
 		if mfraSize > 0 {
-			mfro := MakeMfroBox(uint32(mfraSize) + 16)
-			mfraSize += len(mfro)
-			mfra := BasicBox{Type: TypeMFRA}
-			mfra.Size = 8 + uint64(mfraSize)
-			offset, mfraBox := mfra.Encode()
-			for _, tfra := range tfras {
-				if tfra == nil {
-					continue
-				}
-				copy(mfraBox[offset:], tfra)
-				offset += len(tfra)
-			}
-			copy(mfraBox[offset:], mfro)
-			if _, err = file.Write(mfraBox); err != nil {
+			mfraChildren = append(mfraChildren, box.CreateMfroBox(uint32(mfraSize)+16))
+			mfra := box.CreateContainerBox(TypeMFRA, mfraChildren...)
+			_, err = box.WriteTo(file, mfra)
+			if err != nil {
 				return err
 			}
 		}
-
 		// Clean up any remaining buffers
 		for i := uint32(1); i < m.nextTrackId; i++ {
 			if track := m.Tracks[i]; track != nil && track.writer != nil {
@@ -383,59 +332,32 @@ func (m *Muxer) flushFragment(w io.Writer) (err error) {
 	}
 
 	// Write moof box
-	mfhd := MakeMfhdBox(m.nextFragmentId)
-	trafs := make([][]byte, len(m.Tracks))
-	moofSize := len(mfhd)
-	trunOffsets := make([]int, len(m.Tracks)) // track index -> trun data_offset position in moof box
-	var boxOffset int = 8 + len(mfhd)         // 8 for moof header
+	mfhdBox := box.CreateMovieFragmentHeaderBox(m.nextFragmentId)
+	trafs := make([]*box.TrackFragmentBox, len(m.Tracks))
+	moofChildren := make([]box.IBox, 0, len(m.Tracks)+1)
+	moofChildren = append(moofChildren, mfhdBox)
 	for i := uint32(1); i < m.nextTrackId; i++ {
 		if len(m.Tracks[i].Samplelist) == 0 {
 			continue
 		}
 		track := m.Tracks[i]
 		// 传递 moof 偏移和 mdat 大小
-		traf := track.makeTraf(&trunOffsets[int(i-1)]) // +8 for moof box header
+		traf := track.makeTraf() // +8 for moof box header
 		// Record trun data_offset position: current offset + 16 (after trun header)
 		trafs[i-1] = traf
-		trunOffsets[int(i-1)] += boxOffset
-		boxOffset += len(traf)
-		moofSize += len(traf)
+		moofChildren = append(moofChildren, traf)
 	}
 
-	// Write moof box
-	moof := BasicBox{Type: TypeMOOF}
-	moof.Size = uint64(moofSize + 8) // Add 8 for moof box header
-	offset, moofBox := moof.Encode()
-	copy(moofBox[offset:], mfhd)
-	offset += len(mfhd)
-	for i, traf := range trafs {
-		if traf == nil {
-			continue
-		}
-		copy(moofBox[offset:], traf)
-		// Update trun data_offset
-		binary.BigEndian.PutUint32(moofBox[trunOffsets[i]:trunOffsets[i]+4], uint32(moof.Size)+8) // +8 for mdat header
-		offset += len(traf)
-	}
+	moof := CreateContainerBox(TypeMOOF, moofChildren...)
 
-	if _, err = w.Write(moofBox); err != nil {
-		return err
-	}
-
-	// Write mdat box
-	mdat := BasicBox{Type: TypeMDAT}
-	mdat.Size = mdatSize
-	offset, mdatBox := mdat.Encode()
-	if _, err = w.Write(mdatBox[:offset]); err != nil {
-		return err
-	}
-
+	sampleData := make(net.Buffers, len(m.Tracks))
 	// Write sample data
 	var sampleOffset int64 = 0
 	for i := uint32(1); i < m.nextTrackId; i++ {
 		if len(m.Tracks[i].Samplelist) == 0 {
 			continue
 		}
+
 		track := m.Tracks[i]
 		ws := track.writer.(*Fmp4WriterSeeker)
 
@@ -445,9 +367,7 @@ func (m *Muxer) flushFragment(w io.Writer) (err error) {
 			sampleOffset += int64(track.Samplelist[j].Size)
 		}
 
-		if _, err = w.Write(ws.Buffer); err != nil {
-			return err
-		}
+		sampleData[i-1] = ws.Buffer
 
 		// Record fragment info
 		if len(track.Samplelist) > 0 {
@@ -472,7 +392,30 @@ func (m *Muxer) flushFragment(w io.Writer) (err error) {
 		track.Samplelist = track.Samplelist[:0]
 		track.Duration = 0
 	}
-	m.CurrentOffset += int64(moof.Size) + int64(mdatSize)
+
+	// Write mdat box
+	mdat := CreateBaseBox(TypeMDAT, uint64(sampleOffset)+BasicBoxLen)
+
+	for _, traf := range trafs {
+		traf.TRUN.DataOffset = int32(moof.Size()) + int32(mdat.HeaderSize())
+	}
+
+	var n int64
+	n, err = box.WriteTo(w, moof)
+	if err != nil {
+		return err
+	}
+	m.CurrentOffset += n
+	n, err = mdat.HeaderWriteTo(w)
+	if err != nil {
+		return err
+	}
+	m.CurrentOffset += n
+	n, err = sampleData.WriteTo(w)
+	if err != nil {
+		return err
+	}
+	m.CurrentOffset += n
 	m.nextFragmentId++
 	return nil
 }

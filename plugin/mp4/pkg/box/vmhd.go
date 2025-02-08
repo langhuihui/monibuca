@@ -5,65 +5,61 @@ import (
 	"io"
 )
 
-// Box Types: ‘vmhd’, ‘smhd’, ’hmhd’, ‘nmhd’
-// Container: Media Information Box (‘minf’)
+// Box Types: 'vmhd', 'smhd', 'hmhd', 'nmhd'
+// Container: Media Information Box ('minf')
 // Mandatory: Yes
 // Quantity: Exactly one specific media header shall be present
 
 // aligned(8) class VideoMediaHeaderBox
-// extends FullBox(‘vmhd’, version = 0, 1) {
+// extends FullBox('vmhd', version = 0, 1) {
 // template unsigned int(16) graphicsmode = 0; // copy, see below template
 // unsigned int(16)[3] opcolor = {0, 0, 0};
 // }
 
 type VideoMediaHeaderBox struct {
+	FullBox
 	Graphicsmode uint16
 	Opcolor      [3]uint16
 }
 
-func NewVideoMediaHeaderBox() *VideoMediaHeaderBox {
+func CreateVideoMediaHeaderBox() *VideoMediaHeaderBox {
 	return &VideoMediaHeaderBox{
+		FullBox: FullBox{
+			BaseBox: BaseBox{
+				typ:  TypeVMHD,
+				size: uint32(FullBoxLen + 8),
+			},
+			Version: 0,
+			Flags:   [3]byte{0, 0, 1}, // Flags = 1
+		},
 		Graphicsmode: 0,
 		Opcolor:      [3]uint16{0, 0, 0},
 	}
 }
 
-func (vmhd *VideoMediaHeaderBox) Decode(r io.Reader) (offset int, err error) {
-	var fullbox FullBox
-	if _, err = fullbox.Decode(r); err != nil {
-		return 0, err
-	}
-	buf := make([]byte, 8)
-	if _, err = io.ReadFull(r, buf); err != nil {
-		return 0, err
-	}
-	offset = 0
-	vmhd.Graphicsmode = binary.BigEndian.Uint16(buf[offset:])
-	vmhd.Opcolor[0] = binary.BigEndian.Uint16(buf[offset+2:])
-	vmhd.Opcolor[1] = binary.BigEndian.Uint16(buf[offset+4:])
-	vmhd.Opcolor[2] = binary.BigEndian.Uint16(buf[offset+6:])
-	offset += 8
+func (box *VideoMediaHeaderBox) WriteTo(w io.Writer) (n int64, err error) {
+	var tmp [8]byte
+	binary.BigEndian.PutUint16(tmp[0:], box.Graphicsmode)
+	binary.BigEndian.PutUint16(tmp[2:], box.Opcolor[0])
+	binary.BigEndian.PutUint16(tmp[4:], box.Opcolor[1])
+	binary.BigEndian.PutUint16(tmp[6:], box.Opcolor[2])
+
+	nn, err := w.Write(tmp[:])
+	n = int64(nn)
 	return
 }
 
-func (vmhd *VideoMediaHeaderBox) Encode() (int, []byte) {
-	fullbox := NewFullBox(TypeVMHD, 0)
-	fullbox.Box.Size = FullBoxLen + 8
-	fullbox.Flags[2] = 1
-	offset, buf := fullbox.Encode()
-	binary.BigEndian.PutUint16(buf[offset:], vmhd.Graphicsmode)
-	offset += 2
-	binary.BigEndian.PutUint16(buf[offset:], vmhd.Opcolor[0])
-	offset += 2
-	binary.BigEndian.PutUint16(buf[offset:], vmhd.Opcolor[1])
-	offset += 2
-	binary.BigEndian.PutUint16(buf[offset:], vmhd.Opcolor[2])
-	offset += 2
-	return offset, buf
+func (box *VideoMediaHeaderBox) Unmarshal(buf []byte) (IBox, error) {
+	if len(buf) < 8 {
+		return nil, io.ErrShortBuffer
+	}
+	box.Graphicsmode = binary.BigEndian.Uint16(buf[0:])
+	box.Opcolor[0] = binary.BigEndian.Uint16(buf[2:])
+	box.Opcolor[1] = binary.BigEndian.Uint16(buf[4:])
+	box.Opcolor[2] = binary.BigEndian.Uint16(buf[6:])
+	return box, nil
 }
 
-func MakeVmhdBox() []byte {
-	vmhd := NewVideoMediaHeaderBox()
-	_, vmhdbox := vmhd.Encode()
-	return vmhdbox
+func init() {
+	RegisterBox[*VideoMediaHeaderBox](TypeVMHD)
 }

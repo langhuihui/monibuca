@@ -6,42 +6,48 @@ import (
 )
 
 // aligned(8) class SoundMediaHeaderBox
-//    extends FullBox(‘smhd’, version = 0, 0) {
+//    extends FullBox('smhd', version = 0, 0) {
 //    template int(16) balance = 0;
 //    const unsigned int(16)  reserved = 0;
 // }
 
 type SoundMediaHeaderBox struct {
+	FullBox
 	Balance int16
 }
 
-func NewSoundMediaHeaderBox() *SoundMediaHeaderBox {
-	return &SoundMediaHeaderBox{}
-}
-
-func (smhd *SoundMediaHeaderBox) Decode(r io.Reader) (offset int, err error) {
-	var fullbox FullBox
-	if offset, err = fullbox.Decode(r); err != nil {
-		return 0, err
+func CreateSoundMediaHeaderBox() *SoundMediaHeaderBox {
+	return &SoundMediaHeaderBox{
+		FullBox: FullBox{
+			BaseBox: BaseBox{
+				typ:  TypeSMHD,
+				size: uint32(FullBoxLen + 4),
+			},
+			Version: 0,
+			Flags:   [3]byte{0, 0, 0},
+		},
+		Balance: 0,
 	}
-	buf := make([]byte, 4)
-	if _, err = io.ReadFull(r, buf); err != nil {
-		return
+}
+
+func (box *SoundMediaHeaderBox) WriteTo(w io.Writer) (n int64, err error) {
+	var tmp [4]byte
+	binary.BigEndian.PutUint16(tmp[0:], uint16(box.Balance))
+	// reserved already zeroed
+
+	nn, err := w.Write(tmp[:])
+	n = int64(nn)
+	return
+}
+
+func (box *SoundMediaHeaderBox) Unmarshal(buf []byte) (IBox, error) {
+	if len(buf) < 4 {
+		return nil, io.ErrShortBuffer
 	}
-	smhd.Balance = int16(binary.BigEndian.Uint16(buf[:]))
-	return 4, nil
+	box.Balance = int16(binary.BigEndian.Uint16(buf[0:]))
+	return box, nil
 }
 
-func (smhd *SoundMediaHeaderBox) Encode() (int, []byte) {
-	fullbox := NewFullBox(TypeSMHD, 0)
-	fullbox.Box.Size = FullBoxLen + 4
-	offset, buf := fullbox.Encode()
-	binary.BigEndian.PutUint16(buf[offset:], uint16(smhd.Balance))
-	return offset + 2, buf
-}
-
-func MakeSmhdBox() []byte {
-	smhd := NewSoundMediaHeaderBox()
-	_, smhdbox := smhd.Encode()
-	return smhdbox
+func init() {
+	RegisterBox[*SoundMediaHeaderBox](TypeSMHD)
 }

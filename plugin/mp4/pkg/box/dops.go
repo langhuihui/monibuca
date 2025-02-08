@@ -3,6 +3,7 @@ package box
 import (
 	"encoding/binary"
 	"io"
+	"net"
 
 	"github.com/yapingcat/gomedia/go-codec"
 )
@@ -31,7 +32,7 @@ type ChannelMappingTable struct {
 }
 
 type OpusSpecificBox struct {
-	Box                *BasicBox
+	BaseBox
 	Version            uint8
 	OutputChannelCount uint8
 	PreSkip            uint16
@@ -40,73 +41,15 @@ type OpusSpecificBox struct {
 	ChanMapTable       *ChannelMappingTable
 }
 
-func NewdOpsBox() *OpusSpecificBox {
-	return &OpusSpecificBox{
-		Box: NewBasicBox([4]byte{'d', 'O', 'p', 's'}),
-	}
-}
-
-func (dops *OpusSpecificBox) Size() uint64 {
-	return uint64(8 + 10 + 2 + dops.OutputChannelCount)
-}
-
-func (dops *OpusSpecificBox) Encode() (int, []byte) {
-	dops.Box.Size = dops.Size()
-	offset, buf := dops.Box.Encode()
-	buf[offset] = dops.Version
-	offset++
-	buf[offset] = dops.OutputChannelCount
-	offset++
-	binary.LittleEndian.PutUint16(buf[offset:], dops.PreSkip)
-	offset += 2
-	binary.BigEndian.PutUint32(buf[offset:], dops.InputSampleRate)
-	offset += 4
-	binary.LittleEndian.PutUint16(buf[offset:], uint16(dops.OutputGain))
-	offset += 2
-	if dops.ChanMapTable != nil {
-		buf[offset] = dops.ChanMapTable.StreamCount
-		offset++
-		buf[offset] = dops.ChanMapTable.CoupledCount
-		offset++
-		copy(buf[offset:], dops.ChanMapTable.ChannelMapping)
-		offset += len(dops.ChanMapTable.ChannelMapping)
-	}
-	return offset, buf
-}
-
-func (dops *OpusSpecificBox) Decode(r io.Reader, size uint32) (offset int, err error) {
-
-	dopsBuf := make([]byte, size-BasicBoxLen)
-	ChannelMappingFamily := 0
-	if size-BasicBoxLen-10 > 0 {
-		ChannelMappingFamily = int(size - BasicBoxLen - 10)
-	}
-
-	if _, err = io.ReadFull(r, dopsBuf); err != nil {
-		return
-	}
-
-	dops.Version = dopsBuf[0]
-	dops.OutputChannelCount = dopsBuf[1]
-	dops.PreSkip = binary.BigEndian.Uint16(dopsBuf[2:])
-	dops.InputSampleRate = binary.BigEndian.Uint32(dopsBuf[4:])
-	dops.OutputGain = int16(binary.BigEndian.Uint16(dopsBuf[8:]))
-	dops.ChanMapTable = nil
-	if ChannelMappingFamily > 0 {
-		dops.ChanMapTable = &ChannelMappingTable{}
-		dops.ChanMapTable.StreamCount = dopsBuf[10]
-		dops.ChanMapTable.CoupledCount = dopsBuf[11]
-		dops.ChanMapTable.ChannelMapping = make([]byte, ChannelMappingFamily-2)
-		copy(dops.ChanMapTable.ChannelMapping, dopsBuf[12:])
-	}
-
-	return int(size - BasicBoxLen), nil
-}
-
-func MakeOpusSpecificBox(extraData []byte) []byte {
+func CreateOpusSpecificBox(extraData []byte) *OpusSpecificBox {
 	ctx := &codec.OpusContext{}
 	ctx.ParseExtranData(extraData)
-	dops := NewdOpsBox()
+	dops := &OpusSpecificBox{
+		BaseBox: BaseBox{
+			typ:  TypeDOPS,
+			size: 0,
+		},
+	}
 	dops.Version = 0
 	dops.OutputChannelCount = uint8(ctx.ChannelCount)
 	dops.PreSkip = uint16(ctx.Preskip)
@@ -120,6 +63,67 @@ func MakeOpusSpecificBox(extraData []byte) []byte {
 		}
 		copy(dops.ChanMapTable.ChannelMapping, ctx.Channel)
 	}
-	_, dopsbox := dops.Encode()
-	return dopsbox
+
+	// Calculate final size
+	dops.size = uint32(BasicBoxLen + 10) // Base size
+	if dops.ChanMapTable != nil {
+		dops.size += uint32(2 + len(dops.ChanMapTable.ChannelMapping))
+	}
+	return dops
+}
+
+func (box *OpusSpecificBox) WriteTo(w io.Writer) (n int64, err error) {
+	var tmp [12]byte                   // Buffer for fixed-size fields
+	buffers := make(net.Buffers, 0, 4) // Estimate initial capacity
+
+	// Write fixed fields
+	tmp[0] = box.Version
+	tmp[1] = box.OutputChannelCount
+	binary.BigEndian.PutUint16(tmp[2:], box.PreSkip)
+	binary.BigEndian.PutUint32(tmp[4:], box.InputSampleRate)
+	binary.BigEndian.PutUint16(tmp[8:], uint16(box.OutputGain))
+
+	if box.ChanMapTable != nil {
+		tmp[10] = box.ChanMapTable.StreamCount
+		tmp[11] = box.ChanMapTable.CoupledCount
+		buffers = append(buffers, tmp[:12])
+		buffers = append(buffers, box.ChanMapTable.ChannelMapping)
+	} else {
+		buffers = append(buffers, tmp[:10])
+	}
+
+	return buffers.WriteTo(w)
+}
+
+func (box *OpusSpecificBox) Unmarshal(buf []byte) (IBox, error) {
+	if len(buf) < 10 {
+		return nil, io.ErrShortBuffer
+	}
+
+	box.Version = buf[0]
+	box.OutputChannelCount = buf[1]
+	box.PreSkip = binary.BigEndian.Uint16(buf[2:])
+	box.InputSampleRate = binary.BigEndian.Uint32(buf[4:])
+	box.OutputGain = int16(binary.BigEndian.Uint16(buf[8:]))
+
+	// Check if we have channel mapping data
+	if len(buf) > 10 {
+		if len(buf) < 12 {
+			return nil, io.ErrShortBuffer
+		}
+		box.ChanMapTable = &ChannelMappingTable{
+			StreamCount:  buf[10],
+			CoupledCount: buf[11],
+		}
+		if len(buf) > 12 {
+			box.ChanMapTable.ChannelMapping = make([]byte, len(buf)-12)
+			copy(box.ChanMapTable.ChannelMapping, buf[12:])
+		}
+	}
+
+	return box, nil
+}
+
+func init() {
+	RegisterBox[*OpusSpecificBox](TypeDOPS)
 }

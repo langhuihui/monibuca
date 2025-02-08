@@ -4,8 +4,6 @@ global:
   loglevel: debug
   admin:
     enablelogin: false
-  subscribe:
-    subaudio: false
   # db:
   #   dbtype: mysql
   #   dsn: root:Monibuca#!4@tcp(sh-cynosdbmysql-grp-kxt43lv6.sql.tencentcdb.com:28520)/lkm7s_v5?parseTime=true
@@ -32,7 +30,7 @@ mp4:
   #     ^live/.+:
   #         fragment: 10s
   #         filepath: record/$0
-  #         type: fmp4
+  #         type: mp4
   onsub:
     pull:
       ^vod_mp4_\d+/(.+)$: $1

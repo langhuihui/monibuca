@@ -5,68 +5,56 @@ import (
 	"io"
 )
 
-// aligned(8) class CompositionOffsetBox extends FullBox(‘ctts’, version = 0, 0) {
-//     unsigned int(32) entry_count;
-//     int i;
-//     if (version==0) {
-//         for (i=0; i < entry_count; i++) {
-//             unsigned int(32) sample_count;
-//             unsigned int(32) sample_offset;
-//         }
-//     }
-//     else if (version == 1) {
-//         for (i=0; i < entry_count; i++) {
-//             unsigned int(32) sample_count;
-//             signed int(32) sample_offset;
-//         }
-//     }
-// }
-
-type CompositionOffsetBox []CTTSEntry
-
-func (ctts CompositionOffsetBox) Size() uint64 {
-	return FullBoxLen + 4 + 8*uint64(len(ctts))
+type CTTSBox struct {
+	FullBox
+	Entries []CTTSEntry
 }
 
-func (ctts *CompositionOffsetBox) Decode(r io.Reader) (offset int, err error) {
-	var fullbox FullBox
-	if _, err = fullbox.Decode(r); err != nil {
-		return
+func CreateCTTSBox(entries []CTTSEntry) *CTTSBox {
+	return &CTTSBox{
+		FullBox: FullBox{
+			BaseBox: BaseBox{
+				typ:  TypeCTTS,
+				size: uint32(FullBoxLen + 4 + len(entries)*8),
+			},
+		},
+		Entries: entries,
 	}
-	entryCountBuf := make([]byte, 4)
-	if _, err = io.ReadFull(r, entryCountBuf); err != nil {
-		return
-	}
-	offset = 8
-	l := binary.BigEndian.Uint32(entryCountBuf)
-	*ctts = make([]CTTSEntry, l)
-
-	buf := make([]byte, l*8)
-	if _, err = io.ReadFull(r, buf); err != nil {
-		return
-	}
-	idx := 0
-	for i := 0; i < int(l); i++ {
-		(*ctts)[i].SampleCount = binary.BigEndian.Uint32(buf[idx:])
-		idx += 4
-		(*ctts)[i].SampleOffset = binary.BigEndian.Uint32(buf[idx:])
-		idx += 4
-	}
-	offset += idx
-	return
 }
 
-func (ctts CompositionOffsetBox) Encode() (int, []byte) {
-	fullbox := NewFullBox(TypeCTTS, 0)
-	fullbox.Box.Size = ctts.Size()
-	offset, buf := fullbox.Encode()
-	binary.BigEndian.PutUint32(buf[offset:], uint32(len(ctts)))
-	offset += 4
-	for _, entry := range ctts {
-		binary.BigEndian.PutUint32(buf[offset:], entry.SampleCount)
-		offset += 4
-		binary.BigEndian.PutUint32(buf[offset:], entry.SampleOffset)
-		offset += 4
+func (box *CTTSBox) WriteTo(w io.Writer) (n int64, err error) {
+	buf := make([]byte, 4+len(box.Entries)*8)
+	// Write entry count
+	binary.BigEndian.PutUint32(buf[:4], uint32(len(box.Entries)))
+
+	// Write entries
+	for i, entry := range box.Entries {
+		binary.BigEndian.PutUint32(buf[4+i*8:], entry.SampleCount)
+		binary.BigEndian.PutUint32(buf[4+i*8+4:], entry.SampleOffset)
 	}
-	return offset, buf
+
+	_, err = w.Write(buf)
+	return int64(len(buf)), err
+}
+
+func (box *CTTSBox) Unmarshal(buf []byte) (IBox, error) {
+	entryCount := binary.BigEndian.Uint32(buf[:4])
+	box.Entries = make([]CTTSEntry, entryCount)
+
+	if len(buf) < 4+int(entryCount)*8 {
+		return nil, io.ErrShortBuffer
+	}
+
+	idx := 4
+	for i := 0; i < int(entryCount); i++ {
+		box.Entries[i].SampleCount = binary.BigEndian.Uint32(buf[idx:])
+		idx += 4
+		box.Entries[i].SampleOffset = binary.BigEndian.Uint32(buf[idx:])
+		idx += 4
+	}
+	return box, nil
+}
+
+func init() {
+	RegisterBox[CTTSBox](TypeCTTS)
 }

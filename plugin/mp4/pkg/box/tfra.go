@@ -28,109 +28,186 @@ import (
 // }
 
 type TrackFragmentRandomAccessBox struct {
-	Box                   *FullBox
+	FullBox
 	TrackID               uint32
 	LengthSizeOfTrafNum   uint8
 	LengthSizeOfTrunNum   uint8
 	LengthSizeOfSampleNum uint8
-	FragEntrys            []FragEntry
+	Entries               []TFRAEntry
 }
 
-func NewTrackFragmentRandomAccessBox(trackid uint32) *TrackFragmentRandomAccessBox {
+func CreateTrackFragmentRandomAccessBox(trackID uint32, entries []TFRAEntry) *TrackFragmentRandomAccessBox {
 	return &TrackFragmentRandomAccessBox{
-		Box:     NewFullBox(TypeTFRA, 1),
-		TrackID: trackid,
+		FullBox: FullBox{
+			BaseBox: BaseBox{
+				typ:  TypeTFRA,
+				size: uint32(FullBoxLen + 8 + 4 + len(entries)*(3+8)),
+			},
+		},
+		TrackID: trackID,
+		Entries: entries,
 	}
 }
 
-func (tfra *TrackFragmentRandomAccessBox) Size() uint64 {
-	entrySize := 0
-	if tfra.Box.Version == 1 {
-		entrySize = 16 // 8 bytes for time + 8 bytes for moof_offset
-	} else {
-		entrySize = 8 // 4 bytes for time + 4 bytes for moof_offset
-	}
-	// Add size for traf_number, trun_number, and sample_number
-	entrySize += int(tfra.LengthSizeOfTrafNum + tfra.LengthSizeOfTrunNum + tfra.LengthSizeOfSampleNum + 3)
-	return tfra.Box.Size() + 12 + uint64(len(tfra.FragEntrys)*entrySize) // 12 = 4(track_id) + 4(reserved) + 4(number_of_entry)
-}
-
-func (tfra *TrackFragmentRandomAccessBox) Decode(r io.Reader) (offset int, err error) {
-	if offset, err = tfra.Box.Decode(r); err != nil {
+func (box *TrackFragmentRandomAccessBox) WriteTo(w io.Writer) (n int64, err error) {
+	var tmp [12]byte
+	binary.BigEndian.PutUint32(tmp[:4], box.TrackID)
+	tmp[7] = box.LengthSizeOfTrafNum<<6 | box.LengthSizeOfTrunNum<<4 | box.LengthSizeOfSampleNum<<2
+	binary.BigEndian.PutUint32(tmp[8:], uint32(len(box.Entries)))
+	nn, err := w.Write(tmp[:])
+	if err != nil {
 		return
 	}
+	n = int64(nn)
 
-	needSize := tfra.Box.Box.Size - 12
-	buf := make([]byte, needSize)
-	if _, err = io.ReadFull(r, buf); err != nil {
-		return 0, err
-	}
-	n := 0
-	tfra.TrackID = binary.BigEndian.Uint32(buf[n:])
-	n += 4
-	tfra.LengthSizeOfTrafNum = (buf[n+3] >> 4) & 0x03
-	tfra.LengthSizeOfTrunNum = (buf[n+3] >> 2) & 0x03
-	tfra.LengthSizeOfSampleNum = buf[n+3] & 0x03
-	n += 4
-	tfra.FragEntrys = make([]FragEntry, binary.BigEndian.Uint32(buf[n:]))
-	n += 4
-	for i := range tfra.FragEntrys {
-		frag := &tfra.FragEntrys[i]
-		if tfra.Box.Version == 1 {
-			frag.Time = binary.BigEndian.Uint64(buf[n:])
-			n += 8
-			frag.MoofOffset = binary.BigEndian.Uint64(buf[n:])
-			n += 8
+	for _, entry := range box.Entries {
+		if box.Version == 1 {
+			binary.BigEndian.PutUint64(tmp[:], entry.Time)
+			nn, err = w.Write(tmp[:8])
+			if err != nil {
+				return n + int64(nn), err
+			}
+			n += int64(nn)
+
+			binary.BigEndian.PutUint64(tmp[:], entry.MoofOffset)
+			nn, err = w.Write(tmp[:8])
+			if err != nil {
+				return n + int64(nn), err
+			}
+			n += int64(nn)
 		} else {
-			frag.Time = uint64(binary.BigEndian.Uint32(buf[n:]))
-			n += 4
-			frag.MoofOffset = uint64(binary.BigEndian.Uint32(buf[n:]))
-			n += 4
+			binary.BigEndian.PutUint32(tmp[:4], uint32(entry.Time))
+			binary.BigEndian.PutUint32(tmp[4:8], uint32(entry.MoofOffset))
+			nn, err = w.Write(tmp[:8])
+			if err != nil {
+				return
+			}
+			n += int64(nn)
 		}
-		n += int(tfra.LengthSizeOfTrafNum + tfra.LengthSizeOfTrunNum + tfra.LengthSizeOfSampleNum + 3)
+
+		trafSize := box.LengthSizeOfTrafNum + 1
+		trunSize := box.LengthSizeOfTrunNum + 1
+		sampleSize := box.LengthSizeOfSampleNum + 1
+
+		switch trafSize {
+		case 4:
+			binary.BigEndian.PutUint32(tmp[:], entry.TrafNumber)
+		case 3:
+			binary.BigEndian.PutUint32(tmp[:], entry.TrafNumber&0x00FFFFFF)
+		case 2:
+			binary.BigEndian.PutUint16(tmp[:], uint16(entry.TrafNumber))
+		case 1:
+			tmp[0] = uint8(entry.TrafNumber)
+		}
+		switch trunSize {
+		case 4:
+			binary.BigEndian.PutUint32(tmp[trafSize:], entry.TrunNumber)
+		case 3:
+			binary.BigEndian.PutUint32(tmp[trafSize:], entry.TrunNumber&0x00FFFFFF)
+		case 2:
+			binary.BigEndian.PutUint16(tmp[trafSize:], uint16(entry.TrunNumber))
+		case 1:
+			tmp[trafSize] = uint8(entry.TrunNumber)
+		}
+
+		switch sampleSize {
+		case 4:
+			binary.BigEndian.PutUint32(tmp[trafSize+trunSize:], entry.SampleNumber)
+		case 3:
+			binary.BigEndian.PutUint32(tmp[trafSize+trunSize:], entry.SampleNumber&0x00FFFFFF)
+		case 2:
+			binary.BigEndian.PutUint16(tmp[trafSize+trunSize:], uint16(entry.SampleNumber))
+		case 1:
+			tmp[trafSize+trunSize] = uint8(entry.SampleNumber)
+		}
+		nn, err = w.Write(tmp[:trafSize+trunSize+sampleSize])
+		if err != nil {
+			return
+		}
+		n += int64(nn)
 	}
-	offset += 4
+
 	return
 }
 
-func (tfra *TrackFragmentRandomAccessBox) Encode() (int, []byte) {
-	tfra.Box.Box.Size = tfra.Size()
-	offset, boxdata := tfra.Box.Encode()
-	binary.BigEndian.PutUint32(boxdata[offset:], tfra.TrackID)
-	offset += 4
-	// Pack length size fields into the reserved uint32
-	lengthSizeFlags := uint32(tfra.LengthSizeOfTrafNum&0x03)<<4 |
-		uint32(tfra.LengthSizeOfTrunNum&0x03)<<2 |
-		uint32(tfra.LengthSizeOfSampleNum&0x03)
-	binary.BigEndian.PutUint32(boxdata[offset:], lengthSizeFlags)
-	offset += 4
-	binary.BigEndian.PutUint32(boxdata[offset:], uint32(len(tfra.FragEntrys)))
-	offset += 4
-	for _, frag := range tfra.FragEntrys {
-		if tfra.Box.Version == 1 {
-			binary.BigEndian.PutUint64(boxdata[offset:], frag.Time)
-			offset += 8
-			binary.BigEndian.PutUint64(boxdata[offset:], frag.MoofOffset)
-			offset += 8
+func (box *TrackFragmentRandomAccessBox) Unmarshal(buf []byte) (IBox, error) {
+
+	box.TrackID = binary.BigEndian.Uint32(buf[:4])
+	flags := buf[7]
+	box.LengthSizeOfTrafNum = (flags >> 6) & 0x03
+	box.LengthSizeOfTrunNum = (flags >> 4) & 0x03
+	box.LengthSizeOfSampleNum = (flags >> 2) & 0x03
+	entryCount := binary.BigEndian.Uint32(buf[8:])
+
+	n := 12
+	box.Entries = make([]TFRAEntry, entryCount)
+	for i := uint32(0); i < entryCount; i++ {
+		if box.Version == 1 {
+			if len(buf) < n+16 {
+				return nil, io.ErrShortBuffer
+			}
+			box.Entries[i].Time = binary.BigEndian.Uint64(buf[n:])
+			n += 8
+			box.Entries[i].MoofOffset = binary.BigEndian.Uint64(buf[n:])
+			n += 8
 		} else {
-			binary.BigEndian.PutUint32(boxdata[offset:], uint32(frag.Time))
-			offset += 4
-			binary.BigEndian.PutUint32(boxdata[offset:], uint32(frag.MoofOffset))
-			offset += 4
+			if len(buf) < n+8 {
+				return nil, io.ErrShortBuffer
+			}
+			box.Entries[i].Time = uint64(binary.BigEndian.Uint32(buf[n:]))
+			n += 4
+			box.Entries[i].MoofOffset = uint64(binary.BigEndian.Uint32(buf[n:]))
+			n += 4
 		}
-		// Write traf_number, trun_number, and sample_number based on length sizes
-		for i := uint8(0); i < tfra.LengthSizeOfTrafNum+1; i++ {
-			boxdata[offset] = 1
-			offset++
+
+		trafSize := box.LengthSizeOfTrafNum + 1
+		trunSize := box.LengthSizeOfTrunNum + 1
+		sampleSize := box.LengthSizeOfSampleNum + 1
+
+		if len(buf) < n+int(trafSize+trunSize+sampleSize) {
+			return nil, io.ErrShortBuffer
 		}
-		for i := uint8(0); i < tfra.LengthSizeOfTrunNum+1; i++ {
-			boxdata[offset] = 1
-			offset++
+
+		switch trafSize {
+		case 4:
+			box.Entries[i].TrafNumber = binary.BigEndian.Uint32(buf[n:])
+		case 3:
+			box.Entries[i].TrafNumber = binary.BigEndian.Uint32(buf[n:]) & 0x00FFFFFF
+		case 2:
+			box.Entries[i].TrafNumber = uint32(binary.BigEndian.Uint16(buf[n:]))
+		case 1:
+			box.Entries[i].TrafNumber = uint32(buf[n])
 		}
-		for i := uint8(0); i < tfra.LengthSizeOfSampleNum+1; i++ {
-			boxdata[offset] = 1
-			offset++
+		n += int(trafSize)
+
+		switch trunSize {
+		case 4:
+			box.Entries[i].TrunNumber = binary.BigEndian.Uint32(buf[n:])
+		case 3:
+			box.Entries[i].TrunNumber = binary.BigEndian.Uint32(buf[n:]) & 0x00FFFFFF
+		case 2:
+			box.Entries[i].TrunNumber = uint32(binary.BigEndian.Uint16(buf[n:]))
+		case 1:
+			box.Entries[i].TrunNumber = uint32(buf[n])
 		}
+		n += int(trunSize)
+
+		switch sampleSize {
+		case 4:
+			box.Entries[i].SampleNumber = binary.BigEndian.Uint32(buf[n:])
+		case 3:
+			box.Entries[i].SampleNumber = binary.BigEndian.Uint32(buf[n:]) & 0x00FFFFFF
+		case 2:
+			box.Entries[i].SampleNumber = uint32(binary.BigEndian.Uint16(buf[n:]))
+		case 1:
+			box.Entries[i].SampleNumber = uint32(buf[n])
+		}
+		n += int(sampleSize)
 	}
-	return offset, boxdata
+
+	return box, nil
+}
+
+func init() {
+	RegisterBox[*TrackFragmentRandomAccessBox](TypeTFRA)
 }

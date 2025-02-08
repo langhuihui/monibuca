@@ -5,7 +5,7 @@ import (
 	"io"
 )
 
-// aligned(8) class SyncSampleBox extends FullBox(‘stss’, version = 0, 0) {
+// aligned(8) class SyncSampleBox extends FullBox('stss', version = 0, 0) {
 //  	unsigned int(32) entry_count;
 //  	int i;
 //  	for (i=0; i < entry_count; i++) {
@@ -13,41 +13,47 @@ import (
 //  	}
 //  }
 
-type SyncSampleBox []uint32
-
-func (stss SyncSampleBox) Encode() (int, []byte) {
-	fullbox := NewFullBox(TypeSTSS, 0)
-	fullbox.Box.Size = FullBoxLen + 4 + 4*uint64(len(stss))
-	offset, buf := fullbox.Encode()
-	binary.BigEndian.PutUint32(buf[offset:], uint32(len(stss)))
-	offset += 4
-	for _, sampleNumber := range stss {
-		binary.BigEndian.PutUint32(buf[offset:], sampleNumber)
-		offset += 4
-	}
-	return offset, buf
+type STSSBox struct {
+	FullBox
+	Entries []uint32
 }
 
-func (stss *SyncSampleBox) Decode(r io.Reader) (offset int, err error) {
-	var fullbox FullBox
-	if _, err = fullbox.Decode(r); err != nil {
-		return
+func CreateSTSSBox(entries []uint32) *STSSBox {
+	return &STSSBox{
+		FullBox: FullBox{
+			BaseBox: BaseBox{
+				typ:  TypeSTSS,
+				size: uint32(FullBoxLen + 4 + len(entries)*4),
+			},
+		},
+		Entries: entries,
 	}
-	tmp := make([]byte, 4)
-	if _, err = io.ReadFull(r, tmp); err != nil {
-		return
+}
+
+func (box *STSSBox) WriteTo(w io.Writer) (n int64, err error) {
+	buf := make([]byte, 4*(len(box.Entries)+1))
+	// Write entry count
+	binary.BigEndian.PutUint32(buf[:4], uint32(len(box.Entries)))
+
+	// Write entries
+	for i, sampleNumber := range box.Entries {
+		binary.BigEndian.PutUint32(buf[4+i*4:], sampleNumber)
 	}
-	offset = 8
-	entryCount := binary.BigEndian.Uint32(tmp[:])
-	buf := make([]byte, entryCount*4)
-	if _, err = io.ReadFull(r, buf); err != nil {
-		return
-	}
-	idx := 0
-	for range entryCount {
-		*stss = append(*stss, binary.BigEndian.Uint32(buf[idx:]))
+	_, err = w.Write(buf)
+	return int64(len(buf)), err
+}
+
+func (box *STSSBox) Unmarshal(buf []byte) (IBox, error) {
+	entryCount := binary.BigEndian.Uint32(buf[:4])
+	box.Entries = make([]uint32, entryCount)
+	idx := 4
+	for i := 0; i < int(entryCount); i++ {
+		box.Entries[i] = binary.BigEndian.Uint32(buf[idx:])
 		idx += 4
 	}
-	offset += idx
-	return
+	return box, nil
+}
+
+func init() {
+	RegisterBox[*STSSBox](TypeSTSS)
 }

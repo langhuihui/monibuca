@@ -39,100 +39,169 @@ type SidxEntry struct {
 }
 
 type SegmentIndexBox struct {
-	Box                      *FullBox
+	FullBox
 	ReferenceID              uint32
 	TimeScale                uint32
 	EarliestPresentationTime uint64
 	FirstOffset              uint64
 	ReferenceCount           uint16
-	Entrys                   []SidxEntry
+	Entries                  []SidxEntry
 }
 
-func NewSegmentIndexBox() *SegmentIndexBox {
-	return &SegmentIndexBox{
-		Box: NewFullBox(TypeSIDX, 1),
+func CreateSegmentIndexBox(referenceID uint32, timeScale uint32, earliestPresentationTime uint64, firstOffset uint64, entries []SidxEntry) *SegmentIndexBox {
+	version := uint8(0)
+	if earliestPresentationTime > 0xFFFFFFFF || firstOffset > 0xFFFFFFFF {
+		version = 1
 	}
-}
 
-func (sidx *SegmentIndexBox) Size() uint64 {
-	return sidx.Box.Size() + 28 + uint64(len(sidx.Entrys)*12)
-}
-
-func (sidx *SegmentIndexBox) Decode(r io.Reader) (offset int, err error) {
-	if offset, err = sidx.Box.Decode(r); err != nil {
-		return
-	}
-	buf := make([]byte, sidx.Box.Box.Size-12)
-	if _, err = io.ReadFull(r, buf); err != nil {
-		return
-	}
-	n := 0
-	sidx.ReferenceID = binary.BigEndian.Uint32(buf[n:])
-	n += 4
-	sidx.TimeScale = binary.BigEndian.Uint32(buf[n:])
-	n += 4
-	if sidx.Box.Version == 0 {
-		sidx.EarliestPresentationTime = uint64(binary.BigEndian.Uint32(buf[n:]))
-		n += 4
-		sidx.FirstOffset = uint64(binary.BigEndian.Uint32(buf[n:]))
-		n += 4
+	size := uint32(FullBoxLen + 12) // base size + referenceID(4) + timeScale(4) + reserved(2) + referenceCount(2)
+	if version == 1 {
+		size += 16 // earliestPresentationTime(8) + firstOffset(8)
 	} else {
-		sidx.EarliestPresentationTime = binary.BigEndian.Uint64(buf[n:])
+		size += 8 // earliestPresentationTime(4) + firstOffset(4)
+	}
+	size += uint32(len(entries) * 12) // each entry is 12 bytes
+
+	return &SegmentIndexBox{
+		FullBox: FullBox{
+			BaseBox: BaseBox{
+				typ:  TypeSIDX,
+				size: size,
+			},
+			Version: version,
+			Flags:   [3]byte{0, 0, 0},
+		},
+		ReferenceID:              referenceID,
+		TimeScale:                timeScale,
+		EarliestPresentationTime: earliestPresentationTime,
+		FirstOffset:              firstOffset,
+		ReferenceCount:           uint16(len(entries)),
+		Entries:                  entries,
+	}
+}
+
+func (box *SegmentIndexBox) WriteTo(w io.Writer) (n int64, err error) {
+	var tmp [8]byte
+	binary.BigEndian.PutUint32(tmp[:4], box.ReferenceID)
+	if _, err = w.Write(tmp[:4]); err != nil {
+		return
+	}
+	n = 4
+
+	binary.BigEndian.PutUint32(tmp[:4], box.TimeScale)
+	if _, err = w.Write(tmp[:4]); err != nil {
+		return
+	}
+	n += 4
+
+	if box.Version == 0 {
+		binary.BigEndian.PutUint32(tmp[:4], uint32(box.EarliestPresentationTime))
+		if _, err = w.Write(tmp[:4]); err != nil {
+			return
+		}
+		binary.BigEndian.PutUint32(tmp[:4], uint32(box.FirstOffset))
+		if _, err = w.Write(tmp[:4]); err != nil {
+			return
+		}
 		n += 8
-		sidx.FirstOffset = binary.BigEndian.Uint64(buf[n:])
-		n += 8
+	} else {
+		binary.BigEndian.PutUint64(tmp[:], box.EarliestPresentationTime)
+		if _, err = w.Write(tmp[:]); err != nil {
+			return
+		}
+		binary.BigEndian.PutUint64(tmp[:], box.FirstOffset)
+		if _, err = w.Write(tmp[:]); err != nil {
+			return
+		}
+		n += 16
+	}
+
+	binary.BigEndian.PutUint16(tmp[:2], 0) // reserved
+	if _, err = w.Write(tmp[:2]); err != nil {
+		return
 	}
 	n += 2
-	sidx.ReferenceCount = binary.BigEndian.Uint16(buf[n:])
-	n += 2
-	sidx.Entrys = make([]SidxEntry, sidx.ReferenceCount)
-	for i := 0; i < int(sidx.ReferenceCount); i++ {
-		sidx.Entrys[i].ReferenceType = buf[n] >> 7
-		buf[n] = buf[n] & 0x7F
-		sidx.Entrys[i].ReferencedSize = binary.BigEndian.Uint32(buf[n:])
-		n += 4
-		sidx.Entrys[i].SubsegmentDuration = binary.BigEndian.Uint32(buf[n:])
-		n += 4
-		sidx.Entrys[i].StartsWithSAP = buf[n] >> 7
-		sidx.Entrys[i].SAPType = buf[n] >> 4 & 0x07
-		buf[n] = buf[n] & 0x0F
-		sidx.Entrys[i].SAPDeltaTime = binary.BigEndian.Uint32(buf[n:])
-		n += 4
+
+	binary.BigEndian.PutUint16(tmp[:2], box.ReferenceCount)
+	if _, err = w.Write(tmp[:2]); err != nil {
+		return
 	}
-	offset += 4
+	n += 2
+
+	for _, entry := range box.Entries {
+		var entryBuf [12]byte
+		entryBuf[0] = entry.ReferenceType << 7
+		binary.BigEndian.PutUint32(entryBuf[:4], entry.ReferencedSize)
+		entryBuf[0] &= 0x7F
+		binary.BigEndian.PutUint32(entryBuf[4:], entry.SubsegmentDuration)
+		entryBuf[8] = entry.StartsWithSAP << 7
+		entryBuf[8] |= (entry.SAPType & 0x07) << 4
+		binary.BigEndian.PutUint32(entryBuf[8:], entry.SAPDeltaTime)
+		entryBuf[8] &= 0x0F
+
+		if _, err = w.Write(entryBuf[:]); err != nil {
+			return
+		}
+		n += 12
+	}
 	return
 }
 
-func (sidx *SegmentIndexBox) Encode() (int, []byte) {
-	sidx.Box.Box.Size = sidx.Size()
-	offset, boxdata := sidx.Box.Encode()
-	binary.BigEndian.PutUint32(boxdata[offset:], sidx.ReferenceID)
-	offset += 4
-	binary.BigEndian.PutUint32(boxdata[offset:], sidx.TimeScale)
-	offset += 4
-	if sidx.Box.Version == 0 {
-		binary.BigEndian.PutUint32(boxdata[offset:], uint32(sidx.EarliestPresentationTime))
-		offset += 4
-		binary.BigEndian.PutUint32(boxdata[offset:], uint32(sidx.FirstOffset))
-		offset += 4
+func (box *SegmentIndexBox) Unmarshal(buf []byte) (IBox, error) {
+	if len(buf) < 8 {
+		return nil, io.ErrShortBuffer
+	}
+	n := 0
+	box.ReferenceID = binary.BigEndian.Uint32(buf[n:])
+	n += 4
+	box.TimeScale = binary.BigEndian.Uint32(buf[n:])
+	n += 4
+
+	if box.Version == 0 {
+		if len(buf) < n+8 {
+			return nil, io.ErrShortBuffer
+		}
+		box.EarliestPresentationTime = uint64(binary.BigEndian.Uint32(buf[n:]))
+		n += 4
+		box.FirstOffset = uint64(binary.BigEndian.Uint32(buf[n:]))
+		n += 4
 	} else {
-		binary.BigEndian.PutUint64(boxdata[offset:], sidx.EarliestPresentationTime)
-		offset += 8
-		binary.BigEndian.PutUint64(boxdata[offset:], sidx.FirstOffset)
-		offset += 8
+		if len(buf) < n+16 {
+			return nil, io.ErrShortBuffer
+		}
+		box.EarliestPresentationTime = binary.BigEndian.Uint64(buf[n:])
+		n += 8
+		box.FirstOffset = binary.BigEndian.Uint64(buf[n:])
+		n += 8
 	}
-	offset += 2
-	binary.BigEndian.PutUint16(boxdata[offset:], sidx.ReferenceCount)
-	offset += 2
-	for i := 0; i < int(sidx.ReferenceCount); i++ {
-		binary.BigEndian.PutUint32(boxdata[offset:], uint32(sidx.Entrys[i].ReferencedSize))
-		boxdata[offset] = boxdata[offset]&0x7F | sidx.Entrys[i].ReferenceType<<7
-		offset += 4
-		binary.BigEndian.PutUint32(boxdata[offset:], sidx.Entrys[i].SubsegmentDuration)
-		offset += 4
-		binary.BigEndian.PutUint32(boxdata[offset:], sidx.Entrys[i].SAPDeltaTime)
-		boxdata[offset] = (boxdata[offset] & 0xF0) + sidx.Entrys[i].StartsWithSAP<<7 | (sidx.Entrys[i].SAPType&0x07)<<4
-		offset += 4
+
+	if len(buf) < n+4 {
+		return nil, io.ErrShortBuffer
 	}
-	return offset, boxdata
+	n += 2 // skip reserved
+	box.ReferenceCount = binary.BigEndian.Uint16(buf[n:])
+	n += 2
+
+	if len(buf) < n+int(box.ReferenceCount)*12 {
+		return nil, io.ErrShortBuffer
+	}
+	box.Entries = make([]SidxEntry, box.ReferenceCount)
+	for i := uint16(0); i < box.ReferenceCount; i++ {
+		box.Entries[i].ReferenceType = buf[n] >> 7
+		buf[n] = buf[n] & 0x7F
+		box.Entries[i].ReferencedSize = binary.BigEndian.Uint32(buf[n:])
+		n += 4
+		box.Entries[i].SubsegmentDuration = binary.BigEndian.Uint32(buf[n:])
+		n += 4
+		box.Entries[i].StartsWithSAP = buf[n] >> 7
+		box.Entries[i].SAPType = buf[n] >> 4 & 0x07
+		buf[n] = buf[n] & 0x0F
+		box.Entries[i].SAPDeltaTime = binary.BigEndian.Uint32(buf[n:])
+		n += 4
+	}
+	return box, nil
+}
+
+func init() {
+	RegisterBox[*SegmentIndexBox](TypeSIDX)
 }

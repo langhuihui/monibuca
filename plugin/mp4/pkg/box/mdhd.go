@@ -9,7 +9,7 @@ import (
 	"m7s.live/v5/pkg/util"
 )
 
-// aligned(8) class MediaHeaderBox extends FullBox(‘mdhd’, version, 0) {
+// aligned(8) class MediaHeaderBox extends FullBox('mdhd', version, 0) {
 //  if (version==1) {
 // 	unsigned int(64)  creation_time;
 // 	unsigned int(64)  modification_time;
@@ -40,97 +40,92 @@ func ff_mov_iso639_to_lang(lang [3]byte) (code int) {
 }
 
 type MediaHeaderBox struct {
-	Creation_time     uint64
-	Modification_time uint64
-	Timescale         uint32
-	Duration          uint64
-	Pad               uint8
-	Language          [3]uint8
-	Pre_defined       uint16
+	FullBox
+	CreationTime     uint64
+	ModificationTime uint64
+	Timescale        uint32
+	Duration         uint64
+	Language         [3]byte
 }
 
-func NewMediaHeaderBox() *MediaHeaderBox {
+func CreateMediaHeaderBox(timescale uint32, duration uint64) *MediaHeaderBox {
 	_, offset := time.Now().Zone()
+	now := uint64(time.Now().Unix() + int64(offset) + 0x7C25B080)
+	version := util.Conditional[uint8](duration > 0xFFFFFFFF, 1, 0)
+
 	return &MediaHeaderBox{
-		Creation_time:     uint64(time.Now().Unix() + int64(offset) + 0x7C25B080),
-		Modification_time: uint64(time.Now().Unix() + int64(offset) + 0x7C25B080),
-		Timescale:         1000,
-		Language:          [3]byte{'u', 'n', 'd'},
+		FullBox: FullBox{
+			BaseBox: BaseBox{
+				typ:  TypeMDHD,
+				size: util.Conditional[uint32](version == 1, 32, 20) + FullBoxLen,
+			},
+			Version: version,
+			Flags:   [3]byte{0, 0, 0},
+		},
+		CreationTime:     now,
+		ModificationTime: now,
+		Timescale:        timescale,
+		Duration:         duration,
+		Language:         [3]byte{'u', 'n', 'd'},
 	}
 }
 
-func (mdhd *MediaHeaderBox) Decode(r io.Reader) (offset int, err error) {
-	var fullbox FullBox
-	if offset, err = fullbox.Decode(r); err != nil {
-		return 0, err
+func (box *MediaHeaderBox) WriteTo(w io.Writer) (n int64, err error) {
+	var data []byte
+	if box.Version == 1 {
+		data = make([]byte, 32)
+		binary.BigEndian.PutUint64(data[0:], box.CreationTime)
+		binary.BigEndian.PutUint64(data[8:], box.ModificationTime)
+		binary.BigEndian.PutUint32(data[16:], box.Timescale)
+		binary.BigEndian.PutUint64(data[20:], box.Duration)
+		binary.BigEndian.PutUint16(data[28:], uint16(ff_mov_iso639_to_lang(box.Language)&0x7FFF))
+		// pre_defined already zeroed
+	} else {
+		data = make([]byte, 20)
+		binary.BigEndian.PutUint32(data[0:], uint32(box.CreationTime))
+		binary.BigEndian.PutUint32(data[4:], uint32(box.ModificationTime))
+		binary.BigEndian.PutUint32(data[8:], box.Timescale)
+		binary.BigEndian.PutUint32(data[12:], uint32(box.Duration))
+		binary.BigEndian.PutUint16(data[16:], uint16(ff_mov_iso639_to_lang(box.Language)&0x7FFF))
+		// pre_defined already zeroed
 	}
 
-	buf := make([]byte, util.Conditional(fullbox.Version == 1, 32, 20))
-	if _, err = io.ReadFull(r, buf); err != nil {
-		return 0, err
-	}
-	offset = 0
-	if fullbox.Version == 1 {
-		mdhd.Creation_time = binary.BigEndian.Uint64(buf[offset:])
-		offset += 8
-		mdhd.Modification_time = binary.BigEndian.Uint64(buf[offset:])
-		offset += 8
-		mdhd.Timescale = binary.BigEndian.Uint32(buf[offset:])
-		offset += 4
-		mdhd.Duration = binary.BigEndian.Uint64(buf[offset:])
-		offset += 8
-	} else {
-		mdhd.Creation_time = uint64(binary.BigEndian.Uint32(buf[offset:]))
-		offset += 4
-		mdhd.Modification_time = uint64(binary.BigEndian.Uint32(buf[offset:]))
-		offset += 4
-		mdhd.Timescale = binary.BigEndian.Uint32(buf[offset:])
-		offset += 4
-		mdhd.Duration = uint64(binary.BigEndian.Uint32(buf[offset:]))
-		offset += 4
-	}
-	bs := codec.NewBitStream(buf[offset:])
-	mdhd.Pad = bs.GetBit()
-	mdhd.Language[0] = bs.Uint8(5)
-	mdhd.Language[1] = bs.Uint8(5)
-	mdhd.Language[2] = bs.Uint8(5)
-	mdhd.Pre_defined = 0
-	offset += 4
+	nn, err := w.Write(data)
+	n = int64(nn)
 	return
 }
 
-func (mdhd *MediaHeaderBox) Encode() (int, []byte) {
-	fullbox := NewFullBox(TypeMDHD, 0)
-	fullbox.Box.Size = util.Conditional[uint64](fullbox.Version == 1, 32, 20) + FullBoxLen
-	offset, buf := fullbox.Encode()
-	if fullbox.Version == 1 {
-		binary.BigEndian.PutUint64(buf[offset:], mdhd.Creation_time)
-		offset += 8
-		binary.BigEndian.PutUint64(buf[offset:], mdhd.Modification_time)
-		offset += 8
-		binary.BigEndian.PutUint32(buf[offset:], mdhd.Timescale)
-		offset += 4
-		binary.BigEndian.PutUint64(buf[offset:], mdhd.Duration)
-		offset += 8
+func (box *MediaHeaderBox) Unmarshal(buf []byte) (IBox, error) {
+	if box.Version == 1 {
+		if len(buf) < 32 {
+			return nil, io.ErrShortBuffer
+		}
+		box.CreationTime = binary.BigEndian.Uint64(buf[0:])
+		box.ModificationTime = binary.BigEndian.Uint64(buf[8:])
+		box.Timescale = binary.BigEndian.Uint32(buf[16:])
+		box.Duration = binary.BigEndian.Uint64(buf[20:])
+		buf = buf[28:]
 	} else {
-		binary.BigEndian.PutUint32(buf[offset:], uint32(mdhd.Creation_time))
-		offset += 4
-		binary.BigEndian.PutUint32(buf[offset:], uint32(mdhd.Modification_time))
-		offset += 4
-		binary.BigEndian.PutUint32(buf[offset:], mdhd.Timescale)
-		offset += 4
-		binary.BigEndian.PutUint32(buf[offset:], uint32(mdhd.Duration))
-		offset += 4
+		if len(buf) < 20 {
+			return nil, io.ErrShortBuffer
+		}
+		box.CreationTime = uint64(binary.BigEndian.Uint32(buf[0:]))
+		box.ModificationTime = uint64(binary.BigEndian.Uint32(buf[4:]))
+		box.Timescale = binary.BigEndian.Uint32(buf[8:])
+		box.Duration = uint64(binary.BigEndian.Uint32(buf[12:]))
+		buf = buf[16:]
 	}
-	binary.BigEndian.PutUint16(buf[offset:], uint16(ff_mov_iso639_to_lang(mdhd.Language)&0x7FFF))
-	offset += 2
-	offset += 2
-	return offset, buf
+
+	// Read language
+	bs := codec.NewBitStream(buf)
+	_ = bs.GetBit() // pad
+	box.Language[0] = bs.Uint8(5)
+	box.Language[1] = bs.Uint8(5)
+	box.Language[2] = bs.Uint8(5)
+
+	return box, nil
 }
 
-func MakeMdhdBox(duration uint32) []byte {
-	mdhd := NewMediaHeaderBox()
-	mdhd.Duration = uint64(duration)
-	_, boxdata := mdhd.Encode()
-	return boxdata
+func init() {
+	RegisterBox[*MediaHeaderBox](TypeMDHD)
 }

@@ -9,7 +9,7 @@ import (
 )
 
 // aligned(8) class TrackHeaderBox
-//    extends FullBox(‘tkhd’, version, flags){
+//    extends FullBox('tkhd', version, flags){
 //    if (version==1) {
 //       unsigned int(64)  creation_time;
 //       unsigned int(64)  modification_time;
@@ -36,118 +36,124 @@ import (
 // }
 
 type TrackHeaderBox struct {
-	Creation_time     uint64
-	Modification_time uint64
-	Track_ID          uint32
-	Duration          uint64
-	Layer             uint16
-	Alternate_group   uint16
-	Volume            uint16
-	Matrix            [9]uint32
-	Width             uint32
-	Height            uint32
+	FullBox
+	CreationTime     uint64
+	ModificationTime uint64
+	TrackID          uint32
+	Duration         uint64
+	Layer            uint16
+	AlternateGroup   uint16
+	Volume           uint16
+	Matrix           [9]uint32
+	Width            uint32
+	Height           uint32
 }
 
-func NewTrackHeaderBox() *TrackHeaderBox {
+func CreateTrackHeaderBox(trackID uint32, duration uint64, width, height uint32) *TrackHeaderBox {
 	_, offset := time.Now().Zone()
+	now := uint64(time.Now().Unix() + int64(offset) + 0x7C25B080)
+	version := util.Conditional[uint8](duration > 0xFFFFFFFF, 1, 0)
+
 	return &TrackHeaderBox{
-		Creation_time:     uint64(time.Now().Unix() + int64(offset) + 0x7C25B080),
-		Modification_time: uint64(time.Now().Unix() + int64(offset) + 0x7C25B080),
-		Layer:             0,
-		Alternate_group:   0,
-		Matrix:            [9]uint32{0x00010000, 0, 0, 0, 0x00010000, 0, 0, 0, 0x40000000},
+		FullBox: FullBox{
+			BaseBox: BaseBox{
+				typ:  TypeTKHD,
+				size: util.Conditional[uint32](version == 1, 92, 80) + FullBoxLen,
+			},
+			Version: version,
+			Flags:   [3]byte{0, 0, 3}, // Track_enabled | Track_in_movie
+		},
+		CreationTime:     now,
+		ModificationTime: now,
+		TrackID:          trackID,
+		Duration:         duration,
+		Layer:            0,
+		AlternateGroup:   0,
+		Matrix:           [9]uint32{0x00010000, 0, 0, 0, 0x00010000, 0, 0, 0, 0x40000000},
+		Width:            width,
+		Height:           height,
 	}
 }
 
-func (tkhd *TrackHeaderBox) Decode(r io.Reader) (offset int, err error) {
-	var fullbox FullBox
-	if offset, err = fullbox.Decode(r); err != nil {
-		return 0, err
-	}
-	boxsize := 0
-	if fullbox.Version == 0 {
-		boxsize = 80
+func (box *TrackHeaderBox) WriteTo(w io.Writer) (n int64, err error) {
+	var data []byte
+
+	if box.Version == 1 {
+		data = make([]byte, 92)
+		binary.BigEndian.PutUint64(data[0:], box.CreationTime)
+		binary.BigEndian.PutUint64(data[8:], box.ModificationTime)
+		binary.BigEndian.PutUint32(data[16:], box.TrackID)
+		binary.BigEndian.PutUint64(data[24:], box.Duration)
+		// 32-40 reserved
 	} else {
-		boxsize = 92
+		data = make([]byte, 80)
+		binary.BigEndian.PutUint32(data[0:], uint32(box.CreationTime))
+		binary.BigEndian.PutUint32(data[4:], uint32(box.ModificationTime))
+		binary.BigEndian.PutUint32(data[8:], box.TrackID)
+		binary.BigEndian.PutUint32(data[16:], uint32(box.Duration))
+		// 20-28 reserved
 	}
-	buf := make([]byte, boxsize)
-	if _, err = io.ReadFull(r, buf); err != nil {
-		return 0, err
+
+	offset := util.Conditional[int](box.Version == 1, 32, 20)
+	// 8 bytes reserved already zeroed
+	offset += 8
+	binary.BigEndian.PutUint16(data[offset:], box.Layer)
+	binary.BigEndian.PutUint16(data[offset+2:], box.AlternateGroup)
+	binary.BigEndian.PutUint16(data[offset+4:], box.Volume)
+	// 2 bytes reserved already zeroed
+	offset += 8
+
+	for i, m := range box.Matrix {
+		binary.BigEndian.PutUint32(data[offset+i*4:], m)
 	}
-	n := 0
-	if fullbox.Version == 1 {
-		tkhd.Creation_time = binary.BigEndian.Uint64(buf[n:])
-		n += 8
-		tkhd.Modification_time = binary.BigEndian.Uint64(buf[n:])
-		n += 8
-		tkhd.Track_ID = binary.BigEndian.Uint32(buf[n:])
-		n += 8
-		tkhd.Duration = binary.BigEndian.Uint64(buf[n:])
-		n += 8
-	} else {
-		tkhd.Creation_time = uint64(binary.BigEndian.Uint32(buf[n:]))
-		n += 4
-		tkhd.Modification_time = uint64(binary.BigEndian.Uint32(buf[n:]))
-		n += 4
-		tkhd.Track_ID = binary.BigEndian.Uint32(buf[n:])
-		n += 8
-		tkhd.Duration = uint64(binary.BigEndian.Uint32(buf[n:]))
-		n += 4
-	}
-	n += 8
-	tkhd.Layer = binary.BigEndian.Uint16(buf[n:])
-	n += 2
-	tkhd.Alternate_group = binary.BigEndian.Uint16(buf[n:])
-	n += 2
-	tkhd.Volume = binary.BigEndian.Uint16(buf[n:])
-	n += 4
-	for i := 0; i < 9; i++ {
-		tkhd.Matrix[i] = binary.BigEndian.Uint32(buf[n:])
-		n += 4
-	}
-	tkhd.Width = binary.BigEndian.Uint32(buf[n:])
-	tkhd.Height = binary.BigEndian.Uint32(buf[n+4:])
-	offset += n + 8
+	offset += 36
+
+	binary.BigEndian.PutUint32(data[offset:], box.Width)
+	binary.BigEndian.PutUint32(data[offset+4:], box.Height)
+
+	nn, err := w.Write(data)
+	n = int64(nn)
 	return
 }
 
-func (tkhd *TrackHeaderBox) Encode() (int, []byte) {
-	fullbox := NewFullBox(TypeTKHD, util.Conditional[uint8](tkhd.Duration > 0xFFFFFFFF, 1, 0))
-	fullbox.Flags[2] = 0x03 //Track_enabled | Track_in_movie
-	fullbox.Box.Size = util.Conditional[uint64](fullbox.Version == 1, 92, 80) + FullBoxLen
-	offset, buf := fullbox.Encode()
-	if fullbox.Version == 1 {
-		binary.BigEndian.PutUint64(buf[offset:], tkhd.Creation_time)
-		offset += 8
-		binary.BigEndian.PutUint64(buf[offset:], tkhd.Creation_time)
-		offset += 8
-		binary.BigEndian.PutUint32(buf[offset:], tkhd.Track_ID)
-		offset += 8
-		binary.BigEndian.PutUint64(buf[offset:], tkhd.Duration)
-		offset += 8
+func (box *TrackHeaderBox) Unmarshal(buf []byte) (IBox, error) {
+	if box.Version == 1 {
+		if len(buf) < 92 {
+			return nil, io.ErrShortBuffer
+		}
+		box.CreationTime = binary.BigEndian.Uint64(buf[0:])
+		box.ModificationTime = binary.BigEndian.Uint64(buf[8:])
+		box.TrackID = binary.BigEndian.Uint32(buf[16:])
+		box.Duration = binary.BigEndian.Uint64(buf[24:])
+		buf = buf[32:]
 	} else {
-		binary.BigEndian.PutUint32(buf[offset:], uint32(tkhd.Creation_time))
-		offset += 4
-		binary.BigEndian.PutUint32(buf[offset:], uint32(tkhd.Creation_time))
-		offset += 4
-		binary.BigEndian.PutUint32(buf[offset:], tkhd.Track_ID)
-		offset += 8
-		binary.BigEndian.PutUint32(buf[offset:], uint32(tkhd.Duration))
-		offset += 4
+		if len(buf) < 80 {
+			return nil, io.ErrShortBuffer
+		}
+		box.CreationTime = uint64(binary.BigEndian.Uint32(buf[0:]))
+		box.ModificationTime = uint64(binary.BigEndian.Uint32(buf[4:]))
+		box.TrackID = binary.BigEndian.Uint32(buf[8:])
+		box.Duration = uint64(binary.BigEndian.Uint32(buf[16:]))
+		buf = buf[20:]
 	}
-	offset += 8
-	binary.BigEndian.PutUint16(buf[offset:], tkhd.Layer)
-	offset += 2
-	binary.BigEndian.PutUint16(buf[offset:], tkhd.Alternate_group)
-	offset += 2
-	binary.BigEndian.PutUint16(buf[offset:], tkhd.Volume)
-	offset += 4
-	for i, _ := range tkhd.Matrix {
-		binary.BigEndian.PutUint32(buf[offset:], tkhd.Matrix[i])
-		offset += 4
+
+	buf = buf[8:] // skip reserved
+	box.Layer = binary.BigEndian.Uint16(buf[0:])
+	box.AlternateGroup = binary.BigEndian.Uint16(buf[2:])
+	box.Volume = binary.BigEndian.Uint16(buf[4:])
+	buf = buf[8:] // skip reserved
+
+	for i := 0; i < 9; i++ {
+		box.Matrix[i] = binary.BigEndian.Uint32(buf[i*4:])
 	}
-	binary.BigEndian.PutUint32(buf[offset:], uint32(tkhd.Width))
-	offset += 4
-	binary.BigEndian.PutUint32(buf[offset:], uint32(tkhd.Height))
-	return offset + 4, buf
+	buf = buf[36:]
+
+	box.Width = binary.BigEndian.Uint32(buf[0:])
+	box.Height = binary.BigEndian.Uint32(buf[4:])
+
+	return box, nil
+}
+
+func init() {
+	RegisterBox[*TrackHeaderBox](TypeTKHD)
 }

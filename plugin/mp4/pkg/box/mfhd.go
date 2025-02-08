@@ -5,39 +5,45 @@ import (
 	"io"
 )
 
-// aligned(8) class MovieFragmentHeaderBox extends FullBox(‘mfhd’, 0, 0){
+// aligned(8) class MovieFragmentHeaderBox extends FullBox('mfhd', 0, 0){
 // 	unsigned int(32) sequence_number;
 // }
 
-type MovieFragmentHeaderBox uint32
-
-func (mfhd MovieFragmentHeaderBox) Size() uint64 {
-	return FullBoxLen + 4
+type MovieFragmentHeaderBox struct {
+	FullBox
+	SequenceNumber uint32
 }
 
-func (mfhd *MovieFragmentHeaderBox) Decode(r io.Reader) (offset int, err error) {
-	var fullbox FullBox
-	if offset, err = fullbox.Decode(r); err != nil {
-		return
+func CreateMovieFragmentHeaderBox(sequenceNumber uint32) *MovieFragmentHeaderBox {
+	return &MovieFragmentHeaderBox{
+		FullBox: FullBox{
+			BaseBox: BaseBox{
+				typ:  TypeMFHD,
+				size: uint32(FullBoxLen + 4),
+			},
+			Version: 0,
+			Flags:   [3]byte{0, 0, 0},
+		},
+		SequenceNumber: sequenceNumber,
 	}
-	buf := make([]byte, 4)
-	if _, err = io.ReadFull(r, buf); err != nil {
-		return 0, err
+}
+
+func (box *MovieFragmentHeaderBox) WriteTo(w io.Writer) (n int64, err error) {
+	var tmp [4]byte
+	binary.BigEndian.PutUint32(tmp[:], box.SequenceNumber)
+	nn, err := w.Write(tmp[:])
+	n = int64(nn)
+	return
+}
+
+func (box *MovieFragmentHeaderBox) Unmarshal(buf []byte) (IBox, error) {
+	if len(buf) < 4 {
+		return nil, io.ErrShortBuffer
 	}
-	*mfhd = MovieFragmentHeaderBox(binary.BigEndian.Uint32(buf))
-	return offset + 4, nil
+	box.SequenceNumber = binary.BigEndian.Uint32(buf[:4])
+	return box, nil
 }
 
-func (mfhd MovieFragmentHeaderBox) Encode() (int, []byte) {
-	fullbox := NewFullBox(TypeMFHD, 0)
-	fullbox.Box.Size = mfhd.Size()
-	offset, boxdata := fullbox.Encode()
-	binary.BigEndian.PutUint32(boxdata[offset:], uint32(mfhd))
-	return offset + 4, boxdata
-}
-
-func MakeMfhdBox(frament uint32) []byte {
-	mfhd := MovieFragmentHeaderBox(frament)
-	_, boxData := mfhd.Encode()
-	return boxData
+func init() {
+	RegisterBox[*MovieFragmentHeaderBox](TypeMFHD)
 }

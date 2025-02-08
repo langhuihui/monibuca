@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// aligned(8) class MovieHeaderBox extends FullBox(‘mvhd’, version, 0) {
+// aligned(8) class MovieHeaderBox extends FullBox('mvhd', version, 0) {
 // if (version==1) {
 // 	unsigned int(64)  creation_time;
 // 	unsigned int(64)  modification_time;
@@ -29,121 +29,108 @@ import (
 // }
 
 type MovieHeaderBox struct {
-	Creation_time     uint64
-	Modification_time uint64
-	Timescale         uint32
-	Duration          uint64
-	Rate              uint32
-	Volume            uint16
-	Matrix            [9]uint32
-	Pre_defined       [6]uint32
-	Next_track_ID     uint32
+	FullBox
+	CreationTime     uint64
+	ModificationTime uint64
+	Timescale        uint32
+	Duration         uint64
+	Rate             int32
+	Volume           int16
+	Matrix           [9]int32
+	NextTrackID      uint32
 }
 
-func NewMovieHeaderBox() *MovieHeaderBox {
-	// MP4/QuickTime epoch starts from Jan 1, 1904
-	// Add offset between Unix epoch (1970) and QuickTime epoch (1904)
-	const mp4Epoch = 2082844800 // seconds between 1904 and 1970
-	now := uint64(time.Now().Unix() + mp4Epoch)
+func CreateMovieHeaderBox(nextTrackID uint32, duration uint32) *MovieHeaderBox {
+	now := time.Now().Unix()
 	return &MovieHeaderBox{
-		Creation_time:     now,
-		Modification_time: now,
-		Timescale:         1000,
-		Rate:              0x00010000,
-		Volume:            0x0100,
-		Matrix:            [9]uint32{0x00010000, 0, 0, 0, 0x00010000, 0, 0, 0, 0x40000000},
+		FullBox: FullBox{
+			BaseBox: BaseBox{
+				typ:  TypeMVHD,
+				size: uint32(FullBoxLen + 96),
+			},
+			Version: 0,
+			Flags:   [3]byte{0, 0, 0},
+		},
+		CreationTime:     uint64(now),
+		ModificationTime: uint64(now),
+		Timescale:        1000,
+		Duration:         uint64(duration),
+		Rate:             0x00010000,
+		Volume:           0x0100,
+		Matrix:           [9]int32{0x00010000, 0, 0, 0, 0x00010000, 0, 0, 0, 0x40000000},
+		NextTrackID:      nextTrackID,
 	}
 }
 
-func (mvhd *MovieHeaderBox) Decode(r io.Reader, basebox *BasicBox) (offset int, err error) {
-	var fullbox FullBox
-	if offset, err = fullbox.Decode(r); err != nil {
-		return 0, err
-	}
-	boxsize := 0
-	if fullbox.Version == 0 {
-		boxsize = 96
+func (box *MovieHeaderBox) WriteTo(w io.Writer) (n int64, err error) {
+	var nn int
+	if box.Version == 1 {
+		var tmp [108]byte
+		binary.BigEndian.PutUint64(tmp[0:], box.CreationTime)
+		binary.BigEndian.PutUint64(tmp[8:], box.ModificationTime)
+		binary.BigEndian.PutUint32(tmp[16:], box.Timescale)
+		binary.BigEndian.PutUint64(tmp[20:], box.Duration)
+		binary.BigEndian.PutUint32(tmp[28:], uint32(box.Rate))
+		binary.BigEndian.PutUint16(tmp[32:], uint16(box.Volume))
+		offset := 34 + 8
+		for i := 0; i < 9; i++ {
+			binary.BigEndian.PutUint32(tmp[offset:], uint32(box.Matrix[i]))
+			offset += 4
+		}
+		binary.BigEndian.PutUint32(tmp[104:], box.NextTrackID)
+		nn, err = w.Write(tmp[:])
+		n = int64(nn)
 	} else {
-		boxsize = 108
+		var tmp [96]byte
+		binary.BigEndian.PutUint32(tmp[0:], uint32(box.CreationTime))
+		binary.BigEndian.PutUint32(tmp[4:], uint32(box.ModificationTime))
+		binary.BigEndian.PutUint32(tmp[8:], box.Timescale)
+		binary.BigEndian.PutUint32(tmp[12:], uint32(box.Duration))
+		binary.BigEndian.PutUint32(tmp[16:], uint32(box.Rate))
+		binary.BigEndian.PutUint16(tmp[20:], uint16(box.Volume))
+		offset := 22 + 8
+		for i := 0; i < 9; i++ {
+			binary.BigEndian.PutUint32(tmp[offset:], uint32(box.Matrix[i]))
+			offset += 4
+		}
+		binary.BigEndian.PutUint32(tmp[92:], box.NextTrackID)
+		nn, err = w.Write(tmp[:])
+		n = int64(nn)
 	}
-	buf := make([]byte, boxsize)
-	if _, err := io.ReadFull(r, buf); err != nil {
-		return 0, err
-	}
-	n := 0
-	if fullbox.Version == 1 {
-		mvhd.Creation_time = binary.BigEndian.Uint64(buf[n:])
-		n += 8
-		mvhd.Modification_time = binary.BigEndian.Uint64(buf[n:])
-		n += 8
-		mvhd.Timescale = binary.BigEndian.Uint32(buf[n:])
-		n += 4
-		mvhd.Duration = binary.BigEndian.Uint64(buf[n:])
-		n += 8
-	} else {
-		mvhd.Creation_time = uint64(binary.BigEndian.Uint32(buf[n:]))
-		n += 4
-		mvhd.Modification_time = uint64(binary.BigEndian.Uint32(buf[n:]))
-		n += 4
-		mvhd.Timescale = binary.BigEndian.Uint32(buf[n:])
-		n += 4
-		mvhd.Duration = uint64(binary.BigEndian.Uint32(buf[n:]))
-		n += 4
-	}
-	mvhd.Rate = binary.BigEndian.Uint32(buf[n:])
-	n += 4
-	mvhd.Volume = binary.BigEndian.Uint16(buf[n:])
-	n += 10
-
-	for i, _ := range mvhd.Matrix {
-		mvhd.Matrix[i] = binary.BigEndian.Uint32(buf[n:])
-		n += 4
-	}
-
-	for i := 0; i < 6; i++ {
-		mvhd.Pre_defined[i] = binary.BigEndian.Uint32(buf[n:])
-		n += 4
-	}
-	mvhd.Next_track_ID = binary.BigEndian.Uint32(buf[n:])
-	return n + 4 + offset, nil
+	return
 }
 
-func (mvhd *MovieHeaderBox) Encode() (int, []byte) {
-	// Always use version 0 for better compatibility
-	var fullbox = NewFullBox(TypeMVHD, 0)
-	fullbox.Box.Size = FullBoxLen + 96 // version 0 size
-	offset, buf := fullbox.Encode()
+func (box *MovieHeaderBox) Unmarshal(buf []byte) (IBox, error) {
+	var offset int
+	if box.Version == 1 {
+		box.CreationTime = binary.BigEndian.Uint64(buf[0:])
+		box.ModificationTime = binary.BigEndian.Uint64(buf[8:])
+		box.Timescale = binary.BigEndian.Uint32(buf[16:])
+		box.Duration = binary.BigEndian.Uint64(buf[20:])
+		offset = 28
+	} else {
+		box.CreationTime = uint64(binary.BigEndian.Uint32(buf[0:]))
+		box.ModificationTime = uint64(binary.BigEndian.Uint32(buf[4:]))
+		box.Timescale = binary.BigEndian.Uint32(buf[8:])
+		box.Duration = uint64(binary.BigEndian.Uint32(buf[12:]))
+		offset = 16
+	}
 
-	// Version 0: all 32-bit values
-	binary.BigEndian.PutUint32(buf[offset:], uint32(mvhd.Creation_time))
-	offset += 4
-	binary.BigEndian.PutUint32(buf[offset:], uint32(mvhd.Modification_time))
-	offset += 4
-	binary.BigEndian.PutUint32(buf[offset:], mvhd.Timescale)
-	offset += 4
-	binary.BigEndian.PutUint32(buf[offset:], uint32(mvhd.Duration))
-	offset += 4
+	box.Rate = int32(binary.BigEndian.Uint32(buf[offset:]))
+	box.Volume = int16(binary.BigEndian.Uint16(buf[offset+4:]))
+	// skip reserved: 2 + 8 bytes
 
-	binary.BigEndian.PutUint32(buf[offset:], mvhd.Rate)
-	offset += 4
-	binary.BigEndian.PutUint16(buf[offset:], mvhd.Volume)
-	offset += 2
-	offset += 10 // reserved
-
-	for _, matrix := range mvhd.Matrix {
-		binary.BigEndian.PutUint32(buf[offset:], matrix)
+	offset += 16
+	for i := 0; i < 9; i++ {
+		box.Matrix[i] = int32(binary.BigEndian.Uint32(buf[offset:]))
 		offset += 4
 	}
+	// skip pre_defined: 24 bytes
+	box.NextTrackID = binary.BigEndian.Uint32(buf[offset+24:])
 
-	offset += 24 // pre-defined
-	binary.BigEndian.PutUint32(buf[offset:], mvhd.Next_track_ID)
-	return offset + 4, buf
+	return box, nil
 }
 
-func MakeMvhdBox(trackid uint32, duration uint32) []byte {
-	mvhd := NewMovieHeaderBox()
-	mvhd.Next_track_ID = trackid
-	mvhd.Duration = uint64(duration)
-	_, mvhdbox := mvhd.Encode()
-	return mvhdbox
+func init() {
+	RegisterBox[*MovieHeaderBox](TypeMVHD)
 }

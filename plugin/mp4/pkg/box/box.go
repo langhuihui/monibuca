@@ -2,16 +2,253 @@ package box
 
 import (
 	"encoding/binary"
+	"fmt"
 	"io"
+	"net"
+	"reflect"
+	"unsafe"
 )
+
+type (
+	BoxType [4]byte
+
+	BoxHeader interface {
+		Type() BoxType
+		HeaderSize() uint32
+		Size() uint32
+		Header() BoxHeader
+		HeaderWriteTo(w io.Writer) (n int64, err error)
+	}
+
+	IBox interface {
+		BoxHeader
+		io.WriterTo
+		Unmarshal(buf []byte) (IBox, error)
+	}
+
+	// 基础Box结构，实现通用字段
+	BaseBox struct {
+		typ  BoxType
+		size uint32
+	}
+	DataBox struct {
+		BaseBox
+		Data []byte
+	}
+	BigBox struct {
+		BaseBox
+		size uint64
+	}
+
+	FullBox struct {
+		BaseBox
+		Version uint8
+		Flags   [3]byte
+	}
+	ContainerBox struct {
+		BaseBox
+		Children []IBox
+	}
+)
+
+func CreateBaseBox(typ BoxType, size uint64) IBox {
+	if size > 0xFFFFFFFF {
+		return &BigBox{
+			BaseBox: BaseBox{
+				typ:  typ,
+				size: 1,
+			},
+			size: size + 8,
+		}
+	}
+
+	return &BaseBox{
+		typ:  typ,
+		size: uint32(size),
+	}
+}
+
+func CreateDataBox(typ BoxType, data []byte) *DataBox {
+	return &DataBox{
+		BaseBox: BaseBox{
+			typ:  typ,
+			size: uint32(len(data)) + BasicBoxLen,
+		},
+		Data: data,
+	}
+}
+
+func CreateContainerBox(typ BoxType, children ...IBox) *ContainerBox {
+	size := uint32(BasicBoxLen)
+	realChildren := make([]IBox, 0, len(children))
+	for _, child := range children {
+		if reflect.ValueOf(child).IsNil() {
+			continue
+		}
+		size += child.Size()
+		realChildren = append(realChildren, child)
+	}
+	return &ContainerBox{
+		BaseBox: BaseBox{
+			typ:  typ,
+			size: size,
+		},
+		Children: realChildren,
+	}
+}
+
+func (b *BigBox) HeaderSize() uint32 { return BasicBoxLen + 8 }
+
+func (b *BaseBox) Header() BoxHeader  { return b }
+func (b *BaseBox) HeaderSize() uint32 { return BasicBoxLen }
+func (b *BaseBox) Size() uint32       { return b.size }
+
+func (b *BaseBox) Type() BoxType { return b.typ }
+
+func (b *BaseBox) HeaderWriteTo(w io.Writer) (n int64, err error) {
+	var tmp [4]byte
+	binary.BigEndian.PutUint32(tmp[:], b.size)
+	buffers := net.Buffers{tmp[:], b.typ[:]}
+	return buffers.WriteTo(w)
+}
+
+func (b *BaseBox) WriteTo(w io.Writer) (n int64, err error) {
+	return
+}
+
+func (b *ContainerBox) WriteTo(w io.Writer) (n int64, err error) {
+	return WriteTo(w, b.Children...)
+}
+
+func (b *DataBox) WriteTo(w io.Writer) (n int64, err error) {
+	_, err = w.Write(b.Data)
+	return int64(len(b.Data)), err
+}
+
+func (b *BaseBox) Unmarshal(buf []byte) (IBox, error) {
+	return b, nil
+}
+
+func (b *DataBox) Unmarshal(buf []byte) (IBox, error) {
+	b.Data = buf
+	return b, nil
+}
+
+func (b *FullBox) HeaderWriteTo(w io.Writer) (n int64, err error) {
+
+	var tmp [4]byte
+
+	binary.BigEndian.PutUint32(tmp[:], b.size)
+	buffers := net.Buffers{tmp[:], b.typ[:], []byte{b.Version}, b.Flags[:]}
+	return buffers.WriteTo(w)
+}
+
+func (b *BigBox) HeaderWriteTo(w io.Writer) (n int64, err error) {
+	n, err = b.BaseBox.HeaderWriteTo(w)
+	if err != nil {
+		return
+	}
+	var tmp [8]byte
+	binary.BigEndian.PutUint64(tmp[:], b.size)
+	_, err = w.Write(tmp[:])
+	return n + 8, err
+}
+
+func (b *BigBox) Header() BoxHeader   { return b }
+func (b *FullBox) Header() BoxHeader  { return b }
+func (b *FullBox) HeaderSize() uint32 { return FullBoxLen }
+
+func WriteTo(w io.Writer, box ...IBox) (n int64, err error) {
+	var n1, n2 int64
+	for _, b := range box {
+		if b == nil {
+			continue
+		}
+		n1, err = b.HeaderWriteTo(w)
+		if err != nil {
+			return
+		}
+		n2, err = b.WriteTo(w)
+		if err != nil {
+			return
+		}
+		if n1 + n2 != int64(b.Size()) {
+			panic(fmt.Sprintf("write to %s size error, %d != %d", b.Type(), n1 + n2, b.Size()))
+		}
+		n += n1 + n2
+	}
+	return
+
+}
+
+func ReadFrom(r io.Reader) (box IBox, err error) {
+	var tmp [8]byte
+	if _, err = io.ReadFull(r, tmp[:]); err != nil {
+		return
+	}
+	var baseBox BaseBox
+	baseBox.size = binary.BigEndian.Uint32(tmp[:4])
+	baseBox.typ = BoxType(tmp[4:])
+	t, exists := registry[baseBox.typ.Uint32I()]
+	if !exists {
+		return nil, fmt.Errorf("unknown box type: %s", baseBox.typ)
+	}
+	b := reflect.New(t).Interface().(IBox)
+	var payload []byte
+	if baseBox.size == 1 {
+		if _, err = io.ReadFull(r, tmp[:]); err != nil {
+			return
+		}
+		payload = make([]byte, binary.BigEndian.Uint64(tmp[:])-BasicBoxLen-8)
+	} else {
+		payload = make([]byte, baseBox.size-BasicBoxLen)
+	}
+
+	_, err = io.ReadFull(r, payload)
+	boxHeader := b.Header()
+	switch header := boxHeader.(type) {
+	case *BaseBox:
+		*header = baseBox
+		box, err = b.Unmarshal(payload)
+	case *FullBox:
+		header.BaseBox = baseBox
+		header.Version = payload[0]
+		header.Flags = [3]byte(payload[1:4])
+		box, err = b.Unmarshal(payload[4:])
+	}
+	return
+}
+
+func (b BoxType) String() string {
+	return string(b[:])
+}
+
+func (b BoxType) Uint32() uint32 {
+	return binary.BigEndian.Uint32(b[:])
+}
+
+func (b BoxType) Uint32I() uint32 {
+	return *(*uint32)(unsafe.Pointer(&b[0]))
+}
+
+var registry = map[uint32]reflect.Type{}
+
+// RegisterBox 注册box类型
+func RegisterBox[T any](typ ...BoxType) {
+	var b T
+	bt := reflect.TypeOf(b)
+	for _, t := range typ {
+		registry[t.Uint32I()] = bt
+	}
+}
 
 const (
 	BasicBoxLen = 8  // size(4) + type(4)
 	FullBoxLen  = 12 // BasicBoxLen + version(1) + flags(3)
 )
 
-func f(s string) [4]byte {
-	return [4]byte([]byte(s))
+func f(s string) BoxType {
+	return BoxType([]byte(s))
 }
 
 var (
@@ -56,6 +293,7 @@ var (
 	TypeMP4A = f("mp4a")
 	TypeULAW = f("ulaw")
 	TypeALAW = f("alaw")
+	TypeDOPS = f("dOps")
 	TypeOPUS = f("opus")
 	TypeAVCC = f("avcC")
 	TypeHVCC = f("hvcC")
@@ -99,18 +337,6 @@ var (
 	TypeHINT = f("hint")
 )
 
-type BoxEncoder interface {
-	Encode(buf []byte) (int, []byte)
-}
-
-type BoxDecoder interface {
-	Decode(buf []byte) (int, error)
-}
-
-type BoxSize interface {
-	Size() uint64
-}
-
 //	aligned(8) class Box (unsigned int(32) boxtype, optional unsigned int(8)[16] extended_type) {
 //	    unsigned int(32) size;
 //	    unsigned int(32) type = boxtype;
@@ -123,91 +349,11 @@ type BoxSize interface {
 //	    unsigned int(8)[16] usertype = extended_type;
 //	 }
 //	}
-type IBox interface {
-	Decode(io.Reader, *BasicBox) (int, error)
-}
-type BasicBox struct {
-	Offset int64
-	Size   uint64
-	Type   [4]byte
-}
-
-func NewBasicBox(boxtype [4]byte) *BasicBox {
-	return &BasicBox{
-		Type: boxtype,
-	}
-}
-
-func (box *BasicBox) Decode(r io.Reader) (nn int, err error) {
-	if _, err = io.ReadFull(r, box.Type[:]); err != nil {
-		return
-	}
-	nn = 4
-	if box.Size = uint64(binary.BigEndian.Uint32(box.Type[:])); box.Size == 1 {
-		var largeSize [8]byte
-		if _, err = io.ReadFull(r, largeSize[:]); err != nil {
-			return
-		}
-		box.Size = binary.BigEndian.Uint64(largeSize[:])
-		nn += 8
-	}
-	if _, err = io.ReadFull(r, box.Type[:]); err != nil {
-		return
-	}
-	nn += 4
-	return
-}
-
-func (box *BasicBox) Encode() (int, []byte) {
-	buf := make([]byte, box.Size)
-	binary.BigEndian.PutUint32(buf, uint32(box.Size))
-	copy(buf[4:], box.Type[:])
-	return BasicBoxLen, buf
-}
 
 // aligned(8) class FullBox(unsigned int(32) boxtype, unsigned int(8) v, bit(24) f) extends Box(boxtype) {
 //     unsigned int(8) version = v;
 //     bit(24) flags = f;
 // }
-
-type FullBox struct {
-	Box     *BasicBox
-	Version uint8
-	Flags   [3]byte
-}
-
-func NewFullBox(boxtype [4]byte, version uint8) *FullBox {
-	return &FullBox{
-		Box:     NewBasicBox(boxtype),
-		Version: version,
-	}
-}
-
-func (box *FullBox) Size() uint64 {
-	if box.Box.Size > 0 {
-		return box.Box.Size
-	} else {
-		return FullBoxLen
-	}
-}
-
-func (box *FullBox) Decode(r io.Reader) (int, error) {
-	buf := make([]byte, 4)
-	if n, err := io.ReadFull(r, buf); err != nil {
-		return n, err
-	}
-	box.Version = buf[0]
-	copy(box.Flags[:], buf[1:])
-	return 4, nil
-}
-
-func (box *FullBox) Encode() (int, []byte) {
-	box.Box.Size = box.Size()
-	offset, buf := box.Box.Encode()
-	buf[offset] = box.Version
-	copy(buf[offset+1:], box.Flags[:])
-	return offset + 4, buf
-}
 
 type TimeToSampleEntry struct {
 	SampleCount uint32

@@ -3,58 +3,48 @@ package box
 import (
 	"encoding/binary"
 	"io"
+	"net"
 )
 
 type FileTypeBox struct {
-	Major_brand       [4]byte
-	Minor_version     uint32
-	Compatible_brands [][4]byte
+	BaseBox
+	MajorBrand       BoxType
+	MinorVersion     uint32
+	CompatibleBrands []BoxType
 }
 
-func (ftyp *FileTypeBox) Decode(r io.Reader, baseBox *BasicBox) (int, error) {
-	buf := make([]byte, baseBox.Size-BasicBoxLen)
-	if n, err := io.ReadFull(r, buf); err != nil {
-		return n, err
+func CreateFTYPBox(major BoxType, minor uint32, compatibleBrands ...BoxType) *FileTypeBox {
+	return &FileTypeBox{
+		BaseBox: BaseBox{
+			typ:  TypeFTYP,
+			size: uint32(BasicBoxLen + len(compatibleBrands)*4 + 8),
+		},
+		MajorBrand:       major,
+		MinorVersion:     minor,
+		CompatibleBrands: compatibleBrands,
 	}
-	ftyp.Major_brand = [4]byte(buf[0:])
-	ftyp.Minor_version = binary.BigEndian.Uint32(buf[4:])
-	n := 8
-	for ; BasicBoxLen+n < int(baseBox.Size); n += 4 {
-		ftyp.Compatible_brands = append(ftyp.Compatible_brands, [4]byte(buf[n:]))
+}
+
+func (box *FileTypeBox) WriteTo(w io.Writer) (n int64, err error) {
+	var tmp [4]byte
+	buffers := make(net.Buffers, 0, len(box.CompatibleBrands)+2)
+	binary.BigEndian.PutUint32(tmp[:], box.MinorVersion)
+	buffers = append(buffers, box.MajorBrand[:], tmp[:])
+	for _, brand := range box.CompatibleBrands {
+		buffers = append(buffers, brand[:])
 	}
-	return n, nil
+	return buffers.WriteTo(w)
 }
 
-func (ftyp *FileTypeBox) Encode(t [4]byte) (int, []byte) {
-	var baseBox BasicBox
-	baseBox.Type = t
-	baseBox.Size = uint64(BasicBoxLen + len(ftyp.Compatible_brands)*4 + 8)
-	offset, buf := baseBox.Encode()
-	copy(buf[offset:], ftyp.Major_brand[:])
-	offset += 4
-	binary.BigEndian.PutUint32(buf[offset:], ftyp.Minor_version)
-	offset += 4
-	for i := 0; offset < int(baseBox.Size); offset += 4 {
-		copy(buf[offset:], ftyp.Compatible_brands[i][:])
-		i++
+func (box *FileTypeBox) Unmarshal(buf []byte) (IBox, error) {
+	box.MajorBrand = BoxType(buf[:4])
+	box.MinorVersion = binary.BigEndian.Uint32(buf[4:8])
+	for i := 8; i < len(buf); i += 4 {
+		box.CompatibleBrands = append(box.CompatibleBrands, BoxType(buf[i:i+4]))
 	}
-	return offset, buf
+	return box, nil
 }
 
-func MakeFtypBox(major [4]byte, minor uint32, compatibleBrands ...[4]byte) []byte {
-	var ftyp FileTypeBox
-	ftyp.Major_brand = major
-	ftyp.Minor_version = minor
-	ftyp.Compatible_brands = compatibleBrands
-	_, boxData := ftyp.Encode(TypeFTYP)
-	return boxData
-}
-
-func MakeStypBox(major [4]byte, minor uint32, compatibleBrands ...[4]byte) []byte {
-	var styp FileTypeBox
-	styp.Major_brand = major
-	styp.Minor_version = minor
-	styp.Compatible_brands = compatibleBrands
-	_, boxData := styp.Encode(TypeSTYP)
-	return boxData
+func init() {
+	RegisterBox[*FileTypeBox](TypeFTYP, TypeSTYP)
 }

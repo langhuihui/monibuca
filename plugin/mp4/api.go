@@ -62,12 +62,13 @@ func (p *MP4Plugin) download(w http.ResponseWriter, r *http.Request) {
 	}
 	p.DB.Where(&queryRecord).Find(&streams, "end_time>? AND start_time<? AND stream_path=?", startTime, endTime, streamPath)
 	muxer := mp4.NewMuxer(0)
-	var n int
-	n, err = w.Write(box.MakeFtypBox(box.TypeISOM, 0x200, box.TypeISOM, box.TypeISO2, box.TypeAVC1, box.TypeMP41))
+	ftyp := box.CreateFTYPBox(box.TypeISOM, 0x200, box.TypeISOM, box.TypeISO2, box.TypeAVC1, box.TypeMP41)
+	var n int64
+	n, err = box.WriteTo(w, ftyp)
 	if err != nil {
 		return
 	}
-	muxer.CurrentOffset = int64(n)
+	muxer.CurrentOffset = n
 	var lastTs, tsOffset int64
 	var parts []*ContentPart
 	sampleOffset := muxer.CurrentOffset + box.BasicBoxLen*2
@@ -148,16 +149,14 @@ func (p *MP4Plugin) download(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	var mdatBox = box.MediaDataBox(sampleOffset - mdatOffset)
-	boxLen, buf := mdatBox.Encode()
-	if boxLen == box.BasicBoxLen*2 {
-		w.Write(buf)
-	} else {
-		freeBox := box.NewBasicBox(box.TypeFREE)
-		freeBox.Size = box.BasicBoxLen
-		_, free := freeBox.Encode()
-		w.Write(free)
-		w.Write(buf)
+	var mdatBox = box.CreateBaseBox(box.TypeMDAT, uint64(sampleOffset-mdatOffset)+box.BasicBoxLen)
+	var freeBox *box.FreeBox
+	if mdatBox.HeaderSize() == box.BasicBoxLen {
+		freeBox = box.CreateFreeBox(nil)
+	}
+	_, err = box.WriteTo(w, freeBox, mdatBox)
+	if err != nil {
+		return
 	}
 	var written, totalWritten int64
 	for _, part := range parts {

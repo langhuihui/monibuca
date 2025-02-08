@@ -35,13 +35,6 @@ type ELSTEntry struct {
 	MediaRateFraction int16
 }
 
-type TrunEntry struct {
-	SampleDuration              uint32
-	SampleSize                  uint32
-	SampleFlags                 uint32
-	SampleCompositionTimeOffset int32
-}
-
 type SENC struct {
 	Entrys []SencEntry
 }
@@ -49,4 +42,12 @@ type SENC struct {
 type FragEntry struct {
 	Time       uint64
 	MoofOffset uint64
+}
+
+type TFRAEntry struct {
+	Time         uint64
+	MoofOffset   uint64
+	TrafNumber   uint32
+	TrunNumber   uint32
+	SampleNumber uint32
 }

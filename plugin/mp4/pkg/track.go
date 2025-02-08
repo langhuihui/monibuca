@@ -1,8 +1,8 @@
 package mp4
 
 import (
-	"fmt"
 	"io"
+	"slices"
 
 	. "m7s.live/v5/plugin/mp4/pkg/box"
 )
@@ -12,40 +12,40 @@ type (
 		Cid     MP4_CODEC_TYPE
 		TrackId uint32
 		SampleTable
-		Duration               uint32
-		Height                 uint32
-		Width                  uint32
-		SampleRate             uint32
-		SampleSize             uint16
-		SampleCount            uint32
-		ChannelCount           uint8
-		Timescale              uint32
-		StartDts               uint64
-		EndDts                 uint64
-		StartPts               uint64
-		EndPts                 uint64
-		Samplelist             []Sample
-		ELST                   *EditListBox
-		ExtraData              []byte
-		writer                 io.WriteSeeker
-		fragments              []Fragment
-		defaultSize            uint32
-		defaultDuration        uint32
-		defaultSampleFlags     uint32
-		baseDataOffset         uint64
-		stbl                   []byte
+		Duration     uint32
+		Height       uint32
+		Width        uint32
+		SampleRate   uint32
+		SampleSize   uint16
+		SampleCount  uint32
+		ChannelCount uint8
+		Timescale    uint32
+		// StartDts        uint64
+		// EndDts          uint64
+		// StartPts        uint64
+		// EndPts          uint64
+		Samplelist      []Sample
+		ELST            *EditListBox
+		ExtraData       []byte
+		writer          io.WriteSeeker
+		fragments       []Fragment
+		defaultSize     uint32
+		defaultDuration uint32
+		// defaultSampleFlags     uint32
+		// baseDataOffset         uint64
+		// stbl                   []byte
 		FragmentSequenceNumber uint32
 
 		//for subsample
-		defaultIsProtected     uint8
-		defaultPerSampleIVSize uint8
-		defaultCryptByteBlock  uint8
-		defaultSkipByteBlock   uint8
-		defaultConstantIV      []byte
-		defaultKID             [16]byte
-		lastSeig               *SeigSampleGroupEntry
-		lastSaiz               *SaizBox
-		subSamples             []SencEntry
+		// defaultIsProtected     uint8
+		// defaultPerSampleIVSize uint8
+		// defaultCryptByteBlock  uint8
+		// defaultSkipByteBlock   uint8
+		// defaultConstantIV      []byte
+		// defaultKID             [16]byte
+		// lastSeig               *SeigSampleGroupEntry
+		// lastSaiz               *SaizBox
+		// subSamples             []SencEntry
 	}
 	Fragment struct {
 		Offset   uint64
@@ -57,7 +57,7 @@ type (
 	}
 )
 
-func (track *Track) makeElstBox() []byte {
+func (track *Track) makeElstBox() *EditListBox {
 	delay := track.Samplelist[0].PTS * 1000 / uint64(track.Timescale)
 	entryCount := 1
 	version := byte(0)
@@ -71,23 +71,23 @@ func (track *Track) makeElstBox() []byte {
 	// 	entryCount += 1
 	// }
 	boxSize += 4 + entrySize*entryCount
-	elst := NewEditListBox(version)
-	elst.Entrys = make([]ELSTEntry, entryCount)
+	entrys := make([]ELSTEntry, entryCount)
+
 	// if entryCount > 1 {
 	// 	elst.entrys.entrys[0].segmentDuration = startCt
 	// 	elst.entrys.entrys[0].mediaTime = -1
+
 	// 	elst.entrys.entrys[0].mediaRateInteger = 0x0001
 	// 	elst.entrys.entrys[0].mediaRateFraction = 0
 	// }
 
 	//简单起见，mediaTime先固定为0,即不延迟播放
-	elst.Entrys[entryCount-1].SegmentDuration = uint64(track.Duration)
-	elst.Entrys[entryCount-1].MediaTime = 0
-	elst.Entrys[entryCount-1].MediaRateInteger = 0x0001
-	elst.Entrys[entryCount-1].MediaRateFraction = 0
+	entrys[entryCount-1].SegmentDuration = uint64(track.Duration)
+	entrys[entryCount-1].MediaTime = 0
+	entrys[entryCount-1].MediaRateInteger = 0x0001
+	entrys[entryCount-1].MediaRateFraction = 0
 
-	_, boxdata := elst.Encode(boxSize)
-	return boxdata
+	return CreateEditListBox(version, entrys)
 
 }
 
@@ -106,12 +106,8 @@ func (track *Track) Seek(dts uint64) int {
 	return -1
 }
 
-func (track *Track) makeEdtsBox() []byte {
-	elst := track.makeElstBox()
-	edts := BasicBox{Type: TypeEDTS, Size: 8 + uint64(len(elst))}
-	offset, edtsbox := edts.Encode()
-	copy(edtsbox[offset:], elst)
-	return edtsbox
+func (track *Track) makeEdtsBox() *ContainerBox {
+	return CreateContainerBox(TypeEDTS, track.makeElstBox())
 }
 
 func (track *Track) AddSampleEntry(entry Sample) {
@@ -128,138 +124,90 @@ func (track *Track) AddSampleEntry(entry Sample) {
 	track.Samplelist = append(track.Samplelist, entry)
 }
 
-func (track *Track) makeTkhdBox() []byte {
-	tkhd := NewTrackHeaderBox()
+func (track *Track) makeTkhdBox() *TrackHeaderBox {
+	tkhd := CreateTrackHeaderBox(track.TrackId, uint64(track.Duration), track.Width, track.Height)
 	tkhd.Duration = uint64(track.Duration)
-	tkhd.Track_ID = track.TrackId
+	tkhd.TrackID = track.TrackId
+
 	if track.Cid == MP4_CODEC_AAC || track.Cid == MP4_CODEC_G711A || track.Cid == MP4_CODEC_G711U || track.Cid == MP4_CODEC_OPUS {
 		tkhd.Volume = 0x0100
 	} else {
 		tkhd.Width = track.Width << 16
 		tkhd.Height = track.Height << 16
 	}
-	_, tkhdbox := tkhd.Encode()
-	return tkhdbox
+	return tkhd
 }
 
-func (track *Track) makeMinfBox() []byte {
-	var mhdbox []byte
+func (track *Track) makeMinfBox() *ContainerBox {
+	var mhdbox IBox
 	switch track.Cid {
 	case MP4_CODEC_H264, MP4_CODEC_H265:
-		mhdbox = MakeVmhdBox()
+		mhdbox = CreateVideoMediaHeaderBox()
+
 	case MP4_CODEC_G711A, MP4_CODEC_G711U, MP4_CODEC_AAC,
 		MP4_CODEC_MP2, MP4_CODEC_MP3, MP4_CODEC_OPUS:
-		mhdbox = MakeSmhdBox()
+		mhdbox = CreateSoundMediaHeaderBox()
 	default:
 		panic("unsupport codec id")
 	}
-	dinfbox := MakeDefaultDinfBox()
+	dinfbox := CreateDataInformationBox()
 	stblbox := track.makeStblBox()
-
-	minf := BasicBox{Type: TypeMINF, Size: 8 + uint64(len(mhdbox)+len(dinfbox)+len(stblbox))}
-	offset, minfbox := minf.Encode()
-	copy(minfbox[offset:], mhdbox)
-	offset += len(mhdbox)
-	copy(minfbox[offset:], dinfbox)
-	offset += len(dinfbox)
-	copy(minfbox[offset:], stblbox)
-	offset += len(stblbox)
-	return minfbox
+	return CreateContainerBox(TypeMINF, mhdbox, dinfbox, stblbox)
 }
 
-func (track *Track) makeMdiaBox() []byte {
-	mdhdbox := MakeMdhdBox(track.Duration)
+func (track *Track) makeMdiaBox() *ContainerBox {
+	mdhdbox := CreateMediaHeaderBox(track.Timescale, uint64(track.Duration))
 	hdlrbox := MakeHdlrBox(GetHandlerType(track.Cid))
 	minfbox := track.makeMinfBox()
-	mdia := BasicBox{Type: TypeMDIA, Size: 8 + uint64(len(mdhdbox)+len(hdlrbox)+len(minfbox))}
-	offset, mdiabox := mdia.Encode()
-	copy(mdiabox[offset:], mdhdbox)
-	offset += len(mdhdbox)
-	copy(mdiabox[offset:], hdlrbox)
-	offset += len(hdlrbox)
-	copy(mdiabox[offset:], minfbox)
-	offset += len(minfbox)
-	return mdiabox
+	return CreateContainerBox(TypeMDIA, mdhdbox, hdlrbox, minfbox)
 }
 
-func (track *Track) makeStblBox() []byte {
-	var stsdbox, sttsbox, cttsbox, stscbox, stszbox, stcobox, stssbox []byte
-	stsdbox = track.makeStsd(GetHandlerType(track.Cid))
-	if track.SampleTable.STTS != nil {
-		_, sttsbox = track.SampleTable.STTS.Encode()
-	}
-	if track.SampleTable.CTTS != nil {
-		_, cttsbox = track.SampleTable.CTTS.Encode()
-	}
-	if track.SampleTable.STSC != nil {
-		_, stscbox = track.SampleTable.STSC.Encode()
-	}
-	if track.SampleTable.STSZ != nil {
-		_, stszbox = track.SampleTable.STSZ.Encode()
-	}
-	if track.SampleTable.STCO != nil {
-		_, stcobox = track.SampleTable.STCO.Encode()
-	}
+func (track *Track) makeStblBox() IBox {
+	track.STSD = track.makeStsd(GetHandlerType(track.Cid))
 	if track.Cid == MP4_CODEC_H264 || track.Cid == MP4_CODEC_H265 {
-		stssbox = track.makeStssBox()
+		track.STSS = track.makeStssBox()
 	}
-
-	stbl := BasicBox{Type: TypeSTBL, Size: uint64(8 + len(stsdbox) + len(sttsbox) + len(cttsbox) + len(stscbox) + len(stszbox) + len(stcobox) + len(stssbox))}
-	offset, stblbox := stbl.Encode()
-	copy(stblbox[offset:], stsdbox)
-	offset += len(stsdbox)
-	copy(stblbox[offset:], sttsbox)
-	offset += len(sttsbox)
-	copy(stblbox[offset:], cttsbox)
-	offset += len(cttsbox)
-	copy(stblbox[offset:], stscbox)
-	offset += len(stscbox)
-	copy(stblbox[offset:], stszbox)
-	offset += len(stszbox)
-	copy(stblbox[offset:], stcobox)
-	offset += len(stcobox)
-	copy(stblbox[offset:], stssbox)
-	offset += len(stssbox)
-	return stblbox
+	return CreateContainerBox(TypeSTBL, track.STSD, track.STSS, track.STTS, track.CTTS, track.STSC, track.STSZ, track.STCO)
 }
 
-func (track *Track) makeStsd(handler_type HandlerType) []byte {
-	var avbox []byte
+func (track *Track) makeStsd(handler_type HandlerType) *STSDBox {
+	var avbox IBox
 	if track.Cid == MP4_CODEC_H264 {
-		avbox = MakeAvcCBox(track.ExtraData)
+		avbox = CreateDataBox(TypeAVCC, track.ExtraData)
 	} else if track.Cid == MP4_CODEC_H265 {
-		avbox = MakeHvcCBox(track.ExtraData)
+		avbox = CreateDataBox(TypeHVCC, track.ExtraData)
 	} else if track.Cid == MP4_CODEC_AAC || track.Cid == MP4_CODEC_MP2 || track.Cid == MP4_CODEC_MP3 {
-		avbox = MakeEsdsBox(track.TrackId, track.Cid, track.ExtraData)
+		avbox = CreateESDSBox(uint16(track.TrackId), track.Cid, track.ExtraData)
 	} else if track.Cid == MP4_CODEC_OPUS {
-		avbox = MakeOpusSpecificBox(track.ExtraData)
+		avbox = CreateOpusSpecificBox(track.ExtraData)
 	}
-
-	var se []byte
-	var offset int
+	var entry IBox
 	if handler_type == TypeVIDE {
-		entry := NewVisualSampleEntry(GetCodecNameWithCodecId(track.Cid))
-		entry.Width = uint16(track.Width)
-		entry.Height = uint16(track.Height)
-		offset, se = entry.Encode(entry.Size() + uint64(len(avbox)))
+		entry = CreateVisualSampleEntry(GetCodecNameWithCodecId(track.Cid), uint16(track.Width), uint16(track.Height), avbox)
 	} else if handler_type == TypeSOUN {
-		entry := NewAudioSampleEntry(GetCodecNameWithCodecId(track.Cid))
-		entry.ChannelCount = uint16(track.ChannelCount)
-		entry.Samplerate = track.SampleRate
-		entry.SampleSize = track.SampleSize
-		offset, se = entry.Encode(entry.Size() + uint64(len(avbox)))
+		entry = CreateAudioSampleEntry(GetCodecNameWithCodecId(track.Cid), uint16(track.ChannelCount), uint16(track.SampleSize), track.SampleRate, avbox)
 	}
-	copy(se[offset:], avbox)
-
-	var stsd SampleDescriptionBox = 1
-	offset2, stsdbox := stsd.Encode(FullBoxLen + 4 + uint64(len(se)))
-	copy(stsdbox[offset2:], se)
-	return stsdbox
+	return CreateSTSDBox(entry)
 }
 
 // fmp4
-func (track *Track) makeTraf(dataOffsetOffset *int) []byte {
+func (track *Track) makeTraf() *TrackFragmentBox {
 	// Create tfhd box
+	tfhd := track.makeTfhdBox()
+
+	// Create tfdt box
+	tfdt := track.makeTfdtBox()
+
+	// Create trun box with all samples
+	trun := track.makeTrunBox(0, len(track.Samplelist))
+
+	// Create track fragment box with all necessary boxes
+	traf := CreateTrackFragmentBox(tfhd, tfdt, trun)
+
+	return traf
+}
+
+func (track *Track) makeTfhdBox() *TrackFragmentHeaderBox {
 	tfFlags := uint32(0)
 	tfFlags |= TF_FLAG_DEFAULT_BASE_IS_MOOF
 	tfFlags |= TF_FLAG_SAMPLE_DESCRIPTION_INDEX_PRESENT
@@ -267,8 +215,7 @@ func (track *Track) makeTraf(dataOffsetOffset *int) []byte {
 	tfFlags |= TF_FLAG_DEFAULT_SAMPLE_SIZE_PRESENT
 	tfFlags |= TF_FLAG_DEFAULT_SAMPLE_FLAGS_PRESENT
 
-	tfhd := NewTrackFragmentHeaderBox(track.TrackId)
-	tfhd.SampleDescriptionIndex = 1
+	tfhd := CreateTrackFragmentHeaderBox(track.TrackId, tfFlags)
 
 	// Calculate default sample duration
 	if len(track.Samplelist) > 1 {
@@ -297,175 +244,37 @@ func (track *Track) makeTraf(dataOffsetOffset *int) []byte {
 	} else {
 		tfhd.DefaultSampleFlags = MOV_FRAG_SAMPLE_FLAG_DEPENDS_NO
 	}
-
-	// Create tfdt box
-	tfdt := NewTrackFragmentBaseMediaDecodeTimeBox(uint64(track.Samplelist[0].DTS))
-
-	// Calculate traf size first (including header)
-	_, tfhdbox := tfhd.Encode(tfFlags)
-	_, tfdtbox := tfdt.Encode()
-	trafSize := uint64(8) + uint64(len(tfhdbox)) + uint64(len(tfdtbox))
-	// Create trun box with total moof size
-	// moof = header(8) + mfhd(16) + traf
-	// traf = header(8) + tfhd + tfdt + trun
-	// So the data offset should be relative to moof start
-	trun := track.makeTrunBox(0, len(track.Samplelist))
-
-	// Update traf size with trun size
-	trafSize += uint64(len(trun))
-
-	// Create traf box
-	traf := BasicBox{Type: TypeTRAF, Size: trafSize}
-	offset, boxData := traf.Encode()
-	copy(boxData[offset:], tfhdbox)
-	offset += len(tfhdbox)
-	copy(boxData[offset:], tfdtbox)
-	offset += len(tfdtbox)
-	copy(boxData[offset:], trun)
-	*dataOffsetOffset = offset + 12 + 4 // 12 for trun header, 4 for trun sample count
-	offset += len(trun)
-
-	if offset != int(trafSize) {
-		panic("traf box size mismatch")
-	}
-
-	return boxData
+	return tfhd
 }
 
-func (track *Track) makeTfhdBox(offset uint64) []byte {
-	// Set flags in the correct order
-	tfFlags := uint32(0)
-
-	// Set base is moof flag (0x020000)
-	tfFlags |= TF_FLAG_DEFAULT_BASE_IS_MOOF
-
-	// Then set sample description index flag (0x000002)
-	tfFlags |= TF_FLAG_SAMPLE_DESCRIPTION_INDEX_PRESENT
-
-	// Then set default sample duration flag (0x000008)
-	if len(track.Samplelist) > 0 {
-		// Calculate average duration
-		var totalDuration uint64 = 0
-		var count int = 0
-		for i := 1; i < len(track.Samplelist); i++ {
-			duration := track.Samplelist[i].DTS - track.Samplelist[i-1].DTS
-			if duration > 0 {
-				totalDuration += duration
-				count++
-			}
-		}
-
-		if count > 0 {
-			tfFlags |= TF_FLAG_DEFAULT_SAMPLE_DURATION_PRESENT
-		} else if len(track.fragments) > 0 {
-			lastFrag := track.fragments[len(track.fragments)-1]
-			if lastFrag.Duration > 0 {
-				tfFlags |= TF_FLAG_DEFAULT_SAMPLE_DURATION_PRESENT
-			}
-		}
-	}
-
-	// Then set default sample size flag (0x000010)
-	if len(track.Samplelist) > 0 {
-		tfFlags |= TF_FLAG_DEFAULT_SAMPLE_SIZE_PRESENT
-	}
-
-	// Then set default sample flags flag (0x000020)
-	tfFlags |= TF_FLAG_DEFAULT_SAMPLE_FLAGS_PRESENT
-
-	// Create tfhd box
-	tfhd := NewTrackFragmentHeaderBox(track.TrackId)
-
-	// Set default values based on flags
-	if tfFlags&TF_FLAG_DEFAULT_SAMPLE_DURATION_PRESENT != 0 {
-		if len(track.Samplelist) > 1 {
-			var totalDuration uint64 = 0
-			var count int = 0
-			for i := 1; i < len(track.Samplelist); i++ {
-				duration := track.Samplelist[i].DTS - track.Samplelist[i-1].DTS
-				if duration > 0 {
-					totalDuration += duration
-					count++
-				}
-			}
-			if count > 0 {
-				tfhd.DefaultSampleDuration = uint32(totalDuration / uint64(count))
-			}
-		} else if len(track.fragments) > 0 {
-			lastFrag := track.fragments[len(track.fragments)-1]
-			if lastFrag.Duration > 0 {
-				tfhd.DefaultSampleDuration = lastFrag.Duration
-			}
-		}
-	}
-
-	if tfFlags&TF_FLAG_DEFAULT_SAMPLE_SIZE_PRESENT != 0 {
-		tfhd.DefaultSampleSize = uint32(track.Samplelist[0].Size)
-	}
-
-	if tfFlags&TF_FLAG_DEFAULT_SAMPLE_FLAGS_PRESENT != 0 {
-		if track.Cid.IsVideo() {
-			tfhd.DefaultSampleFlags = MOV_FRAG_SAMPLE_FLAG_DEPENDS_YES | MOV_FRAG_SAMPLE_FLAG_IS_NON_SYNC
-		} else {
-			tfhd.DefaultSampleFlags = MOV_FRAG_SAMPLE_FLAG_DEPENDS_NO
-		}
-	}
-
-	// Store default values for later use
-	track.defaultDuration = tfhd.DefaultSampleDuration
-	track.defaultSize = tfhd.DefaultSampleSize
-	track.defaultSampleFlags = tfhd.DefaultSampleFlags
-
-	// Print tfhd box details
-	fmt.Printf("tfhd box: flags=0x%08x, track_id=%d\n", tfFlags, track.TrackId)
-	fmt.Printf("tfhd box: default_sample_duration=%d, default_sample_size=%d, default_sample_flags=0x%08x\n",
-		tfhd.DefaultSampleDuration, tfhd.DefaultSampleSize, tfhd.DefaultSampleFlags)
-
-	_, boxData := tfhd.Encode(tfFlags)
-	fmt.Printf("tfhd box first 32 bytes: % 02X\n", boxData[:32])
-	return boxData
+func (track *Track) makeTfdtBox() *TrackFragmentBaseMediaDecodeTimeBox {
+	return CreateTrackFragmentBaseMediaDecodeTimeBox(uint64(track.Samplelist[0].DTS))
 }
 
-func (track *Track) makeTfdtBox() []byte {
-	tfdt := NewTrackFragmentBaseMediaDecodeTimeBox(uint64(track.Samplelist[0].DTS))
-	offset, boxData := tfdt.Encode()
-	expectedSize := tfdt.Size()
-	if uint64(offset) != expectedSize {
-		panic("tfdt box size is wrong")
-	}
-	return boxData[:offset]
-}
-
-func (track *Track) makeStssBox() (boxdata []byte) {
-	var stss SyncSampleBox
+func (track *Track) makeStssBox() *STSSBox {
+	var stss []uint32
 	for i, sample := range track.Samplelist {
 		if sample.KeyFrame {
 			stss = append(stss, uint32(i+1))
 		}
 	}
-	_, boxdata = stss.Encode()
-	return
+	return CreateSTSSBox(stss)
 }
 
-func (track *Track) makeTfraBox() []byte {
-	tfra := NewTrackFragmentRandomAccessBox(track.TrackId)
-	tfra.LengthSizeOfSampleNum = 0
-	tfra.LengthSizeOfTrafNum = 0
-	tfra.LengthSizeOfTrunNum = 0
-	for _, f := range track.fragments {
-		tfra.FragEntrys = append(tfra.FragEntrys, FragEntry{
-			Time:       f.FirstPts,
-			MoofOffset: f.Offset,
-		})
-	}
-	_, tfraData := tfra.Encode()
-	return tfraData
+func (track *Track) makeTfraBox() *TrackFragmentRandomAccessBox {
+	return CreateTrackFragmentRandomAccessBox(track.TrackId, slices.Collect(func(yield func(TFRAEntry) bool) {
+		for _, f := range track.fragments {
+			if !yield(TFRAEntry{
+				Time:       f.FirstPts,
+				MoofOffset: f.Offset,
+			}) {
+				break
+			}
+		}
+	}))
 }
 
-func (track *Track) makeTrunBox(start, end int) []byte {
-	// Create a new TrackRunBox
-	trun := NewTrackRunBox()
-	trun.SampleCount = uint32(end - start)
+func (track *Track) makeTrunBox(start, end int) *TrackRunBox {
 
 	// Set flags in the correct order
 	flag := TR_FLAG_DATA_OFFSET
@@ -480,6 +289,7 @@ func (track *Track) makeTrunBox(start, end int) []byte {
 	if track.Cid.IsVideo() {
 		flag |= TR_FLAG_DATA_SAMPLE_FLAGS
 	}
+	// Create a new TrackRunBox
 
 	// Finally set composition time offset flag if needed (0x000800)
 	for i := start; i < end; i++ {
@@ -488,52 +298,44 @@ func (track *Track) makeTrunBox(start, end int) []byte {
 			break
 		}
 	}
-
+	trun := CreateTrackRunBox(flag, uint32(end-start))
 	// Fill entry list
-	trun.EntryList = make([]TrunEntry, trun.SampleCount)
+	trun.Entries = make([]TrunEntry, trun.SampleCount)
 	for i := 0; i < int(trun.SampleCount); i++ {
 		sample := &track.Samplelist[start+i]
 		// Duration
 		if i < int(trun.SampleCount)-1 {
-			trun.EntryList[i].SampleDuration = uint32(track.Samplelist[start+i+1].DTS - sample.DTS)
+			trun.Entries[i].SampleDuration = uint32(track.Samplelist[start+i+1].DTS - sample.DTS)
 		} else {
-			trun.EntryList[i].SampleDuration = trun.EntryList[i-1].SampleDuration
+			trun.Entries[i].SampleDuration = trun.Entries[i-1].SampleDuration
 		}
 		// Size
-		trun.EntryList[i].SampleSize = uint32(sample.Size)
+		trun.Entries[i].SampleSize = uint32(sample.Size)
 		// Flags
 		if flag&TR_FLAG_DATA_SAMPLE_FLAGS != 0 {
 			if sample.KeyFrame {
-				trun.EntryList[i].SampleFlags = MOV_FRAG_SAMPLE_FLAG_DEPENDS_NO | MOV_FRAG_SAMPLE_FLAG_IS_SYNC
+				trun.Entries[i].SampleFlags = MOV_FRAG_SAMPLE_FLAG_DEPENDS_NO | MOV_FRAG_SAMPLE_FLAG_IS_SYNC
 			} else {
-				trun.EntryList[i].SampleFlags = MOV_FRAG_SAMPLE_FLAG_DEPENDS_YES | MOV_FRAG_SAMPLE_FLAG_IS_NON_SYNC
+				trun.Entries[i].SampleFlags = MOV_FRAG_SAMPLE_FLAG_DEPENDS_YES | MOV_FRAG_SAMPLE_FLAG_IS_NON_SYNC
 			}
 		}
 		// Composition time offset
 		if flag&TR_FLAG_DATA_SAMPLE_COMPOSITION_TIME != 0 {
-			trun.EntryList[i].SampleCompositionTimeOffset = int32(sample.PTS - sample.DTS)
+			trun.Entries[i].SampleCompositionTimeOffset = int32(sample.PTS - sample.DTS)
 		}
 	}
 
-	// Calculate data offset
-	// Data offset is relative to the start of the moof box
-	// When TF_FLAG_DEFAULT_BASE_IS_MOOF is set, we need to add the size of the moof box
-	// to point to the start of the data in the mdat box
-	// trun.Dataoffset = int32(moofSize + 8) // +8 for mdat header
-
-	// Print trun box details
-	_, boxData := trun.Encode(flag)
-
-	return boxData
+	return trun
 }
 
 func (track *Track) makeStblTable() {
 	sameSize := true
 	movchunks := make([]movchunk, 0)
 	ckn := uint32(0)
-	var stts TimeToSampleBox
-	var ctts CompositionOffsetBox
-	var stco ChunkOffsetBox
+	var stts []STTSEntry
+	var ctts []CTTSEntry
+	var stco []uint64
+
 	for i, sample := range track.Samplelist {
 		sttsEntry := STTSEntry{SampleCount: 1, SampleDelta: 1}
 		cttsEntry := CTTSEntry{SampleCount: 1, SampleOffset: uint32(sample.PTS) - uint32(sample.DTS)}
@@ -574,56 +376,56 @@ func (track *Track) makeStblTable() {
 			ckn++
 		}
 	}
-	stsz := &SampleSizeBox{
-		SampleSize:  0,
-		SampleCount: uint32(len(track.Samplelist)),
-	}
+	var sampleSize uint32
+	var entrySizelist []uint32
+
 	if sameSize {
-		stsz.SampleSize = uint32(track.Samplelist[0].Size)
+		sampleSize = uint32(track.Samplelist[0].Size)
 	} else {
-		stsz.EntrySizelist = make([]uint32, stsz.SampleCount)
-		for i := 0; i < len(stsz.EntrySizelist); i++ {
-			stsz.EntrySizelist[i] = uint32(track.Samplelist[i].Size)
+		entrySizelist = make([]uint32, len(track.Samplelist))
+
+		for i := 0; i < len(track.Samplelist); i++ {
+			entrySizelist[i] = uint32(track.Samplelist[i].Size)
 		}
+
 	}
 
-	var stsc SampleToChunkBox
+	var stsc []STSCEntry
 	for i, chunk := range movchunks {
 		if i == 0 || chunk.samplenum != movchunks[i-1].samplenum {
 			stsc = append(stsc, STSCEntry{FirstChunk: chunk.chunknum + 1, SampleDescriptionIndex: 1, SamplesPerChunk: chunk.samplenum})
 		}
 	}
-
-	track.SampleTable.STTS = &stts
-	track.SampleTable.STSC = &stsc
-	track.SampleTable.STCO = &stco
-	track.SampleTable.STSZ = stsz
 	if track.Cid == MP4_CODEC_H264 || track.Cid == MP4_CODEC_H265 {
-		track.SampleTable.CTTS = &ctts
+		track.CTTS = CreateCTTSBox(ctts)
 	}
+	track.STTS = CreateSTTSBox(stts)
+	track.STSC = CreateSTSCBox(stsc)
+	track.STCO = CreateSTCOBox(stco)
+	track.STSZ = CreateSTSZBox(sampleSize, entrySizelist)
 }
 
-func (track *Track) makeSidxBox(totalSidxSize uint32, refsize uint32) []byte {
-	sidx := NewSegmentIndexBox()
-	sidx.ReferenceID = track.TrackId
-	sidx.TimeScale = track.Timescale
-	sidx.EarliestPresentationTime = track.StartPts
-	sidx.ReferenceCount = 1
-	sidx.FirstOffset = 52 + uint64(totalSidxSize)
-	entry := SidxEntry{
-		ReferenceType:      0,
-		ReferencedSize:     refsize,
-		SubsegmentDuration: 0,
-		StartsWithSAP:      1,
-		SAPType:            0,
-		SAPDeltaTime:       0,
-	}
+// func (track *Track) makeSidxBox(totalSidxSize uint32, refsize uint32) []byte {
+// 	sidx := NewSegmentIndexBox()
+// 	sidx.ReferenceID = track.TrackId
+// 	sidx.TimeScale = track.Timescale
+// 	sidx.EarliestPresentationTime = track.StartPts
+// 	sidx.ReferenceCount = 1
+// 	sidx.FirstOffset = 52 + uint64(totalSidxSize)
+// 	entry := SidxEntry{
+// 		ReferenceType:      0,
+// 		ReferencedSize:     refsize,
+// 		SubsegmentDuration: 0,
+// 		StartsWithSAP:      1,
+// 		SAPType:            0,
+// 		SAPDeltaTime:       0,
+// 	}
 
-	if len(track.Samplelist) > 0 {
-		entry.SubsegmentDuration = uint32(track.Samplelist[len(track.Samplelist)-1].DTS) - uint32(track.StartDts)
-	}
-	sidx.Entrys = append(sidx.Entrys, entry)
-	sidx.Box.Box.Size = sidx.Size()
-	_, boxData := sidx.Encode()
-	return boxData
-}
+// 	if len(track.Samplelist) > 0 {
+// 		entry.SubsegmentDuration = uint32(track.Samplelist[len(track.Samplelist)-1].DTS) - uint32(track.StartDts)
+// 	}
+// 	sidx.Entrys = append(sidx.Entrys, entry)
+// 	sidx.Box.Box.Size = sidx.Size()
+// 	_, boxData := sidx.Encode()
+// 	return boxData
+// }

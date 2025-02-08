@@ -5,7 +5,7 @@ import (
 	"io"
 )
 
-// aligned(8) class SampleSizeBox extends FullBox(‘stsz’, version = 0, 0) {
+// aligned(8) class SampleSizeBox extends FullBox('stsz', version = 0, 0) {
 // 		unsigned int(32) sample_size;
 // 		unsigned int(32) sample_count;
 // 		if (sample_size==0) {
@@ -15,61 +15,66 @@ import (
 // 	}
 // }
 
-type SampleSizeBox struct {
+type STSZBox struct {
+	FullBox
 	SampleSize    uint32
 	SampleCount   uint32
 	EntrySizelist []uint32
 }
 
-func (stsz *SampleSizeBox) Size() uint64 {
-	if stsz.SampleSize == 0 {
-		return FullBoxLen + 8 + 4*uint64(stsz.SampleCount)
-	} else {
-		return FullBoxLen + 8
+func CreateSTSZBox(sampleSize uint32, entrySizelist []uint32) *STSZBox {
+	return &STSZBox{
+		FullBox: FullBox{
+			BaseBox: BaseBox{
+				typ:  TypeSTSZ,
+				size: uint32(FullBoxLen + 8 + len(entrySizelist)*4),
+			},
+		},
+		SampleSize:    sampleSize,
+		SampleCount:   uint32(len(entrySizelist)),
+		EntrySizelist: entrySizelist,
 	}
 }
 
-func (stsz *SampleSizeBox) Decode(r io.Reader) (offset int, err error) {
-	var fullbox FullBox
-	if _, err = fullbox.Decode(r); err != nil {
-		return
-	}
-	tmp := make([]byte, 8)
-	if _, err = io.ReadFull(r, tmp); err != nil {
-		return
-	}
-	offset = 12
-	stsz.SampleSize = binary.BigEndian.Uint32(tmp[:])
-	stsz.SampleCount = binary.BigEndian.Uint32(tmp[4:])
-	if stsz.SampleSize == 0 {
-		buf := make([]byte, stsz.SampleCount*4)
-		if _, err = io.ReadFull(r, buf); err != nil {
-			return
+func (box *STSZBox) WriteTo(w io.Writer) (n int64, err error) {
+	buf := make([]byte, 8+len(box.EntrySizelist)*4)
+
+	// Write sample size
+	binary.BigEndian.PutUint32(buf[:4], box.SampleSize)
+
+	// Write sample count
+	binary.BigEndian.PutUint32(buf[4:8], box.SampleCount)
+
+	// Write entry sizes if sample size is 0
+	if box.SampleSize == 0 {
+		for i, size := range box.EntrySizelist {
+			binary.BigEndian.PutUint32(buf[8+i*4:], size)
 		}
-		idx := 0
-		stsz.EntrySizelist = make([]uint32, stsz.SampleCount)
-		for i := 0; i < int(stsz.SampleCount); i++ {
-			stsz.EntrySizelist[i] = binary.BigEndian.Uint32(buf[idx:])
+	}
+
+	_, err = w.Write(buf)
+	return int64(len(buf)), err
+}
+
+func (box *STSZBox) Unmarshal(buf []byte) (IBox, error) {
+	box.SampleSize = binary.BigEndian.Uint32(buf[:4])
+	box.SampleCount = binary.BigEndian.Uint32(buf[4:8])
+
+	if box.SampleSize == 0 {
+		if len(buf) < 8+int(box.SampleCount)*4 {
+			return nil, io.ErrShortBuffer
+		}
+		box.EntrySizelist = make([]uint32, box.SampleCount)
+		idx := 8
+		for i := 0; i < int(box.SampleCount); i++ {
+			box.EntrySizelist[i] = binary.BigEndian.Uint32(buf[idx:])
 			idx += 4
 		}
-		offset += idx
 	}
-	return
+
+	return box, nil
 }
 
-func (stsz *SampleSizeBox) Encode() (int, []byte) {
-	fullbox := NewFullBox(TypeSTSZ, 0)
-	fullbox.Box.Size = stsz.Size()
-	offset, buf := fullbox.Encode()
-	binary.BigEndian.PutUint32(buf[offset:], stsz.SampleSize)
-	offset += 4
-	binary.BigEndian.PutUint32(buf[offset:], stsz.SampleCount)
-	offset += 4
-	if stsz.SampleSize == 0 {
-		for i := 0; i < int(stsz.SampleCount); i++ {
-			binary.BigEndian.PutUint32(buf[offset:], stsz.EntrySizelist[i])
-			offset += 4
-		}
-	}
-	return offset, buf
+func init() {
+	RegisterBox[*STSZBox](TypeSTSZ)
 }

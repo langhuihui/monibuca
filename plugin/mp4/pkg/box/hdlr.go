@@ -3,6 +3,7 @@ package box
 import (
 	"encoding/binary"
 	"io"
+	"net"
 )
 
 // Box Type: 'hdlr'
@@ -27,44 +28,43 @@ import (
 
 type HandlerType = [4]byte
 type HandlerBox struct {
+	FullBox
 	Pre_defined  uint32
 	Handler_type HandlerType
-	Reserved     [3]uint32
 	Name         string
 }
 
 func NewHandlerBox(handlerType HandlerType, name string) *HandlerBox {
 	return &HandlerBox{
+		FullBox: FullBox{
+			BaseBox: BaseBox{
+				typ:  TypeHDLR,
+				size: uint32(20 + len(name) + 1 + FullBoxLen),
+			},
+		},
 		Handler_type: handlerType,
 		Name:         name,
 	}
 }
 
-func (hdlr *HandlerBox) Decode(r io.Reader, size uint64) (offset int, err error) {
-	var fullbox FullBox
-	if _, err = fullbox.Decode(r); err != nil {
-		return 0, err
-	}
-	buf := make([]byte, size-FullBoxLen)
-	if _, err = io.ReadFull(r, buf); err != nil {
-		return 0, err
-	}
+func (hdlr *HandlerBox) Unmarshal(buf []byte) (IBox, error) {
 	hdlr.Pre_defined = binary.BigEndian.Uint32(buf[:4])
 	copy(hdlr.Handler_type[:], buf[4:8])
-	hdlr.Name = string(buf[20 : size-FullBoxLen])
-	offset = int(size - FullBoxLen)
-	return
+	hdlr.Name = string(buf[20:])
+	return hdlr, nil
 }
 
-func (hdlr *HandlerBox) Encode() (int, []byte) {
-	fullbox := NewFullBox(TypeHDLR, 0)
-	fullbox.Box.Size = 20 + uint64(len(hdlr.Name)+1) + FullBoxLen
-	offset, buf := fullbox.Encode()
-	binary.BigEndian.PutUint32(buf[offset:], hdlr.Pre_defined)
-	copy(buf[offset+4:], hdlr.Handler_type[:])
-	offset += 20
-	copy(buf[offset:], []byte(hdlr.Name))
-	return offset + len(hdlr.Name), buf
+func (hdlr *HandlerBox) WriteTo(w io.Writer) (n int64, err error) {
+	var tmp [20]byte
+	binary.BigEndian.PutUint32(tmp[:], hdlr.Pre_defined)
+	copy(tmp[4:8], hdlr.Handler_type[:])
+	var buffer = net.Buffers{
+		tmp[:],
+		[]byte(hdlr.Name),
+		[]byte{0},
+	}
+	return buffer.WriteTo(w)
+
 }
 
 func GetHandlerType(cid MP4_CODEC_TYPE) HandlerType {
@@ -79,15 +79,15 @@ func GetHandlerType(cid MP4_CODEC_TYPE) HandlerType {
 	}
 }
 
-func MakeHdlrBox(hdt HandlerType) []byte {
+func MakeHdlrBox(hdt HandlerType) *HandlerBox {
 	var hdlr *HandlerBox = nil
 	if hdt == TypeVIDE {
 		hdlr = NewHandlerBox(hdt, "VideoHandler")
+
 	} else if hdt == TypeSOUN {
 		hdlr = NewHandlerBox(hdt, "SoundHandler")
 	} else {
 		hdlr = NewHandlerBox(hdt, "")
 	}
-	_, boxdata := hdlr.Encode()
-	return boxdata
+	return hdlr
 }

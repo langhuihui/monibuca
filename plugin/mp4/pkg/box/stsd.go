@@ -1,6 +1,7 @@
 package box
 
 import (
+	"bytes"
 	"encoding/binary"
 	"io"
 )
@@ -11,39 +12,8 @@ import (
 // 	}
 
 type SampleEntry struct {
-	Type                 [4]byte
-	data_reference_index uint16
-}
-
-func NewSampleEntry(format [4]byte) *SampleEntry {
-	return &SampleEntry{
-		Type:                 format,
-		data_reference_index: 1,
-	}
-}
-
-func (entry *SampleEntry) Size() uint64 {
-	return BasicBoxLen + 8
-}
-
-func (entry *SampleEntry) Decode(r io.Reader) (offset int, err error) {
-
-	buf := make([]byte, 8)
-	if _, err = io.ReadFull(r, buf); err != nil {
-		return
-	}
-	offset = 6
-	entry.data_reference_index = binary.BigEndian.Uint16(buf[offset:])
-	offset += 2
-	return
-}
-
-func (entry *SampleEntry) Encode(size uint64) (int, []byte) {
-	offset, buf := (&BasicBox{Type: entry.Type, Size: size}).Encode()
-	offset += 6
-	binary.BigEndian.PutUint16(buf[offset:], entry.data_reference_index)
-	offset += 2
-	return offset, buf
+	BaseBox
+	DataReferenceIndex uint16
 }
 
 // class HintSampleEntry() extends SampleEntry (protocol) {
@@ -51,8 +21,9 @@ func (entry *SampleEntry) Encode(size uint64) (int, []byte) {
 // }
 
 type HintSampleEntry struct {
-	Entry *SampleEntry
-	Data  byte
+	SampleEntry
+
+	Data []byte
 }
 
 // class AudioSampleEntry(codingname) extends SampleEntry (codingname){
@@ -65,56 +36,87 @@ type HintSampleEntry struct {
 // }
 
 type AudioSampleEntry struct {
-	*SampleEntry
+	SampleEntry
 	Version      uint16 // ffmpeg mov.c mov_parse_stsd_audio
 	ChannelCount uint16
 	SampleSize   uint16
 	Samplerate   uint32
+	ExtraData    IBox
 }
 
-func NewAudioSampleEntry(format [4]byte) *AudioSampleEntry {
+func (s *SampleEntry) WriteTo(w io.Writer) (n int64, err error) {
+	var tmp [8]byte
+	binary.BigEndian.PutUint16(tmp[6:], s.DataReferenceIndex)
+	_, err = w.Write(tmp[:])
+	return 8, err
+}
+
+func (s *SampleEntry) Unmarshal(buf []byte) {
+	s.DataReferenceIndex = binary.BigEndian.Uint16(buf[6:])
+}
+
+func CreateAudioSampleEntry(codecName BoxType, channelCount uint16, sampleSize uint16, samplerate uint32, extraData IBox) *AudioSampleEntry {
+	size := 28 + BasicBoxLen
+	if extraData != nil {
+		size += int(extraData.Size())
+	}
 	return &AudioSampleEntry{
-		SampleEntry: NewSampleEntry(format),
+		SampleEntry: SampleEntry{
+			BaseBox: BaseBox{
+				typ:  codecName,
+				size: uint32(size),
+			},
+			DataReferenceIndex: 1,
+		},
+		Version:      0,
+		ChannelCount: channelCount,
+		SampleSize:   sampleSize,
+		Samplerate:   samplerate,
+		ExtraData:    extraData,
 	}
 }
 
-func (entry *AudioSampleEntry) Decode(r io.Reader) (offset int, err error) {
-	if _, err = entry.SampleEntry.Decode(r); err != nil {
+func (audio *AudioSampleEntry) WriteTo(w io.Writer) (n int64, err error) {
+	n, err = audio.SampleEntry.WriteTo(w)
+	if err != nil {
 		return
 	}
-	buf := make([]byte, 20)
-	if _, err = io.ReadFull(r, buf); err != nil {
-		return
+	var buf [20]byte
+	binary.BigEndian.PutUint16(buf[8:], audio.Version)
+	binary.BigEndian.PutUint16(buf[10:], audio.ChannelCount)
+	binary.BigEndian.PutUint16(buf[12:], audio.SampleSize)
+	binary.BigEndian.PutUint32(buf[16:], audio.Samplerate<<16)
+	_, err = w.Write(buf[:])
+	n += 20
+	var nn int64
+	if audio.ExtraData != nil {
+		nn, err = WriteTo(w, audio.ExtraData)
+		if err != nil {
+			return
+		}
+		n += nn
 	}
-	offset = 0
-	entry.Version = binary.BigEndian.Uint16(buf[offset:])
-	offset = 8
-	entry.ChannelCount = binary.BigEndian.Uint16(buf[offset:])
-	offset += 2
-	entry.SampleSize = binary.BigEndian.Uint16(buf[offset:])
-	offset += 2
-	offset += 4
-	entry.Samplerate = binary.BigEndian.Uint32(buf[offset:])
-	entry.Samplerate = entry.Samplerate >> 16
-	offset += 4
 	return
+
 }
 
-func (entry *AudioSampleEntry) Size() uint64 {
-	return entry.SampleEntry.Size() + 20
-}
+func (audio *AudioSampleEntry) Unmarshal(buf []byte) (IBox, error) {
+	audio.SampleEntry.Unmarshal(buf)
+	buf = buf[8:]
+	audio.Version = binary.BigEndian.Uint16(buf[0:])
+	audio.ChannelCount = binary.BigEndian.Uint16(buf[8:])
+	audio.SampleSize = binary.BigEndian.Uint16(buf[10:])
 
-func (entry *AudioSampleEntry) Encode(size uint64) (int, []byte) {
-	offset, buf := entry.SampleEntry.Encode(size)
-	offset += 8
-	binary.BigEndian.PutUint16(buf[offset:], entry.ChannelCount)
-	offset += 2
-	binary.BigEndian.PutUint16(buf[offset:], entry.SampleSize)
-	offset += 2
-	offset += 4
-	binary.BigEndian.PutUint32(buf[offset:], entry.Samplerate<<16)
-	offset += 4
-	return offset, buf
+	audio.Samplerate = binary.BigEndian.Uint32(buf[16:]) >> 16
+	if len(buf) > 20 {
+		box, err := ReadFrom(bytes.NewReader(buf[20:]))
+		if err != nil {
+			return nil, err
+		}
+		audio.ExtraData = box
+	}
+
+	return audio, nil
 }
 
 // class VisualSampleEntry(codingname) extends SampleEntry (codingname){
@@ -136,71 +138,88 @@ func (entry *AudioSampleEntry) Encode(size uint64) (int, []byte) {
 // }
 
 type VisualSampleEntry struct {
-	*SampleEntry
+	SampleEntry
 	Width, Height                   uint16
-	horizresolution, vertresolution uint32
-	frame_count                     uint16
-	compressorname                  [32]byte
+	Horizresolution, Vertresolution uint32
+	FrameCount                      uint16
+	Compressorname                  [32]byte
+	Depth                           uint16
+	ExtraData                       IBox
 }
 
-func NewVisualSampleEntry(format [4]byte) *VisualSampleEntry {
+func CreateVisualSampleEntry(codecName BoxType, width, height uint16, extraData IBox) *VisualSampleEntry {
+	size := 78 + BasicBoxLen
+	if extraData != nil {
+		size += int(extraData.Size())
+	}
 	return &VisualSampleEntry{
-		SampleEntry:     NewSampleEntry(format),
-		horizresolution: 0x00480000,
-		vertresolution:  0x00480000,
-		frame_count:     1,
+		SampleEntry: SampleEntry{
+			BaseBox: BaseBox{
+				typ:  codecName,
+				size: uint32(size),
+			},
+			DataReferenceIndex: 1,
+		},
+		Width:           width,
+		Height:          height,
+		Horizresolution: 0x00480000,
+		Vertresolution:  0x00480000,
+		FrameCount:      1,
+		Depth:           0x0018,
+		ExtraData:       extraData,
 	}
 }
 
-func (entry *VisualSampleEntry) Size() uint64 {
-	return entry.SampleEntry.Size() + 70
-}
-
-func (entry *VisualSampleEntry) Decode(r io.Reader) (offset int, err error) {
-	if _, err = entry.SampleEntry.Decode(r); err != nil {
-		return 0, err
-	}
-	buf := make([]byte, 70)
-	if _, err = io.ReadFull(r, buf); err != nil {
+func (visual *VisualSampleEntry) WriteTo(w io.Writer) (n int64, err error) {
+	n, err = visual.SampleEntry.WriteTo(w)
+	if err != nil {
 		return
 	}
-	offset = 16
-	entry.Width = binary.BigEndian.Uint16(buf[offset:])
-	offset += 2
-	entry.Height = binary.BigEndian.Uint16(buf[offset:])
-	offset += 2
-	entry.horizresolution = binary.BigEndian.Uint32(buf[offset:])
-	offset += 4
-	entry.vertresolution = binary.BigEndian.Uint32(buf[offset:])
-	offset += 8
-	entry.frame_count = binary.BigEndian.Uint16(buf[offset:])
-	offset += 2
-	copy(entry.compressorname[:], buf[offset:offset+32])
-	offset += 32
-	offset += 4
+
+	var buf [70]byte // 16(pre_defined) + 2(width) + 2(height) + 4(horiz) + 4(vert) + 4(reserved) + 2(frame) + 32(compressor) + 2(depth) + 2(pre_defined)
+	binary.BigEndian.PutUint16(buf[16:], visual.Width)
+	binary.BigEndian.PutUint16(buf[18:], visual.Height)
+	binary.BigEndian.PutUint32(buf[20:], visual.Horizresolution)
+	binary.BigEndian.PutUint32(buf[24:], visual.Vertresolution)
+	binary.BigEndian.PutUint16(buf[32:], visual.FrameCount)
+	copy(buf[34:66], visual.Compressorname[:])
+	binary.BigEndian.PutUint16(buf[66:], visual.Depth)
+	binary.BigEndian.PutUint16(buf[68:], 0xFFFF) // pre_defined = -1
+
+	_, err = w.Write(buf[:])
+	n += 70
+	var nn int64
+	if visual.ExtraData != nil {
+		nn, err = WriteTo(w, visual.ExtraData)
+		if err != nil {
+			return
+		}
+		n += nn
+	}
 	return
 }
 
-func (entry *VisualSampleEntry) Encode(size uint64) (int, []byte) {
-	offset, buf := entry.SampleEntry.Encode(size)
-	offset += 16
-	binary.BigEndian.PutUint16(buf[offset:], entry.Width)
-	offset += 2
-	binary.BigEndian.PutUint16(buf[offset:], entry.Height)
-	offset += 2
-	binary.BigEndian.PutUint32(buf[offset:], entry.horizresolution)
-	offset += 4
-	binary.BigEndian.PutUint32(buf[offset:], entry.vertresolution)
-	offset += 8
-	binary.BigEndian.PutUint16(buf[offset:], entry.frame_count)
-	offset += 2
-	copy(buf[offset:offset+32], entry.compressorname[:])
-	offset += 32
-	binary.BigEndian.PutUint16(buf[offset:], 0x0018)
-	offset += 2
-	binary.BigEndian.PutUint16(buf[offset:], 0xFFFF)
-	offset += 2
-	return offset, buf
+func (visual *VisualSampleEntry) Unmarshal(buf []byte) (IBox, error) {
+	visual.SampleEntry.Unmarshal(buf)
+	buf = buf[24:] // Skip 8 bytes from SampleEntry + 16 bytes pre_defined
+	visual.Width = binary.BigEndian.Uint16(buf[0:])
+	visual.Height = binary.BigEndian.Uint16(buf[2:])
+
+	visual.Horizresolution = binary.BigEndian.Uint32(buf[4:])
+	visual.Vertresolution = binary.BigEndian.Uint32(buf[8:])
+	visual.FrameCount = binary.BigEndian.Uint16(buf[16:])
+	copy(visual.Compressorname[:], buf[18:50])
+	visual.Depth = binary.BigEndian.Uint16(buf[50:])
+
+	if len(buf) > 52 {
+		box, err := ReadFrom(bytes.NewReader(buf[52:]))
+		if err != nil {
+			return nil, err
+		}
+		visual.ExtraData = box
+	}
+
+	return visual, nil
 }
 
 // aligned(8) class SampleDescriptionBox (unsigned int(32) handler_type) extends FullBox('stsd', 0, 0){
@@ -208,16 +227,16 @@ func (entry *VisualSampleEntry) Encode(size uint64) (int, []byte) {
 // 	unsigned int(32) entry_count;
 // 	   for (i = 1 ; i <= entry_count ; i++){
 // 		  switch (handler_type){
-// 			 case ‘soun’: // for audio tracks
+// 			 case 'soun': // for audio tracks
 // 				AudioSampleEntry();
 // 				break;
-// 			 case ‘vide’: // for video tracks
+// 			 case 'vide': // for video tracks
 // 				VisualSampleEntry();
 // 				break;
-// 			 case ‘hint’: // Hint track
+// 			 case 'hint': // Hint track
 // 				HintSampleEntry();
 // 				break;
-// 			 case ‘meta’: // Metadata track
+// 			 case 'meta': // Metadata track
 // 				MetadataSampleEntry();
 // 				break;
 // 		}
@@ -231,50 +250,82 @@ const (
 	SAMPLE_VIDEO
 )
 
-type SampleDescriptionBox uint32
+type STSDBox struct {
+	FullBox
+	Entries []IBox
+}
 
-func (stsd *SampleDescriptionBox) Decode(r io.Reader) (offset int, err error) {
-	var fullbox FullBox
-	if offset, err = fullbox.Decode(r); err != nil {
+func CreateSTSDBox(entries ...IBox) *STSDBox {
+	childSize := 0
+	for _, entry := range entries {
+		childSize += int(entry.Size())
+	}
+	return &STSDBox{
+		FullBox: FullBox{
+			BaseBox: BaseBox{
+				typ:  TypeSTSD,
+				size: uint32(FullBoxLen + 4 + childSize),
+			},
+		},
+		Entries: entries,
+	}
+}
+
+func (stsd *STSDBox) Unmarshal(buf []byte) (IBox, error) {
+	stsd.Entries = make([]IBox, 0, binary.BigEndian.Uint32(buf))
+	r := bytes.NewReader(buf[4:])
+	for {
+		box, err := ReadFrom(r)
+		if err != nil {
+			break
+		}
+		stsd.Entries = append(stsd.Entries, box)
+	}
+	return stsd, nil
+}
+
+func (stsd *STSDBox) WriteTo(w io.Writer) (n int64, err error) {
+	var tmp [4]byte
+	var nn int64
+	binary.BigEndian.PutUint32(tmp[:], uint32(len(stsd.Entries)))
+	_, err = w.Write(tmp[:])
+	if err != nil {
 		return
 	}
-	buf := make([]byte, 4)
-	if _, err = io.ReadFull(r, buf); err != nil {
+	n += 4
+	for _, entry := range stsd.Entries {
+		nn, err = WriteTo(w, entry)
+		if err != nil {
+			return
+		}
+		n += nn
+	}
+	return int64(n), nil
+}
+
+func (h *HintSampleEntry) Unmarshal(buf []byte) (IBox, error) {
+	h.SampleEntry.Unmarshal(buf)
+	h.Data = buf[8:]
+	return h, nil
+}
+
+func (h *HintSampleEntry) WriteTo(w io.Writer) (n int64, err error) {
+	var offset int64
+	offset, err = h.SampleEntry.WriteTo(w)
+	if err != nil {
 		return
 	}
-	offset += 4
-	*stsd = SampleDescriptionBox(binary.BigEndian.Uint32(buf))
-	return
+	_, err = w.Write(h.Data)
+	return offset + int64(len(h.Data)), err
 }
 
-func (entry SampleDescriptionBox) Encode(size uint64) (int, []byte) {
-	fullbox := FullBox{Box: NewBasicBox(TypeSTSD)}
-	fullbox.Box.Size = size
-	offset, buf := fullbox.Encode()
-	binary.BigEndian.PutUint32(buf[offset:], uint32(entry))
-	offset += 4
-	return offset, buf
-}
-
-func MakeAvcCBox(extraData []byte) []byte {
-	offset, boxdata := (&BasicBox{Type: TypeAVCC, Size: BasicBoxLen + uint64(len(extraData))}).Encode()
-	copy(boxdata[offset:], extraData)
-	return boxdata
-}
-
-func MakeHvcCBox(extraData []byte) []byte {
-	offset, boxdata := (&BasicBox{Type: TypeHVCC, Size: BasicBoxLen + uint64(len(extraData))}).Encode()
-	copy(boxdata[offset:], extraData)
-	return boxdata
-}
-
-func MakeEsdsBox(tid uint32, cid MP4_CODEC_TYPE, extraData []byte) []byte {
-	esd := makeESDescriptor(uint16(tid), cid, extraData)
-	esds := FullBox{Box: NewBasicBox(TypeESDS), Version: 0}
-	esds.Box.Size = esds.Size() + uint64(len(esd))
-	offset, esdsBox := esds.Encode()
-	copy(esdsBox[offset:], esd)
-	return esdsBox
+func init() {
+	RegisterBox[*STSDBox](TypeSTSD)
+	RegisterBox[*AudioSampleEntry](TypeMP4A, TypeULAW, TypeALAW, TypeOPUS, TypeENCA)
+	RegisterBox[*VisualSampleEntry](TypeAVC1, TypeHVC1, TypeHEV1, TypeENCV)
+	RegisterBox[*HintSampleEntry](TypeHINT)
+	RegisterBox[*DataBox](TypeAVCC, TypeHVCC)
+	// RegisterBox[*MetadataSampleEntry](TypeMETA)
 }
 
 //ffmpeg mov_write_wave_tag

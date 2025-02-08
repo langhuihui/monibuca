@@ -2,6 +2,7 @@ package box
 
 import (
 	"encoding/binary"
+	"io"
 
 	"github.com/yapingcat/gomedia/go-codec"
 )
@@ -50,6 +51,21 @@ func (base *BaseDescriptor) Encode() []byte {
 	return bsw.Bits()[:5+int(base.sizeOfInstance)]
 }
 
+type ESDSBox struct {
+	FullBox
+	Data []byte
+}
+
+func (box *ESDSBox) WriteTo(w io.Writer) (n int64, err error) {
+	_, err = w.Write(box.Data)
+	return int64(len(box.Data)), err
+}
+
+func (box *ESDSBox) Unmarshal(buf []byte) (IBox, error) {
+	box.Data = buf
+	return box, nil
+}
+
 // ffmpeg mov_write_esds_tag
 func makeBaseDescriptor(tag uint8, size uint32) []byte {
 	base := BaseDescriptor{
@@ -57,6 +73,19 @@ func makeBaseDescriptor(tag uint8, size uint32) []byte {
 		sizeOfInstance: size,
 	}
 	return base.Encode()
+}
+
+func CreateESDSBox(trackid uint16, cid MP4_CODEC_TYPE, vosData []byte) *ESDSBox {
+	esData := makeESDescriptor(trackid, cid, vosData)
+	return &ESDSBox{
+		FullBox: FullBox{
+			BaseBox: BaseBox{
+				typ:  TypeESDS,
+				size: uint32(FullBoxLen + len(esData)),
+			},
+		},
+		Data: esData,
+	}
 }
 
 func makeESDescriptor(trackid uint16, cid MP4_CODEC_TYPE, vosData []byte) []byte {
@@ -71,7 +100,6 @@ func makeESDescriptor(trackid uint16, cid MP4_CODEC_TYPE, vosData []byte) []byte
 }
 
 func makeDecoderConfigDescriptor(cid MP4_CODEC_TYPE, vosData []byte) []byte {
-
 	decoder_specific_info_len := uint32(0)
 	if len(vosData) > 0 {
 		decoder_specific_info_len = uint32(len(vosData)) + 5
@@ -144,4 +172,8 @@ func DecodeESDescriptor(esd []byte) (cid MP4_CODEC_TYPE, vosData []byte) {
 		}
 	}
 	return
+}
+
+func init() {
+	RegisterBox[*ESDSBox](TypeESDS)
 }
