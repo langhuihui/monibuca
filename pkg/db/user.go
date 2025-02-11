@@ -16,7 +16,7 @@ type User struct {
 	Username  string         `gorm:"uniqueIndex;size:64"`
 	Password  string         `gorm:"size:60"`                // bcrypt hash
 	Role      string         `gorm:"size:20;default:'user'"` // admin or user
-	LastLogin time.Time
+	LastLogin time.Time      `gorm:"type:datetime;default:CURRENT_TIMESTAMP"`
 }
 
 // BeforeCreate hook to hash password before saving
