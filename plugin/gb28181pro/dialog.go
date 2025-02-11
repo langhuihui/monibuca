@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/emiago/sipgo"
-	"github.com/emiago/sipgo/sip"
 	m7s "m7s.live/v5"
 	"m7s.live/v5/pkg/task"
 	"m7s.live/v5/pkg/util"
@@ -54,7 +53,7 @@ func (d *Dialog) Start() (err error) {
 		var recordRange util.Range[int]
 		err = recordRange.Resolve(sss[2])
 	}
-	ssrc := d.CreateSSRC(d.gb.Serial)
+
 	d.gb.dialogs.Set(d)
 	defer d.gb.dialogs.Remove(d)
 	if d.gb.MediaPort.Valid() {
@@ -69,24 +68,13 @@ func (d *Dialog) Start() (err error) {
 	} else {
 		d.MediaPort = d.gb.MediaPort[0]
 	}
-	sdpInfo := []string{
-		"v=0",
-		fmt.Sprintf("o=%s 0 0 IN IP4 %s", d.Channel.DeviceID, d.Channel.Device.mediaIp),
-		"s=" + util.Conditional(d.IsLive(), "Play", "Playback"),
-		"u=" + d.Channel.DeviceID + ":0",
-		"c=IN IP4 " + d.Channel.Device.mediaIp,
-		d.String(),
-		fmt.Sprintf("m=video %d TCP/RTP/AVP 96", d.MediaPort),
-		"a=recvonly",
-		"a=rtpmap:96 PS/90000",
-		"a=setup:passive",
-		"a=connection:new",
-		"y=" + ssrc,
+
+	// 调用 PlayStreamCmd
+	d.session, err = d.gb.PlayStreamCmd(d.Channel.Device, d.Channel, d.MediaPort)
+	if err != nil {
+		return fmt.Errorf("play stream failed: %v", err)
 	}
-	contentTypeHeader := sip.ContentTypeHeader("application/sdp")
-	fromHeader := d.Channel.Device.fromHDR
-	subjectHeader := sip.NewHeader("Subject", fmt.Sprintf("%s:%s,%s:0", d.Channel.DeviceID, ssrc, d.gb.Serial))
-	d.session, err = d.Channel.Device.dialogClient.Invite(d.gb, d.Channel.Device.Recipient, []byte(strings.Join(sdpInfo, "\r\n")+"\r\n"), &contentTypeHeader, subjectHeader, &fromHeader, sip.NewHeader("Allow", "INVITE, ACK, CANCEL, REGISTER, MESSAGE, NOTIFY, BYE"))
+
 	return
 }
 
@@ -121,6 +109,7 @@ func (d *Dialog) Run() (err error) {
 	err = d.session.Ack(d.gb)
 	pub := gb28181.NewPSPublisher(d.pullCtx.Publisher)
 	pub.Receiver.ListenAddr = fmt.Sprintf(":%d", d.MediaPort)
+	pub.Receiver.ListenPort = d.MediaPort
 	d.AddTask(&pub.Receiver)
 	pub.Demux()
 	return

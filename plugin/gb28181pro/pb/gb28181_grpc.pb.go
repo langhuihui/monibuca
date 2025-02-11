@@ -39,6 +39,12 @@ const (
 	Api_GetSyncStatus_FullMethodName                     = "/gb28181pro.api/GetSyncStatus"
 	Api_GetSubscribeInfo_FullMethodName                  = "/gb28181pro.api/GetSubscribeInfo"
 	Api_GetSnap_FullMethodName                           = "/gb28181pro.api/GetSnap"
+	Api_StartPlay_FullMethodName                         = "/gb28181pro.api/StartPlay"
+	Api_StopPlay_FullMethodName                          = "/gb28181pro.api/StopPlay"
+	Api_StopConvert_FullMethodName                       = "/gb28181pro.api/StopConvert"
+	Api_StartBroadcast_FullMethodName                    = "/gb28181pro.api/StartBroadcast"
+	Api_StopBroadcast_FullMethodName                     = "/gb28181pro.api/StopBroadcast"
+	Api_GetAllSSRC_FullMethodName                        = "/gb28181pro.api/GetAllSSRC"
 	Api_GetRawChannel_FullMethodName                     = "/gb28181pro.api/GetRawChannel"
 )
 
@@ -80,6 +86,18 @@ type ApiClient interface {
 	GetSubscribeInfo(ctx context.Context, in *GetSubscribeInfoRequest, opts ...grpc.CallOption) (*SubscribeInfoResponse, error)
 	// 请求截图
 	GetSnap(ctx context.Context, in *GetSnapRequest, opts ...grpc.CallOption) (*SnapResponse, error)
+	// 开始点播
+	StartPlay(ctx context.Context, in *PlayRequest, opts ...grpc.CallOption) (*PlayResponse, error)
+	// 停止点播
+	StopPlay(ctx context.Context, in *PlayRequest, opts ...grpc.CallOption) (*PlayResponse, error)
+	// 结束转码
+	StopConvert(ctx context.Context, in *ConvertStopRequest, opts ...grpc.CallOption) (*BaseResponse, error)
+	// 语音广播命令
+	StartBroadcast(ctx context.Context, in *BroadcastRequest, opts ...grpc.CallOption) (*BroadcastResponse, error)
+	// 停止语音广播
+	StopBroadcast(ctx context.Context, in *BroadcastRequest, opts ...grpc.CallOption) (*BaseResponse, error)
+	// 获取所有的ssrc
+	GetAllSSRC(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*SSRCListResponse, error)
 	// 国标通道编辑时的数据回显
 	GetRawChannel(ctx context.Context, in *GetRawChannelRequest, opts ...grpc.CallOption) (*Channel, error)
 }
@@ -262,6 +280,66 @@ func (c *apiClient) GetSnap(ctx context.Context, in *GetSnapRequest, opts ...grp
 	return out, nil
 }
 
+func (c *apiClient) StartPlay(ctx context.Context, in *PlayRequest, opts ...grpc.CallOption) (*PlayResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PlayResponse)
+	err := c.cc.Invoke(ctx, Api_StartPlay_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *apiClient) StopPlay(ctx context.Context, in *PlayRequest, opts ...grpc.CallOption) (*PlayResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PlayResponse)
+	err := c.cc.Invoke(ctx, Api_StopPlay_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *apiClient) StopConvert(ctx context.Context, in *ConvertStopRequest, opts ...grpc.CallOption) (*BaseResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BaseResponse)
+	err := c.cc.Invoke(ctx, Api_StopConvert_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *apiClient) StartBroadcast(ctx context.Context, in *BroadcastRequest, opts ...grpc.CallOption) (*BroadcastResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BroadcastResponse)
+	err := c.cc.Invoke(ctx, Api_StartBroadcast_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *apiClient) StopBroadcast(ctx context.Context, in *BroadcastRequest, opts ...grpc.CallOption) (*BaseResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BaseResponse)
+	err := c.cc.Invoke(ctx, Api_StopBroadcast_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *apiClient) GetAllSSRC(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*SSRCListResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SSRCListResponse)
+	err := c.cc.Invoke(ctx, Api_GetAllSSRC_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *apiClient) GetRawChannel(ctx context.Context, in *GetRawChannelRequest, opts ...grpc.CallOption) (*Channel, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Channel)
@@ -310,6 +388,18 @@ type ApiServer interface {
 	GetSubscribeInfo(context.Context, *GetSubscribeInfoRequest) (*SubscribeInfoResponse, error)
 	// 请求截图
 	GetSnap(context.Context, *GetSnapRequest) (*SnapResponse, error)
+	// 开始点播
+	StartPlay(context.Context, *PlayRequest) (*PlayResponse, error)
+	// 停止点播
+	StopPlay(context.Context, *PlayRequest) (*PlayResponse, error)
+	// 结束转码
+	StopConvert(context.Context, *ConvertStopRequest) (*BaseResponse, error)
+	// 语音广播命令
+	StartBroadcast(context.Context, *BroadcastRequest) (*BroadcastResponse, error)
+	// 停止语音广播
+	StopBroadcast(context.Context, *BroadcastRequest) (*BaseResponse, error)
+	// 获取所有的ssrc
+	GetAllSSRC(context.Context, *emptypb.Empty) (*SSRCListResponse, error)
 	// 国标通道编辑时的数据回显
 	GetRawChannel(context.Context, *GetRawChannelRequest) (*Channel, error)
 	mustEmbedUnimplementedApiServer()
@@ -372,6 +462,24 @@ func (UnimplementedApiServer) GetSubscribeInfo(context.Context, *GetSubscribeInf
 }
 func (UnimplementedApiServer) GetSnap(context.Context, *GetSnapRequest) (*SnapResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetSnap not implemented")
+}
+func (UnimplementedApiServer) StartPlay(context.Context, *PlayRequest) (*PlayResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StartPlay not implemented")
+}
+func (UnimplementedApiServer) StopPlay(context.Context, *PlayRequest) (*PlayResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StopPlay not implemented")
+}
+func (UnimplementedApiServer) StopConvert(context.Context, *ConvertStopRequest) (*BaseResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StopConvert not implemented")
+}
+func (UnimplementedApiServer) StartBroadcast(context.Context, *BroadcastRequest) (*BroadcastResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StartBroadcast not implemented")
+}
+func (UnimplementedApiServer) StopBroadcast(context.Context, *BroadcastRequest) (*BaseResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StopBroadcast not implemented")
+}
+func (UnimplementedApiServer) GetAllSSRC(context.Context, *emptypb.Empty) (*SSRCListResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetAllSSRC not implemented")
 }
 func (UnimplementedApiServer) GetRawChannel(context.Context, *GetRawChannelRequest) (*Channel, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetRawChannel not implemented")
@@ -703,6 +811,114 @@ func _Api_GetSnap_Handler(srv interface{}, ctx context.Context, dec func(interfa
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Api_StartPlay_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PlayRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).StartPlay(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_StartPlay_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).StartPlay(ctx, req.(*PlayRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Api_StopPlay_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PlayRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).StopPlay(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_StopPlay_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).StopPlay(ctx, req.(*PlayRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Api_StopConvert_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ConvertStopRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).StopConvert(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_StopConvert_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).StopConvert(ctx, req.(*ConvertStopRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Api_StartBroadcast_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BroadcastRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).StartBroadcast(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_StartBroadcast_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).StartBroadcast(ctx, req.(*BroadcastRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Api_StopBroadcast_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BroadcastRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).StopBroadcast(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_StopBroadcast_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).StopBroadcast(ctx, req.(*BroadcastRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Api_GetAllSSRC_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(emptypb.Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).GetAllSSRC(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_GetAllSSRC_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).GetAllSSRC(ctx, req.(*emptypb.Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Api_GetRawChannel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetRawChannelRequest)
 	if err := dec(in); err != nil {
@@ -795,6 +1011,30 @@ var Api_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetSnap",
 			Handler:    _Api_GetSnap_Handler,
+		},
+		{
+			MethodName: "StartPlay",
+			Handler:    _Api_StartPlay_Handler,
+		},
+		{
+			MethodName: "StopPlay",
+			Handler:    _Api_StopPlay_Handler,
+		},
+		{
+			MethodName: "StopConvert",
+			Handler:    _Api_StopConvert_Handler,
+		},
+		{
+			MethodName: "StartBroadcast",
+			Handler:    _Api_StartBroadcast_Handler,
+		},
+		{
+			MethodName: "StopBroadcast",
+			Handler:    _Api_StopBroadcast_Handler,
+		},
+		{
+			MethodName: "GetAllSSRC",
+			Handler:    _Api_GetAllSSRC_Handler,
 		},
 		{
 			MethodName: "GetRawChannel",

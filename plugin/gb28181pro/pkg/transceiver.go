@@ -42,6 +42,7 @@ type Receiver struct {
 	psAudio    PSAudio
 	RTPReader  *rtp2.TCP
 	ListenAddr string
+	ListenPort uint16
 	listener   net.Listener
 }
 
@@ -141,22 +142,23 @@ func (dec *PSPublisher) decProgramStreamMap() (err error) {
 func (p *Receiver) ReadRTP(rtp util.Buffer) (err error) {
 	lastSeq := p.SequenceNumber
 	if err = p.Unmarshal(rtp); err != nil {
+		p.Error("unmarshal error", "err", err)
 		return
 	}
-	if p.SequenceNumber != lastSeq+1 {
-		return ErrRTPReceiveLost
+	if lastSeq == 0 || p.SequenceNumber == lastSeq+1 {
+		if p.Enabled(p, task.TraceLevel) {
+			p.Trace("rtp", "len", rtp.Len(), "seq", p.SequenceNumber, "payloadType", p.PayloadType, "ssrc", p.SSRC)
+		}
+		copyData := make([]byte, len(p.Payload))
+		copy(copyData, p.Payload)
+		p.FeedChan <- copyData
+		return
 	}
-	if p.Enabled(p, task.TraceLevel) {
-		p.Trace("rtp", "len", rtp.Len(), "seq", p.SequenceNumber, "payloadType", p.PayloadType, "ssrc", p.SSRC)
-	}
-	copyData := make([]byte, len(p.Payload))
-	copy(copyData, p.Payload)
-	p.FeedChan <- copyData
-	return
+	return ErrRTPReceiveLost
 }
 
 func (p *Receiver) Start() (err error) {
-	p.listener, err = net.Listen("tcp", p.ListenAddr)
+	p.listener, err = net.Listen("tcp4", p.ListenAddr)
 	if err != nil {
 		p.Error("start listen", "err", err)
 		return

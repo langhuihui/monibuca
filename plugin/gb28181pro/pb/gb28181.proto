@@ -136,6 +136,48 @@ service api {
     };
   }
 
+  // 开始点播
+  rpc StartPlay (PlayRequest) returns (PlayResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/play/start/{deviceId}/{channelId}"
+    };
+  }
+
+  // 停止点播
+  rpc StopPlay (PlayRequest) returns (PlayResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/play/stop/{deviceId}/{channelId}"
+    };
+  }
+
+  // 结束转码
+  rpc StopConvert (ConvertStopRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      post: "/gb28181/api/play/convertStop/{key}"
+    };
+  }
+
+  // 语音广播命令
+  rpc StartBroadcast (BroadcastRequest) returns (BroadcastResponse) {
+    option (google.api.http) = {
+      post: "/gb28181/api/play/broadcast/{deviceId}/{channelId}"
+    };
+  }
+
+  // 停止语音广播
+  rpc StopBroadcast (BroadcastRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      post: "/gb28181/api/play/broadcast/stop/{deviceId}/{channelId}"
+    };
+  }
+
+  // 获取所有的ssrc
+  rpc GetAllSSRC (google.protobuf.Empty) returns (SSRCListResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/play/ssrc"
+    };
+  }
+
   // 国标通道编辑时的数据回显
   rpc GetRawChannel (GetRawChannelRequest) returns (Channel) {
     option (google.api.http) = {
@@ -337,4 +379,56 @@ message ChannelResponse {
   int32 code = 1;
   string message = 2;
   Channel data = 3;
+}
+
+message PlayRequest {
+  string deviceId = 1;
+  string channelId = 2;
+}
+
+message PlayResponse {
+  int32 code = 1;
+  string message = 2;
+  StreamInfo stream_info = 3;
+}
+
+message StreamInfo {
+  string stream = 1;
+  string app = 2;
+  string ip = 3;
+  int32 port = 4;
+  string ssrc = 5;
+}
+
+message ConvertStopRequest {
+  string key = 1;
+  string mediaServerId = 2;
+}
+
+message BroadcastRequest {
+  string deviceId = 1;
+  string channelId = 2;
+  int32 timeout = 3;
+  bool broadcastMode = 4;
+}
+
+message BroadcastResponse {
+  int32 code = 1;
+  string message = 2;
+  string streamId = 3;
+  string url = 4;
+}
+
+message SSRCInfo {
+  string deviceId = 1;
+  string channelId = 2;
+  string ssrc = 3;
+  string streamId = 4;
+}
+
+message SSRCListResponse {
+  int32 code = 1;
+  string message = 2;
+  repeated SSRCInfo data = 3;
+  int32 count = 4;
 }

@@ -123,7 +123,7 @@ type (
 		Type      string
 	}
 	ChannelInfo struct {
-		DeviceID     string // 通道ID
+		DeviceID     string `gorm:"primaryKey"` // 设备国标编号
 		ParentID     string
 		Name         string
 		Manufacturer string
@@ -152,6 +152,10 @@ type (
 		SumNum       int           // 录像结果的总数 SumNum，录像结果会按照多条消息返回，可用于判断是否全部返回
 	}
 )
+
+func (d *ChannelInfo) TableName() string {
+	return "channel_gb28181pro"
+}
 
 func DecodeXML(v any, body []byte) error {
 	decoder := xml.NewDecoder(bytes.NewReader(body))

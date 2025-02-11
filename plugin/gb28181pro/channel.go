@@ -41,3 +41,7 @@ func (c *Channel) Pull() {
 	pubConf.DelayCloseTimeout = util.Conditional(c.AbstractDevice.StopOnIdle, time.Second*5, 0)
 	c.Device.plugin.Pull(c.AbstractDevice.GetStreamPath(), c.AbstractDevice.Pull, &pubConf)
 }
+
+func (c *Channel) GetDeviceID() string {
+	return c.DeviceID
+}
