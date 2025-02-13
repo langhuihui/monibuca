@@ -79,7 +79,9 @@ func (d *Dialog) Start() (err error) {
 }
 
 func (d *Dialog) Run() (err error) {
+	d.Channel.Info("before WaitAnswer")
 	err = d.session.WaitAnswer(d.gb, sipgo.AnswerOptions{})
+	d.Channel.Info("after WaitAnswer")
 	if err != nil {
 		return
 	}

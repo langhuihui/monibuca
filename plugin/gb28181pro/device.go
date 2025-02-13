@@ -25,7 +25,8 @@ const (
 
 type Device struct {
 	task.Task             `gorm:"-:all"`
-	ID                    string    `gorm:"primaryKey"` // 设备国标编号
+	ID                    int64     `gorm:"primaryKey;autoIncrement"` // 数据库自增长ID
+	DeviceID              string    // 设备国标编号
 	Name                  string    // 设备名
 	Manufacturer          string    // 生产厂商
 	Model                 string    // 型号
@@ -80,7 +81,7 @@ func (d *Device) TableName() string {
 }
 
 func (d *Device) GetKey() string {
-	return d.ID
+	return d.DeviceID
 }
 
 func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28181.Message) (err error) {
@@ -98,6 +99,16 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 		if d.plugin.DB != nil {
 			// 更新通道信息
 			for _, c := range msg.DeviceList {
+				// 设置关联的设备数据库ID
+				c.DeviceDBID = d.ID
+				// 先查询是否存在
+				var existing gb28181.ChannelInfo
+				if err := d.plugin.DB.Where("device_id = ?", c.DeviceID).First(&existing).Error; err == nil {
+					c.ID = existing.ID // 保持原有的自增ID
+					d.Debug("update channel", "channelId", c.DeviceID)
+				} else {
+					d.Debug("create channel", "channelId", c.DeviceID)
+				}
 				// 使用 Save 进行 upsert 操作
 				if err := d.plugin.DB.Save(&c).Error; err != nil {
 					d.Error("save channel failed", "error", err)
@@ -129,7 +140,7 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 		}
 	case "Alarm":
 		d.Status = DeviceAlarmedStatus
-		body = []byte(gb28181.BuildAlarmResponseXML(d.ID))
+		body = []byte(gb28181.BuildAlarmResponseXML(d.DeviceID))
 	case "Broadcast":
 		d.Info("broadcast message", "body", req.Body())
 	default:
@@ -202,7 +213,7 @@ func (d *Device) Go() (err error) {
 						parentId := path[len(path)-1]
 						//如果父ID并非本身所属设备，一般情况下这是因为下级设备上传了目录信息，该信息通常不需要处理。
 						// 暂时不考虑级联目录的实现
-						if d.ID != parentId {
+						if d.DeviceID != parentId {
 							if parent, ok := d.plugin.devices.Get(parentId); ok {
 								parent.addOrUpdateChannel(c)
 								continue
@@ -233,27 +244,27 @@ func (d *Device) catalog() (*sip.Response, error) {
 	request := d.CreateRequest(sip.MESSAGE)
 	//d.subscriber.Timeout = time.Now().Add(time.Second * time.Duration(expires))
 	request.AppendHeader(sip.NewHeader("Expires", "3600"))
-	request.SetBody(gb28181.BuildCatalogXML(d.SN, d.ID))
+	request.SetBody(gb28181.BuildCatalogXML(d.SN, d.DeviceID))
 	return d.send(request)
 }
 
 func (d *Device) subscribeCatalog() (*sip.Response, error) {
 	request := d.CreateRequest(sip.SUBSCRIBE)
 	request.AppendHeader(sip.NewHeader("Expires", "3600"))
-	request.SetBody(gb28181.BuildCatalogXML(d.SN, d.ID))
+	request.SetBody(gb28181.BuildCatalogXML(d.SN, d.DeviceID))
 	return d.send(request)
 }
 
 func (d *Device) queryDeviceInfo() (*sip.Response, error) {
 	request := d.CreateRequest(sip.MESSAGE)
-	request.SetBody(gb28181.BuildDeviceInfoXML(d.SN, d.ID))
+	request.SetBody(gb28181.BuildDeviceInfoXML(d.SN, d.DeviceID))
 	return d.send(request)
 }
 
 func (d *Device) subscribePosition(interval int) (*sip.Response, error) {
 	request := d.CreateRequest(sip.SUBSCRIBE)
 	request.AppendHeader(sip.NewHeader("Expires", "3600"))
-	request.SetBody(gb28181.BuildDevicePositionXML(d.SN, d.ID, interval))
+	request.SetBody(gb28181.BuildDevicePositionXML(d.SN, d.DeviceID, interval))
 	return d.send(request)
 }
 
@@ -271,7 +282,7 @@ func (d *Device) addOrUpdateChannel(c gb28181.ChannelInfo) {
 }
 
 func (d *Device) GetID() string {
-	return d.ID
+	return d.DeviceID
 }
 
 func (d *Device) GetSdpIP() string {
@@ -297,8 +308,8 @@ func (d *Device) CreateDialogSession(req *sip.Request) (*sipgo.DialogClientSessi
 func (d *Device) CreateSSRC(serial string) uint16 {
 	// 使用简单的 hash 函数将设备 ID 转换为 uint16
 	var hash uint16
-	for i := 0; i < len(d.ID); i++ {
-		hash = hash*31 + uint16(d.ID[i])
+	for i := 0; i < len(d.DeviceID); i++ {
+		hash = hash*31 + uint16(d.DeviceID[i])
 	}
 	return hash
 }

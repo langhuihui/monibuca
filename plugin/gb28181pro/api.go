@@ -44,7 +44,7 @@ func (gb *GB28181ProPlugin) List(context.Context, *emptypb.Empty) (ret *pb.Respo
 			})
 		}
 		ret.Data = append(ret.Data, &pb.Device{
-			Id:           d.ID,
+			Id:           d.DeviceID,
 			Name:         d.Name,
 			Manufacturer: d.Manufacturer,
 			Model:        d.Model,
@@ -118,7 +118,7 @@ func (gb *GB28181ProPlugin) GetDevice(ctx context.Context, req *pb.GetDeviceRequ
 			})
 		}
 		resp.Data = &pb.Device{
-			Id:           d.ID,
+			Id:           d.DeviceID,
 			Name:         d.Name,
 			Manufacturer: d.Manufacturer,
 			Model:        d.Model,
@@ -147,7 +147,7 @@ func (gb *GB28181ProPlugin) GetDevices(ctx context.Context, req *pb.GetDevicesRe
 	total := 0
 	for d := range gb.devices.Range {
 		// TODO: 实现查询条件过滤
-		if req.Query != "" && !strings.Contains(d.ID, req.Query) && !strings.Contains(d.Name, req.Query) {
+		if req.Query != "" && !strings.Contains(d.DeviceID, req.Query) && !strings.Contains(d.Name, req.Query) {
 			continue
 		}
 		if req.Status && string(d.Status) != "ON" {
@@ -184,7 +184,7 @@ func (gb *GB28181ProPlugin) GetDevices(ctx context.Context, req *pb.GetDevicesRe
 			})
 		}
 		devices = append(devices, &pb.Device{
-			Id:           d.ID,
+			Id:           d.DeviceID,
 			Name:         d.Name,
 			Manufacturer: d.Manufacturer,
 			Model:        d.Model,
@@ -293,8 +293,9 @@ func (gb *GB28181ProPlugin) SyncDevice(ctx context.Context, req *pb.SyncDeviceRe
 
 			// 初始化 Task
 			var hash uint32
-			for i := 0; i < len(d.ID); i++ {
-				hash = hash*31 + uint32(d.ID[i])
+			for i := 0; i < len(d.DeviceID); i++ {
+				ch := d.DeviceID[i]
+				hash = hash*31 + uint32(ch)
 			}
 			d.Task.ID = hash
 			d.Task.Logger = d.Logger
@@ -321,7 +322,7 @@ func (gb *GB28181ProPlugin) SyncDevice(ctx context.Context, req *pb.SyncDeviceRe
 			d.Recipient = sip.Uri{
 				Host: d.IP,
 				Port: d.Port,
-				User: d.ID,
+				User: d.DeviceID,
 			}
 
 			// 初始化 SIP 客户端

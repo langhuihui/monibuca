@@ -143,7 +143,7 @@ type GB28181ProPlugin struct {
 	m7s.Plugin
 	AutoInvite bool   `default:"true" desc:"自动邀请"`
 	Serial     string `default:"34020000002000000001" desc:"sip 服务 id"` //sip 服务器 id, 默认 34020000002000000001
-	Realm      string `default:"3402000000" desc:"sip 服务域"`             //sip 服务器域，默认 3402000000
+	Realm      string `default:"3402000000" desc:"sip 服务域"`            //sip 服务器域，默认 3402000000
 	Username   string
 	Password   string
 	Sip        SipConfig
@@ -266,6 +266,10 @@ func (gb *GB28181ProPlugin) OnRegister(req *sip.Request, tx sip.ServerTransactio
 		d.Expires = int(expSec)
 		d.Online = true
 		if gb.DB != nil {
+			var existing Device
+			if err := gb.DB.Where("device_id = ?", d.DeviceID).First(&existing).Error; err == nil {
+				d.ID = existing.ID // 保持原有的自增ID
+			}
 			gb.DB.Save(d)
 		}
 		response := sip.NewResponseFromRequest(req, sip.StatusOK, "OK", nil)
@@ -385,7 +389,7 @@ func (gb *GB28181ProPlugin) OnMessage(req *sip.Request, tx sip.ServerTransaction
 		// 缓存中没有，尝试从数据库获取
 		if gb.DB != nil {
 			var device Device
-			if err := gb.DB.Where("id = ?", id).First(&device).Error; err == nil {
+			if err := gb.DB.Where("device_id = ?", id).First(&device).Error; err == nil {
 				// 从数据库找到设备，恢复设备状态
 				d = &device
 				gb.RecoverDevice(d, req)
@@ -467,7 +471,7 @@ func (gb *GB28181ProPlugin) StoreDevice(id string, req *sip.Request) (d *Device)
 
 	now := time.Now()
 	d = &Device{
-		ID:            id,
+		DeviceID:      id,
 		CreateTime:    now,
 		UpdateTime:    now,
 		RegisterTime:  now,
@@ -515,8 +519,9 @@ func (gb *GB28181ProPlugin) StoreDevice(id string, req *sip.Request) (d *Device)
 
 	// 使用简单的 hash 函数将设备 ID 转换为 uint32
 	var hash uint32
-	for i := 0; i < len(d.ID); i++ {
-		hash = hash*31 + uint32(d.ID[i])
+	for i := 0; i < len(d.DeviceID); i++ {
+		ch := d.DeviceID[i]
+		hash = hash*31 + uint32(ch)
 	}
 	d.Task.ID = hash
 
@@ -524,22 +529,22 @@ func (gb *GB28181ProPlugin) StoreDevice(id string, req *sip.Request) (d *Device)
 		gb.devices.Add(d)
 		d.channels.OnAdd(func(c *Channel) {
 			if absDevice, ok := gb.Server.PullProxies.Find(func(absDevice *m7s.PullProxy) bool {
-				return absDevice.Type == "gb28181" && absDevice.URL == fmt.Sprintf("%s/%s", d.ID, c.DeviceID)
+				return absDevice.Type == "gb28181" && absDevice.URL == fmt.Sprintf("%s/%s", d.DeviceID, c.DeviceID)
 			}); ok {
 				c.AbstractDevice = absDevice
 				absDevice.Handler = c
 				absDevice.ChangeStatus(m7s.PullProxyStatusOnline)
 			}
 			if gb.AutoInvite {
-				gb.Pull(fmt.Sprintf("%s/%s", d.ID, c.DeviceID), config.Pull{
-					URL: fmt.Sprintf("%s/%s", d.ID, c.DeviceID),
+				gb.Pull(fmt.Sprintf("%s/%s", d.DeviceID, c.DeviceID), config.Pull{
+					URL: fmt.Sprintf("%s/%s", d.DeviceID, c.DeviceID),
 				}, nil)
 			}
 		})
 	})
 	d.OnDispose(func() {
 		d.Status = DeviceOfflineStatus
-		if gb.devices.RemoveByKey(d.ID) {
+		if gb.devices.RemoveByKey(d.DeviceID) {
 			for c := range d.channels.Range {
 				if c.AbstractDevice != nil {
 					c.AbstractDevice.ChangeStatus(m7s.PullProxyStatusOffline)
@@ -550,6 +555,13 @@ func (gb *GB28181ProPlugin) StoreDevice(id string, req *sip.Request) (d *Device)
 	gb.AddTask(d)
 
 	if gb.DB != nil {
+		var existing Device
+		if err := gb.DB.Where("device_id = ?", d.DeviceID).First(&existing).Error; err == nil {
+			d.ID = existing.ID // 保持原有的自增ID
+			gb.Info("StoreDevice", "type", "更新设备", "deviceId", d.DeviceID)
+		} else {
+			gb.Info("StoreDevice", "type", "新增设备", "deviceId", d.DeviceID)
+		}
 		gb.DB.Save(d)
 	}
 	return
@@ -571,7 +583,7 @@ func (gb *GB28181ProPlugin) GetPullableList() []string {
 	return slices.Collect(func(yield func(string) bool) {
 		for d := range gb.devices.Range {
 			for c := range d.channels.Range {
-				yield(fmt.Sprintf("%s/%s", d.ID, c.DeviceID))
+				yield(fmt.Sprintf("%s/%s", d.DeviceID, c.DeviceID))
 			}
 		}
 	})

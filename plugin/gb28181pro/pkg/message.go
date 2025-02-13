@@ -123,7 +123,9 @@ type (
 		Type      string
 	}
 	ChannelInfo struct {
-		DeviceID     string `gorm:"primaryKey"` // 设备国标编号
+		ID           int64  `gorm:"primaryKey;autoIncrement"` // 数据库自增长ID
+		DeviceDBID   int64  // device表里的id
+		DeviceID     string // 设备国标编号
 		ParentID     string
 		Name         string
 		Manufacturer string
