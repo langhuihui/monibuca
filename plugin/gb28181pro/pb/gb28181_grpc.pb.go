@@ -46,6 +46,11 @@ const (
 	Api_StopBroadcast_FullMethodName                     = "/gb28181pro.api/StopBroadcast"
 	Api_GetAllSSRC_FullMethodName                        = "/gb28181pro.api/GetAllSSRC"
 	Api_GetRawChannel_FullMethodName                     = "/gb28181pro.api/GetRawChannel"
+	Api_AddPlatform_FullMethodName                       = "/gb28181pro.api/AddPlatform"
+	Api_GetPlatform_FullMethodName                       = "/gb28181pro.api/GetPlatform"
+	Api_UpdatePlatform_FullMethodName                    = "/gb28181pro.api/UpdatePlatform"
+	Api_DeletePlatform_FullMethodName                    = "/gb28181pro.api/DeletePlatform"
+	Api_ListPlatforms_FullMethodName                     = "/gb28181pro.api/ListPlatforms"
 )
 
 // ApiClient is the client API for Api service.
@@ -100,6 +105,16 @@ type ApiClient interface {
 	GetAllSSRC(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*SSRCListResponse, error)
 	// 国标通道编辑时的数据回显
 	GetRawChannel(ctx context.Context, in *GetRawChannelRequest, opts ...grpc.CallOption) (*Channel, error)
+	// 添加平台信息
+	AddPlatform(ctx context.Context, in *Platform, opts ...grpc.CallOption) (*BaseResponse, error)
+	// 获取平台信息
+	GetPlatform(ctx context.Context, in *GetPlatformRequest, opts ...grpc.CallOption) (*PlatformResponse, error)
+	// 更新平台信息
+	UpdatePlatform(ctx context.Context, in *Platform, opts ...grpc.CallOption) (*BaseResponse, error)
+	// 删除平台信息
+	DeletePlatform(ctx context.Context, in *DeletePlatformRequest, opts ...grpc.CallOption) (*BaseResponse, error)
+	// 获取平台列表
+	ListPlatforms(ctx context.Context, in *ListPlatformsRequest, opts ...grpc.CallOption) (*PlatformsPageInfo, error)
 }
 
 type apiClient struct {
@@ -350,6 +365,56 @@ func (c *apiClient) GetRawChannel(ctx context.Context, in *GetRawChannelRequest,
 	return out, nil
 }
 
+func (c *apiClient) AddPlatform(ctx context.Context, in *Platform, opts ...grpc.CallOption) (*BaseResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BaseResponse)
+	err := c.cc.Invoke(ctx, Api_AddPlatform_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *apiClient) GetPlatform(ctx context.Context, in *GetPlatformRequest, opts ...grpc.CallOption) (*PlatformResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PlatformResponse)
+	err := c.cc.Invoke(ctx, Api_GetPlatform_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *apiClient) UpdatePlatform(ctx context.Context, in *Platform, opts ...grpc.CallOption) (*BaseResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BaseResponse)
+	err := c.cc.Invoke(ctx, Api_UpdatePlatform_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *apiClient) DeletePlatform(ctx context.Context, in *DeletePlatformRequest, opts ...grpc.CallOption) (*BaseResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BaseResponse)
+	err := c.cc.Invoke(ctx, Api_DeletePlatform_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *apiClient) ListPlatforms(ctx context.Context, in *ListPlatformsRequest, opts ...grpc.CallOption) (*PlatformsPageInfo, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PlatformsPageInfo)
+	err := c.cc.Invoke(ctx, Api_ListPlatforms_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ApiServer is the server API for Api service.
 // All implementations must embed UnimplementedApiServer
 // for forward compatibility.
@@ -402,6 +467,16 @@ type ApiServer interface {
 	GetAllSSRC(context.Context, *emptypb.Empty) (*SSRCListResponse, error)
 	// 国标通道编辑时的数据回显
 	GetRawChannel(context.Context, *GetRawChannelRequest) (*Channel, error)
+	// 添加平台信息
+	AddPlatform(context.Context, *Platform) (*BaseResponse, error)
+	// 获取平台信息
+	GetPlatform(context.Context, *GetPlatformRequest) (*PlatformResponse, error)
+	// 更新平台信息
+	UpdatePlatform(context.Context, *Platform) (*BaseResponse, error)
+	// 删除平台信息
+	DeletePlatform(context.Context, *DeletePlatformRequest) (*BaseResponse, error)
+	// 获取平台列表
+	ListPlatforms(context.Context, *ListPlatformsRequest) (*PlatformsPageInfo, error)
 	mustEmbedUnimplementedApiServer()
 }
 
@@ -483,6 +558,21 @@ func (UnimplementedApiServer) GetAllSSRC(context.Context, *emptypb.Empty) (*SSRC
 }
 func (UnimplementedApiServer) GetRawChannel(context.Context, *GetRawChannelRequest) (*Channel, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetRawChannel not implemented")
+}
+func (UnimplementedApiServer) AddPlatform(context.Context, *Platform) (*BaseResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AddPlatform not implemented")
+}
+func (UnimplementedApiServer) GetPlatform(context.Context, *GetPlatformRequest) (*PlatformResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetPlatform not implemented")
+}
+func (UnimplementedApiServer) UpdatePlatform(context.Context, *Platform) (*BaseResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpdatePlatform not implemented")
+}
+func (UnimplementedApiServer) DeletePlatform(context.Context, *DeletePlatformRequest) (*BaseResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DeletePlatform not implemented")
+}
+func (UnimplementedApiServer) ListPlatforms(context.Context, *ListPlatformsRequest) (*PlatformsPageInfo, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListPlatforms not implemented")
 }
 func (UnimplementedApiServer) mustEmbedUnimplementedApiServer() {}
 func (UnimplementedApiServer) testEmbeddedByValue()             {}
@@ -937,6 +1027,96 @@ func _Api_GetRawChannel_Handler(srv interface{}, ctx context.Context, dec func(i
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Api_AddPlatform_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Platform)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).AddPlatform(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_AddPlatform_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).AddPlatform(ctx, req.(*Platform))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Api_GetPlatform_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetPlatformRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).GetPlatform(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_GetPlatform_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).GetPlatform(ctx, req.(*GetPlatformRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Api_UpdatePlatform_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Platform)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).UpdatePlatform(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_UpdatePlatform_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).UpdatePlatform(ctx, req.(*Platform))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Api_DeletePlatform_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeletePlatformRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).DeletePlatform(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_DeletePlatform_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).DeletePlatform(ctx, req.(*DeletePlatformRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Api_ListPlatforms_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListPlatformsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).ListPlatforms(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_ListPlatforms_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).ListPlatforms(ctx, req.(*ListPlatformsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Api_ServiceDesc is the grpc.ServiceDesc for Api service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1039,6 +1219,26 @@ var Api_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetRawChannel",
 			Handler:    _Api_GetRawChannel_Handler,
+		},
+		{
+			MethodName: "AddPlatform",
+			Handler:    _Api_AddPlatform_Handler,
+		},
+		{
+			MethodName: "GetPlatform",
+			Handler:    _Api_GetPlatform_Handler,
+		},
+		{
+			MethodName: "UpdatePlatform",
+			Handler:    _Api_UpdatePlatform_Handler,
+		},
+		{
+			MethodName: "DeletePlatform",
+			Handler:    _Api_DeletePlatform_Handler,
+		},
+		{
+			MethodName: "ListPlatforms",
+			Handler:    _Api_ListPlatforms_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

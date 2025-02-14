@@ -74,6 +74,7 @@ type Device struct {
 	fromHDR             sip.FromHeader
 	toHDR               sip.ToHeader
 	plugin              *GB28181ProPlugin
+	abc                 *sip.ClientTransaction
 }
 
 func (d *Device) TableName() string {

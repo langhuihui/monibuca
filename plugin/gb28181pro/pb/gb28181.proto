@@ -184,6 +184,43 @@ service api {
       get: "/gb28181/api/channel/raw"
     };
   }
+
+  // 添加平台信息
+  rpc AddPlatform (Platform) returns (BaseResponse) {
+    option (google.api.http) = {
+      post: "/gb28181/api/platform/add"
+      body: "*"
+    };
+  }
+
+  // 获取平台信息
+  rpc GetPlatform (GetPlatformRequest) returns (PlatformResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/platform/{id}"
+    };
+  }
+
+  // 更新平台信息
+  rpc UpdatePlatform (Platform) returns (BaseResponse) {
+    option (google.api.http) = {
+      post: "/gb28181/api/platform/update"
+      body: "*"
+    };
+  }
+
+  // 删除平台信息
+  rpc DeletePlatform (DeletePlatformRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      delete: "/gb28181/api/platform/{id}"
+    };
+  }
+
+  // 获取平台列表
+  rpc ListPlatforms (ListPlatformsRequest) returns (PlatformsPageInfo) {
+    option (google.api.http) = {
+      get: "/gb28181/api/platform/list"
+    };
+  }
 }
 
 // 请求和响应消息定义
@@ -431,4 +468,79 @@ message SSRCListResponse {
   string message = 2;
   repeated SSRCInfo data = 3;
   int32 count = 4;
+}
+
+// Platform消息定义
+message Platform {
+  int32 id = 1;                      // ID(数据库中)
+  bool enable = 2;                   // 是否启用
+  string name = 3;                   // 名称
+  string serverGBId = 4;             // SIP服务国标编码
+  string serverGBDomain = 5;         // SIP服务国标域
+  string serverIp = 6;               // SIP服务IP
+  int32 serverPort = 7;              // SIP服务端口
+  string deviceGBId = 8;             // 设备国标编号
+  string deviceIp = 9;               // 设备ip
+  int32 devicePort = 10;             // 设备端口
+  string username = 11;              // SIP认证用户名
+  string password = 12;              // SIP认证密码
+  int32 expires = 13;                // 注册周期(秒)
+  int32 keepTimeout = 14;            // 心跳周期(秒)
+  string transport = 15;             // 传输协议
+  string characterSet = 16;          // 字符集
+  bool ptz = 17;                     // 允许云台控制
+  bool rtcp = 18;                    // RTCP流保活
+  bool status = 19;                  // 在线状态
+  int32 channelCount = 20;           // 通道数量
+  bool catalogSubscribe = 21;        // 已被订阅目录信息
+  bool alarmSubscribe = 22;          // 已被订阅报警信息
+  bool mobilePositionSubscribe = 23; // 已被订阅移动位置信息
+  int32 catalogGroup = 24;           // 目录分组大小
+  string updateTime = 25;            // 最后更新时间
+  string createTime = 26;            // 创建时间
+  bool asMessageChannel = 27;        // 是否作为消息通道
+  string sendStreamIp = 28;          // 点播回复200OK使用的IP
+  bool autoPushChannel = 29;         // 是否自动推送通道变化
+  int32 catalogWithPlatform = 30;    // 目录信息包含平台信息
+  int32 catalogWithGroup = 31;       // 目录信息包含分组信息
+  int32 catalogWithRegion = 32;      // 目录信息包含行政区划
+  string civilCode = 33;             // 行政区划代码
+  string manufacturer = 34;          // 平台厂商
+  string model = 35;                 // 平台型号
+  string address = 36;               // 平台安装地址
+  int32 registerWay = 37;            // 注册方式
+  int32 secrecy = 38;               // 保密属性
+}
+
+// 获取平台请求
+message GetPlatformRequest {
+  int32 id = 1;
+}
+
+// 删除平台请求
+message DeletePlatformRequest {
+  int32 id = 1;
+}
+
+// 平台列表请求
+message ListPlatformsRequest {
+  int32 page = 1;
+  int32 count = 2;
+  string query = 3;
+  bool status = 4;
+}
+
+// 平台响应
+message PlatformResponse {
+  int32 code = 1;
+  string message = 2;
+  Platform data = 3;
+}
+
+// 平台分页信息
+message PlatformsPageInfo {
+  int32 code = 1;
+  string message = 2;
+  int32 total = 3;
+  repeated Platform list = 4;
 }
