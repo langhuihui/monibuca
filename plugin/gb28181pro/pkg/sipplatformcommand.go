@@ -8,11 +8,14 @@ import (
 
 	"github.com/emiago/sipgo"
 	"github.com/emiago/sipgo/sip"
+	myip "github.com/husanpao/ip"
 	"github.com/icholy/digest"
+	"m7s.live/v5/pkg/task"
 )
 
 // InitializeSIPClient 初始化SIP客户端
-func (p *Platform) InitializeSIPClient(ua *sipgo.UserAgent, localIP string) error {
+func (p *Platform) InitializeSIPClient(ua *sipgo.UserAgent) error {
+	localIP := myip.InternalIPv4()
 	var err error
 	p.Client, err = sipgo.NewClient(ua, sipgo.WithClientHostname(localIP))
 	if err != nil {
@@ -45,7 +48,7 @@ func (p *Platform) InitializeSIPClient(ua *sipgo.UserAgent, localIP string) erro
 }
 
 // Register 发送注册请求到上级平台
-func (p *Platform) Register(ctx context.Context, plugin interface{}) (*sipgo.DialogClientSession, error) {
+func (p *Platform) Register(ctx context.Context) (*sipgo.DialogClientSession, error) {
 	// 创建注册请求的目标URI，使用上级平台的信息
 	recipient := sip.Uri{
 		User: p.ServerGBID,
@@ -89,6 +92,7 @@ func (p *Platform) Register(ctx context.Context, plugin interface{}) (*sipgo.Dia
 	// 发送请求并获取响应
 	tx, err := p.Client.TransactionRequest(ctx, req, sipgo.ClientRequestAddVia)
 	if err != nil {
+		p.Error("register", "error", err.Error())
 		return nil, fmt.Errorf("创建事务失败: %v", err)
 	}
 	defer tx.Terminate()
@@ -96,6 +100,7 @@ func (p *Platform) Register(ctx context.Context, plugin interface{}) (*sipgo.Dia
 	// 获取响应
 	res, err := p.getResponse(tx)
 	if err != nil {
+		p.Error("register", "error", err.Error())
 		return nil, fmt.Errorf("获取响应失败: %v", err)
 	}
 
@@ -104,12 +109,14 @@ func (p *Platform) Register(ctx context.Context, plugin interface{}) (*sipgo.Dia
 		// 获取WWW-Authenticate头部
 		wwwAuth := res.GetHeader("WWW-Authenticate")
 		if wwwAuth == nil {
+			p.Error("register", "error", "no auth challenge")
 			return nil, fmt.Errorf("未收到认证质询")
 		}
 
 		// 解析认证质询
 		chal, err := digest.ParseChallenge(wwwAuth.Value())
 		if err != nil {
+			p.Error("register", "error", err.Error())
 			return nil, fmt.Errorf("解析认证质询失败: %v", err)
 		}
 
@@ -142,10 +149,11 @@ func (p *Platform) Register(ctx context.Context, plugin interface{}) (*sipgo.Dia
 
 	// 检查最终响应状态
 	if res.StatusCode != 200 {
+		p.Error("register", "status", res.StatusCode)
 		return nil, fmt.Errorf("注册失败，状态码: %d", res.StatusCode)
 	}
 
-	// 注册成功，不需要维护会话状态
+	p.Info("register", "response", res.String())
 	return nil, nil
 }
 
@@ -160,13 +168,64 @@ func (p *Platform) getResponse(tx sip.ClientTransaction) (*sip.Response, error) 
 }
 
 // Keepalive 发送心跳请求到上级平台
-func (p *Platform) Keepalive(ctx context.Context, plugin interface{}) (*sipgo.DialogClientSession, error) {
-	// TODO: 实现心跳逻辑
+func (p *Platform) Keepalive(ctx context.Context) (*sipgo.DialogClientSession, error) {
+	recipient := sip.Uri{
+		User: p.ServerGBID,
+		Host: p.ServerIP,
+		Port: p.ServerPort,
+	}
+
+	req := sip.NewRequest("MESSAGE", recipient)
+	req.SetTransport(strings.ToUpper(p.Transport))
+
+	// 添加From头部
+	fromHeader := sip.FromHeader{
+		Address: sip.Uri{
+			User: p.DeviceGBID,
+			Host: p.ServerGBDomain,
+		},
+		Params: sip.NewParams(),
+	}
+	fromHeader.Params.Add("tag", sip.GenerateTagN(16))
+	req.AppendHeader(&fromHeader)
+
+	// 添加To头部
+	toHeader := sip.ToHeader{
+		Address: sip.Uri{
+			User: p.ServerGBID,
+			Host: p.ServerGBDomain,
+		},
+	}
+	req.AppendHeader(&toHeader)
+
+	// 添加Contact头部
+	contactStr := fmt.Sprintf("<sip:%s@%s:%d>", p.DeviceGBID, p.DeviceIP, p.DevicePort)
+	req.AppendHeader(sip.NewHeader("Contact", contactStr))
+
+	tx, err := p.Client.TransactionRequest(ctx, req, sipgo.ClientRequestAddVia)
+	if err != nil {
+		p.Error("keepalive", "error", err.Error())
+		return nil, fmt.Errorf("创建事务失败: %v", err)
+	}
+	defer tx.Terminate()
+
+	res, err := p.getResponse(tx)
+	if err != nil {
+		p.Error("keepalive", "error", err.Error())
+		return nil, err
+	}
+
+	if res.StatusCode != 200 {
+		p.Error("keepalive", "status", res.StatusCode)
+		return nil, fmt.Errorf("心跳失败，状态码: %d", res.StatusCode)
+	}
+
+	p.Info("keepalive", "response", res.String())
 	return nil, nil
 }
 
 // Unregister 发送注销请求到上级平台
-func (p *Platform) Unregister(ctx context.Context, plugin interface{}) (*sipgo.DialogClientSession, error) {
+func (p *Platform) Unregister(ctx context.Context) (*sipgo.DialogClientSession, error) {
 	// 创建注销请求的目标URI
 	recipient := sip.Uri{
 		User: p.ServerGBID,
@@ -228,38 +287,64 @@ func (p *Platform) Unregister(ctx context.Context, plugin interface{}) (*sipgo.D
 	return nil, nil
 }
 
-// StartRegisterTask 启动注册任务
-// 这个方法会在平台启用时被调用，负责处理注册和保活
-func (p *Platform) StartRegisterTask(plugin interface{}) {
-	ctx := context.Background()
+// RegisterTask 处理定时注册
+type RegisterTask struct {
+	task.TickTask
+	platform *Platform
+}
 
-	// 首次注册
-	session, err := p.Register(ctx, plugin)
-	if err != nil {
-		// TODO: 处理注册失败
+func (r *RegisterTask) GetTickInterval() time.Duration {
+	return time.Second * time.Duration(r.platform.Expires)
+}
+
+func (r *RegisterTask) Tick(any) {
+	if !r.platform.Enable {
+		r.platform.Status = false
+		r.platform.CurrentSession = nil
+		ctx := context.Background()
+		_, _ = r.platform.Unregister(ctx)
+		r.Error("register", "error", "platform disabled")
+		r.Stop(fmt.Errorf("platform disabled"))
 		return
 	}
 
-	// 保存当前会话
-	p.CurrentSession = session
-
-	// 启动保活协程
-	go func() {
-		ticker := time.NewTicker(time.Duration(p.KeepTimeout) * time.Second)
-		defer ticker.Stop()
-
-		for range ticker.C {
-			if !p.Enable {
-				// 如果平台被禁用，发送注销请求并退出
-				_, _ = p.Unregister(ctx, plugin)
-				return
-			}
-
-			// 发送心跳
-			_, err := p.Keepalive(ctx, plugin)
-			if err != nil {
-				// TODO: 处理心跳失败
-			}
+	ctx := context.Background()
+	session, err := r.platform.Register(ctx)
+	if err != nil {
+		r.platform.IncrementRegisterAliveReply()
+		r.Error("register", "error", err.Error(), "retries", r.platform.RegisterAliveReply)
+		if r.platform.RegisterAliveReply >= 3 {
+			r.platform.Status = false
+			r.platform.CurrentSession = nil
+			r.Stop(fmt.Errorf("max retries reached: %d", r.platform.RegisterAliveReply))
 		}
-	}()
+		return
+	}
+
+	r.Info("register", "status", "success")
+	r.platform.Status = true
+	r.platform.CurrentSession = session
+	r.platform.ResetRegisterAliveReply()
+}
+
+// StartRegisterTask 启动注册任务
+func (p *Platform) StartRegisterTask() {
+	ctx := context.Background()
+
+	// 首次注册
+	session, err := p.Register(ctx)
+	if err != nil {
+		p.Status = false
+		p.IncrementRegisterAliveReply()
+		// 注册失败，启动定时注册任务
+		var rt RegisterTask
+		rt.platform = p
+		p.AddTask(&rt)
+		return
+	}
+
+	// 注册成功，更新状态
+	p.Status = true
+	p.CurrentSession = session
+	p.ResetRegisterAliveReply()
 }

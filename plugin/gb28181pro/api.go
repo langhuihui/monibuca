@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -571,23 +570,15 @@ func (gb *GB28181ProPlugin) AddPlatform(ctx context.Context, req *pb.Platform) (
 
 	// 如果平台启用，则启动注册任务
 	if platform.Enable {
-		// 获取本地SIP端口
-		localPort := 5060 // 默认端口
-		if len(gb.Sip.ListenAddr) > 0 {
-			if port, err := strconv.Atoi(strings.Split(gb.Sip.ListenAddr[0], ":")[1]); err == nil {
-				localPort = port
-			}
-		}
-		// 创建平台命令器
-		commander := gb28181.NewSIPPlatformCommander(platform, gb.GetPublicIP(platform.ServerIP), localPort)
-		if err := commander.InitializeSIPClient(gb.ua); err != nil {
+		// 使用 platform 自身初始化 SIP 客户端
+		if err := platform.InitializeSIPClient(gb.ua); err != nil {
 			gb.Error("初始化SIP客户端失败", "error", err)
 			resp.Code = 500
 			resp.Message = fmt.Sprintf("初始化SIP客户端失败: %v", err)
 			return resp, nil
 		}
 		// 启动注册任务
-		commander.StartRegisterTask(gb)
+		platform.StartRegisterTask()
 	}
 
 	resp.Code = 0
@@ -726,22 +717,14 @@ func (gb *GB28181ProPlugin) UpdatePlatform(ctx context.Context, req *pb.Platform
 
 	// 处理平台启用状态变化
 	if !wasEnabled && platform.Enable {
-		// 获取本地SIP端口
-		localPort := 5060 // 默认端口
-		if len(gb.Sip.ListenAddr) > 0 {
-			if port, err := strconv.Atoi(strings.Split(gb.Sip.ListenAddr[0], ":")[1]); err == nil {
-				localPort = port
-			}
-		}
-		// 平台从禁用变为启用，启动注册任务
-		commander := gb28181.NewSIPPlatformCommander(&platform, gb.GetPublicIP(platform.ServerIP), localPort)
-		if err := commander.InitializeSIPClient(gb.ua); err != nil {
+		// 使用 platform 自身初始化 SIP 客户端
+		if err := platform.InitializeSIPClient(gb.ua); err != nil {
 			gb.Error("初始化SIP客户端失败", "error", err)
 			resp.Code = 500
 			resp.Message = fmt.Sprintf("初始化SIP客户端失败: %v", err)
 			return resp, nil
 		}
-		commander.StartRegisterTask(gb)
+		platform.StartRegisterTask()
 	} else if wasEnabled && !platform.Enable {
 		// TODO: 平台从启用变为禁用，需要处理注销逻辑
 		// 这里可以添加注销相关的代码
