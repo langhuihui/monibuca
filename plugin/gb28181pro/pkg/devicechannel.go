@@ -55,7 +55,9 @@ type DeviceChannel struct {
 	CreateTime          string        `json:"createTime"`                                         // 创建时间
 	Status              ChannelStatus `json:"status" xml:"Status"`                                // 设备状态
 
-	PTZTypeText string `json:"ptzTypeText"` // 云台类型描述字符串
+	PTZTypeText string  `json:"ptzTypeText"` // 云台类型描述字符串
+	GbLongitude float64 `json:"gbLongitude"`
+	GbLatitude  float64 `json:"gbLatitude"`
 }
 
 // SetPTZType 设置云台类型并更新描述文本
@@ -245,11 +247,11 @@ func (d *DeviceChannel) appendCommonInfo(content *string) {
 	if d.Status != "" {
 		*content += "<Status>" + string(d.Status) + "</Status>\n"
 	}
-	if d.Longitude != 0 {
-		*content += "<Longitude>" + strconv.FormatFloat(d.Longitude, 'f', -1, 64) + "</Longitude>\n"
+	if d.GbLongitude != 0 {
+		*content += "<Longitude>" + strconv.FormatFloat(d.GbLongitude, 'f', -1, 64) + "</Longitude>\n"
 	}
-	if d.Latitude != 0 {
-		*content += "<Latitude>" + strconv.FormatFloat(d.Latitude, 'f', -1, 64) + "</Latitude>\n"
+	if d.GbLatitude != 0 {
+		*content += "<Latitude>" + strconv.FormatFloat(d.GbLatitude, 'f', -1, 64) + "</Latitude>\n"
 	}
 
 	// 添加Info标签内的信息

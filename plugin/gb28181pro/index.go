@@ -178,7 +178,7 @@ func (gb *GB28181ProPlugin) OnInit() (err error) {
 		gb.server.OnBye(gb.OnBye)
 		gb.devices.L = new(sync.RWMutex)
 		gb.server.OnInvite(gb.OnInvite)
-		gb.server.OnAck(gb.OnAck)
+		//gb.server.OnAck(gb.OnAck)
 
 		if gb.MediaPort.Valid() {
 			gb.SetDescription("tcp", fmt.Sprintf("%d-%d", gb.MediaPort[0], gb.MediaPort[1]))
@@ -385,59 +385,150 @@ func (gb *GB28181ProPlugin) OnMessage(req *sip.Request, tx sip.ServerTransaction
 		return
 	}
 	id := from.Address.User
+
+	// 检查消息来源
 	var d *Device
+	var p *gb28181.Platform
 	var ok bool
-	// 先从缓存中获取
+
+	// 先从设备缓存中获取
 	if d, ok = gb.devices.Get(id); !ok {
-		// 缓存中没有，尝试从数据库获取
+		// 如果内存中没有，尝试从数据库恢复
 		if gb.DB != nil {
 			var device Device
 			if err := gb.DB.Where("device_id = ?", id).First(&device).Error; err == nil {
 				// 从数据库找到设备，恢复设备状态
 				d = &device
+				d.channels.L = new(sync.RWMutex)
+				d.eventChan = make(chan any, 10)
 				gb.RecoverDevice(d, req)
 				d.Online = true
 				gb.devices.Add(d)
-				d.Logger = gb.With("id", id)
-				d.channels.L = new(sync.RWMutex)
-				d.eventChan = make(chan any, 10)
-				d.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(d.LocalIP))
-				d.dialogClient = sipgo.NewDialogClient(d.client, d.contactHDR)
 				d.Info("OnMessage", "type", "从数据库恢复设备", "deviceId", id)
 			} else {
-				gb.Error("OnMessage", "error", "device not found in cache and database", "deviceId", id)
-				_ = tx.Respond(sip.NewResponseFromRequest(req, sip.StatusNotFound, "Not Found", nil))
-				return
+				d = nil
 			}
 		} else {
-			gb.Error("OnMessage", "error", "device not found in cache", "deviceId", id)
-			_ = tx.Respond(sip.NewResponseFromRequest(req, sip.StatusNotFound, "Not Found", nil))
-			return
+			d = nil
 		}
 	}
 
-	d.UpdateTime = time.Now()
+	// 检查是否是平台
+	if gb.DB != nil {
+		var platform gb28181.Platform
+		if err := gb.DB.Where("device_id = ?", id).First(&platform).Error; err == nil {
+			p = &platform
+		}
+	}
+
+	// 如果设备和平台都存在，通过源地址判断真实来源
+	if d != nil && p != nil {
+		source := req.Source()
+		if d.HostAddress == source {
+			// 如果源地址匹配设备地址，则确认是设备消息
+			p = nil
+		} else {
+			// 否则认为是平台消息
+			d = nil
+		}
+	}
+
+	// 如果既不是设备也不是平台，返回404
+	if d == nil && p == nil {
+		gb.Error("OnMessage", "error", "device/platform not found", "id", id)
+		response := sip.NewResponseFromRequest(req, sip.StatusNotFound, "Not Found", nil)
+		if err := tx.Respond(response); err != nil {
+			gb.Error("respond NotFound", "error", err.Error())
+		}
+		return
+	}
+
+	// 解析消息内容
 	temp := &gb28181.Message{}
 	err := gb28181.DecodeXML(temp, req.Body())
 	if err != nil {
 		gb.Error("OnMessage", "error", err.Error())
+		response := sip.NewResponseFromRequest(req, sip.StatusBadRequest, "Bad Request", nil)
+		if err := tx.Respond(response); err != nil {
+			gb.Error("respond BadRequest", "error", err.Error())
+		}
 		return
 	}
-	if err = d.onMessage(req, tx, temp); err != nil {
-		gb.Error("onMessage", "error", err.Error())
+
+	// 根据来源调用不同的处理方法
+	if d != nil {
+		d.UpdateTime = time.Now()
+		if err = d.onMessage(req, tx, temp); err != nil {
+			gb.Error("onMessage", "error", err.Error(), "type", "device")
+		}
+	} else {
+		if err = p.OnMessage(req, tx, temp); err != nil {
+			gb.Error("onMessage", "error", err.Error(), "type", "platform")
+		}
 	}
 }
 
 func (gb *GB28181ProPlugin) RecoverDevice(d *Device, req *sip.Request) {
 	from := req.From()
 	source := req.Source()
+	desc := req.Destination()
+	servIp, sPortStr, _ := net.SplitHostPort(desc)
+	deviceIP, _, _ := net.SplitHostPort(source)
 	hostname, portStr, _ := net.SplitHostPort(source)
 	port, _ := strconv.Atoi(portStr)
+	serverPort, _ := strconv.Atoi(sPortStr)
+
+	// 优先使用内网IP
+	host := myip.InternalIPv4()
+	// 如果设备IP是内网IP，则使用内网IP
+	deviceIPParsed := net.ParseIP(deviceIP)
+	if deviceIPParsed != nil {
+		if deviceIPParsed.IsPrivate() {
+			// 设备是内网IP，优先使用内网IP
+			servIPParsed := net.ParseIP(servIp)
+			if servIPParsed != nil && servIPParsed.IsPrivate() {
+				// 如果服务器配置的也是内网IP，则使用配置的IP
+				host = servIp
+			}
+		} else {
+			// 设备是公网IP，使用公网IP
+			host = gb.GetPublicIP(servIp)
+		}
+	}
+
+	// 设置 Recipient
 	d.Recipient = sip.Uri{
 		Host: hostname,
 		Port: port,
 		User: from.Address.User,
 	}
+
+	// 设置 contactHDR
+	d.contactHDR = sip.ContactHeader{
+		Address: sip.Uri{
+			User: gb.Serial,
+			Host: host,
+			Port: serverPort,
+		},
+	}
+
+	// 设置 fromHDR
+	d.fromHDR = sip.FromHeader{
+		Address: sip.Uri{
+			User: gb.Serial,
+			Host: gb.Realm,
+		},
+		Params: sip.NewParams(),
+	}
+	d.fromHDR.Params.Add("tag", sip.GenerateTagN(16))
+
+	// 初始化日志
+	d.Logger = gb.With("id", d.DeviceID)
+
+	// 初始化 SIP 客户端
+	d.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(host))
+	d.dialogClient = sipgo.NewDialogClient(d.client, d.contactHDR)
+
 	d.StartTime = time.Now()
 	d.Status = DeviceRecoverStatus
 	d.UpdateTime = time.Now()
