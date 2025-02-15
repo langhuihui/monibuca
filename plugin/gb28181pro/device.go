@@ -103,7 +103,7 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 				// 设置关联的设备数据库ID
 				c.DeviceDBID = d.ID
 				// 先查询是否存在
-				var existing gb28181.ChannelInfo
+				var existing gb28181.DeviceChannel
 				if err := d.plugin.DB.Where("device_id = ?", c.DeviceID).First(&existing).Error; err == nil {
 					c.ID = existing.ID // 保持原有的自增ID
 					d.Debug("update channel", "channelId", c.DeviceID)
@@ -206,7 +206,7 @@ func (d *Device) Go() (err error) {
 			}
 		case event := <-d.eventChan:
 			switch v := event.(type) {
-			case []gb28181.ChannelInfo:
+			case []gb28181.DeviceChannel:
 				for _, c := range v {
 					//当父设备非空且存在时、父设备节点增加通道
 					if c.ParentID != "" {
@@ -269,14 +269,14 @@ func (d *Device) subscribePosition(interval int) (*sip.Response, error) {
 	return d.send(request)
 }
 
-func (d *Device) addOrUpdateChannel(c gb28181.ChannelInfo) {
+func (d *Device) addOrUpdateChannel(c gb28181.DeviceChannel) {
 	if channel, ok := d.channels.Get(c.DeviceID); ok {
-		channel.ChannelInfo = c
+		channel.DeviceChannel = c
 	} else {
 		channel = &Channel{
-			Device:      d,
-			Logger:      d.Logger.With("channel", c.DeviceID),
-			ChannelInfo: c,
+			Device:        d,
+			Logger:        d.Logger.With("channel", c.DeviceID),
+			DeviceChannel: c,
 		}
 		d.channels.Set(channel)
 	}

@@ -4,13 +4,14 @@ import (
 	"bytes"
 	"encoding/xml"
 	"fmt"
-	"golang.org/x/net/html/charset"
-	"golang.org/x/text/encoding/simplifiedchinese"
-	"golang.org/x/text/transform"
 	"io"
 	"strconv"
 	"strings"
 	"time"
+
+	"golang.org/x/net/html/charset"
+	"golang.org/x/text/encoding/simplifiedchinese"
+	"golang.org/x/text/transform"
 )
 
 const (
@@ -61,8 +62,6 @@ const (
 <Status>OK</Status>
 </Notify>
 `
-	ChannelOnStatus  ChannelStatus = "ON"
-	ChannelOffStatus ChannelStatus = "OFF"
 )
 
 func intTotime(t int64) time.Time {
@@ -111,8 +110,7 @@ func BuildKeepAliveXML(sn int, id string) []byte {
 }
 
 type (
-	ChannelStatus string
-	Record        struct {
+	Record struct {
 		DeviceID  string
 		Name      string
 		FilePath  string
@@ -121,24 +119,6 @@ type (
 		EndTime   string
 		Secrecy   int
 		Type      string
-	}
-	ChannelInfo struct {
-		ID           int64  `gorm:"primaryKey;autoIncrement"` // 数据库自增长ID
-		DeviceDBID   int64  // device表里的id
-		DeviceID     string // 设备国标编号
-		ParentID     string
-		Name         string
-		Manufacturer string
-		Model        string
-		Owner        string
-		CivilCode    string
-		Address      string
-		Port         int
-		Parental     int
-		SafetyWay    int
-		RegisterWay  int
-		Secrecy      int
-		Status       ChannelStatus
 	}
 	Message struct {
 		XMLName      xml.Name
@@ -149,15 +129,11 @@ type (
 		Manufacturer string
 		Model        string
 		Channel      string
-		DeviceList   []ChannelInfo `xml:"DeviceList>Item"`
-		RecordList   []Record      `xml:"RecordList>Item"`
-		SumNum       int           // 录像结果的总数 SumNum，录像结果会按照多条消息返回，可用于判断是否全部返回
+		DeviceList   []DeviceChannel `xml:"DeviceList>Item"`
+		RecordList   []Record        `xml:"RecordList>Item"`
+		SumNum       int             // 录像结果的总数 SumNum，录像结果会按照多条消息返回，可用于判断是否全部返回
 	}
 )
-
-func (d *ChannelInfo) TableName() string {
-	return "channel_gb28181pro"
-}
 
 func DecodeXML(v any, body []byte) error {
 	decoder := xml.NewDecoder(bytes.NewReader(body))

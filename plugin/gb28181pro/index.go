@@ -143,7 +143,7 @@ type GB28181ProPlugin struct {
 	m7s.Plugin
 	AutoInvite bool   `default:"true" desc:"自动邀请"`
 	Serial     string `default:"34020000002000000001" desc:"sip 服务 id"` //sip 服务器 id, 默认 34020000002000000001
-	Realm      string `default:"3402000000" desc:"sip 服务域"`             //sip 服务器域，默认 3402000000
+	Realm      string `default:"3402000000" desc:"sip 服务域"`            //sip 服务器域，默认 3402000000
 	Username   string
 	Password   string
 	Sip        SipConfig
@@ -207,7 +207,7 @@ func (gb *GB28181ProPlugin) OnInit() (err error) {
 		}
 		if gb.DB != nil {
 			gb.DB.AutoMigrate(&Device{})
-			gb.DB.AutoMigrate(&gb28181.ChannelInfo{})
+			gb.DB.AutoMigrate(&gb28181.DeviceChannel{})
 			gb.DB.AutoMigrate(&gb28181.Platform{})
 		}
 	}

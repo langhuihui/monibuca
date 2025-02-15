@@ -27,7 +27,7 @@ type Channel struct {
 	Longitude, Latitude string       // 经度
 	RecordReqs          util.Collection[int, *RecordRequest]
 	*slog.Logger
-	gb28181.ChannelInfo
+	gb28181.DeviceChannel
 	AbstractDevice *m7s.PullProxy
 }
 
