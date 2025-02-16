@@ -210,7 +210,7 @@ func (gb *GB28181ProPlugin) OnInit() (err error) {
 		if gb.DB != nil {
 			gb.DB.AutoMigrate(&Device{})
 			gb.DB.AutoMigrate(&gb28181.DeviceChannel{})
-			gb.DB.AutoMigrate(&gb28181.Platform{})
+			gb.DB.AutoMigrate(&gb28181.PlatformModel{})
 		}
 	}
 	if gb.Parent != "" {
@@ -269,11 +269,7 @@ func (gb *GB28181ProPlugin) OnRegister(req *sip.Request, tx sip.ServerTransactio
 		d.Expires = int(expSec)
 		d.Online = true
 		if gb.DB != nil {
-			var existing Device
-			if err := gb.DB.Where("device_id = ?", d.DeviceID).First(&existing).Error; err == nil {
-				d.ID = existing.ID // 保持原有的自增ID
-			}
-			gb.DB.Save(d)
+			gb.DB.Save(d) // 这里需要保留，因为这是设备续订时的状态更新
 		}
 		response := sip.NewResponseFromRequest(req, sip.StatusOK, "OK", nil)
 		response.AppendHeader(sip.NewHeader("Expires", fmt.Sprintf("%d", expSec)))
@@ -369,9 +365,6 @@ func (gb *GB28181ProPlugin) OnRegister(req *sip.Request, tx sip.ServerTransactio
 		if d, ok := gb.devices.Get(id); ok {
 			gb.RecoverDevice(d, req)
 			d.Online = true
-			if gb.DB != nil {
-				gb.DB.Save(d)
-			}
 		} else {
 			gb.StoreDevice(id, req)
 		}
@@ -388,7 +381,7 @@ func (gb *GB28181ProPlugin) OnMessage(req *sip.Request, tx sip.ServerTransaction
 
 	// 检查消息来源
 	var d *Device
-	var p *gb28181.Platform
+	var p *gb28181.PlatformModel
 	var ok bool
 
 	// 先从设备缓存中获取
@@ -396,7 +389,7 @@ func (gb *GB28181ProPlugin) OnMessage(req *sip.Request, tx sip.ServerTransaction
 		// 如果内存中没有，尝试从数据库恢复
 		if gb.DB != nil {
 			var device Device
-			if err := gb.DB.Where("device_id = ?", id).First(&device).Error; err == nil {
+			if err := gb.DB.First(&device, Device{DeviceID: id}).Error; err == nil {
 				// 从数据库找到设备，恢复设备状态
 				d = &device
 				d.channels.L = new(sync.RWMutex)
@@ -415,8 +408,8 @@ func (gb *GB28181ProPlugin) OnMessage(req *sip.Request, tx sip.ServerTransaction
 
 	// 检查是否是平台
 	if gb.DB != nil {
-		var platform gb28181.Platform
-		if err := gb.DB.Where("device_id = ?", id).First(&platform).Error; err == nil {
+		var platform gb28181.PlatformModel
+		if err := gb.DB.First(&platform, gb28181.PlatformModel{ServerGBID: id}).Error; err == nil {
 			p = &platform
 		}
 	}
@@ -462,7 +455,12 @@ func (gb *GB28181ProPlugin) OnMessage(req *sip.Request, tx sip.ServerTransaction
 			gb.Error("onMessage", "error", err.Error(), "type", "device")
 		}
 	} else {
-		if err = p.OnMessage(req, tx, temp); err != nil {
+		// 创建 Platform 实例
+		platform := &Platform{
+			PlatformModel: p,
+			plugin:        gb,
+		}
+		if err = platform.OnMessage(req, tx, temp); err != nil {
 			gb.Error("onMessage", "error", err.Error(), "type", "platform")
 		}
 	}
@@ -650,7 +648,7 @@ func (gb *GB28181ProPlugin) StoreDevice(id string, req *sip.Request) (d *Device)
 
 	if gb.DB != nil {
 		var existing Device
-		if err := gb.DB.Where("device_id = ?", d.DeviceID).First(&existing).Error; err == nil {
+		if err := gb.DB.First(&existing, Device{DeviceID: d.DeviceID}).Error; err == nil {
 			d.ID = existing.ID // 保持原有的自增ID
 			gb.Info("StoreDevice", "type", "更新设备", "deviceId", d.DeviceID)
 		} else {

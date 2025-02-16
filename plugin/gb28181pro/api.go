@@ -491,7 +491,7 @@ func (gb *GB28181ProPlugin) AddPlatform(ctx context.Context, req *pb.Platform) (
 	}
 
 	// 检查平台是否已存在
-	var existingPlatform gb28181.Platform
+	var existingPlatform gb28181.PlatformModel
 	if err := gb.DB.Where("server_gb_id = ?", req.ServerGBId).First(&existingPlatform).Error; err == nil {
 		resp.Code = 400
 		resp.Message = fmt.Sprintf("平台 %s 已存在", req.ServerGBId)
@@ -521,7 +521,7 @@ func (gb *GB28181ProPlugin) AddPlatform(ctx context.Context, req *pb.Platform) (
 	req.UpdateTime = currentTime
 
 	// 将proto消息转换为数据库模型
-	platform := &gb28181.Platform{
+	platform := &gb28181.PlatformModel{
 		Enable:                  req.Enable,
 		Name:                    req.Name,
 		ServerGBID:              req.ServerGBId,
@@ -570,15 +570,20 @@ func (gb *GB28181ProPlugin) AddPlatform(ctx context.Context, req *pb.Platform) (
 
 	// 如果平台启用，则启动注册任务
 	if platform.Enable {
-		// 使用 platform 自身初始化 SIP 客户端
-		if err := platform.InitializeSIPClient(gb.ua); err != nil {
+		// 创建 Platform 实例
+		platformInstance := &Platform{
+			PlatformModel: platform,
+			plugin:        gb,
+		}
+		// 初始化 SIP 客户端
+		if err := platformInstance.InitializeSIPClient(gb.ua); err != nil {
 			gb.Error("初始化SIP客户端失败", "error", err)
 			resp.Code = 500
 			resp.Message = fmt.Sprintf("初始化SIP客户端失败: %v", err)
 			return resp, nil
 		}
 		// 启动注册任务
-		platform.StartRegisterTask()
+		platformInstance.StartRegisterTask()
 	}
 
 	resp.Code = 0
@@ -596,7 +601,7 @@ func (gb *GB28181ProPlugin) GetPlatform(ctx context.Context, req *pb.GetPlatform
 		return resp, nil
 	}
 
-	var platform gb28181.Platform
+	var platform gb28181.PlatformModel
 	if err := gb.DB.First(&platform, req.Id).Error; err != nil {
 		resp.Code = 404
 		resp.Message = "platform not found"
@@ -661,7 +666,7 @@ func (gb *GB28181ProPlugin) UpdatePlatform(ctx context.Context, req *pb.Platform
 	}
 
 	// 检查平台是否存在
-	var platform gb28181.Platform
+	var platform gb28181.PlatformModel
 	if err := gb.DB.First(&platform, req.Id).Error; err != nil {
 		resp.Code = 404
 		resp.Message = "platform not found"
@@ -717,14 +722,20 @@ func (gb *GB28181ProPlugin) UpdatePlatform(ctx context.Context, req *pb.Platform
 
 	// 处理平台启用状态变化
 	if !wasEnabled && platform.Enable {
-		// 使用 platform 自身初始化 SIP 客户端
-		if err := platform.InitializeSIPClient(gb.ua); err != nil {
+		// 创建 Platform 实例
+		platformInstance := &Platform{
+			PlatformModel: &platform,
+			plugin:        gb,
+		}
+		// 初始化 SIP 客户端
+		if err := platformInstance.InitializeSIPClient(gb.ua); err != nil {
 			gb.Error("初始化SIP客户端失败", "error", err)
 			resp.Code = 500
 			resp.Message = fmt.Sprintf("初始化SIP客户端失败: %v", err)
 			return resp, nil
 		}
-		platform.StartRegisterTask()
+		// 启动注册任务
+		platformInstance.StartRegisterTask()
 	} else if wasEnabled && !platform.Enable {
 		// TODO: 平台从启用变为禁用，需要处理注销逻辑
 		// 这里可以添加注销相关的代码
@@ -746,7 +757,7 @@ func (gb *GB28181ProPlugin) DeletePlatform(ctx context.Context, req *pb.DeletePl
 	}
 
 	// 删除平台
-	if err := gb.DB.Delete(&gb28181.Platform{}, req.Id).Error; err != nil {
+	if err := gb.DB.Delete(&gb28181.PlatformModel{}, req.Id).Error; err != nil {
 		resp.Code = 500
 		resp.Message = fmt.Sprintf("failed to delete platform: %v", err)
 		return resp, nil
@@ -767,11 +778,11 @@ func (gb *GB28181ProPlugin) ListPlatforms(ctx context.Context, req *pb.ListPlatf
 		return resp, nil
 	}
 
-	var platforms []gb28181.Platform
+	var platforms []gb28181.PlatformModel
 	var total int64
 
 	// 构建查询条件
-	query := gb.DB.Model(&gb28181.Platform{})
+	query := gb.DB.Model(&gb28181.PlatformModel{})
 	if req.Query != "" {
 		query = query.Where("name LIKE ? OR server_gb_id LIKE ? OR device_gb_id LIKE ?",
 			"%"+req.Query+"%", "%"+req.Query+"%", "%"+req.Query+"%")

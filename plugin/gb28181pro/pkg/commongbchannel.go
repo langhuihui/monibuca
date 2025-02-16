@@ -310,3 +310,56 @@ func (c *CommonGBChannel) Encode(deviceID string, event string) string {
 		return ""
 	}
 }
+
+// BuildFromGroup 从 Group 构建 CommonGBChannel 实例
+func BuildFromGroup(group *Group) *CommonGBChannel {
+	gbCode := DecodeGBCode(group.DeviceID)
+	if gbCode == nil {
+		return nil
+	}
+
+	channel := &CommonGBChannel{
+		GbName:      group.Name,
+		GbDeviceID:  group.DeviceID,
+		GbCivilCode: group.CivilCode,
+	}
+
+	if gbCode.TypeCode == "215" {
+		// 业务分组
+		channel.GbCivilCode = group.CivilCode
+	} else if gbCode.TypeCode == "216" {
+		// 虚拟组织
+		channel.GbParentID = group.ParentDeviceID
+		channel.GbBusinessGroupID = group.BusinessGroup
+		channel.GbCivilCode = group.CivilCode
+	}
+
+	return channel
+}
+
+// BuildFromPlatform 从 PlatformModel 构建 CommonGBChannel 实例
+func BuildFromPlatform(platform *PlatformModel) *CommonGBChannel {
+	status := "OFF"
+	if platform.Status {
+		status = "ON"
+	}
+	return &CommonGBChannel{
+		GbDeviceID:     platform.DeviceGBID,
+		GbName:         platform.Name,
+		GbManufacturer: platform.Manufacturer,
+		GbModel:        platform.Model,
+		GbCivilCode:    platform.CivilCode,
+		GbAddress:      platform.Address,
+		GbRegisterWay:  platform.RegisterWay,
+		GbSecrecy:      platform.Secrecy,
+		GbStatus:       status,
+	}
+}
+
+// BuildFromRegion 从 Region 构建 CommonGBChannel 实例
+func BuildFromRegion(region *Region) *CommonGBChannel {
+	return &CommonGBChannel{
+		GbDeviceID: region.DeviceID,
+		GbName:     region.Name,
+	}
+}
