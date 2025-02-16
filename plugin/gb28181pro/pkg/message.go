@@ -110,16 +110,6 @@ func BuildKeepAliveXML(sn int, id string) []byte {
 }
 
 type (
-	Record struct {
-		DeviceID  string
-		Name      string
-		FilePath  string
-		Address   string
-		StartTime string
-		EndTime   string
-		Secrecy   int
-		Type      string
-	}
 	Message struct {
 		XMLName      xml.Name
 		CmdType      string
@@ -130,8 +120,13 @@ type (
 		Model        string
 		Channel      string
 		DeviceList   []DeviceChannel `xml:"DeviceList>Item"`
-		RecordList   []Record        `xml:"RecordList>Item"`
-		SumNum       int             // 录像结果的总数 SumNum，录像结果会按照多条消息返回，可用于判断是否全部返回
+		RecordList   struct {
+			Num  int          `xml:"Num,attr"`
+			Item []RecordItem `xml:"Item"`
+		} `xml:"RecordList"`
+		SumNum   int       // 录像结果的总数 SumNum，录像结果会按照多条消息返回，可用于判断是否全部返回
+		Name     string    // 设备/通道名称
+		LastTime time.Time `xml:"LastTime"` // 最后时间
 	}
 )
 

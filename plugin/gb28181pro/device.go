@@ -5,6 +5,8 @@ import (
 	"strings"
 	"time"
 
+	"m7s.live/v5"
+
 	"github.com/emiago/sipgo"
 	"github.com/emiago/sipgo/sip"
 	"m7s.live/v5/pkg/task"
@@ -129,8 +131,10 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 	case "RecordInfo":
 		if channel, ok := d.channels.Get(msg.DeviceID); ok {
 			if req, ok := channel.RecordReqs.Get(msg.SN); ok {
-				req.Response = msg.RecordList
-				req.Resolve()
+				// 添加响应并检查是否完成
+				if req.AddResponse(*msg) {
+					req.Resolve()
+				}
 			}
 		}
 	case "DeviceInfo":
@@ -239,8 +243,7 @@ func (d *Device) CreateRequest(Method sip.RequestMethod) *sip.Request {
 	req := sip.NewRequest(Method, d.Recipient)
 	req.AppendHeader(&d.fromHDR)
 	contentType := sip.ContentTypeHeader("Application/MANSCDP+xml")
-	//req.AppendHeader(sip.NewHeader("User-Agent", "M7S/"+m7s.Version))
-	req.AppendHeader(sip.NewHeader("User-Agent", "asdf"))
+	req.AppendHeader(sip.NewHeader("User-Agent", "M7S/"+m7s.Version))
 	req.AppendHeader(&contentType)
 	req.AppendHeader(&d.contactHDR)
 	return req

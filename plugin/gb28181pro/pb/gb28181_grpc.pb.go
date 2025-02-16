@@ -52,6 +52,7 @@ const (
 	Api_DeletePlatform_FullMethodName                    = "/gb28181pro.api/DeletePlatform"
 	Api_ListPlatforms_FullMethodName                     = "/gb28181pro.api/ListPlatforms"
 	Api_StartPlayback_FullMethodName                     = "/gb28181pro.api/StartPlayback"
+	Api_QueryRecord_FullMethodName                       = "/gb28181pro.api/QueryRecord"
 )
 
 // ApiClient is the client API for Api service.
@@ -118,6 +119,8 @@ type ApiClient interface {
 	ListPlatforms(ctx context.Context, in *ListPlatformsRequest, opts ...grpc.CallOption) (*PlatformsPageInfo, error)
 	// 开始回放
 	StartPlayback(ctx context.Context, in *PlaybackRequest, opts ...grpc.CallOption) (*PlayResponse, error)
+	// 查询录像记录
+	QueryRecord(ctx context.Context, in *QueryRecordRequest, opts ...grpc.CallOption) (*QueryRecordResponse, error)
 }
 
 type apiClient struct {
@@ -428,6 +431,16 @@ func (c *apiClient) StartPlayback(ctx context.Context, in *PlaybackRequest, opts
 	return out, nil
 }
 
+func (c *apiClient) QueryRecord(ctx context.Context, in *QueryRecordRequest, opts ...grpc.CallOption) (*QueryRecordResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(QueryRecordResponse)
+	err := c.cc.Invoke(ctx, Api_QueryRecord_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ApiServer is the server API for Api service.
 // All implementations must embed UnimplementedApiServer
 // for forward compatibility.
@@ -492,6 +505,8 @@ type ApiServer interface {
 	ListPlatforms(context.Context, *ListPlatformsRequest) (*PlatformsPageInfo, error)
 	// 开始回放
 	StartPlayback(context.Context, *PlaybackRequest) (*PlayResponse, error)
+	// 查询录像记录
+	QueryRecord(context.Context, *QueryRecordRequest) (*QueryRecordResponse, error)
 	mustEmbedUnimplementedApiServer()
 }
 
@@ -591,6 +606,9 @@ func (UnimplementedApiServer) ListPlatforms(context.Context, *ListPlatformsReque
 }
 func (UnimplementedApiServer) StartPlayback(context.Context, *PlaybackRequest) (*PlayResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StartPlayback not implemented")
+}
+func (UnimplementedApiServer) QueryRecord(context.Context, *QueryRecordRequest) (*QueryRecordResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method QueryRecord not implemented")
 }
 func (UnimplementedApiServer) mustEmbedUnimplementedApiServer() {}
 func (UnimplementedApiServer) testEmbeddedByValue()             {}
@@ -1153,6 +1171,24 @@ func _Api_StartPlayback_Handler(srv interface{}, ctx context.Context, dec func(i
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Api_QueryRecord_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueryRecordRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).QueryRecord(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_QueryRecord_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).QueryRecord(ctx, req.(*QueryRecordRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Api_ServiceDesc is the grpc.ServiceDesc for Api service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1279,6 +1315,10 @@ var Api_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "StartPlayback",
 			Handler:    _Api_StartPlayback_Handler,
+		},
+		{
+			MethodName: "QueryRecord",
+			Handler:    _Api_QueryRecord_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

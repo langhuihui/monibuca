@@ -942,3 +942,89 @@ func (gb *GB28181ProPlugin) ListPlatforms(ctx context.Context, req *pb.ListPlatf
 	resp.Message = "success"
 	return resp, nil
 }
+
+// QueryRecord 实现录像查询接口
+func (gb *GB28181ProPlugin) QueryRecord(ctx context.Context, req *pb.QueryRecordRequest) (*pb.QueryRecordResponse, error) {
+	resp := &pb.QueryRecordResponse{
+		Code:    0,
+		Message: "",
+	}
+
+	// 获取设备和通道
+	device, ok := gb.devices.Get(req.DeviceId)
+	if !ok {
+		resp.Code = 404
+		resp.Message = "device not found"
+		return resp, nil
+	}
+
+	channel, ok := device.channels.Get(req.ChannelId)
+	if !ok {
+		resp.Code = 404
+		resp.Message = "channel not found"
+		return resp, nil
+	}
+
+	// 生成随机序列号
+	sn := int(time.Now().UnixNano() / 1e6 % 1000000)
+
+	// 发送录像查询请求
+	promise, err := gb.RecordInfoQuery(req.DeviceId, req.ChannelId, req.Start, req.End, sn)
+	if err != nil {
+		resp.Code = 500
+		resp.Message = err.Error()
+		return resp, nil
+	}
+
+	// 等待响应
+	err = promise.Await()
+	if err != nil {
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("query failed: %v", err)
+		return resp, nil
+	}
+
+	// 获取录像请求
+	recordReq, ok := channel.RecordReqs.Get(sn)
+	if !ok {
+		resp.Code = 500
+		resp.Message = "record request not found"
+		return resp, nil
+	}
+
+	// 转换结果
+	if len(recordReq.Response) > 0 {
+		firstResponse := recordReq.Response[0]
+		resp.DeviceId = req.DeviceId
+		resp.ChannelId = req.ChannelId
+		resp.Name = firstResponse.Name
+		resp.Count = int32(recordReq.ReceivedNum)
+		if !firstResponse.LastTime.IsZero() {
+			resp.LastTime = timestamppb.New(firstResponse.LastTime)
+		}
+	}
+
+	for _, record := range recordReq.Response {
+		for _, item := range record.RecordList.Item {
+			resp.Records = append(resp.Records, &pb.RecordItem{
+				DeviceId:   item.DeviceID,
+				Name:       item.Name,
+				FilePath:   item.FilePath,
+				Address:    item.Address,
+				StartTime:  item.StartTime,
+				EndTime:    item.EndTime,
+				Secrecy:    int32(item.Secrecy),
+				Type:       item.Type,
+				RecorderId: item.RecorderID,
+			})
+		}
+	}
+
+	resp.Code = 0
+	resp.Message = fmt.Sprintf("success, received %d/%d records", recordReq.ReceivedNum, recordReq.SumNum)
+
+	// 清理请求
+	channel.RecordReqs.Remove(recordReq)
+
+	return resp, nil
+}

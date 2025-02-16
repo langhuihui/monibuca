@@ -228,6 +228,13 @@ service api {
       post: "/gb28181/api/playback/start/{deviceId}/{channelId}"
     };
   }
+
+  // 查询录像记录
+  rpc QueryRecord (QueryRecordRequest) returns (QueryRecordResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/gbrecord/query/{deviceId}/{channelId}"
+    };
+  }
 }
 
 // 请求和响应消息定义
@@ -559,4 +566,36 @@ message PlatformsPageInfo {
   string message = 2;
   int32 total = 3;
   repeated Platform list = 4;
+}
+
+message QueryRecordRequest {
+  string deviceId = 1;
+  string channelId = 2;
+  string start = 3;
+  string end = 4;
+}
+
+message QueryRecordResponse {
+  int32 code = 1;
+  string message = 2;
+  repeated RecordItem records = 3;
+  string device_id = 4;
+  string channel_id = 5;
+  string sn = 6;
+  string name = 7;
+  int32 sum_num = 8;
+  int32 count = 9;
+  google.protobuf.Timestamp last_time = 10;
+}
+
+message RecordItem {
+  string deviceId = 1;
+  string name = 2;
+  string filePath = 3;
+  string address = 4;
+  string startTime = 5;
+  string endTime = 6;
+  int32 secrecy = 7;
+  string type = 8;
+  string recorderId = 9;
 }

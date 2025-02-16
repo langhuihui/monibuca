@@ -11,13 +11,22 @@ import (
 )
 
 type RecordRequest struct {
-	SN, SumNum int
-	Response   []gb28181.Record
+	SN, SumNum  int
+	ReceivedNum int // 已接收的记录数
+	Response    []gb28181.Message
 	*util.Promise
 }
 
 func (r *RecordRequest) GetKey() int {
 	return r.SN
+}
+
+// AddResponse 添加响应并检查是否完成
+func (r *RecordRequest) AddResponse(msg gb28181.Message) bool {
+	r.Response = append(r.Response, msg)
+	r.ReceivedNum += msg.RecordList.Num
+	// 当接收到的记录数等于总数时，表示接收完成
+	return r.ReceivedNum >= msg.SumNum
 }
 
 type Channel struct {
