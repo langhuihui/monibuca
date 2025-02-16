@@ -25,45 +25,46 @@ const (
 
 type Device struct {
 	task.Task             `gorm:"-:all"`
-	ID                    int64     `gorm:"primaryKey;autoIncrement"` // 数据库自增长ID
-	DeviceID              string    // 设备国标编号
-	Name                  string    // 设备名
-	Manufacturer          string    // 生产厂商
-	Model                 string    // 型号
-	Owner                 string    // 所有者
-	Firmware              string    // 固件版本
-	Transport             string    // 传输协议（UDP/TCP）
-	StreamMode            string    // 数据流传输模式（UDP:udp传输/TCP-ACTIVE：tcp主动模式/TCP-PASSIVE：tcp被动模式）
-	IP                    string    // wan地址_ip
-	Port                  int       // wan地址_port
-	HostAddress           string    // wan地址
-	Online                bool      // 是否在线，true为在线，false为离线
-	RegisterTime          time.Time // 注册时间
-	KeepaliveTime         time.Time // 心跳时间
-	KeepaliveInterval     int       // 心跳间隔
-	ChannelCount          int       // 通道个数
-	Expires               int       // 注册有效期
-	CreateTime            time.Time // 创建时间
-	UpdateTime            time.Time // 更新时间
-	MediaServerID         string    // 设备使用的媒体id, 默认为null
-	Charset               string    // 字符集, 支持 UTF-8 与 GB2312
-	SubscribeCatalog      int       // 目录订阅周期，0为不订阅
-	SubscribePosition     int       // 移动设备位置订阅周期，0为不订阅
-	PositionInterval      int       // 移动设备位置信息上报时间间隔,单位:秒,默认值5
-	SubscribeAlarm        int       // 报警订阅周期，0为不订阅
-	SSRCCheck             bool      // 是否开启ssrc校验，默认关闭，开启可以防止串流
-	GeoCoordSys           string    // 地理坐标系， 目前支持 WGS84,GCJ02
-	Password              string    // 密码
-	SdpIP                 string    // 收流IP
-	LocalIP               string    // SIP交互IP（设备访问平台的IP）
-	AsMessageChannel      bool      // 是否作为消息通道
-	BroadcastPushAfterAck bool      // 控制语音对讲流程，释放收到ACK后发流
+	ID                    int64                   `gorm:"primaryKey;autoIncrement"` // 数据库自增长ID
+	DeviceID              string                  // 设备国标编号
+	Name                  string                  // 设备名
+	Manufacturer          string                  // 生产厂商
+	Model                 string                  // 型号
+	Owner                 string                  // 所有者
+	Firmware              string                  // 固件版本
+	Transport             string                  // 传输协议（UDP/TCP）
+	StreamMode            string                  // 数据流传输模式（UDP:udp传输/TCP-ACTIVE：tcp主动模式/TCP-PASSIVE：tcp被动模式）
+	IP                    string                  // wan地址_ip
+	Port                  int                     // wan地址_port
+	HostAddress           string                  // wan地址
+	Online                bool                    // 是否在线，true为在线，false为离线
+	RegisterTime          time.Time               // 注册时间
+	KeepaliveTime         time.Time               // 心跳时间
+	KeepaliveInterval     int                     `gorm:"default:60"` // 心跳间隔
+	ChannelCount          int                     // 通道个数
+	Expires               int                     // 注册有效期
+	CreateTime            time.Time               // 创建时间
+	UpdateTime            time.Time               // 更新时间
+	MediaServerID         string                  // 设备使用的媒体id, 默认为null
+	Charset               string                  // 字符集, 支持 UTF-8 与 GB2312
+	SubscribeCatalog      int                     // 目录订阅周期，0为不订阅
+	SubscribePosition     int                     // 移动设备位置订阅周期，0为不订阅
+	PositionInterval      int                     // 移动设备位置信息上报时间间隔,单位:秒,默认值5
+	SubscribeAlarm        int                     // 报警订阅周期，0为不订阅
+	SSRCCheck             bool                    // 是否开启ssrc校验，默认关闭，开启可以防止串流
+	GeoCoordSys           string                  // 地理坐标系， 目前支持 WGS84,GCJ02
+	Password              string                  // 密码
+	SdpIP                 string                  // 收流IP
+	LocalIP               string                  // SIP交互IP（设备访问平台的IP）
+	AsMessageChannel      bool                    // 是否作为消息通道
+	BroadcastPushAfterAck bool                    // 控制语音对讲流程，释放收到ACK后发流
+	Channels              []gb28181.DeviceChannel `gorm:"foreignKey:DeviceDBID;references:ID"` // 设备通道列表
 
 	// 保留原有字段
 	Status              DeviceStatus
 	SN                  int
-	Recipient           sip.Uri `gorm:"-:all"`
-	channels            util.Collection[string, *Channel]
+	Recipient           sip.Uri                           `gorm:"-:all"`
+	channels            util.Collection[string, *Channel] `gorm:"-:all"`
 	mediaIp             string
 	GpsTime             time.Time // gps时间
 	Longitude, Latitude string    // 经度,纬度
@@ -93,7 +94,11 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 	d.Debug("OnMessage", "cmdType", msg.CmdType, "body", string(req.Body()))
 	switch msg.CmdType {
 	case "Keepalive":
+		d.KeepaliveInterval = int(time.Since(d.KeepaliveTime).Seconds())
 		d.KeepaliveTime = time.Now()
+		if d.plugin.DB != nil {
+			d.plugin.DB.Save(d)
+		}
 	case "Catalog":
 		d.eventChan <- msg.DeviceList
 		// 更新设备信息到数据库

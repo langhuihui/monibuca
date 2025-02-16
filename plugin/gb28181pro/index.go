@@ -143,7 +143,7 @@ type GB28181ProPlugin struct {
 	m7s.Plugin
 	AutoInvite bool   `default:"true" desc:"自动邀请"`
 	Serial     string `default:"34020000002000000001" desc:"sip 服务 id"` //sip 服务器 id, 默认 34020000002000000001
-	Realm      string `default:"3402000000" desc:"sip 服务域"`             //sip 服务器域，默认 3402000000
+	Realm      string `default:"3402000000" desc:"sip 服务域"`            //sip 服务器域，默认 3402000000
 	Username   string
 	Password   string
 	Sip        SipConfig
@@ -246,7 +246,7 @@ func (gb *GB28181ProPlugin) OnRegister(req *sip.Request, tx sip.ServerTransactio
 		return
 	}
 	isUnregister := false
-	id := from.Address.User
+	deviceid := from.Address.User
 	exp := req.GetHeader("Expires")
 	if exp == nil {
 		gb.Error("OnRegister", "error", "no expires")
@@ -262,8 +262,8 @@ func (gb *GB28181ProPlugin) OnRegister(req *sip.Request, tx sip.ServerTransactio
 	}
 
 	// 检查设备是否存在（通过deviceId判断）
-	if d, ok := gb.devices.Get(id); ok {
-		gb.Info("OnRegister", "type", "续订", "deviceId", id)
+	if d, ok := gb.devices.Get(deviceid); ok {
+		gb.Info("OnRegister", "type", "续订", "deviceId", deviceid)
 		d.UpdateTime = time.Now()
 		d.RegisterTime = time.Now()
 		d.Expires = int(expSec)
@@ -354,7 +354,7 @@ func (gb *GB28181ProPlugin) OnRegister(req *sip.Request, tx sip.ServerTransactio
 		gb.Error("respond OK", "error", err.Error())
 	}
 	if isUnregister {
-		if d, ok := gb.devices.Get(id); ok {
+		if d, ok := gb.devices.Get(deviceid); ok {
 			d.Online = false
 			if gb.DB != nil {
 				gb.DB.Save(d)
@@ -362,11 +362,11 @@ func (gb *GB28181ProPlugin) OnRegister(req *sip.Request, tx sip.ServerTransactio
 			d.Stop(errors.New("unregister"))
 		}
 	} else {
-		if d, ok := gb.devices.Get(id); ok {
+		if d, ok := gb.devices.Get(deviceid); ok {
 			gb.RecoverDevice(d, req)
 			d.Online = true
 		} else {
-			gb.StoreDevice(id, req)
+			gb.StoreDevice(deviceid, req)
 		}
 	}
 }
@@ -386,23 +386,22 @@ func (gb *GB28181ProPlugin) OnMessage(req *sip.Request, tx sip.ServerTransaction
 
 	// 先从设备缓存中获取
 	if d, ok = gb.devices.Get(id); !ok {
-		// 如果内存中没有，尝试从数据库恢复
+		// 如果内存中没有，尝试从数据库查找
 		if gb.DB != nil {
 			var device Device
 			if err := gb.DB.First(&device, Device{DeviceID: id}).Error; err == nil {
-				// 从数据库找到设备，恢复设备状态
 				d = &device
-				d.channels.L = new(sync.RWMutex)
-				d.eventChan = make(chan any, 10)
-				gb.RecoverDevice(d, req)
-				d.Online = true
-				gb.devices.Add(d)
-				d.Info("OnMessage", "type", "从数据库恢复设备", "deviceId", id)
-			} else {
-				d = nil
 			}
-		} else {
-			d = nil
+		}
+		gb.RecoverDevice(d, req)
+		// 如果设备不存在，直接返回404
+		if d == nil {
+			gb.Error("OnMessage", "error", "device not found", "DeviceID", id)
+			response := sip.NewResponseFromRequest(req, sip.StatusNotFound, "Not Found", nil)
+			if err := tx.Respond(response); err != nil {
+				gb.Error("respond NotFound", "error", err.Error())
+			}
+			return
 		}
 	}
 
@@ -530,15 +529,27 @@ func (gb *GB28181ProPlugin) RecoverDevice(d *Device, req *sip.Request) {
 	d.StartTime = time.Now()
 	d.Status = DeviceRecoverStatus
 	d.UpdateTime = time.Now()
+	d.plugin = gb
+	gb.devices.Add(d)
 }
 
-func (gb *GB28181ProPlugin) StoreDevice(id string, req *sip.Request) (d *Device) {
+func (gb *GB28181ProPlugin) StoreDevice(deviceid string, req *sip.Request) (d *Device) {
 	from := req.From()
 	source := req.Source()
 	desc := req.Destination()
 	servIp, sPortStr, _ := net.SplitHostPort(desc)
 	deviceIP, _, _ := net.SplitHostPort(source)
 
+	exp := req.GetHeader("Expires")
+	if exp == nil {
+		gb.Error("OnRegister", "error", "no expires")
+		return
+	}
+	expSec, err := strconv.ParseInt(exp.Value(), 10, 32)
+	if err != nil {
+		gb.Error("OnRegister", "error", err.Error())
+		return
+	}
 	// 优先使用内网IP
 	host := myip.InternalIPv4()
 	// 如果设备IP是内网IP，则使用内网IP
@@ -563,7 +574,7 @@ func (gb *GB28181ProPlugin) StoreDevice(id string, req *sip.Request) (d *Device)
 
 	now := time.Now()
 	d = &Device{
-		DeviceID:      id,
+		DeviceID:      deviceid,
 		CreateTime:    now,
 		UpdateTime:    now,
 		RegisterTime:  now,
@@ -579,6 +590,7 @@ func (gb *GB28181ProPlugin) StoreDevice(id string, req *sip.Request) (d *Device)
 		HostAddress:   hostname + ":" + portStr,
 		LocalIP:       host,
 		mediaIp:       host,
+		Expires:       int(expSec),
 		eventChan:     make(chan any, 10),
 		Recipient: sip.Uri{
 			Host: hostname,
@@ -602,7 +614,7 @@ func (gb *GB28181ProPlugin) StoreDevice(id string, req *sip.Request) (d *Device)
 		plugin: gb,
 	}
 
-	d.Logger = gb.With("id", id)
+	d.Logger = gb.With("deviceid", deviceid)
 	d.fromHDR.Params.Add("tag", sip.GenerateTagN(16))
 	d.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(host))
 	d.dialogClient = sipgo.NewDialogClient(d.client, d.contactHDR)

@@ -323,6 +323,7 @@ message Device {
   google.protobuf.Timestamp registerTime=10;
   google.protobuf.Timestamp updateTime=11;
   repeated Channel channels = 12;
+  bool online = 13;
 }
 
 message ResponseList {

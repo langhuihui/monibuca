@@ -4,8 +4,13 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
+
+	"os"
 
 	"github.com/emiago/sipgo"
+	"github.com/emiago/sipgo/sip"
+	"github.com/rs/zerolog"
 	m7s "m7s.live/v5"
 	"m7s.live/v5/pkg/task"
 	"m7s.live/v5/pkg/util"
@@ -40,15 +45,78 @@ func (d *Dialog) Start() (err error) {
 	sss := strings.Split(d.pullCtx.RemoteURL, "/")
 	deviceId, channelId := sss[0], sss[1]
 	if len(sss) == 2 {
-		if device, ok := d.gb.devices.Get(deviceId); ok {
-			if channel, ok := device.channels.Get(channelId); ok {
-				d.Channel = channel
+		// 先从内存中获取设备
+		device, ok := d.gb.devices.Get(deviceId)
+		if !ok && d.gb.DB != nil {
+			// 如果内存中没有且数据库存在，则从数据库查询
+			var dbDevice Device
+			if err := d.gb.DB.Where("device_id = ?", deviceId).First(&dbDevice).Error; err == nil {
+				// 恢复设备的必要字段
+				dbDevice.Logger = d.gb.With("id", deviceId)
+				dbDevice.channels.L = new(sync.RWMutex)
+				dbDevice.plugin = d.gb
+				dbDevice.eventChan = make(chan any, 10)
+
+				// 初始化 SIP 相关字段
+				dbDevice.fromHDR = sip.FromHeader{
+					Address: sip.Uri{
+						User: d.gb.Serial,
+						Host: d.gb.Realm,
+					},
+					Params: sip.NewParams(),
+				}
+				dbDevice.fromHDR.Params.Add("tag", sip.GenerateTagN(16))
+
+				dbDevice.contactHDR = sip.ContactHeader{
+					Address: sip.Uri{
+						User: d.gb.Serial,
+						Host: dbDevice.LocalIP,
+						Port: dbDevice.Port,
+					},
+				}
+
+				dbDevice.Recipient = sip.Uri{
+					Host: dbDevice.IP,
+					Port: dbDevice.Port,
+					User: dbDevice.DeviceID,
+				}
+
+				// 初始化 SIP 客户端
+				dbDevice.client, _ = sipgo.NewClient(d.gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(dbDevice.LocalIP))
+				if dbDevice.client != nil {
+					dbDevice.dialogClient = sipgo.NewDialogClient(dbDevice.client, dbDevice.contactHDR)
+				} else {
+					return fmt.Errorf("failed to create sip client for device %s", deviceId)
+				}
+
+				device = &dbDevice
+			} else {
+				return fmt.Errorf("device %s not found", deviceId)
+			}
+		} else if !ok {
+			return fmt.Errorf("device %s not found", deviceId)
+		}
+
+		// 先从内存中获取通道
+		channel, ok := device.channels.Get(channelId)
+		if !ok && d.gb.DB != nil {
+			// 如果内存中没有且数据库存在，则从数据库查询
+			var dbChannel gb28181.DeviceChannel
+			if err := d.gb.DB.Where("device_id = ? AND device_db_id = ?", channelId, device.ID).First(&dbChannel).Error; err == nil {
+				channel = &Channel{
+					Device:        device,
+					Logger:        device.Logger.With("channel", channelId),
+					DeviceChannel: dbChannel,
+				}
+				device.channels.Set(channel)
 			} else {
 				return fmt.Errorf("channel %s not found", channelId)
 			}
-		} else {
-			return fmt.Errorf("device %s not found", deviceId)
+		} else if !ok {
+			return fmt.Errorf("channel %s not found", channelId)
 		}
+
+		d.Channel = channel
 	} else if len(sss) == 3 {
 		var recordRange util.Range[int]
 		err = recordRange.Resolve(sss[2])

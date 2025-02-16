@@ -51,6 +51,7 @@ func (gb *GB28181ProPlugin) List(context.Context, *emptypb.Empty) (ret *pb.Respo
 			Model:        d.Model,
 			Owner:        d.Owner,
 			Status:       string(d.Status),
+			Online:       d.Online,
 			Longitude:    d.Longitude,
 			Latitude:     d.Latitude,
 			GpsTime:      timestamppb.New(d.GpsTime),
@@ -125,6 +126,7 @@ func (gb *GB28181ProPlugin) GetDevice(ctx context.Context, req *pb.GetDeviceRequ
 			Model:        d.Model,
 			Owner:        d.Owner,
 			Status:       string(d.Status),
+			Online:       d.Online,
 			Longitude:    d.Longitude,
 			Latitude:     d.Latitude,
 			GpsTime:      timestamppb.New(d.GpsTime),
@@ -144,27 +146,49 @@ func (gb *GB28181ProPlugin) GetDevice(ctx context.Context, req *pb.GetDeviceRequ
 // GetDevices 实现分页查询设备列表
 func (gb *GB28181ProPlugin) GetDevices(ctx context.Context, req *pb.GetDevicesRequest) (*pb.DevicesPageInfo, error) {
 	resp := &pb.DevicesPageInfo{}
-	var devices []*pb.Device
-	total := 0
-	for d := range gb.devices.Range {
-		// TODO: 实现查询条件过滤
-		if req.Query != "" && !strings.Contains(d.DeviceID, req.Query) && !strings.Contains(d.Name, req.Query) {
-			continue
-		}
-		if req.Status && string(d.Status) != "ON" {
-			continue
-		}
-		total++
-		// 分页处理
-		if total > int(req.Page*req.Count) {
-			continue
-		}
-		if total <= int((req.Page-1)*req.Count) {
-			continue
-		}
-		var channels []*pb.Channel
-		for c := range d.channels.Range {
-			channels = append(channels, &pb.Channel{
+
+	if gb.DB == nil {
+		resp.Code = 500
+		resp.Message = "数据库未初始化"
+		return resp, nil
+	}
+
+	var devices []Device
+	var total int64
+
+	// 构建查询条件
+	query := gb.DB.Model(&Device{})
+	if req.Query != "" {
+		query = query.Where("device_id LIKE ? OR name LIKE ?",
+			"%"+req.Query+"%", "%"+req.Query+"%")
+	}
+	if req.Status {
+		query = query.Where("online = ?", true)
+	}
+
+	// 获取总数
+	if err := query.Count(&total).Error; err != nil {
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("查询总数失败: %v", err)
+		return resp, nil
+	}
+
+	// 分页查询设备，并预加载通道数据
+	if err := query.Preload("Channels").
+		Offset(int(req.Page-1) * int(req.Count)).
+		Limit(int(req.Count)).
+		Find(&devices).Error; err != nil {
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("查询设备列表失败: %v", err)
+		return resp, nil
+	}
+
+	// 转换为proto消息
+	var pbDevices []*pb.Device
+	for _, d := range devices {
+		var pbChannels []*pb.Channel
+		for _, c := range d.Channels {
+			pbChannels = append(pbChannels, &pb.Channel{
 				DeviceID:     c.DeviceID,
 				ParentID:     c.ParentID,
 				Name:         c.Name,
@@ -179,28 +203,32 @@ func (gb *GB28181ProPlugin) GetDevices(ctx context.Context, req *pb.GetDevicesRe
 				RegisterWay:  int32(c.RegisterWay),
 				Secrecy:      int32(c.Secrecy),
 				Status:       string(c.Status),
-				Longitude:    c.Longitude,
-				Latitude:     c.Latitude,
-				GpsTime:      timestamppb.New(c.GpsTime),
+				Longitude:    fmt.Sprintf("%f", c.GbLongitude),
+				Latitude:     fmt.Sprintf("%f", c.GbLatitude),
+				GpsTime:      timestamppb.New(time.Now()),
 			})
 		}
-		devices = append(devices, &pb.Device{
+
+		pbDevice := &pb.Device{
 			Id:           d.DeviceID,
 			Name:         d.Name,
 			Manufacturer: d.Manufacturer,
 			Model:        d.Model,
 			Owner:        d.Owner,
 			Status:       string(d.Status),
+			Online:       d.Online,
 			Longitude:    d.Longitude,
 			Latitude:     d.Latitude,
 			GpsTime:      timestamppb.New(d.GpsTime),
-			RegisterTime: timestamppb.New(d.StartTime),
+			RegisterTime: timestamppb.New(d.RegisterTime),
 			UpdateTime:   timestamppb.New(d.UpdateTime),
-			Channels:     channels,
-		})
+			Channels:     pbChannels,
+		}
+		pbDevices = append(pbDevices, pbDevice)
 	}
+
 	resp.Total = int32(total)
-	resp.List = devices
+	resp.List = pbDevices
 	resp.Code = 0
 	resp.Message = "success"
 	return resp, nil
@@ -362,94 +390,63 @@ func (gb *GB28181ProPlugin) StartPlay(ctx context.Context, req *pb.PlayRequest) 
 	resp := &pb.PlayResponse{}
 	gb.Info("StartPlay request", "deviceId", req.DeviceId, "channelId", req.ChannelId)
 
-	// 从设备列表中获取设备
+	// 先从内存中获取设备
 	device, ok := gb.devices.Get(req.DeviceId)
-	if !ok {
-		gb.Error("StartPlay failed", "error", "device not found", "deviceId", req.DeviceId)
-		resp.Code = 404
-		resp.Message = "device not found"
-		return resp, nil
-	}
-
-	// 从设备中获取通道
-	channel, ok := device.channels.Get(req.ChannelId)
-	if !ok {
-		gb.Error("StartPlay failed", "error", "channel not found", "channelId", req.ChannelId)
-		resp.Code = 404
-		resp.Message = "channel not found"
-		return resp, nil
-	}
-
-	// 获取可用的媒体端口
-	var mediaPort uint16
-	if gb.MediaPort.Valid() {
-		select {
-		case mediaPort = <-gb.tcpPorts:
-			defer func() {
-				gb.tcpPorts <- mediaPort
-			}()
-		default:
-			resp.Code = 500
-			resp.Message = "no available tcp port"
+	if !ok && gb.DB != nil {
+		// 如果内存中没有且数据库存在，则从数据库查询
+		var dbDevice Device
+		if err := gb.DB.Where("device_id = ?", req.DeviceId).First(&dbDevice).Error; err == nil {
+			// 恢复设备的必要字段
+			dbDevice.Logger = gb.With("id", req.DeviceId)
+			dbDevice.channels.L = new(sync.RWMutex)
+			dbDevice.plugin = gb
+			device = &dbDevice
+		} else {
+			gb.Error("StartPlay failed", "error", "device not found", "deviceId", req.DeviceId)
+			resp.Code = 404
+			resp.Message = "device not found"
 			return resp, nil
 		}
-	} else {
-		mediaPort = gb.MediaPort[0]
 	}
 
-	// 调用 PlayStreamCmd
-	session, err := gb.PlayStreamCmd(device, channel, mediaPort)
-	if err != nil {
-		gb.Error("StartPlay failed", "error", err, "step", "PlayStreamCmd")
-		resp.Code = 500
-		resp.Message = fmt.Sprintf("play stream failed: %v", err)
-		return resp, nil
-	}
-
-	// 等待应答
-	err = session.WaitAnswer(gb, sipgo.AnswerOptions{})
-	if err != nil {
-		gb.Error("StartPlay failed", "error", err, "step", "WaitAnswer")
-		resp.Code = 500
-		resp.Message = fmt.Sprintf("wait answer failed: %v", err)
-		return resp, nil
-	}
-
-	// 解析应答中的 SSRC
-	inviteResponseBody := string(session.InviteResponse.Body())
-	gb.Debug("StartPlay response", "body", inviteResponseBody)
-	lines := strings.Split(inviteResponseBody, "\r\n")
-	var ssrc string
-	for _, line := range lines {
-		if parts := strings.Split(line, "="); len(parts) > 1 {
-			if parts[0] == "y" && len(parts[1]) > 0 {
-				ssrc = parts[1]
-				break
+	// 先从内存中获取通道
+	channel, ok := device.channels.Get(req.ChannelId)
+	if !ok && gb.DB != nil {
+		// 如果内存中没有且数据库存在，则从数据库查询
+		var dbChannel gb28181.DeviceChannel
+		if err := gb.DB.Where("device_id = ? AND device_db_id = ?", req.ChannelId, device.ID).First(&dbChannel).Error; err == nil {
+			channel = &Channel{
+				Device:        device,
+				Logger:        device.Logger.With("channel", req.ChannelId),
+				DeviceChannel: dbChannel,
 			}
+			device.channels.Set(channel)
+		} else {
+			gb.Error("StartPlay failed", "error", "channel not found", "channelId", req.ChannelId)
+			resp.Code = 404
+			resp.Message = "channel not found"
+			return resp, nil
 		}
 	}
 
-	// 发送 ACK
-	err = session.Ack(gb)
-	if err != nil {
-		gb.Error("StartPlay failed", "error", err, "step", "Ack")
-		resp.Code = 500
-		resp.Message = fmt.Sprintf("send ack failed: %v", err)
-		return resp, nil
-	}
+	// 构建流路径
+	streamPath := fmt.Sprintf("%s/%s", req.DeviceId, req.ChannelId)
+
+	// 调用 Pull 方法开始拉流
+	gb.Pull(streamPath, config.Pull{
+		URL: streamPath,
+	}, nil)
 
 	// 设置响应信息
 	resp.Code = 0
 	resp.Message = "success"
 	resp.StreamInfo = &pb.StreamInfo{
-		Stream: fmt.Sprintf("%s/%s", req.DeviceId, req.ChannelId),
+		Stream: streamPath,
 		App:    "gb28181",
 		Ip:     device.IP,
-		Port:   int32(mediaPort),
-		Ssrc:   ssrc,
 	}
 
-	gb.Info("StartPlay success", "deviceId", req.DeviceId, "channelId", req.ChannelId, "ssrc", ssrc)
+	gb.Info("StartPlay success", "deviceId", req.DeviceId, "channelId", req.ChannelId)
 	return resp, nil
 }
 
