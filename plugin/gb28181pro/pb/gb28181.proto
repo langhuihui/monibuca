@@ -221,6 +221,13 @@ service api {
       get: "/gb28181/api/platform/list"
     };
   }
+
+  // 开始回放
+  rpc StartPlayback (PlaybackRequest) returns (PlayResponse) {
+    option (google.api.http) = {
+      post: "/gb28181/api/playback/start/{deviceId}/{channelId}"
+    };
+  }
 }
 
 // 请求和响应消息定义
@@ -422,6 +429,14 @@ message ChannelResponse {
 message PlayRequest {
   string deviceId = 1;
   string channelId = 2;
+}
+
+message PlaybackRequest {
+  string deviceId = 1;
+  string channelId = 2;
+  string start = 3;     // 开始时间
+  string end = 4;       // 结束时间
+  string range = 5;     // 时间范围，可选
 }
 
 message PlayResponse {

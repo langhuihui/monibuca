@@ -40,7 +40,7 @@ type PositionConfig struct {
 }
 
 // PlayStreamCmd 请求预览视频流
-func (gb *GB28181ProPlugin) PlayStreamCmd(device *Device, channel *Channel, mediaPort uint16) (*sipgo.DialogClientSession, error) {
+func (gb *GB28181ProPlugin) PlayStreamCmd(device *Device, channel *Channel, mediaPort uint16, start, end string) (*sipgo.DialogClientSession, error) {
 	if channel == nil {
 		return nil, fmt.Errorf("channel is nil")
 	}
@@ -60,11 +60,26 @@ func (gb *GB28181ProPlugin) PlayStreamCmd(device *Device, channel *Channel, medi
 	// 构建 SDP 内容
 	sdpInfo := []string{
 		"v=0",
-		fmt.Sprintf("o=%s 0 0 IN IP4 %s", device.ID, sdpIP),
-		"s=Play",
+		fmt.Sprintf("o=%s 0 0 IN IP4 %s", device.DeviceID, sdpIP),
+		fmt.Sprintf("s=%s", map[bool]string{true: "Playback", false: "Play"}[start != "" && end != ""]), // 根据是否有时间参数决定
 		//"u=" + device.ID + ":0",
+		"u=" + channel.DeviceID + ":0",
 		"c=IN IP4 " + sdpIP,
-		"t=0 0",
+	}
+
+	// 如果有时间参数，添加时间行
+	if start != "" && end != "" {
+		startTime, err := time.Parse(time.RFC3339, start)
+		if err != nil {
+			return nil, fmt.Errorf("parse start time failed: %v", err)
+		}
+		endTime, err := time.Parse(time.RFC3339, end)
+		if err != nil {
+			return nil, fmt.Errorf("parse end time failed: %v", err)
+		}
+		sdpInfo = append(sdpInfo, fmt.Sprintf("t=%d %d", startTime.Unix(), endTime.Unix()))
+	} else {
+		sdpInfo = append(sdpInfo, "t=0 0")
 	}
 
 	// 添加媒体行和相关属性
@@ -127,6 +142,7 @@ func (gb *GB28181ProPlugin) PlayStreamCmd(device *Device, channel *Channel, medi
 	toHeader := sip.ToHeader{
 		Address: sip.Uri{User: channel.DeviceID, Host: device.HostAddress},
 	}
+	userAgentHeader := sip.NewHeader("User-Agent", "M7S/"+m7s.Version)
 
 	request.AppendHeader(&contentTypeHeader)
 	request.AppendHeader(subjectHeader)
@@ -135,7 +151,8 @@ func (gb *GB28181ProPlugin) PlayStreamCmd(device *Device, channel *Channel, medi
 	request.SetBody([]byte(strings.Join(sdpInfo, "\r\n") + "\r\n"))
 
 	// 创建会话
-	return device.dialogClient.Invite(gb, device.Recipient, request.Body(), &contentTypeHeader, subjectHeader, &device.fromHDR, allowHeader, &toHeader)
+	return device.dialogClient.Invite(gb, device.Recipient, request.Body(), &contentTypeHeader, subjectHeader, &device.fromHDR, &toHeader, userAgentHeader, allowHeader)
+	//return device.dialogClient.Invite(gb, device.Recipient, request.Body(), &contentTypeHeader, subjectHeader, &device.fromHDR, allowHeader, &toHeader)
 }
 
 type GB28181ProPlugin struct {
@@ -680,6 +697,14 @@ func (gb *GB28181ProPlugin) Pull(streamPath string, conf config.Pull, pubConf *c
 	dialog := Dialog{
 		gb: gb,
 	}
+	if conf.Args != nil {
+		if starts, ok := conf.Args["start"]; ok && len(starts) > 0 {
+			dialog.start = starts[0]
+		}
+		if ends, ok := conf.Args["end"]; ok && len(ends) > 0 {
+			dialog.end = ends[0]
+		}
+	}
 	dialog.GetPullJob().Init(&dialog, &gb.Plugin, streamPath, conf, pubConf)
 }
 
@@ -848,18 +873,4 @@ func (gb *GB28181ProPlugin) OnInvite(req *sip.Request, tx sip.ServerTransaction)
 
 	gb.Info("OnInvite", "action", "complete", "deviceId", inviteInfo.RequesterId, "channelId", inviteInfo.TargetChannelId,
 		"ip", inviteInfo.IP, "port", inviteInfo.Port, "tcp", inviteInfo.TCP, "tcpActive", inviteInfo.TCPActive)
-
-	// TODO: 实现媒体流处理
-	// 1. 创建合适的Publisher
-	// 2. 创建PS流接收器
-	// 3. 配置接收参数：
-	//    - 使用解析出的 inviteInfo.IP 和 inviteInfo.Port 作为目标地址
-	//    - 使用 inviteInfo.TCP 和 inviteInfo.TCPActive 确定传输模式
-	//    - 使用本地分配的 mediaPort 作为监听端口
-	// 4. 启动接收任务
-	// 5. 处理媒体流解复用
-	// 6. 根据 inviteInfo.SessionName 判断是实时点播还是历史回放
-	//    - 如果是回放，使用 inviteInfo.StartTime 和 inviteInfo.StopTime
-	// 7. 使用 inviteInfo.SSRC 标识流
-	// 8. 如果指定了 inviteInfo.DownloadSpeed，控制下载速度
 }

@@ -9,12 +9,15 @@ import (
 	"sync"
 	"time"
 
+	"net/url"
+
 	"github.com/emiago/sipgo"
 	"github.com/emiago/sipgo/sip"
 	"github.com/rs/zerolog"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"m7s.live/v5/pkg/config"
+	"m7s.live/v5/pkg/util"
 	"m7s.live/v5/plugin/gb28181pro/pb"
 	gb28181 "m7s.live/v5/plugin/gb28181pro/pkg"
 )
@@ -447,6 +450,90 @@ func (gb *GB28181ProPlugin) StartPlay(ctx context.Context, req *pb.PlayRequest) 
 	}
 
 	gb.Info("StartPlay success", "deviceId", req.DeviceId, "channelId", req.ChannelId)
+	return resp, nil
+}
+
+// StartPlayback 处理回放请求
+func (gb *GB28181ProPlugin) StartPlayback(ctx context.Context, req *pb.PlaybackRequest) (*pb.PlayResponse, error) {
+	resp := &pb.PlayResponse{}
+	gb.Info("StartPlayback request", "deviceId", req.DeviceId, "channelId", req.ChannelId, "start", req.Start, "end", req.End, "range", req.Range)
+
+	// 先从内存中获取设备
+	device, ok := gb.devices.Get(req.DeviceId)
+	if !ok && gb.DB != nil {
+		// 如果内存中没有且数据库存在，则从数据库查询
+		var dbDevice Device
+		if err := gb.DB.Where("device_id = ?", req.DeviceId).First(&dbDevice).Error; err == nil {
+			// 恢复设备的必要字段
+			dbDevice.Logger = gb.With("id", req.DeviceId)
+			dbDevice.channels.L = new(sync.RWMutex)
+			dbDevice.plugin = gb
+			device = &dbDevice
+		} else {
+			gb.Error("StartPlayback failed", "error", "device not found", "deviceId", req.DeviceId)
+			resp.Code = 404
+			resp.Message = "device not found"
+			return resp, nil
+		}
+	}
+
+	// 先从内存中获取通道
+	channel, ok := device.channels.Get(req.ChannelId)
+	if !ok && gb.DB != nil {
+		// 如果内存中没有且数据库存在，则从数据库查询
+		var dbChannel gb28181.DeviceChannel
+		if err := gb.DB.Where("device_id = ? AND device_db_id = ?", req.ChannelId, device.ID).First(&dbChannel).Error; err == nil {
+			channel = &Channel{
+				Device:        device,
+				Logger:        device.Logger.With("channel", req.ChannelId),
+				DeviceChannel: dbChannel,
+			}
+			device.channels.Set(channel)
+		} else {
+			gb.Error("StartPlayback failed", "error", "channel not found", "channelId", req.ChannelId)
+			resp.Code = 404
+			resp.Message = "channel not found"
+			return resp, nil
+		}
+	}
+
+	// 处理时间范围
+	startTime, endTime, err := util.TimeRangeQueryParse(url.Values{
+		"range": []string{req.Range},
+		"start": []string{req.Start},
+		"end":   []string{req.End},
+	})
+	if err != nil {
+		gb.Error("StartPlayback failed", "error", "invalid time format", "err", err)
+		resp.Code = 400
+		resp.Message = fmt.Sprintf("invalid time format: %v", err)
+		return resp, nil
+	}
+
+	// 构建流路径，加入时间信息以区分不同的回放请求
+	streamPath := fmt.Sprintf("%s/%s/playback_%s_%s", req.DeviceId, req.ChannelId,
+		startTime.Format("20060102150405"), endTime.Format("20060102150405"))
+
+	// 调用 Pull 方法开始拉流
+	gb.Pull(streamPath, config.Pull{
+		URL: streamPath,
+		Args: config.HTTPValues{
+			"start": []string{startTime.Format(time.RFC3339)},
+			"end":   []string{endTime.Format(time.RFC3339)},
+		},
+	}, nil)
+
+	// 设置响应信息
+	resp.Code = 0
+	resp.Message = "success"
+	resp.StreamInfo = &pb.StreamInfo{
+		Stream: streamPath,
+		App:    "gb28181",
+		Ip:     device.IP,
+	}
+
+	gb.Info("StartPlayback success", "deviceId", req.DeviceId, "channelId", req.ChannelId,
+		"start", startTime.Format(time.RFC3339), "end", endTime.Format(time.RFC3339))
 	return resp, nil
 }
 

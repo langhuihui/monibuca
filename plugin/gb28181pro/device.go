@@ -7,7 +7,6 @@ import (
 
 	"github.com/emiago/sipgo"
 	"github.com/emiago/sipgo/sip"
-	"m7s.live/v5"
 	"m7s.live/v5/pkg/task"
 	"m7s.live/v5/pkg/util"
 	gb28181 "m7s.live/v5/plugin/gb28181pro/pkg"
@@ -240,7 +239,8 @@ func (d *Device) CreateRequest(Method sip.RequestMethod) *sip.Request {
 	req := sip.NewRequest(Method, d.Recipient)
 	req.AppendHeader(&d.fromHDR)
 	contentType := sip.ContentTypeHeader("Application/MANSCDP+xml")
-	req.AppendHeader(sip.NewHeader("User-Agent", "M7S/"+m7s.Version))
+	//req.AppendHeader(sip.NewHeader("User-Agent", "M7S/"+m7s.Version))
+	req.AppendHeader(sip.NewHeader("User-Agent", "asdf"))
 	req.AppendHeader(&contentType)
 	req.AppendHeader(&d.contactHDR)
 	return req
