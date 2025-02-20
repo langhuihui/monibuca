@@ -53,6 +53,29 @@ const (
 	Api_ListPlatforms_FullMethodName                     = "/gb28181pro.api/ListPlatforms"
 	Api_StartPlayback_FullMethodName                     = "/gb28181pro.api/StartPlayback"
 	Api_QueryRecord_FullMethodName                       = "/gb28181pro.api/QueryRecord"
+	Api_FrontEndCommand_FullMethodName                   = "/gb28181pro.api/FrontEndCommand"
+	Api_PtzControl_FullMethodName                        = "/gb28181pro.api/PtzControl"
+	Api_IrisControl_FullMethodName                       = "/gb28181pro.api/IrisControl"
+	Api_FocusControl_FullMethodName                      = "/gb28181pro.api/FocusControl"
+	Api_QueryPreset_FullMethodName                       = "/gb28181pro.api/QueryPreset"
+	Api_AddPreset_FullMethodName                         = "/gb28181pro.api/AddPreset"
+	Api_CallPreset_FullMethodName                        = "/gb28181pro.api/CallPreset"
+	Api_DeletePreset_FullMethodName                      = "/gb28181pro.api/DeletePreset"
+	Api_AddCruisePoint_FullMethodName                    = "/gb28181pro.api/AddCruisePoint"
+	Api_DeleteCruisePoint_FullMethodName                 = "/gb28181pro.api/DeleteCruisePoint"
+	Api_SetCruiseSpeed_FullMethodName                    = "/gb28181pro.api/SetCruiseSpeed"
+	Api_SetCruiseTime_FullMethodName                     = "/gb28181pro.api/SetCruiseTime"
+	Api_StartCruise_FullMethodName                       = "/gb28181pro.api/StartCruise"
+	Api_StopCruise_FullMethodName                        = "/gb28181pro.api/StopCruise"
+	Api_StartScan_FullMethodName                         = "/gb28181pro.api/StartScan"
+	Api_StopScan_FullMethodName                          = "/gb28181pro.api/StopScan"
+	Api_SetScanLeft_FullMethodName                       = "/gb28181pro.api/SetScanLeft"
+	Api_SetScanRight_FullMethodName                      = "/gb28181pro.api/SetScanRight"
+	Api_SetScanSpeed_FullMethodName                      = "/gb28181pro.api/SetScanSpeed"
+	Api_WiperControl_FullMethodName                      = "/gb28181pro.api/WiperControl"
+	Api_AuxiliaryControl_FullMethodName                  = "/gb28181pro.api/AuxiliaryControl"
+	Api_TestSip_FullMethodName                           = "/gb28181pro.api/TestSip"
+	Api_SearchAlarms_FullMethodName                      = "/gb28181pro.api/SearchAlarms"
 )
 
 // ApiClient is the client API for Api service.
@@ -60,7 +83,7 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type ApiClient interface {
 	// 获取设备列表
-	List(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*ResponseList, error)
+	List(ctx context.Context, in *GetDevicesRequest, opts ...grpc.CallOption) (*DevicesPageInfo, error)
 	// 使用ID查询国标设备
 	GetDevice(ctx context.Context, in *GetDeviceRequest, opts ...grpc.CallOption) (*DeviceResponse, error)
 	// 分页查询国标设备
@@ -121,6 +144,52 @@ type ApiClient interface {
 	StartPlayback(ctx context.Context, in *PlaybackRequest, opts ...grpc.CallOption) (*PlayResponse, error)
 	// 查询录像记录
 	QueryRecord(ctx context.Context, in *QueryRecordRequest, opts ...grpc.CallOption) (*QueryRecordResponse, error)
+	// PTZ 通用控制命令
+	FrontEndCommand(ctx context.Context, in *FrontEndCommandRequest, opts ...grpc.CallOption) (*BaseResponse, error)
+	// PTZ 云台控制
+	PtzControl(ctx context.Context, in *PtzControlRequest, opts ...grpc.CallOption) (*BaseResponse, error)
+	// 光圈控制
+	IrisControl(ctx context.Context, in *IrisControlRequest, opts ...grpc.CallOption) (*BaseResponse, error)
+	// 聚焦控制
+	FocusControl(ctx context.Context, in *FocusControlRequest, opts ...grpc.CallOption) (*BaseResponse, error)
+	// 查询预置位
+	QueryPreset(ctx context.Context, in *PresetRequest, opts ...grpc.CallOption) (*PresetResponse, error)
+	// 设置预置位
+	AddPreset(ctx context.Context, in *PresetRequest, opts ...grpc.CallOption) (*BaseResponse, error)
+	// 调用预置位
+	CallPreset(ctx context.Context, in *PresetRequest, opts ...grpc.CallOption) (*BaseResponse, error)
+	// 删除预置位
+	DeletePreset(ctx context.Context, in *PresetRequest, opts ...grpc.CallOption) (*BaseResponse, error)
+	// 巡航点控制 - 添加巡航点
+	AddCruisePoint(ctx context.Context, in *CruisePointRequest, opts ...grpc.CallOption) (*BaseResponse, error)
+	// 巡航点控制 - 删除巡航点
+	DeleteCruisePoint(ctx context.Context, in *CruisePointRequest, opts ...grpc.CallOption) (*BaseResponse, error)
+	// 设置巡航速度
+	SetCruiseSpeed(ctx context.Context, in *CruiseSpeedRequest, opts ...grpc.CallOption) (*BaseResponse, error)
+	// 设置巡航停留时间
+	SetCruiseTime(ctx context.Context, in *CruiseTimeRequest, opts ...grpc.CallOption) (*BaseResponse, error)
+	// 开始巡航
+	StartCruise(ctx context.Context, in *CruiseRequest, opts ...grpc.CallOption) (*BaseResponse, error)
+	// 停止巡航
+	StopCruise(ctx context.Context, in *CruiseRequest, opts ...grpc.CallOption) (*BaseResponse, error)
+	// 开始自动扫描
+	StartScan(ctx context.Context, in *ScanRequest, opts ...grpc.CallOption) (*BaseResponse, error)
+	// 停止自动扫描
+	StopScan(ctx context.Context, in *ScanRequest, opts ...grpc.CallOption) (*BaseResponse, error)
+	// 设置自动扫描左边界
+	SetScanLeft(ctx context.Context, in *ScanRequest, opts ...grpc.CallOption) (*BaseResponse, error)
+	// 设置自动扫描右边界
+	SetScanRight(ctx context.Context, in *ScanRequest, opts ...grpc.CallOption) (*BaseResponse, error)
+	// 设置自动扫描速度
+	SetScanSpeed(ctx context.Context, in *ScanSpeedRequest, opts ...grpc.CallOption) (*BaseResponse, error)
+	// 雨刷控制
+	WiperControl(ctx context.Context, in *WiperControlRequest, opts ...grpc.CallOption) (*BaseResponse, error)
+	// 辅助开关控制
+	AuxiliaryControl(ctx context.Context, in *AuxiliaryControlRequest, opts ...grpc.CallOption) (*BaseResponse, error)
+	// 测试SIP连接
+	TestSip(ctx context.Context, in *TestSipRequest, opts ...grpc.CallOption) (*TestSipResponse, error)
+	// 分页查询报警记录
+	SearchAlarms(ctx context.Context, in *SearchAlarmsRequest, opts ...grpc.CallOption) (*SearchAlarmsResponse, error)
 }
 
 type apiClient struct {
@@ -131,9 +200,9 @@ func NewApiClient(cc grpc.ClientConnInterface) ApiClient {
 	return &apiClient{cc}
 }
 
-func (c *apiClient) List(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*ResponseList, error) {
+func (c *apiClient) List(ctx context.Context, in *GetDevicesRequest, opts ...grpc.CallOption) (*DevicesPageInfo, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ResponseList)
+	out := new(DevicesPageInfo)
 	err := c.cc.Invoke(ctx, Api_List_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -441,12 +510,242 @@ func (c *apiClient) QueryRecord(ctx context.Context, in *QueryRecordRequest, opt
 	return out, nil
 }
 
+func (c *apiClient) FrontEndCommand(ctx context.Context, in *FrontEndCommandRequest, opts ...grpc.CallOption) (*BaseResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BaseResponse)
+	err := c.cc.Invoke(ctx, Api_FrontEndCommand_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *apiClient) PtzControl(ctx context.Context, in *PtzControlRequest, opts ...grpc.CallOption) (*BaseResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BaseResponse)
+	err := c.cc.Invoke(ctx, Api_PtzControl_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *apiClient) IrisControl(ctx context.Context, in *IrisControlRequest, opts ...grpc.CallOption) (*BaseResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BaseResponse)
+	err := c.cc.Invoke(ctx, Api_IrisControl_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *apiClient) FocusControl(ctx context.Context, in *FocusControlRequest, opts ...grpc.CallOption) (*BaseResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BaseResponse)
+	err := c.cc.Invoke(ctx, Api_FocusControl_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *apiClient) QueryPreset(ctx context.Context, in *PresetRequest, opts ...grpc.CallOption) (*PresetResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PresetResponse)
+	err := c.cc.Invoke(ctx, Api_QueryPreset_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *apiClient) AddPreset(ctx context.Context, in *PresetRequest, opts ...grpc.CallOption) (*BaseResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BaseResponse)
+	err := c.cc.Invoke(ctx, Api_AddPreset_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *apiClient) CallPreset(ctx context.Context, in *PresetRequest, opts ...grpc.CallOption) (*BaseResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BaseResponse)
+	err := c.cc.Invoke(ctx, Api_CallPreset_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *apiClient) DeletePreset(ctx context.Context, in *PresetRequest, opts ...grpc.CallOption) (*BaseResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BaseResponse)
+	err := c.cc.Invoke(ctx, Api_DeletePreset_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *apiClient) AddCruisePoint(ctx context.Context, in *CruisePointRequest, opts ...grpc.CallOption) (*BaseResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BaseResponse)
+	err := c.cc.Invoke(ctx, Api_AddCruisePoint_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *apiClient) DeleteCruisePoint(ctx context.Context, in *CruisePointRequest, opts ...grpc.CallOption) (*BaseResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BaseResponse)
+	err := c.cc.Invoke(ctx, Api_DeleteCruisePoint_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *apiClient) SetCruiseSpeed(ctx context.Context, in *CruiseSpeedRequest, opts ...grpc.CallOption) (*BaseResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BaseResponse)
+	err := c.cc.Invoke(ctx, Api_SetCruiseSpeed_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *apiClient) SetCruiseTime(ctx context.Context, in *CruiseTimeRequest, opts ...grpc.CallOption) (*BaseResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BaseResponse)
+	err := c.cc.Invoke(ctx, Api_SetCruiseTime_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *apiClient) StartCruise(ctx context.Context, in *CruiseRequest, opts ...grpc.CallOption) (*BaseResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BaseResponse)
+	err := c.cc.Invoke(ctx, Api_StartCruise_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *apiClient) StopCruise(ctx context.Context, in *CruiseRequest, opts ...grpc.CallOption) (*BaseResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BaseResponse)
+	err := c.cc.Invoke(ctx, Api_StopCruise_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *apiClient) StartScan(ctx context.Context, in *ScanRequest, opts ...grpc.CallOption) (*BaseResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BaseResponse)
+	err := c.cc.Invoke(ctx, Api_StartScan_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *apiClient) StopScan(ctx context.Context, in *ScanRequest, opts ...grpc.CallOption) (*BaseResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BaseResponse)
+	err := c.cc.Invoke(ctx, Api_StopScan_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *apiClient) SetScanLeft(ctx context.Context, in *ScanRequest, opts ...grpc.CallOption) (*BaseResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BaseResponse)
+	err := c.cc.Invoke(ctx, Api_SetScanLeft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *apiClient) SetScanRight(ctx context.Context, in *ScanRequest, opts ...grpc.CallOption) (*BaseResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BaseResponse)
+	err := c.cc.Invoke(ctx, Api_SetScanRight_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *apiClient) SetScanSpeed(ctx context.Context, in *ScanSpeedRequest, opts ...grpc.CallOption) (*BaseResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BaseResponse)
+	err := c.cc.Invoke(ctx, Api_SetScanSpeed_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *apiClient) WiperControl(ctx context.Context, in *WiperControlRequest, opts ...grpc.CallOption) (*BaseResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BaseResponse)
+	err := c.cc.Invoke(ctx, Api_WiperControl_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *apiClient) AuxiliaryControl(ctx context.Context, in *AuxiliaryControlRequest, opts ...grpc.CallOption) (*BaseResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BaseResponse)
+	err := c.cc.Invoke(ctx, Api_AuxiliaryControl_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *apiClient) TestSip(ctx context.Context, in *TestSipRequest, opts ...grpc.CallOption) (*TestSipResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TestSipResponse)
+	err := c.cc.Invoke(ctx, Api_TestSip_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *apiClient) SearchAlarms(ctx context.Context, in *SearchAlarmsRequest, opts ...grpc.CallOption) (*SearchAlarmsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SearchAlarmsResponse)
+	err := c.cc.Invoke(ctx, Api_SearchAlarms_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ApiServer is the server API for Api service.
 // All implementations must embed UnimplementedApiServer
 // for forward compatibility.
 type ApiServer interface {
 	// 获取设备列表
-	List(context.Context, *emptypb.Empty) (*ResponseList, error)
+	List(context.Context, *GetDevicesRequest) (*DevicesPageInfo, error)
 	// 使用ID查询国标设备
 	GetDevice(context.Context, *GetDeviceRequest) (*DeviceResponse, error)
 	// 分页查询国标设备
@@ -507,6 +806,52 @@ type ApiServer interface {
 	StartPlayback(context.Context, *PlaybackRequest) (*PlayResponse, error)
 	// 查询录像记录
 	QueryRecord(context.Context, *QueryRecordRequest) (*QueryRecordResponse, error)
+	// PTZ 通用控制命令
+	FrontEndCommand(context.Context, *FrontEndCommandRequest) (*BaseResponse, error)
+	// PTZ 云台控制
+	PtzControl(context.Context, *PtzControlRequest) (*BaseResponse, error)
+	// 光圈控制
+	IrisControl(context.Context, *IrisControlRequest) (*BaseResponse, error)
+	// 聚焦控制
+	FocusControl(context.Context, *FocusControlRequest) (*BaseResponse, error)
+	// 查询预置位
+	QueryPreset(context.Context, *PresetRequest) (*PresetResponse, error)
+	// 设置预置位
+	AddPreset(context.Context, *PresetRequest) (*BaseResponse, error)
+	// 调用预置位
+	CallPreset(context.Context, *PresetRequest) (*BaseResponse, error)
+	// 删除预置位
+	DeletePreset(context.Context, *PresetRequest) (*BaseResponse, error)
+	// 巡航点控制 - 添加巡航点
+	AddCruisePoint(context.Context, *CruisePointRequest) (*BaseResponse, error)
+	// 巡航点控制 - 删除巡航点
+	DeleteCruisePoint(context.Context, *CruisePointRequest) (*BaseResponse, error)
+	// 设置巡航速度
+	SetCruiseSpeed(context.Context, *CruiseSpeedRequest) (*BaseResponse, error)
+	// 设置巡航停留时间
+	SetCruiseTime(context.Context, *CruiseTimeRequest) (*BaseResponse, error)
+	// 开始巡航
+	StartCruise(context.Context, *CruiseRequest) (*BaseResponse, error)
+	// 停止巡航
+	StopCruise(context.Context, *CruiseRequest) (*BaseResponse, error)
+	// 开始自动扫描
+	StartScan(context.Context, *ScanRequest) (*BaseResponse, error)
+	// 停止自动扫描
+	StopScan(context.Context, *ScanRequest) (*BaseResponse, error)
+	// 设置自动扫描左边界
+	SetScanLeft(context.Context, *ScanRequest) (*BaseResponse, error)
+	// 设置自动扫描右边界
+	SetScanRight(context.Context, *ScanRequest) (*BaseResponse, error)
+	// 设置自动扫描速度
+	SetScanSpeed(context.Context, *ScanSpeedRequest) (*BaseResponse, error)
+	// 雨刷控制
+	WiperControl(context.Context, *WiperControlRequest) (*BaseResponse, error)
+	// 辅助开关控制
+	AuxiliaryControl(context.Context, *AuxiliaryControlRequest) (*BaseResponse, error)
+	// 测试SIP连接
+	TestSip(context.Context, *TestSipRequest) (*TestSipResponse, error)
+	// 分页查询报警记录
+	SearchAlarms(context.Context, *SearchAlarmsRequest) (*SearchAlarmsResponse, error)
 	mustEmbedUnimplementedApiServer()
 }
 
@@ -517,7 +862,7 @@ type ApiServer interface {
 // pointer dereference when methods are called.
 type UnimplementedApiServer struct{}
 
-func (UnimplementedApiServer) List(context.Context, *emptypb.Empty) (*ResponseList, error) {
+func (UnimplementedApiServer) List(context.Context, *GetDevicesRequest) (*DevicesPageInfo, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method List not implemented")
 }
 func (UnimplementedApiServer) GetDevice(context.Context, *GetDeviceRequest) (*DeviceResponse, error) {
@@ -610,6 +955,75 @@ func (UnimplementedApiServer) StartPlayback(context.Context, *PlaybackRequest) (
 func (UnimplementedApiServer) QueryRecord(context.Context, *QueryRecordRequest) (*QueryRecordResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method QueryRecord not implemented")
 }
+func (UnimplementedApiServer) FrontEndCommand(context.Context, *FrontEndCommandRequest) (*BaseResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method FrontEndCommand not implemented")
+}
+func (UnimplementedApiServer) PtzControl(context.Context, *PtzControlRequest) (*BaseResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PtzControl not implemented")
+}
+func (UnimplementedApiServer) IrisControl(context.Context, *IrisControlRequest) (*BaseResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method IrisControl not implemented")
+}
+func (UnimplementedApiServer) FocusControl(context.Context, *FocusControlRequest) (*BaseResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method FocusControl not implemented")
+}
+func (UnimplementedApiServer) QueryPreset(context.Context, *PresetRequest) (*PresetResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method QueryPreset not implemented")
+}
+func (UnimplementedApiServer) AddPreset(context.Context, *PresetRequest) (*BaseResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AddPreset not implemented")
+}
+func (UnimplementedApiServer) CallPreset(context.Context, *PresetRequest) (*BaseResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CallPreset not implemented")
+}
+func (UnimplementedApiServer) DeletePreset(context.Context, *PresetRequest) (*BaseResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DeletePreset not implemented")
+}
+func (UnimplementedApiServer) AddCruisePoint(context.Context, *CruisePointRequest) (*BaseResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AddCruisePoint not implemented")
+}
+func (UnimplementedApiServer) DeleteCruisePoint(context.Context, *CruisePointRequest) (*BaseResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DeleteCruisePoint not implemented")
+}
+func (UnimplementedApiServer) SetCruiseSpeed(context.Context, *CruiseSpeedRequest) (*BaseResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetCruiseSpeed not implemented")
+}
+func (UnimplementedApiServer) SetCruiseTime(context.Context, *CruiseTimeRequest) (*BaseResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetCruiseTime not implemented")
+}
+func (UnimplementedApiServer) StartCruise(context.Context, *CruiseRequest) (*BaseResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StartCruise not implemented")
+}
+func (UnimplementedApiServer) StopCruise(context.Context, *CruiseRequest) (*BaseResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StopCruise not implemented")
+}
+func (UnimplementedApiServer) StartScan(context.Context, *ScanRequest) (*BaseResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StartScan not implemented")
+}
+func (UnimplementedApiServer) StopScan(context.Context, *ScanRequest) (*BaseResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StopScan not implemented")
+}
+func (UnimplementedApiServer) SetScanLeft(context.Context, *ScanRequest) (*BaseResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetScanLeft not implemented")
+}
+func (UnimplementedApiServer) SetScanRight(context.Context, *ScanRequest) (*BaseResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetScanRight not implemented")
+}
+func (UnimplementedApiServer) SetScanSpeed(context.Context, *ScanSpeedRequest) (*BaseResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetScanSpeed not implemented")
+}
+func (UnimplementedApiServer) WiperControl(context.Context, *WiperControlRequest) (*BaseResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method WiperControl not implemented")
+}
+func (UnimplementedApiServer) AuxiliaryControl(context.Context, *AuxiliaryControlRequest) (*BaseResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AuxiliaryControl not implemented")
+}
+func (UnimplementedApiServer) TestSip(context.Context, *TestSipRequest) (*TestSipResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method TestSip not implemented")
+}
+func (UnimplementedApiServer) SearchAlarms(context.Context, *SearchAlarmsRequest) (*SearchAlarmsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SearchAlarms not implemented")
+}
 func (UnimplementedApiServer) mustEmbedUnimplementedApiServer() {}
 func (UnimplementedApiServer) testEmbeddedByValue()             {}
 
@@ -632,7 +1046,7 @@ func RegisterApiServer(s grpc.ServiceRegistrar, srv ApiServer) {
 }
 
 func _Api_List_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(emptypb.Empty)
+	in := new(GetDevicesRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -644,7 +1058,7 @@ func _Api_List_Handler(srv interface{}, ctx context.Context, dec func(interface{
 		FullMethod: Api_List_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ApiServer).List(ctx, req.(*emptypb.Empty))
+		return srv.(ApiServer).List(ctx, req.(*GetDevicesRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1189,6 +1603,420 @@ func _Api_QueryRecord_Handler(srv interface{}, ctx context.Context, dec func(int
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Api_FrontEndCommand_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(FrontEndCommandRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).FrontEndCommand(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_FrontEndCommand_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).FrontEndCommand(ctx, req.(*FrontEndCommandRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Api_PtzControl_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PtzControlRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).PtzControl(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_PtzControl_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).PtzControl(ctx, req.(*PtzControlRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Api_IrisControl_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(IrisControlRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).IrisControl(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_IrisControl_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).IrisControl(ctx, req.(*IrisControlRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Api_FocusControl_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(FocusControlRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).FocusControl(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_FocusControl_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).FocusControl(ctx, req.(*FocusControlRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Api_QueryPreset_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PresetRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).QueryPreset(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_QueryPreset_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).QueryPreset(ctx, req.(*PresetRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Api_AddPreset_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PresetRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).AddPreset(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_AddPreset_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).AddPreset(ctx, req.(*PresetRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Api_CallPreset_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PresetRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).CallPreset(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_CallPreset_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).CallPreset(ctx, req.(*PresetRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Api_DeletePreset_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PresetRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).DeletePreset(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_DeletePreset_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).DeletePreset(ctx, req.(*PresetRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Api_AddCruisePoint_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CruisePointRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).AddCruisePoint(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_AddCruisePoint_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).AddCruisePoint(ctx, req.(*CruisePointRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Api_DeleteCruisePoint_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CruisePointRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).DeleteCruisePoint(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_DeleteCruisePoint_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).DeleteCruisePoint(ctx, req.(*CruisePointRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Api_SetCruiseSpeed_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CruiseSpeedRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).SetCruiseSpeed(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_SetCruiseSpeed_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).SetCruiseSpeed(ctx, req.(*CruiseSpeedRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Api_SetCruiseTime_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CruiseTimeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).SetCruiseTime(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_SetCruiseTime_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).SetCruiseTime(ctx, req.(*CruiseTimeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Api_StartCruise_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CruiseRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).StartCruise(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_StartCruise_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).StartCruise(ctx, req.(*CruiseRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Api_StopCruise_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CruiseRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).StopCruise(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_StopCruise_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).StopCruise(ctx, req.(*CruiseRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Api_StartScan_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ScanRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).StartScan(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_StartScan_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).StartScan(ctx, req.(*ScanRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Api_StopScan_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ScanRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).StopScan(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_StopScan_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).StopScan(ctx, req.(*ScanRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Api_SetScanLeft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ScanRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).SetScanLeft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_SetScanLeft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).SetScanLeft(ctx, req.(*ScanRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Api_SetScanRight_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ScanRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).SetScanRight(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_SetScanRight_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).SetScanRight(ctx, req.(*ScanRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Api_SetScanSpeed_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ScanSpeedRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).SetScanSpeed(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_SetScanSpeed_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).SetScanSpeed(ctx, req.(*ScanSpeedRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Api_WiperControl_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(WiperControlRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).WiperControl(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_WiperControl_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).WiperControl(ctx, req.(*WiperControlRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Api_AuxiliaryControl_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AuxiliaryControlRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).AuxiliaryControl(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_AuxiliaryControl_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).AuxiliaryControl(ctx, req.(*AuxiliaryControlRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Api_TestSip_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TestSipRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).TestSip(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_TestSip_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).TestSip(ctx, req.(*TestSipRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Api_SearchAlarms_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SearchAlarmsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).SearchAlarms(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_SearchAlarms_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).SearchAlarms(ctx, req.(*SearchAlarmsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Api_ServiceDesc is the grpc.ServiceDesc for Api service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1319,6 +2147,98 @@ var Api_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "QueryRecord",
 			Handler:    _Api_QueryRecord_Handler,
+		},
+		{
+			MethodName: "FrontEndCommand",
+			Handler:    _Api_FrontEndCommand_Handler,
+		},
+		{
+			MethodName: "PtzControl",
+			Handler:    _Api_PtzControl_Handler,
+		},
+		{
+			MethodName: "IrisControl",
+			Handler:    _Api_IrisControl_Handler,
+		},
+		{
+			MethodName: "FocusControl",
+			Handler:    _Api_FocusControl_Handler,
+		},
+		{
+			MethodName: "QueryPreset",
+			Handler:    _Api_QueryPreset_Handler,
+		},
+		{
+			MethodName: "AddPreset",
+			Handler:    _Api_AddPreset_Handler,
+		},
+		{
+			MethodName: "CallPreset",
+			Handler:    _Api_CallPreset_Handler,
+		},
+		{
+			MethodName: "DeletePreset",
+			Handler:    _Api_DeletePreset_Handler,
+		},
+		{
+			MethodName: "AddCruisePoint",
+			Handler:    _Api_AddCruisePoint_Handler,
+		},
+		{
+			MethodName: "DeleteCruisePoint",
+			Handler:    _Api_DeleteCruisePoint_Handler,
+		},
+		{
+			MethodName: "SetCruiseSpeed",
+			Handler:    _Api_SetCruiseSpeed_Handler,
+		},
+		{
+			MethodName: "SetCruiseTime",
+			Handler:    _Api_SetCruiseTime_Handler,
+		},
+		{
+			MethodName: "StartCruise",
+			Handler:    _Api_StartCruise_Handler,
+		},
+		{
+			MethodName: "StopCruise",
+			Handler:    _Api_StopCruise_Handler,
+		},
+		{
+			MethodName: "StartScan",
+			Handler:    _Api_StartScan_Handler,
+		},
+		{
+			MethodName: "StopScan",
+			Handler:    _Api_StopScan_Handler,
+		},
+		{
+			MethodName: "SetScanLeft",
+			Handler:    _Api_SetScanLeft_Handler,
+		},
+		{
+			MethodName: "SetScanRight",
+			Handler:    _Api_SetScanRight_Handler,
+		},
+		{
+			MethodName: "SetScanSpeed",
+			Handler:    _Api_SetScanSpeed_Handler,
+		},
+		{
+			MethodName: "WiperControl",
+			Handler:    _Api_WiperControl_Handler,
+		},
+		{
+			MethodName: "AuxiliaryControl",
+			Handler:    _Api_AuxiliaryControl_Handler,
+		},
+		{
+			MethodName: "TestSip",
+			Handler:    _Api_TestSip_Handler,
+		},
+		{
+			MethodName: "SearchAlarms",
+			Handler:    _Api_SearchAlarms_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

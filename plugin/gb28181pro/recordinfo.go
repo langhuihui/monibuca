@@ -39,7 +39,7 @@ func (gb *GB28181ProPlugin) RecordInfoQuery(deviceID string, channelID string, s
 </Query>`, charset, sn, channelID, startTime, endTime)
 
 	// 创建 MESSAGE 请求
-	request := device.CreateRequest(sip.MESSAGE)
+	request := device.CreateRequest(sip.MESSAGE, nil)
 	if request == nil {
 		return nil, fmt.Errorf("create request failed")
 	}

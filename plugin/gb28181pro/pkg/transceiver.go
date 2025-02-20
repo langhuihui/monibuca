@@ -172,7 +172,7 @@ func (p *Receiver) Dispose() {
 	if p.RTPReader != nil {
 		p.RTPReader.Close()
 	}
-	//close(p.FeedChan)
+	close(p.FeedChan)
 }
 
 func (p *Receiver) Go() error {

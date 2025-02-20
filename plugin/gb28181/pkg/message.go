@@ -147,7 +147,7 @@ type (
 		Manufacturer string
 		Model        string
 		Channel      string
-		DeviceList   []ChannelInfo `xml:"DeviceList>Item"`
+		DeviceList   []ChannelInfo `xml:"DeviceChannelList>Item"`
 		RecordList   []Record      `xml:"RecordList>Item"`
 		SumNum       int           // 录像结果的总数 SumNum，录像结果会按照多条消息返回，可用于判断是否全部返回
 	}

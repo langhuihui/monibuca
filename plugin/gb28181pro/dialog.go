@@ -2,16 +2,16 @@ package plugin_gb28181pro
 
 import (
 	"fmt"
-	"github.com/emiago/sipgo"
+	"m7s.live/v5/pkg/util"
+	"strconv"
+	"strings"
+	"time"
+
+	sipgo "github.com/emiago/sipgo"
 	"github.com/emiago/sipgo/sip"
-	"github.com/rs/zerolog"
 	m7s "m7s.live/v5"
 	"m7s.live/v5/pkg/task"
 	gb28181 "m7s.live/v5/plugin/gb28181pro/pkg"
-	"os"
-	"strconv"
-	"strings"
-	"sync"
 )
 
 type Dialog struct {
@@ -43,86 +43,22 @@ func (d *Dialog) Start() (err error) {
 	}
 	sss := strings.Split(d.pullCtx.RemoteURL, "/")
 	deviceId, channelId := sss[0], sss[1]
-	//if len(sss) == 2 {
-	// 先从内存中获取设备
-	device, ok := d.gb.devices.Get(deviceId)
-	if !ok && d.gb.DB != nil {
-		// 如果内存中没有且数据库存在，则从数据库查询
-		var dbDevice Device
-		if err := d.gb.DB.Where("device_id = ?", deviceId).First(&dbDevice).Error; err == nil {
-
-			device = &dbDevice
+	var device *Device
+	if len(sss) == 2 {
+		if deviceTmp, ok := d.gb.devices.Get(deviceId); ok {
+			device = deviceTmp
+			if channel, ok := deviceTmp.channels.Get(channelId); ok {
+				d.Channel = channel
+			} else {
+				return fmt.Errorf("channel %s not found", channelId)
+			}
 		} else {
 			return fmt.Errorf("device %s not found", deviceId)
 		}
-	} else if !ok {
-		return fmt.Errorf("device %s not found", deviceId)
+	} else if len(sss) == 3 {
+		var recordRange util.Range[int]
+		err = recordRange.Resolve(sss[2])
 	}
-
-	// 先从内存中获取通道
-	channel, ok := device.channels.Get(channelId)
-	if !ok && d.gb.DB != nil {
-		// 如果内存中没有且数据库存在，则从数据库查询
-		var dbChannel gb28181.DeviceChannel
-		if err := d.gb.DB.Where("device_id = ? AND device_db_id = ?", channelId, device.ID).First(&dbChannel).Error; err == nil {
-			channel = &Channel{
-				Device:        device,
-				Logger:        device.Logger.With("channel", channelId),
-				DeviceChannel: dbChannel,
-			}
-			device.channels.Set(channel)
-		} else {
-			return fmt.Errorf("channel %s not found", channelId)
-		}
-	} else if !ok {
-		return fmt.Errorf("channel %s not found", channelId)
-	}
-
-	d.Channel = channel
-	//} else if len(sss) == 3 {
-	//	var recordRange util.Range[int]
-	//	err = recordRange.Resolve(sss[2])
-	//}
-
-	if device != nil && channel != nil {
-		// 初始化 SIP 相关字段
-		device.fromHDR = sip.FromHeader{
-			Address: sip.Uri{
-				User: d.gb.Serial,
-				Host: d.gb.Realm,
-			},
-			Params: sip.NewParams(),
-		}
-		device.fromHDR.Params.Add("tag", sip.GenerateTagN(16))
-
-		device.contactHDR = sip.ContactHeader{
-			Address: sip.Uri{
-				User: d.gb.Serial,
-				Host: device.LocalIP,
-				Port: device.Port,
-			},
-		}
-
-		device.Recipient = sip.Uri{
-			Host: device.IP,
-			Port: device.Port,
-			User: channelId, // 使用通道的 DeviceID
-		}
-		// 恢复设备的必要字段
-		device.Logger = d.gb.With("id", deviceId)
-		device.channels.L = new(sync.RWMutex)
-		device.plugin = d.gb
-		device.eventChan = make(chan any, 10)
-		// 初始化 SIP 客户端
-		device.client, _ = sipgo.NewClient(d.gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(device.LocalIP))
-		if device.client != nil {
-			device.dialogClient = sipgo.NewDialogClient(device.client, device.contactHDR)
-		} else {
-			d.gb.Error("failed to create sip client for device", "error", "deviceId", deviceId)
-			return
-		}
-	}
-
 	d.gb.dialogs.Set(d)
 	defer d.gb.dialogs.Remove(d)
 	if d.gb.MediaPort.Valid() {
@@ -137,14 +73,243 @@ func (d *Dialog) Start() (err error) {
 	} else {
 		d.MediaPort = d.gb.MediaPort[0]
 	}
-
-	// 调用 PlayStreamCmd
-	d.session, err = d.gb.PlayStreamCmd(device, channel, d.MediaPort, d.start, d.end)
-	if err != nil {
-		return fmt.Errorf("play stream failed: %v", err)
+	ssrc := d.CreateSSRC(d.gb.Serial)
+	// 获取 SDP IP
+	sdpIP := device.LocalIP
+	if sdpIP == "" {
+		sdpIP = device.mediaIp
 	}
 
+	// 构建 SDP 内容
+	sdpInfo := []string{
+		"v=0",
+		fmt.Sprintf("o=%s 0 0 IN IP4 %s", device.DeviceID, sdpIP),
+		fmt.Sprintf("s=%s", util.Conditional(d.IsLive(), "Play", "Playback")), // 根据是否有时间参数决定
+		//"u=" + device.ID + ":0",
+		//"u=" + channel.DeviceID + ":0",
+		"c=IN IP4 " + sdpIP,
+	}
+
+	sdpInfo = append(sdpInfo, "t=0 0")
+
+	// 添加媒体行和相关属性
+	var mediaLine string
+	switch strings.ToUpper(device.StreamMode) {
+	case "TCP-PASSIVE", "TCP-ACTIVE":
+		mediaLine = fmt.Sprintf("m=video %d TCP/RTP/AVP 96 126 125 99 34 98 97", d.MediaPort)
+	case "UDP":
+		mediaLine = fmt.Sprintf("m=video %d TCP/RTP/AVP 96", d.MediaPort)
+	default:
+		mediaLine = fmt.Sprintf("m=video %d RTP/AVP 96 126 125 99 34 98 97", d.MediaPort)
+	}
+
+	sdpInfo = append(sdpInfo, mediaLine)
+	sdpInfo = append(sdpInfo,
+		"a=recvonly",
+		"a=rtpmap:96 PS/90000",
+		//"a=fmtp:126 profile-level-id=42e01e",
+		//"a=rtpmap:126 H264/90000",
+		//"a=rtpmap:125 H264S/90000",
+		//"a=fmtp:125 profile-level-id=42e01e",
+		//"a=rtpmap:98 H264/90000",
+		//"a=rtpmap:97 MPEG4/90000",
+		//"a=rtpmap:99 H265/90000",
+	)
+
+	//根据传输模式添加 setup 和 connection 属性
+	switch strings.ToUpper(device.StreamMode) {
+	case "TCP-PASSIVE":
+		sdpInfo = append(sdpInfo,
+			"a=setup:passive",
+			"a=connection:new",
+		)
+	case "TCP-ACTIVE":
+		sdpInfo = append(sdpInfo,
+			"a=setup:active",
+			"a=connection:new",
+		)
+	default:
+		sdpInfo = append(sdpInfo,
+			"a=setup:passive",
+			"a=connection:new",
+		)
+	}
+
+	// 添加 SSRC
+	sdpInfo = append(sdpInfo, fmt.Sprintf("y=%s", ssrc))
+
+	// 创建 INVITE 请求
+	recipient := sip.Uri{
+		Host: device.IP,
+		Port: device.Port,
+		User: channelId,
+	}
+	request := device.CreateRequest(sip.INVITE, recipient)
+	if request == nil {
+		return nil
+	}
+
+	// 设置必需的头部
+	contentTypeHeader := sip.ContentTypeHeader("APPLICATION/SDP")
+	subjectHeader := sip.NewHeader("Subject", fmt.Sprintf("%s:%s,%s:0", channelId, ssrc, d.gb.Serial))
+	//allowHeader := sip.NewHeader("Allow", "INVITE, ACK, CANCEL, REGISTER, MESSAGE, NOTIFY, BYE")
+	//Toheader里需要放入目录通道的id
+	toHeader := sip.ToHeader{
+		Address: sip.Uri{User: channelId, Host: device.HostAddress},
+	}
+	userAgentHeader := sip.NewHeader("User-Agent", "M7S/"+m7s.Version)
+
+	request.AppendHeader(&contentTypeHeader)
+	request.AppendHeader(subjectHeader)
+	//request.AppendHeader(allowHeader)
+	request.AppendHeader(&toHeader)
+	customCallID := fmt.Sprintf("%s-%s-%d@%s", device.DeviceID, channelId, time.Now().Unix(), device.LocalIP)
+	callID := sip.CallIDHeader(customCallID)
+	//request.AppendHeaderAfter(&callID, "User-Agent")
+	viaHeader := sip.ViaHeader{
+		ProtocolName:    "SIP",
+		ProtocolVersion: "2.0",
+		Transport:       "UDP",
+		Host:            device.LocalIP,
+		Port:            device.Port,
+		Params:          sip.HeaderParams(sip.NewParams()),
+	}
+	viaHeader.Params.Add("branch", sip.GenerateBranchN(16)).Add("rport", "")
+	maxforward := sip.MaxForwardsHeader(70)
+	contentLengthHeader := sip.ContentLengthHeader(len(strings.Join(sdpInfo, "\r\n") + "\r\n"))
+	csqHeader := sip.CSeqHeader{
+		SeqNo:      uint32(device.SN),
+		MethodName: "INVITE",
+	}
+	request.AppendHeader(&viaHeader)
+	request.SetBody([]byte(strings.Join(sdpInfo, "\r\n") + "\r\n"))
+	request.AppendHeader(&contentLengthHeader)
+
+	// 创建会话
+	d.session, err = device.dialogClient.Invite(d.gb, recipient, request.Body(), &callID, &csqHeader, &device.fromHDR, &toHeader, &viaHeader, &maxforward, userAgentHeader, &device.contactHDR, subjectHeader, &contentTypeHeader, &contentLengthHeader)
+	// 最后添加Content-Length头部
 	return
+}
+
+// PlayStreamCmd 请求预览视频流
+func (d *Dialog) PlayStreamCmd(device *Device, channel *Channel, mediaPort uint16, start, end string) (*sipgo.DialogClientSession, error) {
+	if channel == nil {
+		return nil, fmt.Errorf("channel is nil")
+	}
+	if device == nil {
+		return nil, fmt.Errorf("device is nil")
+	}
+
+	// 创建 SSRC
+	ssrc := d.CreateSSRC(d.gb.Serial)
+
+	// 获取 SDP IP
+	sdpIP := device.LocalIP
+	if sdpIP == "" {
+		sdpIP = device.mediaIp
+	}
+
+	// 构建 SDP 内容
+	sdpInfo := []string{
+		"v=0",
+		fmt.Sprintf("o=%s 0 0 IN IP4 %s", device.DeviceID, sdpIP),
+		fmt.Sprintf("s=%s", map[bool]string{true: "Playback", false: "Play"}[start != "" && end != ""]), // 根据是否有时间参数决定
+		//"u=" + device.ID + ":0",
+		"u=" + channel.DeviceID + ":0",
+		"c=IN IP4 " + sdpIP,
+	}
+
+	// 如果有时间参数，添加时间行
+	if start != "" && end != "" {
+		startTime, err := time.Parse(time.RFC3339, start)
+		if err != nil {
+			return nil, fmt.Errorf("parse start time failed: %v", err)
+		}
+		endTime, err := time.Parse(time.RFC3339, end)
+		if err != nil {
+			return nil, fmt.Errorf("parse end time failed: %v", err)
+		}
+		sdpInfo = append(sdpInfo, fmt.Sprintf("t=%d %d", startTime.Unix(), endTime.Unix()))
+	} else {
+		sdpInfo = append(sdpInfo, "t=0 0")
+	}
+
+	// 添加媒体行和相关属性
+	var mediaLine string
+	switch strings.ToUpper(device.StreamMode) {
+	case "TCP-PASSIVE", "TCP-ACTIVE":
+		mediaLine = fmt.Sprintf("m=video %d TCP/RTP/AVP 96 126 125 99 34 98 97", mediaPort)
+	case "UDP":
+		mediaLine = fmt.Sprintf("m=video %d TCP/RTP/AVP 96", mediaPort)
+	default:
+		mediaLine = fmt.Sprintf("m=video %d RTP/AVP 96 126 125 99 34 98 97", mediaPort)
+	}
+
+	sdpInfo = append(sdpInfo, mediaLine)
+	sdpInfo = append(sdpInfo,
+		"a=recvonly",
+		"a=rtpmap:96 PS/90000",
+		//"a=fmtp:126 profile-level-id=42e01e",
+		//"a=rtpmap:126 H264/90000",
+		//"a=rtpmap:125 H264S/90000",
+		//"a=fmtp:125 profile-level-id=42e01e",
+		//"a=rtpmap:99 H265/90000",
+		//"a=rtpmap:98 H264/90000",
+		//"a=rtpmap:97 MPEG4/90000",
+	)
+
+	//根据传输模式添加 setup 和 connection 属性
+	switch strings.ToUpper(device.StreamMode) {
+	case "TCP-PASSIVE":
+		sdpInfo = append(sdpInfo,
+			"a=setup:passive",
+			"a=connection:new",
+		)
+	case "TCP-ACTIVE":
+		sdpInfo = append(sdpInfo,
+			"a=setup:active",
+			"a=connection:new",
+		)
+	default:
+		sdpInfo = append(sdpInfo,
+			"a=setup:passive",
+			"a=connection:new",
+		)
+	}
+
+	// 添加 SSRC
+	sdpInfo = append(sdpInfo, fmt.Sprintf("y=%s", ssrc))
+
+	// 创建 INVITE 请求
+	recipient := sip.Uri{
+		Host: device.IP,
+		Port: device.Port,
+		User: channel.DeviceID,
+	}
+	request := device.CreateRequest(sip.INVITE, recipient)
+	if request == nil {
+		return nil, fmt.Errorf("create request failed")
+	}
+
+	// 设置必需的头部
+	contentTypeHeader := sip.ContentTypeHeader("application/sdp")
+	subjectHeader := sip.NewHeader("Subject", fmt.Sprintf("%s:%s,%s:0", channel.DeviceID, ssrc, d.gb.Serial))
+	allowHeader := sip.NewHeader("Allow", "INVITE, ACK, CANCEL, REGISTER, MESSAGE, NOTIFY, BYE")
+	//Toheader里需要放入目录通道的id
+	toHeader := sip.ToHeader{
+		Address: sip.Uri{User: channel.DeviceID, Host: device.HostAddress},
+	}
+	userAgentHeader := sip.NewHeader("User-Agent", "M7S/"+m7s.Version)
+
+	request.AppendHeader(&contentTypeHeader)
+	request.AppendHeader(subjectHeader)
+	request.AppendHeader(allowHeader)
+	request.AppendHeader(&toHeader)
+	request.SetBody([]byte(strings.Join(sdpInfo, "\r\n") + "\r\n"))
+
+	// 创建会话
+	return device.dialogClient.Invite(d.gb, recipient, request.Body(), &contentTypeHeader, subjectHeader, &device.fromHDR, &toHeader, userAgentHeader, allowHeader)
+	//return device.dialogClient.Invite(gb, device.Recipient, request.Body(), &contentTypeHeader, subjectHeader, &device.fromHDR, allowHeader, &toHeader)
 }
 
 func (d *Dialog) Run() (err error) {
@@ -172,7 +337,8 @@ func (d *Dialog) Run() (err error) {
 				if strings.ToUpper(netinfo[2]) == "TCP/RTP/AVP" {
 					d.gb.Debug("device support tcp")
 				} else {
-					return fmt.Errorf("device not support tcp")
+					d.gb.Error("device not support tcp")
+					return
 				}
 			}
 		}
@@ -191,5 +357,13 @@ func (d *Dialog) GetKey() uint32 {
 }
 
 func (d *Dialog) Dispose() {
-	d.session.Close()
+	d.Info("111111111111111111111111")
+	err := d.session.Bye(d)
+	if err != nil {
+		d.Error("bye bye err", err)
+	}
+	err = d.session.Close()
+	if err != nil {
+		d.Error("close session err", err)
+	}
 }

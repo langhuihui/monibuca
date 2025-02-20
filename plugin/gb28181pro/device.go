@@ -1,6 +1,7 @@
 package plugin_gb28181pro
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -26,40 +27,40 @@ const (
 
 type Device struct {
 	task.Task             `gorm:"-:all"`
-	ID                    int64                   `gorm:"primaryKey;autoIncrement"` // 数据库自增长ID
-	DeviceID              string                  // 设备国标编号
-	Name                  string                  // 设备名
-	Manufacturer          string                  // 生产厂商
-	Model                 string                  // 型号
-	Owner                 string                  // 所有者
-	Firmware              string                  // 固件版本
-	Transport             string                  // 传输协议（UDP/TCP）
-	StreamMode            string                  // 数据流传输模式（UDP:udp传输/TCP-ACTIVE：tcp主动模式/TCP-PASSIVE：tcp被动模式）
-	IP                    string                  // wan地址_ip
-	Port                  int                     // wan地址_port
-	HostAddress           string                  // wan地址
-	Online                bool                    // 是否在线，true为在线，false为离线
-	RegisterTime          time.Time               // 注册时间
-	KeepaliveTime         time.Time               // 心跳时间
-	KeepaliveInterval     int                     `gorm:"default:60"` // 心跳间隔
-	ChannelCount          int                     // 通道个数
-	Expires               int                     // 注册有效期
-	CreateTime            time.Time               // 创建时间
-	UpdateTime            time.Time               // 更新时间
-	MediaServerID         string                  // 设备使用的媒体id, 默认为null
-	Charset               string                  // 字符集, 支持 UTF-8 与 GB2312
-	SubscribeCatalog      int                     // 目录订阅周期，0为不订阅
-	SubscribePosition     int                     // 移动设备位置订阅周期，0为不订阅
-	PositionInterval      int                     // 移动设备位置信息上报时间间隔,单位:秒,默认值5
-	SubscribeAlarm        int                     // 报警订阅周期，0为不订阅
-	SSRCCheck             bool                    // 是否开启ssrc校验，默认关闭，开启可以防止串流
-	GeoCoordSys           string                  // 地理坐标系， 目前支持 WGS84,GCJ02
-	Password              string                  // 密码
-	SdpIP                 string                  // 收流IP
-	LocalIP               string                  // SIP交互IP（设备访问平台的IP）
-	AsMessageChannel      bool                    // 是否作为消息通道
-	BroadcastPushAfterAck bool                    // 控制语音对讲流程，释放收到ACK后发流
-	Channels              []gb28181.DeviceChannel `gorm:"foreignKey:DeviceDBID;references:ID"` // 设备通道列表
+	ID                    int64     `gorm:"primaryKey;autoIncrement"` // 数据库自增长ID
+	DeviceID              string    // 设备国标编号
+	Name                  string    // 设备名
+	Manufacturer          string    // 生产厂商
+	Model                 string    // 型号
+	Owner                 string    // 所有者
+	Firmware              string    // 固件版本
+	Transport             string    // 传输协议（UDP/TCP）
+	StreamMode            string    // 数据流传输模式（UDP:udp传输/TCP-ACTIVE：tcp主动模式/TCP-PASSIVE：tcp被动模式）
+	IP                    string    // wan地址_ip
+	Port                  int       // wan地址_port
+	HostAddress           string    // wan地址
+	Online                bool      // 是否在线，true为在线，false为离线
+	RegisterTime          time.Time // 注册时间
+	KeepaliveTime         time.Time // 心跳时间
+	KeepaliveInterval     int       `gorm:"default:60"` // 心跳间隔
+	ChannelCount          int       // 通道个数
+	Expires               int       // 注册有效期
+	CreateTime            time.Time // 创建时间
+	UpdateTime            time.Time // 更新时间
+	Charset               string    // 字符集, 支持 UTF-8 与 GB2312
+	SubscribeCatalog      int       // 目录订阅周期，0为不订阅
+	SubscribePosition     int       // 移动设备位置订阅周期，0为不订阅
+	PositionInterval      int       // 移动设备位置信息上报时间间隔,单位:秒,默认值5
+	SubscribeAlarm        int       // 报警订阅周期，0为不订阅
+	SSRCCheck             bool      // 是否开启ssrc校验，默认关闭，开启可以防止串流
+	GeoCoordSys           string    // 地理坐标系， 目前支持 WGS84,GCJ02
+	Password              string    // 密码
+	SdpIP                 string    // 收流IP
+	LocalIP               string    // SIP交互IP（设备访问平台的IP）
+	AsMessageChannel      bool      // 是否作为消息通道
+	BroadcastPushAfterAck bool      // 控制语音对讲流程，释放收到ACK后发流
+	// 删除强关联字段
+	// Channels              []gb28181.DeviceChannel `gorm:"foreignKey:DeviceDBID;references:ID"` // 设备通道列表
 
 	// 保留原有字段
 	Status              DeviceStatus
@@ -76,7 +77,6 @@ type Device struct {
 	fromHDR             sip.FromHeader
 	toHDR               sip.ToHeader
 	plugin              *GB28181ProPlugin
-	abc                 *sip.ClientTransaction
 }
 
 func (d *Device) TableName() string {
@@ -92,7 +92,7 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 	if d.Status == DeviceRecoverStatus {
 		d.Status = DeviceOnlineStatus
 	}
-	d.Debug("OnMessage", "cmdType", msg.CmdType, "body", string(req.Body()))
+	//d.Debug("OnMessage", "cmdType", msg.CmdType, "body", string(req.Body()))
 	switch msg.CmdType {
 	case "Keepalive":
 		d.KeepaliveInterval = int(time.Since(d.KeepaliveTime).Seconds())
@@ -101,16 +101,19 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 			d.plugin.DB.Save(d)
 		}
 	case "Catalog":
-		d.eventChan <- msg.DeviceList
+		d.eventChan <- msg.DeviceChannelList
 		// 更新设备信息到数据库
 		if d.plugin.DB != nil {
 			// 更新通道信息
-			for _, c := range msg.DeviceList {
+			for _, c := range msg.DeviceChannelList {
 				// 设置关联的设备数据库ID
 				c.DeviceDBID = d.ID
 				// 先查询是否存在
 				var existing gb28181.DeviceChannel
-				if err := d.plugin.DB.Where("device_id = ?", c.DeviceID).First(&existing).Error; err == nil {
+				if err := d.plugin.DB.Where(&gb28181.DeviceChannel{
+					DeviceDBID: d.ID,
+					DeviceID:   c.DeviceID,
+				}).First(&existing).Error; err == nil {
 					c.ID = existing.ID // 保持原有的自增ID
 					d.Debug("update channel", "channelId", c.DeviceID)
 				} else {
@@ -122,7 +125,7 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 				}
 			}
 			// 更新当前设备的通道数
-			d.ChannelCount = len(msg.DeviceList)
+			d.ChannelCount = len(msg.DeviceChannelList)
 			d.UpdateTime = time.Now()
 			if err := d.plugin.DB.Save(d).Error; err != nil {
 				d.Error("save device failed", "error", err)
@@ -148,8 +151,38 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 			d.plugin.DB.Save(d)
 		}
 	case "Alarm":
-		d.Status = DeviceAlarmedStatus
-		body = []byte(gb28181.BuildAlarmResponseXML(d.DeviceID))
+		// 创建报警记录
+		alarm := &gb28181.DeviceAlarm{
+			DeviceID:      d.DeviceID, // 使用当前设备的ID
+			DeviceName:    d.Name,
+			ChannelID:     msg.DeviceID, // 使用消息中的DeviceID作为通道ID
+			AlarmPriority: msg.AlarmPriority,
+			AlarmMethod:   msg.AlarmMethod,
+			AlarmType:     msg.Info.AlarmType,
+			CreateTime:    time.Now(),
+		}
+
+		// 尝试解析报警时间
+		if alarmTime, err := time.Parse("2006-01-02T15:04:05", msg.AlarmTime); err == nil {
+			alarm.AlarmTime = alarmTime
+		} else {
+			alarm.AlarmTime = time.Now()
+			d.Error("解析报警时间失败", "error", err)
+		}
+
+		// 保存到数据库
+		if d.plugin.DB != nil {
+			if err := d.plugin.DB.Create(alarm).Error; err != nil {
+				d.Error("保存报警信息失败", "error", err)
+			} else {
+				d.Info("保存报警信息成功",
+					"deviceId", alarm.DeviceID,
+					"channelId", alarm.ChannelID,
+					"alarmType", alarm.GetAlarmTypeDescription(),
+					"alarmMethod", alarm.GetAlarmMethodDescription(),
+					"alarmPriority", alarm.GetAlarmPriorityDescription())
+			}
+		}
 	case "Broadcast":
 		d.Info("broadcast message", "body", req.Body())
 	default:
@@ -210,7 +243,7 @@ func (d *Device) Go() (err error) {
 			if err != nil {
 				d.Error("catalog", "err", err)
 			} else {
-				d.Debug("catalog", "response", response.String())
+				d.Debug("catalogTick", "response", response.String())
 			}
 		case event := <-d.eventChan:
 			switch v := event.(type) {
@@ -239,18 +272,27 @@ func (d *Device) Go() (err error) {
 	}
 }
 
-func (d *Device) CreateRequest(Method sip.RequestMethod) *sip.Request {
-	req := sip.NewRequest(Method, d.Recipient)
+func (d *Device) CreateRequest(Method sip.RequestMethod, Recipient any) *sip.Request {
+	var req *sip.Request
+	if recipient, ok := Recipient.(sip.Uri); ok {
+		req = sip.NewRequest(Method, recipient)
+	} else {
+		req = sip.NewRequest(Method, d.Recipient)
+	}
 	req.AppendHeader(&d.fromHDR)
 	contentType := sip.ContentTypeHeader("Application/MANSCDP+xml")
 	req.AppendHeader(sip.NewHeader("User-Agent", "M7S/"+m7s.Version))
 	req.AppendHeader(&contentType)
-	req.AppendHeader(&d.contactHDR)
+	toHeader := sip.ToHeader{
+		Address: sip.Uri{User: d.DeviceID, Host: d.HostAddress},
+	}
+	req.AppendHeader(&toHeader)
+	//req.AppendHeader(&d.contactHDR)
 	return req
 }
 
 func (d *Device) catalog() (*sip.Response, error) {
-	request := d.CreateRequest(sip.MESSAGE)
+	request := d.CreateRequest(sip.MESSAGE, nil)
 	//d.subscriber.Timeout = time.Now().Add(time.Second * time.Duration(expires))
 	request.AppendHeader(sip.NewHeader("Expires", "3600"))
 	request.SetBody(gb28181.BuildCatalogXML(d.SN, d.DeviceID))
@@ -258,23 +300,72 @@ func (d *Device) catalog() (*sip.Response, error) {
 }
 
 func (d *Device) subscribeCatalog() (*sip.Response, error) {
-	request := d.CreateRequest(sip.SUBSCRIBE)
+	request := d.CreateRequest(sip.SUBSCRIBE, nil)
 	request.AppendHeader(sip.NewHeader("Expires", "3600"))
 	request.SetBody(gb28181.BuildCatalogXML(d.SN, d.DeviceID))
 	return d.send(request)
 }
 
 func (d *Device) queryDeviceInfo() (*sip.Response, error) {
-	request := d.CreateRequest(sip.MESSAGE)
+	request := d.CreateRequest(sip.MESSAGE, nil)
 	request.SetBody(gb28181.BuildDeviceInfoXML(d.SN, d.DeviceID))
 	return d.send(request)
 }
 
 func (d *Device) subscribePosition(interval int) (*sip.Response, error) {
-	request := d.CreateRequest(sip.SUBSCRIBE)
+	request := d.CreateRequest(sip.SUBSCRIBE, nil)
 	request.AppendHeader(sip.NewHeader("Expires", "3600"))
 	request.SetBody(gb28181.BuildDevicePositionXML(d.SN, d.DeviceID, interval))
 	return d.send(request)
+}
+
+// frontEndCmd 前端控制命令，包括PTZ指令、FI指令、预置位指令、巡航指令、扫描指令和辅助开关指令
+func (d *Device) frontEndCmd(channelId string, cmdCode int32, parameter1 int32, parameter2 int32, combineCode2 int32) (*sip.Response, error) {
+	// 构建前端控制指令字符串
+	cmdStr := d.frontEndCmdString(cmdCode, parameter1, parameter2, combineCode2)
+
+	// 构建XML消息体
+	ptzXml := strings.Builder{}
+	ptzXml.WriteString(fmt.Sprintf("<?xml version=\"1.0\" encoding=\"%s\"?>\r\n", d.Charset))
+	ptzXml.WriteString("<Control>\r\n")
+	ptzXml.WriteString("<CmdType>DeviceControl</CmdType>\r\n")
+	ptzXml.WriteString(fmt.Sprintf("<SN>%d</SN>\r\n", int(time.Now().UnixNano()/1e6%1000000)))
+	ptzXml.WriteString(fmt.Sprintf("<DeviceID>%s</DeviceID>\r\n", channelId))
+	ptzXml.WriteString(fmt.Sprintf("<PTZCmd>%s</PTZCmd>\r\n", cmdStr))
+	ptzXml.WriteString("<Info>\r\n")
+	ptzXml.WriteString("<ControlPriority>5</ControlPriority>\r\n")
+	ptzXml.WriteString("</Info>\r\n")
+	ptzXml.WriteString("</Control>\r\n")
+
+	// 创建并发送请求
+	request := d.CreateRequest(sip.MESSAGE, nil)
+	request.SetBody([]byte(ptzXml.String()))
+	return d.send(request)
+}
+
+// frontEndCmdString 生成前端控制指令字符串
+func (d *Device) frontEndCmdString(cmdCode int32, parameter1 int32, parameter2 int32, combineCode2 int32) string {
+	// 构建指令字符串
+	var builder strings.Builder
+	builder.WriteString("A50F01")
+
+	// 添加指令码
+	builder.WriteString(fmt.Sprintf("%02X", cmdCode))
+
+	// 添加参数1
+	builder.WriteString(fmt.Sprintf("%02X", parameter1))
+
+	// 添加参数2
+	builder.WriteString(fmt.Sprintf("%02X", parameter2))
+
+	// 添加组合码2（左移4位）
+	builder.WriteString(fmt.Sprintf("%02X", combineCode2<<4))
+
+	// 计算校验码
+	checkCode := (0xA5 + 0x0F + 0x01 + int(cmdCode) + int(parameter1) + int(parameter2) + int(combineCode2<<4)) % 0x100
+	builder.WriteString(fmt.Sprintf("%02X", checkCode))
+
+	return builder.String()
 }
 
 func (d *Device) addOrUpdateChannel(c gb28181.DeviceChannel) {

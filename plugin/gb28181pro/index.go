@@ -39,128 +39,12 @@ type PositionConfig struct {
 	Interval time.Duration `default:"6s" desc:"订阅间隔"`    //订阅间隔
 }
 
-// PlayStreamCmd 请求预览视频流
-func (gb *GB28181ProPlugin) PlayStreamCmd(device *Device, channel *Channel, mediaPort uint16, start, end string) (*sipgo.DialogClientSession, error) {
-	if channel == nil {
-		return nil, fmt.Errorf("channel is nil")
-	}
-	if device == nil {
-		return nil, fmt.Errorf("device is nil")
-	}
-
-	// 创建 SSRC
-	ssrc := device.CreateSSRC(gb.Serial)
-
-	// 获取 SDP IP
-	sdpIP := device.LocalIP
-	if sdpIP == "" {
-		sdpIP = device.mediaIp
-	}
-
-	// 构建 SDP 内容
-	sdpInfo := []string{
-		"v=0",
-		fmt.Sprintf("o=%s 0 0 IN IP4 %s", device.DeviceID, sdpIP),
-		fmt.Sprintf("s=%s", map[bool]string{true: "Playback", false: "Play"}[start != "" && end != ""]), // 根据是否有时间参数决定
-		//"u=" + device.ID + ":0",
-		"u=" + channel.DeviceID + ":0",
-		"c=IN IP4 " + sdpIP,
-	}
-
-	// 如果有时间参数，添加时间行
-	if start != "" && end != "" {
-		startTime, err := time.Parse(time.RFC3339, start)
-		if err != nil {
-			return nil, fmt.Errorf("parse start time failed: %v", err)
-		}
-		endTime, err := time.Parse(time.RFC3339, end)
-		if err != nil {
-			return nil, fmt.Errorf("parse end time failed: %v", err)
-		}
-		sdpInfo = append(sdpInfo, fmt.Sprintf("t=%d %d", startTime.Unix(), endTime.Unix()))
-	} else {
-		sdpInfo = append(sdpInfo, "t=0 0")
-	}
-
-	// 添加媒体行和相关属性
-	var mediaLine string
-	switch strings.ToUpper(device.StreamMode) {
-	case "TCP-PASSIVE", "TCP-ACTIVE":
-		mediaLine = fmt.Sprintf("m=video %d TCP/RTP/AVP 96 126 125 99 34 98 97", mediaPort)
-	case "UDP":
-		mediaLine = fmt.Sprintf("m=video %d TCP/RTP/AVP 96", mediaPort)
-	default:
-		mediaLine = fmt.Sprintf("m=video %d RTP/AVP 96 126 125 99 34 98 97", mediaPort)
-	}
-
-	sdpInfo = append(sdpInfo, mediaLine)
-	sdpInfo = append(sdpInfo,
-		"a=recvonly",
-		"a=rtpmap:96 PS/90000",
-		//"a=fmtp:126 profile-level-id=42e01e",
-		//"a=rtpmap:126 H264/90000",
-		//"a=rtpmap:125 H264S/90000",
-		//"a=fmtp:125 profile-level-id=42e01e",
-		//"a=rtpmap:99 H265/90000",
-		//"a=rtpmap:98 H264/90000",
-		//"a=rtpmap:97 MPEG4/90000",
-	)
-
-	//根据传输模式添加 setup 和 connection 属性
-	switch strings.ToUpper(device.StreamMode) {
-	case "TCP-PASSIVE":
-		sdpInfo = append(sdpInfo,
-			"a=setup:passive",
-			"a=connection:new",
-		)
-	case "TCP-ACTIVE":
-		sdpInfo = append(sdpInfo,
-			"a=setup:active",
-			"a=connection:new",
-		)
-	default:
-		sdpInfo = append(sdpInfo,
-			"a=setup:passive",
-			"a=connection:new",
-		)
-	}
-
-	// 添加 SSRC
-	sdpInfo = append(sdpInfo, fmt.Sprintf("y=%010d", ssrc))
-
-	// 创建 INVITE 请求
-	request := device.CreateRequest(sip.INVITE)
-	if request == nil {
-		return nil, fmt.Errorf("create request failed")
-	}
-
-	// 设置必需的头部
-	contentTypeHeader := sip.ContentTypeHeader("application/sdp")
-	subjectHeader := sip.NewHeader("Subject", fmt.Sprintf("%s:%d,%s:0", channel.DeviceID, ssrc, gb.Serial))
-	allowHeader := sip.NewHeader("Allow", "INVITE, ACK, CANCEL, REGISTER, MESSAGE, NOTIFY, BYE")
-	//Toheader里需要放入目录通道的id
-	toHeader := sip.ToHeader{
-		Address: sip.Uri{User: channel.DeviceID, Host: device.HostAddress},
-	}
-	userAgentHeader := sip.NewHeader("User-Agent", "M7S/"+m7s.Version)
-
-	request.AppendHeader(&contentTypeHeader)
-	request.AppendHeader(subjectHeader)
-	request.AppendHeader(allowHeader)
-	request.AppendHeader(&toHeader)
-	request.SetBody([]byte(strings.Join(sdpInfo, "\r\n") + "\r\n"))
-
-	// 创建会话
-	return device.dialogClient.Invite(gb, device.Recipient, request.Body(), &contentTypeHeader, subjectHeader, &device.fromHDR, &toHeader, userAgentHeader, allowHeader)
-	//return device.dialogClient.Invite(gb, device.Recipient, request.Body(), &contentTypeHeader, subjectHeader, &device.fromHDR, allowHeader, &toHeader)
-}
-
 type GB28181ProPlugin struct {
 	pb.UnimplementedApiServer
 	m7s.Plugin
 	AutoInvite bool   `default:"true" desc:"自动邀请"`
 	Serial     string `default:"34020000002000000001" desc:"sip 服务 id"` //sip 服务器 id, 默认 34020000002000000001
-	Realm      string `default:"3402000000" desc:"sip 服务域"`            //sip 服务器域，默认 3402000000
+	Realm      string `default:"3402000000" desc:"sip 服务域"`             //sip 服务器域，默认 3402000000
 	Username   string
 	Password   string
 	Sip        SipConfig
@@ -171,6 +55,7 @@ type GB28181ProPlugin struct {
 	server     *sipgo.Server
 	devices    util.Collection[string, *Device]
 	dialogs    util.Collection[uint32, *Dialog]
+	platforms  util.Collection[string, *Platform]
 	tcpPorts   chan uint16
 }
 
@@ -228,6 +113,11 @@ func (gb *GB28181ProPlugin) OnInit() (err error) {
 			gb.DB.AutoMigrate(&Device{})
 			gb.DB.AutoMigrate(&gb28181.DeviceChannel{})
 			gb.DB.AutoMigrate(&gb28181.PlatformModel{})
+			gb.DB.AutoMigrate(&gb28181.DeviceAlarm{})
+			// 检查设备过期状态
+			if err := gb.checkDeviceExpire(); err != nil {
+				gb.Error("检查设备过期状态失败", "error", err)
+			}
 		}
 	}
 	if gb.Parent != "" {
@@ -237,6 +127,49 @@ func (gb *GB28181ProPlugin) OnInit() (err error) {
 		gb.AddTask(&client)
 	}
 	return
+}
+
+func (gb *GB28181ProPlugin) checkDeviceExpire() (err error) {
+	// 从数据库中查询所有设备
+	var devices []*Device
+	if err := gb.DB.Find(&devices).Error; err != nil {
+		gb.Error("查询设备列表失败", "error", err)
+		return err
+	}
+
+	now := time.Now()
+	for _, device := range devices {
+		// 检查设备是否过期
+		expireTime := device.RegisterTime.Add(time.Duration(device.Expires) * time.Second)
+		if now.After(expireTime) {
+			// 设备已过期，更新设备状态
+			device.Online = false
+			device.Status = "OFFLINE"
+			if err := gb.DB.Model(&Device{}).Where(&Device{ID: device.ID}).Updates(device).Error; err != nil {
+				gb.Error("更新设备状态失败", "error", err, "deviceId", device.DeviceID)
+				continue
+			}
+
+			// 更新关联的通道状态
+			var channels []gb28181.DeviceChannel
+			if err := gb.DB.Where(&gb28181.DeviceChannel{DeviceDBID: device.ID}).Find(&channels).Error; err != nil {
+				gb.Error("查询通道列表失败", "error", err, "deviceId", device.DeviceID)
+				continue
+			}
+
+			// 更新所有关联通道的状态
+			for _, channel := range channels {
+				channel.Status = "OFF"
+				if err := gb.DB.Model(&gb28181.DeviceChannel{}).Where(&gb28181.DeviceChannel{ID: channel.ID}).Updates(channel).Error; err != nil {
+					gb.Error("更新通道状态失败", "error", err, "channelId", channel.DeviceID)
+				}
+			}
+
+			gb.Info("设备已过期", "deviceId", device.DeviceID, "registerTime", device.RegisterTime, "expireTime", expireTime)
+		}
+	}
+
+	return nil
 }
 
 func (p *GB28181ProPlugin) OnPullProxyAdd(pullProxy *m7s.PullProxy) any {
@@ -276,27 +209,6 @@ func (gb *GB28181ProPlugin) OnRegister(req *sip.Request, tx sip.ServerTransactio
 	}
 	if expSec == 0 {
 		isUnregister = true
-	}
-
-	// 检查设备是否存在（通过deviceId判断）
-	if d, ok := gb.devices.Get(deviceid); ok {
-		gb.Info("OnRegister", "type", "续订", "deviceId", deviceid)
-		d.UpdateTime = time.Now()
-		d.RegisterTime = time.Now()
-		d.Expires = int(expSec)
-		d.Online = true
-		if gb.DB != nil {
-			gb.DB.Save(d) // 这里需要保留，因为这是设备续订时的状态更新
-		}
-		response := sip.NewResponseFromRequest(req, sip.StatusOK, "OK", nil)
-		response.AppendHeader(sip.NewHeader("Expires", fmt.Sprintf("%d", expSec)))
-		response.AppendHeader(sip.NewHeader("Date", time.Now().Local().Format(util.LocalTimeFormat)))
-		response.AppendHeader(sip.NewHeader("Server", "M7S/"+m7s.Version))
-		response.AppendHeader(sip.NewHeader("Allow", "INVITE,ACK,CANCEL,BYE,NOTIFY,OPTIONS,PRACK,UPDATE,REFER"))
-		if err = tx.Respond(response); err != nil {
-			gb.Error("respond OK", "error", err.Error())
-		}
-		return
 	}
 
 	// 不需要密码情况
@@ -367,21 +279,43 @@ func (gb *GB28181ProPlugin) OnRegister(req *sip.Request, tx sip.ServerTransactio
 	response.AppendHeader(sip.NewHeader("Date", time.Now().Local().Format(util.LocalTimeFormat)))
 	response.AppendHeader(sip.NewHeader("Server", "M7S/"+m7s.Version))
 	response.AppendHeader(sip.NewHeader("Allow", "INVITE,ACK,CANCEL,BYE,NOTIFY,OPTIONS,PRACK,UPDATE,REFER"))
+	hostname, portStr, _ := net.SplitHostPort(req.Source())
+	port, _ := strconv.Atoi(portStr)
+	response.AppendHeader(&sip.ContactHeader{
+		Address: sip.Uri{
+			User: deviceid,
+			Host: hostname,
+			Port: port,
+		},
+	})
 	if err = tx.Respond(response); err != nil {
 		gb.Error("respond OK", "error", err.Error())
 	}
-	if isUnregister {
+	if isUnregister { //取消绑定操作
 		if d, ok := gb.devices.Get(deviceid); ok {
 			d.Online = false
+			d.Status = DeviceOfflineStatus
 			if gb.DB != nil {
+				// 更新设备状态
+				var dbDevice Device
+				if err := gb.DB.First(&dbDevice, Device{DeviceID: deviceid}).Error; err == nil {
+					d.ID = dbDevice.ID
+				}
 				gb.DB.Save(d)
+
+				// 批量更新关联的通道状态
+				if err := gb.DB.Model(&gb28181.DeviceChannel{}).Where(&gb28181.DeviceChannel{DeviceDBID: d.ID}).Update("status", "OFF").Error; err != nil {
+					gb.Error("更新通道状态失败", "error", err, "deviceId", d.DeviceID)
+				} else {
+					gb.Info("更新通道状态成功", "deviceId", d.DeviceID)
+				}
 			}
 			d.Stop(errors.New("unregister"))
 		}
 	} else {
 		if d, ok := gb.devices.Get(deviceid); ok {
-			gb.RecoverDevice(d, req)
 			d.Online = true
+			gb.RecoverDevice(d, req)
 		} else {
 			gb.StoreDevice(deviceid, req)
 		}
@@ -403,15 +337,6 @@ func (gb *GB28181ProPlugin) OnMessage(req *sip.Request, tx sip.ServerTransaction
 
 	// 先从设备缓存中获取
 	if d, ok = gb.devices.Get(id); !ok {
-		// 如果内存中没有，尝试从数据库查找
-		if gb.DB != nil {
-			var device Device
-			if err := gb.DB.First(&device, Device{DeviceID: id}).Error; err == nil {
-				d = &device
-			}
-		}
-		gb.RecoverDevice(d, req)
-		// 如果设备不存在，直接返回404
 		if d == nil {
 			gb.Error("OnMessage", "error", "device not found", "DeviceID", id)
 			response := sip.NewResponseFromRequest(req, sip.StatusNotFound, "Not Found", nil)
@@ -516,7 +441,6 @@ func (gb *GB28181ProPlugin) RecoverDevice(d *Device, req *sip.Request) {
 		Port: port,
 		User: from.Address.User,
 	}
-
 	// 设置 contactHDR
 	d.contactHDR = sip.ContactHeader{
 		Address: sip.Uri{
@@ -526,28 +450,22 @@ func (gb *GB28181ProPlugin) RecoverDevice(d *Device, req *sip.Request) {
 		},
 	}
 
-	// 设置 fromHDR
-	d.fromHDR = sip.FromHeader{
-		Address: sip.Uri{
-			User: gb.Serial,
-			Host: gb.Realm,
-		},
-		Params: sip.NewParams(),
-	}
-	d.fromHDR.Params.Add("tag", sip.GenerateTagN(16))
-
-	// 初始化日志
-	d.Logger = gb.With("id", d.DeviceID)
-
-	// 初始化 SIP 客户端
-	d.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(host))
-	d.dialogClient = sipgo.NewDialogClient(d.client, d.contactHDR)
-
 	d.StartTime = time.Now()
 	d.Status = DeviceRecoverStatus
 	d.UpdateTime = time.Now()
-	d.plugin = gb
-	gb.devices.Add(d)
+	d.Online = true
+
+	if gb.DB != nil {
+		var existing Device
+		if err := gb.DB.First(&existing, Device{DeviceID: d.DeviceID}).Error; err == nil {
+			d.ID = existing.ID // 保持原有的自增ID
+			gb.Info("RecoverDevice", "type", "更新设备", "deviceId", d.DeviceID)
+		} else {
+			gb.Info("RecoverDevice", "type", "新增设备", "deviceId", d.DeviceID)
+		}
+		gb.DB.Save(d)
+	}
+	return
 }
 
 func (gb *GB28181ProPlugin) StoreDevice(deviceid string, req *sip.Request) (d *Device) {
@@ -591,24 +509,23 @@ func (gb *GB28181ProPlugin) StoreDevice(deviceid string, req *sip.Request) (d *D
 
 	now := time.Now()
 	d = &Device{
-		DeviceID:      deviceid,
-		CreateTime:    now,
-		UpdateTime:    now,
-		RegisterTime:  now,
-		Status:        DeviceRegisterStatus,
-		Online:        true,
-		StreamMode:    "UDP",           // 默认UDP传输
-		Charset:       "GB2312",        // 默认GB2312字符集
-		GeoCoordSys:   "WGS84",         // 默认WGS84坐标系
-		MediaServerID: "auto",          // 默认auto
-		Transport:     req.Transport(), // 传输协议
-		IP:            hostname,
-		Port:          port,
-		HostAddress:   hostname + ":" + portStr,
-		LocalIP:       host,
-		mediaIp:       host,
-		Expires:       int(expSec),
-		eventChan:     make(chan any, 10),
+		DeviceID:     deviceid,
+		CreateTime:   now,
+		UpdateTime:   now,
+		RegisterTime: now,
+		Status:       DeviceRegisterStatus,
+		Online:       true,
+		StreamMode:   "UDP",           // 默认UDP传输
+		Charset:      "GB2312",        // 默认GB2312字符集
+		GeoCoordSys:  "WGS84",         // 默认WGS84坐标系
+		Transport:    req.Transport(), // 传输协议
+		IP:           hostname,
+		Port:         port,
+		HostAddress:  hostname + ":" + portStr,
+		LocalIP:      host,
+		mediaIp:      host,
+		Expires:      int(expSec),
+		eventChan:    make(chan any, 10),
 		Recipient: sip.Uri{
 			Host: hostname,
 			Port: port,
@@ -658,7 +575,8 @@ func (gb *GB28181ProPlugin) StoreDevice(deviceid string, req *sip.Request) (d *D
 			}
 			if gb.AutoInvite {
 				gb.Pull(fmt.Sprintf("%s/%s", d.DeviceID, c.DeviceID), config.Pull{
-					URL: fmt.Sprintf("%s/%s", d.DeviceID, c.DeviceID),
+					MaxRetry: 0,
+					URL:      fmt.Sprintf("%s/%s", d.DeviceID, c.DeviceID),
 				}, nil)
 			}
 		})

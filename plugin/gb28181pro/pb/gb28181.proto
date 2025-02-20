@@ -14,7 +14,7 @@ message BaseResponse {
 
 service api {
   // 获取设备列表
-  rpc List (google.protobuf.Empty) returns (ResponseList) {
+  rpc List (GetDevicesRequest) returns (DevicesPageInfo) {
     option (google.api.http) = {
       get: "/gb28181/api/list"
     };
@@ -233,6 +233,167 @@ service api {
   rpc QueryRecord (QueryRecordRequest) returns (QueryRecordResponse) {
     option (google.api.http) = {
       get: "/gb28181/api/gbrecord/query/{deviceId}/{channelId}"
+    };
+  }
+
+  // PTZ 通用控制命令
+  rpc FrontEndCommand (FrontEndCommandRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/front-end/{deviceId}/{channelId}"
+    };
+  }
+
+  // PTZ 云台控制
+  rpc PtzControl (PtzControlRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/ptz/{deviceId}/{channelId}"
+    };
+  }
+
+  // 光圈控制
+  rpc IrisControl (IrisControlRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/fi/iris/{deviceId}/{channelId}"
+    };
+  }
+
+  // 聚焦控制
+  rpc FocusControl (FocusControlRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/fi/focus/{deviceId}/{channelId}"
+    };
+  }
+
+  // 查询预置位
+  rpc QueryPreset (PresetRequest) returns (PresetResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/preset/query/{deviceId}/{channelId}"
+    };
+  }
+
+  // 设置预置位
+  rpc AddPreset (PresetRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/preset/add/{deviceId}/{channelId}"
+    };
+  }
+
+  // 调用预置位
+  rpc CallPreset (PresetRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/preset/call/{deviceId}/{channelId}"
+    };
+  }
+
+  // 删除预置位
+  rpc DeletePreset (PresetRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/preset/delete/{deviceId}/{channelId}"
+    };
+  }
+
+  // 巡航点控制 - 添加巡航点
+  rpc AddCruisePoint (CruisePointRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/cruise/point/add/{deviceId}/{channelId}"
+    };
+  }
+
+  // 巡航点控制 - 删除巡航点
+  rpc DeleteCruisePoint (CruisePointRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/cruise/point/delete/{deviceId}/{channelId}"
+    };
+  }
+
+  // 设置巡航速度
+  rpc SetCruiseSpeed (CruiseSpeedRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/cruise/speed/{deviceId}/{channelId}"
+    };
+  }
+
+  // 设置巡航停留时间
+  rpc SetCruiseTime (CruiseTimeRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/cruise/time/{deviceId}/{channelId}"
+    };
+  }
+
+  // 开始巡航
+  rpc StartCruise (CruiseRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/cruise/start/{deviceId}/{channelId}"
+    };
+  }
+
+  // 停止巡航
+  rpc StopCruise (CruiseRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/cruise/stop/{deviceId}/{channelId}"
+    };
+  }
+
+  // 开始自动扫描
+  rpc StartScan (ScanRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/scan/start/{deviceId}/{channelId}"
+    };
+  }
+
+  // 停止自动扫描
+  rpc StopScan (ScanRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/scan/stop/{deviceId}/{channelId}"
+    };
+  }
+
+  // 设置自动扫描左边界
+  rpc SetScanLeft (ScanRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/scan/set/left/{deviceId}/{channelId}"
+    };
+  }
+
+  // 设置自动扫描右边界
+  rpc SetScanRight (ScanRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/scan/set/right/{deviceId}/{channelId}"
+    };
+  }
+
+  // 设置自动扫描速度
+  rpc SetScanSpeed (ScanSpeedRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/scan/set/speed/{deviceId}/{channelId}"
+    };
+  }
+
+  // 雨刷控制
+  rpc WiperControl (WiperControlRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/wiper/{deviceId}/{channelId}"
+    };
+  }
+
+  // 辅助开关控制
+  rpc AuxiliaryControl (AuxiliaryControlRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/auxiliary/{deviceId}/{channelId}"
+    };
+  }
+
+  // 测试SIP连接
+  rpc TestSip (TestSipRequest) returns (TestSipResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/testsip"
+    };
+  }
+
+  // 分页查询报警记录
+  rpc SearchAlarms (SearchAlarmsRequest) returns (SearchAlarmsResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/alarms/{deviceId}"
     };
   }
 }
@@ -598,4 +759,150 @@ message RecordItem {
   int32 secrecy = 7;
   string type = 8;
   string recorderId = 9;
+}
+
+// PTZ 相关消息定义
+message FrontEndCommandRequest {
+  string deviceId = 1;
+  string channelId = 2;
+  int32 cmdCode = 3;
+  int32 parameter1 = 4;
+  int32 parameter2 = 5;
+  int32 combindCode2 = 6;
+}
+
+message PtzControlRequest {
+  string deviceId = 1;
+  string channelId = 2;
+  string command = 3;  // left, right, up, down, upleft, upright, downleft, downright, zoomin, zoomout, stop
+  int32 horizonSpeed = 4;  // 0-255
+  int32 verticalSpeed = 5; // 0-255
+  int32 zoomSpeed = 6;     // 0-16
+}
+
+message IrisControlRequest {
+  string deviceId = 1;
+  string channelId = 2;
+  string command = 3;  // in, out, stop
+  int32 speed = 4;     // 0-255
+}
+
+message FocusControlRequest {
+  string deviceId = 1;
+  string channelId = 2;
+  string command = 3;  // near, far, stop
+  int32 speed = 4;     // 0-255
+}
+
+message PresetRequest {
+  string deviceId = 1;
+  string channelId = 2;
+  int32 presetId = 3;  // 1-255
+}
+
+message PresetResponse {
+  int32 code = 1;
+  string message = 2;
+  string data = 3;
+}
+
+message CruisePointRequest {
+  string deviceId = 1;
+  string channelId = 2;
+  int32 cruiseId = 3;   // 0-255
+  int32 presetId = 4;   // 1-255
+}
+
+message CruiseSpeedRequest {
+  string deviceId = 1;
+  string channelId = 2;
+  int32 cruiseId = 3;   // 0-255
+  int32 speed = 4;      // 1-4095
+}
+
+message CruiseTimeRequest {
+  string deviceId = 1;
+  string channelId = 2;
+  int32 cruiseId = 3;   // 0-255
+  int32 time = 4;       // 1-4095
+}
+
+message CruiseRequest {
+  string deviceId = 1;
+  string channelId = 2;
+  int32 cruiseId = 3;   // 0-255
+}
+
+message ScanRequest {
+  string deviceId = 1;
+  string channelId = 2;
+  int32 scanId = 3;     // 0-255
+}
+
+message ScanSpeedRequest {
+  string deviceId = 1;
+  string channelId = 2;
+  int32 scanId = 3;     // 0-255
+  int32 speed = 4;      // 1-4095
+}
+
+message WiperControlRequest {
+  string deviceId = 1;
+  string channelId = 2;
+  string command = 3;   // on, off
+}
+
+message AuxiliaryControlRequest {
+  string deviceId = 1;
+  string channelId = 2;
+  string command = 3;   // on, off
+  int32 switchId = 4;
+}
+
+// 测试SIP连接的消息定义
+message TestSipRequest {
+  string testParam = 1;  // 测试参数
+}
+
+message TestSipResponse {
+  int32 code = 1;        // 响应代码
+  string message = 2;    // 响应消息
+  string testResult = 3; // 测试结果
+}
+
+// 报警记录查询请求
+message SearchAlarmsRequest {
+  string deviceId = 1;           // 设备ID，可选
+  string start = 2;              // 开始时间
+  string end = 3;                // 结束时间
+  string range = 4;              // 时间范围，可选
+  int32 page = 5;               // 页码，从1开始
+  int32 count = 6;              // 每页大小
+}
+
+// 报警记录查询响应
+message SearchAlarmsResponse {
+  int32 code = 1;               // 响应代码
+  string message = 2;           // 响应消息
+  int32 total = 3;              // 总记录数
+  repeated AlarmRecord list = 4; // 报警记录列表
+}
+
+// 报警记录详情
+message AlarmRecord {
+  string id = 1;                // 报警记录ID
+  string deviceId = 2;          // 设备ID
+  string deviceName = 3;        // 设备名称
+  string channelId = 4;         // 通道ID
+  string alarmPriority = 5;     // 报警级别
+  string alarmMethod = 6;       // 报警方式
+  string alarmTime = 7;         // 报警时间
+  string alarmDescription = 8;  // 报警描述
+  double longitude = 9;         // 经度
+  double latitude = 10;         // 纬度
+  string alarmType = 11;        // 报警类型
+  string createTime = 12;       // 创建时间
+  string alarmPriorityDesc = 13;// 报警级别描述
+  string alarmMethodDesc = 14;  // 报警方式描述
+  string alarmTypeDesc = 15;    // 报警类型描述
 }

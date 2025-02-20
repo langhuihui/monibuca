@@ -111,22 +111,29 @@ func BuildKeepAliveXML(sn int, id string) []byte {
 
 type (
 	Message struct {
-		XMLName      xml.Name
-		CmdType      string
-		SN           int // 请求序列号，一般用于对应 request 和 response
-		DeviceID     string
-		DeviceName   string
-		Manufacturer string
-		Model        string
-		Channel      string
-		DeviceList   []DeviceChannel `xml:"DeviceList>Item"`
-		RecordList   struct {
+		XMLName           xml.Name
+		CmdType           string
+		SN                int // 请求序列号，一般用于对应 request 和 response
+		DeviceID          string
+		DeviceName        string
+		Manufacturer      string
+		Model             string
+		Channel           string
+		DeviceChannelList []DeviceChannel `xml:"DeviceList>Item"`
+		RecordList        struct {
 			Num  int          `xml:"Num,attr"`
 			Item []RecordItem `xml:"Item"`
 		} `xml:"RecordList"`
 		SumNum   int       // 录像结果的总数 SumNum，录像结果会按照多条消息返回，可用于判断是否全部返回
 		Name     string    // 设备/通道名称
 		LastTime time.Time `xml:"LastTime"` // 最后时间
+		// 报警相关字段
+		AlarmPriority string `xml:"AlarmPriority"` // 报警级别
+		AlarmMethod   string `xml:"AlarmMethod"`   // 报警方式
+		AlarmTime     string `xml:"AlarmTime"`     // 报警时间
+		Info          struct {
+			AlarmType string `xml:"AlarmType"` // 报警类型
+		} `xml:"Info"`
 	}
 )
 

@@ -491,9 +491,9 @@ func (p *Platform) sendCatalogResponse(req *sip.Request, sn string, fromTag stri
 <Response>
 <CmdType>Catalog</CmdType>
 <SN>%s</SN>
-<DeviceList Num="%d">
+<DeviceChannelList Num="%d">
 %s
-</DeviceList>
+</DeviceChannelList>
 </Response>`, sn, len(channels), p.buildChannelList(channels))))
 	_, err := p.Client.Do(p, request)
 	return err
@@ -513,8 +513,8 @@ func (p *Platform) sendEmptyCatalogResponse(req *sip.Request, sn string, fromTag
 <Response>
 <CmdType>Catalog</CmdType>
 <SN>%s</SN>
-<DeviceList Num="0">
-</DeviceList>
+<DeviceChannelList Num="0">
+</DeviceChannelList>
 </Response>`, sn)))
 	_, err := p.Client.Do(p, request)
 	return err
@@ -645,4 +645,9 @@ func (p *Platform) buildChannelList(channels []gb28181.CommonGBChannel) string {
 		content += channel.GetFullContent(channel.StreamID, channel.StreamID, p.PlatformModel.DeviceGBID, "Catalog")
 	}
 	return content
+}
+
+// GetKey 返回平台的唯一标识符
+func (p *Platform) GetKey() string {
+	return p.PlatformModel.ServerGBID
 }
