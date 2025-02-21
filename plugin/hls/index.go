@@ -76,13 +76,8 @@ func (config *HLSPlugin) vod(w http.ResponseWriter, r *http.Request) {
 		if !startTime.IsZero() {
 			if config.DB != nil {
 				var records []m7s.RecordStream
-				if endTime.IsZero() {
-					query := `stream_path = ? AND type = ? AND start_time IS NOT NULL AND end_time > ?`
-					config.DB.Where(query, streamPath, recordType, startTime).Find(&records)
-				} else {
-					query := `stream_path = ? AND type = ? AND start_time IS NOT NULL AND end_time IS NOT NULL AND ? <= end_time AND ? >= start_time`
-					config.DB.Where(query, streamPath, recordType, startTime, endTime).Find(&records)
-				}
+				query := `stream_path = ? AND type = ? AND start_time IS NOT NULL AND end_time IS NOT NULL AND ? <= end_time AND ? >= start_time`
+				config.DB.Where(query, streamPath, recordType, startTime, endTime).Find(&records)
 				if len(records) > 0 {
 					playlist := hls.Playlist{
 						Version:        7,

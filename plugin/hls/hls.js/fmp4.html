@@ -80,8 +80,13 @@
 
 <body>
   <div class="input-container">
-    <input type="text" id="m3u8Url" placeholder="输入 M3U8 地址">
+    <input type="text" id="m3u8Url" placeholder="输入 M3U8 地址"
+      value="http://localhost:8080/hls/vod/fmp4.m3u8?start=1740116409&streamPath=live/test">
     <button onclick="loadM3U8()">加载 M3U8</button>
+
+    <div id="m3u8Content"
+      style="margin: 10px 0; padding: 10px; background-color: #f0f0f0; border: 1px solid #ddd; font-family: monospace; white-space: pre; max-height: 200px; overflow-y: auto;">
+    </div>
 
     <input type="text" id="fmp4Url" placeholder="输入 FMP4 地址">
     <button onclick="testFMP4()">测试 FMP4</button>
@@ -90,8 +95,8 @@
     <button onclick="connectWebSocket()">连接 WebSocket</button>
 
     <div style="margin: 10px 0;">
-      <label for="bufferCount">缓存包数量: <span id="bufferCountValue">10</span></label>
-      <input type="range" id="bufferCount" min="1" max="50" value="10" style="width: 200px; margin-left: 10px;">
+      <label for="bufferCount">缓存包数量: <span id="bufferCountValue">1</span></label>
+      <input type="range" id="bufferCount" min="1" max="50" value="1" style="width: 200px; margin-left: 10px;">
     </div>
 
     <div class="drop-zone" id="dropZone">
@@ -659,6 +664,131 @@
         await msePlayer.appendBuffer(buffer);
       } catch (error) {
         log(`处理本地文件失败: ${error.message}`);
+      }
+    }
+
+    // M3U8 handling
+    async function loadM3U8() {
+      const m3u8Url = document.getElementById('m3u8Url').value;
+      if (!m3u8Url) {
+        alert('请输入 M3U8 地址');
+        return;
+      }
+
+      try {
+        log(`开始加载 M3U8: ${m3u8Url}`);
+        const response = await fetch(m3u8Url);
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const content = await response.text();
+
+        // 显示 M3U8 内容
+        const m3u8ContentDiv = document.getElementById('m3u8Content');
+        m3u8ContentDiv.textContent = content;
+
+        const mp4Urls = parseM3U8(content, m3u8Url);
+        log(`解析到 ${mp4Urls.length} 个 MP4 文件`);
+
+        if (mp4Urls.length === 0) {
+          alert('未找到可播放的 MP4 文件');
+          return;
+        }
+
+        currentPlaylist = mp4Urls;
+        currentIndex = 0;
+        await initPlayer();
+        await loadNextSegment();
+      } catch (error) {
+        log(`加载 M3U8 文件失败: ${error.message}`);
+        alert('加载 M3U8 文件失败');
+      }
+    }
+
+    function parseM3U8(content, baseUrl) {
+      const lines = content.split('\n');
+      const mp4Urls = [];
+      let duration = 0;
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+
+        // 解析 EXTINF 获取时长
+        if (line.startsWith('#EXTINF:')) {
+          duration = parseFloat(line.split(':')[1]);
+          continue;
+        }
+
+        // 跳过注释和空行
+        if (line === '' || line.startsWith('#')) {
+          continue;
+        }
+
+        // 处理 MP4 文件 URL
+        if (line.toLowerCase().endsWith('.mp4') || line.toLowerCase().endsWith('.fmp4')) {
+          const url = line.startsWith('http') ? line : new URL(line, baseUrl).href;
+          mp4Urls.push({
+            url,
+            duration
+          });
+          log(`找到 MP4: ${url} (时长: ${duration}秒)`);
+        }
+      }
+
+      return mp4Urls;
+    }
+
+    async function loadNextSegment() {
+      if (currentIndex >= currentPlaylist.length) {
+        if (msePlayer.mediaSource.readyState === 'open') {
+          msePlayer.mediaSource.endOfStream();
+          log('已到达播放列表末尾');
+        }
+        return;
+      }
+
+      try {
+        const segment = currentPlaylist[currentIndex];
+        log(`加载视频片段 ${currentIndex + 1}/${currentPlaylist.length}`);
+        const response = await fetch(segment.url);
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const buffer = await response.arrayBuffer();
+        log(`视频片段 ${currentIndex + 1} 加载完成，大小: ${buffer.byteLength} 字节`);
+        await msePlayer.appendBuffer(buffer);
+
+        // 预加载下一个片段
+        if (currentIndex < currentPlaylist.length - 1 && msePlayer.pendingBuffers.length < 2) {
+          currentIndex++;
+          loadNextSegment();
+        }
+      } catch (error) {
+        log(`加载视频片段失败: ${error.message}`);
+      }
+    }
+
+    // FMP4 testing
+    async function testFMP4() {
+      const fmp4Url = document.getElementById('fmp4Url').value;
+      if (!fmp4Url) {
+        alert('请输入 FMP4 地址');
+        return;
+      }
+
+      try {
+        log(`开始测试 FMP4: ${fmp4Url}`);
+        await initPlayer();
+
+        const response = await fetch(fmp4Url);
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const buffer = await response.arrayBuffer();
+        log(`FMP4 文件加载完成，大小: ${buffer.byteLength} 字节`);
+        await msePlayer.appendBuffer(buffer);
+      } catch (error) {
+        log(`加载 FMP4 文件失败: ${error.message}`);
       }
     }
 

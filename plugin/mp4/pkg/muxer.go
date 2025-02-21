@@ -54,14 +54,15 @@ func NewMuxer(flag Flag) *Muxer {
 	}
 }
 
-func (m *Muxer) WriteInitSegment(w io.Writer) (err error) {
-	var ftypBox *FileTypeBox
+func (m *Muxer) CreateFTYPBox() *FileTypeBox {
 	if m.isFragment() {
-		ftypBox = CreateFTYPBox(TypeISOM, 1, TypeISOM, TypeAVC1)
-	} else {
-		ftypBox = CreateFTYPBox(TypeISOM, 0x200, TypeISOM, TypeISO2, TypeAVC1, TypeMP41)
+		return CreateFTYPBox(TypeISOM, 1, TypeISOM, TypeAVC1)
 	}
-	m.CurrentOffset, err = WriteTo(w, ftypBox)
+	return CreateFTYPBox(TypeISOM, 0x200, TypeISOM, TypeISO2, TypeAVC1, TypeMP41)
+}
+
+func (m *Muxer) WriteInitSegment(w io.Writer) (err error) {
+	m.CurrentOffset, err = WriteTo(w, m.CreateFTYPBox())
 	if err != nil {
 		return
 	}
@@ -92,7 +93,7 @@ func (m *Muxer) AddTrack(cid MP4_CODEC_TYPE) *Track {
 		Timescale: 1000,
 	}
 	if m.isFragment() || m.isDash() {
-		track.writer = NewFmp4WriterSeeker(1024 * 1024)
+		// track.writer = NewFmp4WriterSeeker(1024 * 1024)
 		track.isFragment = true
 	}
 	m.Tracks[m.nextTrackId] = track
@@ -100,32 +101,47 @@ func (m *Muxer) AddTrack(cid MP4_CODEC_TYPE) *Track {
 	return track
 }
 
+func (m *Muxer) CreateFlagment(t *Track, sample Sample) (moof IBox, mdat IBox) {
+	sample.Size = len(sample.Data)
+	if len(t.Samplelist) > 0 {
+		lastSample := &t.Samplelist[0]
+		lastSample.Duration = sample.Timestamp - lastSample.Timestamp
+		m.nextFragmentId++
+		// Create moof box for this track
+		moof = t.MakeMoof(m.nextFragmentId)
+		// Create mdat box for this track
+		mdat = CreateDataBox(TypeMDAT, lastSample.Data)
+
+		moofOffset := m.CurrentOffset
+		m.CurrentOffset += int64(moof.Size() + mdat.Size())
+		t.fragments = append(t.fragments, Fragment{
+			Offset:   uint64(moofOffset),
+			Duration: lastSample.Duration,
+			FirstTs:  uint64(lastSample.Timestamp),
+			LastTs:   uint64(sample.Timestamp),
+		})
+		t.Samplelist[0] = sample
+	} else {
+		t.Samplelist = append(t.Samplelist, sample)
+	}
+	return
+}
+
 func (m *Muxer) WriteSample(w io.Writer, t *Track, sample Sample) (err error) {
 	if m.isFragment() {
-		// For fragmented MP4, write to track's buffer
-		if sample.Offset, err = t.writer.Seek(0, io.SeekCurrent); err != nil {
-			return
-		}
-		if sample.Size, err = t.writer.Write(sample.Data); err != nil {
-			return
-		}
-		defer func() {
-			// For fragmented MP4, check if we should create a new fragment
-			// if sample.KeyFrame && t.Duration >= m.fragDuration {
-			err = m.flushFragment(w)
-			// }
-		}()
-	} else {
-		// For regular MP4, write directly to output
-		sample.Offset = m.CurrentOffset
-		sample.Size, err = w.Write(sample.Data)
-		if err != nil {
-			return
-		}
-		m.CurrentOffset += int64(sample.Size)
+		moof, mdat := m.CreateFlagment(t, sample)
+		_, err = WriteTo(w, moof, mdat)
+		return
 	}
-	sample.Data = nil
+	// For regular MP4, write directly to output
+	sample.Offset = m.CurrentOffset
+	sample.Size, err = w.Write(sample.Data)
+	if err != nil {
+		return
+	}
+	m.CurrentOffset += int64(sample.Size)
 	t.AddSampleEntry(sample)
+	sample.Data = nil
 	return
 }
 
@@ -212,9 +228,8 @@ func (m *Muxer) MakeMoov() IBox {
 }
 
 func (m *Muxer) WriteMoov(w io.Writer) (err error) {
-	m.MakeMoov()
 	var n int64
-	n, err = WriteTo(w, m.moov)
+	n, err = WriteTo(w, m.MakeMoov())
 	m.CurrentOffset += n
 	return
 }
@@ -222,9 +237,9 @@ func (m *Muxer) WriteMoov(w io.Writer) (err error) {
 func (m *Muxer) WriteTrailer(file *os.File) (err error) {
 	if m.isFragment() {
 		// Flush any remaining samples
-		if err = m.flushFragment(file); err != nil {
-			return err
-		}
+		// if err = m.flushFragment(file); err != nil {
+		// 	return err
+		// }
 		var mfraChildren []IBox
 		var mfraSize uint32 = 0
 		// Write mfra box
@@ -247,13 +262,13 @@ func (m *Muxer) WriteTrailer(file *os.File) (err error) {
 			}
 		}
 		// Clean up any remaining buffers
-		for i := uint32(1); i < m.nextTrackId; i++ {
-			if track := m.Tracks[i]; track != nil && track.writer != nil {
-				if ws, ok := track.writer.(*Fmp4WriterSeeker); ok {
-					ws.Buffer = nil
-				}
-			}
-		}
+		// for i := uint32(1); i < m.nextTrackId; i++ {
+		// 	if track := m.Tracks[i]; track != nil && track.writer != nil {
+		// 		if ws, ok := track.writer.(*Fmp4WriterSeeker); ok {
+		// 			ws.Buffer = nil
+		// 		}
+		// 	}
+		// }
 	} else {
 		if err = m.reWriteMdatSize(file); err != nil {
 			return err
@@ -263,72 +278,72 @@ func (m *Muxer) WriteTrailer(file *os.File) (err error) {
 	return nil
 }
 
-func (m *Muxer) flushFragment(w io.Writer) (err error) {
-	// Check if there are any samples to write
-	hasSamples := false
-	for i := uint32(1); i < m.nextTrackId; i++ {
-		if len(m.Tracks[i].Samplelist) > 0 {
-			hasSamples = true
-			break
-		}
-	}
-	if !hasSamples {
-		return nil
-	}
+// func (m *Muxer) flushFragment(w io.Writer) (err error) {
+// 	// Check if there are any samples to write
+// 	hasSamples := false
+// 	for i := uint32(1); i < m.nextTrackId; i++ {
+// 		if len(m.Tracks[i].Samplelist) > 0 {
+// 			hasSamples = true
+// 			break
+// 		}
+// 	}
+// 	if !hasSamples {
+// 		return nil
+// 	}
 
-	// Write moov box if not written yet
-	if m.moov == nil {
-		if err = m.WriteMoov(w); err != nil {
-			return err
-		}
-	}
+// 	// Write moov box if not written yet
+// 	if m.moov == nil {
+// 		if err = m.WriteMoov(w); err != nil {
+// 			return err
+// 		}
+// 	}
 
-	// Process each track separately
-	for i := uint32(1); i < m.nextTrackId; i++ {
-		track := m.Tracks[i]
-		if len(track.Samplelist) == 0 {
-			continue
-		}
+// 	// Process each track separately
+// 	for i := uint32(1); i < m.nextTrackId; i++ {
+// 		track := m.Tracks[i]
+// 		if len(track.Samplelist) == 0 {
+// 			continue
+// 		}
 
-		ws := track.writer.(*Fmp4WriterSeeker)
+// 		ws := track.writer.(*Fmp4WriterSeeker)
 
-		// Create moof box for this track
-		moof := track.MakeMoof(m.nextFragmentId)
+// 		// Create moof box for this track
+// 		moof := track.MakeMoof(m.nextFragmentId)
 
-		// Create mdat box for this track
-		mdat := CreateDataBox(TypeMDAT, ws.Buffer)
+// 		// Create mdat box for this track
+// 		mdat := CreateDataBox(TypeMDAT, ws.Buffer)
 
-		// Write moof box
-		var n int64
-		n, err = WriteTo(w, moof, mdat)
-		if err != nil {
-			return err
-		}
-		m.CurrentOffset += n
+// 		// Write moof box
+// 		var n int64
+// 		n, err = WriteTo(w, moof, mdat)
+// 		if err != nil {
+// 			return err
+// 		}
+// 		m.CurrentOffset += n
 
-		// Record fragment info
-		if len(track.Samplelist) > 0 {
-			firstTs := track.Samplelist[0].Timestamp
-			lastTs := track.Samplelist[len(track.Samplelist)-1].Timestamp
-			frag := Fragment{
-				Offset:   uint64(int64(moof.Size()) + int64(mdat.HeaderSize())), // Start of moof
-				Duration: track.Duration,
-				FirstTs:  uint64(firstTs),
-				LastTs:   uint64(lastTs),
-			}
-			track.fragments = append(track.fragments, frag)
-		}
+// 		// Record fragment info
+// 		if len(track.Samplelist) > 0 {
+// 			firstTs := track.Samplelist[0].Timestamp
+// 			lastTs := track.Samplelist[len(track.Samplelist)-1].Timestamp
+// 			frag := Fragment{
+// 				Offset:   uint64(int64(moof.Size()) + int64(mdat.HeaderSize())), // Start of moof
+// 				Duration: track.Duration,
+// 				FirstTs:  uint64(firstTs),
+// 				LastTs:   uint64(lastTs),
+// 			}
+// 			track.fragments = append(track.fragments, frag)
+// 		}
 
-		// Clear track buffers
-		ws.Buffer = ws.Buffer[:0]
-		ws.Offset = 0
-		track.Samplelist = track.Samplelist[:0]
-		track.Duration = 0
-	}
+// 		// Clear track buffers
+// 		ws.Buffer = ws.Buffer[:0]
+// 		ws.Offset = 0
+// 		track.Samplelist = track.Samplelist[:0]
+// 		track.Duration = 0
+// 	}
 
-	m.nextFragmentId++
-	return nil
-}
+// 	m.nextFragmentId++
+// 	return nil
+// }
 
 // SetFragmentDuration sets the target duration for each fragment in milliseconds
 func (m *Muxer) SetFragmentDuration(duration uint32) {

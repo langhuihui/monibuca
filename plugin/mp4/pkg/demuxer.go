@@ -126,7 +126,6 @@ func (d *Demuxer) Demux() (err error) {
 				track.Duration = uint32(trak.TKHD.Duration)
 				track.Timescale = trak.MDIA.MDHD.Timescale
 				track.Samplelist = trak.ParseSamples()
-				track.ELST = trak.EDTS.Elst
 				if len(trak.MDIA.MINF.STBL.STSD.Entries) > 0 {
 					entryBox := trak.MDIA.MINF.STBL.STSD.Entries[0]
 					switch entry := entryBox.(type) {
@@ -141,6 +140,9 @@ func (d *Demuxer) Demux() (err error) {
 						case TypeOPUS:
 							track.Cid = MP4_CODEC_OPUS
 						}
+						track.SampleRate = entry.Samplerate
+						track.ChannelCount = uint8(entry.ChannelCount)
+						track.SampleSize = entry.SampleSize
 						switch extra := entry.ExtraData.(type) {
 						case *ESDSBox:
 							track.Cid, track.ExtraData = DecodeESDescriptor(extra.Data)
@@ -153,6 +155,8 @@ func (d *Demuxer) Demux() (err error) {
 						case TypeHVCC:
 							track.Cid = MP4_CODEC_H265
 						}
+						track.Width = uint32(entry.Width)
+						track.Height = uint32(entry.Height)
 					}
 				}
 				d.Tracks = append(d.Tracks, track)

@@ -1,7 +1,6 @@
 package mp4
 
 import (
-	"io"
 	"slices"
 
 	. "m7s.live/v5/plugin/mp4/pkg/box"
@@ -25,9 +24,7 @@ type (
 		// StartPts        uint64
 		// EndPts          uint64
 		Samplelist      []Sample
-		ELST            *EditListBox
 		ExtraData       []byte
-		writer          io.WriteSeeker
 		isFragment      bool
 		fragments       []Fragment
 		defaultSize     uint32

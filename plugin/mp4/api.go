@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 	"unsafe"
 
@@ -24,8 +25,9 @@ import (
 
 type ContentPart struct {
 	*os.File
-	Start int64
-	Size  int
+	Start  int64
+	Size   int
+	boxies []box.IBox
 }
 
 func (p *MP4Plugin) download(w http.ResponseWriter, r *http.Request) {
@@ -35,7 +37,13 @@ func (p *MP4Plugin) download(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "video/mp4")
 	streamPath := r.PathValue("streamPath")
-
+	var flag mp4.Flag
+	if strings.HasSuffix(streamPath, ".fmp4") {
+		flag = mp4.FLAG_FRAGMENT
+		streamPath = strings.TrimSuffix(streamPath, ".fmp4")
+	} else {
+		streamPath = strings.TrimSuffix(streamPath, ".mp4")
+	}
 	query := r.URL.Query()
 	var streams []m7s.RecordStream
 	if id := query.Get("id"); id != "" {
@@ -59,18 +67,20 @@ func (p *MP4Plugin) download(w http.ResponseWriter, r *http.Request) {
 
 	queryRecord := m7s.RecordStream{
 		Mode: m7s.RecordModeAuto,
+		Type: "mp4",
 	}
 	p.DB.Where(&queryRecord).Find(&streams, "end_time>? AND start_time<? AND stream_path=?", startTime, endTime, streamPath)
-	muxer := mp4.NewMuxer(0)
-	ftyp := box.CreateFTYPBox(box.TypeISOM, 0x200, box.TypeISOM, box.TypeISO2, box.TypeAVC1, box.TypeMP41)
+	muxer := mp4.NewMuxer(flag)
+	ftyp := muxer.CreateFTYPBox()
 	n := ftyp.Size()
 	muxer.CurrentOffset = int64(n)
 	var lastTs, tsOffset int64
 	var parts []*ContentPart
-	sampleOffset := muxer.CurrentOffset + box.BasicBoxLen*2
+	sampleOffset := muxer.CurrentOffset + mp4.BeforeMdatData
 	mdatOffset := sampleOffset
 	var audioTrack, videoTrack *mp4.Track
 	var file *os.File
+	var moov box.IBox
 	streamCount := len(streams)
 	for i, stream := range streams {
 		tsOffset = lastTs
@@ -99,6 +109,9 @@ func (p *MP4Plugin) download(w http.ResponseWriter, r *http.Request) {
 					t.Height = track.Height
 				}
 			}
+			if flag == mp4.FLAG_FRAGMENT {
+				moov = muxer.MakeMoov()
+			}
 			startTimestamp := startTime.Sub(stream.StartTime).Milliseconds()
 			var startSample *box.Sample
 			if startSample, err = demuxer.SeekTime(uint64(startTimestamp)); err != nil {
@@ -118,15 +131,31 @@ func (p *MP4Plugin) download(w http.ResponseWriter, r *http.Request) {
 					Start: sample.Offset,
 				}
 			}
-			part.Size += sample.Size
 			lastTs = int64(sample.Timestamp + uint32(tsOffset))
 			fixSample := *sample
 			fixSample.Timestamp += uint32(tsOffset)
-			fixSample.Offset += sampleOffset - part.Start
-			if track.Cid.IsAudio() {
-				audioTrack.AddSampleEntry(fixSample)
-			} else if track.Cid.IsVideo() {
-				videoTrack.AddSampleEntry(fixSample)
+			if flag == 0 {
+				fixSample.Offset = sampleOffset + (fixSample.Offset - part.Start)
+				part.Size += sample.Size
+				if track.Cid.IsAudio() {
+					audioTrack.AddSampleEntry(fixSample)
+				} else if track.Cid.IsVideo() {
+					videoTrack.AddSampleEntry(fixSample)
+				}
+			} else {
+				part.Seek(sample.Offset, io.SeekStart)
+				fixSample.Data = make([]byte, sample.Size)
+				part.Read(fixSample.Data)
+				var moof, mdat box.IBox
+				if track.Cid.IsAudio() {
+					moof, mdat = muxer.CreateFlagment(audioTrack, fixSample)
+				} else if track.Cid.IsVideo() {
+					moof, mdat = muxer.CreateFlagment(videoTrack, fixSample)
+				}
+				if moof != nil {
+					part.boxies = append(part.boxies, moof, mdat)
+					part.Size += int(moof.Size() + mdat.Size())
+				}
 			}
 		}
 		if part != nil {
@@ -135,37 +164,53 @@ func (p *MP4Plugin) download(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	moovSize := muxer.MakeMoov().Size()
-	for _, track := range muxer.Tracks {
-		for i := range track.Samplelist {
-			track.Samplelist[i].Offset += int64(moovSize)
+	if flag == 0 {
+		moovSize := muxer.MakeMoov().Size()
+		dataSize := uint64(sampleOffset - mdatOffset)
+		w.Header().Set("Content-Length", fmt.Sprintf("%d", uint64(sampleOffset)+moovSize))
+		for _, track := range muxer.Tracks {
+			for i := range track.Samplelist {
+				track.Samplelist[i].Offset += int64(moovSize)
+			}
 		}
-	}
-	newMoov := muxer.MakeMoov()
-	dataSize := uint64(sampleOffset - mdatOffset)
-	w.Header().Set("Content-Length", fmt.Sprintf("%d", dataSize+8+moovSize+ftyp.Size()))
-	mdatBox := box.CreateBaseBox(box.TypeMDAT, dataSize+box.BasicBoxLen)
+		mdatBox := box.CreateBaseBox(box.TypeMDAT, dataSize+box.BasicBoxLen)
 
-	var freeBox *box.FreeBox
-	if mdatBox.HeaderSize() == box.BasicBoxLen {
-		freeBox = box.CreateFreeBox(nil)
-	}
+		var freeBox *box.FreeBox
+		if mdatBox.HeaderSize() == box.BasicBoxLen {
+			freeBox = box.CreateFreeBox(nil)
+		}
 
-	var written, totalWritten int64
+		var written, totalWritten int64
 
-	totalWritten, err = box.WriteTo(w, ftyp, newMoov, freeBox, mdatBox)
-	if err != nil {
-		return
-	}
-
-	for _, part := range parts {
-		part.Seek(part.Start, io.SeekStart)
-		written, err = io.CopyN(w, part.File, int64(part.Size))
+		totalWritten, err = box.WriteTo(w, ftyp, muxer.MakeMoov(), freeBox, mdatBox)
 		if err != nil {
 			return
 		}
-		totalWritten += written
-		part.Close()
+
+		for _, part := range parts {
+			part.Seek(part.Start, io.SeekStart)
+			written, err = io.CopyN(w, part.File, int64(part.Size))
+			if err != nil {
+				return
+			}
+			totalWritten += written
+			part.Close()
+		}
+	} else {
+		var children []box.IBox
+		var totalSize uint64
+		children = append(children, ftyp, moov)
+		totalSize += uint64(ftyp.Size() + moov.Size())
+		for _, part := range parts {
+			totalSize += uint64(part.Size)
+			children = append(children, part.boxies...)
+			part.Close()
+		}
+		w.Header().Set("Content-Length", fmt.Sprintf("%d", totalSize))
+		_, err = box.WriteTo(w, children...)
+		if err != nil {
+			return
+		}
 	}
 }
 
