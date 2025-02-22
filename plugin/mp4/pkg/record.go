@@ -93,17 +93,16 @@ func (t *eventRecordCheck) Run() (err error) {
 		EventLevel: m7s.EventLevelHigh,
 		Mode:       m7s.RecordModeEvent,
 		Type:       "mp4",
+		StreamPath: t.streamPath,
 	}
-	t.DB.Where(&queryRecord).Find(&eventRecordStreams, "stream_path=?", t.streamPath) //搜索事件录像，且为重要事件（无法自动删除）
+	t.DB.Where(&queryRecord).Find(&eventRecordStreams) //搜索事件录像，且为重要事件（无法自动删除）
 	if len(eventRecordStreams) > 0 {
 		for _, recordStream := range eventRecordStreams {
 			var unimportantEventRecordStreams []m7s.RecordStream
 			queryRecord.EventLevel = m7s.EventLevelLow
-			query := `(start_time BETWEEN ? AND ?)
-							OR (end_time BETWEEN ? AND ?) 
-							OR (? BETWEEN start_time AND end_time) 
-							OR (? BETWEEN start_time AND end_time) AND stream_path=? `
-			t.DB.Where(&queryRecord).Where(query, recordStream.StartTime, recordStream.EndTime, recordStream.StartTime, recordStream.EndTime, recordStream.StartTime, recordStream.EndTime, recordStream.StreamPath).Find(&unimportantEventRecordStreams)
+			queryRecord.Mode = m7s.RecordModeAuto
+			query := `start_time <= ? and end_time >= ?`
+			t.DB.Where(&queryRecord).Where(query, recordStream.EndTime, recordStream.StartTime).Find(&unimportantEventRecordStreams)
 			if len(unimportantEventRecordStreams) > 0 {
 				for _, unimportantEventRecordStream := range unimportantEventRecordStreams {
 					unimportantEventRecordStream.EventLevel = m7s.EventLevelHigh

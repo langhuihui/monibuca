@@ -46,6 +46,7 @@ message ReqRecordList {
   uint32 pageNum = 5;
   uint32 pageSize = 6;
   string mode = 7;
+  string eventLevel = 8;
 }
 
 message ReqRecordDelete {

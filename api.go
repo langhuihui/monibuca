@@ -842,6 +842,9 @@ func (s *Server) GetRecordList(ctx context.Context, req *pb.ReqRecordList) (resp
 			query = query.Where("end_time <= ?", endTime)
 		}
 	}
+	if req.EventLevel != "" {
+		query = query.Where("event_level = ?", req.EventLevel)
+	}
 
 	query.Count(&totalCount)
 	err = query.Offset(int(offset)).Limit(int(req.PageSize)).Order("start_time desc").Find(&result).Error

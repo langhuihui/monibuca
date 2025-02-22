@@ -213,7 +213,7 @@ func (p *MP4Plugin) EventStart(ctx context.Context, req *mp4pb.ReqEventRecord) (
 			p.Error("EventStart", "error", err)
 		}
 	}
-	recorder := p.Meta.Recorder(config.Record{})
+	//recorder := p.Meta.Recorder(config.Record{})
 	var tmpJob *m7s.RecordJob
 	p.Server.Records.Call(func() error {
 		tmpJob, _ = p.Server.Records.Find(func(job *m7s.RecordJob) bool {
@@ -229,7 +229,11 @@ func (p *MP4Plugin) EventStart(ctx context.Context, req *mp4pb.ReqEventRecord) (
 					Fragment: 0,
 					FilePath: filepath.Join(p.EventRecordFilePath, stream.StreamPath, time.Now().Local().Format("2006-01-02-15-04-05")),
 				}
-				recordJob := recorder.GetRecordJob()
+				//recordJob := recorder.GetRecordJob()
+				var subconfig config.Subscribe
+				defaults.SetDefaults(&subconfig)
+				subconfig.BufferTime = beforeDuration
+				recordJob := p.Record(stream, recordConf, &subconfig)
 				recordJob.EventId = req.EventId
 				recordJob.EventLevel = req.EventLevel
 				recordJob.EventName = req.EventName
@@ -237,10 +241,6 @@ func (p *MP4Plugin) EventStart(ctx context.Context, req *mp4pb.ReqEventRecord) (
 				recordJob.AfterDuration = afterDuration
 				recordJob.BeforeDuration = beforeDuration
 				recordJob.Mode = m7s.RecordModeEvent
-				var subconfig config.Subscribe
-				defaults.SetDefaults(&subconfig)
-				subconfig.BufferTime = beforeDuration
-				p.Record(stream, recordConf, &subconfig)
 			}
 			return nil
 		})
@@ -257,6 +257,7 @@ func (p *MP4Plugin) EventStart(ctx context.Context, req *mp4pb.ReqEventRecord) (
 				Mode:           m7s.RecordModeEvent,
 				BeforeDuration: beforeDuration,
 				AfterDuration:  afterDuration,
+				Type:           "mp4",
 			}
 			now := time.Now()
 			startTime := now.Add(-beforeDuration)
@@ -281,6 +282,7 @@ func (p *MP4Plugin) List(ctx context.Context, req *mp4pb.ReqRecordList) (resp *p
 		PageSize:   req.PageSize,
 		Mode:       req.Mode,
 		Type:       "mp4",
+		EventLevel: req.EventLevel,
 	}
 	return p.Server.GetRecordList(ctx, globalReq)
 }
