@@ -31,6 +31,77 @@ type ContentPart struct {
 	boxies []box.IBox
 }
 
+func (p *MP4Plugin) downloadSingleFile(stream *m7s.RecordStream, flag mp4.Flag, w http.ResponseWriter, r *http.Request) {
+	if flag == 0 {
+		http.ServeFile(w, r, stream.FilePath)
+	} else if flag == mp4.FLAG_FRAGMENT {
+		file, err := os.Open(stream.FilePath)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		p.Info("read", "file", file.Name())
+		demuxer := mp4.NewDemuxer(file)
+		err = demuxer.Demux()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		var trackMap = make(map[box.MP4_CODEC_TYPE]*mp4.Track)
+		muxer := mp4.NewMuxer(mp4.FLAG_FRAGMENT)
+		for _, track := range demuxer.Tracks {
+			t := muxer.AddTrack(track.Cid)
+			t.ExtraData = track.ExtraData
+			trackMap[track.Cid] = t
+			if track.Cid.IsAudio() {
+				t.SampleSize = track.SampleSize
+				t.SampleRate = track.SampleRate
+				t.ChannelCount = track.ChannelCount
+			} else if track.Cid.IsVideo() {
+				t.Width = track.Width
+				t.Height = track.Height
+			}
+		}
+		moov := muxer.MakeMoov()
+		var parts []*ContentPart
+		var part *ContentPart
+		for track, sample := range demuxer.RangeSample {
+			if part == nil {
+				part = &ContentPart{
+					File:  file,
+					Start: sample.Offset,
+				}
+				parts = append(parts, part)
+			}
+			fixSample := *sample
+			part.Seek(sample.Offset, io.SeekStart)
+			fixSample.Data = make([]byte, sample.Size)
+			part.Read(fixSample.Data)
+			moof, mdat := muxer.CreateFlagment(trackMap[track.Cid], fixSample)
+			if moof != nil {
+				part.boxies = append(part.boxies, moof, mdat)
+				part.Size += int(moof.Size() + mdat.Size())
+			}
+		}
+		var children []box.IBox
+		var totalSize uint64
+		ftyp := muxer.CreateFTYPBox()
+		children = append(children, ftyp, moov)
+		totalSize += uint64(ftyp.Size() + moov.Size())
+		for _, part := range parts {
+			totalSize += uint64(part.Size)
+			children = append(children, part.boxies...)
+			part.Close()
+		}
+		w.Header().Set("Content-Length", fmt.Sprintf("%d", totalSize))
+		_, err = box.WriteTo(w, children...)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+}
+
 func (p *MP4Plugin) download(w http.ResponseWriter, r *http.Request) {
 	if p.DB == nil {
 		http.Error(w, pkg.ErrNoDB.Error(), http.StatusInternalServerError)
@@ -54,10 +125,10 @@ func (p *MP4Plugin) download(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "record not found", http.StatusNotFound)
 			return
 		}
-		http.ServeFile(w, r, streams[0].FilePath)
+		p.downloadSingleFile(&streams[0], flag, w, r)
 		return
 	}
-
+	// 合并多个 mp4
 	startTime, endTime, err := util.TimeRangeQueryParse(query)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -90,6 +161,30 @@ func (p *MP4Plugin) download(w http.ResponseWriter, r *http.Request) {
 		ExtraData []byte
 	}
 	var audioHistory, videoHistory []TrackHistory
+	addAudioTrack := func(track *mp4.Track) {
+		t := muxer.AddTrack(track.Cid)
+		t.ExtraData = track.ExtraData
+		t.SampleSize = track.SampleSize
+		t.SampleRate = track.SampleRate
+		t.ChannelCount = track.ChannelCount
+		if len(audioHistory) > 0 {
+			t.Samplelist = audioHistory[len(audioHistory)-1].Track.Samplelist
+		}
+		audioTrack = t
+		audioHistory = append(audioHistory, TrackHistory{Track: t, ExtraData: track.ExtraData})
+	}
+
+	addVideoTrack := func(track *mp4.Track) {
+		t := muxer.AddTrack(track.Cid)
+		t.ExtraData = track.ExtraData
+		t.Width = track.Width
+		t.Height = track.Height
+		if len(videoHistory) > 0 {
+			t.Samplelist = videoHistory[len(videoHistory)-1].Track.Samplelist
+		}
+		videoTrack = t
+		videoHistory = append(videoHistory, TrackHistory{Track: t, ExtraData: track.ExtraData})
+	}
 
 	addTrack := func(track *mp4.Track) {
 		var lastAudioTrack, lastVideoTrack *TrackHistory
@@ -99,27 +194,32 @@ func (p *MP4Plugin) download(w http.ResponseWriter, r *http.Request) {
 		if len(videoHistory) > 0 {
 			lastVideoTrack = &videoHistory[len(videoHistory)-1]
 		}
-		if track.Cid.IsAudio() && (lastAudioTrack == nil || !bytes.Equal(lastAudioTrack.ExtraData, track.ExtraData)) {
-			t := muxer.AddTrack(track.Cid)
-			t.ExtraData = track.ExtraData
-			t.SampleSize = track.SampleSize
-			t.SampleRate = track.SampleRate
-			t.ChannelCount = track.ChannelCount
-			if lastAudioTrack != nil {
-				t.Samplelist = lastAudioTrack.Track.Samplelist
+		if track.Cid.IsAudio() {
+			if lastAudioTrack == nil {
+				addAudioTrack(track)
+			} else if !bytes.Equal(lastAudioTrack.ExtraData, track.ExtraData) {
+				for _, history := range audioHistory {
+					if bytes.Equal(history.ExtraData, track.ExtraData) {
+						audioTrack = history.Track
+						audioTrack.Samplelist = audioHistory[len(audioHistory)-1].Track.Samplelist
+						return
+					}
+				}
+				addAudioTrack(track)
 			}
-			audioTrack = t
-			audioHistory = append(audioHistory, TrackHistory{Track: t, ExtraData: track.ExtraData})
-		} else if track.Cid.IsVideo() && (lastVideoTrack == nil || !bytes.Equal(lastVideoTrack.ExtraData, track.ExtraData)) {
-			t := muxer.AddTrack(track.Cid)
-			t.ExtraData = track.ExtraData
-			t.Width = track.Width
-			t.Height = track.Height
-			if lastVideoTrack != nil {
-				t.Samplelist = lastVideoTrack.Track.Samplelist
+		} else if track.Cid.IsVideo() {
+			if lastVideoTrack == nil {
+				addVideoTrack(track)
+			} else if !bytes.Equal(lastVideoTrack.ExtraData, track.ExtraData) {
+				for _, history := range videoHistory {
+					if bytes.Equal(history.ExtraData, track.ExtraData) {
+						videoTrack = history.Track
+						videoTrack.Samplelist = videoHistory[len(videoHistory)-1].Track.Samplelist
+						return
+					}
+				}
+				addVideoTrack(track)
 			}
-			videoTrack = t
-			videoHistory = append(videoHistory, TrackHistory{Track: t, ExtraData: track.ExtraData})
 		}
 	}
 
