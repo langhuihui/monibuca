@@ -1,6 +1,7 @@
 package plugin_mp4
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -82,6 +83,46 @@ func (p *MP4Plugin) download(w http.ResponseWriter, r *http.Request) {
 	var file *os.File
 	var moov box.IBox
 	streamCount := len(streams)
+
+	// Track ExtraData history for each track
+	type TrackHistory struct {
+		Track     *mp4.Track
+		ExtraData []byte
+	}
+	var audioHistory, videoHistory []TrackHistory
+
+	addTrack := func(track *mp4.Track) {
+		var lastAudioTrack, lastVideoTrack *TrackHistory
+		if len(audioHistory) > 0 {
+			lastAudioTrack = &audioHistory[len(audioHistory)-1]
+		}
+		if len(videoHistory) > 0 {
+			lastVideoTrack = &videoHistory[len(videoHistory)-1]
+		}
+		if track.Cid.IsAudio() && (lastAudioTrack == nil || !bytes.Equal(lastAudioTrack.ExtraData, track.ExtraData)) {
+			t := muxer.AddTrack(track.Cid)
+			t.ExtraData = track.ExtraData
+			t.SampleSize = track.SampleSize
+			t.SampleRate = track.SampleRate
+			t.ChannelCount = track.ChannelCount
+			if lastAudioTrack != nil {
+				t.Samplelist = lastAudioTrack.Track.Samplelist
+			}
+			audioTrack = t
+			audioHistory = append(audioHistory, TrackHistory{Track: t, ExtraData: track.ExtraData})
+		} else if track.Cid.IsVideo() && (lastVideoTrack == nil || !bytes.Equal(lastVideoTrack.ExtraData, track.ExtraData)) {
+			t := muxer.AddTrack(track.Cid)
+			t.ExtraData = track.ExtraData
+			t.Width = track.Width
+			t.Height = track.Height
+			if lastVideoTrack != nil {
+				t.Samplelist = lastVideoTrack.Track.Samplelist
+			}
+			videoTrack = t
+			videoHistory = append(videoHistory, TrackHistory{Track: t, ExtraData: track.ExtraData})
+		}
+	}
+
 	for i, stream := range streams {
 		tsOffset = lastTs
 		file, err = os.Open(stream.FilePath)
@@ -94,24 +135,18 @@ func (p *MP4Plugin) download(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return
 		}
-		if i == 0 {
+		trackCount := len(demuxer.Tracks)
+		if i == 0 || flag == mp4.FLAG_FRAGMENT {
 			for _, track := range demuxer.Tracks {
-				t := muxer.AddTrack(track.Cid)
-				t.ExtraData = track.ExtraData
-				if track.Cid.IsAudio() {
-					audioTrack = t
-					t.SampleSize = track.SampleSize
-					t.SampleRate = track.SampleRate
-					t.ChannelCount = track.ChannelCount
-				} else if track.Cid.IsVideo() {
-					videoTrack = t
-					t.Width = track.Width
-					t.Height = track.Height
-				}
+				addTrack(track)
 			}
+		}
+		if trackCount != len(muxer.Tracks) {
 			if flag == mp4.FLAG_FRAGMENT {
 				moov = muxer.MakeMoov()
 			}
+		}
+		if i == 0 {
 			startTimestamp := startTime.Sub(stream.StartTime).Milliseconds()
 			var startSample *box.Sample
 			if startSample, err = demuxer.SeekTime(uint64(startTimestamp)); err != nil {

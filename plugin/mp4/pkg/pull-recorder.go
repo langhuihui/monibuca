@@ -61,26 +61,27 @@ func (p *RecordReader) Run() (err error) {
 			if err = p.demuxer.Demux(); err != nil {
 				return
 			}
-			if i == 0 {
-				for _, track := range p.demuxer.Tracks {
-					switch track.Cid {
-					case box.MP4_CODEC_H264:
-						var sequence rtmp.RTMPVideo
-						// sequence.SetAllocator(allocator)
-						sequence.Append([]byte{0x17, 0x00, 0x00, 0x00, 0x00}, track.ExtraData)
-						err = publisher.WriteVideo(&sequence)
-					case box.MP4_CODEC_H265:
-						var sequence rtmp.RTMPVideo
-						// sequence.SetAllocator(allocator)
-						sequence.Append([]byte{0b1001_0000 | rtmp.PacketTypeSequenceStart}, codec.FourCC_H265[:], track.ExtraData)
-						err = publisher.WriteVideo(&sequence)
-					case box.MP4_CODEC_AAC:
-						var sequence rtmp.RTMPAudio
-						// sequence.SetAllocator(allocator)
-						sequence.Append([]byte{0xaf, 0x00}, track.ExtraData)
-						err = publisher.WriteAudio(&sequence)
-					}
+
+			for _, track := range p.demuxer.Tracks {
+				switch track.Cid {
+				case box.MP4_CODEC_H264:
+					var sequence rtmp.RTMPVideo
+					// sequence.SetAllocator(allocator)
+					sequence.Append([]byte{0x17, 0x00, 0x00, 0x00, 0x00}, track.ExtraData)
+					err = publisher.WriteVideo(&sequence)
+				case box.MP4_CODEC_H265:
+					var sequence rtmp.RTMPVideo
+					// sequence.SetAllocator(allocator)
+					sequence.Append([]byte{0b1001_0000 | rtmp.PacketTypeSequenceStart}, codec.FourCC_H265[:], track.ExtraData)
+					err = publisher.WriteVideo(&sequence)
+				case box.MP4_CODEC_AAC:
+					var sequence rtmp.RTMPAudio
+					// sequence.SetAllocator(allocator)
+					sequence.Append([]byte{0xaf, 0x00}, track.ExtraData)
+					err = publisher.WriteAudio(&sequence)
 				}
+			}
+			if i == 0 {
 				startTimestamp := p.PullStartTime.Sub(stream.StartTime).Milliseconds()
 				if startTimestamp < 0 {
 					startTimestamp = 0
