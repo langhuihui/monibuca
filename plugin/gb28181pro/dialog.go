@@ -171,145 +171,24 @@ func (d *Dialog) Start() (err error) {
 		ProtocolVersion: "2.0",
 		Transport:       "UDP",
 		Host:            device.LocalIP,
-		Port:            device.Port,
+		Port:            device.LocalPort,
 		Params:          sip.HeaderParams(sip.NewParams()),
 	}
 	viaHeader.Params.Add("branch", sip.GenerateBranchN(16)).Add("rport", "")
 	maxforward := sip.MaxForwardsHeader(70)
-	contentLengthHeader := sip.ContentLengthHeader(len(strings.Join(sdpInfo, "\r\n") + "\r\n"))
+	//contentLengthHeader := sip.ContentLengthHeader(len(strings.Join(sdpInfo, "\r\n") + "\r\n"))
 	csqHeader := sip.CSeqHeader{
 		SeqNo:      uint32(device.SN),
 		MethodName: "INVITE",
 	}
 	request.AppendHeader(&viaHeader)
 	request.SetBody([]byte(strings.Join(sdpInfo, "\r\n") + "\r\n"))
-	request.AppendHeader(&contentLengthHeader)
+	//request.AppendHeader(&contentLengthHeader)
 
 	// 创建会话
-	d.session, err = device.dialogClient.Invite(d.gb, recipient, request.Body(), &callID, &csqHeader, &device.fromHDR, &toHeader, &viaHeader, &maxforward, userAgentHeader, &device.contactHDR, subjectHeader, &contentTypeHeader, &contentLengthHeader)
+	d.session, err = device.dialogClient.Invite(d.gb, recipient, request.Body(), &callID, &csqHeader, &device.fromHDR, &toHeader, &viaHeader, &maxforward, userAgentHeader, &device.contactHDR, subjectHeader, &contentTypeHeader)
 	// 最后添加Content-Length头部
 	return
-}
-
-// PlayStreamCmd 请求预览视频流
-func (d *Dialog) PlayStreamCmd(device *Device, channel *Channel, mediaPort uint16, start, end string) (*sipgo.DialogClientSession, error) {
-	if channel == nil {
-		return nil, fmt.Errorf("channel is nil")
-	}
-	if device == nil {
-		return nil, fmt.Errorf("device is nil")
-	}
-
-	// 创建 SSRC
-	ssrc := d.CreateSSRC(d.gb.Serial)
-
-	// 获取 SDP IP
-	sdpIP := device.LocalIP
-	if sdpIP == "" {
-		sdpIP = device.mediaIp
-	}
-
-	// 构建 SDP 内容
-	sdpInfo := []string{
-		"v=0",
-		fmt.Sprintf("o=%s 0 0 IN IP4 %s", device.DeviceID, sdpIP),
-		fmt.Sprintf("s=%s", map[bool]string{true: "Playback", false: "Play"}[start != "" && end != ""]), // 根据是否有时间参数决定
-		//"u=" + device.ID + ":0",
-		"u=" + channel.DeviceID + ":0",
-		"c=IN IP4 " + sdpIP,
-	}
-
-	// 如果有时间参数，添加时间行
-	if start != "" && end != "" {
-		startTime, err := time.Parse(time.RFC3339, start)
-		if err != nil {
-			return nil, fmt.Errorf("parse start time failed: %v", err)
-		}
-		endTime, err := time.Parse(time.RFC3339, end)
-		if err != nil {
-			return nil, fmt.Errorf("parse end time failed: %v", err)
-		}
-		sdpInfo = append(sdpInfo, fmt.Sprintf("t=%d %d", startTime.Unix(), endTime.Unix()))
-	} else {
-		sdpInfo = append(sdpInfo, "t=0 0")
-	}
-
-	// 添加媒体行和相关属性
-	var mediaLine string
-	switch strings.ToUpper(device.StreamMode) {
-	case "TCP-PASSIVE", "TCP-ACTIVE":
-		mediaLine = fmt.Sprintf("m=video %d TCP/RTP/AVP 96 126 125 99 34 98 97", mediaPort)
-	case "UDP":
-		mediaLine = fmt.Sprintf("m=video %d TCP/RTP/AVP 96", mediaPort)
-	default:
-		mediaLine = fmt.Sprintf("m=video %d RTP/AVP 96 126 125 99 34 98 97", mediaPort)
-	}
-
-	sdpInfo = append(sdpInfo, mediaLine)
-	sdpInfo = append(sdpInfo,
-		"a=recvonly",
-		"a=rtpmap:96 PS/90000",
-		//"a=fmtp:126 profile-level-id=42e01e",
-		//"a=rtpmap:126 H264/90000",
-		//"a=rtpmap:125 H264S/90000",
-		//"a=fmtp:125 profile-level-id=42e01e",
-		//"a=rtpmap:99 H265/90000",
-		//"a=rtpmap:98 H264/90000",
-		//"a=rtpmap:97 MPEG4/90000",
-	)
-
-	//根据传输模式添加 setup 和 connection 属性
-	switch strings.ToUpper(device.StreamMode) {
-	case "TCP-PASSIVE":
-		sdpInfo = append(sdpInfo,
-			"a=setup:passive",
-			"a=connection:new",
-		)
-	case "TCP-ACTIVE":
-		sdpInfo = append(sdpInfo,
-			"a=setup:active",
-			"a=connection:new",
-		)
-	default:
-		sdpInfo = append(sdpInfo,
-			"a=setup:passive",
-			"a=connection:new",
-		)
-	}
-
-	// 添加 SSRC
-	sdpInfo = append(sdpInfo, fmt.Sprintf("y=%s", ssrc))
-
-	// 创建 INVITE 请求
-	recipient := sip.Uri{
-		Host: device.IP,
-		Port: device.Port,
-		User: channel.DeviceID,
-	}
-	request := device.CreateRequest(sip.INVITE, recipient)
-	if request == nil {
-		return nil, fmt.Errorf("create request failed")
-	}
-
-	// 设置必需的头部
-	contentTypeHeader := sip.ContentTypeHeader("application/sdp")
-	subjectHeader := sip.NewHeader("Subject", fmt.Sprintf("%s:%s,%s:0", channel.DeviceID, ssrc, d.gb.Serial))
-	allowHeader := sip.NewHeader("Allow", "INVITE, ACK, CANCEL, REGISTER, MESSAGE, NOTIFY, BYE")
-	//Toheader里需要放入目录通道的id
-	toHeader := sip.ToHeader{
-		Address: sip.Uri{User: channel.DeviceID, Host: device.HostAddress},
-	}
-	userAgentHeader := sip.NewHeader("User-Agent", "M7S/"+m7s.Version)
-
-	request.AppendHeader(&contentTypeHeader)
-	request.AppendHeader(subjectHeader)
-	request.AppendHeader(allowHeader)
-	request.AppendHeader(&toHeader)
-	request.SetBody([]byte(strings.Join(sdpInfo, "\r\n") + "\r\n"))
-
-	// 创建会话
-	return device.dialogClient.Invite(d.gb, recipient, request.Body(), &contentTypeHeader, subjectHeader, &device.fromHDR, &toHeader, userAgentHeader, allowHeader)
-	//return device.dialogClient.Invite(gb, device.Recipient, request.Body(), &contentTypeHeader, subjectHeader, &device.fromHDR, allowHeader, &toHeader)
 }
 
 func (d *Dialog) Run() (err error) {
@@ -357,7 +236,6 @@ func (d *Dialog) GetKey() uint32 {
 }
 
 func (d *Dialog) Dispose() {
-	d.Info("111111111111111111111111")
 	err := d.session.Bye(d)
 	if err != nil {
 		d.Error("bye bye err", err)

@@ -8,9 +8,10 @@ import (
 	"strings"
 	"time"
 
+	"m7s.live/v5"
+
 	"github.com/emiago/sipgo"
 	"github.com/emiago/sipgo/sip"
-	myip "github.com/husanpao/ip"
 	"github.com/icholy/digest"
 	"m7s.live/v5/pkg/task"
 	gb28181 "m7s.live/v5/plugin/gb28181pro/pkg"
@@ -18,34 +19,44 @@ import (
 
 // Platform 表示GB28181平台的运行时实例
 type Platform struct {
-	task.Job      `gorm:"-:all"` // 使用 Task 而不是 Job，并且排除 gorm 序列化
+	task.Job      `gorm:"-:all"` // 使用TickTask，并且排除 gorm 序列化
 	PlatformModel *gb28181.PlatformModel
 
 	// SIP相关字段，不存储到数据库
-	Client         *sipgo.Client              `gorm:"-" json:"-"` // SIP客户端
-	DialogClient   *sipgo.DialogClient        `gorm:"-" json:"-"` // SIP对话客户端
-	ContactHDR     *sip.ContactHeader         `gorm:"-" json:"-"` // 联系人头部
-	FromHDR        *sip.FromHeader            `gorm:"-" json:"-"` // From头部
-	CurrentSession *sipgo.DialogClientSession `gorm:"-" json:"-"` // 当前会话
-	Recipient      sip.Uri                    `gorm:"-" json:"-"` // 接收者地址
+	Client         *sipgo.Client         `gorm:"-" json:"-"` // SIP客户端
+	DialogClient   *sipgo.DialogClient   `gorm:"-" json:"-"` // SIP对话客户端
+	Recipient      sip.Uri               `gorm:"-" json:"-"` // 接收者地址
+	ContactHDR     *sip.ContactHeader    `gorm:"-" json:"-"` // 联系人头部
+	UserAgentHDR   sip.Header            `gorm:"-" json:"-"`
+	MaxForwardsHDR sip.MaxForwardsHeader `gorm:"-" json:"-"`
 
 	// 运行时字段
-	KeepAliveReply     int    `gorm:"-" json:"keepAliveReply"`     // KeepAliveReply表示心跳未回复次数
-	RegisterAliveReply int    `gorm:"-" json:"registerAliveReply"` // RegisterAliveReply表示注册未回复次数
-	CallID             string `gorm:"-" json:"callId"`             // CallID表示SIP会话的标识符
+	KeepAliveReply int    `gorm:"-" json:"keepAliveReply"` // KeepAliveReply表示心跳未回复次数
+	CallID         string `gorm:"-" json:"callId"`         // CallID表示SIP会话的标识符
+	SN             int
 
+	eventChan chan any
 	// 插件配置
 	plugin *GB28181ProPlugin
 }
 
-// InitializeSIPClient 初始化SIP客户端
-func (p *Platform) InitializeSIPClient(ua *sipgo.UserAgent) error {
-	localIP := myip.InternalIPv4()
-	var err error
-	p.Client, err = sipgo.NewClient(ua, sipgo.WithClientHostname(localIP))
+func (p *Platform) init() {
+	client, err := sipgo.NewClient(p.plugin.ua, sipgo.WithClientHostname(p.PlatformModel.DeviceIP), sipgo.WithClientPort(p.PlatformModel.DevicePort))
 	if err != nil {
-		return fmt.Errorf("failed to create sip client: %v", err)
+		p.Error("failed to create sip client: %v", err)
 	}
+	p.Client = client
+	userAgentHeader := sip.NewHeader("User-Agent", "M7S/"+m7s.Version)
+	p.UserAgentHDR = userAgentHeader
+
+	// 创建注册请求的目标URI，使用上级平台的信息
+	recipient := sip.Uri{
+		User: p.PlatformModel.ServerGBID,
+		Host: p.PlatformModel.ServerIP,
+		Port: p.PlatformModel.ServerPort,
+	}
+
+	p.Recipient = recipient
 
 	// 设置联系人头部，使用本地平台的信息
 	contactHdr := sip.ContactHeader{
@@ -57,131 +68,24 @@ func (p *Platform) InitializeSIPClient(ua *sipgo.UserAgent) error {
 	}
 	p.ContactHDR = &contactHdr
 
-	// 设置From头部，使用本地平台的信息
-	fromHdr := sip.FromHeader{
-		Address: sip.Uri{
-			User: p.PlatformModel.DeviceGBID,
-			Host: p.PlatformModel.ServerGBDomain,
-		},
-		Params: sip.NewParams(),
-	}
-	fromHdr.Params.Add("tag", sip.GenerateTagN(16))
-	p.FromHDR = &fromHdr
-
 	// 创建对话客户端
 	p.DialogClient = sipgo.NewDialogClient(p.Client, *p.ContactHDR)
 
-	return nil
+	p.MaxForwardsHDR = sip.MaxForwardsHeader(70)
+	p.plugin.platforms.Add(p)
 }
 
-// Register 发送注册请求到上级平台
-func (p *Platform) Register(ctx context.Context) (*sipgo.DialogClientSession, error) {
-	// 创建注册请求的目标URI，使用上级平台的信息
-	recipient := sip.Uri{
-		User: p.PlatformModel.ServerGBID,
-		Host: p.PlatformModel.ServerIP,
-		Port: p.PlatformModel.ServerPort,
+func (p *Platform) Start() error {
+
+	if _, ok := p.plugin.platforms.Get(p.ID); !ok {
+		p.init()
 	}
-
-	// 创建基本的REGISTER请求
-	req := sip.NewRequest(sip.REGISTER, recipient)
-
-	// 添加Contact头部
-	contactStr := fmt.Sprintf("<sip:%s@%s:%d>", p.PlatformModel.DeviceGBID, p.PlatformModel.DeviceIP, p.PlatformModel.DevicePort)
-	req.AppendHeader(sip.NewHeader("Contact", contactStr))
-
-	// 添加From头部
-	fromHeader := sip.FromHeader{
-		Address: sip.Uri{
-			User: p.PlatformModel.DeviceGBID,
-			Host: p.PlatformModel.ServerGBDomain,
-		},
-		Params: sip.NewParams(),
-	}
-	fromHeader.Params.Add("tag", sip.GenerateTagN(16))
-	req.AppendHeader(&fromHeader)
-
-	// 添加To头部
-	toHeader := sip.ToHeader{
-		Address: sip.Uri{
-			User: p.PlatformModel.DeviceGBID,
-			Host: p.PlatformModel.ServerGBDomain,
-		},
-	}
-	req.AppendHeader(&toHeader)
-
-	// 添加Expires头部
-	req.AppendHeader(sip.NewHeader("Expires", fmt.Sprintf("%d", p.PlatformModel.Expires)))
-
-	// 设置传输协议
-	req.SetTransport(strings.ToUpper(p.PlatformModel.Transport))
-
-	// 发送请求并获取响应
-	tx, err := p.Client.TransactionRequest(ctx, req, sipgo.ClientRequestAddVia)
-	if err != nil {
-		p.Error("register", "error", err.Error())
-		return nil, fmt.Errorf("创建事务失败: %v", err)
-	}
-	defer tx.Terminate()
-
-	// 获取响应
-	res, err := p.getResponse(tx)
-	if err != nil {
-		p.Error("register", "error", err.Error())
-		return nil, fmt.Errorf("获取响应失败: %v", err)
-	}
-
-	// 处理401未授权响应
-	if res.StatusCode == 401 {
-		// 获取WWW-Authenticate头部
-		wwwAuth := res.GetHeader("WWW-Authenticate")
-		if wwwAuth == nil {
-			p.Error("register", "error", "no auth challenge")
-			return nil, fmt.Errorf("未收到认证质询")
-		}
-
-		// 解析认证质询
-		chal, err := digest.ParseChallenge(wwwAuth.Value())
-		if err != nil {
-			p.Error("register", "error", err.Error())
-			return nil, fmt.Errorf("解析认证质询失败: %v", err)
-		}
-
-		// 生成认证响应
-		cred, _ := digest.Digest(chal, digest.Options{
-			Method:   req.Method.String(),
-			URI:      recipient.Host,
-			Username: p.PlatformModel.Username,
-			Password: p.PlatformModel.Password,
-		})
-
-		// 创建新的带认证信息的请求
-		newReq := req.Clone()
-		newReq.RemoveHeader("Via") // 必须由传输层重新生成
-		newReq.AppendHeader(sip.NewHeader("Authorization", cred.String()))
-
-		// 发送认证请求
-		tx, err = p.Client.TransactionRequest(ctx, newReq, sipgo.ClientRequestAddVia)
-		if err != nil {
-			return nil, fmt.Errorf("创建认证事务失败: %v", err)
-		}
-		defer tx.Terminate()
-
-		// 获取认证响应
-		res, err = p.getResponse(tx)
-		if err != nil {
-			return nil, fmt.Errorf("获取认证响应失败: %v", err)
-		}
-	}
-
-	// 检查最终响应状态
-	if res.StatusCode != 200 {
-		p.Error("register", "status", res.StatusCode)
-		return nil, fmt.Errorf("注册失败，状态码: %d", res.StatusCode)
-	}
-
-	p.Info("register", "response", res.String())
-	return nil, nil
+	register := NewRegister(p, "firstRegister")
+	register.OnStart(func() {
+		register.Tick(nil)
+	})
+	p.AddTask(register)
+	return nil
 }
 
 // getResponse 从事务中获取响应
@@ -196,14 +100,19 @@ func (p *Platform) getResponse(tx sip.ClientTransaction) (*sip.Response, error) 
 
 // Keepalive 发送心跳请求到上级平台
 func (p *Platform) Keepalive(ctx context.Context) (*sipgo.DialogClientSession, error) {
-	recipient := sip.Uri{
-		User: p.PlatformModel.ServerGBID,
-		Host: p.PlatformModel.ServerIP,
-		Port: p.PlatformModel.ServerPort,
-	}
 
-	req := sip.NewRequest("MESSAGE", recipient)
+	req := sip.NewRequest("MESSAGE", p.Recipient)
 	req.SetTransport(strings.ToUpper(p.PlatformModel.Transport))
+	customCallID := fmt.Sprintf("%s-%d@%s", p.PlatformModel.DeviceGBID, time.Now().Unix(), p.PlatformModel.ServerIP)
+	callID := sip.CallIDHeader(customCallID)
+	req.AppendHeader(&callID)
+
+	csqHeader := sip.CSeqHeader{
+		SeqNo:      uint32(p.SN),
+		MethodName: "REGISTER",
+	}
+	p.SN++
+	req.AppendHeader(&csqHeader)
 
 	// 添加From头部
 	fromHeader := sip.FromHeader{
@@ -225,11 +134,20 @@ func (p *Platform) Keepalive(ctx context.Context) (*sipgo.DialogClientSession, e
 	}
 	req.AppendHeader(&toHeader)
 
-	// 添加Contact头部
-	contactStr := fmt.Sprintf("<sip:%s@%s:%d>", p.PlatformModel.DeviceGBID, p.PlatformModel.DeviceIP, p.PlatformModel.DevicePort)
-	req.AppendHeader(sip.NewHeader("Contact", contactStr))
+	viaHeader := sip.ViaHeader{
+		ProtocolName:    "SIP",
+		ProtocolVersion: "2.0",
+		Transport:       p.PlatformModel.Transport,
+		Host:            p.PlatformModel.DeviceIP,
+		Port:            p.PlatformModel.DevicePort,
+		Params:          sip.NewParams(),
+	}
+	viaHeader.Params.Add("branch", sip.GenerateBranchN(16)).Add("rport", "")
+	req.AppendHeader(&viaHeader)
 
-	tx, err := p.Client.TransactionRequest(ctx, req, sipgo.ClientRequestAddVia)
+	req.SetBody(gb28181.BuildKeepAliveXML(p.SN, p.PlatformModel.DeviceGBID))
+	p.SN++
+	tx, err := p.Client.TransactionRequest(ctx, req)
 	if err != nil {
 		p.Error("keepalive", "error", err.Error())
 		return nil, fmt.Errorf("创建事务失败: %v", err)
@@ -336,78 +254,13 @@ func (k *PlatformKeepAliveTask) Tick(any) {
 		k.Error("keepalive", "error", err.Error())
 		if k.platform.KeepAliveReply >= 3 {
 			k.platform.PlatformModel.Status = false
-			k.platform.CurrentSession = nil
 			k.Stop(fmt.Errorf("max keepalive retries reached"))
 			// 重新启动注册任务
-			var rt PlatformRegisterTask
-			rt.platform = k.platform
-			k.platform.AddTask(&rt)
+			//k.platform.Start()
 		}
 	} else {
 		k.platform.KeepAliveReply = 0
 	}
-}
-
-// PlatformRegisterTask 处理定时注册
-type PlatformRegisterTask struct {
-	task.TickTask
-	platform *Platform
-}
-
-func (r *PlatformRegisterTask) GetTickInterval() time.Duration {
-	return time.Second * time.Duration(r.platform.PlatformModel.Expires)
-}
-
-func (r *PlatformRegisterTask) Tick(any) {
-	if !r.platform.PlatformModel.Enable {
-		r.platform.PlatformModel.Status = false
-		r.platform.CurrentSession = nil
-		ctx := context.Background()
-		_, _ = r.platform.Unregister(ctx)
-		r.Error("register", "error", "platform disabled")
-		r.Stop(fmt.Errorf("platform disabled"))
-		return
-	}
-
-	ctx := context.Background()
-	session, err := r.platform.Register(ctx)
-	if err != nil {
-		r.platform.RegisterAliveReply++
-		r.Error("register", "error", err.Error(), "retries", r.platform.RegisterAliveReply)
-		if r.platform.RegisterAliveReply >= 3 {
-			r.platform.PlatformModel.Status = false
-			r.platform.CurrentSession = nil
-			r.Stop(fmt.Errorf("max retries reached: %d", r.platform.RegisterAliveReply))
-		}
-		return
-	}
-
-	r.Info("register", "status", "success")
-	r.platform.PlatformModel.Status = true
-	r.platform.CurrentSession = session
-	r.platform.RegisterAliveReply = 0
-}
-
-// StartRegisterTask 启动注册任务
-func (p *Platform) StartRegisterTask() {
-	ctx := context.Background()
-
-	// 首次注册
-	session, err := p.Register(ctx)
-	if err != nil {
-		p.PlatformModel.Status = false
-		p.RegisterAliveReply++
-		// 注册失败，启动定时注册任务
-		var rt PlatformRegisterTask
-		rt.platform = p
-		p.AddTask(&rt)
-		return
-	}
-
-	// 注册成功，更新状态
-	p.PlatformModel.Status = true
-	p.CurrentSession = session
-	p.RegisterAliveReply = 0
 }
 
 // OnMessage 处理来自平台的消息
@@ -419,7 +272,7 @@ func (p *Platform) OnMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb
 	switch msg.CmdType {
 	case "Catalog":
 		// 处理目录请求
-		return p.handleCatalog(req, tx)
+		return p.handleCatalog(req, tx, msg)
 	case "DeviceControl":
 		// 处理设备控制请求
 		return p.handleDeviceControl(req, tx, msg)
@@ -443,7 +296,7 @@ func (p *Platform) OnMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb
 }
 
 // handleCatalog 处理目录请求
-func (p *Platform) handleCatalog(req *sip.Request, tx sip.ServerTransaction) error {
+func (p *Platform) handleCatalog(req *sip.Request, tx sip.ServerTransaction, msg *gb28181.Message) error {
 	// 回复 200 OK
 	err := tx.Respond(sip.NewResponseFromRequest(req, http.StatusOK, "OK", nil))
 	if err != nil {
@@ -451,19 +304,64 @@ func (p *Platform) handleCatalog(req *sip.Request, tx sip.ServerTransaction) err
 	}
 
 	// 获取 SN 和 FromTag
-	sn, _ := req.From().Params.Get("tag")
+	sn := strconv.Itoa(msg.SN)
 	fromTag, _ := req.From().Params.Get("tag")
+	p.plugin.Info("catalog", "sn", sn, "fromTag", fromTag)
 
 	// 查询通道列表
 	var channels []gb28181.CommonGBChannel
 	if p.plugin.DB != nil {
-		if err := p.plugin.DB.Where("platform_id = ?", p.PlatformModel.ID).Find(&channels).Error; err != nil {
+		if err := p.plugin.DB.Table("channel_gb28181pro c").
+			Select(`c.id as gb_id,
+				c.device_db_id as gb_device_db_id,
+				c.stream_push_id,
+				c.stream_proxy_id,
+				c.create_time,
+				c.update_time,
+				COALESCE(pc.custom_device_id, c.gb_device_id, c.device_id) as gb_device_id,
+				COALESCE(pc.custom_name, c.gb_name, c.name) as gb_name,
+				COALESCE(pc.custom_manufacturer, c.gb_manufacturer, c.manufacturer) as gb_manufacturer,
+				COALESCE(pc.custom_model, c.gb_model, c.model) as gb_model,
+				COALESCE(pc.custom_owner, c.gb_owner, c.owner) as gb_owner,
+				COALESCE(pc.custom_civil_code, c.gb_civil_code, c.civil_code) as gb_civil_code,
+				COALESCE(pc.custom_block, c.gb_block, c.block) as gb_block,
+				COALESCE(pc.custom_address, c.gb_address, c.address) as gb_address,
+				COALESCE(pc.custom_parental, c.gb_parental, c.parental) as gb_parental,
+				COALESCE(pc.custom_parent_id, c.gb_parent_id, c.parent_id) as gb_parent_id,
+				COALESCE(pc.custom_safety_way, c.gb_safety_way, c.safety_way) as gb_safety_way,
+				COALESCE(pc.custom_register_way, c.gb_register_way, c.register_way) as gb_register_way,
+				COALESCE(pc.custom_cert_num, c.gb_cert_num, c.cert_num) as gb_cert_num,
+				COALESCE(pc.custom_certifiable, c.gb_certifiable, c.certifiable) as gb_certifiable,
+				COALESCE(pc.custom_err_code, c.gb_err_code, c.err_code) as gb_err_code,
+				COALESCE(pc.custom_end_time, c.gb_end_time, c.end_time) as gb_end_time,
+				COALESCE(pc.custom_secrecy, c.gb_secrecy, c.secrecy) as gb_secrecy,
+				COALESCE(pc.custom_ip_address, c.gb_ip_address, c.ip_address) as gb_ip_address,
+				COALESCE(pc.custom_port, c.gb_port, c.port) as gb_port,
+				COALESCE(pc.custom_password, c.gb_password, c.password) as gb_password,
+				COALESCE(pc.custom_status, c.gb_status, c.status) as gb_status,
+				COALESCE(pc.custom_longitude, c.gb_longitude, c.longitude) as gb_longitude,
+				COALESCE(pc.custom_latitude, c.gb_latitude, c.latitude) as gb_latitude,
+				COALESCE(pc.custom_ptz_type, c.gb_ptz_type, c.ptz_type) as gb_ptz_type,
+				COALESCE(pc.custom_position_type, c.gb_position_type, c.position_type) as gb_position_type,
+				COALESCE(pc.custom_room_type, c.gb_room_type, c.room_type) as gb_room_type,
+				COALESCE(pc.custom_use_type, c.gb_use_type, c.use_type) as gb_use_type,
+				COALESCE(pc.custom_supply_light_type, c.gb_supply_light_type, c.supply_light_type) as gb_supply_light_type,
+				COALESCE(pc.custom_direction_type, c.gb_direction_type, c.direction_type) as gb_direction_type,
+				COALESCE(pc.custom_resolution, c.gb_resolution, c.resolution) as gb_resolution,
+				COALESCE(pc.custom_business_group_id, c.gb_business_group_id, c.business_group_id) as gb_business_group_id,
+				COALESCE(pc.custom_download_speed, c.gb_download_speed, c.download_speed) as gb_download_speed,
+				COALESCE(pc.custom_svc_space_support_mod, c.gb_svc_space_support_mod, c.svc_space_support_mod) as gb_svc_space_support_mod,
+				COALESCE(pc.custom_svc_time_support_mode, c.gb_svc_time_support_mode, c.svc_time_support_mode) as gb_svc_time_support_mode`).
+			Joins("left join platform_channel_gb28181pro pc on c.id = pc.device_channel_id").
+			Where("pc.platform_id = ?", p.PlatformModel.ID).
+			Find(&channels).Error; err != nil {
 			return fmt.Errorf("query channels error: %v", err)
 		}
 	}
 
 	// 发送目录响应
 	if len(channels) > 0 {
+		p.Info("get channels success", channels)
 		return p.sendCatalogResponse(req, sn, fromTag, channels)
 	} else {
 		return p.sendEmptyCatalogResponse(req, sn, fromTag)
@@ -473,28 +371,59 @@ func (p *Platform) handleCatalog(req *sip.Request, tx sip.ServerTransaction) err
 // CreateRequest 创建 SIP 请求
 func (p *Platform) CreateRequest(method string) *sip.Request {
 	request := sip.NewRequest(sip.RequestMethod(method), p.Recipient)
-	request.SetDestination(p.Recipient.String())
+	//request.SetDestination(p.Recipient.String())
 	return request
 }
 
 // sendCatalogResponse 发送目录响应
 func (p *Platform) sendCatalogResponse(req *sip.Request, sn string, fromTag string, channels []gb28181.CommonGBChannel) error {
 	request := p.CreateRequest("MESSAGE")
-	request.From().Params.Add("tag", fromTag)
-	request.To().Params.Add("tag", fromTag)
-	request.SetSource(req.Source())
-	request.SetDestination(req.Destination())
+
+	// 设置From头部
+	fromHeader := sip.FromHeader{
+		Address: sip.Uri{
+			User: p.PlatformModel.DeviceGBID,
+			Host: p.PlatformModel.ServerGBDomain,
+		},
+		Params: sip.NewParams(),
+	}
+	fromHeader.Params.Add("tag", fromTag)
+	request.AppendHeader(&fromHeader)
+	// 添加To头部
+	toHeader := sip.ToHeader{
+		Address: sip.Uri{
+			User: p.PlatformModel.ServerGBID,
+			Host: p.PlatformModel.ServerGBDomain,
+		},
+	}
+	req.AppendHeader(&toHeader)
+	// 添加Via头部
+	viaHeader := sip.ViaHeader{
+		ProtocolName:    "SIP",
+		ProtocolVersion: "2.0",
+		Transport:       p.PlatformModel.Transport,
+		Host:            p.PlatformModel.DeviceIP,
+		Port:            p.PlatformModel.DevicePort,
+		Params:          sip.NewParams(),
+	}
+	viaHeader.Params.Add("branch", sip.GenerateBranchN(16)).Add("rport", "")
+	req.AppendHeader(&viaHeader)
+
+	//request.SetSource(req.Source())
+	//request.SetDestination(req.Destination())
 	request.SetTransport(req.Transport())
 	contentTypeHeader := sip.ContentTypeHeader("Application/MANSCDP+xml")
 	request.AppendHeader(&contentTypeHeader)
-	request.SetBody([]byte(fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
+	request.SetBody([]byte(fmt.Sprintf(`<?xml version="1.0" encoding="GB2312"?>
 <Response>
 <CmdType>Catalog</CmdType>
 <SN>%s</SN>
-<DeviceChannelList Num="%d">
+<DeviceID>%s</DeviceID>
+<SumNum>%d</SumNum>
+<DeviceList Num="%d">
 %s
-</DeviceChannelList>
-</Response>`, sn, len(channels), p.buildChannelList(channels))))
+</DeviceList>
+</Response>`, sn, p.PlatformModel.DeviceGBID, len(channels), len(channels), p.buildChannelList(channels))))
 	_, err := p.Client.Do(p, request)
 	return err
 }
@@ -582,11 +511,35 @@ func (p *Platform) handleDeviceInfo(req *sip.Request, tx sip.ServerTransaction, 
 // sendDeviceInfoResponse 发送设备信息响应
 func (p *Platform) sendDeviceInfoResponse(req *sip.Request, device *Device, sn string, fromTag string) error {
 	request := p.CreateRequest("MESSAGE")
-	request.From().Params.Add("tag", fromTag)
-	request.To().Params.Add("tag", fromTag)
-	request.SetSource(req.Source())
-	request.SetDestination(req.Destination())
-	request.SetTransport(req.Transport())
+	// 设置From头部
+	fromHeader := sip.FromHeader{
+		Address: sip.Uri{
+			User: p.PlatformModel.DeviceGBID,
+			Host: p.PlatformModel.ServerGBDomain,
+		},
+		Params: sip.NewParams(),
+	}
+	fromHeader.Params.Add("tag", fromTag)
+	request.AppendHeader(&fromHeader)
+	// 添加To头部
+	toHeader := sip.ToHeader{
+		Address: sip.Uri{
+			User: p.PlatformModel.ServerGBID,
+			Host: p.PlatformModel.ServerGBDomain,
+		},
+	}
+	req.AppendHeader(&toHeader)
+	// 添加Via头部
+	viaHeader := sip.ViaHeader{
+		ProtocolName:    "SIP",
+		ProtocolVersion: "2.0",
+		Transport:       p.PlatformModel.Transport,
+		Host:            p.PlatformModel.DeviceIP,
+		Port:            p.PlatformModel.DevicePort,
+		Params:          sip.NewParams(),
+	}
+	viaHeader.Params.Add("branch", sip.GenerateBranchN(16)).Add("rport", "")
+	req.AppendHeader(&viaHeader)
 	contentTypeHeader := sip.ContentTypeHeader("Application/MANSCDP+xml")
 	request.AppendHeader(&contentTypeHeader)
 
@@ -642,12 +595,197 @@ func (p *Platform) handleMobilePosition(req *sip.Request, tx sip.ServerTransacti
 func (p *Platform) buildChannelList(channels []gb28181.CommonGBChannel) string {
 	var content string
 	for _, channel := range channels {
-		content += channel.GetFullContent(channel.StreamID, channel.StreamID, p.PlatformModel.DeviceGBID, "Catalog")
+		// 确保字符串字段不为空
+		deviceID := channel.GbDeviceID
+		if deviceID == "" {
+			deviceID = "unknown_device" // 如果没有设备ID，使用默认值
+		}
+		name := channel.GbName
+		if name == "" {
+			name = "未命名设备"
+		}
+		manufacturer := channel.GbManufacturer
+		if manufacturer == "" {
+			manufacturer = "未知厂商"
+		}
+		model := channel.GbModel
+		if model == "" {
+			model = "未知型号"
+		}
+		owner := channel.GbOwner
+		if owner == "" {
+			owner = "未知所有者"
+		}
+		address := channel.GbAddress
+		if address == "" {
+			address = "未知地址"
+		}
+		parentID := channel.GbParentID
+		if parentID == "" {
+			parentID = p.PlatformModel.DeviceGBID // 使用平台ID作为父ID
+		}
+
+		content += fmt.Sprintf(`<Item>
+<DeviceID>%s</DeviceID>
+<Name>%s</Name>
+<Manufacturer>%s</Manufacturer>
+<Model>%s</Model>
+<Owner>%s</Owner>
+<Address>%s</Address>
+<RegisterWay>%d</RegisterWay>
+<Secrecy>%d</Secrecy>
+<ParentID>%s</ParentID>
+<Parental>%d</Parental>
+<SafetyWay>%d</SafetyWay>
+<Status>ON</Status>
+<Info>
+</Info>
+</Item>
+`, deviceID, name, manufacturer, model,
+			owner, address,
+			channel.GbRegisterWay, // 直接使用整数值
+			channel.GbSecrecy,     // 直接使用整数值
+			parentID,
+			channel.GbParental,  // 直接使用整数值
+			channel.GbSafetyWay) // 直接使用整数值
 	}
 	return content
 }
 
 // GetKey 返回平台的唯一标识符
-func (p *Platform) GetKey() string {
-	return p.PlatformModel.ServerGBID
+func (p *Platform) GetKey() uint32 {
+	return p.PlatformModel.ID
+}
+
+// Register 执行注册流程
+func (p *Platform) DoRegister(ctx context.Context) error {
+	// 创建基本的REGISTER请求
+	req := sip.NewRequest(sip.REGISTER, p.Recipient)
+
+	//callid
+	customCallID := fmt.Sprintf("%d@%s", time.Now().Unix(), p.PlatformModel.DeviceIP)
+	callID := sip.CallIDHeader(customCallID)
+	req.AppendHeader(&callID)
+
+	//cseqheader
+	csqHeader := sip.CSeqHeader{
+		SeqNo:      uint32(p.SN),
+		MethodName: "REGISTER",
+	}
+	p.SN++
+	req.AppendHeader(&csqHeader)
+	// 设置From头部，使用本地平台的信息
+	fromHdr := sip.FromHeader{
+		Address: sip.Uri{
+			User: p.PlatformModel.DeviceGBID,
+			Host: p.PlatformModel.ServerGBDomain,
+		},
+		Params: sip.NewParams(),
+	}
+	fromHdr.Params.Add("tag", sip.GenerateTagN(16))
+	req.AppendHeader(&fromHdr)
+
+	// 添加To头部
+	toHeader := sip.ToHeader{
+		Address: sip.Uri{
+			User: p.PlatformModel.DeviceGBID,
+			Host: p.PlatformModel.ServerGBDomain,
+		},
+	}
+	req.AppendHeader(&toHeader)
+
+	// 添加Via头部
+	viaHeader := sip.ViaHeader{
+		ProtocolName:    "SIP",
+		ProtocolVersion: "2.0",
+		Transport:       p.PlatformModel.Transport,
+		Host:            p.PlatformModel.DeviceIP,
+		Port:            p.PlatformModel.DevicePort,
+		Params:          sip.NewParams(),
+	}
+	viaHeader.Params.Add("branch", sip.GenerateBranchN(16)).Add("rport", "")
+	req.AppendHeader(&viaHeader)
+
+	req.AppendHeader(&p.MaxForwardsHDR)
+
+	// 添加Contact头部
+	req.AppendHeader(p.ContactHDR)
+
+	req.AppendHeader(p.UserAgentHDR)
+	// 添加Expires头部
+	req.AppendHeader(sip.NewHeader("Expires", fmt.Sprintf("%d", p.PlatformModel.Expires)))
+
+	contentLengthHeader := sip.ContentLengthHeader(0)
+	req.AppendHeader(&contentLengthHeader)
+	// 设置传输协议
+	req.SetTransport(strings.ToUpper(p.PlatformModel.Transport))
+
+	tx, err := p.Client.TransactionRequest(ctx, req, sipgo.ClientRequestAddVia)
+	if err != nil {
+		p.Error("register", "error", err.Error())
+		return fmt.Errorf("创建事务失败: %v", err)
+	}
+	defer tx.Terminate()
+
+	// 获取响应
+	res, err := p.getResponse(tx)
+	if err != nil {
+		p.Error("register", "error", err.Error())
+		return err
+	}
+
+	// 处理401未授权响应
+	if res.StatusCode == 401 {
+		// 获取WWW-Authenticate头部
+		wwwAuth := res.GetHeader("WWW-Authenticate")
+		if wwwAuth == nil {
+			p.Error("register", "error", "no auth challenge")
+			return fmt.Errorf("no auth challenge")
+		}
+
+		// 解析认证质询
+		chal, err := digest.ParseChallenge(wwwAuth.Value())
+		if err != nil {
+			p.Error("register", "error", err.Error())
+			return err
+		}
+
+		// 生成认证响应
+		cred, _ := digest.Digest(chal, digest.Options{
+			Method:   req.Method.String(),
+			URI:      p.Recipient.Host,
+			Username: p.PlatformModel.Username,
+			Password: p.PlatformModel.Password,
+		})
+
+		// 创建新的带认证信息的请求
+		newReq := req.Clone()
+		newReq.RemoveHeader("Via") // 必须由传输层重新生成
+		newReq.AppendHeader(sip.NewHeader("Authorization", cred.String()))
+
+		// 发送认证请求
+		tx, err = p.Client.TransactionRequest(ctx, newReq, sipgo.ClientRequestAddVia)
+		if err != nil {
+			p.Error("register", "error", err.Error())
+			return err
+		}
+		defer tx.Terminate()
+
+		// 获取认证响应
+		res, err = p.getResponse(tx)
+		if err != nil {
+			p.Error("register", "error", err.Error())
+			return err
+		}
+	}
+
+	// 检查最终响应状态
+	if res.StatusCode != 200 {
+		p.Error("register", "status", res.StatusCode)
+		return fmt.Errorf("注册失败，状态码: %d", res.StatusCode)
+	}
+
+	p.Info("register", "status", "success")
+	p.PlatformModel.Status = true
+	return nil
 }

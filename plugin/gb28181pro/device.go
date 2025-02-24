@@ -77,6 +77,7 @@ type Device struct {
 	fromHDR             sip.FromHeader
 	toHDR               sip.ToHeader
 	plugin              *GB28181ProPlugin
+	LocalPort           int
 }
 
 func (d *Device) TableName() string {

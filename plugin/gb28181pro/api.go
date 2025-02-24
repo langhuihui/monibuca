@@ -2,6 +2,7 @@ package plugin_gb28181pro
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -665,7 +666,7 @@ func (gb *GB28181ProPlugin) AddPlatform(ctx context.Context, req *pb.Platform) (
 	req.UpdateTime = currentTime
 
 	// 将proto消息转换为数据库模型
-	platform := &gb28181.PlatformModel{
+	platformModel := &gb28181.PlatformModel{
 		Enable:                  req.Enable,
 		Name:                    req.Name,
 		ServerGBID:              req.ServerGBId,
@@ -706,28 +707,23 @@ func (gb *GB28181ProPlugin) AddPlatform(ctx context.Context, req *pb.Platform) (
 	}
 
 	// 保存到数据库
-	if err := gb.DB.Create(platform).Error; err != nil {
+	if err := gb.DB.Create(platformModel).Error; err != nil {
 		resp.Code = 500
 		resp.Message = fmt.Sprintf("failed to create platform: %v", err)
 		return resp, nil
 	}
 
-	// 如果平台启用，则启动注册任务
-	if platform.Enable {
-		// 创建 Platform 实例
-		platformInstance := &Platform{
-			PlatformModel: platform,
+	// 如果平台启用，则创建Platform实例并启动任务
+	if platformModel.Enable {
+		// 创建Platform实例
+		platform := &Platform{
+			PlatformModel: platformModel,
 			plugin:        gb,
 		}
-		// 初始化 SIP 客户端
-		if err := platformInstance.InitializeSIPClient(gb.ua); err != nil {
-			gb.Error("初始化SIP客户端失败", "error", err)
-			resp.Code = 500
-			resp.Message = fmt.Sprintf("初始化SIP客户端失败: %v", err)
-			return resp, nil
-		}
-		// 启动注册任务
-		platformInstance.StartRegisterTask()
+
+		// 添加到任务系统
+		gb.AddTask(platform)
+		gb.platforms.Set(platform)
 	}
 
 	resp.Code = 0
@@ -754,7 +750,7 @@ func (gb *GB28181ProPlugin) GetPlatform(ctx context.Context, req *pb.GetPlatform
 
 	// 将数据库模型转换为proto消息
 	resp.Data = &pb.Platform{
-		Id:                      int32(platform.ID),
+		ID:                      platform.ID,
 		Enable:                  platform.Enable,
 		Name:                    platform.Name,
 		ServerGBId:              platform.ServerGBID,
@@ -811,14 +807,14 @@ func (gb *GB28181ProPlugin) UpdatePlatform(ctx context.Context, req *pb.Platform
 
 	// 检查平台是否存在
 	var platform gb28181.PlatformModel
-	if err := gb.DB.First(&platform, req.Id).Error; err != nil {
+	if err := gb.DB.First(&platform, req.ID).Error; err != nil {
 		resp.Code = 404
 		resp.Message = "platform not found"
 		return resp, nil
 	}
-
-	// 记录之前的启用状态
-	wasEnabled := platform.Enable
+	if runningPlatform, ok := gb.platforms.Get(req.ID); ok {
+		runningPlatform.Stop(errors.New("stop running platform,platform.ServerGBID is " + platform.ServerGBID))
+	}
 
 	// 更新平台信息
 	platform.Enable = req.Enable
@@ -865,24 +861,30 @@ func (gb *GB28181ProPlugin) UpdatePlatform(ctx context.Context, req *pb.Platform
 	}
 
 	// 处理平台启用状态变化
-	if !wasEnabled && platform.Enable {
-		// 创建 Platform 实例
+	if platform.Enable {
+		// 如果存在旧的platform实例，先停止并移除
+		if oldPlatform, ok := gb.platforms.Get(platform.ID); ok {
+			oldPlatform.Stop(fmt.Errorf("platform updated"))
+			gb.platforms.Remove(oldPlatform)
+		}
+
+		// 创建新的Platform实例
 		platformInstance := &Platform{
 			PlatformModel: &platform,
 			plugin:        gb,
 		}
-		// 初始化 SIP 客户端
-		if err := platformInstance.InitializeSIPClient(gb.ua); err != nil {
-			gb.Error("初始化SIP客户端失败", "error", err)
-			resp.Code = 500
-			resp.Message = fmt.Sprintf("初始化SIP客户端失败: %v", err)
-			return resp, nil
+
+		// 添加到任务系统
+		gb.AddTask(platformInstance)
+
+		// 添加到platforms集合中
+		gb.platforms.Add(platformInstance)
+	} else {
+		// 如果平台被禁用，停止并移除旧的platform实例
+		if oldPlatform, ok := gb.platforms.Get(platform.ID); ok {
+			oldPlatform.Stop(fmt.Errorf("platform disabled"))
+			gb.platforms.Remove(oldPlatform)
 		}
-		// 启动注册任务
-		platformInstance.StartRegisterTask()
-	} else if wasEnabled && !platform.Enable {
-		// TODO: 平台从启用变为禁用，需要处理注销逻辑
-		// 这里可以添加注销相关的代码
 	}
 
 	resp.Code = 0
@@ -955,7 +957,7 @@ func (gb *GB28181ProPlugin) ListPlatforms(ctx context.Context, req *pb.ListPlatf
 	var pbPlatforms []*pb.Platform
 	for _, p := range platforms {
 		pbPlatforms = append(pbPlatforms, &pb.Platform{
-			Id:                      int32(p.ID),
+			ID:                      p.ID,
 			Enable:                  p.Enable,
 			Name:                    p.Name,
 			ServerGBId:              p.ServerGBID,
@@ -1418,5 +1420,47 @@ func (gb *GB28181ProPlugin) GetDeviceAlarm(ctx context.Context, req *pb.GetDevic
 		resp.Alarms = append(resp.Alarms, alarmInfo)
 	}
 
+	return resp, nil
+}
+
+// AddPlatformChannel 实现添加平台通道
+func (gb *GB28181ProPlugin) AddPlatformChannel(ctx context.Context, req *pb.AddPlatformChannelRequest) (*pb.BaseResponse, error) {
+	resp := &pb.BaseResponse{}
+
+	if gb.DB == nil {
+		resp.Code = 500
+		resp.Message = "数据库未初始化"
+		return resp, nil
+	}
+
+	// 开始事务
+	tx := gb.DB.Begin()
+
+	// 遍历通道ID列表，为每个通道ID创建一条记录
+	for _, channelId := range req.ChannelIds {
+		// 创建新的平台通道记录
+		platformChannel := &gb28181.PlatformChannel{
+			PlatformId:      int(req.PlatformId),
+			DeviceChannelId: int(channelId),
+		}
+
+		// 插入记录
+		if err := tx.Create(platformChannel).Error; err != nil {
+			tx.Rollback()
+			resp.Code = 500
+			resp.Message = fmt.Sprintf("添加平台通道失败: %v", err)
+			return resp, nil
+		}
+	}
+
+	// 提交事务
+	if err := tx.Commit().Error; err != nil {
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("提交事务失败: %v", err)
+		return resp, nil
+	}
+
+	resp.Code = 0
+	resp.Message = "success"
 	return resp, nil
 }

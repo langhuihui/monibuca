@@ -44,7 +44,7 @@ type GB28181ProPlugin struct {
 	m7s.Plugin
 	AutoInvite bool   `default:"true" desc:"自动邀请"`
 	Serial     string `default:"34020000002000000001" desc:"sip 服务 id"` //sip 服务器 id, 默认 34020000002000000001
-	Realm      string `default:"3402000000" desc:"sip 服务域"`             //sip 服务器域，默认 3402000000
+	Realm      string `default:"3402000000" desc:"sip 服务域"`            //sip 服务器域，默认 3402000000
 	Username   string
 	Password   string
 	Sip        SipConfig
@@ -55,7 +55,7 @@ type GB28181ProPlugin struct {
 	server     *sipgo.Server
 	devices    util.Collection[string, *Device]
 	dialogs    util.Collection[uint32, *Dialog]
-	platforms  util.Collection[string, *Platform]
+	platforms  util.Collection[uint32, *Platform]
 	tcpPorts   chan uint16
 }
 
@@ -114,6 +114,7 @@ func (gb *GB28181ProPlugin) OnInit() (err error) {
 			gb.DB.AutoMigrate(&gb28181.DeviceChannel{})
 			gb.DB.AutoMigrate(&gb28181.PlatformModel{})
 			gb.DB.AutoMigrate(&gb28181.DeviceAlarm{})
+			gb.DB.AutoMigrate(&gb28181.PlatformChannel{})
 			// 检查设备过期状态
 			if err := gb.checkDeviceExpire(); err != nil {
 				gb.Error("检查设备过期状态失败", "error", err)
@@ -333,19 +334,9 @@ func (gb *GB28181ProPlugin) OnMessage(req *sip.Request, tx sip.ServerTransaction
 	// 检查消息来源
 	var d *Device
 	var p *gb28181.PlatformModel
-	var ok bool
 
 	// 先从设备缓存中获取
-	if d, ok = gb.devices.Get(id); !ok {
-		if d == nil {
-			gb.Error("OnMessage", "error", "device not found", "DeviceID", id)
-			response := sip.NewResponseFromRequest(req, sip.StatusNotFound, "Not Found", nil)
-			if err := tx.Respond(response); err != nil {
-				gb.Error("respond NotFound", "error", err.Error())
-			}
-			return
-		}
-	}
+	d, _ = gb.devices.Get(id)
 
 	// 检查是否是平台
 	if gb.DB != nil {
@@ -396,11 +387,21 @@ func (gb *GB28181ProPlugin) OnMessage(req *sip.Request, tx sip.ServerTransaction
 			gb.Error("onMessage", "error", err.Error(), "type", "device")
 		}
 	} else {
-		// 创建 Platform 实例
-		platform := &Platform{
-			PlatformModel: p,
-			plugin:        gb,
+		var platform *Platform
+		if platformtmp, ok := gb.platforms.Get(p.ID); !ok {
+			// 创建 Platform 实例
+			platform = &Platform{
+				PlatformModel: p,
+				plugin:        gb,
+			}
+			platform.init()
+			gb.Info("222222222222222222")
+
+		} else {
+			gb.Info("1111111111111111")
+			platform = platformtmp
 		}
+
 		if err = platform.OnMessage(req, tx, temp); err != nil {
 			gb.Error("onMessage", "error", err.Error(), "type", "platform")
 		}
@@ -545,7 +546,8 @@ func (gb *GB28181ProPlugin) StoreDevice(deviceid string, req *sip.Request) (d *D
 			},
 			Params: sip.NewParams(),
 		},
-		plugin: gb,
+		plugin:    gb,
+		LocalPort: serverPort,
 	}
 
 	d.Logger = gb.With("deviceid", deviceid)

@@ -76,6 +76,7 @@ const (
 	Api_AuxiliaryControl_FullMethodName                  = "/gb28181pro.api/AuxiliaryControl"
 	Api_TestSip_FullMethodName                           = "/gb28181pro.api/TestSip"
 	Api_SearchAlarms_FullMethodName                      = "/gb28181pro.api/SearchAlarms"
+	Api_AddPlatformChannel_FullMethodName                = "/gb28181pro.api/AddPlatformChannel"
 )
 
 // ApiClient is the client API for Api service.
@@ -190,6 +191,8 @@ type ApiClient interface {
 	TestSip(ctx context.Context, in *TestSipRequest, opts ...grpc.CallOption) (*TestSipResponse, error)
 	// 分页查询报警记录
 	SearchAlarms(ctx context.Context, in *SearchAlarmsRequest, opts ...grpc.CallOption) (*SearchAlarmsResponse, error)
+	// 添加平台通道
+	AddPlatformChannel(ctx context.Context, in *AddPlatformChannelRequest, opts ...grpc.CallOption) (*BaseResponse, error)
 }
 
 type apiClient struct {
@@ -740,6 +743,16 @@ func (c *apiClient) SearchAlarms(ctx context.Context, in *SearchAlarmsRequest, o
 	return out, nil
 }
 
+func (c *apiClient) AddPlatformChannel(ctx context.Context, in *AddPlatformChannelRequest, opts ...grpc.CallOption) (*BaseResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BaseResponse)
+	err := c.cc.Invoke(ctx, Api_AddPlatformChannel_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ApiServer is the server API for Api service.
 // All implementations must embed UnimplementedApiServer
 // for forward compatibility.
@@ -852,6 +865,8 @@ type ApiServer interface {
 	TestSip(context.Context, *TestSipRequest) (*TestSipResponse, error)
 	// 分页查询报警记录
 	SearchAlarms(context.Context, *SearchAlarmsRequest) (*SearchAlarmsResponse, error)
+	// 添加平台通道
+	AddPlatformChannel(context.Context, *AddPlatformChannelRequest) (*BaseResponse, error)
 	mustEmbedUnimplementedApiServer()
 }
 
@@ -1023,6 +1038,9 @@ func (UnimplementedApiServer) TestSip(context.Context, *TestSipRequest) (*TestSi
 }
 func (UnimplementedApiServer) SearchAlarms(context.Context, *SearchAlarmsRequest) (*SearchAlarmsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SearchAlarms not implemented")
+}
+func (UnimplementedApiServer) AddPlatformChannel(context.Context, *AddPlatformChannelRequest) (*BaseResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AddPlatformChannel not implemented")
 }
 func (UnimplementedApiServer) mustEmbedUnimplementedApiServer() {}
 func (UnimplementedApiServer) testEmbeddedByValue()             {}
@@ -2017,6 +2035,24 @@ func _Api_SearchAlarms_Handler(srv interface{}, ctx context.Context, dec func(in
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Api_AddPlatformChannel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddPlatformChannelRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).AddPlatformChannel(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_AddPlatformChannel_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).AddPlatformChannel(ctx, req.(*AddPlatformChannelRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Api_ServiceDesc is the grpc.ServiceDesc for Api service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -2239,6 +2275,10 @@ var Api_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SearchAlarms",
 			Handler:    _Api_SearchAlarms_Handler,
+		},
+		{
+			MethodName: "AddPlatformChannel",
+			Handler:    _Api_AddPlatformChannel_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

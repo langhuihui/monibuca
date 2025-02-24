@@ -9,7 +9,7 @@ import (
 // 包含了平台的基本信息、SIP服务配置、设备信息、认证信息等。
 // 用于存储和管理GB28181平台的所有相关参数。
 type PlatformModel struct {
-	ID                      int    `gorm:"primaryKey;autoIncrement" json:"id"`                              // ID表示数据库中的唯一标识符
+	ID                      uint32 `gorm:"primaryKey;autoIncrement"`                                        // ID表示数据库中的唯一标识符
 	Enable                  bool   `gorm:"column:enable" json:"enable"`                                     // Enable表示该平台配置是否启用
 	Name                    string `gorm:"column:name" json:"name"`                                         // Name表示平台的名称
 	ServerGBID              string `gorm:"column:server_gb_id" json:"serverGBId"`                           // ServerGBID表示SIP服务器的国标编码

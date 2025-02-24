@@ -17,43 +17,45 @@ const (
 type DeviceChannel struct {
 	CommonGBChannel // 通过组合继承 CommonGBChannel 的字段
 
-	ID                  int64         `gorm:"primaryKey;autoIncrement" json:"id"`                 // 数据库自增长ID
-	DeviceDBID          int64         `json:"deviceDbId"`                                         // device表里的id
-	DeviceID            string        `json:"deviceId" xml:"DeviceID"`                            // 设备国标编号
-	ParentID            string        `json:"parentId" xml:"ParentID"`                            // 父节点ID
-	Name                string        `json:"name" xml:"Name"`                                    // 通道名称
-	Manufacturer        string        `json:"manufacturer" xml:"Manufacturer"`                    // 设备厂商
-	Model               string        `json:"model" xml:"Model"`                                  // 设备型号
-	Owner               string        `json:"owner" xml:"Owner"`                                  // 设备归属
-	CivilCode           string        `json:"civilCode" xml:"CivilCode"`                          // 行政区域
-	Block               string        `json:"block" xml:"Block"`                                  // 警区
-	Address             string        `json:"address" xml:"Address"`                              // 安装地址
-	Port                int           `json:"port" xml:"Port"`                                    // 端口
-	Parental            int           `json:"parental" xml:"Parental"`                            // 是否有子设备
-	SafetyWay           int           `json:"safetyWay" xml:"SafetyWay"`                          // 信令安全模式
-	RegisterWay         int           `json:"registerWay" xml:"RegisterWay"`                      // 注册方式
-	CertNum             string        `json:"certNum" xml:"CertNum"`                              // 证书序列号
-	Certifiable         int           `json:"certifiable" xml:"Certifiable"`                      // 证书有效标识
-	ErrCode             int           `json:"errCode" xml:"ErrCode"`                              // 无效原因码
-	EndTime             string        `json:"endTime" xml:"EndTime"`                              // 证书终止有效期
-	Secrecy             int           `json:"secrecy" xml:"Secrecy"`                              // 保密属性
-	IPAddress           string        `json:"ipAddress" xml:"IPAddress"`                          // 设备/系统IP地址
-	Password            string        `json:"password" xml:"Password"`                            // 设备口令
-	PTZType             int           `json:"ptzType" xml:"Info>PTZType"`                         // 摄像机类型
-	PositionType        int           `json:"positionType" xml:"Info>PositionType"`               // 摄像机位置类型
-	RoomType            int           `json:"roomType" xml:"Info>RoomType"`                       // 安装位置室内外属性
-	UseType             int           `json:"useType" xml:"Info>UseType"`                         // 用途属性
-	SupplyLightType     int           `json:"supplyLightType" xml:"Info>SupplyLightType"`         // 摄像机补光属性
-	DirectionType       int           `json:"directionType" xml:"Info>DirectionType"`             // 摄像机监视方位属性
-	Resolution          string        `json:"resolution" xml:"Info>Resolution"`                   // 摄像机支持的分辨率
-	BusinessGroupID     string        `json:"businessGroupId" xml:"Info>BusinessGroupID"`         // 虚拟组织所属的业务分组ID
-	DownloadSpeed       string        `json:"downloadSpeed" xml:"Info>DownloadSpeed"`             // 下载倍速
-	SVCSpaceSupportMode int           `json:"svcSpaceSupportMode" xml:"Info>SVCSpaceSupportMode"` // 空域编码能力
-	SVCTimeSupportMode  int           `json:"svcTimeSupportMode" xml:"Info>SVCTimeSupportMode"`   // 时域编码能力
-	StreamPushID        int           `json:"streamPushId"`                                       // 关联的推流ID
-	StreamProxyID       int           `json:"streamProxyId"`                                      // 关联的拉流代理ID
-	CreateTime          string        `json:"createTime"`                                         // 创建时间
-	Status              ChannelStatus `json:"status" xml:"Status"`                                // 设备状态
+	ID                 int64         `gorm:"primaryKey;autoIncrement" json:"id"`                // 数据库自增长ID
+	DeviceDBID         int64         `json:"deviceDbId"`                                        // device表里的id
+	DeviceID           string        `json:"deviceId" xml:"DeviceID"`                           // 设备国标编号
+	ParentID           string        `json:"parentId" xml:"ParentID"`                           // 父节点ID
+	Name               string        `json:"name" xml:"Name"`                                   // 通道名称
+	Manufacturer       string        `json:"manufacturer" xml:"Manufacturer"`                   // 设备厂商
+	Model              string        `json:"model" xml:"Model"`                                 // 设备型号
+	Owner              string        `json:"owner" xml:"Owner"`                                 // 设备归属
+	CivilCode          string        `json:"civilCode" xml:"CivilCode"`                         // 行政区域
+	Block              string        `json:"block" xml:"Block"`                                 // 警区
+	Address            string        `json:"address" xml:"Address"`                             // 安装地址
+	Port               int           `json:"port" xml:"Port"`                                   // 端口
+	Parental           int           `json:"parental" xml:"Parental"`                           // 是否有子设备
+	SafetyWay          int           `json:"safetyWay" xml:"SafetyWay"`                         // 信令安全模式
+	RegisterWay        int           `json:"registerWay" xml:"RegisterWay"`                     // 注册方式
+	CertNum            string        `json:"certNum" xml:"CertNum"`                             // 证书序列号
+	Certifiable        int           `json:"certifiable" xml:"Certifiable"`                     // 证书有效标识
+	ErrCode            int           `json:"errCode" xml:"ErrCode"`                             // 无效原因码
+	EndTime            string        `json:"endTime" xml:"EndTime"`                             // 证书终止有效期
+	Secrecy            int           `json:"secrecy" xml:"Secrecy"`                             // 保密属性
+	IPAddress          string        `json:"ipAddress" xml:"IPAddress"`                         // 设备/系统IP地址
+	Password           string        `json:"password" xml:"Password"`                           // 设备口令
+	PTZType            int           `json:"ptzType" xml:"Info>PTZType"`                        // 摄像机类型
+	PositionType       int           `json:"positionType" xml:"Info>PositionType"`              // 摄像机位置类型
+	RoomType           int           `json:"roomType" xml:"Info>RoomType"`                      // 安装位置室内外属性
+	UseType            int           `json:"useType" xml:"Info>UseType"`                        // 用途属性
+	SupplyLightType    int           `json:"supplyLightType" xml:"Info>SupplyLightType"`        // 摄像机补光属性
+	DirectionType      int           `json:"directionType" xml:"Info>DirectionType"`            // 摄像机监视方位属性
+	Resolution         string        `json:"resolution" xml:"Info>Resolution"`                  // 摄像机支持的分辨率
+	BusinessGroupID    string        `json:"businessGroupId" xml:"Info>BusinessGroupID"`        // 虚拟组织所属的业务分组ID
+	DownloadSpeed      string        `json:"downloadSpeed" xml:"Info>DownloadSpeed"`            // 下载倍速
+	SVCSpaceSupportMod int           `json:"svcSpaceSupportMod" xml:"Info>SVCSpaceSupportMode"` // 空域编码能力
+	SVCTimeSupportMode int           `json:"svcTimeSupportMode" xml:"Info>SVCTimeSupportMode"`  // 时域编码能力
+	StreamPushID       int           `json:"streamPushId"`                                      // 关联的推流ID
+	StreamProxyID      int           `json:"streamProxyId"`                                     // 关联的拉流代理ID
+	CreateTime         string        `json:"createTime"`                                        // 创建时间
+	Status             ChannelStatus `json:"status" xml:"Status"`                               // 设备状态
+	Longitude          float64
+	Latitude           float64
 
 	PTZTypeText string  `json:"ptzTypeText"` // 云台类型描述字符串
 	GbLongitude float64 `json:"gbLongitude"`
@@ -289,8 +291,8 @@ func (d *DeviceChannel) appendInfoContent(content *string) {
 	if d.DownloadSpeed != "" {
 		*content += "  <DownloadSpeed>" + d.DownloadSpeed + "</DownloadSpeed>\n"
 	}
-	if d.SVCSpaceSupportMode != 0 {
-		*content += "  <SVCSpaceSupportMode>" + strconv.Itoa(d.SVCSpaceSupportMode) + "</SVCSpaceSupportMode>\n"
+	if d.SVCSpaceSupportMod != 0 {
+		*content += "  <SVCSpaceSupportMode>" + strconv.Itoa(d.SVCSpaceSupportMod) + "</SVCSpaceSupportMode>\n"
 	}
 	if d.SVCTimeSupportMode != 0 {
 		*content += "  <SVCTimeSupportMode>" + strconv.Itoa(d.SVCTimeSupportMode) + "</SVCTimeSupportMode>\n"

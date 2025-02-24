@@ -396,6 +396,14 @@ service api {
       get: "/gb28181/api/alarms/{deviceId}"
     };
   }
+
+  // 添加平台通道
+  rpc AddPlatformChannel (AddPlatformChannelRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      post: "/gb28181/api/platform/channel/add"
+      body: "*"
+    };
+  }
 }
 
 // 请求和响应消息定义
@@ -656,7 +664,7 @@ message SSRCListResponse {
 
 // Platform消息定义
 message Platform {
-  int32 id = 1;                      // ID(数据库中)
+  uint32 ID = 1;                      // ID(数据库中)
   bool enable = 2;                   // 是否启用
   string name = 3;                   // 名称
   string serverGBId = 4;             // SIP服务国标编码
@@ -905,4 +913,10 @@ message AlarmRecord {
   string alarmPriorityDesc = 13;// 报警级别描述
   string alarmMethodDesc = 14;  // 报警方式描述
   string alarmTypeDesc = 15;    // 报警类型描述
+}
+
+// 添加平台通道请求
+message AddPlatformChannelRequest {
+  int32 platformId = 1;  // 平台ID
+  repeated int32 channelIds = 2;  // 通道ID列表
 }
