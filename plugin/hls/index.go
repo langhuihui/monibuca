@@ -76,6 +76,32 @@ func (config *HLSPlugin) vod(w http.ResponseWriter, r *http.Request) {
 		if !startTime.IsZero() {
 			if config.DB != nil {
 				var records []m7s.RecordStream
+				if recordType == "fmp4" {
+					query := `stream_path = ? AND type = ? AND start_time IS NOT NULL AND end_time IS NOT NULL AND ? <= end_time AND ? >= start_time`
+					config.DB.Where(query, streamPath, "mp4", startTime, endTime).Find(&records)
+					if len(records) == 0 {
+						return
+					}
+					playlist := hls.Playlist{
+						Version:        7,
+						Sequence:       0,
+						Targetduration: 90,
+					}
+					var plBuffer util.Buffer
+					playlist.Writer = &plBuffer
+					playlist.Init()
+
+					for _, record := range records {
+						duration := record.EndTime.Sub(record.StartTime).Seconds()
+						playlist.WriteInf(hls.PlaylistInf{
+							Duration: duration,
+							Title:    fmt.Sprintf("/mp4/download/%s.fmp4?id=%d", streamPath, record.ID),
+						})
+					}
+					plBuffer.WriteString("#EXT-X-ENDLIST\n")
+					w.Write(plBuffer)
+					return
+				}
 				query := `stream_path = ? AND type = ? AND start_time IS NOT NULL AND end_time IS NOT NULL AND ? <= end_time AND ? >= start_time`
 				config.DB.Where(query, streamPath, recordType, startTime, endTime).Find(&records)
 				if len(records) > 0 {
@@ -93,7 +119,6 @@ func (config *HLSPlugin) vod(w http.ResponseWriter, r *http.Request) {
 						playlist.WriteInf(hls.PlaylistInf{
 							Duration: duration,
 							Title:    record.FilePath,
-							FilePath: record.FilePath,
 						})
 					}
 					plBuffer.WriteString("#EXT-X-ENDLIST\n")

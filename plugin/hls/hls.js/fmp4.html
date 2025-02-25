@@ -725,14 +725,12 @@
         }
 
         // 处理 MP4 文件 URL
-        if (line.toLowerCase().endsWith('.mp4') || line.toLowerCase().endsWith('.fmp4')) {
-          const url = line.startsWith('http') ? line : new URL(line, baseUrl).href;
-          mp4Urls.push({
-            url,
-            duration
-          });
-          log(`找到 MP4: ${url} (时长: ${duration}秒)`);
-        }
+        const url = line.startsWith('http') ? line : new URL(line, baseUrl).href;
+        mp4Urls.push({
+          url,
+          duration
+        });
+        log(`找到 MP4: ${url} (时长: ${duration}秒)`);
       }
 
       return mp4Urls;
