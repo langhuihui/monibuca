@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"io"
+	"net"
 	"time"
 
 	"github.com/deepch/vdk/codec/h264parser"
@@ -23,6 +24,51 @@ type RTMPVideo struct {
 
 func (avcc *RTMPVideo) GetCTS() time.Duration {
 	return time.Duration(avcc.CTS) * time.Millisecond
+}
+
+// 过滤掉异常的 NALU
+func (avcc *RTMPVideo) filterH264(naluSizeLen int) {
+	reader := avcc.NewReader()
+	lenReader := reader.NewReader()
+	var afterFilter util.Memory
+	allocator := avcc.GetAllocator()
+	var hasBadNalu bool
+	for {
+		naluLen, err := reader.ReadBE(naluSizeLen)
+		if err != nil {
+			break
+		}
+		var lenBuffer net.Buffers
+		lenReader.RangeN(naluSizeLen, func(b []byte) {
+			lenBuffer = append(lenBuffer, b)
+		})
+		lenReader.Skip(int(naluLen))
+		var naluBuffer net.Buffers
+		reader.RangeN(int(naluLen), func(b []byte) {
+			naluBuffer = append(naluBuffer, b)
+		})
+		if badType := codec.ParseH264NALUType(naluBuffer[0][0]); badType > 9 {
+			hasBadNalu = true
+			if allocator != nil {
+				for _, nalu := range lenBuffer {
+					allocator.Free(nalu)
+				}
+				for _, nalu := range naluBuffer {
+					allocator.Free(nalu)
+				}
+			}
+		} else {
+			afterFilter.Append(lenBuffer...)
+			afterFilter.Append(naluBuffer...)
+		}
+	}
+	if hasBadNalu {
+		avcc.Memory = afterFilter
+	}
+}
+
+func (avcc *RTMPVideo) filterH265(naluSizeLen int) {
+	//TODO
 }
 
 func (avcc *RTMPVideo) Parse(t *AVTrack) (err error) {
@@ -86,8 +132,17 @@ func (avcc *RTMPVideo) Parse(t *AVTrack) (err error) {
 			err = parseSequence()
 			return
 		case PacketTypeCodedFrames:
-
+			switch ctx := t.ICodecCtx.(type) {
+			case *H265Ctx:
+				if avcc.CTS, err = reader.ReadBE(3); err != nil {
+					return err
+				}
+				avcc.filterH265(int(ctx.RecordInfo.LengthSizeMinusOne) + 1)
+			case *AV1Ctx:
+				// return avcc.parseAV1(reader)
+			}
 		case PacketTypeCodedFramesX:
+			avcc.filterH265(int(t.ICodecCtx.(*H265Ctx).RecordInfo.LengthSizeMinusOne) + 1)
 		}
 	} else {
 		b0, err = reader.ReadByte() //sequence frame flag
@@ -108,19 +163,12 @@ func (avcc *RTMPVideo) Parse(t *AVTrack) (err error) {
 				return
 			}
 		} else {
-			// var naluLen int
-			// for reader.Length > 0 {
-			// 	naluLen, err = reader.ReadBE(4) // naluLenM
-			// 	if err != nil {
-			// 		return
-			// 	}
-			// 	var nalus net.Buffers
-			// 	n := reader.WriteNTo(naluLen, &nalus)
-			// 	if n != naluLen {
-			// 		err = fmt.Errorf("naluLen:%d != n:%d", naluLen, n)
-			// 		return
-			// 	}
-			// }
+			switch ctx := t.ICodecCtx.(type) {
+			case *codec.H264Ctx:
+				avcc.filterH264(int(ctx.RecordInfo.LengthSizeMinusOne) + 1)
+			case *H265Ctx:
+				avcc.filterH265(int(ctx.RecordInfo.LengthSizeMinusOne) + 1)
+			}
 		}
 	}
 	return
