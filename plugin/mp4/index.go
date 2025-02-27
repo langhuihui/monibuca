@@ -80,6 +80,7 @@ func (p *MP4Plugin) OnInit() (err error) {
 		deleteRecordTask.DiskMaxPercent = p.DiskMaxPercent
 		deleteRecordTask.AutoOverWriteDiskPercent = p.AutoOverWriteDiskPercent
 		deleteRecordTask.RecordFileExpireDays = p.RecordFileExpireDays
+		deleteRecordTask.plugin = p
 		p.AddTask(&deleteRecordTask)
 	}
 	// go func() { //处理所有异常，录像中断异常、录像读取异常、录像导出文件中断、磁盘容量低于阈值异常、磁盘异常

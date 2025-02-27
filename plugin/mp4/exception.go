@@ -2,6 +2,8 @@ package plugin_mp4
 
 import (
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/shirou/gopsutil/v4/disk"
@@ -57,60 +59,72 @@ type Exception struct {
 // }
 
 // 判断磁盘使用量是否中超限
-func (p *DeleteRecordTask) getDiskOutOfSpace(max float64) bool {
-	exePath, err := os.Getwd()
-	//pwd, _ := os.Getwd()
-	//fmt.Printf("当前pwd是: %v\n", pwd)
-	//if err != nil {
-	//	fmt.Printf("Error getting executable path: %v\n", err)
-	//	return false
-	//}
-	//// 获取路径的根目录部分
-	//root := filepath.VolumeName(exePath)
-	//if root == "" {
-	//	// 在Unix-like系统中，根目录是 "/"
-	//	root = "/"
-	//}
+func (p *DeleteRecordTask) getDiskOutOfSpace(filePath string) bool {
+	exePath := filepath.Dir(filePath)
 	d, err := disk.Usage(exePath)
-	if err != nil {
+	if err != nil || d == nil {
 		p.Error("getDiskOutOfSpace", "error", err)
-	}
-	p.Debug("getDiskOutOfSpace", "current path", exePath, "disk UsedPercent", d.UsedPercent, "total disk space", d.Total,
-		"disk free", d.Free, "disk usage", d.Used, "AutoOverWriteDiskPercent", p.AutoOverWriteDiskPercent, "DiskMaxPercent", p.DiskMaxPercent)
-	if d.UsedPercent >= max {
-		return true
-	} else {
 		return false
 	}
+	p.plugin.Debug("getDiskOutOfSpace", "current path", exePath, "disk UsedPercent", d.UsedPercent, "total disk space", d.Total,
+		"disk free", d.Free, "disk usage", d.Used, "AutoOverWriteDiskPercent", p.AutoOverWriteDiskPercent, "DiskMaxPercent", p.DiskMaxPercent)
+	return d.UsedPercent >= p.AutoOverWriteDiskPercent
 }
 
 func (p *DeleteRecordTask) deleteOldestFile() {
 	//当当前磁盘使用量大于AutoOverWriteDiskPercent自动覆盖磁盘使用量配置时，自动删除最旧的文件
 	//连续录像删除最旧的文件
-	for p.getDiskOutOfSpace(p.AutoOverWriteDiskPercent) {
-		queryRecord := m7s.RecordStream{
-			EventLevel: m7s.EventLevelLow, // 查询条件：event_level = 1,非重要事件
+	// 创建一个数组来存储所有的conf.FilePath
+	var filePaths []string
+	if len(p.plugin.GetCommonConf().OnPub.Record) > 0 {
+		for _, conf := range p.plugin.GetCommonConf().OnPub.Record {
+			// 处理路径，去掉最后的/$0部分，只保留目录部分
+			dirPath := filepath.Dir(conf.FilePath)
+			p.Info("deleteOldestFile", "original filepath", conf.FilePath, "processed filepath", dirPath)
+			filePaths = append(filePaths, dirPath)
 		}
-		var eventRecords []m7s.RecordStream
-		err := p.DB.Where(&queryRecord).Where("end_time != '1970-01-01 00:00:00'").Order("end_time ASC").Limit(1).Find(&eventRecords).Error
-		if err == nil {
-			if len(eventRecords) > 0 {
-				for _, record := range eventRecords {
-					p.Info("deleteOldestFile", "ready to delete oldestfile,ID", record.ID, "create time", record.EndTime, "filepath", record.FilePath)
-					err = os.Remove(record.FilePath)
-					if err != nil {
-						p.Error("deleteOldestFile", "delete file from disk error", err)
-					}
-					err = p.DB.Delete(&record).Error
-					if err != nil {
-						p.Error("deleteOldestFile", "delete record from disk error", err)
+	}
+	if p.plugin.EventRecordFilePath != "" {
+		// 同样处理EventRecordFilePath
+		dirPath := filepath.Dir(p.plugin.EventRecordFilePath)
+		filePaths = append(filePaths, dirPath)
+	}
+	for _, filePath := range filePaths {
+		for p.getDiskOutOfSpace(filePath) {
+			queryRecord := m7s.RecordStream{
+				EventLevel: m7s.EventLevelLow, // 查询条件：event_level = 1,非重要事件
+			}
+			var eventRecords []m7s.RecordStream
+			// 使用不同的方法进行路径匹配，避免ESCAPE语法问题
+			// 解决方案：用MySQL能理解的简单方式匹配路径前缀
+			basePath := filePath
+			// 直接替换所有反斜杠，不需要判断是否包含
+			basePath = strings.Replace(basePath, "\\", "\\\\", -1)
+			searchPattern := basePath + "%"
+			p.Info("deleteOldestFile", "searching with path pattern", searchPattern)
+
+			err := p.DB.Where(&queryRecord).Where("end_time != '1970-01-01 00:00:00'").
+				Where("file_path LIKE ?", searchPattern).
+				Order("end_time ASC").Limit(1).Find(&eventRecords).Error
+			if err == nil {
+				if len(eventRecords) > 0 {
+					for _, record := range eventRecords {
+						p.Info("deleteOldestFile", "ready to delete oldestfile,ID", record.ID, "create time", record.EndTime, "filepath", record.FilePath)
+						err = os.Remove(record.FilePath)
+						if err != nil {
+							p.Error("deleteOldestFile", "delete file from disk error", err)
+						}
+						err = p.DB.Delete(&record).Error
+						if err != nil {
+							p.Error("deleteOldestFile", "delete record from disk error", err)
+						}
 					}
 				}
+			} else {
+				p.Error("deleteOldestFile", "search record from db error", err)
 			}
-		} else {
-			p.Error("deleteOldestFile", "search record from db error", err)
+			time.Sleep(time.Second * 3)
 		}
-		time.Sleep(time.Second * 3)
 	}
 }
 
@@ -120,6 +134,7 @@ type DeleteRecordTask struct {
 	AutoOverWriteDiskPercent float64
 	RecordFileExpireDays     int
 	DB                       *gorm.DB
+	plugin                   *MP4Plugin
 }
 
 func (t *DeleteRecordTask) GetTickInterval() time.Duration {
