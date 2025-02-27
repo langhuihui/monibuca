@@ -32,7 +32,6 @@ type Device struct {
 	Name                  string    // 设备名
 	Manufacturer          string    // 生产厂商
 	Model                 string    // 型号
-	Owner                 string    // 所有者
 	Firmware              string    // 固件版本
 	Transport             string    // 传输协议（UDP/TCP）
 	StreamMode            string    // 数据流传输模式（UDP:udp传输/TCP-ACTIVE：tcp主动模式/TCP-PASSIVE：tcp被动模式）
@@ -68,8 +67,7 @@ type Device struct {
 	Recipient           sip.Uri                           `gorm:"-:all"`
 	channels            util.Collection[string, *Channel] `gorm:"-:all"`
 	mediaIp             string
-	GpsTime             time.Time // gps时间
-	Longitude, Latitude string    // 经度,纬度
+	Longitude, Latitude string // 经度,纬度
 	eventChan           chan any
 	client              *sipgo.Client
 	dialogClient        *sipgo.DialogClient
@@ -126,7 +124,7 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 				}
 			}
 			// 更新当前设备的通道数
-			d.ChannelCount = len(msg.DeviceChannelList)
+			d.ChannelCount = msg.SumNum
 			d.UpdateTime = time.Now()
 			if err := d.plugin.DB.Save(d).Error; err != nil {
 				d.Error("save device failed", "error", err)
@@ -146,6 +144,7 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 		d.Name = msg.DeviceName
 		d.Manufacturer = msg.Manufacturer
 		d.Model = msg.Model
+		d.Firmware = msg.Firmware
 		// 更新设备信息到数据库
 		if d.plugin.DB != nil {
 			d.UpdateTime = time.Now()

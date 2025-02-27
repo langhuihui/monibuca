@@ -119,6 +119,7 @@ type (
 		Manufacturer      string
 		Model             string
 		Channel           string
+		Firmware          string
 		DeviceChannelList []DeviceChannel `xml:"DeviceList>Item"`
 		RecordList        struct {
 			Num  int          `xml:"Num,attr"`

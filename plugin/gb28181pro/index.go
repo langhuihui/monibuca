@@ -44,7 +44,7 @@ type GB28181ProPlugin struct {
 	m7s.Plugin
 	AutoInvite bool   `default:"true" desc:"自动邀请"`
 	Serial     string `default:"34020000002000000001" desc:"sip 服务 id"` //sip 服务器 id, 默认 34020000002000000001
-	Realm      string `default:"3402000000" desc:"sip 服务域"`            //sip 服务器域，默认 3402000000
+	Realm      string `default:"3402000000" desc:"sip 服务域"`             //sip 服务器域，默认 3402000000
 	Username   string
 	Password   string
 	Sip        SipConfig
@@ -510,23 +510,24 @@ func (gb *GB28181ProPlugin) StoreDevice(deviceid string, req *sip.Request) (d *D
 
 	now := time.Now()
 	d = &Device{
-		DeviceID:     deviceid,
-		CreateTime:   now,
-		UpdateTime:   now,
-		RegisterTime: now,
-		Status:       DeviceRegisterStatus,
-		Online:       true,
-		StreamMode:   "UDP",           // 默认UDP传输
-		Charset:      "GB2312",        // 默认GB2312字符集
-		GeoCoordSys:  "WGS84",         // 默认WGS84坐标系
-		Transport:    req.Transport(), // 传输协议
-		IP:           hostname,
-		Port:         port,
-		HostAddress:  hostname + ":" + portStr,
-		LocalIP:      host,
-		mediaIp:      host,
-		Expires:      int(expSec),
-		eventChan:    make(chan any, 10),
+		DeviceID:      deviceid,
+		CreateTime:    now,
+		UpdateTime:    now,
+		RegisterTime:  now,
+		KeepaliveTime: now,
+		Status:        DeviceRegisterStatus,
+		Online:        true,
+		StreamMode:    "UDP",           // 默认UDP传输
+		Charset:       "GB2312",        // 默认GB2312字符集
+		GeoCoordSys:   "WGS84",         // 默认WGS84坐标系
+		Transport:     req.Transport(), // 传输协议
+		IP:            hostname,
+		Port:          port,
+		HostAddress:   hostname + ":" + portStr,
+		LocalIP:       host,
+		mediaIp:       host,
+		Expires:       int(expSec),
+		eventChan:     make(chan any, 10),
 		Recipient: sip.Uri{
 			Host: hostname,
 			Port: port,

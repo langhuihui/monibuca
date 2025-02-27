@@ -95,19 +95,19 @@ func (gb *GB28181ProPlugin) List(ctx context.Context, req *pb.GetDevicesRequest)
 		}
 
 		pbDevices = append(pbDevices, &pb.Device{
-			Id:           d.DeviceID,
-			Name:         d.Name,
-			Manufacturer: d.Manufacturer,
-			Model:        d.Model,
-			Owner:        d.Owner,
-			Status:       string(d.Status),
-			Online:       d.Online,
-			Longitude:    d.Longitude,
-			Latitude:     d.Latitude,
-			GpsTime:      timestamppb.New(d.GpsTime),
-			RegisterTime: timestamppb.New(d.RegisterTime),
-			UpdateTime:   timestamppb.New(d.UpdateTime),
-			Channels:     pbChannels,
+			DeviceID:      d.DeviceID,
+			Name:          d.Name,
+			Manufacturer:  d.Manufacturer,
+			Model:         d.Model,
+			Status:        string(d.Status),
+			Online:        d.Online,
+			Longitude:     d.Longitude,
+			Latitude:      d.Latitude,
+			RegisterTime:  timestamppb.New(d.RegisterTime),
+			UpdateTime:    timestamppb.New(d.UpdateTime),
+			KeepAliveTime: timestamppb.New(d.KeepaliveTime),
+			ChannelCount:  int32(d.ChannelCount),
+			Channels:      pbChannels,
 		})
 	}
 
@@ -176,16 +176,14 @@ func (gb *GB28181ProPlugin) GetDevice(ctx context.Context, req *pb.GetDeviceRequ
 			})
 		}
 		resp.Data = &pb.Device{
-			Id:           d.DeviceID,
+			DeviceID:     d.DeviceID,
 			Name:         d.Name,
 			Manufacturer: d.Manufacturer,
 			Model:        d.Model,
-			Owner:        d.Owner,
 			Status:       string(d.Status),
 			Online:       d.Online,
 			Longitude:    d.Longitude,
 			Latitude:     d.Latitude,
-			GpsTime:      timestamppb.New(d.GpsTime),
 			RegisterTime: timestamppb.New(d.RegisterTime),
 			UpdateTime:   timestamppb.New(d.UpdateTime),
 			Channels:     channels,
@@ -273,19 +271,18 @@ func (gb *GB28181ProPlugin) GetDevices(ctx context.Context, req *pb.GetDevicesRe
 		}
 
 		pbDevice := &pb.Device{
-			Id:           d.DeviceID,
-			Name:         d.Name,
-			Manufacturer: d.Manufacturer,
-			Model:        d.Model,
-			Owner:        d.Owner,
-			Status:       string(d.Status),
-			Online:       d.Online,
-			Longitude:    d.Longitude,
-			Latitude:     d.Latitude,
-			GpsTime:      timestamppb.New(d.GpsTime),
-			RegisterTime: timestamppb.New(d.RegisterTime),
-			UpdateTime:   timestamppb.New(d.UpdateTime),
-			Channels:     pbChannels,
+			DeviceID:      d.DeviceID,
+			Name:          d.Name,
+			Manufacturer:  d.Manufacturer,
+			Model:         d.Model,
+			Status:        string(d.Status),
+			Online:        d.Online,
+			Longitude:     d.Longitude,
+			Latitude:      d.Latitude,
+			RegisterTime:  timestamppb.New(d.RegisterTime),
+			UpdateTime:    timestamppb.New(d.UpdateTime),
+			KeepAliveTime: timestamppb.New(d.KeepaliveTime),
+			Channels:      pbChannels,
 		}
 		pbDevices = append(pbDevices, pbDevice)
 	}
