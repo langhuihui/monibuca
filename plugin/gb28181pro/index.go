@@ -553,7 +553,8 @@ func (gb *GB28181ProPlugin) StoreDevice(deviceid string, req *sip.Request) (d *D
 
 	d.Logger = gb.With("deviceid", deviceid)
 	d.fromHDR.Params.Add("tag", sip.GenerateTagN(16))
-	d.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(host))
+	d.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(host), sipgo.WithClientPort(serverPort))
+	gb.Info("get serverport is ", serverPort)
 	d.dialogClient = sipgo.NewDialogClient(d.client, d.contactHDR)
 	d.channels.L = new(sync.RWMutex)
 	d.Info("StoreDevice", "source", source, "desc", desc, "servIp", servIp, "publicIP", host, "recipient", req.Recipient)

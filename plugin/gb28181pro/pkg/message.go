@@ -16,14 +16,16 @@ import (
 
 const (
 	// CatalogXML 获取设备列表xml样式
-	CatalogXML = `<?xml version="1.0"?><Query>
+	CatalogXML = `<?xml version="1.0" encoding="%s"?>
+<Query>
 <CmdType>Catalog</CmdType>
 <SN>%d</SN>
 <DeviceID>%s</DeviceID>
 </Query>
 `
 	// RecordInfoXML 获取录像文件列表xml样式
-	RecordInfoXML = `<?xml version="1.0"?><Query>
+	RecordInfoXML = `<?xml version="1.0"?>
+<Query>
 <CmdType>RecordInfo</CmdType>
 <SN>%d</SN>
 <DeviceID>%s</DeviceID>
@@ -34,14 +36,16 @@ const (
 </Query>
 `
 	// DeviceInfoXML 查询设备详情xml样式
-	DeviceInfoXML = `<?xml version="1.0"?><Query>
+	DeviceInfoXML = `<?xml version="1.0" encoding="%s"?>
+<Query>
 <CmdType>DeviceInfo</CmdType>
 <SN>%d</SN>
 <DeviceID>%s</DeviceID>
 </Query>
 `
 	// DevicePositionXML 订阅设备位置
-	DevicePositionXML = `<?xml version="1.0"?><Query>
+	DevicePositionXML = `<?xml version="1.0"?>
+<Query>
 <CmdType>MobilePosition</CmdType>
 <SN>%d</SN>
 <DeviceID>%s</DeviceID>
@@ -82,13 +86,13 @@ func toGB2312(s string) []byte {
 }
 
 // BuildDeviceInfoXML 获取设备详情指令
-func BuildDeviceInfoXML(sn int, id string) []byte {
-	return toGB2312(fmt.Sprintf(DeviceInfoXML, sn, id))
+func BuildDeviceInfoXML(sn int, id string, charset string) []byte {
+	return toGB2312(fmt.Sprintf(DeviceInfoXML, charset, sn, id))
 }
 
 // BuildCatalogXML 获取NVR下设备列表指令
-func BuildCatalogXML(sn int, id string) []byte {
-	return toGB2312(fmt.Sprintf(CatalogXML, sn, id))
+func BuildCatalogXML(charset string, sn int, id string) []byte {
+	return toGB2312(fmt.Sprintf(CatalogXML, charset, sn, id))
 }
 
 // BuildRecordInfoXML 获取录像文件列表指令

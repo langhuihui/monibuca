@@ -202,17 +202,17 @@ func (d *Device) send(req *sip.Request) (*sip.Response, error) {
 
 func (d *Device) Go() (err error) {
 	var response *sip.Response
-	response, err = d.catalog()
-	if err != nil {
-		d.Error("catalog", "err", err)
-	} else {
-		d.Debug("catalog", "response", response.String())
-	}
 	response, err = d.queryDeviceInfo()
 	if err != nil {
 		d.Error("deviceInfo", "err", err)
 	} else {
 		d.Debug("deviceInfo", "response", response.String())
+	}
+	response, err = d.catalog()
+	if err != nil {
+		d.Error("catalog", "err", err)
+	} else {
+		d.Debug("catalog", "response", response.String())
 	}
 	subTick := time.NewTicker(time.Second * 3600)
 	defer subTick.Stop()
@@ -295,20 +295,20 @@ func (d *Device) catalog() (*sip.Response, error) {
 	request := d.CreateRequest(sip.MESSAGE, nil)
 	//d.subscriber.Timeout = time.Now().Add(time.Second * time.Duration(expires))
 	request.AppendHeader(sip.NewHeader("Expires", "3600"))
-	request.SetBody(gb28181.BuildCatalogXML(d.SN, d.DeviceID))
+	request.SetBody(gb28181.BuildCatalogXML(d.Charset, d.SN, d.DeviceID))
 	return d.send(request)
 }
 
 func (d *Device) subscribeCatalog() (*sip.Response, error) {
 	request := d.CreateRequest(sip.SUBSCRIBE, nil)
 	request.AppendHeader(sip.NewHeader("Expires", "3600"))
-	request.SetBody(gb28181.BuildCatalogXML(d.SN, d.DeviceID))
+	request.SetBody(gb28181.BuildCatalogXML(d.Charset, d.SN, d.DeviceID))
 	return d.send(request)
 }
 
 func (d *Device) queryDeviceInfo() (*sip.Response, error) {
 	request := d.CreateRequest(sip.MESSAGE, nil)
-	request.SetBody(gb28181.BuildDeviceInfoXML(d.SN, d.DeviceID))
+	request.SetBody(gb28181.BuildDeviceInfoXML(d.SN, d.DeviceID, d.Charset))
 	return d.send(request)
 }
 
