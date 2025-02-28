@@ -367,6 +367,9 @@ func (s *Server) UpdatePullProxy(ctx context.Context, req *pb.PullProxyInfo) (re
 		if device, ok := s.PullProxies.Get(uint(req.ID)); ok {
 			if target.URL != device.URL || device.Audio != target.Audio || device.StreamPath != target.StreamPath || device.Record.FilePath != target.Record.FilePath || device.Record.Fragment != target.Record.Fragment {
 				device.Stop(task.ErrStopByUser)
+				if pull, ok := device.server.Pulls.Get(device.StreamPath); ok {
+					pull.Stop(task.ErrStopByUser)
+				}
 				needStopOld = device
 				return nil
 			}
@@ -402,6 +405,9 @@ func (s *Server) RemovePullProxy(ctx context.Context, req *pb.RequestWithId) (re
 		s.PullProxies.Call(func() error {
 			if device, ok := s.PullProxies.Get(uint(req.Id)); ok {
 				device.Stop(task.ErrStopByUser)
+				if pull, ok := device.server.Pulls.Get(device.StreamPath); ok {
+					pull.Stop(task.ErrStopByUser)
+				}
 			}
 			return nil
 		})
@@ -416,6 +422,9 @@ func (s *Server) RemovePullProxy(ctx context.Context, req *pb.RequestWithId) (re
 				s.PullProxies.Call(func() error {
 					if device, ok := s.PullProxies.Get(uint(device.ID)); ok {
 						device.Stop(task.ErrStopByUser)
+						if pull, ok := device.server.Pulls.Get(device.StreamPath); ok {
+							pull.Stop(task.ErrStopByUser)
+						}
 					}
 					return nil
 				})
