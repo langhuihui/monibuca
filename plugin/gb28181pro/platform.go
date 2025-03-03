@@ -38,9 +38,11 @@ type Platform struct {
 	eventChan chan any
 	// 插件配置
 	plugin *GB28181ProPlugin
+	ctx    context.Context
 }
 
 func (p *Platform) init() {
+	p.ctx = context.Background()
 	client, err := sipgo.NewClient(p.plugin.ua, sipgo.WithClientHostname(p.PlatformModel.DeviceIP), sipgo.WithClientPort(p.PlatformModel.DevicePort))
 	if err != nil {
 		p.Error("failed to create sip client: %v", err)
@@ -212,7 +214,7 @@ func (p *Platform) Unregister(ctx context.Context) (*sipgo.DialogClientSession, 
 	req.SetTransport(strings.ToUpper(p.PlatformModel.Transport))
 
 	// 发送请求并获取响应
-	tx, err := p.Client.TransactionRequest(ctx, req, sipgo.ClientRequestAddVia)
+	tx, err := p.Client.TransactionRequest(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("创建事务失败: %v", err)
 	}
@@ -308,6 +310,9 @@ func (p *Platform) handleCatalog(req *sip.Request, tx sip.ServerTransaction, msg
 	fromTag, _ := req.From().Params.Get("tag")
 	p.plugin.Info("catalog", "sn", sn, "fromTag", fromTag)
 
+	// 打印平台ID
+	p.plugin.Info("catalog query platform_id", "platform_id", p.PlatformModel.ID)
+
 	// 查询通道列表
 	var channels []gb28181.CommonGBChannel
 	if p.plugin.DB != nil {
@@ -318,40 +323,40 @@ func (p *Platform) handleCatalog(req *sip.Request, tx sip.ServerTransaction, msg
 				c.stream_proxy_id,
 				c.create_time,
 				c.update_time,
-				COALESCE(pc.custom_device_id, c.gb_device_id, c.device_id) as gb_device_id,
-				COALESCE(pc.custom_name, c.gb_name, c.name) as gb_name,
-				COALESCE(pc.custom_manufacturer, c.gb_manufacturer, c.manufacturer) as gb_manufacturer,
-				COALESCE(pc.custom_model, c.gb_model, c.model) as gb_model,
-				COALESCE(pc.custom_owner, c.gb_owner, c.owner) as gb_owner,
-				COALESCE(pc.custom_civil_code, c.gb_civil_code, c.civil_code) as gb_civil_code,
-				COALESCE(pc.custom_block, c.gb_block, c.block) as gb_block,
-				COALESCE(pc.custom_address, c.gb_address, c.address) as gb_address,
-				COALESCE(pc.custom_parental, c.gb_parental, c.parental) as gb_parental,
-				COALESCE(pc.custom_parent_id, c.gb_parent_id, c.parent_id) as gb_parent_id,
-				COALESCE(pc.custom_safety_way, c.gb_safety_way, c.safety_way) as gb_safety_way,
-				COALESCE(pc.custom_register_way, c.gb_register_way, c.register_way) as gb_register_way,
-				COALESCE(pc.custom_cert_num, c.gb_cert_num, c.cert_num) as gb_cert_num,
-				COALESCE(pc.custom_certifiable, c.gb_certifiable, c.certifiable) as gb_certifiable,
-				COALESCE(pc.custom_err_code, c.gb_err_code, c.err_code) as gb_err_code,
-				COALESCE(pc.custom_end_time, c.gb_end_time, c.end_time) as gb_end_time,
-				COALESCE(pc.custom_secrecy, c.gb_secrecy, c.secrecy) as gb_secrecy,
-				COALESCE(pc.custom_ip_address, c.gb_ip_address, c.ip_address) as gb_ip_address,
-				COALESCE(pc.custom_port, c.gb_port, c.port) as gb_port,
-				COALESCE(pc.custom_password, c.gb_password, c.password) as gb_password,
-				COALESCE(pc.custom_status, c.gb_status, c.status) as gb_status,
-				COALESCE(pc.custom_longitude, c.gb_longitude, c.longitude) as gb_longitude,
-				COALESCE(pc.custom_latitude, c.gb_latitude, c.latitude) as gb_latitude,
-				COALESCE(pc.custom_ptz_type, c.gb_ptz_type, c.ptz_type) as gb_ptz_type,
-				COALESCE(pc.custom_position_type, c.gb_position_type, c.position_type) as gb_position_type,
-				COALESCE(pc.custom_room_type, c.gb_room_type, c.room_type) as gb_room_type,
-				COALESCE(pc.custom_use_type, c.gb_use_type, c.use_type) as gb_use_type,
-				COALESCE(pc.custom_supply_light_type, c.gb_supply_light_type, c.supply_light_type) as gb_supply_light_type,
-				COALESCE(pc.custom_direction_type, c.gb_direction_type, c.direction_type) as gb_direction_type,
-				COALESCE(pc.custom_resolution, c.gb_resolution, c.resolution) as gb_resolution,
-				COALESCE(pc.custom_business_group_id, c.gb_business_group_id, c.business_group_id) as gb_business_group_id,
-				COALESCE(pc.custom_download_speed, c.gb_download_speed, c.download_speed) as gb_download_speed,
-				COALESCE(pc.custom_svc_space_support_mod, c.gb_svc_space_support_mod, c.svc_space_support_mod) as gb_svc_space_support_mod,
-				COALESCE(pc.custom_svc_time_support_mode, c.gb_svc_time_support_mode, c.svc_time_support_mode) as gb_svc_time_support_mode`).
+				COALESCE(nullif(pc.custom_device_id,''), nullif(c.gb_device_id,''), nullif(c.device_id,'')) as gb_device_id,
+				COALESCE(nullif(pc.custom_name,''), nullif(c.gb_name,''), nullif(c.name,'')) as gb_name,
+				COALESCE(nullif(pc.custom_manufacturer,''), nullif(c.gb_manufacturer,''), nullif(c.manufacturer,'')) as gb_manufacturer,
+				COALESCE(nullif(pc.custom_model,''), nullif(c.gb_model,''), nullif(c.model,'')) as gb_model,
+				COALESCE(nullif(pc.custom_owner,''), nullif(c.gb_owner,''), nullif(c.owner,'')) as gb_owner,
+				COALESCE(nullif(pc.custom_civil_code,''), nullif(c.gb_civil_code,''), nullif(c.civil_code,'')) as gb_civil_code,
+				COALESCE(nullif(pc.custom_block,''), nullif(c.gb_block,''), nullif(c.block,'')) as gb_block,
+				COALESCE(nullif(pc.custom_address,''), nullif(c.gb_address,''), nullif(c.address,'')) as gb_address,
+				COALESCE(nullif(pc.custom_parental,''), nullif(c.gb_parental,''), nullif(c.parental,'')) as gb_parental,
+				COALESCE(nullif(pc.custom_parent_id,''), nullif(c.gb_parent_id,''), nullif(c.parent_id,'')) as gb_parent_id,
+				COALESCE(nullif(pc.custom_safety_way,''), nullif(c.gb_safety_way,''), nullif(c.safety_way,'')) as gb_safety_way,
+				COALESCE(nullif(pc.custom_register_way,''), nullif(c.gb_register_way,''), nullif(c.register_way,'')) as gb_register_way,
+				COALESCE(nullif(pc.custom_cert_num,''), nullif(c.gb_cert_num,''), nullif(c.cert_num,'')) as gb_cert_num,
+				COALESCE(nullif(pc.custom_certifiable,''), nullif(c.gb_certifiable,''), nullif(c.certifiable,'')) as gb_certifiable,
+				COALESCE(nullif(pc.custom_err_code,''), nullif(c.gb_err_code,''), nullif(c.err_code,'')) as gb_err_code,
+				COALESCE(nullif(pc.custom_end_time,''), nullif(c.gb_end_time,''), nullif(c.end_time,'')) as gb_end_time,
+				COALESCE(nullif(pc.custom_secrecy,''), nullif(c.gb_secrecy,''), nullif(c.secrecy,'')) as gb_secrecy,
+				COALESCE(nullif(pc.custom_ip_address,''), nullif(c.gb_ip_address,''), nullif(c.ip_address,'')) as gb_ip_address,
+				COALESCE(nullif(pc.custom_port,''), nullif(c.gb_port,''), nullif(c.port,'')) as gb_port,
+				COALESCE(nullif(pc.custom_password,''), nullif(c.gb_password,''), nullif(c.password,'')) as gb_password,
+				COALESCE(nullif(pc.custom_status,''), nullif(c.gb_status,''), nullif(c.status,'')) as gb_status,
+				COALESCE(nullif(pc.custom_longitude,''), nullif(c.gb_longitude,''), nullif(c.longitude,'')) as gb_longitude,
+				COALESCE(nullif(pc.custom_latitude,''), nullif(c.gb_latitude,''), nullif(c.latitude,'')) as gb_latitude,
+				COALESCE(nullif(pc.custom_ptz_type,''), nullif(c.gb_ptz_type,''), nullif(c.ptz_type,'')) as gb_ptz_type,
+				COALESCE(nullif(pc.custom_position_type,''), nullif(c.gb_position_type,''), nullif(c.position_type,'')) as gb_position_type,
+				COALESCE(nullif(pc.custom_room_type,''), nullif(c.gb_room_type,''), nullif(c.room_type,'')) as gb_room_type,
+				COALESCE(nullif(pc.custom_use_type,''), nullif(c.gb_use_type,''), nullif(c.use_type,'')) as gb_use_type,
+				COALESCE(nullif(pc.custom_supply_light_type,''), nullif(c.gb_supply_light_type,''), nullif(c.supply_light_type,'')) as gb_supply_light_type,
+				COALESCE(nullif(pc.custom_direction_type,''), nullif(c.gb_direction_type,''), nullif(c.direction_type,'')) as gb_direction_type,
+				COALESCE(nullif(pc.custom_resolution,''), nullif(c.gb_resolution,''), nullif(c.resolution,'')) as gb_resolution,
+				COALESCE(nullif(pc.custom_business_group_id,''), nullif(c.gb_business_group_id,''), nullif(c.business_group_id,'')) as gb_business_group_id,
+				COALESCE(nullif(pc.custom_download_speed,''), nullif(c.gb_download_speed,''), nullif(c.download_speed,'')) as gb_download_speed,
+				COALESCE(nullif(pc.custom_svc_space_support_mod,''), nullif(c.gb_svc_space_support_mod,''), nullif(c.svc_space_support_mod,'')) as gb_svc_space_support_mod,
+				COALESCE(nullif(pc.custom_svc_time_support_mode,''), nullif(c.gb_svc_time_support_mode,''), nullif(c.svc_time_support_mode,'')) as gb_svc_time_support_mode`).
 			Joins("left join platform_channel_gb28181pro pc on c.id = pc.device_channel_id").
 			Where("pc.platform_id = ?", p.PlatformModel.ID).
 			Find(&channels).Error; err != nil {
@@ -359,13 +364,9 @@ func (p *Platform) handleCatalog(req *sip.Request, tx sip.ServerTransaction, msg
 		}
 	}
 
-	// 发送目录响应
-	if len(channels) > 0 {
-		p.Info("get channels success", channels)
-		return p.sendCatalogResponse(req, sn, fromTag, channels)
-	} else {
-		return p.sendEmptyCatalogResponse(req, sn, fromTag)
-	}
+	// 发送目录响应，无论是否有通道
+	p.plugin.Info("get channels success", channels)
+	return p.sendCatalogResponse(req, sn, fromTag, channels)
 }
 
 // CreateRequest 创建 SIP 请求
@@ -377,76 +378,185 @@ func (p *Platform) CreateRequest(method string) *sip.Request {
 
 // sendCatalogResponse 发送目录响应
 func (p *Platform) sendCatalogResponse(req *sip.Request, sn string, fromTag string, channels []gb28181.CommonGBChannel) error {
-	request := p.CreateRequest("MESSAGE")
+	// 如果没有通道，发送一个空的目录列表
+	if len(channels) == 0 {
+		request := p.CreateRequest("MESSAGE")
 
-	// 设置From头部
-	fromHeader := sip.FromHeader{
-		Address: sip.Uri{
-			User: p.PlatformModel.DeviceGBID,
-			Host: p.PlatformModel.ServerGBDomain,
-		},
-		Params: sip.NewParams(),
-	}
-	fromHeader.Params.Add("tag", fromTag)
-	request.AppendHeader(&fromHeader)
-	// 添加To头部
-	toHeader := sip.ToHeader{
-		Address: sip.Uri{
-			User: p.PlatformModel.ServerGBID,
-			Host: p.PlatformModel.ServerGBDomain,
-		},
-	}
-	req.AppendHeader(&toHeader)
-	// 添加Via头部
-	viaHeader := sip.ViaHeader{
-		ProtocolName:    "SIP",
-		ProtocolVersion: "2.0",
-		Transport:       p.PlatformModel.Transport,
-		Host:            p.PlatformModel.DeviceIP,
-		Port:            p.PlatformModel.DevicePort,
-		Params:          sip.NewParams(),
-	}
-	viaHeader.Params.Add("branch", sip.GenerateBranchN(16)).Add("rport", "")
-	req.AppendHeader(&viaHeader)
+		// 设置From头部
+		fromHeader := sip.FromHeader{
+			Address: sip.Uri{
+				User: p.PlatformModel.DeviceGBID,
+				Host: p.PlatformModel.ServerGBDomain,
+			},
+			Params: sip.NewParams(),
+		}
+		fromHeader.Params.Add("tag", fromTag)
+		request.AppendHeader(&fromHeader)
 
-	//request.SetSource(req.Source())
-	//request.SetDestination(req.Destination())
-	request.SetTransport(req.Transport())
-	contentTypeHeader := sip.ContentTypeHeader("Application/MANSCDP+xml")
-	request.AppendHeader(&contentTypeHeader)
-	request.SetBody([]byte(fmt.Sprintf(`<?xml version="1.0" encoding="GB2312"?>
+		// 添加To头部
+		toHeader := sip.ToHeader{
+			Address: sip.Uri{
+				User: p.PlatformModel.ServerGBID,
+				Host: p.PlatformModel.ServerGBDomain,
+			},
+		}
+		request.AppendHeader(&toHeader)
+
+		// 添加Via头部
+		viaHeader := sip.ViaHeader{
+			ProtocolName:    "SIP",
+			ProtocolVersion: "2.0",
+			Transport:       p.PlatformModel.Transport,
+			Host:            p.PlatformModel.DeviceIP,
+			Port:            p.PlatformModel.DevicePort,
+			Params:          sip.NewParams(),
+		}
+		viaHeader.Params.Add("branch", sip.GenerateBranchN(16)).Add("rport", "")
+		request.AppendHeader(&viaHeader)
+
+		request.SetTransport(req.Transport())
+		contentTypeHeader := sip.ContentTypeHeader("Application/MANSCDP+xml")
+		request.AppendHeader(&contentTypeHeader)
+
+		// 空目录列表XML
+		xmlContent := fmt.Sprintf(`<?xml version="1.0" encoding="GB2312"?>
+<Response>
+<CmdType>Catalog</CmdType>
+<SN>%s</SN>
+<DeviceID>%s</DeviceID>
+<SumNum>0</SumNum>
+<DeviceList Num="0">
+</DeviceList>
+</Response>`, sn, p.PlatformModel.DeviceGBID)
+		request.SetBody([]byte(xmlContent))
+		_, err := p.Client.Do(p.ctx, request)
+		if err != nil {
+			p.plugin.Error("p.Client.Do", err)
+		}
+		return err
+	}
+
+	// 有通道时，为每个通道单独发送一个XML
+	for i, channel := range channels {
+		request := p.CreateRequest("MESSAGE")
+
+		// 设置From头部
+		fromHeader := sip.FromHeader{
+			Address: sip.Uri{
+				User: p.PlatformModel.DeviceGBID,
+				Host: p.PlatformModel.ServerGBDomain,
+			},
+			Params: sip.NewParams(),
+		}
+		fromHeader.Params.Add("tag", fromTag)
+		request.AppendHeader(&fromHeader)
+
+		// 添加To头部
+		toHeader := sip.ToHeader{
+			Address: sip.Uri{
+				User: p.PlatformModel.ServerGBID,
+				Host: p.PlatformModel.ServerGBDomain,
+			},
+		}
+		request.AppendHeader(&toHeader)
+
+		// 添加Via头部
+		viaHeader := sip.ViaHeader{
+			ProtocolName:    "SIP",
+			ProtocolVersion: "2.0",
+			Transport:       p.PlatformModel.Transport,
+			Host:            p.PlatformModel.DeviceIP,
+			Port:            p.PlatformModel.DevicePort,
+			Params:          sip.NewParams(),
+		}
+		viaHeader.Params.Add("branch", sip.GenerateBranchN(16)).Add("rport", "")
+		request.AppendHeader(&viaHeader)
+
+		request.SetTransport(req.Transport())
+		contentTypeHeader := sip.ContentTypeHeader("Application/MANSCDP+xml")
+		request.AppendHeader(&contentTypeHeader)
+
+		// 为单个通道创建XML
+		channelXML := p.buildChannelItem(channel)
+		xmlContent := fmt.Sprintf(`<?xml version="1.0" encoding="GB2312"?>
 <Response>
 <CmdType>Catalog</CmdType>
 <SN>%s</SN>
 <DeviceID>%s</DeviceID>
 <SumNum>%d</SumNum>
-<DeviceList Num="%d">
+<DeviceList Num="1">
 %s
 </DeviceList>
-</Response>`, sn, p.PlatformModel.DeviceGBID, len(channels), len(channels), p.buildChannelList(channels))))
-	_, err := p.Client.Do(p, request)
-	return err
+</Response>`, sn, p.PlatformModel.DeviceGBID, len(channels), channelXML)
+
+		request.SetBody([]byte(xmlContent))
+		_, err := p.Client.Do(p.ctx, request)
+		if err != nil {
+			p.Error("send catalog response", "error", err.Error(), "channel_index", i)
+			return err
+		}
+
+		// 添加短暂延迟以防止发送过快
+		time.Sleep(time.Millisecond * 50)
+	}
+
+	return nil
 }
 
-// sendEmptyCatalogResponse 发送空目录响应
-func (p *Platform) sendEmptyCatalogResponse(req *sip.Request, sn string, fromTag string) error {
-	request := p.CreateRequest("MESSAGE")
-	request.From().Params.Add("tag", fromTag)
-	request.To().Params.Add("tag", fromTag)
-	request.SetSource(req.Source())
-	request.SetDestination(req.Destination())
-	request.SetTransport(req.Transport())
-	contentTypeHeader := sip.ContentTypeHeader("Application/MANSCDP+xml")
-	request.AppendHeader(&contentTypeHeader)
-	request.SetBody([]byte(fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-<CmdType>Catalog</CmdType>
-<SN>%s</SN>
-<DeviceChannelList Num="0">
-</DeviceChannelList>
-</Response>`, sn)))
-	_, err := p.Client.Do(p, request)
-	return err
+// buildChannelItem 构建单个通道的XML项
+func (p *Platform) buildChannelItem(channel gb28181.CommonGBChannel) string {
+	// 确保字符串字段不为空
+	deviceID := channel.GbDeviceID
+	if deviceID == "" {
+		deviceID = "unknown_device" // 如果没有设备ID，使用默认值
+	}
+	name := channel.GbName
+	if name == "" {
+		name = "未命名设备"
+	}
+	manufacturer := channel.GbManufacturer
+	if manufacturer == "" {
+		manufacturer = "未知厂商"
+	}
+	model := channel.GbModel
+	if model == "" {
+		model = "未知型号"
+	}
+	owner := channel.GbOwner
+	if owner == "" {
+		owner = "未知所有者"
+	}
+	address := channel.GbAddress
+	if address == "" {
+		address = "未知地址"
+	}
+	parentID := channel.GbParentID
+	if parentID == "" {
+		parentID = p.PlatformModel.DeviceGBID // 使用平台ID作为父ID
+	}
+
+	return fmt.Sprintf(`<Item>
+<DeviceID>%s</DeviceID>
+<Name>%s</Name>
+<Manufacturer>%s</Manufacturer>
+<Model>%s</Model>
+<Owner>%s</Owner>
+<Address>%s</Address>
+<RegisterWay>%d</RegisterWay>
+<Secrecy>%d</Secrecy>
+<ParentID>%s</ParentID>
+<Parental>%d</Parental>
+<SafetyWay>%d</SafetyWay>
+<Status>ON</Status>
+<Info>
+</Info>
+</Item>`, deviceID, name, manufacturer, model,
+		owner, address,
+		channel.GbRegisterWay, // 直接使用整数值
+		channel.GbSecrecy,     // 直接使用整数值
+		parentID,
+		channel.GbParental,  // 直接使用整数值
+		channel.GbSafetyWay) // 直接使用整数值
 }
 
 // handleDeviceControl 处理设备控制请求
@@ -592,66 +702,6 @@ func (p *Platform) handleMobilePosition(req *sip.Request, tx sip.ServerTransacti
 	return tx.Respond(response)
 }
 
-func (p *Platform) buildChannelList(channels []gb28181.CommonGBChannel) string {
-	var content string
-	for _, channel := range channels {
-		// 确保字符串字段不为空
-		deviceID := channel.GbDeviceID
-		if deviceID == "" {
-			deviceID = "unknown_device" // 如果没有设备ID，使用默认值
-		}
-		name := channel.GbName
-		if name == "" {
-			name = "未命名设备"
-		}
-		manufacturer := channel.GbManufacturer
-		if manufacturer == "" {
-			manufacturer = "未知厂商"
-		}
-		model := channel.GbModel
-		if model == "" {
-			model = "未知型号"
-		}
-		owner := channel.GbOwner
-		if owner == "" {
-			owner = "未知所有者"
-		}
-		address := channel.GbAddress
-		if address == "" {
-			address = "未知地址"
-		}
-		parentID := channel.GbParentID
-		if parentID == "" {
-			parentID = p.PlatformModel.DeviceGBID // 使用平台ID作为父ID
-		}
-
-		content += fmt.Sprintf(`<Item>
-<DeviceID>%s</DeviceID>
-<Name>%s</Name>
-<Manufacturer>%s</Manufacturer>
-<Model>%s</Model>
-<Owner>%s</Owner>
-<Address>%s</Address>
-<RegisterWay>%d</RegisterWay>
-<Secrecy>%d</Secrecy>
-<ParentID>%s</ParentID>
-<Parental>%d</Parental>
-<SafetyWay>%d</SafetyWay>
-<Status>ON</Status>
-<Info>
-</Info>
-</Item>
-`, deviceID, name, manufacturer, model,
-			owner, address,
-			channel.GbRegisterWay, // 直接使用整数值
-			channel.GbSecrecy,     // 直接使用整数值
-			parentID,
-			channel.GbParental,  // 直接使用整数值
-			channel.GbSafetyWay) // 直接使用整数值
-	}
-	return content
-}
-
 // GetKey 返回平台的唯一标识符
 func (p *Platform) GetKey() uint32 {
 	return p.PlatformModel.ID
@@ -720,7 +770,7 @@ func (p *Platform) DoRegister(ctx context.Context) error {
 	// 设置传输协议
 	req.SetTransport(strings.ToUpper(p.PlatformModel.Transport))
 
-	tx, err := p.Client.TransactionRequest(ctx, req, sipgo.ClientRequestAddVia)
+	tx, err := p.Client.TransactionRequest(ctx, req)
 	if err != nil {
 		p.Error("register", "error", err.Error())
 		return fmt.Errorf("创建事务失败: %v", err)

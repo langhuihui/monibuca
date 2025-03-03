@@ -7,133 +7,133 @@ import (
 // CommonGBChannel 通用国标通道信息
 type CommonGBChannel struct {
 	// 数据库自增ID
-	GbID int `json:"gbId" gorm:"column:gb_id"`
+	GbID int `json:"gb_id" gorm:"column:gb_id"`
 
 	// 国标编码
-	GbDeviceID string `json:"gbDeviceId" gorm:"column:gb_device_id"`
+	GbDeviceID string `json:"gb_device_id" gorm:"column:gb_device_id;default:null"`
 
 	// 国标名称
-	GbName string `json:"gbName" gorm:"column:gb_name"`
+	GbName string `json:"gb_name" gorm:"column:gb_name;default:null"`
 
 	// 国标设备厂商
-	GbManufacturer string `json:"gbManufacturer" gorm:"column:gb_manufacturer"`
+	GbManufacturer string `json:"gb_manufacturer" gorm:"column:gb_manufacturer;default:null"`
 
 	// 国标设备型号
-	GbModel string `json:"gbModel" gorm:"column:gb_model"`
+	GbModel string `json:"gb_model" gorm:"column:gb_model;default:null"`
 
 	// 国标设备归属
-	GbOwner string `json:"gbOwner" gorm:"column:gb_owner"`
+	GbOwner string `json:"gb_owner" gorm:"column:gb_owner;default:null"`
 
 	// 国标行政区域
-	GbCivilCode string `json:"gbCivilCode" gorm:"column:gb_civil_code"`
+	GbCivilCode string `json:"gb_civil_code" gorm:"column:gb_civil_code"`
 
 	// 国标警区
-	GbBlock string `json:"gbBlock" gorm:"column:gb_block"`
+	GbBlock string `json:"gb_block" gorm:"column:gb_block"`
 
 	// 国标安装地址
-	GbAddress string `json:"gbAddress" gorm:"column:gb_address"`
+	GbAddress string `json:"gb_address" gorm:"column:gb_address;default:null"`
 
 	// 国标是否有子设备
-	GbParental int `json:"gbParental" gorm:"column:gb_parental"`
+	GbParental int `json:"gb_parental" gorm:"column:gb_parental"`
 
 	// 国标父节点ID
-	GbParentID string `json:"gbParentId" gorm:"column:gb_parent_id"`
+	GbParentID string `json:"gb_parent_id" gorm:"column:gb_parent_id"`
 
 	// 国标信令安全模式
-	GbSafetyWay int `json:"gbSafetyWay" gorm:"column:gb_safety_way"`
+	GbSafetyWay int `json:"gb_safety_way" gorm:"column:gb_safety_way"`
 
 	// 国标注册方式
-	GbRegisterWay int `json:"gbRegisterWay" gorm:"column:gb_register_way"`
+	GbRegisterWay int `json:"gb_register_way" gorm:"column:gb_register_way"`
 
 	// 国标证书序列号
-	GbCertNum string `json:"gbCertNum" gorm:"column:gb_cert_num"`
+	GbCertNum string `json:"gb_cert_num" gorm:"column:gb_cert_num"`
 
 	// 国标证书有效标识
-	GbCertifiable int `json:"gbCertifiable" gorm:"column:gb_certifiable"`
+	GbCertifiable int `json:"gb_certifiable" gorm:"column:gb_certifiable"`
 
 	// 国标无效原因码
-	GbErrCode int `json:"gbErrCode" gorm:"column:gb_err_code"`
+	GbErrCode int `json:"gb_err_code" gorm:"column:gb_err_code"`
 
 	// 国标证书终止有效期
-	GbEndTime string `json:"gbEndTime" gorm:"column:gb_end_time"`
+	GbEndTime string `json:"gb_end_time" gorm:"column:gb_end_time"`
 
 	// 国标保密属性
-	GbSecrecy int `json:"gbSecrecy" gorm:"column:gb_secrecy"`
+	GbSecrecy int `json:"gb_secrecy" gorm:"column:gb_secrecy"`
 
 	// 国标IP地址
-	GbIPAddress string `json:"gbIpAddress" gorm:"column:gb_ip_address"`
+	GbIPAddress string `json:"gb_ip_address" gorm:"column:gb_ip_address"`
 
 	// 国标端口
-	GbPort int `json:"gbPort" gorm:"column:gb_port"`
+	GbPort int `json:"gb_port" gorm:"column:gb_port"`
 
 	// 国标密码
-	GbPassword string `json:"gbPassword" gorm:"column:gb_password"`
+	GbPassword string `json:"gb_password" gorm:"column:gb_password"`
 
 	// 国标状态
-	GbStatus string `json:"gbStatus" gorm:"column:gb_status"`
+	GbStatus string `json:"gb_status" gorm:"column:gb_status"`
 
 	// 国标经度
-	GbLongitude float64 `json:"gbLongitude" gorm:"column:gb_longitude"`
+	GbLongitude float64 `json:"gb_longitude" gorm:"column:gb_longitude"`
 
 	// 国标纬度
-	GbLatitude float64 `json:"gbLatitude" gorm:"column:gb_latitude"`
+	GbLatitude float64 `json:"gb_latitude" gorm:"column:gb_latitude"`
 
 	// 国标业务分组ID
-	GbBusinessGroupID string `json:"gbBusinessGroupId" gorm:"column:gb_business_group_id"`
+	GbBusinessGroupID string `json:"gb_business_group_id" gorm:"column:gb_business_group_id"`
 
 	// 国标云台类型
-	GbPTZType int `json:"gbPtzType" gorm:"column:gb_ptz_type"`
+	GbPTZType int `json:"gb_ptz_type" gorm:"column:gb_ptz_type"`
 
 	// 国标位置类型
-	GbPositionType int `json:"gbPositionType" gorm:"column:gb_position_type"`
+	GbPositionType int `json:"gb_position_type" gorm:"column:gb_position_type"`
 
 	// 国标房间类型
-	GbRoomType int `json:"gbRoomType" gorm:"column:gb_room_type"`
+	GbRoomType int `json:"gb_room_type" gorm:"column:gb_room_type"`
 
 	// 国标用途类型
-	GbUseType int `json:"gbUseType" gorm:"column:gb_use_type"`
+	GbUseType int `json:"gb_use_type" gorm:"column:gb_use_type"`
 
 	// 国标补光类型
-	GbSupplyLightType int `json:"gbSupplyLightType" gorm:"column:gb_supply_light_type"`
+	GbSupplyLightType int `json:"gb_supply_light_type" gorm:"column:gb_supply_light_type"`
 
 	// 国标方向类型
-	GbDirectionType int `json:"gbDirectionType" gorm:"column:gb_direction_type"`
+	GbDirectionType int `json:"gb_direction_type" gorm:"column:gb_direction_type"`
 
 	// 国标分辨率
-	GbResolution string `json:"gbResolution" gorm:"column:gb_resolution"`
+	GbResolution string `json:"gb_resolution" gorm:"column:gb_resolution"`
 
 	// 国标下载速度
-	GbDownloadSpeed string `json:"gbDownloadSpeed" gorm:"column:gb_download_speed"`
+	GbDownloadSpeed string `json:"gb_download_speed" gorm:"column:gb_download_speed"`
 
 	// 国标空域编码能力
-	GbSvcSpaceSupportMod int `json:"gbSvcSpaceSupportMod" gorm:"column:gb_svc_space_support_mod"`
+	GbSvcSpaceSupportMod int `json:"gb_svc_space_support_mod" gorm:"column:gb_svc_space_support_mod"`
 
 	// 国标时域编码能力
-	GbSvcTimeSupportMode int `json:"gbSvcTimeSupportMode" gorm:"column:gb_svc_time_support_mode"`
+	GbSvcTimeSupportMode int `json:"gb_svc_time_support_mode" gorm:"column:gb_svc_time_support_mode"`
 
 	// 关联的国标设备数据库ID
-	GbDeviceDbID int `json:"gbDeviceDbId" gorm:"column:gb_device_db_id"`
+	GbDeviceDbID int `json:"gb_device_db_id" gorm:"column:gb_device_db_id"`
 
 	// 二进制保存的录制计划
-	RecordPlan int64 `json:"recordPlan" gorm:"column:record_plan"`
+	RecordPlan int64 `json:"record_plan" gorm:"column:record_plan"`
 
 	// 关联的推流ID
-	StreamPushID int `json:"streamPushId" gorm:"column:stream_push_id"`
+	StreamPushID int `json:"stream_push_id" gorm:"column:stream_push_id"`
 
 	// 关联的拉流代理ID
-	StreamProxyID int `json:"streamProxyId" gorm:"column:stream_proxy_id"`
+	StreamProxyID int `json:"stream_proxy_id" gorm:"column:stream_proxy_id"`
 
 	// 创建时间
-	CreateTime string `json:"createTime" gorm:"column:create_time"`
+	CreateTime string `json:"create_time" gorm:"column:create_time"`
 
 	// 更新时间
-	UpdateTime string `json:"updateTime" gorm:"column:update_time"`
+	UpdateTime string `json:"update_time" gorm:"column:update_time"`
 
 	// 流ID，存在表示正在推流
-	StreamID string `json:"streamId" xml:"-"`
+	StreamID string `json:"stream_id" xml:"-"`
 
 	// 是否含有音频
-	HasAudio bool `json:"hasAudio" xml:"-"`
+	HasAudio bool `json:"has_audio" xml:"-"`
 }
 
 // Build 构建通道信息

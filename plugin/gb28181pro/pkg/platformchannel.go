@@ -7,14 +7,14 @@ type PlatformChannel struct {
 	Id                             int     // 数据库自增长ID
 	PlatformId                     int     // 平台ID
 	DeviceChannelId                int     // 设备通道ID
-	CustomDeviceId                 string  // 国标-编码
-	CustomName                     string  // 国标-名称
-	CustomManufacturer             string  // 国标-设备厂商
-	CustomModel                    string  // 国标-设备型号
-	CustomOwner                    string  // 国标-设备归属
+	CustomDeviceId                 string  `gorm:"default:null"` // 国标-编码
+	CustomName                     string  `gorm:"default:null"` // 国标-名称
+	CustomManufacturer             string  `gorm:"default:null"` // 国标-设备厂商
+	CustomModel                    string  `gorm:"default:null"` // 国标-设备型号
+	CustomOwner                    string  `gorm:"default:null"` // 国标-设备归属
 	CustomCivilCode                string  // 国标-行政区域
 	CustomBlock                    string  // 国标-警区
-	CustomAddress                  string  // 国标-安装地址
+	CustomAddress                  string  `gorm:"default:null"` // 国标-安装地址
 	CustomParental                 int     // 国标-是否有子设备
 	CustomParentId                 string  // 国标-父节点ID
 	CustomSafetyWay                int     // 国标-信令安全模式
