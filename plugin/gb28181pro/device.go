@@ -320,9 +320,9 @@ func (d *Device) subscribePosition(interval int) (*sip.Response, error) {
 }
 
 // frontEndCmd 前端控制命令，包括PTZ指令、FI指令、预置位指令、巡航指令、扫描指令和辅助开关指令
-func (d *Device) frontEndCmd(channelId string, cmdCode int32, parameter1 int32, parameter2 int32, combineCode2 int32) (*sip.Response, error) {
+func (d *Device) frontEndCmd(channelId string, cmdStr string) (*sip.Response, error) {
 	// 构建前端控制指令字符串
-	cmdStr := d.frontEndCmdString(cmdCode, parameter1, parameter2, combineCode2)
+	//cmdStr := d.frontEndCmdString(cmdCode, parameter1, parameter2, combineCode2)
 
 	// 构建XML消息体
 	ptzXml := strings.Builder{}

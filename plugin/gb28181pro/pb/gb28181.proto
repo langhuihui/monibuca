@@ -236,13 +236,6 @@ service api {
     };
   }
 
-  // PTZ 通用控制命令
-  rpc FrontEndCommand (FrontEndCommandRequest) returns (BaseResponse) {
-    option (google.api.http) = {
-      get: "/gb28181/api/front-end/{deviceId}/{channelId}"
-    };
-  }
-
   // PTZ 云台控制
   rpc PtzControl (PtzControlRequest) returns (BaseResponse) {
     option (google.api.http) = {
@@ -769,23 +762,11 @@ message RecordItem {
   string recorderId = 9;
 }
 
-// PTZ 相关消息定义
-message FrontEndCommandRequest {
-  string deviceId = 1;
-  string channelId = 2;
-  int32 cmdCode = 3;
-  int32 parameter1 = 4;
-  int32 parameter2 = 5;
-  int32 combindCode2 = 6;
-}
 
 message PtzControlRequest {
   string deviceId = 1;
   string channelId = 2;
-  string command = 3;  // left, right, up, down, upleft, upright, downleft, downright, zoomin, zoomout, stop
-  int32 horizonSpeed = 4;  // 0-255
-  int32 verticalSpeed = 5; // 0-255
-  int32 zoomSpeed = 6;     // 0-16
+  string ptzcmd = 3;
 }
 
 message IrisControlRequest {

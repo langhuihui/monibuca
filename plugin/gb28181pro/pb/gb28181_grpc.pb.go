@@ -53,7 +53,6 @@ const (
 	Api_ListPlatforms_FullMethodName                     = "/gb28181pro.api/ListPlatforms"
 	Api_StartPlayback_FullMethodName                     = "/gb28181pro.api/StartPlayback"
 	Api_QueryRecord_FullMethodName                       = "/gb28181pro.api/QueryRecord"
-	Api_FrontEndCommand_FullMethodName                   = "/gb28181pro.api/FrontEndCommand"
 	Api_PtzControl_FullMethodName                        = "/gb28181pro.api/PtzControl"
 	Api_IrisControl_FullMethodName                       = "/gb28181pro.api/IrisControl"
 	Api_FocusControl_FullMethodName                      = "/gb28181pro.api/FocusControl"
@@ -145,8 +144,6 @@ type ApiClient interface {
 	StartPlayback(ctx context.Context, in *PlaybackRequest, opts ...grpc.CallOption) (*PlayResponse, error)
 	// 查询录像记录
 	QueryRecord(ctx context.Context, in *QueryRecordRequest, opts ...grpc.CallOption) (*QueryRecordResponse, error)
-	// PTZ 通用控制命令
-	FrontEndCommand(ctx context.Context, in *FrontEndCommandRequest, opts ...grpc.CallOption) (*BaseResponse, error)
 	// PTZ 云台控制
 	PtzControl(ctx context.Context, in *PtzControlRequest, opts ...grpc.CallOption) (*BaseResponse, error)
 	// 光圈控制
@@ -513,16 +510,6 @@ func (c *apiClient) QueryRecord(ctx context.Context, in *QueryRecordRequest, opt
 	return out, nil
 }
 
-func (c *apiClient) FrontEndCommand(ctx context.Context, in *FrontEndCommandRequest, opts ...grpc.CallOption) (*BaseResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(BaseResponse)
-	err := c.cc.Invoke(ctx, Api_FrontEndCommand_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *apiClient) PtzControl(ctx context.Context, in *PtzControlRequest, opts ...grpc.CallOption) (*BaseResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(BaseResponse)
@@ -819,8 +806,6 @@ type ApiServer interface {
 	StartPlayback(context.Context, *PlaybackRequest) (*PlayResponse, error)
 	// 查询录像记录
 	QueryRecord(context.Context, *QueryRecordRequest) (*QueryRecordResponse, error)
-	// PTZ 通用控制命令
-	FrontEndCommand(context.Context, *FrontEndCommandRequest) (*BaseResponse, error)
 	// PTZ 云台控制
 	PtzControl(context.Context, *PtzControlRequest) (*BaseResponse, error)
 	// 光圈控制
@@ -969,9 +954,6 @@ func (UnimplementedApiServer) StartPlayback(context.Context, *PlaybackRequest) (
 }
 func (UnimplementedApiServer) QueryRecord(context.Context, *QueryRecordRequest) (*QueryRecordResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method QueryRecord not implemented")
-}
-func (UnimplementedApiServer) FrontEndCommand(context.Context, *FrontEndCommandRequest) (*BaseResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method FrontEndCommand not implemented")
 }
 func (UnimplementedApiServer) PtzControl(context.Context, *PtzControlRequest) (*BaseResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PtzControl not implemented")
@@ -1621,24 +1603,6 @@ func _Api_QueryRecord_Handler(srv interface{}, ctx context.Context, dec func(int
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Api_FrontEndCommand_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(FrontEndCommandRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ApiServer).FrontEndCommand(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: Api_FrontEndCommand_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ApiServer).FrontEndCommand(ctx, req.(*FrontEndCommandRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _Api_PtzControl_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(PtzControlRequest)
 	if err := dec(in); err != nil {
@@ -2183,10 +2147,6 @@ var Api_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "QueryRecord",
 			Handler:    _Api_QueryRecord_Handler,
-		},
-		{
-			MethodName: "FrontEndCommand",
-			Handler:    _Api_FrontEndCommand_Handler,
 		},
 		{
 			MethodName: "PtzControl",

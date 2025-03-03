@@ -51,14 +51,25 @@ func (gb *GB28181ProPlugin) List(ctx context.Context, req *pb.GetDevicesRequest)
 		return resp, nil
 	}
 
-	// 分页查询设备列表
-	if err := query.
-		Offset(int(req.Page-1) * int(req.Count)).
-		Limit(int(req.Count)).
-		Find(&devices).Error; err != nil {
-		resp.Code = 500
-		resp.Message = fmt.Sprintf("查询设备列表失败: %v", err)
-		return resp, nil
+	// 查询设备列表
+	// 当Page和Count都为0时，不做分页，返回所有数据
+	if req.Page == 0 && req.Count == 0 {
+		// 不分页，查询所有数据
+		if err := query.Find(&devices).Error; err != nil {
+			resp.Code = 500
+			resp.Message = fmt.Sprintf("查询设备列表失败: %v", err)
+			return resp, nil
+		}
+	} else {
+		// 分页查询设备列表
+		if err := query.
+			Offset(int(req.Page-1) * int(req.Count)).
+			Limit(int(req.Count)).
+			Find(&devices).Error; err != nil {
+			resp.Code = 500
+			resp.Message = fmt.Sprintf("查询设备列表失败: %v", err)
+			return resp, nil
+		}
 	}
 
 	// 转换为proto消息
@@ -227,14 +238,25 @@ func (gb *GB28181ProPlugin) GetDevices(ctx context.Context, req *pb.GetDevicesRe
 		return resp, nil
 	}
 
-	// 分页查询设备，并预加载通道数据
-	if err := query.
-		Offset(int(req.Page-1) * int(req.Count)).
-		Limit(int(req.Count)).
-		Find(&devices).Error; err != nil {
-		resp.Code = 500
-		resp.Message = fmt.Sprintf("查询设备列表失败: %v", err)
-		return resp, nil
+	// 查询设备列表
+	// 当Page和Count都为0时，不做分页，返回所有数据
+	if req.Page == 0 && req.Count == 0 {
+		// 不分页，查询所有数据
+		if err := query.Find(&devices).Error; err != nil {
+			resp.Code = 500
+			resp.Message = fmt.Sprintf("查询设备列表失败: %v", err)
+			return resp, nil
+		}
+	} else {
+		// 分页查询设备，并预加载通道数据
+		if err := query.
+			Offset(int(req.Page-1) * int(req.Count)).
+			Limit(int(req.Count)).
+			Find(&devices).Error; err != nil {
+			resp.Code = 500
+			resp.Message = fmt.Sprintf("查询设备列表失败: %v", err)
+			return resp, nil
+		}
 	}
 
 	// 转换为proto消息
@@ -323,32 +345,57 @@ func (gb *GB28181ProPlugin) GetChannels(ctx context.Context, req *pb.GetChannels
 				continue
 			}
 			total++
-			// 分页处理
-			if total > int(req.Page*req.Count) {
-				continue
+
+			// 当Page和Count都为0时，不做分页，返回所有数据
+			if req.Page == 0 && req.Count == 0 {
+				// 不分页，添加所有符合条件的通道
+				channels = append(channels, &pb.Channel{
+					DeviceID:     c.DeviceID,
+					ParentID:     c.ParentID,
+					Name:         c.Name,
+					Manufacturer: c.Manufacturer,
+					Model:        c.Model,
+					Owner:        c.Owner,
+					CivilCode:    c.CivilCode,
+					Address:      c.Address,
+					Port:         int32(c.Port),
+					Parental:     int32(c.Parental),
+					SafetyWay:    int32(c.SafetyWay),
+					RegisterWay:  int32(c.RegisterWay),
+					Secrecy:      int32(c.Secrecy),
+					Status:       string(c.Status),
+					Longitude:    fmt.Sprintf("%f", c.GbLongitude),
+					Latitude:     fmt.Sprintf("%f", c.GbLatitude),
+					GpsTime:      timestamppb.New(time.Now()),
+				})
+			} else {
+				// 分页处理
+				if total > int(req.Page*req.Count) {
+					continue
+				}
+				if total <= int((req.Page-1)*req.Count) {
+					continue
+				}
+				channels = append(channels, &pb.Channel{
+					DeviceID:     c.DeviceID,
+					ParentID:     c.ParentID,
+					Name:         c.Name,
+					Manufacturer: c.Manufacturer,
+					Model:        c.Model,
+					Owner:        c.Owner,
+					CivilCode:    c.CivilCode,
+					Address:      c.Address,
+					Port:         int32(c.Port),
+					Parental:     int32(c.Parental),
+					SafetyWay:    int32(c.SafetyWay),
+					RegisterWay:  int32(c.RegisterWay),
+					Secrecy:      int32(c.Secrecy),
+					Status:       string(c.Status),
+					Longitude:    fmt.Sprintf("%f", c.GbLongitude),
+					Latitude:     fmt.Sprintf("%f", c.GbLatitude),
+					GpsTime:      timestamppb.New(time.Now()),
+				})
 			}
-			if total <= int((req.Page-1)*req.Count) {
-				continue
-			}
-			channels = append(channels, &pb.Channel{
-				DeviceID:     c.DeviceID,
-				ParentID:     c.ParentID,
-				Name:         c.Name,
-				Manufacturer: c.Manufacturer,
-				Model:        c.Model,
-				Owner:        c.Owner,
-				CivilCode:    c.CivilCode,
-				Address:      c.Address,
-				Port:         int32(c.Port),
-				Parental:     int32(c.Parental),
-				SafetyWay:    int32(c.SafetyWay),
-				RegisterWay:  int32(c.RegisterWay),
-				Secrecy:      int32(c.Secrecy),
-				Status:       string(c.Status),
-				Longitude:    fmt.Sprintf("%f", c.GbLongitude),
-				Latitude:     fmt.Sprintf("%f", c.GbLatitude),
-				GpsTime:      timestamppb.New(time.Now()),
-			})
 		}
 		resp.Total = int32(total)
 		resp.List = channels
@@ -941,13 +988,24 @@ func (gb *GB28181ProPlugin) ListPlatforms(ctx context.Context, req *pb.ListPlatf
 		return resp, nil
 	}
 
-	// 分页查询
-	if err := query.Offset(int(req.Page-1) * int(req.Count)).
-		Limit(int(req.Count)).
-		Find(&platforms).Error; err != nil {
-		resp.Code = 500
-		resp.Message = fmt.Sprintf("failed to list platforms: %v", err)
-		return resp, nil
+	// 查询平台列表
+	// 当Page和Count都为0时，不做分页，返回所有数据
+	if req.Page == 0 && req.Count == 0 {
+		// 不分页，查询所有数据
+		if err := query.Find(&platforms).Error; err != nil {
+			resp.Code = 500
+			resp.Message = fmt.Sprintf("failed to list platforms: %v", err)
+			return resp, nil
+		}
+	} else {
+		// 分页查询
+		if err := query.Offset(int(req.Page-1) * int(req.Count)).
+			Limit(int(req.Count)).
+			Find(&platforms).Error; err != nil {
+			resp.Code = 500
+			resp.Message = fmt.Sprintf("failed to list platforms: %v", err)
+			return resp, nil
+		}
 	}
 
 	// 转换为proto消息
@@ -1104,34 +1162,6 @@ func (gb *GB28181ProPlugin) PtzControl(ctx context.Context, req *pb.PtzControlRe
 		return resp, nil
 	}
 
-	// 设置默认值
-	if req.HorizonSpeed == 0 {
-		req.HorizonSpeed = 100
-	}
-	if req.VerticalSpeed == 0 {
-		req.VerticalSpeed = 100
-	}
-	if req.ZoomSpeed == 0 {
-		req.ZoomSpeed = 16
-	}
-
-	// 参数范围验证
-	if req.HorizonSpeed < 0 || req.HorizonSpeed > 255 {
-		resp.Code = 400
-		resp.Message = "水平速度必须在0-255范围内"
-		return resp, nil
-	}
-	if req.VerticalSpeed < 0 || req.VerticalSpeed > 255 {
-		resp.Code = 400
-		resp.Message = "垂直速度必须在0-255范围内"
-		return resp, nil
-	}
-	if req.ZoomSpeed < 0 || req.ZoomSpeed > 16 {
-		resp.Code = 400
-		resp.Message = "缩放速度必须在0-16范围内"
-		return resp, nil
-	}
-
 	// 获取设备
 	device, ok := gb.devices.Get(req.DeviceId)
 	if !ok {
@@ -1140,42 +1170,8 @@ func (gb *GB28181ProPlugin) PtzControl(ctx context.Context, req *pb.PtzControlRe
 		return resp, nil
 	}
 
-	// 根据命令设置对应的指令码
-	var cmdCode int32
-	switch req.Command {
-	case "left":
-		cmdCode = 2
-	case "right":
-		cmdCode = 1
-	case "up":
-		cmdCode = 8
-	case "down":
-		cmdCode = 4
-	case "upleft":
-		cmdCode = 10
-	case "upright":
-		cmdCode = 9
-	case "downleft":
-		cmdCode = 6
-	case "downright":
-		cmdCode = 5
-	case "zoomin":
-		cmdCode = 16
-	case "zoomout":
-		cmdCode = 32
-	case "stop":
-		cmdCode = 0
-		req.HorizonSpeed = 0
-		req.VerticalSpeed = 0
-		req.ZoomSpeed = 0
-	default:
-		resp.Code = 400
-		resp.Message = "不支持的控制命令"
-		return resp, nil
-	}
-
 	// 调用设备的前端控制命令
-	response, err := device.frontEndCmd(req.ChannelId, cmdCode, req.HorizonSpeed, req.VerticalSpeed, req.ZoomSpeed)
+	response, err := device.frontEndCmd(req.ChannelId, req.Ptzcmd)
 	if err != nil {
 		resp.Code = 500
 		resp.Message = fmt.Sprintf("发送云台控制命令失败: %v", err)
@@ -1185,10 +1181,7 @@ func (gb *GB28181ProPlugin) PtzControl(ctx context.Context, req *pb.PtzControlRe
 	gb.Info("云台控制",
 		"deviceId", req.DeviceId,
 		"channelId", req.ChannelId,
-		"command", req.Command,
-		"horizonSpeed", req.HorizonSpeed,
-		"verticalSpeed", req.VerticalSpeed,
-		"zoomSpeed", req.ZoomSpeed,
+		"Ptzcmd", req.Ptzcmd,
 		"response", response.String())
 
 	resp.Code = 0
