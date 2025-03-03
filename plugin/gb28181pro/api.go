@@ -114,7 +114,7 @@ func (gb *GB28181ProPlugin) List(ctx context.Context, req *pb.GetDevicesRequest)
 	resp.Code = 0
 	resp.Message = "success"
 	resp.Total = int32(total)
-	resp.List = pbDevices
+	resp.Data = pbDevices
 
 	return resp, nil
 }
@@ -288,7 +288,7 @@ func (gb *GB28181ProPlugin) GetDevices(ctx context.Context, req *pb.GetDevicesRe
 	}
 
 	resp.Total = int32(total)
-	resp.List = pbDevices
+	resp.Data = pbDevices
 	resp.Code = 0
 	resp.Message = "success"
 	return resp, nil

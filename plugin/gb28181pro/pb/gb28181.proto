@@ -422,7 +422,7 @@ message DevicesPageInfo {
   int32 code = 1;
   string message = 2;
   int32 total = 3;
-  repeated Device list = 4;
+  repeated Device data = 4;
 }
 
 message GetChannelsRequest {
