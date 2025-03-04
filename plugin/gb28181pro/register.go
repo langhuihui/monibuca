@@ -1,7 +1,6 @@
 package plugin_gb28181pro
 
 import (
-	"context"
 	"errors"
 	"time"
 
@@ -38,8 +37,7 @@ func (r *Register) Tick(any) {
 }
 
 func (r *Register) Register() {
-	ctx := context.Background()
-	if err := r.platform.DoRegister(ctx); err != nil {
+	if err := r.platform.DoRegister(); err != nil {
 		if r.registerType == "keepaliveRegister" { //保活注册失败，需要回到首次注册类型
 			r.Error("keepaliveRegister err", err, "register type is ", r.registerType, "DeviceGBId is", r.platform.PlatformModel.DeviceGBID)
 			//r.platform.eventChan <- r

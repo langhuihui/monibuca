@@ -119,6 +119,9 @@ func (gb *GB28181ProPlugin) OnInit() (err error) {
 			if err := gb.checkDeviceExpire(); err != nil {
 				gb.Error("检查设备过期状态失败", "error", err)
 			}
+
+			// 检查并初始化平台
+			gb.checkPlatform()
 		}
 	}
 	if gb.Parent != "" {
@@ -128,6 +131,41 @@ func (gb *GB28181ProPlugin) OnInit() (err error) {
 		gb.AddTask(&client)
 	}
 	return
+}
+
+// checkPlatform 从数据库中查找启用状态的平台，初始化它们，并进行注册和定时任务设置
+func (gb *GB28181ProPlugin) checkPlatform() {
+	// 检查数据库是否初始化
+	if gb.DB == nil {
+		gb.Error("数据库未初始化，无法检查平台")
+		return
+	}
+
+	// 查询所有启用状态的平台
+	var platformModels []*gb28181.PlatformModel
+	platformModel := gb28181.PlatformModel{Enable: true}
+	if err := gb.DB.Where(&platformModel).Find(&platformModels).Error; err != nil {
+		gb.Error("查询平台失败", "error", err.Error())
+		return
+	}
+
+	gb.Info("找到启用状态的平台", "count", len(platformModels))
+
+	// 遍历所有平台进行初始化和注册
+	for _, platformModel := range platformModels {
+		// 创建Platform实例
+		platform := NewPlatform(platformModel, gb)
+
+		_, err := platform.Unregister()
+		if err != nil {
+			gb.Error("unregister err ", err)
+		} else {
+			// 添加到任务系统
+			gb.AddTask(platform)
+			gb.platforms.Set(platform)
+			gb.Info("平台初始化完成", "ID", platformModel.ID, "Name", platformModel.Name)
+		}
+	}
 }
 
 func (gb *GB28181ProPlugin) checkDeviceExpire() (err error) {
@@ -390,18 +428,10 @@ func (gb *GB28181ProPlugin) OnMessage(req *sip.Request, tx sip.ServerTransaction
 		var platform *Platform
 		if platformtmp, ok := gb.platforms.Get(p.ID); !ok {
 			// 创建 Platform 实例
-			platform = &Platform{
-				PlatformModel: p,
-				plugin:        gb,
-			}
-			platform.init()
-			gb.Info("222222222222222222")
-
+			platform = NewPlatform(p, gb)
 		} else {
-			gb.Info("1111111111111111")
 			platform = platformtmp
 		}
-
 		if err = platform.OnMessage(req, tx, temp); err != nil {
 			gb.Error("onMessage", "error", err.Error(), "type", "platform")
 		}

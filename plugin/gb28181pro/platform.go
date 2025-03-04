@@ -41,7 +41,11 @@ type Platform struct {
 	ctx    context.Context
 }
 
-func (p *Platform) init() {
+func NewPlatform(pm *gb28181.PlatformModel, plugin *GB28181ProPlugin) *Platform {
+	p := &Platform{
+		PlatformModel: pm,
+		plugin:        plugin,
+	}
 	p.ctx = context.Background()
 	client, err := sipgo.NewClient(p.plugin.ua, sipgo.WithClientHostname(p.PlatformModel.DeviceIP), sipgo.WithClientPort(p.PlatformModel.DevicePort))
 	if err != nil {
@@ -74,14 +78,11 @@ func (p *Platform) init() {
 	p.DialogClient = sipgo.NewDialogClient(p.Client, *p.ContactHDR)
 
 	p.MaxForwardsHDR = sip.MaxForwardsHeader(70)
-	p.plugin.platforms.Add(p)
+	p.plugin.platforms.Set(p)
+	return p
 }
 
 func (p *Platform) Start() error {
-
-	if _, ok := p.plugin.platforms.Get(p.ID); !ok {
-		p.init()
-	}
 	register := NewRegister(p, "firstRegister")
 	register.OnStart(func() {
 		register.Tick(nil)
@@ -101,7 +102,7 @@ func (p *Platform) getResponse(tx sip.ClientTransaction) (*sip.Response, error) 
 }
 
 // Keepalive 发送心跳请求到上级平台
-func (p *Platform) Keepalive(ctx context.Context) (*sipgo.DialogClientSession, error) {
+func (p *Platform) Keepalive() (*sipgo.DialogClientSession, error) {
 
 	req := sip.NewRequest("MESSAGE", p.Recipient)
 	req.SetTransport(strings.ToUpper(p.PlatformModel.Transport))
@@ -149,7 +150,7 @@ func (p *Platform) Keepalive(ctx context.Context) (*sipgo.DialogClientSession, e
 
 	req.SetBody(gb28181.BuildKeepAliveXML(p.SN, p.PlatformModel.DeviceGBID))
 	p.SN++
-	tx, err := p.Client.TransactionRequest(ctx, req)
+	tx, err := p.Client.TransactionRequest(p.ctx, req)
 	if err != nil {
 		p.Error("keepalive", "error", err.Error())
 		return nil, fmt.Errorf("创建事务失败: %v", err)
@@ -172,7 +173,7 @@ func (p *Platform) Keepalive(ctx context.Context) (*sipgo.DialogClientSession, e
 }
 
 // Unregister 发送注销请求到上级平台
-func (p *Platform) Unregister(ctx context.Context) (*sipgo.DialogClientSession, error) {
+func (p *Platform) Unregister() (*sipgo.DialogClientSession, error) {
 	// 创建注销请求的目标URI
 	recipient := sip.Uri{
 		User: p.PlatformModel.ServerGBID,
@@ -214,7 +215,7 @@ func (p *Platform) Unregister(ctx context.Context) (*sipgo.DialogClientSession, 
 	req.SetTransport(strings.ToUpper(p.PlatformModel.Transport))
 
 	// 发送请求并获取响应
-	tx, err := p.Client.TransactionRequest(ctx, req)
+	tx, err := p.Client.TransactionRequest(p.ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("创建事务失败: %v", err)
 	}
@@ -248,9 +249,7 @@ func (k *PlatformKeepAliveTask) Tick(any) {
 	if !k.platform.PlatformModel.Enable {
 		return
 	}
-
-	ctx := context.Background()
-	_, err := k.platform.Keepalive(ctx)
+	_, err := k.platform.Keepalive()
 	if err != nil {
 		k.platform.KeepAliveReply++
 		k.Error("keepalive", "error", err.Error())
@@ -708,7 +707,7 @@ func (p *Platform) GetKey() uint32 {
 }
 
 // Register 执行注册流程
-func (p *Platform) DoRegister(ctx context.Context) error {
+func (p *Platform) DoRegister() error {
 	// 创建基本的REGISTER请求
 	req := sip.NewRequest(sip.REGISTER, p.Recipient)
 
@@ -770,7 +769,7 @@ func (p *Platform) DoRegister(ctx context.Context) error {
 	// 设置传输协议
 	req.SetTransport(strings.ToUpper(p.PlatformModel.Transport))
 
-	tx, err := p.Client.TransactionRequest(ctx, req)
+	tx, err := p.Client.TransactionRequest(p.ctx, req)
 	if err != nil {
 		p.Error("register", "error", err.Error())
 		return fmt.Errorf("创建事务失败: %v", err)
@@ -814,7 +813,7 @@ func (p *Platform) DoRegister(ctx context.Context) error {
 		newReq.AppendHeader(sip.NewHeader("Authorization", cred.String()))
 
 		// 发送认证请求
-		tx, err = p.Client.TransactionRequest(ctx, newReq, sipgo.ClientRequestAddVia)
+		tx, err = p.Client.TransactionRequest(p.ctx, newReq, sipgo.ClientRequestAddVia)
 		if err != nil {
 			p.Error("register", "error", err.Error())
 			return err

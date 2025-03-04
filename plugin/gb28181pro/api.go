@@ -738,7 +738,7 @@ func (gb *GB28181ProPlugin) AddPlatform(ctx context.Context, req *pb.Platform) (
 		CreateTime:              req.CreateTime,
 		AsMessageChannel:        req.AsMessageChannel,
 		SendStreamIP:            req.SendStreamIp,
-		AutoPushChannel:         &req.AutoPushChannel,
+		AutoPushChannel:         req.AutoPushChannel,
 		CatalogWithPlatform:     int(req.CatalogWithPlatform),
 		CatalogWithGroup:        int(req.CatalogWithGroup),
 		CatalogWithRegion:       int(req.CatalogWithRegion),
@@ -760,11 +760,7 @@ func (gb *GB28181ProPlugin) AddPlatform(ctx context.Context, req *pb.Platform) (
 	// 如果平台启用，则创建Platform实例并启动任务
 	if platformModel.Enable {
 		// 创建Platform实例
-		platform := &Platform{
-			PlatformModel: platformModel,
-			plugin:        gb,
-		}
-
+		platform := NewPlatform(platformModel, gb)
 		// 添加到任务系统
 		gb.AddTask(platform)
 		gb.platforms.Set(platform)
@@ -822,7 +818,7 @@ func (gb *GB28181ProPlugin) GetPlatform(ctx context.Context, req *pb.GetPlatform
 		CreateTime:              platform.CreateTime,
 		AsMessageChannel:        platform.AsMessageChannel,
 		SendStreamIp:            platform.SendStreamIP,
-		AutoPushChannel:         platform.AutoPushChannel != nil && *platform.AutoPushChannel,
+		AutoPushChannel:         platform.AutoPushChannel,
 		CatalogWithPlatform:     int32(platform.CatalogWithPlatform),
 		CatalogWithGroup:        int32(platform.CatalogWithGroup),
 		CatalogWithRegion:       int32(platform.CatalogWithRegion),
@@ -860,45 +856,49 @@ func (gb *GB28181ProPlugin) UpdatePlatform(ctx context.Context, req *pb.Platform
 		runningPlatform.Stop(errors.New("stop running platform,platform.ServerGBID is " + platform.ServerGBID))
 	}
 
-	// 更新平台信息
-	platform.Enable = req.Enable
-	platform.Name = req.Name
-	platform.ServerGBID = req.ServerGBId
-	platform.ServerGBDomain = req.ServerGBDomain
-	platform.ServerIP = req.ServerIp
-	platform.ServerPort = int(req.ServerPort)
-	platform.DeviceGBID = req.DeviceGBId
-	platform.DeviceIP = req.DeviceIp
-	platform.DevicePort = int(req.DevicePort)
-	platform.Username = req.Username
-	platform.Password = req.Password
-	platform.Expires = int(req.Expires)
-	platform.KeepTimeout = int(req.KeepTimeout)
-	platform.Transport = req.Transport
-	platform.CharacterSet = req.CharacterSet
-	platform.PTZ = req.Ptz
-	platform.RTCP = req.Rtcp
-	platform.Status = req.Status
-	platform.ChannelCount = int(req.ChannelCount)
-	platform.CatalogSubscribe = req.CatalogSubscribe
-	platform.AlarmSubscribe = req.AlarmSubscribe
-	platform.MobilePositionSubscribe = req.MobilePositionSubscribe
-	platform.CatalogGroup = int(req.CatalogGroup)
-	platform.UpdateTime = req.UpdateTime
-	platform.AsMessageChannel = req.AsMessageChannel
-	platform.SendStreamIP = req.SendStreamIp
-	platform.AutoPushChannel = &req.AutoPushChannel
-	platform.CatalogWithPlatform = int(req.CatalogWithPlatform)
-	platform.CatalogWithGroup = int(req.CatalogWithGroup)
-	platform.CatalogWithRegion = int(req.CatalogWithRegion)
-	platform.CivilCode = req.CivilCode
-	platform.Manufacturer = req.Manufacturer
-	platform.Model = req.Model
-	platform.Address = req.Address
-	platform.RegisterWay = int(req.RegisterWay)
-	platform.Secrecy = int(req.Secrecy)
+	// 从请求中创建一个新的平台模型
+	updatedPlatform := gb28181.PlatformModel{
+		ID:                      req.ID,
+		Enable:                  req.Enable,
+		Name:                    req.Name,
+		ServerGBID:              req.ServerGBId,
+		ServerGBDomain:          req.ServerGBDomain,
+		ServerIP:                req.ServerIp,
+		ServerPort:              int(req.ServerPort),
+		DeviceGBID:              req.DeviceGBId,
+		DeviceIP:                req.DeviceIp,
+		DevicePort:              int(req.DevicePort),
+		Username:                req.Username,
+		Password:                req.Password,
+		Expires:                 int(req.Expires),
+		KeepTimeout:             int(req.KeepTimeout),
+		Transport:               req.Transport,
+		CharacterSet:            req.CharacterSet,
+		PTZ:                     req.Ptz,
+		RTCP:                    req.Rtcp,
+		Status:                  req.Status,
+		ChannelCount:            int(req.ChannelCount),
+		CatalogSubscribe:        req.CatalogSubscribe,
+		AlarmSubscribe:          req.AlarmSubscribe,
+		MobilePositionSubscribe: req.MobilePositionSubscribe,
+		CatalogGroup:            int(req.CatalogGroup),
+		UpdateTime:              req.UpdateTime,
+		AsMessageChannel:        req.AsMessageChannel,
+		SendStreamIP:            req.SendStreamIp,
+		AutoPushChannel:         req.AutoPushChannel,
+		CatalogWithPlatform:     int(req.CatalogWithPlatform),
+		CatalogWithGroup:        int(req.CatalogWithGroup),
+		CatalogWithRegion:       int(req.CatalogWithRegion),
+		CivilCode:               req.CivilCode,
+		Manufacturer:            req.Manufacturer,
+		Model:                   req.Model,
+		Address:                 req.Address,
+		RegisterWay:             int(req.RegisterWay),
+		Secrecy:                 int(req.Secrecy),
+	}
 
-	if err := gb.DB.Save(&platform).Error; err != nil {
+	// 使用 GORM 的 Updates 方法更新非零值字段
+	if err := gb.DB.Model(&platform).Updates(updatedPlatform).Error; err != nil {
 		resp.Code = 500
 		resp.Message = fmt.Sprintf("failed to update platform: %v", err)
 		return resp, nil
@@ -913,19 +913,16 @@ func (gb *GB28181ProPlugin) UpdatePlatform(ctx context.Context, req *pb.Platform
 		}
 
 		// 创建新的Platform实例
-		platformInstance := &Platform{
-			PlatformModel: &platform,
-			plugin:        gb,
-		}
-
+		platformInstance := NewPlatform(&platform, gb)
+		platformInstance.Unregister()
 		// 添加到任务系统
 		gb.AddTask(platformInstance)
-
 		// 添加到platforms集合中
 		gb.platforms.Add(platformInstance)
 	} else {
 		// 如果平台被禁用，停止并移除旧的platform实例
 		if oldPlatform, ok := gb.platforms.Get(platform.ID); ok {
+			oldPlatform.Unregister()
 			oldPlatform.Stop(fmt.Errorf("platform disabled"))
 			gb.platforms.Remove(oldPlatform)
 		}
@@ -1040,7 +1037,7 @@ func (gb *GB28181ProPlugin) ListPlatforms(ctx context.Context, req *pb.ListPlatf
 			CreateTime:              p.CreateTime,
 			AsMessageChannel:        p.AsMessageChannel,
 			SendStreamIp:            p.SendStreamIP,
-			AutoPushChannel:         p.AutoPushChannel != nil && *p.AutoPushChannel,
+			AutoPushChannel:         p.AutoPushChannel,
 			CatalogWithPlatform:     int32(p.CatalogWithPlatform),
 			CatalogWithGroup:        int32(p.CatalogWithGroup),
 			CatalogWithRegion:       int32(p.CatalogWithRegion),
