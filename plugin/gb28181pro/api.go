@@ -2,7 +2,6 @@ package plugin_gb28181pro
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -711,7 +710,7 @@ func (gb *GB28181ProPlugin) AddPlatform(ctx context.Context, req *pb.Platform) (
 
 	// 将proto消息转换为数据库模型
 	platformModel := &gb28181.PlatformModel{
-		Enable:                  req.Enable,
+		Enable:                  &req.Enable,
 		Name:                    req.Name,
 		ServerGBID:              req.ServerGBId,
 		ServerGBDomain:          req.ServerGBDomain,
@@ -758,12 +757,11 @@ func (gb *GB28181ProPlugin) AddPlatform(ctx context.Context, req *pb.Platform) (
 	}
 
 	// 如果平台启用，则创建Platform实例并启动任务
-	if platformModel.Enable {
+	if *platformModel.Enable {
 		// 创建Platform实例
 		platform := NewPlatform(platformModel, gb)
 		// 添加到任务系统
 		gb.AddTask(platform)
-		gb.platforms.Set(platform)
 	}
 
 	resp.Code = 0
@@ -791,7 +789,7 @@ func (gb *GB28181ProPlugin) GetPlatform(ctx context.Context, req *pb.GetPlatform
 	// 将数据库模型转换为proto消息
 	resp.Data = &pb.Platform{
 		ID:                      platform.ID,
-		Enable:                  platform.Enable,
+		Enable:                  *platform.Enable,
 		Name:                    platform.Name,
 		ServerGBId:              platform.ServerGBID,
 		ServerGBDomain:          platform.ServerGBDomain,
@@ -852,14 +850,11 @@ func (gb *GB28181ProPlugin) UpdatePlatform(ctx context.Context, req *pb.Platform
 		resp.Message = "platform not found"
 		return resp, nil
 	}
-	if runningPlatform, ok := gb.platforms.Get(req.ID); ok {
-		runningPlatform.Stop(errors.New("stop running platform,platform.ServerGBID is " + platform.ServerGBID))
-	}
 
 	// 从请求中创建一个新的平台模型
 	updatedPlatform := gb28181.PlatformModel{
 		ID:                      req.ID,
-		Enable:                  req.Enable,
+		Enable:                  &req.Enable,
 		Name:                    req.Name,
 		ServerGBID:              req.ServerGBId,
 		ServerGBDomain:          req.ServerGBDomain,
@@ -903,22 +898,19 @@ func (gb *GB28181ProPlugin) UpdatePlatform(ctx context.Context, req *pb.Platform
 		resp.Message = fmt.Sprintf("failed to update platform: %v", err)
 		return resp, nil
 	}
-
+	gb.DB.Model(&platform).Find(&platform)
 	// 处理平台启用状态变化
-	if platform.Enable {
+	if *platform.Enable {
 		// 如果存在旧的platform实例，先停止并移除
 		if oldPlatform, ok := gb.platforms.Get(platform.ID); ok {
+			oldPlatform.Unregister()
 			oldPlatform.Stop(fmt.Errorf("platform updated"))
 			gb.platforms.Remove(oldPlatform)
 		}
-
 		// 创建新的Platform实例
 		platformInstance := NewPlatform(&platform, gb)
-		platformInstance.Unregister()
 		// 添加到任务系统
 		gb.AddTask(platformInstance)
-		// 添加到platforms集合中
-		gb.platforms.Add(platformInstance)
 	} else {
 		// 如果平台被禁用，停止并移除旧的platform实例
 		if oldPlatform, ok := gb.platforms.Get(platform.ID); ok {
@@ -1010,7 +1002,7 @@ func (gb *GB28181ProPlugin) ListPlatforms(ctx context.Context, req *pb.ListPlatf
 	for _, p := range platforms {
 		pbPlatforms = append(pbPlatforms, &pb.Platform{
 			ID:                      p.ID,
-			Enable:                  p.Enable,
+			Enable:                  *p.Enable,
 			Name:                    p.Name,
 			ServerGBId:              p.ServerGBID,
 			ServerGBDomain:          p.ServerGBDomain,

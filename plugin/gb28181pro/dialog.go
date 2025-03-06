@@ -1,11 +1,13 @@
 package plugin_gb28181pro
 
 import (
+	"errors"
 	"fmt"
-	"m7s.live/v5/pkg/util"
 	"strconv"
 	"strings"
 	"time"
+
+	"m7s.live/v5/pkg/util"
 
 	sipgo "github.com/emiago/sipgo"
 	"github.com/emiago/sipgo/sip"
@@ -34,7 +36,10 @@ func (d *Dialog) GetPullJob() *m7s.PullJob {
 }
 
 func (d *Dialog) Start() (err error) {
-	if !d.IsLive() {
+	// 处理时间范围
+	isLive := true
+	if d.start != "" && d.end != "" {
+		isLive = false
 		d.pullCtx.PublishConfig.PubType = m7s.PublishTypeVod
 	}
 	err = d.pullCtx.Publish()
@@ -44,21 +49,17 @@ func (d *Dialog) Start() (err error) {
 	sss := strings.Split(d.pullCtx.RemoteURL, "/")
 	deviceId, channelId := sss[0], sss[1]
 	var device *Device
-	if len(sss) == 2 {
-		if deviceTmp, ok := d.gb.devices.Get(deviceId); ok {
-			device = deviceTmp
-			if channel, ok := deviceTmp.channels.Get(channelId); ok {
-				d.Channel = channel
-			} else {
-				return fmt.Errorf("channel %s not found", channelId)
-			}
+	if deviceTmp, ok := d.gb.devices.Get(deviceId); ok {
+		device = deviceTmp
+		if channel, ok := deviceTmp.channels.Get(channelId); ok {
+			d.Channel = channel
 		} else {
-			return fmt.Errorf("device %s not found", deviceId)
+			return fmt.Errorf("channel %s not found", channelId)
 		}
-	} else if len(sss) == 3 {
-		var recordRange util.Range[int]
-		err = recordRange.Resolve(sss[2])
+	} else {
+		return fmt.Errorf("device %s not found", deviceId)
 	}
+
 	d.gb.dialogs.Set(d)
 	defer d.gb.dialogs.Remove(d)
 	if d.gb.MediaPort.Valid() {
@@ -84,24 +85,37 @@ func (d *Dialog) Start() (err error) {
 	sdpInfo := []string{
 		"v=0",
 		fmt.Sprintf("o=%s 0 0 IN IP4 %s", device.DeviceID, sdpIP),
-		fmt.Sprintf("s=%s", util.Conditional(d.IsLive(), "Play", "Playback")), // 根据是否有时间参数决定
-		//"u=" + device.ID + ":0",
-		//"u=" + channel.DeviceID + ":0",
+		fmt.Sprintf("s=%s", util.Conditional(isLive, "Play", "Playback")), // 根据是否有时间参数决定
+		util.Conditional(isLive, "", fmt.Sprintf("u=%s:0", channelId)),
 		"c=IN IP4 " + sdpIP,
 	}
 
-	sdpInfo = append(sdpInfo, "t=0 0")
+	// 将字符串时间转换为 Unix 时间戳
+	if !isLive {
+		// 直接使用字符串格式的日期时间转换为秒级时间戳，不考虑时区问题
+		startime, err := time.ParseInLocation("2006-01-02T15:04:05", d.start, time.Local)
+		if err != nil {
+			d.Stop(errors.New("parse start time error"))
+		}
+		endtime, err := time.ParseInLocation("2006-01-02T15:04:05", d.end, time.Local)
+		if err != nil {
+			d.Stop(errors.New("parse end time error"))
+		}
+		sdpInfo = append(sdpInfo, fmt.Sprintf("t=%d %d", startime.Unix(), endtime.Unix()))
+	} else {
+		sdpInfo = append(sdpInfo, "t=0 0")
+	}
 
 	// 添加媒体行和相关属性
 	var mediaLine string
-	switch strings.ToUpper(device.StreamMode) {
-	case "TCP-PASSIVE", "TCP-ACTIVE":
-		mediaLine = fmt.Sprintf("m=video %d TCP/RTP/AVP 96 126 125 99 34 98 97", d.MediaPort)
-	case "UDP":
-		mediaLine = fmt.Sprintf("m=video %d TCP/RTP/AVP 96", d.MediaPort)
-	default:
-		mediaLine = fmt.Sprintf("m=video %d RTP/AVP 96 126 125 99 34 98 97", d.MediaPort)
-	}
+	//switch strings.ToUpper(device.StreamMode) {
+	//case "TCP-PASSIVE", "TCP-ACTIVE":
+	mediaLine = fmt.Sprintf("m=video %d TCP/RTP/AVP 96", d.MediaPort)
+	//case "UDP":
+	//	mediaLine = fmt.Sprintf("m=video %d TCP/RTP/AVP 96", d.MediaPort)
+	//default:
+	//	mediaLine = fmt.Sprintf("m=video %d RTP/AVP 96 126 125 99 34 98 97", d.MediaPort)
+	//}
 
 	sdpInfo = append(sdpInfo, mediaLine)
 	sdpInfo = append(sdpInfo,
@@ -244,4 +258,52 @@ func (d *Dialog) Dispose() {
 	if err != nil {
 		d.Error("close session err", err)
 	}
+}
+
+// 辅助函数：直接将ISO格式时间字符串解析为Unix时间戳字符串，不考虑时区
+// 格式：2025-03-05T16:30:23
+func parseTimeStringToUnixTimestamp(timeStr string) string {
+	// 手动解析日期时间字符串
+	var year, month, day, hour, minute, second int
+
+	// 解析格式为 "2025-03-05T16:30:23" 的字符串
+	fmt.Sscanf(timeStr, "%d-%d-%dT%d:%d:%d", &year, &month, &day, &hour, &minute, &second)
+
+	// 手动计算从1970-01-01 00:00:00开始的秒数
+	// 这种计算不考虑时区，直接将输入的时间视为绝对时间
+
+	// 首先计算从1970年到目标年份之前的天数
+	days := 0
+	for y := 1970; y < year; y++ {
+		if isLeapYear(y) {
+			days += 366
+		} else {
+			days += 365
+		}
+	}
+
+	// 加上当年目标月份之前的天数
+	daysInMonth := []int{0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}
+	if isLeapYear(year) {
+		daysInMonth[2] = 29
+	}
+	for m := 1; m < month; m++ {
+		days += daysInMonth[m]
+	}
+
+	// 加上当月的天数
+	days += day - 1
+
+	// 计算总秒数
+	seconds := days * 86400 // 一天的秒数
+	seconds += hour * 3600  // 小时的秒数
+	seconds += minute * 60  // 分钟的秒数
+	seconds += second       // 秒数
+
+	return strconv.FormatInt(int64(seconds), 10)
+}
+
+// 判断是否为闰年
+func isLeapYear(year int) bool {
+	return (year%4 == 0 && year%100 != 0) || (year%400 == 0)
 }

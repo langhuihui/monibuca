@@ -143,7 +143,8 @@ func (gb *GB28181ProPlugin) checkPlatform() {
 
 	// 查询所有启用状态的平台
 	var platformModels []*gb28181.PlatformModel
-	platformModel := gb28181.PlatformModel{Enable: true}
+	enableTrue := true
+	platformModel := gb28181.PlatformModel{Enable: &enableTrue}
 	if err := gb.DB.Where(&platformModel).Find(&platformModels).Error; err != nil {
 		gb.Error("查询平台失败", "error", err.Error())
 		return
@@ -162,7 +163,6 @@ func (gb *GB28181ProPlugin) checkPlatform() {
 		} else {
 			// 添加到任务系统
 			gb.AddTask(platform)
-			gb.platforms.Set(platform)
 			gb.Info("平台初始化完成", "ID", platformModel.ID, "Name", platformModel.Name)
 		}
 	}
@@ -650,11 +650,9 @@ func (gb *GB28181ProPlugin) Pull(streamPath string, conf config.Pull, pubConf *c
 		gb: gb,
 	}
 	if conf.Args != nil {
-		if starts, ok := conf.Args["start"]; ok && len(starts) > 0 {
-			dialog.start = starts[0]
-		}
-		if ends, ok := conf.Args["end"]; ok && len(ends) > 0 {
-			dialog.end = ends[0]
+		if conf.Args.Get(util.StartKey) != "" && conf.Args.Get(util.EndKey) != "" {
+			dialog.start = conf.Args.Get(util.StartKey)
+			dialog.end = conf.Args.Get(util.EndKey)
 		}
 	}
 	dialog.GetPullJob().Init(&dialog, &gb.Plugin, streamPath, conf, pubConf)

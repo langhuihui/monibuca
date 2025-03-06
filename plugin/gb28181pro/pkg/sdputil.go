@@ -21,13 +21,6 @@ func DecodeSDP(req *sip.Request) (*InviteInfo, error) {
 
 	// 获取目标通道ID
 	channelIDArray := getChannelIDFromRequest(req)
-	if channelIDArray == nil {
-		return nil, fmt.Errorf("无法从请求中获取通道id")
-	}
-	inviteInfo.TargetChannelId = channelIDArray[0]
-	if len(channelIDArray) == 2 {
-		inviteInfo.SourceChannelId = channelIDArray[1]
-	}
 
 	// 获取CallID
 	callID := req.CallID()
@@ -43,7 +36,12 @@ func DecodeSDP(req *sip.Request) (*InviteInfo, error) {
 
 	// 解析SDP各个字段
 	lines := strings.Split(sdpStr, "\r\n")
-	var mediaDesc []string
+	var channelIdFromSdp string
+	var port int = -1
+	var mediaTransmissionTCP bool
+	var tcpActive *bool
+	var supportedMediaFormat bool
+	var sessionName string
 
 	for _, line := range lines {
 		if line == "" {
@@ -52,7 +50,22 @@ func DecodeSDP(req *sip.Request) (*InviteInfo, error) {
 
 		switch {
 		case strings.HasPrefix(line, "s="):
-			inviteInfo.SessionName = strings.TrimPrefix(line, "s=")
+			sessionName = strings.TrimPrefix(line, "s=")
+			inviteInfo.SessionName = sessionName
+
+			// 如果是回放，从URI中获取通道ID
+			if strings.EqualFold(sessionName, "Playback") {
+				for _, l := range lines {
+					if strings.HasPrefix(l, "u=") {
+						uriField := strings.TrimPrefix(l, "u=")
+						parts := strings.Split(uriField, ":")
+						if len(parts) > 0 {
+							channelIdFromSdp = parts[0]
+						}
+						break
+					}
+				}
+			}
 
 		case strings.HasPrefix(line, "c="):
 			// c=IN IP4 192.168.1.100
@@ -76,23 +89,35 @@ func DecodeSDP(req *sip.Request) (*InviteInfo, error) {
 			}
 
 		case strings.HasPrefix(line, "m="):
-			mediaDesc = strings.Split(strings.TrimPrefix(line, "m="), " ")
-			if len(mediaDesc) >= 3 {
-				port, err := strconv.Atoi(mediaDesc[1])
+			mediaDesc := strings.Split(strings.TrimPrefix(line, "m="), " ")
+			if len(mediaDesc) >= 4 { // 必须有足够的元素：类型、端口、传输协议和格式
+				portVal, err := strconv.Atoi(mediaDesc[1])
 				if err == nil {
-					inviteInfo.Port = port
+					port = portVal
 				}
+
 				// 检查传输协议
-				if strings.Contains(mediaDesc[2], "TCP") {
-					inviteInfo.TCP = true
+				if strings.EqualFold(mediaDesc[2], "TCP/RTP/AVP") {
+					mediaTransmissionTCP = true
+				}
+
+				// 检查是否包含支持的媒体格式：96或8
+				for i := 3; i < len(mediaDesc); i++ {
+					if mediaDesc[i] == "96" || mediaDesc[i] == "8" {
+						supportedMediaFormat = true
+						break
+					}
 				}
 			}
 
 		case strings.HasPrefix(line, "a=setup:"):
-			if strings.Contains(line, "active") {
-				inviteInfo.TCPActive = true
-			} else if strings.Contains(line, "passive") {
-				inviteInfo.TCPActive = false
+			val := strings.TrimPrefix(line, "a=setup:")
+			if strings.EqualFold(val, "active") {
+				activeVal := true
+				tcpActive = &activeVal
+			} else if strings.EqualFold(val, "passive") {
+				passiveVal := false
+				tcpActive = &passiveVal
 			}
 
 		case strings.HasPrefix(line, "y="):
@@ -103,25 +128,66 @@ func DecodeSDP(req *sip.Request) (*InviteInfo, error) {
 		}
 	}
 
+	// 确定最终的通道ID，优先使用SDP中的通道ID
+	var finalChannelId string
+	if channelIdFromSdp != "" {
+		finalChannelId = channelIdFromSdp
+	} else if len(channelIDArray) > 0 {
+		finalChannelId = channelIDArray[0]
+	}
+
+	// 验证通道ID和请求者ID
+	if inviteInfo.RequesterId == "" || finalChannelId == "" {
+		return nil, fmt.Errorf("无法从请求中获取通道id或来源id")
+	}
+
+	// 设置目标通道ID
+	inviteInfo.TargetChannelId = finalChannelId
+
+	// 设置源通道ID（如果有）
+	if len(channelIDArray) >= 2 {
+		inviteInfo.SourceChannelId = channelIDArray[1]
+	}
+
+	// 验证媒体格式支持
+	if port == -1 || !supportedMediaFormat {
+		return nil, fmt.Errorf("不支持的媒体格式")
+	}
+
+	// 设置传输相关信息
+	inviteInfo.TCP = mediaTransmissionTCP
+	if tcpActive != nil {
+		inviteInfo.TCPActive = *tcpActive
+	} else {
+		inviteInfo.TCPActive = false // 默认值
+	}
+	inviteInfo.Port = port
+
 	return inviteInfo, nil
 }
 
 // getChannelIDFromRequest 从请求中获取通道ID
 func getChannelIDFromRequest(req *sip.Request) []string {
-	to := req.To()
-	if to == nil {
+	subjectHeaders := req.GetHeaders("Subject")
+	if len(subjectHeaders) == 0 {
+		// 如果缺失subject
 		return nil
 	}
 
-	channelID := to.Address.User
-	if channelID == "" {
-		return nil
+	// 获取第一个Subject头部的值
+	subjectStr := subjectHeaders[0].Value()
+
+	result := make([]string, 2)
+
+	if strings.Contains(subjectStr, ",") {
+		subjectSplit := strings.Split(subjectStr, ",")
+		result[0] = strings.Split(subjectSplit[0], ":")[0]
+		if len(subjectSplit) > 1 {
+			result[1] = strings.Split(subjectSplit[1], ":")[0]
+		}
+	} else {
+		result[0] = strings.Split(subjectStr, ":")[0]
 	}
 
-	// 检查是否包含源通道ID
-	if strings.Contains(channelID, "@") {
-		return strings.Split(channelID, "@")
-	}
-
-	return []string{channelID}
+	return result
 }

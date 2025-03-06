@@ -4429,7 +4429,7 @@ func RegisterApiHandlerServer(ctx context.Context, mux *runtime.ServeMux, server
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/gb28181pro.Api/QueryRecord", runtime.WithHTTPPathPattern("/gb28181/api/gbrecord/query/{deviceId}/{channelId}"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/gb28181pro.Api/QueryRecord", runtime.WithHTTPPathPattern("/gb28181/api/records/{deviceId}/{channelId}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -5728,7 +5728,7 @@ func RegisterApiHandlerClient(ctx context.Context, mux *runtime.ServeMux, client
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/gb28181pro.Api/QueryRecord", runtime.WithHTTPPathPattern("/gb28181/api/gbrecord/query/{deviceId}/{channelId}"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/gb28181pro.Api/QueryRecord", runtime.WithHTTPPathPattern("/gb28181/api/records/{deviceId}/{channelId}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -6314,7 +6314,7 @@ var (
 
 	pattern_Api_StartPlayback_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 1, 0, 4, 1, 5, 4, 1, 0, 4, 1, 5, 5}, []string{"gb28181", "api", "playback", "start", "deviceId", "channelId"}, ""))
 
-	pattern_Api_QueryRecord_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 1, 0, 4, 1, 5, 4, 1, 0, 4, 1, 5, 5}, []string{"gb28181", "api", "gbrecord", "query", "deviceId", "channelId"}, ""))
+	pattern_Api_QueryRecord_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 1, 0, 4, 1, 5, 4}, []string{"gb28181", "api", "records", "deviceId", "channelId"}, ""))
 
 	pattern_Api_PtzControl_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 1, 0, 4, 1, 5, 4}, []string{"gb28181", "api", "ptz", "deviceId", "channelId"}, ""))
 

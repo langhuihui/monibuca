@@ -232,7 +232,7 @@ service api {
   // 查询录像记录
   rpc QueryRecord (QueryRecordRequest) returns (QueryRecordResponse) {
     option (google.api.http) = {
-      get: "/gb28181/api/gbrecord/query/{deviceId}/{channelId}"
+      get: "/gb28181/api/records/{deviceId}/{channelId}"
     };
   }
 

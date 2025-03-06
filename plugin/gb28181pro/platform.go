@@ -79,6 +79,15 @@ func NewPlatform(pm *gb28181.PlatformModel, plugin *GB28181ProPlugin) *Platform 
 
 	p.MaxForwardsHDR = sip.MaxForwardsHeader(70)
 	p.plugin.platforms.Set(p)
+	p.OnDispose(func() {
+		if plugin.platforms.RemoveByKey(p.ID) {
+			//for c := range d.channels.Range {
+			//	if c.AbstractDevice != nil {
+			//		c.AbstractDevice.ChangeStatus(m7s.PullProxyStatusOffline)
+			//	}
+			//}
+		}
+	})
 	return p
 }
 
@@ -246,7 +255,7 @@ func (k *PlatformKeepAliveTask) GetTickInterval() time.Duration {
 }
 
 func (k *PlatformKeepAliveTask) Tick(any) {
-	if !k.platform.PlatformModel.Enable {
+	if !*k.platform.PlatformModel.Enable {
 		return
 	}
 	_, err := k.platform.Keepalive()
@@ -491,7 +500,7 @@ func (p *Platform) sendCatalogResponse(req *sip.Request, sn string, fromTag stri
 		request.SetBody([]byte(xmlContent))
 		_, err := p.Client.Do(p.ctx, request)
 		if err != nil {
-			p.Error("send catalog response", "error", err.Error(), "channel_index", i)
+			p.plugin.Error("send catalog response", "error", err.Error(), "channel_index", i)
 			return err
 		}
 
@@ -554,7 +563,7 @@ func (p *Platform) buildChannelItem(channel gb28181.CommonGBChannel) string {
 		channel.GbRegisterWay, // 直接使用整数值
 		channel.GbSecrecy,     // 直接使用整数值
 		parentID,
-		channel.GbParental,  // 直接使用整数值
+		channel.GbParental, // 直接使用整数值
 		channel.GbSafetyWay) // 直接使用整数值
 }
 
