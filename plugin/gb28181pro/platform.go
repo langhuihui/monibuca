@@ -23,12 +23,12 @@ type Platform struct {
 	PlatformModel *gb28181.PlatformModel
 
 	// SIP相关字段，不存储到数据库
-	Client         *sipgo.Client         `gorm:"-" json:"-"` // SIP客户端
-	DialogClient   *sipgo.DialogClient   `gorm:"-" json:"-"` // SIP对话客户端
-	Recipient      sip.Uri               `gorm:"-" json:"-"` // 接收者地址
-	ContactHDR     *sip.ContactHeader    `gorm:"-" json:"-"` // 联系人头部
-	UserAgentHDR   sip.Header            `gorm:"-" json:"-"`
-	MaxForwardsHDR sip.MaxForwardsHeader `gorm:"-" json:"-"`
+	Client         *sipgo.Client            `gorm:"-" json:"-"` // SIP客户端
+	DialogClient   *sipgo.DialogClientCache `gorm:"-" json:"-"` // SIP对话客户端
+	Recipient      sip.Uri                  `gorm:"-" json:"-"` // 接收者地址
+	ContactHDR     *sip.ContactHeader       `gorm:"-" json:"-"` // 联系人头部
+	UserAgentHDR   sip.Header               `gorm:"-" json:"-"`
+	MaxForwardsHDR sip.MaxForwardsHeader    `gorm:"-" json:"-"`
 
 	// 运行时字段
 	KeepAliveReply int    `gorm:"-" json:"keepAliveReply"` // KeepAliveReply表示心跳未回复次数
@@ -75,7 +75,7 @@ func NewPlatform(pm *gb28181.PlatformModel, plugin *GB28181ProPlugin) *Platform 
 	p.ContactHDR = &contactHdr
 
 	// 创建对话客户端
-	p.DialogClient = sipgo.NewDialogClient(p.Client, *p.ContactHDR)
+	p.DialogClient = sipgo.NewDialogClientCache(p.Client, *p.ContactHDR)
 
 	p.MaxForwardsHDR = sip.MaxForwardsHeader(70)
 	p.plugin.platforms.Set(p)
@@ -563,7 +563,7 @@ func (p *Platform) buildChannelItem(channel gb28181.CommonGBChannel) string {
 		channel.GbRegisterWay, // 直接使用整数值
 		channel.GbSecrecy,     // 直接使用整数值
 		parentID,
-		channel.GbParental, // 直接使用整数值
+		channel.GbParental,  // 直接使用整数值
 		channel.GbSafetyWay) // 直接使用整数值
 }
 

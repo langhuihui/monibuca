@@ -70,7 +70,7 @@ type Device struct {
 	Longitude, Latitude string // 经度,纬度
 	eventChan           chan any
 	client              *sipgo.Client
-	dialogClient        *sipgo.DialogClient
+	dialogClient        *sipgo.DialogClientCache
 	contactHDR          sip.ContactHeader
 	fromHDR             sip.FromHeader
 	toHDR               sip.ToHeader

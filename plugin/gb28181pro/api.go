@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -463,7 +464,7 @@ func (gb *GB28181ProPlugin) SyncDevice(ctx context.Context, req *pb.SyncDeviceRe
 			// 初始化 SIP 客户端
 			d.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(d.LocalIP))
 			if d.client != nil {
-				d.dialogClient = sipgo.NewDialogClient(d.client, d.contactHDR)
+				d.dialogClient = sipgo.NewDialogClientCache(d.client, d.contactHDR)
 			} else {
 				return resp, fmt.Errorf("failed to create sip client")
 			}
@@ -1129,6 +1130,11 @@ func (gb *GB28181ProPlugin) QueryRecord(ctx context.Context, req *pb.QueryRecord
 	resp.Code = 0
 	resp.Message = fmt.Sprintf("success, received %d/%d records", recordReq.ReceivedNum, recordReq.SumNum)
 
+	// 排序录像列表，按StartTime升序排序
+	sort.Slice(resp.Records, func(i, j int) bool {
+		return resp.Records[i].StartTime < resp.Records[j].StartTime
+	})
+
 	// 清理请求
 	channel.RecordReqs.Remove(recordReq)
 
@@ -1219,7 +1225,7 @@ func (gb *GB28181ProPlugin) TestSip(ctx context.Context, req *pb.TestSipRequest)
 		resp.Message = "failed to create sip client"
 		return resp, nil
 	}
-	device.dialogClient = sipgo.NewDialogClient(device.client, device.contactHDR)
+	device.dialogClient = sipgo.NewDialogClientCache(device.client, device.contactHDR)
 
 	// 构建目标URI
 	recipient := sip.Uri{
