@@ -39,8 +39,6 @@ const (
 	Api_GetSyncStatus_FullMethodName                     = "/gb28181pro.api/GetSyncStatus"
 	Api_GetSubscribeInfo_FullMethodName                  = "/gb28181pro.api/GetSubscribeInfo"
 	Api_GetSnap_FullMethodName                           = "/gb28181pro.api/GetSnap"
-	Api_StartPlay_FullMethodName                         = "/gb28181pro.api/StartPlay"
-	Api_StopPlay_FullMethodName                          = "/gb28181pro.api/StopPlay"
 	Api_StopConvert_FullMethodName                       = "/gb28181pro.api/StopConvert"
 	Api_StartBroadcast_FullMethodName                    = "/gb28181pro.api/StartBroadcast"
 	Api_StopBroadcast_FullMethodName                     = "/gb28181pro.api/StopBroadcast"
@@ -51,7 +49,6 @@ const (
 	Api_UpdatePlatform_FullMethodName                    = "/gb28181pro.api/UpdatePlatform"
 	Api_DeletePlatform_FullMethodName                    = "/gb28181pro.api/DeletePlatform"
 	Api_ListPlatforms_FullMethodName                     = "/gb28181pro.api/ListPlatforms"
-	Api_StartPlayback_FullMethodName                     = "/gb28181pro.api/StartPlayback"
 	Api_QueryRecord_FullMethodName                       = "/gb28181pro.api/QueryRecord"
 	Api_PtzControl_FullMethodName                        = "/gb28181pro.api/PtzControl"
 	Api_IrisControl_FullMethodName                       = "/gb28181pro.api/IrisControl"
@@ -116,10 +113,6 @@ type ApiClient interface {
 	GetSubscribeInfo(ctx context.Context, in *GetSubscribeInfoRequest, opts ...grpc.CallOption) (*SubscribeInfoResponse, error)
 	// 请求截图
 	GetSnap(ctx context.Context, in *GetSnapRequest, opts ...grpc.CallOption) (*SnapResponse, error)
-	// 开始点播
-	StartPlay(ctx context.Context, in *PlayRequest, opts ...grpc.CallOption) (*PlayResponse, error)
-	// 停止点播
-	StopPlay(ctx context.Context, in *PlayRequest, opts ...grpc.CallOption) (*PlayResponse, error)
 	// 结束转码
 	StopConvert(ctx context.Context, in *ConvertStopRequest, opts ...grpc.CallOption) (*BaseResponse, error)
 	// 语音广播命令
@@ -140,8 +133,6 @@ type ApiClient interface {
 	DeletePlatform(ctx context.Context, in *DeletePlatformRequest, opts ...grpc.CallOption) (*BaseResponse, error)
 	// 获取平台列表
 	ListPlatforms(ctx context.Context, in *ListPlatformsRequest, opts ...grpc.CallOption) (*PlatformsPageInfo, error)
-	// 开始回放
-	StartPlayback(ctx context.Context, in *PlaybackRequest, opts ...grpc.CallOption) (*PlayResponse, error)
 	// 查询录像记录
 	QueryRecord(ctx context.Context, in *QueryRecordRequest, opts ...grpc.CallOption) (*QueryRecordResponse, error)
 	// PTZ 云台控制
@@ -370,26 +361,6 @@ func (c *apiClient) GetSnap(ctx context.Context, in *GetSnapRequest, opts ...grp
 	return out, nil
 }
 
-func (c *apiClient) StartPlay(ctx context.Context, in *PlayRequest, opts ...grpc.CallOption) (*PlayResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(PlayResponse)
-	err := c.cc.Invoke(ctx, Api_StartPlay_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *apiClient) StopPlay(ctx context.Context, in *PlayRequest, opts ...grpc.CallOption) (*PlayResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(PlayResponse)
-	err := c.cc.Invoke(ctx, Api_StopPlay_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *apiClient) StopConvert(ctx context.Context, in *ConvertStopRequest, opts ...grpc.CallOption) (*BaseResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(BaseResponse)
@@ -484,16 +455,6 @@ func (c *apiClient) ListPlatforms(ctx context.Context, in *ListPlatformsRequest,
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(PlatformsPageInfo)
 	err := c.cc.Invoke(ctx, Api_ListPlatforms_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *apiClient) StartPlayback(ctx context.Context, in *PlaybackRequest, opts ...grpc.CallOption) (*PlayResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(PlayResponse)
-	err := c.cc.Invoke(ctx, Api_StartPlayback_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -778,10 +739,6 @@ type ApiServer interface {
 	GetSubscribeInfo(context.Context, *GetSubscribeInfoRequest) (*SubscribeInfoResponse, error)
 	// 请求截图
 	GetSnap(context.Context, *GetSnapRequest) (*SnapResponse, error)
-	// 开始点播
-	StartPlay(context.Context, *PlayRequest) (*PlayResponse, error)
-	// 停止点播
-	StopPlay(context.Context, *PlayRequest) (*PlayResponse, error)
 	// 结束转码
 	StopConvert(context.Context, *ConvertStopRequest) (*BaseResponse, error)
 	// 语音广播命令
@@ -802,8 +759,6 @@ type ApiServer interface {
 	DeletePlatform(context.Context, *DeletePlatformRequest) (*BaseResponse, error)
 	// 获取平台列表
 	ListPlatforms(context.Context, *ListPlatformsRequest) (*PlatformsPageInfo, error)
-	// 开始回放
-	StartPlayback(context.Context, *PlaybackRequest) (*PlayResponse, error)
 	// 查询录像记录
 	QueryRecord(context.Context, *QueryRecordRequest) (*QueryRecordResponse, error)
 	// PTZ 云台控制
@@ -913,12 +868,6 @@ func (UnimplementedApiServer) GetSubscribeInfo(context.Context, *GetSubscribeInf
 func (UnimplementedApiServer) GetSnap(context.Context, *GetSnapRequest) (*SnapResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetSnap not implemented")
 }
-func (UnimplementedApiServer) StartPlay(context.Context, *PlayRequest) (*PlayResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method StartPlay not implemented")
-}
-func (UnimplementedApiServer) StopPlay(context.Context, *PlayRequest) (*PlayResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method StopPlay not implemented")
-}
 func (UnimplementedApiServer) StopConvert(context.Context, *ConvertStopRequest) (*BaseResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StopConvert not implemented")
 }
@@ -948,9 +897,6 @@ func (UnimplementedApiServer) DeletePlatform(context.Context, *DeletePlatformReq
 }
 func (UnimplementedApiServer) ListPlatforms(context.Context, *ListPlatformsRequest) (*PlatformsPageInfo, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListPlatforms not implemented")
-}
-func (UnimplementedApiServer) StartPlayback(context.Context, *PlaybackRequest) (*PlayResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method StartPlayback not implemented")
 }
 func (UnimplementedApiServer) QueryRecord(context.Context, *QueryRecordRequest) (*QueryRecordResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method QueryRecord not implemented")
@@ -1351,42 +1297,6 @@ func _Api_GetSnap_Handler(srv interface{}, ctx context.Context, dec func(interfa
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Api_StartPlay_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(PlayRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ApiServer).StartPlay(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: Api_StartPlay_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ApiServer).StartPlay(ctx, req.(*PlayRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _Api_StopPlay_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(PlayRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ApiServer).StopPlay(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: Api_StopPlay_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ApiServer).StopPlay(ctx, req.(*PlayRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _Api_StopConvert_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ConvertStopRequest)
 	if err := dec(in); err != nil {
@@ -1563,24 +1473,6 @@ func _Api_ListPlatforms_Handler(srv interface{}, ctx context.Context, dec func(i
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ApiServer).ListPlatforms(ctx, req.(*ListPlatformsRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _Api_StartPlayback_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(PlaybackRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ApiServer).StartPlayback(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: Api_StartPlayback_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ApiServer).StartPlayback(ctx, req.(*PlaybackRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2093,14 +1985,6 @@ var Api_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Api_GetSnap_Handler,
 		},
 		{
-			MethodName: "StartPlay",
-			Handler:    _Api_StartPlay_Handler,
-		},
-		{
-			MethodName: "StopPlay",
-			Handler:    _Api_StopPlay_Handler,
-		},
-		{
 			MethodName: "StopConvert",
 			Handler:    _Api_StopConvert_Handler,
 		},
@@ -2139,10 +2023,6 @@ var Api_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListPlatforms",
 			Handler:    _Api_ListPlatforms_Handler,
-		},
-		{
-			MethodName: "StartPlayback",
-			Handler:    _Api_StartPlayback_Handler,
 		},
 		{
 			MethodName: "QueryRecord",

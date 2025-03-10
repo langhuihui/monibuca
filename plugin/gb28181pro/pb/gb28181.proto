@@ -136,20 +136,6 @@ service api {
     };
   }
 
-  // 开始点播
-  rpc StartPlay (PlayRequest) returns (PlayResponse) {
-    option (google.api.http) = {
-      get: "/gb28181/api/play/start/{deviceId}/{channelId}"
-    };
-  }
-
-  // 停止点播
-  rpc StopPlay (PlayRequest) returns (PlayResponse) {
-    option (google.api.http) = {
-      get: "/gb28181/api/play/stop/{deviceId}/{channelId}"
-    };
-  }
-
   // 结束转码
   rpc StopConvert (ConvertStopRequest) returns (BaseResponse) {
     option (google.api.http) = {
@@ -222,12 +208,6 @@ service api {
     };
   }
 
-  // 开始回放
-  rpc StartPlayback (PlaybackRequest) returns (PlayResponse) {
-    option (google.api.http) = {
-      post: "/gb28181/api/playback/start/{deviceId}/{channelId}"
-    };
-  }
 
   // 查询录像记录
   rpc QueryRecord (QueryRecordRequest) returns (QueryRecordResponse) {
@@ -735,6 +715,7 @@ message QueryRecordRequest {
   string channelId = 2;
   string start = 3;
   string end = 4;
+  string range = 5;
 }
 
 message QueryRecordResponse {

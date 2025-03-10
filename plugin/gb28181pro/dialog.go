@@ -86,9 +86,15 @@ func (d *Dialog) Start() (err error) {
 		"v=0",
 		fmt.Sprintf("o=%s 0 0 IN IP4 %s", device.DeviceID, sdpIP),
 		fmt.Sprintf("s=%s", util.Conditional(isLive, "Play", "Playback")), // 根据是否有时间参数决定
-		util.Conditional(isLive, "", fmt.Sprintf("u=%s:0", channelId)),
-		"c=IN IP4 " + sdpIP,
 	}
+
+	// 非直播模式下添加u行，保持在s=和c=之间
+	if !isLive {
+		sdpInfo = append(sdpInfo, fmt.Sprintf("u=%s:0", channelId))
+	}
+
+	// 添加c行
+	sdpInfo = append(sdpInfo, "c=IN IP4 "+sdpIP)
 
 	// 将字符串时间转换为 Unix 时间戳
 	if !isLive {
@@ -258,52 +264,4 @@ func (d *Dialog) Dispose() {
 	if err != nil {
 		d.Error("close session err", err)
 	}
-}
-
-// 辅助函数：直接将ISO格式时间字符串解析为Unix时间戳字符串，不考虑时区
-// 格式：2025-03-05T16:30:23
-func parseTimeStringToUnixTimestamp(timeStr string) string {
-	// 手动解析日期时间字符串
-	var year, month, day, hour, minute, second int
-
-	// 解析格式为 "2025-03-05T16:30:23" 的字符串
-	fmt.Sscanf(timeStr, "%d-%d-%dT%d:%d:%d", &year, &month, &day, &hour, &minute, &second)
-
-	// 手动计算从1970-01-01 00:00:00开始的秒数
-	// 这种计算不考虑时区，直接将输入的时间视为绝对时间
-
-	// 首先计算从1970年到目标年份之前的天数
-	days := 0
-	for y := 1970; y < year; y++ {
-		if isLeapYear(y) {
-			days += 366
-		} else {
-			days += 365
-		}
-	}
-
-	// 加上当年目标月份之前的天数
-	daysInMonth := []int{0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}
-	if isLeapYear(year) {
-		daysInMonth[2] = 29
-	}
-	for m := 1; m < month; m++ {
-		days += daysInMonth[m]
-	}
-
-	// 加上当月的天数
-	days += day - 1
-
-	// 计算总秒数
-	seconds := days * 86400 // 一天的秒数
-	seconds += hour * 3600  // 小时的秒数
-	seconds += minute * 60  // 分钟的秒数
-	seconds += second       // 秒数
-
-	return strconv.FormatInt(int64(seconds), 10)
-}
-
-// 判断是否为闰年
-func isLeapYear(year int) bool {
-	return (year%4 == 0 && year%100 != 0) || (year%400 == 0)
 }

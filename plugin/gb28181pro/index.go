@@ -42,21 +42,22 @@ type PositionConfig struct {
 type GB28181ProPlugin struct {
 	pb.UnimplementedApiServer
 	m7s.Plugin
-	AutoInvite bool   `default:"true" desc:"自动邀请"`
-	Serial     string `default:"34020000002000000001" desc:"sip 服务 id"` //sip 服务器 id, 默认 34020000002000000001
-	Realm      string `default:"3402000000" desc:"sip 服务域"`            //sip 服务器域，默认 3402000000
-	Username   string
-	Password   string
-	Sip        SipConfig
-	MediaPort  util.Range[uint16] `default:"10000-20000" desc:"媒体端口范围"` //媒体端口范围
-	Position   PositionConfig
-	Parent     string `desc:"父级设备"`
-	ua         *sipgo.UserAgent
-	server     *sipgo.Server
-	devices    util.Collection[string, *Device]
-	dialogs    util.Collection[uint32, *Dialog]
-	platforms  util.Collection[uint32, *Platform]
-	tcpPorts   chan uint16
+	AutoInvite   bool   `default:"true" desc:"自动邀请"`
+	Serial       string `default:"34020000002000000001" desc:"sip 服务 id"` //sip 服务器 id, 默认 34020000002000000001
+	Realm        string `default:"3402000000" desc:"sip 服务域"`             //sip 服务器域，默认 3402000000
+	Username     string
+	Password     string
+	Sip          SipConfig
+	MediaPort    util.Range[uint16] `default:"10000-20000" desc:"媒体端口范围"` //媒体端口范围
+	Position     PositionConfig
+	Parent       string `desc:"父级设备"`
+	ua           *sipgo.UserAgent
+	server       *sipgo.Server
+	devices      util.Collection[string, *Device]
+	dialogs      util.Collection[uint32, *Dialog]
+	platforms    util.Collection[uint32, *Platform]
+	sendRtpInfos util.Collection[string, *SendRtpInfo] // 保存发送RTP流的信息，key为CallID
+	tcpPorts     chan uint16
 }
 
 var _ = m7s.InstallPlugin[GB28181ProPlugin](pb.RegisterApiHandler, &pb.Api_ServiceDesc, func(conf config.Pull) m7s.IPuller {
@@ -79,8 +80,9 @@ func (gb *GB28181ProPlugin) OnInit() (err error) {
 		gb.server.OnRegister(gb.OnRegister)
 		gb.server.OnBye(gb.OnBye)
 		gb.devices.L = new(sync.RWMutex)
+		gb.sendRtpInfos.L = new(sync.RWMutex)
 		gb.server.OnInvite(gb.OnInvite)
-		//gb.server.OnAck(gb.OnAck)
+		gb.server.OnAck(gb.OnAck)
 
 		if gb.MediaPort.Valid() {
 			gb.SetDescription("tcp", fmt.Sprintf("%d-%d", gb.MediaPort[0], gb.MediaPort[1]))
@@ -659,7 +661,6 @@ func (gb *GB28181ProPlugin) StoreDevice(deviceid string, req *sip.Request) (d *D
 	source := req.Source()
 	desc := req.Destination()
 	servIp, sPortStr, _ := net.SplitHostPort(desc)
-	deviceIP, _, _ := net.SplitHostPort(source)
 
 	exp := req.GetHeader("Expires")
 	if exp == nil {
@@ -674,18 +675,11 @@ func (gb *GB28181ProPlugin) StoreDevice(deviceid string, req *sip.Request) (d *D
 	// 优先使用内网IP
 	host := myip.InternalIPv4()
 	// 如果设备IP是内网IP，则使用内网IP
-	deviceIPParsed := net.ParseIP(deviceIP)
+	deviceIPParsed := net.ParseIP(servIp)
 	if deviceIPParsed != nil {
-		if deviceIPParsed.IsPrivate() {
-			// 设备是内网IP，优先使用内网IP
-			servIPParsed := net.ParseIP(servIp)
-			if servIPParsed != nil && servIPParsed.IsPrivate() {
-				// 如果服务器配置的也是内网IP，则使用配置的IP
-				host = servIp
-			}
-		} else {
+		if !deviceIPParsed.IsPrivate() { //公网情况就去获取本地网卡的公网IP
 			// 设备是公网IP，使用公网IP
-			host = gb.GetPublicIP(servIp)
+			host = gb.GetPublicIP(host)
 		}
 	}
 
@@ -884,98 +878,391 @@ func (gb *GB28181ProPlugin) OnInvite(req *sip.Request, tx sip.ServerTransaction)
 		return
 	}
 
-	// 检查设备是否存在
-	d, ok := gb.devices.Get(inviteInfo.RequesterId)
-	if !ok {
-		gb.Error("OnInvite", "error", "device not found", "deviceId", inviteInfo.RequesterId)
-		_ = tx.Respond(sip.NewResponseFromRequest(req, sip.StatusNotFound, "Device Not Found", nil))
-		return
-	}
+	// 首先从数据库中查询平台
+	var platformModel gb28181.PlatformModel
+	if gb.DB != nil {
+		// 使用requesterId查询平台，类似于Java代码中的queryPlatformByServerGBId
+		result := gb.DB.Where("server_gb_id = ?", inviteInfo.RequesterId).First(&platformModel)
+		if result.Error == nil {
+			// 数据库中找到平台，根据平台ID从运行时实例中查找
+			platform, platformFound := gb.platforms.Find(func(p *Platform) bool {
+				return p.PlatformModel.ID == platformModel.ID
+			})
 
-	// 检查通道是否存在
-	_, ok = d.channels.Get(inviteInfo.TargetChannelId)
-	if !ok {
-		gb.Error("OnInvite", "error", "channel not found", "channelId", inviteInfo.TargetChannelId)
-		_ = tx.Respond(sip.NewResponseFromRequest(req, sip.StatusNotFound, "Channel Not Found", nil))
-		return
-	}
+			if !platformFound {
+				gb.Error("OnInvite", "error", "platform found in DB but not in runtime", "platformId", inviteInfo.RequesterId)
+				_ = tx.Respond(sip.NewResponseFromRequest(req, sip.StatusNotFound, "Platform Not Found In Runtime", nil))
+				return
+			}
 
-	gb.Info("OnInvite", "action", "start", "deviceId", inviteInfo.RequesterId, "channelId", inviteInfo.TargetChannelId)
+			gb.Info("OnInvite", "action", "platform found", "platformId", inviteInfo.RequesterId, "platformName", platformModel.Name)
 
-	// 发送100 Trying响应
-	_ = tx.Respond(sip.NewResponseFromRequest(req, sip.StatusTrying, "Trying", nil))
+			// 查询平台下是否有该通道
+			// 根据Java代码中的 channelService.queryOneWithPlatform 逻辑
+			var commonGBChannels []gb28181.CommonGBChannel
 
-	// 获取媒体信息
-	mediaPort := uint16(0)
-	if gb.MediaPort.Valid() {
-		select {
-		case port := <-gb.tcpPorts:
-			mediaPort = port
-			gb.Debug("OnInvite", "action", "allocate port", "port", port)
-		default:
-			gb.Error("OnInvite", "error", "no available port")
-			_ = tx.Respond(sip.NewResponseFromRequest(req, sip.StatusServiceUnavailable, "No Available Port", nil))
+			// 使用类似Java代码中queryOneWithPlatform的SQL查询
+			// 进行JOIN查询，查找平台ID和通道ID匹配的记录
+			query := `
+				SELECT 
+					wdc.id as gb_id,
+					wdc.device_db_id as gb_device_db_id,
+					wdc.stream_push_id,
+					wdc.stream_proxy_id,
+					wdc.create_time,
+					wdc.update_time,
+					COALESCE(wpgc.custom_device_id, wdc.gb_device_id, wdc.device_id) as gb_device_id,
+					COALESCE(wpgc.custom_name, wdc.gb_name, wdc.name) as gb_name,
+					COALESCE(wpgc.custom_manufacturer, wdc.gb_manufacturer, wdc.manufacturer) as gb_manufacturer,
+					COALESCE(wpgc.custom_model, wdc.gb_model, wdc.model) as gb_model,
+					COALESCE(wpgc.custom_owner, wdc.gb_owner, wdc.owner) as gb_owner,
+					COALESCE(wpgc.custom_civil_code, wdc.gb_civil_code, wdc.civil_code) as gb_civil_code,
+					COALESCE(wpgc.custom_block, wdc.gb_block, wdc.block) as gb_block,
+					COALESCE(wpgc.custom_address, wdc.gb_address, wdc.address) as gb_address,
+					COALESCE(wpgc.custom_parental, wdc.gb_parental, wdc.parental) as gb_parental,
+					COALESCE(wpgc.custom_parent_id, wdc.gb_parent_id, wdc.parent_id) as gb_parent_id,
+					COALESCE(wpgc.custom_safety_way, wdc.gb_safety_way, wdc.safety_way) as gb_safety_way,
+					COALESCE(wpgc.custom_register_way, wdc.gb_register_way, wdc.register_way) as gb_register_way,
+					COALESCE(wpgc.custom_cert_num, wdc.gb_cert_num, wdc.cert_num) as gb_cert_num,
+					COALESCE(wpgc.custom_certifiable, wdc.gb_certifiable, wdc.certifiable) as gb_certifiable,
+					COALESCE(wpgc.custom_err_code, wdc.gb_err_code, wdc.err_code) as gb_err_code,
+					COALESCE(wpgc.custom_end_time, wdc.gb_end_time, wdc.end_time) as gb_end_time,
+					COALESCE(wpgc.custom_secrecy, wdc.gb_secrecy, wdc.secrecy) as gb_secrecy,
+					COALESCE(wpgc.custom_ip_address, wdc.gb_ip_address, wdc.ip_address) as gb_ip_address,
+					COALESCE(wpgc.custom_port, wdc.gb_port, wdc.port) as gb_port,
+					COALESCE(wpgc.custom_password, wdc.gb_password, wdc.password) as gb_password,
+					COALESCE(wpgc.custom_status, wdc.gb_status, wdc.status) as gb_status,
+					COALESCE(wpgc.custom_longitude, wdc.gb_longitude, wdc.longitude) as gb_longitude,
+					COALESCE(wpgc.custom_latitude, wdc.gb_latitude, wdc.latitude) as gb_latitude,
+					COALESCE(wpgc.custom_ptz_type, wdc.gb_ptz_type, wdc.ptz_type) as gb_ptz_type,
+					COALESCE(wpgc.custom_position_type, wdc.gb_position_type, wdc.position_type) as gb_position_type,
+					COALESCE(wpgc.custom_room_type, wdc.gb_room_type, wdc.room_type) as gb_room_type,
+					COALESCE(wpgc.custom_use_type, wdc.gb_use_type, wdc.use_type) as gb_use_type,
+					COALESCE(wpgc.custom_supply_light_type, wdc.gb_supply_light_type, wdc.supply_light_type) as gb_supply_light_type,
+					COALESCE(wpgc.custom_direction_type, wdc.gb_direction_type, wdc.direction_type) as gb_direction_type,
+					COALESCE(wpgc.custom_resolution, wdc.gb_resolution, wdc.resolution) as gb_resolution,
+					COALESCE(wpgc.custom_business_group_id, wdc.gb_business_group_id, wdc.business_group_id) as gb_business_group_id,
+					COALESCE(wpgc.custom_download_speed, wdc.gb_download_speed, wdc.download_speed) as gb_download_speed,
+					COALESCE(wpgc.custom_svc_space_support_mod, wdc.gb_svc_space_support_mod, wdc.svc_space_support_mod) as gb_svc_space_support_mod,
+					COALESCE(wpgc.custom_svc_time_support_mode, wdc.gb_svc_time_support_mode, wdc.svc_time_support_mode) as gb_svc_time_support_mode
+				FROM 
+					device_channel_gb28181pro wdc
+				LEFT JOIN 
+					platform_channel_gb28181pro wpgc ON wdc.id = wpgc.device_channel_id
+				WHERE 
+					wpgc.platform_id = ? AND 
+					COALESCE(wpgc.custom_device_id, wdc.gb_device_id, wdc.device_id) = ?
+				ORDER BY 
+					wdc.id
+			`
+
+			// 执行查询
+			channelResult := gb.DB.Raw(query, platformModel.ID, inviteInfo.TargetChannelId).Scan(&commonGBChannels)
+			if channelResult.Error != nil || len(commonGBChannels) == 0 {
+				gb.Error("OnInvite", "error", "channel not found", "channelId", inviteInfo.TargetChannelId, "err", channelResult.Error)
+				_ = tx.Respond(sip.NewResponseFromRequest(req, sip.StatusNotFound, "Channel Not Found", nil))
+				return
+			}
+
+			// 找到了通道
+			channel := commonGBChannels[len(commonGBChannels)-1]
+			gb.Info("OnInvite", "action", "channel found", "channelId", channel.GbDeviceID, "channelName", channel.GbName)
+
+			// 通道存在，发送100 Trying响应
+			tryingResp := sip.NewResponseFromRequest(req, sip.StatusTrying, "Trying", nil)
+			if err := tx.Respond(tryingResp); err != nil {
+				gb.Error("OnInvite", "error", "send trying response failed", "err", err.Error())
+				return
+			}
+
+			// 检查SSRC
+			if inviteInfo.SSRC == "" {
+				gb.Error("OnInvite", "error", "ssrc not found in invite")
+				_ = tx.Respond(sip.NewResponseFromRequest(req, sip.StatusBadRequest, "SSRC Not Found", nil))
+				return
+			}
+
+			// 获取媒体信息
+			mediaPort := uint16(0)
+			if gb.MediaPort.Valid() {
+				select {
+				case port := <-gb.tcpPorts:
+					mediaPort = port
+					gb.Debug("OnInvite", "action", "allocate port", "port", port)
+				default:
+					gb.Error("OnInvite", "error", "no available port")
+					_ = tx.Respond(sip.NewResponseFromRequest(req, sip.StatusServiceUnavailable, "No Available Port", nil))
+					return
+				}
+			} else {
+				mediaPort = gb.MediaPort[0]
+				gb.Debug("OnInvite", "action", "use default port", "port", mediaPort)
+			}
+
+			// 构建SDP响应
+			// 使用平台和通道的信息构建响应
+			sdpIP := platform.PlatformModel.DeviceIP
+			// 如果平台配置了SendStreamIP，则使用此IP
+			if platform.PlatformModel.SendStreamIP != "" {
+				sdpIP = platform.PlatformModel.SendStreamIP
+			}
+
+			// 构建SDP内容，参考Java代码createSendSdp方法
+			content := []string{
+				"v=0",
+				fmt.Sprintf("o=%s 0 0 IN IP4 %s", channel.GbDeviceID, sdpIP),
+				fmt.Sprintf("s=%s", inviteInfo.SessionName),
+				fmt.Sprintf("c=IN IP4 %s", sdpIP),
+			}
+
+			// 处理播放时间
+			if strings.EqualFold("Playback", inviteInfo.SessionName) && inviteInfo.StartTime > 0 && inviteInfo.StopTime > 0 {
+				content = append(content, fmt.Sprintf("t=%d %d", inviteInfo.StartTime, inviteInfo.StopTime))
+			} else {
+				content = append(content, "t=0 0")
+			}
+
+			// 处理传输模式
+			if inviteInfo.TCP {
+				content = append(content, fmt.Sprintf("m=video %d TCP/RTP/AVP 96", mediaPort))
+				if inviteInfo.TCPActive {
+					content = append(content, "a=setup:passive")
+				} else {
+					content = append(content, "a=setup:active")
+				}
+				if inviteInfo.TCP {
+					content = append(content, "a=connection:new")
+				}
+			} else {
+				content = append(content, fmt.Sprintf("m=video %d RTP/AVP 96", mediaPort))
+			}
+
+			// 添加其他属性，参考Java代码
+			content = append(content,
+				"a=sendonly",
+				"a=rtpmap:96 PS/90000",
+				fmt.Sprintf("y=%s", inviteInfo.SSRC),
+				"f=",
+			)
+
+			// 发送200 OK响应
+			response := sip.NewResponseFromRequest(req, sip.StatusOK, "OK", nil)
+			contentType := sip.ContentTypeHeader("application/sdp")
+			response.AppendHeader(&contentType)
+			response.SetBody([]byte(strings.Join(content, "\r\n") + "\r\n"))
+
+			// 创建并保存SendRtpInfo，以供OnAck方法使用
+			callID := req.CallID().Value()
+			sendRtpInfo := &SendRtpInfo{
+				IP:            inviteInfo.IP,
+				Port:          inviteInfo.Port,
+				SSRC:          inviteInfo.SSRC,
+				TargetID:      platformModel.ServerGBID,
+				TargetName:    platformModel.Name,
+				App:           "rtp",                              // 使用rtp作为应用名
+				Stream:        fmt.Sprintf("%s", inviteInfo.SSRC), // 可以根据需要修改
+				ChannelID:     channel.GbDeviceID,
+				Status:        1, // 1表示等待ACK
+				TCP:           inviteInfo.TCP,
+				TCPActive:     inviteInfo.TCPActive,
+				LocalPort:     int(mediaPort),
+				CallID:        callID,
+				Channel:       &channel,
+				PlatformModel: &platformModel,
+			}
+
+			// 将FromTag和ToTag记录下来（如果有的话）
+			fromHeader := req.From()
+			if fromHeader != nil {
+				tag, _ := fromHeader.Params.Get("tag")
+				sendRtpInfo.FromTag = tag
+			}
+
+			toHeader := req.To()
+			if toHeader != nil && response != nil {
+				tag, _ := toHeader.Params.Get("tag")
+				sendRtpInfo.ToTag = tag
+			}
+
+			// 保存到集合中
+			gb.sendRtpInfos.Set(sendRtpInfo)
+			gb.Info("OnInvite", "action", "sendRtpInfo created", "callId", callID)
+
+			if err := tx.Respond(response); err != nil {
+				gb.Error("OnInvite", "error", "send response failed", "err", err.Error())
+				return
+			}
+
+			// 如果是TCP主动模式，需要开启监听
+			if inviteInfo.TCP && inviteInfo.TCPActive {
+				// TODO: 实现TCP主动模式监听逻辑，类似Java代码中的startSendRtpPassive
+				gb.Info("OnInvite", "action", "TCP active mode, should start passive listener")
+			}
+
+			gb.Info("OnInvite", "action", "complete", "platformId", inviteInfo.RequesterId, "channelId", channel.GbDeviceID,
+				"ip", inviteInfo.IP, "port", inviteInfo.Port, "tcp", inviteInfo.TCP, "tcpActive", inviteInfo.TCPActive)
+			return
+		} else {
+			// 数据库中未找到平台，响应not found
+			gb.Error("OnInvite", "error", "platform not found in database", "platformId", inviteInfo.RequesterId)
+			_ = tx.Respond(sip.NewResponseFromRequest(req, sip.StatusNotFound, "Platform Not Found", nil))
 			return
 		}
 	} else {
-		mediaPort = gb.MediaPort[0]
-		gb.Debug("OnInvite", "action", "use default port", "port", mediaPort)
+		// 数据库未初始化，响应服务不可用
+		gb.Error("OnInvite", "error", "database not initialized")
+		_ = tx.Respond(sip.NewResponseFromRequest(req, sip.StatusServiceUnavailable, "Database Not Initialized", nil))
+		return
 	}
+}
 
-	// 设置SSRC
-	ssrc := d.CreateSSRC(gb.Serial)
-	gb.Debug("OnInvite", "action", "create ssrc", "ssrc", ssrc)
-
-	// 构建SDP响应
-	sdpIP := d.LocalIP
-	if sdpIP == "" {
-		sdpIP = d.mediaIp
-	}
-
-	responseContent := []string{
-		"v=0",
-		fmt.Sprintf("o=%s 0 0 IN IP4 %s", gb.Serial, sdpIP),
-		"s=Play",
-		fmt.Sprintf("c=IN IP4 %s", sdpIP),
-		"t=0 0",
-	}
-
-	// 根据传输模式添加媒体行
-	var mediaLine string
-	switch strings.ToUpper(d.StreamMode) {
-	case "TCP-PASSIVE", "TCP-ACTIVE":
-		mediaLine = fmt.Sprintf("m=video %d TCP/RTP/AVP 96", mediaPort)
-		responseContent = append(responseContent, mediaLine)
-		if d.StreamMode == "TCP-PASSIVE" {
-			responseContent = append(responseContent, "a=setup:passive")
-		} else {
-			responseContent = append(responseContent, "a=setup:active")
-		}
-		responseContent = append(responseContent, "a=connection:new")
-		gb.Debug("OnInvite", "action", "create sdp", "mode", d.StreamMode)
-	default:
-		mediaLine = fmt.Sprintf("m=video %d RTP/AVP 96", mediaPort)
-		responseContent = append(responseContent, mediaLine)
-		gb.Debug("OnInvite", "action", "create sdp", "mode", "UDP")
-	}
-
-	responseContent = append(responseContent,
-		"a=recvonly",
-		"a=rtpmap:96 PS/90000",
-		fmt.Sprintf("y=%010d", ssrc),
-	)
-
-	// 发送200 OK响应
-	response := sip.NewResponseFromRequest(req, sip.StatusOK, "OK", nil)
-	contentType := sip.ContentTypeHeader("application/sdp")
-	response.AppendHeader(&contentType)
-	response.SetBody([]byte(strings.Join(responseContent, "\r\n") + "\r\n"))
-
-	if err := tx.Respond(response); err != nil {
-		gb.Error("OnInvite", "error", "send response failed", "err", err.Error())
+func (gb *GB28181ProPlugin) OnAck(req *sip.Request, tx sip.ServerTransaction) {
+	callID := req.CallID().Value()
+	if callID == "" {
+		gb.Error("OnAck", "error", "callid header not found")
 		return
 	}
 
-	gb.Info("OnInvite", "action", "complete", "deviceId", inviteInfo.RequesterId, "channelId", inviteInfo.TargetChannelId,
-		"ip", inviteInfo.IP, "port", inviteInfo.Port, "tcp", inviteInfo.TCP, "tcpActive", inviteInfo.TCPActive)
+	// 停止等待ACK的任务
+	// TODO: 实现动态任务管理，类似Java中的dynamicTask.stop
+
+	// 获取From和To头部的User部分
+	// 简化提取User的方式
+	fromUser := ""
+	toUser := ""
+
+	fromHeader := req.From()
+	if fromHeader != nil {
+		fromUser = fromHeader.Address.User
+	}
+
+	toHeader := req.To()
+	if toHeader != nil {
+		toUser = toHeader.Address.User
+	}
+
+	if fromUser == "" {
+		gb.Error("OnAck", "error", "from user not found")
+		return
+	}
+
+	gb.Info("OnAck", "fromUser", fromUser, "toUser", toUser)
+
+	// 查询发送RTP信息
+	sendRtpItem, ok := gb.sendRtpInfos.Get(callID)
+	if !ok {
+		gb.Warn("OnAck", "warning", "SendRtpInfo not found", "callID", callID, "fromUserID", fromUser)
+		return
+	}
+
+	// 对于TCP主动模式，已经在200 OK时开启了监听，跳过后续处理
+	if sendRtpItem.TCPActive {
+		gb.Info("OnAck", "action", "tcp active mode, waiting for connection", "stream", sendRtpItem.Stream)
+		return
+	}
+
+	// 获取平台信息
+	var platform *Platform
+	platform, platformFound := gb.platforms.Find(func(p *Platform) bool {
+		return p.PlatformModel.ServerGBID == fromUser
+	})
+
+	gb.Info("OnAck", "action", "start push stream", "stream", sendRtpItem.Stream,
+		"target", fmt.Sprintf("%s:%d", sendRtpItem.IP, sendRtpItem.Port),
+		"ssrc", sendRtpItem.SSRC,
+		"protocol", sendRtpItem.GetProtocolString())
+
+	if platform != nil && platformFound {
+		// 如果是平台
+		// TODO: 实现跨服务推流逻辑
+
+		// 开始推流
+		err := gb.startSendRtp(sendRtpItem)
+		if err != nil {
+			gb.Error("OnAck", "error", "start send rtp failed", "err", err.Error())
+			// TODO: 实现失败处理
+			return
+		}
+
+		// 发送平台开始播放消息
+		// TODO: 实现Redis缓存消息
+	} else {
+		// 如果是设备
+		_, deviceFound := gb.devices.Get(fromUser)
+		if !deviceFound {
+			gb.Warn("OnAck", "warning", "device not found", "deviceId", fromUser, "targetId", toUser)
+			return
+		}
+
+		// 开始推流
+		err := gb.startSendRtp(sendRtpItem)
+		if err != nil {
+			gb.Error("OnAck", "error", "start send rtp failed", "err", err.Error())
+			// TODO: 实现失败处理
+			return
+		}
+	}
+}
+
+// startSendRtp 开始发送RTP流
+func (gb *GB28181ProPlugin) startSendRtp(sendRtpItem *SendRtpInfo) error {
+	// 创建ForwardDialog对象
+	forwardDialog := NewForwardDialog(gb)
+
+	// 设置转发目标
+	forwardDialog.SetTarget(sendRtpItem.IP, sendRtpItem.Port)
+
+	// 设置监听协议（根据SendRtpInfo中的设置决定）
+	if sendRtpItem.TCP {
+		forwardDialog.SetListenProtocol("tcp")
+	} else {
+		forwardDialog.SetListenProtocol("udp")
+	}
+
+	// 构建streamPath
+	var streamPath string
+	if sendRtpItem.Channel != nil {
+		// 通过channel.GbDeviceDbId从设备缓存中获取设备
+		if device, ok := gb.devices.Find(func(d *Device) bool {
+			return d.ID == int64(sendRtpItem.Channel.GbDeviceDbID)
+		}); ok {
+			// 使用设备的DeviceID作为前半段
+			// 使用channel的DeviceID作为后半段
+			streamPath = fmt.Sprintf("%s/%s", device.DeviceID, sendRtpItem.Channel.GbDeviceID)
+		} else {
+			gb.Error("startSendRtp", "error", "device not found", "deviceDbId", sendRtpItem.Channel.GbDeviceDbID)
+			return fmt.Errorf("device not found for deviceDbId: %d", sendRtpItem.Channel.GbDeviceDbID)
+		}
+	} else {
+		gb.Error("startSendRtp", "error", "channel info is nil")
+		return fmt.Errorf("channel info is nil")
+	}
+
+	// 创建配置
+	pullConf := config.Pull{
+		URL: streamPath,
+	}
+
+	// 如果是回放模式，设置开始和结束时间
+	if sendRtpItem.StartTime > 0 && sendRtpItem.StopTime > 0 {
+		startTimeStr := time.Unix(sendRtpItem.StartTime, 0).Format("2006-01-02T15:04:05")
+		endTimeStr := time.Unix(sendRtpItem.StopTime, 0).Format("2006-01-02T15:04:05")
+
+		forwardDialog.start = startTimeStr
+		forwardDialog.end = endTimeStr
+	}
+
+	// 初始化拉流任务
+	forwardDialog.GetPullJob().Init(forwardDialog, &gb.Plugin, streamPath, pullConf, nil)
+
+	// 更新状态为推流中
+	sendRtpItem.Status = 2
+	gb.sendRtpInfos.Set(sendRtpItem)
+
+	gb.Info("startSendRtp", "action", "forward rtp started",
+		"from", pullConf.URL,
+		"to", fmt.Sprintf("%s:%d", sendRtpItem.IP, sendRtpItem.Port),
+		"protocol", sendRtpItem.GetProtocolString())
+
+	return nil
 }

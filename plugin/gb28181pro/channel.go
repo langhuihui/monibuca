@@ -48,6 +48,7 @@ func (c *Channel) Pull() {
 	pubConf := c.Device.plugin.GetCommonConf().Publish
 	pubConf.PubAudio = c.AbstractDevice.Audio
 	pubConf.DelayCloseTimeout = util.Conditional(c.AbstractDevice.StopOnIdle, time.Second*5, 0)
+	c.Info("into channel.Pull")
 	c.Device.plugin.Pull(c.AbstractDevice.GetStreamPath(), c.AbstractDevice.Pull, &pubConf)
 }
 
