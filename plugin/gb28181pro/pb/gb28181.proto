@@ -721,7 +721,7 @@ message QueryRecordRequest {
 message QueryRecordResponse {
   int32 code = 1;
   string message = 2;
-  repeated RecordItem records = 3;
+  repeated RecordItem data = 3;
   string device_id = 4;
   string channel_id = 5;
   string sn = 6;

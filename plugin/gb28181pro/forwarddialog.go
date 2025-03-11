@@ -164,7 +164,7 @@ func (d *ForwardDialog) Start() (err error) {
 	if d.SSRC == 0 {
 		d.SSRC = uint32(ssrcValue)
 	}
-	sdpInfo = append(sdpInfo, fmt.Sprintf("y=%d", d.SSRC))
+	sdpInfo = append(sdpInfo, fmt.Sprintf("y=%s", d.SSRC))
 
 	// 创建INVITE请求
 	request := sip.NewRequest(sip.INVITE, sip.Uri{User: channelId, Host: device.IP})

@@ -963,7 +963,7 @@ func (gb *GB28181ProPlugin) QueryRecord(ctx context.Context, req *pb.QueryRecord
 
 	for _, record := range recordReq.Response {
 		for _, item := range record.RecordList.Item {
-			resp.Records = append(resp.Records, &pb.RecordItem{
+			resp.Data = append(resp.Data, &pb.RecordItem{
 				DeviceId:   item.DeviceID,
 				Name:       item.Name,
 				FilePath:   item.FilePath,
@@ -981,8 +981,8 @@ func (gb *GB28181ProPlugin) QueryRecord(ctx context.Context, req *pb.QueryRecord
 	resp.Message = fmt.Sprintf("success, received %d/%d records", recordReq.ReceivedNum, recordReq.SumNum)
 
 	// 排序录像列表，按StartTime升序排序
-	sort.Slice(resp.Records, func(i, j int) bool {
-		return resp.Records[i].StartTime < resp.Records[j].StartTime
+	sort.Slice(resp.Data, func(i, j int) bool {
+		return resp.Data[i].StartTime < resp.Data[j].StartTime
 	})
 
 	// 清理请求
