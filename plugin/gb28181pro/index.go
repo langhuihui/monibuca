@@ -42,22 +42,23 @@ type PositionConfig struct {
 type GB28181ProPlugin struct {
 	pb.UnimplementedApiServer
 	m7s.Plugin
-	AutoInvite   bool   `default:"true" desc:"自动邀请"`
-	Serial       string `default:"34020000002000000001" desc:"sip 服务 id"` //sip 服务器 id, 默认 34020000002000000001
-	Realm        string `default:"3402000000" desc:"sip 服务域"`             //sip 服务器域，默认 3402000000
-	Username     string
-	Password     string
-	Sip          SipConfig
-	MediaPort    util.Range[uint16] `default:"10000-20000" desc:"媒体端口范围"` //媒体端口范围
-	Position     PositionConfig
-	Parent       string `desc:"父级设备"`
-	ua           *sipgo.UserAgent
-	server       *sipgo.Server
-	devices      util.Collection[string, *Device]
-	dialogs      util.Collection[uint32, *Dialog]
-	platforms    util.Collection[uint32, *Platform]
-	sendRtpInfos util.Collection[string, *SendRtpInfo] // 保存发送RTP流的信息，key为CallID
-	tcpPorts     chan uint16
+	AutoInvite     bool   `default:"true" desc:"自动邀请"`
+	Serial         string `default:"34020000002000000001" desc:"sip 服务 id"` //sip 服务器 id, 默认 34020000002000000001
+	Realm          string `default:"3402000000" desc:"sip 服务域"`             //sip 服务器域，默认 3402000000
+	Username       string
+	Password       string
+	Sip            SipConfig
+	MediaPort      util.Range[uint16] `default:"10000-20000" desc:"媒体端口范围"` //媒体端口范围
+	Position       PositionConfig
+	Parent         string `desc:"父级设备"`
+	ua             *sipgo.UserAgent
+	server         *sipgo.Server
+	devices        util.Collection[string, *Device]
+	dialogs        util.Collection[uint32, *Dialog]
+	forwardDialogs util.Collection[uint32, *ForwardDialog]
+	platforms      util.Collection[uint32, *Platform]
+	sendRtpInfos   util.Collection[string, *SendRtpInfo] // 保存发送RTP流的信息，key为CallID
+	tcpPorts       chan uint16
 }
 
 var _ = m7s.InstallPlugin[GB28181ProPlugin](pb.RegisterApiHandler, &pb.Api_ServiceDesc, func(conf config.Pull) m7s.IPuller {
@@ -863,6 +864,12 @@ func (gb *GB28181ProPlugin) OnBye(req *sip.Request, tx sip.ServerTransaction) {
 		gb.Warn("OnBye", "dialog", dialog.GetCallID())
 		dialog.Stop(task.ErrTaskComplete)
 	}
+	if forwardDialog, ok := gb.forwardDialogs.Find(func(d *ForwardDialog) bool {
+		return d.GetCallID() == req.CallID().Value()
+	}); ok {
+		gb.Warn("OnBye", "dialog", forwardDialog.GetCallID())
+		forwardDialog.Stop(task.ErrTaskComplete)
+	}
 }
 
 func (gb *GB28181ProPlugin) GetSerial() string {
@@ -879,23 +886,22 @@ func (gb *GB28181ProPlugin) OnInvite(req *sip.Request, tx sip.ServerTransaction)
 	}
 
 	// 首先从数据库中查询平台
-	var platformModel gb28181.PlatformModel
+	var platform *Platform
+	var platformModel = &gb28181.PlatformModel{}
 	if gb.DB != nil {
 		// 使用requesterId查询平台，类似于Java代码中的queryPlatformByServerGBId
 		result := gb.DB.Where("server_gb_id = ?", inviteInfo.RequesterId).First(&platformModel)
 		if result.Error == nil {
 			// 数据库中找到平台，根据平台ID从运行时实例中查找
-			platform, platformFound := gb.platforms.Find(func(p *Platform) bool {
-				return p.PlatformModel.ID == platformModel.ID
-			})
-
-			if !platformFound {
+			if platformTmp, platformFound := gb.platforms.Get(platformModel.ID); !platformFound {
 				gb.Error("OnInvite", "error", "platform found in DB but not in runtime", "platformId", inviteInfo.RequesterId)
 				_ = tx.Respond(sip.NewResponseFromRequest(req, sip.StatusNotFound, "Platform Not Found In Runtime", nil))
 				return
+			} else {
+				platform = platformTmp
 			}
 
-			gb.Info("OnInvite", "action", "platform found", "platformId", inviteInfo.RequesterId, "platformName", platformModel.Name)
+			gb.Info("OnInvite", "action", "platform found", "platformId", inviteInfo.RequesterId, "platformName", platform.PlatformModel.Name)
 
 			// 查询平台下是否有该通道
 			// 根据Java代码中的 channelService.queryOneWithPlatform 逻辑
@@ -957,7 +963,7 @@ func (gb *GB28181ProPlugin) OnInvite(req *sip.Request, tx sip.ServerTransaction)
 			`
 
 			// 执行查询
-			channelResult := gb.DB.Raw(query, platformModel.ID, inviteInfo.TargetChannelId).Scan(&commonGBChannels)
+			channelResult := gb.DB.Raw(query, platform.PlatformModel.ID, inviteInfo.TargetChannelId).Scan(&commonGBChannels)
 			if channelResult.Error != nil || len(commonGBChannels) == 0 {
 				gb.Error("OnInvite", "error", "channel not found", "channelId", inviteInfo.TargetChannelId, "err", channelResult.Error)
 				_ = tx.Respond(sip.NewResponseFromRequest(req, sip.StatusNotFound, "Channel Not Found", nil))
@@ -1052,13 +1058,12 @@ func (gb *GB28181ProPlugin) OnInvite(req *sip.Request, tx sip.ServerTransaction)
 			response.SetBody([]byte(strings.Join(content, "\r\n") + "\r\n"))
 
 			// 创建并保存SendRtpInfo，以供OnAck方法使用
-			callID := req.CallID().Value()
 			sendRtpInfo := &SendRtpInfo{
 				IP:            inviteInfo.IP,
 				Port:          inviteInfo.Port,
 				SSRC:          inviteInfo.SSRC,
-				TargetID:      platformModel.ServerGBID,
-				TargetName:    platformModel.Name,
+				TargetID:      platform.PlatformModel.ServerGBID,
+				TargetName:    platform.PlatformModel.Name,
 				App:           "rtp",                              // 使用rtp作为应用名
 				Stream:        fmt.Sprintf("%s", inviteInfo.SSRC), // 可以根据需要修改
 				ChannelID:     channel.GbDeviceID,
@@ -1066,9 +1071,9 @@ func (gb *GB28181ProPlugin) OnInvite(req *sip.Request, tx sip.ServerTransaction)
 				TCP:           inviteInfo.TCP,
 				TCPActive:     inviteInfo.TCPActive,
 				LocalPort:     int(mediaPort),
-				CallID:        callID,
+				CallID:        req.CallID().Value(),
 				Channel:       &channel,
-				PlatformModel: &platformModel,
+				PlatformModel: platform.PlatformModel,
 			}
 
 			// 将FromTag和ToTag记录下来（如果有的话）
@@ -1086,7 +1091,7 @@ func (gb *GB28181ProPlugin) OnInvite(req *sip.Request, tx sip.ServerTransaction)
 
 			// 保存到集合中
 			gb.sendRtpInfos.Set(sendRtpInfo)
-			gb.Info("OnInvite", "action", "sendRtpInfo created", "callId", callID)
+			gb.Info("OnInvite", "action", "sendRtpInfo created", "callId", sendRtpInfo.CallID)
 
 			if err := tx.Respond(response); err != nil {
 				gb.Error("OnInvite", "error", "send response failed", "err", err.Error())
@@ -1219,6 +1224,9 @@ func (gb *GB28181ProPlugin) startSendRtp(sendRtpItem *SendRtpInfo) error {
 		forwardDialog.SetListenProtocol("udp")
 	}
 
+	// 设置上级平台的SSRC
+	forwardDialog.PlatformSSRC = sendRtpItem.SSRC
+
 	// 构建streamPath
 	var streamPath string
 	if sendRtpItem.Channel != nil {
@@ -1262,7 +1270,8 @@ func (gb *GB28181ProPlugin) startSendRtp(sendRtpItem *SendRtpInfo) error {
 	gb.Info("startSendRtp", "action", "forward rtp started",
 		"from", pullConf.URL,
 		"to", fmt.Sprintf("%s:%d", sendRtpItem.IP, sendRtpItem.Port),
-		"protocol", sendRtpItem.GetProtocolString())
+		"protocol", sendRtpItem.GetProtocolString(),
+		"ssrc", sendRtpItem.SSRC)
 
 	return nil
 }

@@ -22,12 +22,14 @@ package gb28181
 
 import (
 	"fmt"
+	"log/slog"
 	"net"
+	"os"
+	"strconv"
 	"sync"
 	"time"
 
 	"github.com/pion/rtp"
-	"m7s.live/v5"
 	"m7s.live/v5/pkg/task"
 	"m7s.live/v5/pkg/util"
 	rtp2 "m7s.live/v5/plugin/rtp/pkg"
@@ -46,21 +48,24 @@ type RTPForwarder struct {
 	Protocol     string        // 监听协议: "tcp" 或 "udp"
 	TargetIP     string        // 目标IP地址
 	TargetPort   int           // 目标端口
+	TargetSSRC   string        // 目标SSRC，用于替换RTP包中的SSRC
 	udpConn      *net.UDPConn  // UDP发送连接
 	bufferPool   sync.Pool     // 缓冲池
 	ForwardCount int64         // 已转发的包数量
 	SendInterval time.Duration // 发送间隔，可用于限流
 	lastSendTime time.Time     // 上次发送时间
 	stopChan     chan struct{} // 停止信号通道
+	*slog.Logger
 }
 
 // NewRTPForwarder 创建一个新的RTP转发器
 func NewRTPForwarder() *RTPForwarder {
 	ret := &RTPForwarder{
-		FeedChan:     make(chan []byte, 100),
-		SendInterval: time.Millisecond * 5, // 默认5ms间隔，可根据需要调整
-		Protocol:     "tcp",                // 默认使用TCP
+		FeedChan:     make(chan []byte, 2000), // 增加缓冲区大小，减少丢包风险
+		SendInterval: time.Millisecond * 0,    // 默认不限制发送间隔，最大速度转发
+		Protocol:     "tcp",                   // 默认使用TCP
 		stopChan:     make(chan struct{}),
+		Logger:       slog.New(slog.NewTextHandler(os.Stdout, nil)),
 	}
 
 	ret.bufferPool = sync.Pool{
@@ -74,35 +79,28 @@ func NewRTPForwarder() *RTPForwarder {
 
 // ReadRTP 读取RTP包
 func (p *RTPForwarder) ReadRTP(rtpBuf util.Buffer) (err error) {
-	lastSeq := p.SequenceNumber
-
 	if err = p.Unmarshal(rtpBuf); err != nil {
 		p.Error("unmarshal error", "err", err)
 		return
 	}
 
-	// 检查序列号连续性
-	if lastSeq == 0 || p.SequenceNumber == lastSeq+1 {
-		if p.Enabled(p, task.TraceLevel) {
-			p.Trace("rtp", "len", rtpBuf.Len(), "seq", p.SequenceNumber, "payloadType", p.PayloadType, "ssrc", p.SSRC)
-		}
-
-		// 创建一个副本，以防在异步处理时缓冲区被重用
-		copyData := make([]byte, len(p.Payload))
-		copy(copyData, p.Payload)
-
-		// 将数据发送到通道
-		p.FeedChan <- copyData
-
-		// 直接转发RTP包到目标地址（如果已设置）
-		if p.udpConn != nil {
-			p.ForwardRTPPacket(rtpBuf)
-		}
-
-		return nil
+	if p.Enabled(p, task.TraceLevel) {
+		p.Trace("rtp", "len", rtpBuf.Len(), "seq", p.SequenceNumber, "payloadType", p.PayloadType, "ssrc", p.SSRC)
 	}
 
-	p.Warn("rtp sequence discontinuity", "expected", lastSeq+1, "got", p.SequenceNumber)
+	// 直接使用原始RTP包数据
+	rtpData := make([]byte, rtpBuf.Len())
+	copy(rtpData, rtpBuf)
+
+	// 将完整的RTP包数据发送到通道
+	select {
+	case p.FeedChan <- rtpData:
+		// 成功发送
+	default:
+		// 通道已满，记录警告
+		p.Warn("feed channel full, dropping packet")
+	}
+
 	return nil
 }
 
@@ -117,49 +115,95 @@ func (p *RTPForwarder) ReadRTPBytes(data []byte) (err error) {
 	// 设置当前Packet的值
 	p.Packet = packet
 
-	// 创建一个副本，以防在异步处理时缓冲区被重用
-	copyData := make([]byte, len(p.Payload))
-	copy(copyData, p.Payload)
+	if p.Enabled(p, task.TraceLevel) {
+		p.Trace("rtp bytes", "len", len(data), "seq", packet.SequenceNumber, "payloadType", packet.PayloadType, "ssrc", packet.SSRC)
+	}
 
-	// 将数据发送到通道
-	p.FeedChan <- copyData
+	// 直接使用原始RTP包数据
+	rtpData := make([]byte, len(data))
+	copy(rtpData, data)
 
-	// 直接转发RTP包到目标地址（如果已设置）
-	if p.udpConn != nil {
-		_, err = p.udpConn.Write(data)
-		if err != nil {
-			p.Error("forward rtp bytes error", "err", err)
-			return
-		}
-
-		p.lastSendTime = time.Now()
-		p.ForwardCount++
-
-		if p.Enabled(p, task.TraceLevel) && p.ForwardCount%100 == 0 {
-			p.Trace("forward rtp packet", "count", p.ForwardCount)
-		}
+	// 将完整的RTP包数据发送到通道
+	select {
+	case p.FeedChan <- rtpData:
+		// 成功发送
+	default:
+		// 通道已满，记录警告
+		p.Warn("feed channel full, dropping packet")
 	}
 
 	return nil
 }
 
-// ForwardRTPPacket 将RTP包转发到目标地址
+// ForwardRTPPacket 转发RTP包到目标地址
 func (p *RTPForwarder) ForwardRTPPacket(rtpBuf util.Buffer) {
 	// 限流控制
 	if !p.lastSendTime.IsZero() && time.Since(p.lastSendTime) < p.SendInterval {
 		time.Sleep(p.SendInterval - time.Since(p.lastSendTime))
 	}
 
-	_, err := p.udpConn.Write(rtpBuf.Bytes())
-	if err != nil {
-		p.Error("forward rtp packet error", "err", err)
-		return
+	// 如果设置了目标SSRC，则修改RTP包中的SSRC
+	if p.TargetSSRC != "" {
+		// 创建一个新的RTP包
+		packet := &rtp.Packet{}
+
+		// 解析原始RTP包
+		if err := packet.Unmarshal(rtpBuf.Bytes()); err == nil {
+			// 将字符串SSRC转换为uint32
+			targetSSRCUint, err := strconv.ParseUint(p.TargetSSRC, 10, 32)
+			if err != nil {
+				p.Error("parse target ssrc error", "err", err)
+				// 发送原始RTP包
+				_, err = p.udpConn.Write(rtpBuf.Bytes())
+				if err != nil {
+					p.Error("forward original rtp packet error", "err", err)
+				}
+				return
+			}
+
+			// 修改SSRC
+			packet.SSRC = uint32(targetSSRCUint)
+
+			// 重新编码RTP包
+			modifiedData, err := packet.Marshal()
+			if err == nil {
+				// 发送修改后的RTP包
+				_, err = p.udpConn.Write(modifiedData)
+				if err != nil {
+					p.Error("forward modified rtp packet error", "err", err)
+					return
+				}
+			} else {
+				p.Error("marshal modified rtp packet error", "err", err)
+				// 发送原始RTP包
+				_, err = p.udpConn.Write(rtpBuf.Bytes())
+				if err != nil {
+					p.Error("forward original rtp packet error", "err", err)
+					return
+				}
+			}
+		} else {
+			p.Error("unmarshal rtp packet error", "err", err)
+			// 发送原始RTP包
+			_, err = p.udpConn.Write(rtpBuf.Bytes())
+			if err != nil {
+				p.Error("forward original rtp packet error", "err", err)
+				return
+			}
+		}
+	} else {
+		// 直接发送原始RTP包
+		_, err := p.udpConn.Write(rtpBuf.Bytes())
+		if err != nil {
+			p.Error("forward rtp packet error", "err", err)
+			return
+		}
 	}
 
 	p.lastSendTime = time.Now()
 	p.ForwardCount++
 
-	if p.Enabled(p, task.TraceLevel) && p.ForwardCount%100 == 0 {
+	if p.Enabled(p, task.TraceLevel) && p.ForwardCount%1000 == 0 {
 		p.Trace("forward rtp packet", "count", p.ForwardCount)
 	}
 }
@@ -193,6 +237,7 @@ func (p *RTPForwarder) SetTarget(ip string, port int) error {
 
 // Start 启动监听
 func (p *RTPForwarder) Start() (err error) {
+	p.Info("RTPForwarder start", "target", p.TargetIP, "port", p.TargetPort)
 	switch p.Protocol {
 	case "tcp", "TCP":
 		p.listener, err = net.Listen("tcp4", p.ListenAddr)
@@ -216,12 +261,13 @@ func (p *RTPForwarder) Start() (err error) {
 	default:
 		return fmt.Errorf("unsupported protocol: %s", p.Protocol)
 	}
-
+	p.Info("RTPForwarder end")
 	return nil
 }
 
 // Go 启动处理任务
 func (p *RTPForwarder) Go() error {
+	p.Info("start go", "addr", p.ListenAddr)
 	switch p.Protocol {
 	case "tcp", "TCP":
 		return p.goTCP()
@@ -235,17 +281,49 @@ func (p *RTPForwarder) Go() error {
 // goTCP 处理TCP连接的RTP包
 func (p *RTPForwarder) goTCP() error {
 	p.Info("start tcp accept")
-	conn, err := p.listener.Accept()
-	if err != nil {
-		p.Error("accept error", "err", err)
-		return err
+
+	// 创建一个停止信号通道，与goUDP保持一致
+	if p.stopChan == nil {
+		p.stopChan = make(chan struct{})
 	}
 
-	p.RTPReader = (*rtp2.TCP)(conn.(*net.TCPConn))
-	p.Info("accept", "addr", conn.RemoteAddr())
+	// 持续接受新的TCP连接
+	for {
+		select {
+		case <-p.stopChan:
+			return nil
+		default:
+			// 设置接受连接的超时时间，避免阻塞
+			p.listener.(*net.TCPListener).SetDeadline(time.Now().Add(time.Second))
 
-	// 开始读取RTP包
-	return p.RTPReader.Read(p.ReadRTP)
+			conn, err := p.listener.Accept()
+			if err != nil {
+				if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+					continue // 超时，继续接收
+				}
+				p.Error("accept error", "err", err)
+				return err
+			}
+
+			// 为每个连接创建一个goroutine来处理
+			go func(conn net.Conn) {
+				tcpConn := conn.(*net.TCPConn)
+				p.Info("accept", "addr", conn.RemoteAddr())
+
+				// 创建RTP TCP读取器
+				rtpReader := (*rtp2.TCP)(tcpConn)
+
+				// 开始读取RTP包
+				err := rtpReader.Read(p.ReadRTP)
+				if err != nil {
+					p.Error("read rtp error", "err", err)
+				}
+
+				// 关闭连接
+				tcpConn.Close()
+			}(conn)
+		}
+	}
 }
 
 // goUDP 处理UDP连接的RTP包
@@ -312,115 +390,40 @@ func (p *RTPForwarder) Dispose() {
 	p.Info("forwarder disposed", "forwarded_packets", p.ForwardCount)
 }
 
-// RTPForwarderPublisher 作为一个发布者
-type RTPForwarderPublisher struct {
-	*m7s.Publisher
-	Forwarder RTPForwarder
-}
+// Demux 阻塞读取RTP并转发至目标IP和端口
+func (p *RTPForwarder) Demux() {
+	defer p.Info("demux exit")
 
-// NewRTPForwarderPublisher 创建一个新的RTP转发发布者
-func NewRTPForwarderPublisher(puber *m7s.Publisher) *RTPForwarderPublisher {
-	ret := &RTPForwarderPublisher{
-		Publisher: puber,
-	}
-	ret.Forwarder = *NewRTPForwarder()
-	return ret
-}
-
-// ExampleUseInDialog 展示如何在Dialog中使用RTPForwarder的示例方法
-// 注意：这是示例代码，需要根据实际项目结构进行修改
-func ExampleUseInDialog() {
-	// 1. 创建一个TCP模式的RTPForwarder
-	forwarder := NewRTPForwarder()
-	forwarder.Protocol = "tcp" // 默认为TCP模式，可以省略
-
-	// 2. 设置监听地址和端口
-	forwarder.ListenAddr = "0.0.0.0:5540" // 根据实际情况设置监听地址
-
-	// 3. 设置目标转发地址和端口
-	err := forwarder.SetTarget("192.168.1.100", 8000) // 设置转发目标
-	if err != nil {
-		// 处理错误
+	// 检查是否设置了目标地址
+	if p.udpConn == nil {
+		p.Error("no target set for forwarding")
 		return
 	}
 
-	// 4. 启动监听
-	err = forwarder.Start()
-	if err != nil {
-		// 处理错误
-		return
-	}
+	p.Info("start demux and forward", "target", net.JoinHostPort(p.TargetIP, fmt.Sprintf("%d", p.TargetPort)))
 
-	// 5. 在后台运行转发任务
-	go func() {
-		err := forwarder.Go()
+	// 持续从FeedChan读取RTP数据并转发
+	for rtpData := range p.FeedChan {
+		// 直接转发原始RTP包数据
+		_, err := p.udpConn.Write(rtpData)
 		if err != nil {
-			// 处理错误
+			p.Error("forward rtp packet error", "err", err)
+			continue
 		}
-	}()
 
-	// 6. 使用完成后，在适当的时候释放资源
-	// defer forwarder.Dispose()
+		p.ForwardCount++
 
-	// 7. 如果需要更改转发目标，可以再次调用SetTarget方法
-	// forwarder.SetTarget("192.168.1.101", 9000)
-}
-
-// ExampleUseUDP 展示如何使用UDP模式的RTPForwarder
-func ExampleUseUDP() {
-	// 1. 创建一个UDP模式的RTPForwarder
-	forwarder := NewRTPForwarder()
-	forwarder.Protocol = "udp" // 设置为UDP模式
-
-	// 2. 设置监听地址和端口
-	forwarder.ListenAddr = "0.0.0.0:5540"
-
-	// 3. 设置目标转发地址和端口
-	err := forwarder.SetTarget("192.168.1.100", 8000)
-	if err != nil {
-		// 处理错误
-		return
-	}
-
-	// 4. 启动监听
-	err = forwarder.Start()
-	if err != nil {
-		// 处理错误
-		return
-	}
-
-	// 5. 在后台运行转发任务
-	go func() {
-		err := forwarder.Go()
-		if err != nil {
-			// 处理错误
+		// 控制发送速率
+		if p.SendInterval > 0 && !p.lastSendTime.IsZero() {
+			elapsed := time.Since(p.lastSendTime)
+			if elapsed < p.SendInterval {
+				time.Sleep(p.SendInterval - elapsed)
+			}
 		}
-	}()
+		p.lastSendTime = time.Now()
 
-	// 6. 使用完成后的清理
-	// defer forwarder.Dispose()
-}
-
-// ExampleUseWithPublisher 展示如何在Publisher中使用RTPForwarder的示例方法
-func ExampleUseWithPublisher(publisherName string) {
-	// 1. 假设我们已经获取了一个Publisher实例
-	// 在实际应用中，Publisher通常由框架创建或从其他地方获取
-	// 这里仅作示例说明，实际使用时需要修改为正确的Publisher获取方式
-	var publisher *m7s.Publisher
-
-	// 2. 创建RTPForwarderPublisher
-	rtpPublisher := NewRTPForwarderPublisher(publisher)
-
-	// 3. 设置监听地址和端口
-	rtpPublisher.Forwarder.ListenAddr = "0.0.0.0:5540"
-
-	// 4. 设置转发目标
-	rtpPublisher.Forwarder.SetTarget("192.168.1.100", 8000)
-
-	// 5. 启动监听和处理
-	rtpPublisher.Forwarder.Start()
-	go rtpPublisher.Forwarder.Go()
-
-	// 6. 使用完成后，释放资源
-	// defer rtpPublisher.Forwarder.Dispose()
+		if p.Enabled(p, task.TraceLevel) && p.ForwardCount%1000 == 0 {
+			p.Trace("forward rtp packet", "count", p.ForwardCount)
+		}
+	}
 }

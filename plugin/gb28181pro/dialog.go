@@ -3,6 +3,7 @@ package plugin_gb28181pro
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -47,7 +48,11 @@ func (d *Dialog) Start() (err error) {
 		return
 	}
 	sss := strings.Split(d.pullCtx.RemoteURL, "/")
-	deviceId, channelId := sss[0], sss[1]
+	if len(sss) < 2 {
+		d.Info("remote url is invalid", d.pullCtx.RemoteURL)
+		return
+	}
+	deviceId, channelId := sss[len(sss)-2], sss[len(sss)-1]
 	var device *Device
 	if deviceTmp, ok := d.gb.devices.Get(deviceId); ok {
 		device = deviceTmp
@@ -98,16 +103,11 @@ func (d *Dialog) Start() (err error) {
 
 	// 将字符串时间转换为 Unix 时间戳
 	if !isLive {
-		// 直接使用字符串格式的日期时间转换为秒级时间戳，不考虑时区问题
-		startime, err := time.ParseInLocation("2006-01-02T15:04:05", d.start, time.Local)
-		if err != nil {
-			d.Stop(errors.New("parse start time error"))
-		}
-		endtime, err := time.ParseInLocation("2006-01-02T15:04:05", d.end, time.Local)
+		startTime, endTime, err := util.TimeRangeQueryParse(url.Values{"start": []string{d.start}, "end": []string{d.end}})
 		if err != nil {
 			d.Stop(errors.New("parse end time error"))
 		}
-		sdpInfo = append(sdpInfo, fmt.Sprintf("t=%d %d", startime.Unix(), endtime.Unix()))
+		sdpInfo = append(sdpInfo, fmt.Sprintf("t=%d %d", startTime.Unix(), endTime.Unix()))
 	} else {
 		sdpInfo = append(sdpInfo, "t=0 0")
 	}

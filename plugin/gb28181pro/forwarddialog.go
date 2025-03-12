@@ -30,6 +30,7 @@ type ForwardDialog struct {
 	targetPort   int
 	listenProto  string // 监听协议：tcp或udp
 	enableBuffer bool   // 是否启用缓冲（当false时直接转发，不缓存到FeedChan）
+	PlatformSSRC string // 上级平台的SSRC
 }
 
 // GetCallID 获取会话的CallID
@@ -80,7 +81,7 @@ func (d *ForwardDialog) Start() (err error) {
 		isLive = false
 		d.pullCtx.PublishConfig.PubType = m7s.PublishTypeVod
 	}
-	err = d.pullCtx.Publish()
+	//err = d.pullCtx.Publish()
 	if err != nil {
 		return
 	}
@@ -99,7 +100,8 @@ func (d *ForwardDialog) Start() (err error) {
 	}
 
 	// 注册对话到集合，使用类型转换
-	d.gb.AddTask(d)
+	d.gb.forwardDialogs.Set(d)
+	//defer d.gb.forwardDialogs.Remove(d)
 
 	if d.gb.MediaPort.Valid() {
 		select {
@@ -114,9 +116,23 @@ func (d *ForwardDialog) Start() (err error) {
 		d.MediaPort = d.gb.MediaPort[0]
 	}
 
-	// 使用设备的CreateSSRC方法
-	ssrcValue := device.CreateSSRC(d.gb.Serial)
-	d.SSRC = uint32(ssrcValue)
+	// 使用上级平台的SSRC（如果有）或者设备的CreateSSRC方法
+	var ssrcValue uint16
+	if d.PlatformSSRC != "" {
+		// 使用上级平台的SSRC
+		if ssrcInt, err := strconv.ParseUint(d.PlatformSSRC, 10, 32); err == nil {
+			d.SSRC = uint32(ssrcInt)
+		} else {
+			d.gb.Error("parse platform ssrc error", "err", err)
+			// 使用设备的CreateSSRC方法作为备选
+			ssrcValue = device.CreateSSRC(d.gb.Serial)
+			d.SSRC = uint32(ssrcValue)
+		}
+	} else {
+		// 使用设备的CreateSSRC方法
+		ssrcValue = device.CreateSSRC(d.gb.Serial)
+		d.SSRC = uint32(ssrcValue)
+	}
 
 	// 获取 SDP IP
 	sdpIP := device.LocalIP
@@ -155,20 +171,26 @@ func (d *ForwardDialog) Start() (err error) {
 		sdpInfo = append(sdpInfo, "t=0 0")
 	}
 
-	sdpInfo = append(sdpInfo, fmt.Sprintf("m=video %d RTP/AVP 96 98 97", d.MediaPort))
+	sdpInfo = append(sdpInfo, fmt.Sprintf("m=video %d TCP/RTP/AVP 96", d.MediaPort))
 	sdpInfo = append(sdpInfo, "a=recvonly")
 	sdpInfo = append(sdpInfo, "a=rtpmap:96 PS/90000")
-	sdpInfo = append(sdpInfo, "a=rtpmap:98 H264/90000")
-	sdpInfo = append(sdpInfo, "a=rtpmap:97 MPEG4/90000")
+	//sdpInfo = append(sdpInfo, "a=rtpmap:98 H264/90000")
+	//sdpInfo = append(sdpInfo, "a=rtpmap:97 MPEG4/90000")
+	sdpInfo = append(sdpInfo, "a=setup:passive")
+	sdpInfo = append(sdpInfo, "a=connection:new")
 
 	if d.SSRC == 0 {
 		d.SSRC = uint32(ssrcValue)
 	}
-	sdpInfo = append(sdpInfo, fmt.Sprintf("y=%s", d.SSRC))
+
+	// 将SSRC转换为字符串格式
+	ssrcStr := strconv.FormatUint(uint64(d.SSRC), 10)
+	sdpInfo = append(sdpInfo, fmt.Sprintf("y=%s", ssrcStr))
 
 	// 创建INVITE请求
 	request := sip.NewRequest(sip.INVITE, sip.Uri{User: channelId, Host: device.IP})
-	subject := fmt.Sprintf("%s:0,%s:0", channelId, deviceId)
+	// 使用字符串格式的SSRC
+	subject := fmt.Sprintf("%s:%s,%s:0", channelId, ssrcStr, deviceId)
 
 	// 创建自定义头部
 	contentTypeHeader := sip.ContentTypeHeader("APPLICATION/SDP")
@@ -177,8 +199,21 @@ func (d *ForwardDialog) Start() (err error) {
 	// 设置请求体
 	request.SetBody([]byte(strings.Join(sdpInfo, "\r\n") + "\r\n"))
 
+	recipient := device.Recipient
+	recipient.User = channelId
+
+	viaHeader := sip.ViaHeader{
+		ProtocolName:    "SIP",
+		ProtocolVersion: "2.0",
+		Transport:       "UDP",
+		Host:            device.LocalIP,
+		Port:            device.LocalPort,
+		Params:          sip.HeaderParams(sip.NewParams()),
+	}
+	viaHeader.Params.Add("branch", sip.GenerateBranchN(16)).Add("rport", "")
+
 	// 创建会话 - 使用device的dialogClient创建
-	d.session, err = device.dialogClient.Invite(d.gb, device.Recipient, request.Body(), &contentTypeHeader, subjectHeader)
+	d.session, err = device.dialogClient.Invite(d.gb, recipient, request.Body(), &device.fromHDR, &viaHeader, &device.contactHDR, subjectHeader, &contentTypeHeader)
 
 	return
 }
@@ -237,13 +272,23 @@ func (d *ForwardDialog) Run() (err error) {
 		d.Warn("no target set, will only receive but not forward")
 	}
 
+	// 设置目标SSRC
+	if d.PlatformSSRC != "" {
+		d.forwarder.TargetSSRC = d.PlatformSSRC
+		d.Info("set target ssrc", "ssrc", d.PlatformSSRC)
+	}
+
 	// 将forwarder添加到任务中
 	d.AddTask(d.forwarder)
 
 	d.Info("forwarder started successfully",
 		"protocol", d.forwarder.Protocol,
 		"listen", d.forwarder.ListenAddr,
-		"target", fmt.Sprintf("%s:%d", d.targetIP, d.targetPort))
+		"target", fmt.Sprintf("%s:%d", d.targetIP, d.targetPort),
+		"ssrc", d.PlatformSSRC)
+
+	// 使用goroutine启动Demux，避免阻塞
+	d.forwarder.Demux()
 
 	return
 }
