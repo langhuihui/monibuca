@@ -377,6 +377,13 @@ service api {
       body: "*"
     };
   }
+
+  // 录制控制
+  rpc Recording (RecordingRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/recording/{cmdType}/{deviceId}/{channelId}"
+    };
+  }
 }
 
 // 请求和响应消息定义
@@ -881,4 +888,11 @@ message AlarmRecord {
 message AddPlatformChannelRequest {
   int32 platformId = 1;  // 平台ID
   repeated int32 channelIds = 2;  // 通道ID列表
+}
+
+// 录制控制请求
+message RecordingRequest {
+  string cmdType = 1;    // 命令类型：start/stop
+  string deviceId = 2;   // 设备ID
+  string channelId = 3;  // 通道ID
 }

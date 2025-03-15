@@ -184,7 +184,9 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 			}
 		}
 	case "Broadcast":
-		d.Info("broadcast message", "body", req.Body())
+		d.Info("Broadcast message", "body", req.Body())
+	case "DeviceControl":
+		d.Info("DeviceControl message", "body", req.Body())
 	default:
 		d.Warn("Not supported CmdType", "CmdType", msg.CmdType, "body", req.Body())
 		err = tx.Respond(sip.NewResponseFromRequest(req, http.StatusBadRequest, "", nil))
@@ -235,7 +237,7 @@ func (d *Device) Go() (err error) {
 				d.Debug("subPosition", "response", response.String())
 			}
 		case <-catalogTick.C:
-			if time.Since(d.KeepaliveTime) > time.Second*3600 {
+			if time.Since(d.KeepaliveTime) > time.Second*time.Duration(d.Expires) {
 				d.Error("keepalive timeout", "keepaliveTime", d.KeepaliveTime)
 				return
 			}
@@ -412,4 +414,22 @@ func (d *Device) CreateSSRC(serial string) uint16 {
 		hash = hash*31 + uint16(d.DeviceID[i])
 	}
 	return hash
+}
+
+// recordCmd 录制控制命令
+func (d *Device) recordCmd(channelId string, cmdType string) (*sip.Response, error) {
+	// 构建XML消息体
+	recordXml := strings.Builder{}
+	recordXml.WriteString(fmt.Sprintf("<?xml version=\"1.0\" encoding=\"%s\"?>\r\n", d.Charset))
+	recordXml.WriteString("<Control>\r\n")
+	recordXml.WriteString("<CmdType>DeviceControl</CmdType>\r\n")
+	recordXml.WriteString(fmt.Sprintf("<SN>%d</SN>\r\n", int(time.Now().UnixNano()/1e6%1000000)))
+	recordXml.WriteString(fmt.Sprintf("<DeviceID>%s</DeviceID>\r\n", channelId))
+	recordXml.WriteString(fmt.Sprintf("<RecordCmd>%s</RecordCmd>\r\n", cmdType))
+	recordXml.WriteString("</Control>\r\n")
+
+	// 创建并发送请求
+	request := d.CreateRequest(sip.MESSAGE, nil)
+	request.SetBody([]byte(recordXml.String()))
+	return d.send(request)
 }

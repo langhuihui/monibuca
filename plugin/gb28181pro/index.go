@@ -57,7 +57,6 @@ type GB28181ProPlugin struct {
 	dialogs        util.Collection[uint32, *Dialog]
 	forwardDialogs util.Collection[uint32, *ForwardDialog]
 	platforms      util.Collection[uint32, *Platform]
-	sendRtpInfos   util.Collection[string, *SendRtpInfo] // 保存发送RTP流的信息，key为CallID
 	tcpPorts       chan uint16
 }
 
@@ -81,7 +80,6 @@ func (gb *GB28181ProPlugin) OnInit() (err error) {
 		gb.server.OnRegister(gb.OnRegister)
 		gb.server.OnBye(gb.OnBye)
 		gb.devices.L = new(sync.RWMutex)
-		gb.sendRtpInfos.L = new(sync.RWMutex)
 		gb.server.OnInvite(gb.OnInvite)
 		gb.server.OnAck(gb.OnAck)
 
@@ -865,7 +863,7 @@ func (gb *GB28181ProPlugin) OnBye(req *sip.Request, tx sip.ServerTransaction) {
 		dialog.Stop(task.ErrTaskComplete)
 	}
 	if forwardDialog, ok := gb.forwardDialogs.Find(func(d *ForwardDialog) bool {
-		return d.GetCallID() == req.CallID().Value()
+		return d.platformCallId == req.CallID().Value()
 	}); ok {
 		gb.Warn("OnBye", "dialog", forwardDialog.GetCallID())
 		forwardDialog.Stop(task.ErrTaskComplete)
@@ -974,6 +972,23 @@ func (gb *GB28181ProPlugin) OnInvite(req *sip.Request, tx sip.ServerTransaction)
 			channel := commonGBChannels[len(commonGBChannels)-1]
 			gb.Info("OnInvite", "action", "channel found", "channelId", channel.GbDeviceID, "channelName", channel.GbName)
 
+			var channelTmp *Channel
+			if deviceFound, ok := gb.devices.Find(func(device *Device) bool {
+				return device.ID == int64(channel.GbDeviceDbID)
+			}); ok {
+				if channelFound, ok := deviceFound.channels.Get(channel.GbDeviceID); ok {
+					channelTmp = channelFound
+				} else {
+					gb.Error("OnInvite", "error", "channel not found memory,channel deviceid is ", channel.GbDeviceID)
+					_ = tx.Respond(sip.NewResponseFromRequest(req, sip.StatusBadRequest, "SSRC Not Found", nil))
+					return
+				}
+			} else {
+				gb.Error("OnInvite", "error", "device not found memory,device dbid is ", channel.GbDeviceDbID)
+				_ = tx.Respond(sip.NewResponseFromRequest(req, sip.StatusBadRequest, "SSRC Not Found", nil))
+				return
+			}
+
 			// 通道存在，发送100 Trying响应
 			tryingResp := sip.NewResponseFromRequest(req, sip.StatusTrying, "Trying", nil)
 			if err := tx.Respond(tryingResp); err != nil {
@@ -1058,50 +1073,26 @@ func (gb *GB28181ProPlugin) OnInvite(req *sip.Request, tx sip.ServerTransaction)
 			response.SetBody([]byte(strings.Join(content, "\r\n") + "\r\n"))
 
 			// 创建并保存SendRtpInfo，以供OnAck方法使用
-			sendRtpInfo := &SendRtpInfo{
-				IP:            inviteInfo.IP,
-				Port:          inviteInfo.Port,
-				SSRC:          inviteInfo.SSRC,
-				TargetID:      platform.PlatformModel.ServerGBID,
-				TargetName:    platform.PlatformModel.Name,
-				App:           "rtp",                              // 使用rtp作为应用名
-				Stream:        fmt.Sprintf("%s", inviteInfo.SSRC), // 可以根据需要修改
-				ChannelID:     channel.GbDeviceID,
-				Status:        1, // 1表示等待ACK
-				TCP:           inviteInfo.TCP,
-				TCPActive:     inviteInfo.TCPActive,
-				LocalPort:     int(mediaPort),
-				CallID:        req.CallID().Value(),
-				Channel:       &channel,
-				PlatformModel: platform.PlatformModel,
-			}
-
-			// 将FromTag和ToTag记录下来（如果有的话）
-			fromHeader := req.From()
-			if fromHeader != nil {
-				tag, _ := fromHeader.Params.Get("tag")
-				sendRtpInfo.FromTag = tag
-			}
-
-			toHeader := req.To()
-			if toHeader != nil && response != nil {
-				tag, _ := toHeader.Params.Get("tag")
-				sendRtpInfo.ToTag = tag
+			forwardDialog := &ForwardDialog{
+				gb:             gb,
+				platformIP:     inviteInfo.IP,
+				platformPort:   inviteInfo.Port,
+				platformSSRC:   inviteInfo.SSRC,
+				TCP:            inviteInfo.TCP,
+				TCPActive:      inviteInfo.TCPActive,
+				platformCallId: req.CallID().Value(),
+				start:          inviteInfo.StartTime,
+				end:            inviteInfo.StopTime,
+				channel:        channelTmp,
 			}
 
 			// 保存到集合中
-			gb.sendRtpInfos.Set(sendRtpInfo)
-			gb.Info("OnInvite", "action", "sendRtpInfo created", "callId", sendRtpInfo.CallID)
+			gb.forwardDialogs.Set(forwardDialog)
+			gb.Info("OnInvite", "action", "sendRtpInfo created", "callId", req.CallID().Value())
 
 			if err := tx.Respond(response); err != nil {
 				gb.Error("OnInvite", "error", "send response failed", "err", err.Error())
 				return
-			}
-
-			// 如果是TCP主动模式，需要开启监听
-			if inviteInfo.TCP && inviteInfo.TCPActive {
-				// TODO: 实现TCP主动模式监听逻辑，类似Java代码中的startSendRtpPassive
-				gb.Info("OnInvite", "action", "TCP active mode, should start passive listener")
 			}
 
 			gb.Info("OnInvite", "action", "complete", "platformId", inviteInfo.RequesterId, "channelId", channel.GbDeviceID,
@@ -1127,151 +1118,20 @@ func (gb *GB28181ProPlugin) OnAck(req *sip.Request, tx sip.ServerTransaction) {
 		gb.Error("OnAck", "error", "callid header not found")
 		return
 	}
-
-	// 停止等待ACK的任务
-	// TODO: 实现动态任务管理，类似Java中的dynamicTask.stop
-
-	// 获取From和To头部的User部分
-	// 简化提取User的方式
-	fromUser := ""
-	toUser := ""
-
-	fromHeader := req.From()
-	if fromHeader != nil {
-		fromUser = fromHeader.Address.User
-	}
-
-	toHeader := req.To()
-	if toHeader != nil {
-		toUser = toHeader.Address.User
-	}
-
-	if fromUser == "" {
-		gb.Error("OnAck", "error", "from user not found")
-		return
-	}
-
-	gb.Info("OnAck", "fromUser", fromUser, "toUser", toUser)
-
-	// 查询发送RTP信息
-	sendRtpItem, ok := gb.sendRtpInfos.Get(callID)
-	if !ok {
-		gb.Warn("OnAck", "warning", "SendRtpInfo not found", "callID", callID, "fromUserID", fromUser)
-		return
-	}
-
-	// 对于TCP主动模式，已经在200 OK时开启了监听，跳过后续处理
-	if sendRtpItem.TCPActive {
-		gb.Info("OnAck", "action", "tcp active mode, waiting for connection", "stream", sendRtpItem.Stream)
-		return
-	}
-
-	// 获取平台信息
-	var platform *Platform
-	platform, platformFound := gb.platforms.Find(func(p *Platform) bool {
-		return p.PlatformModel.ServerGBID == fromUser
-	})
-
-	gb.Info("OnAck", "action", "start push stream", "stream", sendRtpItem.Stream,
-		"target", fmt.Sprintf("%s:%d", sendRtpItem.IP, sendRtpItem.Port),
-		"ssrc", sendRtpItem.SSRC,
-		"protocol", sendRtpItem.GetProtocolString())
-
-	if platform != nil && platformFound {
-		// 如果是平台
-		// TODO: 实现跨服务推流逻辑
-
-		// 开始推流
-		err := gb.startSendRtp(sendRtpItem)
-		if err != nil {
-			gb.Error("OnAck", "error", "start send rtp failed", "err", err.Error())
-			// TODO: 实现失败处理
-			return
-		}
-
-		// 发送平台开始播放消息
-		// TODO: 实现Redis缓存消息
-	} else {
-		// 如果是设备
-		_, deviceFound := gb.devices.Get(fromUser)
-		if !deviceFound {
-			gb.Warn("OnAck", "warning", "device not found", "deviceId", fromUser, "targetId", toUser)
-			return
-		}
-
-		// 开始推流
-		err := gb.startSendRtp(sendRtpItem)
-		if err != nil {
-			gb.Error("OnAck", "error", "start send rtp failed", "err", err.Error())
-			// TODO: 实现失败处理
-			return
-		}
-	}
-}
-
-// startSendRtp 开始发送RTP流
-func (gb *GB28181ProPlugin) startSendRtp(sendRtpItem *SendRtpInfo) error {
-	// 创建ForwardDialog对象
-	forwardDialog := NewForwardDialog(gb)
-
-	// 设置转发目标
-	forwardDialog.SetTarget(sendRtpItem.IP, sendRtpItem.Port)
-
-	// 设置监听协议（根据SendRtpInfo中的设置决定）
-	if sendRtpItem.TCP {
-		forwardDialog.SetListenProtocol("tcp")
-	} else {
-		forwardDialog.SetListenProtocol("udp")
-	}
-
-	// 设置上级平台的SSRC
-	forwardDialog.PlatformSSRC = sendRtpItem.SSRC
-
 	// 构建streamPath
-	var streamPath string
-	if sendRtpItem.Channel != nil {
-		// 通过channel.GbDeviceDbId从设备缓存中获取设备
-		if device, ok := gb.devices.Find(func(d *Device) bool {
-			return d.ID == int64(sendRtpItem.Channel.GbDeviceDbID)
-		}); ok {
-			// 使用设备的DeviceID作为前半段
-			// 使用channel的DeviceID作为后半段
-			streamPath = fmt.Sprintf("%s/%s", device.DeviceID, sendRtpItem.Channel.GbDeviceID)
-		} else {
-			gb.Error("startSendRtp", "error", "device not found", "deviceDbId", sendRtpItem.Channel.GbDeviceDbID)
-			return fmt.Errorf("device not found for deviceDbId: %d", sendRtpItem.Channel.GbDeviceDbID)
+	if forwardDialog, ok := gb.forwardDialogs.Find(func(dialog *ForwardDialog) bool {
+		return dialog.platformCallId == callID
+	}); ok {
+		streamPath := fmt.Sprintf("%s/%s", forwardDialog.channel.Device.DeviceID, forwardDialog.channel.DeviceID)
+
+		// 创建配置
+		pullConf := config.Pull{
+			URL: streamPath,
 		}
+		// 初始化拉流任务
+		forwardDialog.GetPullJob().Init(forwardDialog, &gb.Plugin, streamPath, pullConf, nil)
 	} else {
-		gb.Error("startSendRtp", "error", "channel info is nil")
-		return fmt.Errorf("channel info is nil")
+		gb.Error("OnAck", "error", "forwardDialog not found", "callID", callID)
+		return
 	}
-
-	// 创建配置
-	pullConf := config.Pull{
-		URL: streamPath,
-	}
-
-	// 如果是回放模式，设置开始和结束时间
-	if sendRtpItem.StartTime > 0 && sendRtpItem.StopTime > 0 {
-		startTimeStr := time.Unix(sendRtpItem.StartTime, 0).Format("2006-01-02T15:04:05")
-		endTimeStr := time.Unix(sendRtpItem.StopTime, 0).Format("2006-01-02T15:04:05")
-
-		forwardDialog.start = startTimeStr
-		forwardDialog.end = endTimeStr
-	}
-
-	// 初始化拉流任务
-	forwardDialog.GetPullJob().Init(forwardDialog, &gb.Plugin, streamPath, pullConf, nil)
-
-	// 更新状态为推流中
-	sendRtpItem.Status = 2
-	gb.sendRtpInfos.Set(sendRtpItem)
-
-	gb.Info("startSendRtp", "action", "forward rtp started",
-		"from", pullConf.URL,
-		"to", fmt.Sprintf("%s:%d", sendRtpItem.IP, sendRtpItem.Port),
-		"protocol", sendRtpItem.GetProtocolString(),
-		"ssrc", sendRtpItem.SSRC)
-
-	return nil
 }

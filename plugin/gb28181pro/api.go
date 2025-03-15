@@ -1299,3 +1299,121 @@ func (gb *GB28181ProPlugin) AddPlatformChannel(ctx context.Context, req *pb.AddP
 	resp.Message = "success"
 	return resp, nil
 }
+
+// Recording 实现录制控制功能
+func (gb *GB28181ProPlugin) Recording(ctx context.Context, req *pb.RecordingRequest) (*pb.BaseResponse, error) {
+	resp := &pb.BaseResponse{}
+
+	// 检查命令类型是否有效
+	if req.CmdType != "Record" && req.CmdType != "RecordStop" {
+		resp.Code = 400
+		resp.Message = "无效的命令类型，只能是 Record 或 RecordStop"
+		return resp, nil
+	}
+
+	// 1. 先在 platforms 中查找设备
+	platform, found := gb.platforms.Find(func(p *Platform) bool {
+		return p.PlatformModel.ServerGBID == req.DeviceId
+	})
+	if found {
+		if gb.DB == nil {
+			resp.Code = 500
+			resp.Message = "数据库未初始化"
+			return resp, nil
+		}
+
+		// 使用SQL查询获取实际的设备ID和通道ID
+		var result struct {
+			DeviceID  string
+			ChannelID string
+		}
+		err := gb.DB.Raw(`
+			SELECT dg.device_id, cg.device_id as channelid 
+			FROM platform_gb28181pro pg
+			LEFT JOIN platform_channel_gb28181pro pcg on pcg.platform_id = pg.id
+			LEFT JOIN channel_gb28181pro cg on cg.id = pcg.device_channel_id
+			LEFT JOIN device_gb28181pro dg on dg.id = cg.device_db_id
+			WHERE pg.device_gb_id = ? AND cg.device_id = ?`,
+			req.DeviceId, req.ChannelId,
+		).Scan(&result).Error
+
+		if err != nil {
+			resp.Code = 500
+			resp.Message = fmt.Sprintf("查询设备通道关系失败: %v", err)
+			return resp, nil
+		}
+
+		if result.DeviceID == "" || result.ChannelID == "" {
+			resp.Code = 404
+			resp.Message = "未找到对应的设备和通道信息"
+			return resp, nil
+		}
+
+		// 从gb.devices中查找实际设备
+		actualDevice, ok := gb.devices.Get(result.DeviceID)
+		if !ok {
+			resp.Code = 404
+			resp.Message = "实际设备未找到"
+			return resp, nil
+		}
+
+		// 从device.channels中查找实际通道
+		_, ok = actualDevice.channels.Get(result.ChannelID)
+		if !ok {
+			resp.Code = 404
+			resp.Message = "实际通道未找到"
+			return resp, nil
+		}
+
+		// 发送录制控制命令
+		response, err := actualDevice.recordCmd(result.ChannelID, req.CmdType)
+		if err != nil {
+			resp.Code = 500
+			resp.Message = fmt.Sprintf("发送录制控制命令失败: %v", err)
+			return resp, nil
+		}
+
+		gb.Info("通过平台控制录制",
+			"command", req.CmdType,
+			"platformDeviceId", req.DeviceId,
+			"platformChannelId", req.ChannelId,
+			"actualDeviceId", result.DeviceID,
+			"actualChannelId", result.ChannelID,
+			"platformId", platform.PlatformModel.ID,
+			"response", response.String())
+	} else {
+		// 2. 如果在平台中没找到，则在本地设备中查找
+		device, ok := gb.devices.Get(req.DeviceId)
+		if !ok {
+			resp.Code = 404
+			resp.Message = "设备未找到"
+			return resp, nil
+		}
+
+		// 检查通道是否存在
+		_, ok = device.channels.Get(req.ChannelId)
+		if !ok {
+			resp.Code = 404
+			resp.Message = "通道未找到"
+			return resp, nil
+		}
+
+		// 发送录制控制命令
+		response, err := device.recordCmd(req.ChannelId, req.CmdType)
+		if err != nil {
+			resp.Code = 500
+			resp.Message = fmt.Sprintf("发送录制控制命令失败: %v", err)
+			return resp, nil
+		}
+
+		gb.Info("控制录制",
+			"command", req.CmdType,
+			"deviceId", req.DeviceId,
+			"channelId", req.ChannelId,
+			"response", response.String())
+	}
+
+	resp.Code = 0
+	resp.Message = "success"
+	return resp, nil
+}

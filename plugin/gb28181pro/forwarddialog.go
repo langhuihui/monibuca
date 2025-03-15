@@ -1,36 +1,36 @@
 package plugin_gb28181pro
 
 import (
-	"errors"
 	"fmt"
-	"strconv"
-	"strings"
-	"time"
-
 	sipgo "github.com/emiago/sipgo"
 	"github.com/emiago/sipgo/sip"
 	m7s "m7s.live/v5"
 	"m7s.live/v5/pkg/task"
 	"m7s.live/v5/pkg/util"
 	gb28181 "m7s.live/v5/plugin/gb28181pro/pkg"
+	"strconv"
+	"strings"
 )
 
 // ForwardDialog 是用于转发RTP流的会话结构体
 type ForwardDialog struct {
 	task.Job
-	Channel *Channel
+	channel *Channel
 	gb28181.InviteOptions
-	gb           *GB28181ProPlugin
-	session      *sipgo.DialogClientSession
-	pullCtx      m7s.PullJob
-	start        string
-	end          string
-	forwarder    *gb28181.RTPForwarder
-	targetIP     string
-	targetPort   int
-	listenProto  string // 监听协议：tcp或udp
-	enableBuffer bool   // 是否启用缓冲（当false时直接转发，不缓存到FeedChan）
-	PlatformSSRC string // 上级平台的SSRC
+	gb             *GB28181ProPlugin
+	session        *sipgo.DialogClientSession
+	pullCtx        m7s.PullJob
+	forwarder      *gb28181.RTPForwarder
+	platformIP     string
+	platformPort   int
+	platformSSRC   string // 上级平台的SSRC
+	platformCallId string //上级平台发起invite的callid
+	// 是否为TCP传输
+	TCP bool
+	// 是否为TCP主动模式
+	TCPActive bool
+	start     int64
+	end       int64
 }
 
 // GetCallID 获取会话的CallID
@@ -48,36 +48,11 @@ func (d *ForwardDialog) GetKey() uint32 {
 	return d.SSRC
 }
 
-// SetTarget 设置转发目标地址和端口
-func (d *ForwardDialog) SetTarget(ip string, port int) {
-	d.targetIP = ip
-	d.targetPort = port
-}
-
-// SetListenProtocol 设置监听协议类型
-func (d *ForwardDialog) SetListenProtocol(proto string) {
-	d.listenProto = strings.ToLower(proto)
-}
-
-// EnableBuffering 设置是否启用缓冲
-func (d *ForwardDialog) EnableBuffering(enable bool) {
-	d.enableBuffer = enable
-}
-
-// NewForwardDialog 创建一个新的转发会话
-func NewForwardDialog(gb *GB28181ProPlugin) *ForwardDialog {
-	return &ForwardDialog{
-		gb:           gb,
-		listenProto:  "tcp", // 默认TCP
-		enableBuffer: true,  // 默认启用缓冲
-	}
-}
-
 // Start 启动会话
 func (d *ForwardDialog) Start() (err error) {
 	// 处理时间范围
 	isLive := true
-	if d.start != "" && d.end != "" {
+	if d.start > 0 && d.end > 0 {
 		isLive = false
 		d.pullCtx.PublishConfig.PubType = m7s.PublishTypeVod
 	}
@@ -91,7 +66,7 @@ func (d *ForwardDialog) Start() (err error) {
 	if deviceTmp, ok := d.gb.devices.Get(deviceId); ok {
 		device = deviceTmp
 		if channel, ok := deviceTmp.channels.Get(channelId); ok {
-			d.Channel = channel
+			d.channel = channel
 		} else {
 			return fmt.Errorf("channel %s not found", channelId)
 		}
@@ -118,9 +93,9 @@ func (d *ForwardDialog) Start() (err error) {
 
 	// 使用上级平台的SSRC（如果有）或者设备的CreateSSRC方法
 	var ssrcValue uint16
-	if d.PlatformSSRC != "" {
+	if d.platformSSRC != "" {
 		// 使用上级平台的SSRC
-		if ssrcInt, err := strconv.ParseUint(d.PlatformSSRC, 10, 32); err == nil {
+		if ssrcInt, err := strconv.ParseUint(d.platformSSRC, 10, 32); err == nil {
 			d.SSRC = uint32(ssrcInt)
 		} else {
 			d.gb.Error("parse platform ssrc error", "err", err)
@@ -158,15 +133,7 @@ func (d *ForwardDialog) Start() (err error) {
 	// 将字符串时间转换为 Unix 时间戳
 	if !isLive {
 		// 直接使用字符串格式的日期时间转换为秒级时间戳，不考虑时区问题
-		startime, err := time.ParseInLocation("2006-01-02T15:04:05", d.start, time.Local)
-		if err != nil {
-			d.Stop(errors.New("parse start time error"))
-		}
-		endtime, err := time.ParseInLocation("2006-01-02T15:04:05", d.end, time.Local)
-		if err != nil {
-			d.Stop(errors.New("parse end time error"))
-		}
-		sdpInfo = append(sdpInfo, fmt.Sprintf("t=%d %d", startime.Unix(), endtime.Unix()))
+		sdpInfo = append(sdpInfo, fmt.Sprintf("t=%d %d", d.start, d.end))
 	} else {
 		sdpInfo = append(sdpInfo, "t=0 0")
 	}
@@ -220,14 +187,14 @@ func (d *ForwardDialog) Start() (err error) {
 
 // Run 运行会话
 func (d *ForwardDialog) Run() (err error) {
-	d.Channel.Info("before WaitAnswer")
+	d.channel.Info("before WaitAnswer")
 	err = d.session.WaitAnswer(d.gb, sipgo.AnswerOptions{})
-	d.Channel.Info("after WaitAnswer")
+	d.channel.Info("after WaitAnswer")
 	if err != nil {
 		return
 	}
 	inviteResponseBody := string(d.session.InviteResponse.Body())
-	d.Channel.Info("inviteResponse", "body", inviteResponseBody)
+	d.channel.Info("inviteResponse", "body", inviteResponseBody)
 	ds := strings.Split(inviteResponseBody, "\r\n")
 	for _, l := range ds {
 		if ls := strings.Split(l, "="); len(ls) > 1 {
@@ -252,40 +219,40 @@ func (d *ForwardDialog) Run() (err error) {
 
 	// 创建并初始化RTPForwarder
 	d.forwarder = gb28181.NewRTPForwarder()
-	d.forwarder.Protocol = d.listenProto // 使用设定的协议
-	if d.listenProto == "" {
-		d.forwarder.Protocol = "tcp" // 默认使用TCP
-	}
+	d.forwarder.TCP = d.TCP
+	d.forwarder.TCPActive = d.TCPActive
 
 	// 设置监听地址和端口
 	d.forwarder.ListenAddr = fmt.Sprintf(":%d", d.MediaPort)
 	d.forwarder.ListenPort = d.MediaPort
 
 	// 设置转发目标
-	if d.targetIP != "" && d.targetPort > 0 {
-		err = d.forwarder.SetTarget(d.targetIP, d.targetPort)
+	if d.platformIP != "" && d.platformPort > 0 {
+		err = d.forwarder.SetTarget(d.platformIP, d.platformPort)
 		if err != nil {
 			d.Error("set target error", "err", err)
 			return err
 		}
 	} else {
-		d.Warn("no target set, will only receive but not forward")
+		d.Error("no target set, will only receive but not forward")
+		return
 	}
 
 	// 设置目标SSRC
-	if d.PlatformSSRC != "" {
-		d.forwarder.TargetSSRC = d.PlatformSSRC
-		d.Info("set target ssrc", "ssrc", d.PlatformSSRC)
+	if d.platformSSRC != "" {
+		d.forwarder.TargetSSRC = d.platformSSRC
+		d.Info("set target ssrc", "ssrc", d.platformSSRC)
 	}
 
 	// 将forwarder添加到任务中
 	d.AddTask(d.forwarder)
 
 	d.Info("forwarder started successfully",
-		"protocol", d.forwarder.Protocol,
+		"TCP", d.forwarder.TCP,
+		"TCPActive", d.forwarder.TCPActive,
 		"listen", d.forwarder.ListenAddr,
-		"target", fmt.Sprintf("%s:%d", d.targetIP, d.targetPort),
-		"ssrc", d.PlatformSSRC)
+		"target", fmt.Sprintf("%s:%d", d.platformIP, d.platformPort),
+		"ssrc", d.platformSSRC)
 
 	// 使用goroutine启动Demux，避免阻塞
 	d.forwarder.Demux()
@@ -304,10 +271,5 @@ func (d *ForwardDialog) Dispose() {
 		if err != nil {
 			d.Error("close session err", err)
 		}
-	}
-
-	// 清理RTPForwarder资源
-	if d.forwarder != nil {
-		d.forwarder.Dispose()
 	}
 }
