@@ -247,7 +247,7 @@ service api {
   // 设置预置位
   rpc AddPreset (PresetRequest) returns (BaseResponse) {
     option (google.api.http) = {
-      get: "/gb28181/api/preset/add/{deviceId}/{channelId}"
+      get: "/gb28181/api/preset/{deviceId}/{channelId}"
     };
   }
 
@@ -382,6 +382,14 @@ service api {
   rpc Recording (RecordingRequest) returns (BaseResponse) {
     option (google.api.http) = {
       get: "/gb28181/api/recording/{cmdType}/{deviceId}/{channelId}"
+    };
+  }
+
+  // 接收JPEG文件
+  rpc UploadJpeg (UploadJpegRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      post: "/gb28181/api/snap/upload"
+      body: "*"
     };
   }
 }
@@ -780,7 +788,7 @@ message PresetRequest {
 message PresetResponse {
   int32 code = 1;
   string message = 2;
-  string data = 3;
+  repeated int32 data = 3;
 }
 
 message CruisePointRequest {
@@ -895,4 +903,9 @@ message RecordingRequest {
   string cmdType = 1;    // 命令类型：start/stop
   string deviceId = 2;   // 设备ID
   string channelId = 3;  // 通道ID
+}
+
+// JPEG文件上传请求
+message UploadJpegRequest {
+  bytes imageData = 1;    // JPEG文件数据
 }

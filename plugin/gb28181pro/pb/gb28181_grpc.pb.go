@@ -74,6 +74,7 @@ const (
 	Api_SearchAlarms_FullMethodName                      = "/gb28181pro.api/SearchAlarms"
 	Api_AddPlatformChannel_FullMethodName                = "/gb28181pro.api/AddPlatformChannel"
 	Api_Recording_FullMethodName                         = "/gb28181pro.api/Recording"
+	Api_UploadJpeg_FullMethodName                        = "/gb28181pro.api/UploadJpeg"
 )
 
 // ApiClient is the client API for Api service.
@@ -184,6 +185,8 @@ type ApiClient interface {
 	AddPlatformChannel(ctx context.Context, in *AddPlatformChannelRequest, opts ...grpc.CallOption) (*BaseResponse, error)
 	// 录制控制
 	Recording(ctx context.Context, in *RecordingRequest, opts ...grpc.CallOption) (*BaseResponse, error)
+	// 接收JPEG文件
+	UploadJpeg(ctx context.Context, in *UploadJpegRequest, opts ...grpc.CallOption) (*BaseResponse, error)
 }
 
 type apiClient struct {
@@ -714,6 +717,16 @@ func (c *apiClient) Recording(ctx context.Context, in *RecordingRequest, opts ..
 	return out, nil
 }
 
+func (c *apiClient) UploadJpeg(ctx context.Context, in *UploadJpegRequest, opts ...grpc.CallOption) (*BaseResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BaseResponse)
+	err := c.cc.Invoke(ctx, Api_UploadJpeg_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ApiServer is the server API for Api service.
 // All implementations must embed UnimplementedApiServer
 // for forward compatibility.
@@ -822,6 +835,8 @@ type ApiServer interface {
 	AddPlatformChannel(context.Context, *AddPlatformChannelRequest) (*BaseResponse, error)
 	// 录制控制
 	Recording(context.Context, *RecordingRequest) (*BaseResponse, error)
+	// 接收JPEG文件
+	UploadJpeg(context.Context, *UploadJpegRequest) (*BaseResponse, error)
 	mustEmbedUnimplementedApiServer()
 }
 
@@ -987,6 +1002,9 @@ func (UnimplementedApiServer) AddPlatformChannel(context.Context, *AddPlatformCh
 }
 func (UnimplementedApiServer) Recording(context.Context, *RecordingRequest) (*BaseResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Recording not implemented")
+}
+func (UnimplementedApiServer) UploadJpeg(context.Context, *UploadJpegRequest) (*BaseResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UploadJpeg not implemented")
 }
 func (UnimplementedApiServer) mustEmbedUnimplementedApiServer() {}
 func (UnimplementedApiServer) testEmbeddedByValue()             {}
@@ -1945,6 +1963,24 @@ func _Api_Recording_Handler(srv interface{}, ctx context.Context, dec func(inter
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Api_UploadJpeg_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UploadJpegRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).UploadJpeg(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_UploadJpeg_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).UploadJpeg(ctx, req.(*UploadJpegRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Api_ServiceDesc is the grpc.ServiceDesc for Api service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -2159,6 +2195,10 @@ var Api_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Recording",
 			Handler:    _Api_Recording_Handler,
+		},
+		{
+			MethodName: "UploadJpeg",
+			Handler:    _Api_UploadJpeg_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

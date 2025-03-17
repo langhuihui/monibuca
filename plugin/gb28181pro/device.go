@@ -139,6 +139,14 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 				}
 			}
 		}
+	case "PresetQuery":
+		if channel, ok := d.channels.Get(msg.DeviceID); ok {
+			if req, ok := channel.PresetReqs.Get(msg.SN); ok {
+				// 添加预置位响应
+				req.Response = msg.PresetList.Item
+				req.Resolve()
+			}
+		}
 	case "DeviceInfo":
 		// 主设备信息
 		d.Name = msg.DeviceName
@@ -432,4 +440,41 @@ func (d *Device) recordCmd(channelId string, cmdType string) (*sip.Response, err
 	request := d.CreateRequest(sip.MESSAGE, nil)
 	request.SetBody([]byte(recordXml.String()))
 	return d.send(request)
+}
+
+// SnapshotConfig 抓拍配置结构体
+type SnapshotConfig struct {
+	SnapNum   int    `json:"snapNum"`   // 连拍张数(1-10张)
+	Interval  int    `json:"interval"`  // 单张抓拍间隔(单位:秒，最小1秒)
+	UploadURL string `json:"uploadUrl"` // 抓拍图片上传路径
+	SessionID string `json:"sessionId"` // 会话ID，用于标识抓拍会话
+}
+
+// BuildSnapshotConfigXML 生成抓拍配置XML
+func (d *Device) BuildSnapshotConfigXML(config SnapshotConfig, channelID string) string {
+	// 参数验证和限制
+	if config.SnapNum < 1 {
+		config.SnapNum = 1
+	} else if config.SnapNum > 10 {
+		config.SnapNum = 10
+	}
+	if config.Interval < 1 {
+		config.Interval = 1
+	}
+
+	xml := strings.Builder{}
+	xml.WriteString(fmt.Sprintf("<?xml version=\"1.0\" encoding=\"%s\"?>\r\n", d.Charset))
+	xml.WriteString("<Control>\r\n")
+	xml.WriteString("<CmdType>DeviceConfig</CmdType>\r\n")
+	xml.WriteString(fmt.Sprintf("<SN>%d</SN>\r\n", d.SN))
+	xml.WriteString(fmt.Sprintf("<DeviceID>%s</DeviceID>\r\n", channelID))
+	xml.WriteString("<SnapShotConfig>\r\n")
+	xml.WriteString(fmt.Sprintf("<SnapNum>%d</SnapNum>\r\n", config.SnapNum))
+	xml.WriteString(fmt.Sprintf("<Interval>%d</Interval>\r\n", config.Interval))
+	xml.WriteString(fmt.Sprintf("<UploadURL>%s</UploadURL>\r\n", config.UploadURL))
+	xml.WriteString(fmt.Sprintf("<SessionID>%s</SessionID>\r\n", config.SessionID))
+	xml.WriteString("</SnapShotConfig>\r\n")
+	xml.WriteString("</Control>\r\n")
+
+	return xml.String()
 }

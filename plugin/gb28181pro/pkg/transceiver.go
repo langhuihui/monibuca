@@ -161,7 +161,7 @@ func (p *Receiver) Start() (err error) {
 	p.listener, err = net.Listen("tcp4", p.ListenAddr)
 	if err != nil {
 		p.Error("start listen", "err", err)
-		return
+		return errors.New("start listen,err" + err.Error())
 	}
 	p.Info("start listen", "addr", p.ListenAddr)
 	return

@@ -44,11 +44,11 @@ type GB28181ProPlugin struct {
 	m7s.Plugin
 	AutoInvite     bool   `default:"true" desc:"自动邀请"`
 	Serial         string `default:"34020000002000000001" desc:"sip 服务 id"` //sip 服务器 id, 默认 34020000002000000001
-	Realm          string `default:"3402000000" desc:"sip 服务域"`             //sip 服务器域，默认 3402000000
+	Realm          string `default:"3402000000" desc:"sip 服务域"`            //sip 服务器域，默认 3402000000
 	Username       string
 	Password       string
 	Sip            SipConfig
-	MediaPort      util.Range[uint16] `default:"10000-20000" desc:"媒体端口范围"` //媒体端口范围
+	MediaPort      util.Range[uint16] `default:"10001-20000" desc:"媒体端口范围"` //媒体端口范围
 	Position       PositionConfig
 	Parent         string `desc:"父级设备"`
 	ua             *sipgo.UserAgent
@@ -111,11 +111,7 @@ func (gb *GB28181ProPlugin) OnInit() (err error) {
 			}
 		}
 		if gb.DB != nil {
-			gb.DB.AutoMigrate(&Device{})
-			gb.DB.AutoMigrate(&gb28181.DeviceChannel{})
-			gb.DB.AutoMigrate(&gb28181.PlatformModel{})
-			gb.DB.AutoMigrate(&gb28181.DeviceAlarm{})
-			gb.DB.AutoMigrate(&gb28181.PlatformChannel{})
+			gb.DB.AutoMigrate(&Device{}, &gb28181.DeviceChannel{}, &gb28181.PlatformModel{}, &gb28181.DeviceAlarm{}, &gb28181.PlatformChannel{})
 			// 检查设备过期状态
 			if err := gb.checkDeviceExpire(); err != nil {
 				gb.Error("检查设备过期状态失败", "error", err)
@@ -798,7 +794,7 @@ func (gb *GB28181ProPlugin) Pull(streamPath string, conf config.Pull, pubConf *c
 		gb: gb,
 	}
 	if conf.Args != nil {
-		if conf.Args.Get(util.StartKey) != "" && conf.Args.Get(util.EndKey) != "" {
+		if conf.Args.Get(util.StartKey) != "" || conf.Args.Get(util.EndKey) != "" {
 			dialog.start = conf.Args.Get(util.StartKey)
 			dialog.end = conf.Args.Get(util.EndKey)
 		}

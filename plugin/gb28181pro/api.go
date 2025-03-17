@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -1412,6 +1413,448 @@ func (gb *GB28181ProPlugin) Recording(ctx context.Context, req *pb.RecordingRequ
 			"channelId", req.ChannelId,
 			"response", response.String())
 	}
+
+	resp.Code = 0
+	resp.Message = "success"
+	return resp, nil
+}
+
+// GetSnap 实现抓拍功能
+func (gb *GB28181ProPlugin) GetSnap(ctx context.Context, req *pb.GetSnapRequest) (*pb.SnapResponse, error) {
+	resp := &pb.SnapResponse{}
+
+	// 参数校验
+	if req.DeviceId == "" {
+		resp.Code = 400
+		resp.Message = "设备ID不能为空"
+		return resp, nil
+	}
+	if req.ChannelId == "" {
+		resp.Code = 400
+		resp.Message = "通道ID不能为空"
+		return resp, nil
+	}
+
+	// 1. 先在 platforms 中查找设备
+	platform, found := gb.platforms.Find(func(p *Platform) bool {
+		return p.PlatformModel.ServerGBID == req.DeviceId
+	})
+	if found {
+		if gb.DB == nil {
+			resp.Code = 500
+			resp.Message = "数据库未初始化"
+			return resp, nil
+		}
+
+		// 使用SQL查询获取实际的设备ID和通道ID
+		var result struct {
+			DeviceID  string
+			ChannelID string
+		}
+		err := gb.DB.Raw(`
+			SELECT dg.device_id, cg.device_id as channelid 
+			FROM platform_gb28181pro pg
+			LEFT JOIN platform_channel_gb28181pro pcg on pcg.platform_id = pg.id
+			LEFT JOIN channel_gb28181pro cg on cg.id = pcg.device_channel_id
+			LEFT JOIN device_gb28181pro dg on dg.id = cg.device_db_id
+			WHERE pg.device_gb_id = ? AND cg.device_id = ?`,
+			req.DeviceId, req.ChannelId,
+		).Scan(&result).Error
+
+		if err != nil {
+			resp.Code = 500
+			resp.Message = fmt.Sprintf("查询设备通道关系失败: %v", err)
+			return resp, nil
+		}
+
+		if result.DeviceID == "" || result.ChannelID == "" {
+			resp.Code = 404
+			resp.Message = "未找到对应的设备和通道信息"
+			return resp, nil
+		}
+
+		// 从gb.devices中查找实际设备
+		actualDevice, ok := gb.devices.Get(result.DeviceID)
+		if !ok {
+			resp.Code = 404
+			resp.Message = "实际设备未找到"
+			return resp, nil
+		}
+
+		// 从device.channels中查找实际通道
+		_, ok = actualDevice.channels.Get(result.ChannelID)
+		if !ok {
+			resp.Code = 404
+			resp.Message = "实际通道未找到"
+			return resp, nil
+		}
+
+		// 构建抓拍配置
+		config := SnapshotConfig{
+			SnapNum:   1, // 默认抓拍1张
+			Interval:  1, // 默认间隔1秒
+			UploadURL: fmt.Sprintf("http://%s%s/gb28181/api/snap/upload", actualDevice.LocalIP, gb.GetCommonConf().HTTP.ListenAddr),
+			SessionID: fmt.Sprintf("%d", time.Now().UnixNano()),
+		}
+
+		// 生成XML并发送请求
+		xmlBody := actualDevice.BuildSnapshotConfigXML(config, result.ChannelID)
+		request := actualDevice.CreateRequest(sip.MESSAGE, nil)
+		request.SetBody([]byte(xmlBody))
+		response, err := actualDevice.send(request)
+		if err != nil {
+			resp.Code = 500
+			resp.Message = fmt.Sprintf("发送抓拍配置命令失败: %v", err)
+			return resp, nil
+		}
+
+		gb.Info("通过平台配置抓拍",
+			"platformDeviceId", req.DeviceId,
+			"platformChannelId", req.ChannelId,
+			"actualDeviceId", result.DeviceID,
+			"actualChannelId", result.ChannelID,
+			"platformId", platform.PlatformModel.ID,
+			"response", response.String())
+
+	} else {
+		// 2. 如果在平台中没找到，则在本地设备中查找
+		device, ok := gb.devices.Get(req.DeviceId)
+		if !ok {
+			resp.Code = 404
+			resp.Message = "设备未找到"
+			return resp, nil
+		}
+
+		// 检查通道是否存在
+		_, ok = device.channels.Get(req.ChannelId)
+		if !ok {
+			resp.Code = 404
+			resp.Message = "通道未找到"
+			return resp, nil
+		}
+
+		// 构建抓拍配置
+		config := SnapshotConfig{
+			SnapNum:   1, // 默认抓拍1张
+			Interval:  1, // 默认间隔1秒
+			UploadURL: fmt.Sprintf("http://%s%s/gb28181/api/snap/upload", device.LocalIP, gb.GetCommonConf().HTTP.ListenAddr),
+			SessionID: fmt.Sprintf("%d", time.Now().UnixNano()),
+		}
+
+		// 生成XML并发送请求
+		xmlBody := device.BuildSnapshotConfigXML(config, req.ChannelId)
+		request := device.CreateRequest(sip.MESSAGE, nil)
+		request.SetBody([]byte(xmlBody))
+		response, err := device.send(request)
+		if err != nil {
+			resp.Code = 500
+			resp.Message = fmt.Sprintf("发送抓拍配置命令失败: %v", err)
+			return resp, nil
+		}
+
+		gb.Info("配置抓拍",
+			"deviceId", req.DeviceId,
+			"channelId", req.ChannelId,
+			"response", response.String())
+	}
+
+	resp.Code = 0
+	resp.Message = "success"
+	return resp, nil
+}
+
+// UploadJpeg 实现接收JPEG文件功能
+func (gb *GB28181ProPlugin) UploadJpeg(ctx context.Context, req *pb.UploadJpegRequest) (*pb.BaseResponse, error) {
+	gb.Info("UploadJpeg", "req", req.String())
+	resp := &pb.BaseResponse{}
+
+	// 检查图片数据是否为空
+	if len(req.ImageData) == 0 {
+		resp.Code = 400
+		resp.Message = "图片数据不能为空"
+		return resp, nil
+	}
+
+	// 生成文件名
+	fileName := fmt.Sprintf("snap_%d.jpg", time.Now().UnixNano()/1e6)
+
+	// 确保目录存在
+	snapPath := "snaps"
+	if err := os.MkdirAll(snapPath, 0755); err != nil {
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("创建目录失败: %v", err)
+		return resp, nil
+	}
+
+	// 保存文件
+	filePath := fmt.Sprintf("%s/%s", snapPath, fileName)
+	if err := os.WriteFile(filePath, req.ImageData, 0644); err != nil {
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("保存文件失败: %v", err)
+		return resp, nil
+	}
+
+	gb.Info("保存抓拍图片",
+		"fileName", fileName,
+		"size", len(req.ImageData))
+
+	resp.Code = 0
+	resp.Message = "success"
+	return resp, nil
+}
+
+// AddPreset 实现添加预置位功能
+func (gb *GB28181ProPlugin) AddPreset(ctx context.Context, req *pb.PresetRequest) (*pb.BaseResponse, error) {
+	resp := &pb.BaseResponse{}
+
+	// 参数校验
+	if req.DeviceId == "" {
+		resp.Code = 400
+		resp.Message = "设备ID不能为空"
+		return resp, nil
+	}
+	if req.ChannelId == "" {
+		resp.Code = 400
+		resp.Message = "通道ID不能为空"
+		return resp, nil
+	}
+	if req.PresetId <= 0 || req.PresetId > 255 {
+		resp.Code = 400
+		resp.Message = "预置位ID必须在1-255之间"
+		return resp, nil
+	}
+
+	// 获取设备
+	device, ok := gb.devices.Get(req.DeviceId)
+	if !ok {
+		resp.Code = 404
+		resp.Message = "设备不存在"
+		return resp, nil
+	}
+
+	// 检查通道是否存在
+	_, ok = device.channels.Get(req.ChannelId)
+	if !ok {
+		resp.Code = 404
+		resp.Message = "通道不存在"
+		return resp, nil
+	}
+
+	// 发送预置位设置命令
+	response, err := device.frontEndCmd(req.ChannelId, device.frontEndCmdString(0x81, 1, int32(req.PresetId), 0))
+	if err != nil {
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("设置预置位失败: %v", err)
+		return resp, nil
+	}
+
+	gb.Info("设置预置位",
+		"deviceId", req.DeviceId,
+		"channelId", req.ChannelId,
+		"presetId", req.PresetId,
+		"response", response.String())
+
+	resp.Code = 0
+	resp.Message = "success"
+	return resp, nil
+}
+
+// QueryPreset 实现查询预置位功能
+func (gb *GB28181ProPlugin) QueryPreset(ctx context.Context, req *pb.PresetRequest) (*pb.PresetResponse, error) {
+	resp := &pb.PresetResponse{
+		Code:    200,
+		Message: "success",
+	}
+
+	if req.DeviceId == "" {
+		resp.Code = 400
+		resp.Message = "device id is empty"
+		return resp, nil
+	}
+
+	if req.ChannelId == "" {
+		resp.Code = 400
+		resp.Message = "channel id is empty"
+		return resp, nil
+	}
+
+	device, ok := gb.devices.Get(req.DeviceId)
+	if !ok {
+		resp.Code = 404
+		resp.Message = "device not found"
+		return resp, nil
+	}
+
+	channel, ok := device.channels.Get(req.ChannelId)
+	if !ok {
+		resp.Code = 404
+		resp.Message = "channel not found"
+		return resp, nil
+	}
+
+	// 生成随机序列号
+	sn := int(time.Now().UnixNano() / 1e6 % 1000000)
+
+	// 创建Promise并保存到channel的PresetReqs中
+	promise := util.NewPromise(ctx)
+	presetReq := &PresetRequest{
+		SN:      sn,
+		Promise: promise,
+	}
+
+	// 先保存请求到PresetReqs，确保能接收到响应
+	channel.PresetReqs.Set(presetReq)
+
+	// 创建请求
+	request := device.CreateRequest(sip.MESSAGE, nil)
+	if request == nil {
+		resp.Code = 500
+		resp.Message = "create request failed"
+		channel.PresetReqs.Remove(presetReq)
+		return resp, nil
+	}
+
+	// 构建预置位查询XML消息
+	request.SetBody(gb28181.BuildPresetQueryXML(sn, req.ChannelId))
+
+	// 发送预置位查询命令
+	_, err := device.send(request)
+	if err != nil {
+		channel.PresetReqs.Remove(presetReq)
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("查询预置位失败: %v", err)
+		return resp, nil
+	}
+
+	// 等待响应
+	err = promise.Await()
+	if err != nil {
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("等待预置位响应超时: %v", err)
+		return resp, nil
+	}
+
+	// 获取预置位响应
+	if presetReq.Response != nil {
+		resp.Data = make([]int32, len(presetReq.Response))
+		for i, item := range presetReq.Response {
+			// 将预置位ID转换为整数
+			presetID, _ := strconv.Atoi(item.PresetID)
+			resp.Data[i] = int32(presetID)
+		}
+	}
+
+	// 清理请求
+	channel.PresetReqs.Remove(presetReq)
+	return resp, nil
+}
+
+// DeletePreset 实现删除预置位功能
+func (gb *GB28181ProPlugin) DeletePreset(ctx context.Context, req *pb.PresetRequest) (*pb.BaseResponse, error) {
+	resp := &pb.BaseResponse{}
+
+	// 参数校验
+	if req.DeviceId == "" {
+		resp.Code = 400
+		resp.Message = "设备ID不能为空"
+		return resp, nil
+	}
+	if req.ChannelId == "" {
+		resp.Code = 400
+		resp.Message = "通道ID不能为空"
+		return resp, nil
+	}
+	if req.PresetId <= 0 || req.PresetId > 255 {
+		resp.Code = 400
+		resp.Message = "预置位ID必须在1-255之间"
+		return resp, nil
+	}
+
+	// 获取设备
+	device, ok := gb.devices.Get(req.DeviceId)
+	if !ok {
+		resp.Code = 404
+		resp.Message = "设备不存在"
+		return resp, nil
+	}
+
+	// 检查通道是否存在
+	_, ok = device.channels.Get(req.ChannelId)
+	if !ok {
+		resp.Code = 404
+		resp.Message = "通道不存在"
+		return resp, nil
+	}
+
+	// 发送删除预置位命令
+	response, err := device.frontEndCmd(req.ChannelId, device.frontEndCmdString(0x83, 3, int32(req.PresetId), 0))
+	if err != nil {
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("删除预置位失败: %v", err)
+		return resp, nil
+	}
+
+	gb.Info("删除预置位",
+		"deviceId", req.DeviceId,
+		"channelId", req.ChannelId,
+		"presetId", req.PresetId,
+		"response", response.String())
+
+	resp.Code = 0
+	resp.Message = "success"
+	return resp, nil
+}
+
+// CallPreset 实现调用预置位功能
+func (gb *GB28181ProPlugin) CallPreset(ctx context.Context, req *pb.PresetRequest) (*pb.BaseResponse, error) {
+	resp := &pb.BaseResponse{}
+
+	// 参数校验
+	if req.DeviceId == "" {
+		resp.Code = 400
+		resp.Message = "设备ID不能为空"
+		return resp, nil
+	}
+	if req.ChannelId == "" {
+		resp.Code = 400
+		resp.Message = "通道ID不能为空"
+		return resp, nil
+	}
+	if req.PresetId <= 0 || req.PresetId > 255 {
+		resp.Code = 400
+		resp.Message = "预置位ID必须在1-255之间"
+		return resp, nil
+	}
+
+	// 获取设备
+	device, ok := gb.devices.Get(req.DeviceId)
+	if !ok {
+		resp.Code = 404
+		resp.Message = "设备不存在"
+		return resp, nil
+	}
+
+	// 检查通道是否存在
+	_, ok = device.channels.Get(req.ChannelId)
+	if !ok {
+		resp.Code = 404
+		resp.Message = "通道不存在"
+		return resp, nil
+	}
+
+	// 发送调用预置位命令
+	response, err := device.frontEndCmd(req.ChannelId, device.frontEndCmdString(0x82, 2, int32(req.PresetId), 0))
+	if err != nil {
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("调用预置位失败: %v", err)
+		return resp, nil
+	}
+
+	gb.Info("调用预置位",
+		"deviceId", req.DeviceId,
+		"channelId", req.ChannelId,
+		"presetId", req.PresetId,
+		"response", response.String())
 
 	resp.Code = 0
 	resp.Message = "success"

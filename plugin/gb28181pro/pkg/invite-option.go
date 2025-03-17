@@ -8,8 +8,8 @@ import (
 )
 
 type InviteOptions struct {
-	Start       int
-	End         int
+	Start       string
+	End         string
 	dump        string
 	ssrc        string
 	SSRC        uint32
@@ -19,7 +19,7 @@ type InviteOptions struct {
 }
 
 func (o InviteOptions) IsLive() bool {
-	return o.Start == 0 || o.End == 0
+	return o.Start == "" && o.End == ""
 }
 
 func (o InviteOptions) Record() bool {
@@ -27,21 +27,25 @@ func (o InviteOptions) Record() bool {
 }
 
 func (o *InviteOptions) Validate(start, end string) error {
+	var sint int64
+	var eint int64
 	if start != "" {
-		sint, err1 := strconv.ParseInt(start, 10, 0)
+		sinttmp, err1 := strconv.ParseInt(start, 10, 0)
 		if err1 != nil {
 			return err1
 		}
-		o.Start = int(sint)
+		sint = sinttmp
+		o.Start = start
 	}
 	if end != "" {
-		eint, err2 := strconv.ParseInt(end, 10, 0)
+		einttmp, err2 := strconv.ParseInt(end, 10, 0)
 		if err2 != nil {
 			return err2
 		}
-		o.End = int(eint)
+		eint = einttmp
+		o.End = end
 	}
-	if o.Start >= o.End {
+	if sint >= eint {
 		return errors.New("start < end")
 	}
 	return nil

@@ -52,6 +52,14 @@ const (
 <Interval>%d</Interval>
 </Query>
 `
+	// PresetQueryXML 查询预置位指令
+	PresetQueryXML = `<?xml version="1.0"?>
+<Query>
+<CmdType>PresetQuery</CmdType>
+<SN>%d</SN>
+<DeviceID>%s</DeviceID>
+</Query>
+`
 	AlarmResponseXML = `<?xml version="1.0"?><Response>
 <CmdType>Alarm</CmdType>
 <SN>17430</SN>
@@ -105,6 +113,11 @@ func BuildDevicePositionXML(sn int, id string, interval int) []byte {
 	return toGB2312(fmt.Sprintf(DevicePositionXML, sn, id, interval))
 }
 
+// BuildPresetQueryXML 构建预置位查询XML
+func BuildPresetQueryXML(sn int, id string) []byte {
+	return toGB2312(fmt.Sprintf(PresetQueryXML, sn, id))
+}
+
 func BuildAlarmResponseXML(id string) []byte {
 	return toGB2312(fmt.Sprintf(AlarmResponseXML, id))
 }
@@ -129,6 +142,10 @@ type (
 			Num  int          `xml:"Num,attr"`
 			Item []RecordItem `xml:"Item"`
 		} `xml:"RecordList"`
+		PresetList struct {
+			Num  int          `xml:"Num,attr"`
+			Item []PresetItem `xml:"Item"`
+		} `xml:"PresetList"`
 		SumNum   int       // 录像结果的总数 SumNum，录像结果会按照多条消息返回，可用于判断是否全部返回
 		Name     string    // 设备/通道名称
 		LastTime time.Time `xml:"LastTime"` // 最后时间
@@ -139,6 +156,11 @@ type (
 		Info          struct {
 			AlarmType string `xml:"AlarmType"` // 报警类型
 		} `xml:"Info"`
+	}
+
+	PresetItem struct {
+		PresetID   string `xml:"PresetID"`
+		PresetName string `xml:"PresetName"`
 	}
 )
 

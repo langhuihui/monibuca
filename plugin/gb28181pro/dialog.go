@@ -38,9 +38,9 @@ func (d *Dialog) GetPullJob() *m7s.PullJob {
 
 func (d *Dialog) Start() (err error) {
 	// 处理时间范围
-	isLive := true
-	if d.start != "" && d.end != "" {
-		isLive = false
+	d.InviteOptions.Start = d.start
+	d.InviteOptions.End = d.End
+	if d.IsLive() {
 		d.pullCtx.PublishConfig.PubType = m7s.PublishTypeVod
 	}
 	err = d.pullCtx.Publish()
@@ -90,11 +90,11 @@ func (d *Dialog) Start() (err error) {
 	sdpInfo := []string{
 		"v=0",
 		fmt.Sprintf("o=%s 0 0 IN IP4 %s", device.DeviceID, sdpIP),
-		fmt.Sprintf("s=%s", util.Conditional(isLive, "Play", "Playback")), // 根据是否有时间参数决定
+		fmt.Sprintf("s=%s", util.Conditional(d.IsLive(), "Play", "Playback")), // 根据是否有时间参数决定
 	}
 
 	// 非直播模式下添加u行，保持在s=和c=之间
-	if !isLive {
+	if !d.IsLive() {
 		sdpInfo = append(sdpInfo, fmt.Sprintf("u=%s:0", channelId))
 	}
 
@@ -102,7 +102,7 @@ func (d *Dialog) Start() (err error) {
 	sdpInfo = append(sdpInfo, "c=IN IP4 "+sdpIP)
 
 	// 将字符串时间转换为 Unix 时间戳
-	if !isLive {
+	if !d.IsLive() {
 		startTime, endTime, err := util.TimeRangeQueryParse(url.Values{"start": []string{d.start}, "end": []string{d.end}})
 		if err != nil {
 			d.Stop(errors.New("parse end time error"))

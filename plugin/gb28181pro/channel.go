@@ -29,12 +29,24 @@ func (r *RecordRequest) AddResponse(msg gb28181.Message) bool {
 	return r.ReceivedNum >= msg.SumNum
 }
 
+// PresetRequest 预置位请求结构体
+type PresetRequest struct {
+	SN       int
+	Response []gb28181.PresetItem
+	*util.Promise
+}
+
+func (r *PresetRequest) GetKey() int {
+	return r.SN
+}
+
 type Channel struct {
 	Device              *Device      // 所属设备
 	State               atomic.Int32 // 通道状态,0:空闲,1:正在invite,2:正在播放/对讲
 	GpsTime             time.Time    // gps时间
 	Longitude, Latitude string       // 经度
 	RecordReqs          util.Collection[int, *RecordRequest]
+	PresetReqs          util.Collection[int, *PresetRequest] // 预置位请求集合
 	*slog.Logger
 	gb28181.DeviceChannel
 	AbstractDevice *m7s.PullProxy
