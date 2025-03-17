@@ -855,13 +855,17 @@ func (gb *GB28181ProPlugin) OnBye(req *sip.Request, tx sip.ServerTransaction) {
 	if dialog, ok := gb.dialogs.Find(func(d *Dialog) bool {
 		return d.GetCallID() == req.CallID().Value()
 	}); ok {
-		gb.Warn("OnBye", "dialog", dialog.GetCallID())
+		gb.Warn("OnBye", "devicedialog", dialog.GetCallID())
 		dialog.Stop(task.ErrTaskComplete)
 	}
 	if forwardDialog, ok := gb.forwardDialogs.Find(func(d *ForwardDialog) bool {
 		return d.platformCallId == req.CallID().Value()
 	}); ok {
-		gb.Warn("OnBye", "dialog", forwardDialog.GetCallID())
+		err := tx.Respond(sip.NewResponseFromRequest(req, http.StatusOK, "OK", req.Body()))
+		if err != nil {
+			gb.Error("forwarddialog bye err", err)
+		}
+		gb.Warn("OnBye", "forwardDialog.platformCallId", req.CallID().Value())
 		forwardDialog.Stop(task.ErrTaskComplete)
 	}
 }

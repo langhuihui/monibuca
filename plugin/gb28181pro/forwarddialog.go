@@ -178,10 +178,16 @@ func (d *ForwardDialog) Start() (err error) {
 		Params:          sip.HeaderParams(sip.NewParams()),
 	}
 	viaHeader.Params.Add("branch", sip.GenerateBranchN(16)).Add("rport", "")
-
+	fromHDR := sip.FromHeader{
+		Address: sip.Uri{
+			User: d.gb.Serial,
+			Host: d.gb.Realm,
+		},
+		Params: sip.NewParams(),
+	}
+	fromHDR.Params.Add("tag", sip.GenerateTagN(16))
 	// 创建会话 - 使用device的dialogClient创建
-	d.session, err = device.dialogClient.Invite(d.gb, recipient, request.Body(), &device.fromHDR, &viaHeader, &device.contactHDR, subjectHeader, &contentTypeHeader)
-
+	d.session, err = device.dialogClient.Invite(d.gb, recipient, request.Body(), &fromHDR, &viaHeader, &device.contactHDR, subjectHeader, &contentTypeHeader)
 	return
 }
 
@@ -265,11 +271,11 @@ func (d *ForwardDialog) Dispose() {
 	if d.session != nil {
 		err := d.session.Bye(d)
 		if err != nil {
-			d.Error("bye bye err", err)
+			d.Error("forwarddialog bye bye err", err)
 		}
 		err = d.session.Close()
 		if err != nil {
-			d.Error("close session err", err)
+			d.Error("forwarddialog close session err", err)
 		}
 	}
 }

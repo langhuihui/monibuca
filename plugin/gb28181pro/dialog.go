@@ -258,10 +258,10 @@ func (d *Dialog) GetKey() uint32 {
 func (d *Dialog) Dispose() {
 	err := d.session.Bye(d)
 	if err != nil {
-		d.Error("bye bye err", err)
+		d.Error("dialog bye bye err", err)
 	}
 	err = d.session.Close()
 	if err != nil {
-		d.Error("close session err", err)
+		d.Error("dialog close session err", err)
 	}
 }

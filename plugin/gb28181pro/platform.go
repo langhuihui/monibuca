@@ -289,6 +289,9 @@ func (p *Platform) OnMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb
 	case "DeviceInfo":
 		// 处理设备信息请求
 		return p.handleDeviceInfo(req, tx, msg)
+	case "PresetQuery":
+		// 处理预置位查询请求
+		return p.handlePresetQuery(req, tx, msg)
 	case "Alarm":
 		// 处理报警消息
 		return p.handleAlarm(req, tx, msg)
@@ -569,9 +572,85 @@ func (p *Platform) buildChannelItem(channel gb28181.CommonGBChannel) string {
 
 // handleDeviceControl 处理设备控制请求
 func (p *Platform) handleDeviceControl(req *sip.Request, tx sip.ServerTransaction, msg *gb28181.Message) error {
-	// TODO: 实现设备控制请求处理
-	response := sip.NewResponseFromRequest(req, sip.StatusOK, "OK", nil)
-	return tx.Respond(response)
+	// 首先回复200 OK给上级平台
+	err := tx.Respond(sip.NewResponseFromRequest(req, http.StatusOK, "OK", nil))
+	if err != nil {
+		return fmt.Errorf("respond error: %v", err)
+	}
+
+	// 获取通道ID
+	channelID := msg.DeviceID
+
+	// 查询通道和设备信息
+	type Result struct {
+		DeviceID string `gorm:"column:device_id"`
+	}
+	var result Result
+
+	if p.plugin.DB != nil {
+		// 多表联查: channel_gb28181pro -> device_gb28181pro -> devices
+		if err := p.plugin.DB.Table("channel_gb28181pro c").
+			Select("d.device_id").
+			Joins("LEFT JOIN device_gb28181pro d ON c.device_db_id = d.id").
+			Where("c.device_id = ?", channelID).
+			First(&result).Error; err != nil {
+			p.Error("查询通道和设备信息失败", "error", err.Error())
+			return fmt.Errorf("channel or device not found: %v", err)
+		}
+	}
+
+	// 从devices集合中获取设备实例
+	device, ok := p.plugin.devices.Get(result.DeviceID)
+	if !ok {
+		p.Error("设备不存在或未注册", "device_id", result.DeviceID)
+		return fmt.Errorf("device not found or not registered: %v", result.DeviceID)
+	}
+
+	// 创建转发请求
+	request := sip.NewRequest(sip.MESSAGE, device.Recipient)
+
+	// 设置From头部，使用平台信息
+	fromHeader := device.fromHDR
+	fromTag, _ := req.From().Params.Get("tag")
+	fromHeader.Params.Add("tag", fromTag)
+	request.AppendHeader(&fromHeader)
+
+	// 添加To头部，使用设备信息
+	toHeader := sip.ToHeader{
+		Address: device.Recipient,
+	}
+	request.AppendHeader(&toHeader)
+
+	// 添加Via头部
+	viaHeader := sip.ViaHeader{
+		ProtocolName:    "SIP",
+		ProtocolVersion: "2.0",
+		Transport:       device.Transport,
+		Host:            device.LocalIP,
+		Port:            device.LocalPort,
+		Params:          sip.NewParams(),
+	}
+	viaHeader.Params.Add("branch", sip.GenerateBranchN(16)).Add("rport", "")
+	request.AppendHeader(&viaHeader)
+
+	// 设置Content-Type
+	contentTypeHeader := sip.ContentTypeHeader("Application/MANSCDP+xml")
+	request.AppendHeader(&contentTypeHeader)
+
+	// 直接使用原始消息体
+	request.SetBody(req.Body())
+
+	// 设置传输协议
+	request.SetTransport(strings.ToUpper(device.Transport))
+
+	// 发送请求
+	_, err = device.client.Do(p.ctx, request)
+	if err != nil {
+		p.Error("发送控制命令失败", "error", err.Error())
+		return fmt.Errorf("send control command failed: %v", err)
+	}
+
+	return nil
 }
 
 // handleDeviceInfo 处理设备信息查询请求
@@ -708,6 +787,89 @@ func (p *Platform) handleMobilePosition(req *sip.Request, tx sip.ServerTransacti
 	// TODO: 实现移动位置信息处理
 	response := sip.NewResponseFromRequest(req, sip.StatusOK, "OK", nil)
 	return tx.Respond(response)
+}
+
+// handlePresetQuery 处理预置位查询请求
+func (p *Platform) handlePresetQuery(req *sip.Request, tx sip.ServerTransaction, msg *gb28181.Message) error {
+	// 首先回复200 OK给上级平台
+	err := tx.Respond(sip.NewResponseFromRequest(req, http.StatusOK, "OK", nil))
+	if err != nil {
+		return fmt.Errorf("respond error: %v", err)
+	}
+
+	// 获取通道ID
+	channelID := msg.DeviceID
+
+	// 查询通道和设备信息
+	type Result struct {
+		DeviceID string `gorm:"column:device_id"`
+	}
+	var result Result
+
+	if p.plugin.DB != nil {
+		// 多表联查: channel_gb28181pro -> device_gb28181pro -> devices
+		if err := p.plugin.DB.Table("channel_gb28181pro c").
+			Select("d.device_id").
+			Joins("LEFT JOIN device_gb28181pro d ON c.device_db_id = d.id").
+			Where("c.device_id = ?", channelID).
+			First(&result).Error; err != nil {
+			p.Error("查询通道和设备信息失败", "error", err.Error())
+			return fmt.Errorf("channel or device not found: %v", err)
+		}
+	}
+
+	// 从devices集合中获取设备实例
+	device, ok := p.plugin.devices.Get(result.DeviceID)
+	if !ok {
+		p.Error("设备不存在或未注册", "device_id", result.DeviceID)
+		return fmt.Errorf("device not found or not registered: %v", result.DeviceID)
+	}
+
+	// 创建转发请求
+	request := sip.NewRequest(sip.MESSAGE, device.Recipient)
+
+	// 设置From头部，使用平台信息
+	fromHeader := device.fromHDR
+	fromTag, _ := req.From().Params.Get("tag")
+	fromHeader.Params.Add("tag", fromTag)
+	request.AppendHeader(&fromHeader)
+
+	// 添加To头部，使用设备信息
+	toHeader := sip.ToHeader{
+		Address: device.Recipient,
+	}
+	request.AppendHeader(&toHeader)
+
+	// 添加Via头部
+	viaHeader := sip.ViaHeader{
+		ProtocolName:    "SIP",
+		ProtocolVersion: "2.0",
+		Transport:       device.Transport,
+		Host:            device.LocalIP,
+		Port:            device.LocalPort,
+		Params:          sip.NewParams(),
+	}
+	viaHeader.Params.Add("branch", sip.GenerateBranchN(16)).Add("rport", "")
+	request.AppendHeader(&viaHeader)
+
+	// 设置Content-Type
+	contentTypeHeader := sip.ContentTypeHeader("Application/MANSCDP+xml")
+	request.AppendHeader(&contentTypeHeader)
+
+	// 直接使用原始消息体
+	request.SetBody(req.Body())
+
+	// 设置传输协议
+	request.SetTransport(strings.ToUpper(device.Transport))
+
+	// 发送请求
+	_, err = device.client.Do(p.ctx, request)
+	if err != nil {
+		p.Error("发送预置位查询命令失败", "error", err.Error())
+		return fmt.Errorf("send preset query command failed: %v", err)
+	}
+
+	return nil
 }
 
 // GetKey 返回平台的唯一标识符

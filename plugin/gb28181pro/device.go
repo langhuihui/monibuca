@@ -147,6 +147,72 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 				req.Resolve()
 			}
 		}
+		// 查询平台信息
+		type Result struct {
+			PlatformID uint32 `gorm:"column:platform_id"`
+		}
+		var result Result
+		if d.plugin.DB != nil {
+			if err := d.plugin.DB.Table("platform_channel_gb28181pro pcg").
+				Select("pcg.platform_id").
+				Joins("LEFT JOIN channel_gb28181pro cg on pcg.device_channel_id= cg.id").
+				Where("cg.device_id = ?", msg.DeviceID).
+				First(&result).Error; err != nil {
+				d.Error("查询平台信息失败", "error", err)
+				return err
+			}
+			// 从platforms集合中获取平台实例
+			if platform, ok := d.plugin.platforms.Get(result.PlatformID); ok {
+				// 创建并发送响应消息
+				request := platform.CreateRequest("MESSAGE")
+				fromTag, _ := req.From().Params.Get("tag")
+				// 设置From头部
+				fromHeader := sip.FromHeader{
+					Address: sip.Uri{
+						User: platform.PlatformModel.DeviceGBID,
+						Host: platform.PlatformModel.ServerGBDomain,
+					},
+					Params: sip.NewParams(),
+				}
+				fromHeader.Params.Add("tag", fromTag)
+				request.AppendHeader(&fromHeader)
+
+				// 添加To头部
+				toHeader := sip.ToHeader{
+					Address: sip.Uri{
+						User: platform.PlatformModel.ServerGBID,
+						Host: platform.PlatformModel.ServerGBDomain,
+					},
+				}
+				request.AppendHeader(&toHeader)
+
+				// 添加Via头部
+				viaHeader := sip.ViaHeader{
+					ProtocolName:    "SIP",
+					ProtocolVersion: "2.0",
+					Transport:       platform.PlatformModel.Transport,
+					Host:            platform.PlatformModel.DeviceIP,
+					Port:            platform.PlatformModel.DevicePort,
+					Params:          sip.NewParams(),
+				}
+				viaHeader.Params.Add("branch", sip.GenerateBranchN(16)).Add("rport", "")
+				request.AppendHeader(&viaHeader)
+
+				// 设置Content-Type
+				contentTypeHeader := sip.ContentTypeHeader("Application/MANSCDP+xml")
+				request.AppendHeader(&contentTypeHeader)
+
+				// 直接使用原始消息体
+				request.SetBody(req.Body())
+
+				// 发送请求
+				_, err = platform.Client.Do(platform.ctx, request)
+				if err != nil {
+					d.Error("发送预置位查询响应失败", "error", err)
+					return err
+				}
+			}
+		}
 	case "DeviceInfo":
 		// 主设备信息
 		d.Name = msg.DeviceName
