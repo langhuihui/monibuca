@@ -3,6 +3,7 @@ package plugin_gb28181pro
 import (
 	"errors"
 	"fmt"
+	"net"
 	"net/url"
 	"strconv"
 	"strings"
@@ -85,6 +86,11 @@ func (d *Dialog) Start() (err error) {
 	if sdpIP == "" {
 		sdpIP = device.mediaIp
 	}
+	deviceIPParsed := net.ParseIP(device.IP)
+	if !deviceIPParsed.IsPrivate() {
+		sdpIP = d.gb.GetPublicIP(sdpIP)
+	}
+	d.Info("sdpIP is ", sdpIP)
 
 	// 构建 SDP 内容
 	sdpInfo := []string{
@@ -164,11 +170,6 @@ func (d *Dialog) Start() (err error) {
 		Port: device.Port,
 		User: channelId,
 	}
-	request := device.CreateRequest(sip.INVITE, recipient)
-	if request == nil {
-		return nil
-	}
-
 	// 设置必需的头部
 	contentTypeHeader := sip.ContentTypeHeader("APPLICATION/SDP")
 	subjectHeader := sip.NewHeader("Subject", fmt.Sprintf("%s:%s,%s:0", channelId, ssrc, d.gb.Serial))
@@ -178,14 +179,8 @@ func (d *Dialog) Start() (err error) {
 		Address: sip.Uri{User: channelId, Host: device.HostAddress},
 	}
 	userAgentHeader := sip.NewHeader("User-Agent", "M7S/"+m7s.Version)
-
-	request.AppendHeader(&contentTypeHeader)
-	request.AppendHeader(subjectHeader)
-	//request.AppendHeader(allowHeader)
-	request.AppendHeader(&toHeader)
 	customCallID := fmt.Sprintf("%s-%s-%d@%s", device.DeviceID, channelId, time.Now().Unix(), device.LocalIP)
 	callID := sip.CallIDHeader(customCallID)
-	//request.AppendHeaderAfter(&callID, "User-Agent")
 	viaHeader := sip.ViaHeader{
 		ProtocolName:    "SIP",
 		ProtocolVersion: "2.0",
@@ -201,12 +196,16 @@ func (d *Dialog) Start() (err error) {
 		SeqNo:      uint32(device.SN),
 		MethodName: "INVITE",
 	}
-	request.AppendHeader(&viaHeader)
-	request.SetBody([]byte(strings.Join(sdpInfo, "\r\n") + "\r\n"))
 	//request.AppendHeader(&contentLengthHeader)
-
+	contactHDR := sip.ContactHeader{
+		Address: sip.Uri{
+			User: d.gb.Serial,
+			Host: device.LocalIP,
+			Port: 5060,
+		},
+	}
 	// 创建会话
-	d.session, err = device.dialogClient.Invite(d.gb, recipient, request.Body(), &callID, &csqHeader, &device.fromHDR, &toHeader, &viaHeader, &maxforward, userAgentHeader, &device.contactHDR, subjectHeader, &contentTypeHeader)
+	d.session, err = device.dialogClient.Invite(d.gb, recipient, []byte(strings.Join(sdpInfo, "\r\n")+"\r\n"), &callID, &csqHeader, &device.fromHDR, &toHeader, &maxforward, userAgentHeader, &contactHDR, subjectHeader, &contentTypeHeader)
 	// 最后添加Content-Length头部
 	return
 }
@@ -243,6 +242,9 @@ func (d *Dialog) Run() (err error) {
 		}
 	}
 	err = d.session.Ack(d.gb)
+	if err != nil {
+		d.gb.Error("ack session err", err)
+	}
 	pub := gb28181.NewPSPublisher(d.pullCtx.Publisher)
 	pub.Receiver.ListenAddr = fmt.Sprintf(":%d", d.MediaPort)
 	pub.Receiver.ListenPort = d.MediaPort

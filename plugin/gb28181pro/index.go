@@ -44,7 +44,7 @@ type GB28181ProPlugin struct {
 	m7s.Plugin
 	AutoInvite     bool   `default:"true" desc:"自动邀请"`
 	Serial         string `default:"34020000002000000001" desc:"sip 服务 id"` //sip 服务器 id, 默认 34020000002000000001
-	Realm          string `default:"3402000000" desc:"sip 服务域"`            //sip 服务器域，默认 3402000000
+	Realm          string `default:"3402000000" desc:"sip 服务域"`             //sip 服务器域，默认 3402000000
 	Username       string
 	Password       string
 	Sip            SipConfig
@@ -111,7 +111,10 @@ func (gb *GB28181ProPlugin) OnInit() (err error) {
 			}
 		}
 		if gb.DB != nil {
-			gb.DB.AutoMigrate(&Device{}, &gb28181.DeviceChannel{}, &gb28181.PlatformModel{}, &gb28181.DeviceAlarm{}, &gb28181.PlatformChannel{})
+			err = gb.DB.AutoMigrate(&Device{}, &gb28181.DeviceChannel{}, &gb28181.PlatformModel{}, &gb28181.DeviceAlarm{}, &gb28181.PlatformChannel{})
+			if err != nil {
+				gb.Error("auto migrate DB error: %v", err)
+			}
 			// 检查设备过期状态
 			if err := gb.checkDeviceExpire(); err != nil {
 				gb.Error("检查设备过期状态失败", "error", err)
@@ -225,8 +228,9 @@ func (gb *GB28181ProPlugin) checkDevices() error {
 		}
 
 		// 创建SIP客户端
-		d.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(host), sipgo.WithClientPort(d.LocalPort))
+		d.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(d.LocalIP))
 		d.dialogClient = sipgo.NewDialogClientCache(d.client, d.contactHDR)
+		d.Info("checkDevices", "d.LocalIP", d.LocalIP, "d.LocalPort", d.LocalPort, "d.contactHDR", d.contactHDR)
 
 		// 设置设备ID的hash值作为任务ID
 		var hash uint32
@@ -654,8 +658,10 @@ func (gb *GB28181ProPlugin) RecoverDevice(d *Device, req *sip.Request) {
 
 func (gb *GB28181ProPlugin) StoreDevice(deviceid string, req *sip.Request) (d *Device) {
 	source := req.Source()
+	gb.Info("req.Source is ", source)
 	desc := req.Destination()
-	servIp, sPortStr, _ := net.SplitHostPort(desc)
+	gb.Info("req.Destination is ", desc)
+	myIP, myPortStr, _ := net.SplitHostPort(desc)
 
 	exp := req.GetHeader("Expires")
 	if exp == nil {
@@ -668,20 +674,22 @@ func (gb *GB28181ProPlugin) StoreDevice(deviceid string, req *sip.Request) (d *D
 		return
 	}
 	// 优先使用内网IP
-	host := myip.InternalIPv4()
+	localLanIP := myip.InternalIPv4()
+	localWanIP := myip.ExternalIPv4()
 	// 如果设备IP是内网IP，则使用内网IP
-	deviceIPParsed := net.ParseIP(servIp)
-	if deviceIPParsed != nil {
-		if !deviceIPParsed.IsPrivate() { //公网情况就去获取本地网卡的公网IP
-			// 设备是公网IP，使用公网IP
-			host = gb.GetPublicIP(host)
-		}
-	}
+	//deviceIPParsed := net.ParseIP(myIP)
+	//if deviceIPParsed != nil {
+	//	if !deviceIPParsed.IsPrivate() { //公网情况就去获取本地网卡的公网IP
+	//		// 设备是公网IP，使用公网IP
+	//		localIp = gb.GetPublicIP(localIp)
+	//	}
+	//}
 
-	hostname, portStr, _ := net.SplitHostPort(source)
-	port, _ := strconv.Atoi(portStr)
-	serverPort, _ := strconv.Atoi(sPortStr)
-
+	sourceIP, sourcePortStr, _ := net.SplitHostPort(source)
+	sourcePort, _ := strconv.Atoi(sourcePortStr)
+	myPort, _ := strconv.Atoi(myPortStr)
+	//_, addr, _ := strings.Cut(gb.Sip.ListenAddr[0], "::")
+	//localport, _ := strconv.Atoi(addr)
 	now := time.Now()
 	d = &Device{
 		DeviceID:      deviceid,
@@ -695,23 +703,23 @@ func (gb *GB28181ProPlugin) StoreDevice(deviceid string, req *sip.Request) (d *D
 		Charset:       "GB2312",        // 默认GB2312字符集
 		GeoCoordSys:   "WGS84",         // 默认WGS84坐标系
 		Transport:     req.Transport(), // 传输协议
-		IP:            hostname,
-		Port:          port,
-		HostAddress:   hostname + ":" + portStr,
-		LocalIP:       host,
-		mediaIp:       host,
+		IP:            sourceIP,
+		Port:          sourcePort,
+		HostAddress:   sourceIP + ":" + sourcePortStr,
+		LocalIP:       localLanIP,
+		mediaIp:       localLanIP,
 		Expires:       int(expSec),
 		eventChan:     make(chan any, 10),
 		Recipient: sip.Uri{
-			Host: hostname,
-			Port: port,
+			Host: sourceIP,
+			Port: sourcePort,
 			User: deviceid,
 		},
 		contactHDR: sip.ContactHeader{
 			Address: sip.Uri{
 				User: gb.Serial,
-				Host: host,
-				Port: serverPort,
+				Host: localLanIP,
+				Port: myPort,
 			},
 		},
 		fromHDR: sip.FromHeader{
@@ -722,16 +730,15 @@ func (gb *GB28181ProPlugin) StoreDevice(deviceid string, req *sip.Request) (d *D
 			Params: sip.NewParams(),
 		},
 		plugin:    gb,
-		LocalPort: serverPort,
+		LocalPort: myPort,
 	}
 
 	d.Logger = gb.With("deviceid", deviceid)
 	d.fromHDR.Params.Add("tag", sip.GenerateTagN(16))
-	d.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(host), sipgo.WithClientPort(serverPort))
-	gb.Info("get serverport is ", serverPort)
+	d.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(myIP))
 	d.dialogClient = sipgo.NewDialogClientCache(d.client, d.contactHDR)
 	d.channels.L = new(sync.RWMutex)
-	d.Info("StoreDevice", "source", source, "desc", desc, "servIp", servIp, "publicIP", host, "recipient", req.Recipient)
+	d.Info("StoreDevice", "source", source, "desc", desc, "myIP", myIP, "localLanIP", localLanIP, "localWanIP", localWanIP, "recipient", req.Recipient, "myPort", myPort, "myPort", myPort)
 
 	// 使用简单的 hash 函数将设备 ID 转换为 uint32
 	var hash uint32
