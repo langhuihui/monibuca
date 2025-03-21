@@ -3,13 +3,13 @@ package plugin_gb28181pro
 import (
 	"errors"
 	"fmt"
+	"m7s.live/v5/pkg/util"
+	"math/rand"
 	"net"
 	"net/url"
 	"strconv"
 	"strings"
 	"time"
-
-	"m7s.live/v5/pkg/util"
 
 	sipgo "github.com/emiago/sipgo"
 	"github.com/emiago/sipgo/sip"
@@ -35,6 +35,18 @@ func (d *Dialog) GetCallID() string {
 
 func (d *Dialog) GetPullJob() *m7s.PullJob {
 	return &d.pullCtx
+}
+
+const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+
+var seededRand *rand.Rand = rand.New(rand.NewSource(time.Now().UnixNano()))
+
+func GenerateCallID(length int) string {
+	b := make([]byte, length)
+	for i := range b {
+		b[i] = charset[seededRand.Intn(len(charset))]
+	}
+	return string(b)
 }
 
 func (d *Dialog) Start() (err error) {
@@ -122,7 +134,7 @@ func (d *Dialog) Start() (err error) {
 	var mediaLine string
 	//switch strings.ToUpper(device.StreamMode) {
 	//case "TCP-PASSIVE", "TCP-ACTIVE":
-	mediaLine = fmt.Sprintf("m=video %d TCP/RTP/AVP 96", d.MediaPort)
+	mediaLine = fmt.Sprintf("m=video %d TCP/RTP/AVP 96 97 98 99", d.MediaPort)
 	//case "UDP":
 	//	mediaLine = fmt.Sprintf("m=video %d TCP/RTP/AVP 96", d.MediaPort)
 	//default:
@@ -137,9 +149,9 @@ func (d *Dialog) Start() (err error) {
 		//"a=rtpmap:126 H264/90000",
 		//"a=rtpmap:125 H264S/90000",
 		//"a=fmtp:125 profile-level-id=42e01e",
-		//"a=rtpmap:98 H264/90000",
-		//"a=rtpmap:97 MPEG4/90000",
-		//"a=rtpmap:99 H265/90000",
+		"a=rtpmap:98 H264/90000",
+		"a=rtpmap:97 MPEG4/90000",
+		"a=rtpmap:99 H265/90000",
 	)
 
 	//根据传输模式添加 setup 和 connection 属性
@@ -178,8 +190,11 @@ func (d *Dialog) Start() (err error) {
 	toHeader := sip.ToHeader{
 		Address: sip.Uri{User: channelId, Host: device.HostAddress},
 	}
-	userAgentHeader := sip.NewHeader("User-Agent", "M7S/"+m7s.Version)
-	customCallID := fmt.Sprintf("%s-%s-%d@%s", device.DeviceID, channelId, time.Now().Unix(), device.LocalIP)
+	//userAgentHeader := sip.NewHeader("User-Agent", "M7S/"+m7s.Version)
+	userAgentHeader := sip.NewHeader("User-Agent", "WVP-Pro v2.7.3.20241218")
+
+	//customCallID := fmt.Sprintf("%s-%s-%d@%s", device.DeviceID, channelId, time.Now().Unix(), device.LocalIP)
+	customCallID := fmt.Sprintf("%s@%s", GenerateCallID(32), device.LocalIP)
 	callID := sip.CallIDHeader(customCallID)
 	viaHeader := sip.ViaHeader{
 		ProtocolName:    "SIP",
@@ -189,7 +204,7 @@ func (d *Dialog) Start() (err error) {
 		Port:            device.LocalPort,
 		Params:          sip.HeaderParams(sip.NewParams()),
 	}
-	viaHeader.Params.Add("branch", sip.GenerateBranchN(16)).Add("rport", "")
+	viaHeader.Params.Add("branch", sip.GenerateBranchN(10)).Add("rport", "")
 	maxforward := sip.MaxForwardsHeader(70)
 	//contentLengthHeader := sip.ContentLengthHeader(len(strings.Join(sdpInfo, "\r\n") + "\r\n"))
 	csqHeader := sip.CSeqHeader{
@@ -201,11 +216,20 @@ func (d *Dialog) Start() (err error) {
 		Address: sip.Uri{
 			User: d.gb.Serial,
 			Host: device.LocalIP,
-			Port: 5060,
+			Port: device.LocalPort,
 		},
 	}
+
+	fromHDR := sip.FromHeader{
+		Address: sip.Uri{
+			User: d.gb.Serial,
+			Host: d.gb.Realm,
+		},
+		Params: sip.NewParams(),
+	}
+	fromHDR.Params.Add("tag", sip.GenerateTagN(32))
 	// 创建会话
-	d.session, err = device.dialogClient.Invite(d.gb, recipient, []byte(strings.Join(sdpInfo, "\r\n")+"\r\n"), &callID, &csqHeader, &device.fromHDR, &toHeader, &maxforward, userAgentHeader, &contactHDR, subjectHeader, &contentTypeHeader)
+	d.session, err = device.dialogClient.Invite(d.gb, recipient, []byte(strings.Join(sdpInfo, "\r\n")+"\r\n"), &callID, &csqHeader, &fromHDR, &toHeader, &viaHeader, &maxforward, userAgentHeader, &contactHDR, subjectHeader, &contentTypeHeader)
 	// 最后添加Content-Length头部
 	return
 }

@@ -58,6 +58,7 @@ type GB28181ProPlugin struct {
 	forwardDialogs util.Collection[uint32, *ForwardDialog]
 	platforms      util.Collection[uint32, *Platform]
 	tcpPorts       chan uint16
+	sipPorts       []int
 }
 
 var _ = m7s.InstallPlugin[GB28181ProPlugin](pb.RegisterApiHandler, &pb.Api_ServiceDesc, func(conf config.Pull) m7s.IPuller {
@@ -97,6 +98,9 @@ func (gb *GB28181ProPlugin) OnInit() (err error) {
 		for _, addr := range gb.Sip.ListenAddr {
 			netWork, addr, _ := strings.Cut(addr, ":")
 			gb.SetDescription(netWork, strings.TrimPrefix(addr, ":"))
+			if port, err := strconv.Atoi(strings.TrimPrefix(addr, ":")); err == nil {
+				gb.sipPorts = append(gb.sipPorts, port)
+			}
 			go gb.server.ListenAndServe(gb, netWork, addr)
 		}
 		if len(gb.Sip.ListenTLSAddr) > 0 {
@@ -104,6 +108,9 @@ func (gb *GB28181ProPlugin) OnInit() (err error) {
 				for _, addr := range gb.Sip.ListenTLSAddr {
 					netWork, addr, _ := strings.Cut(addr, ":")
 					gb.SetDescription(netWork+"TLS", strings.TrimPrefix(addr, ":"))
+					if port, err := strconv.Atoi(strings.TrimPrefix(addr, ":")); err == nil {
+						gb.sipPorts = append(gb.sipPorts, port)
+					}
 					go gb.server.ListenAndServeTLS(gb, netWork, addr, tslConfig)
 				}
 			} else {
@@ -688,8 +695,22 @@ func (gb *GB28181ProPlugin) StoreDevice(deviceid string, req *sip.Request) (d *D
 	sourceIP, sourcePortStr, _ := net.SplitHostPort(source)
 	sourcePort, _ := strconv.Atoi(sourcePortStr)
 	myPort, _ := strconv.Atoi(myPortStr)
-	//_, addr, _ := strings.Cut(gb.Sip.ListenAddr[0], "::")
-	//localport, _ := strconv.Atoi(addr)
+
+	// 检查myPort是否在sipPorts中，如果不在则使用sipPorts[0]
+	if len(gb.sipPorts) > 0 {
+		portFound := false
+		for _, port := range gb.sipPorts {
+			if port == myPort {
+				portFound = true
+				break
+			}
+		}
+		if !portFound {
+			myPort = gb.sipPorts[0]
+			gb.Debug("StoreDevice", "使用默认端口替换", myPort)
+		}
+	}
+
 	now := time.Now()
 	d = &Device{
 		DeviceID:      deviceid,

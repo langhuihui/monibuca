@@ -22,7 +22,7 @@ const (
 var (
 	UnixTimeReg      = regexp.MustCompile(`^\d+$`)
 	UnixTimeRangeReg = regexp.MustCompile(`^(\d+)(~|-)(\d+)$`)
-	TimeStrRangeReg  = regexp.MustCompile(`^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})~(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})$`)
+	TimeStrRangeReg  = regexp.MustCompile(`^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z?)~(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z?)$`)
 )
 
 func TimeRangeQueryParse(query url.Values) (startTime, endTime time.Time, err error) {
@@ -99,6 +99,9 @@ func UnixTimeQueryParseRefer(query string, refer time.Time) (t time.Time, err er
 func TimeQueryParseRefer(query string, refer time.Time) (time.Time, error) {
 	if !strings.Contains(query, "T") {
 		query = refer.Format("2006-01-02") + "T" + query
+	}
+	if strings.Contains(query, "Z") {
+		return time.Parse(time.RFC3339, query)
 	}
 	return time.ParseInLocation("2006-01-02T15:04:05", query, time.Local)
 }
