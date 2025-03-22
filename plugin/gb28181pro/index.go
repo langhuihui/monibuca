@@ -574,8 +574,13 @@ func (gb *GB28181ProPlugin) OnMessage(req *sip.Request, tx sip.ServerTransaction
 
 	// 如果既不是设备也不是平台，返回404
 	if d == nil && p == nil {
+		var response *sip.Response
 		gb.Error("OnMessage", "error", "device/platform not found", "id", id)
-		response := sip.NewResponseFromRequest(req, sip.StatusNotFound, "Not Found", nil)
+		if temp.CmdType == "Keepalive" {
+			response = sip.NewResponseFromRequest(req, sip.StatusUnauthorized, "需要重新注册", nil)
+		} else {
+			response = sip.NewResponseFromRequest(req, sip.StatusNotFound, "Not Found", nil)
+		}
 		if err := tx.Respond(response); err != nil {
 			gb.Error("respond NotFound", "error", err.Error())
 		}
@@ -719,7 +724,7 @@ func (gb *GB28181ProPlugin) StoreDevice(deviceid string, req *sip.Request) (d *D
 		RegisterTime:  now,
 		KeepaliveTime: now,
 		Status:        DeviceRegisterStatus,
-		Online:        true,
+		Online:        false,
 		StreamMode:    "UDP",           // 默认UDP传输
 		Charset:       "GB2312",        // 默认GB2312字符集
 		GeoCoordSys:   "WGS84",         // 默认WGS84坐标系

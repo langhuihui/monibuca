@@ -43,6 +43,14 @@ const (
 <DeviceID>%s</DeviceID>
 </Query>
 `
+	// DeviceStatusXML 查询设备详情xml样式
+	DeviceStatusXML = `<?xml version="1.0" encoding="%s"?>
+<Query>
+<CmdType>DeviceStatus</CmdType>
+<SN>%d</SN>
+<DeviceID>%s</DeviceID>
+</Query>
+`
 	// DevicePositionXML 订阅设备位置
 	DevicePositionXML = `<?xml version="1.0"?>
 <Query>
@@ -96,6 +104,11 @@ func toGB2312(s string) []byte {
 // BuildDeviceInfoXML 获取设备详情指令
 func BuildDeviceInfoXML(sn int, id string, charset string) []byte {
 	return toGB2312(fmt.Sprintf(DeviceInfoXML, charset, sn, id))
+}
+
+// BuildDeviceStatusXML 获取设备详情指令
+func BuildDeviceStatusXML(sn int, id string, charset string) []byte {
+	return toGB2312(fmt.Sprintf(DeviceStatusXML, charset, sn, id))
 }
 
 // BuildCatalogXML 获取NVR下设备列表指令

@@ -289,6 +289,9 @@ func (p *Platform) OnMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb
 	case "DeviceInfo":
 		// 处理设备信息请求
 		return p.handleDeviceInfo(req, tx, msg)
+	case "DeviceStatus":
+		// 处理设备信息请求
+		return p.handleDeviceStatus(req, tx, msg)
 	case "PresetQuery":
 		// 处理预置位查询请求
 		return p.handlePresetQuery(req, tx, msg)
@@ -648,6 +651,155 @@ func (p *Platform) handleDeviceControl(req *sip.Request, tx sip.ServerTransactio
 	if err != nil {
 		p.Error("发送控制命令失败", "error", err.Error())
 		return fmt.Errorf("send control command failed: %v", err)
+	}
+
+	return nil
+}
+
+// handleDeviceStatus 处理设备状态查询请求
+func (p *Platform) handleDeviceStatus(req *sip.Request, tx sip.ServerTransaction, msg *gb28181.Message) error {
+	// 先回复200 OK
+	err := tx.Respond(sip.NewResponseFromRequest(req, http.StatusOK, "OK", nil))
+	if err != nil {
+		return fmt.Errorf("respond error: %v", err)
+	}
+
+	// 获取 SN 和 FromTag
+	sn := strconv.Itoa(msg.SN)
+	fromTag, _ := req.From().Params.Get("tag")
+
+	// 获取请求的设备ID
+	channelId := msg.DeviceID
+
+	// 1. 判断是否是查询平台自身信息
+	if p.PlatformModel.DeviceGBID == channelId {
+		// 如果是查询平台信息，直接返回平台状态
+		return p.sendDeviceStatusResponse(req, nil, sn, fromTag)
+	}
+
+	// 2. 查询通道和设备信息
+	type Result struct {
+		DeviceID string `gorm:"column:device_id"`
+	}
+	var result Result
+
+	if p.plugin.DB != nil {
+		// 多表联查: channel_gb28181pro -> device_gb28181pro -> devices
+		if err := p.plugin.DB.Table("channel_gb28181pro c").
+			Select("d.device_id").
+			Joins("LEFT JOIN device_gb28181pro d ON c.device_db_id = d.id").
+			Where("c.device_id = ?", channelId).
+			First(&result).Error; err != nil {
+			p.Error("查询通道和设备信息失败", "error", err.Error())
+			return fmt.Errorf("channel or device not found: %v", err)
+		}
+	}
+
+	// 3. 从devices集合中获取设备实例
+	device, ok := p.plugin.devices.Get(result.DeviceID)
+	if !ok {
+		p.Error("设备不存在或未注册", "device_id", result.DeviceID)
+		return fmt.Errorf("device not found or not registered: %v", result.DeviceID)
+	}
+
+	// 4. 发送设备状态响应
+	return p.sendDeviceStatusResponse(req, device, sn, fromTag)
+}
+
+// sendDeviceStatusResponse 发送设备状态响应
+func (p *Platform) sendDeviceStatusResponse(req *sip.Request, device *Device, sn string, fromTag string) error {
+	request := p.CreateRequest("MESSAGE")
+
+	// 设置From头部
+	fromHeader := sip.FromHeader{
+		Address: sip.Uri{
+			User: p.PlatformModel.DeviceGBID,
+			Host: p.PlatformModel.ServerGBDomain,
+		},
+		Params: sip.NewParams(),
+	}
+	fromHeader.Params.Add("tag", fromTag)
+	request.AppendHeader(&fromHeader)
+
+	// 添加To头部
+	toHeader := sip.ToHeader{
+		Address: sip.Uri{
+			User: p.PlatformModel.ServerGBID,
+			Host: p.PlatformModel.ServerGBDomain,
+		},
+	}
+	request.AppendHeader(&toHeader)
+
+	// 添加Via头部
+	viaHeader := sip.ViaHeader{
+		ProtocolName:    "SIP",
+		ProtocolVersion: "2.0",
+		Transport:       p.PlatformModel.Transport,
+		Host:            p.PlatformModel.DeviceIP,
+		Port:            p.PlatformModel.DevicePort,
+		Params:          sip.NewParams(),
+	}
+	viaHeader.Params.Add("branch", sip.GenerateBranchN(16)).Add("rport", "")
+	request.AppendHeader(&viaHeader)
+
+	// 设置Content-Type
+	contentTypeHeader := sip.ContentTypeHeader("Application/MANSCDP+xml")
+	request.AppendHeader(&contentTypeHeader)
+
+	// 获取当前时间，格式化为设备时间
+	currentTime := time.Now().Format("2006-01-02T15:04:05")
+
+	// 根据设备状态构建响应
+	var deviceID, online, status, encode, record string
+	if device == nil {
+		// 平台自身状态
+		deviceID = p.PlatformModel.DeviceGBID
+		online = "ONLINE"
+		status = "OK"
+		encode = "ON"
+		record = "OFF"
+	} else {
+		// 设备状态
+		deviceID = device.DeviceID
+		// 将布尔值转换为对应的状态字符串
+		if device.Online {
+			online = "ONLINE"
+			status = "OK"
+			encode = "ON"  // 在线时默认编码开启
+			record = "OFF" // 默认不录制
+		} else {
+			online = "OFFLINE"
+			status = "ERROR"
+			encode = "OFF" // 离线时编码关闭
+			record = "OFF" // 离线时不录制
+		}
+	}
+
+	// 构建响应XML
+	xmlContent := fmt.Sprintf(`<?xml version="1.0" encoding="GB2312" standalone="yes" ?>
+<Response>
+<CmdType>DeviceStatus</CmdType>
+<SN>%s</SN>
+<DeviceID>%s</DeviceID>
+<Result>OK</Result>
+<Online>%s</Online>
+<Status>%s</Status>
+<DeviceTime>%s</DeviceTime>
+<Encode>%s</Encode>
+<Record>%s</Record>
+<Alarmstatus Num="0"/>
+</Response>`, sn, deviceID, online, status, currentTime, encode, record)
+
+	request.SetBody([]byte(xmlContent))
+
+	// 设置传输协议
+	request.SetTransport(strings.ToUpper(p.PlatformModel.Transport))
+
+	// 发送响应
+	_, err := p.Client.Do(p.ctx, request)
+	if err != nil {
+		p.Error("发送设备状态响应失败", "error", err.Error())
+		return fmt.Errorf("send device status response failed: %v", err)
 	}
 
 	return nil

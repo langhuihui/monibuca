@@ -213,6 +213,13 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 				}
 			}
 		}
+	case "DeviceStatus":
+		d.Status = DeviceOnlineStatus
+		d.Online = true
+		if d.plugin.DB != nil {
+			d.UpdateTime = time.Now()
+			d.plugin.DB.Save(d)
+		}
 	case "DeviceInfo":
 		// 主设备信息
 		d.Name = msg.DeviceName
@@ -280,9 +287,11 @@ func (d *Device) Go() (err error) {
 	var response *sip.Response
 	response, err = d.queryDeviceInfo()
 	if err != nil {
-		d.Error("deviceInfo", "err", err)
-	} else {
-		d.Debug("deviceInfo", "response", response.String())
+		d.Error("queryDeviceInfo", "err", err)
+	}
+	response, err = d.queryDeviceStatus()
+	if err != nil {
+		d.Error("queryDeviceStatus", "err", err)
 	}
 	response, err = d.catalog()
 	if err != nil {
@@ -363,6 +372,16 @@ func (d *Device) CreateRequest(Method sip.RequestMethod, Recipient any) *sip.Req
 		Address: sip.Uri{User: d.DeviceID, Host: d.HostAddress},
 	}
 	req.AppendHeader(&toHeader)
+	viaHeader := sip.ViaHeader{
+		ProtocolName:    "SIP",
+		ProtocolVersion: "2.0",
+		Transport:       "UDP",
+		Host:            d.LocalIP,
+		Port:            d.LocalPort,
+		Params:          sip.HeaderParams(sip.NewParams()),
+	}
+	viaHeader.Params.Add("branch", sip.GenerateBranchN(10)).Add("rport", "")
+	req.AppendHeader(&viaHeader)
 	//req.AppendHeader(&d.contactHDR)
 	return req
 }
@@ -385,6 +404,12 @@ func (d *Device) subscribeCatalog() (*sip.Response, error) {
 func (d *Device) queryDeviceInfo() (*sip.Response, error) {
 	request := d.CreateRequest(sip.MESSAGE, nil)
 	request.SetBody(gb28181.BuildDeviceInfoXML(d.SN, d.DeviceID, d.Charset))
+	return d.send(request)
+}
+
+func (d *Device) queryDeviceStatus() (*sip.Response, error) {
+	request := d.CreateRequest(sip.MESSAGE, nil)
+	request.SetBody(gb28181.BuildDeviceStatusXML(d.SN, d.DeviceID, d.Charset))
 	return d.send(request)
 }
 
