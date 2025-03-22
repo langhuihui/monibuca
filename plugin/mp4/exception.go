@@ -103,7 +103,7 @@ func (p *DeleteRecordTask) deleteOldestFile() {
 			searchPattern := basePath + "%"
 			p.Info("deleteOldestFile", "searching with path pattern", searchPattern)
 
-			err := p.DB.Where(&queryRecord).Where("end_time != '1970-01-01 00:00:00'").
+			err := p.DB.Where(&queryRecord).Where("end_time IS NOT NULL").
 				Where("file_path LIKE ?", searchPattern).
 				Order("end_time ASC").Limit(1).Find(&eventRecords).Error
 			if err == nil {
@@ -113,10 +113,11 @@ func (p *DeleteRecordTask) deleteOldestFile() {
 						err = os.Remove(record.FilePath)
 						if err != nil {
 							p.Error("deleteOldestFile", "delete file from disk error", err)
-						}
-						err = p.DB.Delete(&record).Error
-						if err != nil {
-							p.Error("deleteOldestFile", "delete record from disk error", err)
+						} else {
+							err = p.DB.Delete(&record).Error
+							if err != nil {
+								p.Error("deleteOldestFile", "delete record from disk error", err)
+							}
 						}
 					}
 				}
@@ -153,7 +154,7 @@ func (t *DeleteRecordTask) Tick(any) {
 	queryRecord := m7s.RecordStream{
 		EventLevel: m7s.EventLevelLow, // 查询条件：event_level = low,非重要事件
 	}
-	err := t.DB.Where(&queryRecord).Find(&eventRecords, "end_time < ? AND end_time != '1970-01-01 00:00:00'", expireTime).Error
+	err := t.DB.Where(&queryRecord).Find(&eventRecords, "end_time < ? AND end_time IS NOT NULL", expireTime).Error
 	if err == nil {
 		for _, record := range eventRecords {
 			t.Info("RecordFileExpireDays is set to auto delete oldestfile", "ID", record.ID, "create time", record.EndTime, "filepath", record.FilePath)

@@ -49,7 +49,7 @@ type (
 	}
 	RecordStream struct {
 		ID                     uint          `gorm:"primarykey"`
-		StartTime, EndTime     time.Time     `gorm:"type:datetime;default:CURRENT_TIMESTAMP"`
+		StartTime, EndTime     time.Time     `gorm:"type:datetime;default:NULL"`
 		EventId                string        `json:"eventId" desc:"事件编号" gorm:"type:varchar(255);comment:事件编号"`
 		Mode                   RecordMode    `json:"mode" desc:"事件类型,auto=连续录像模式，event=事件录像模式" gorm:"type:varchar(255);comment:事件类型,auto=连续录像模式，event=事件录像模式;default:'auto'"`
 		EventName              string        `json:"eventName" desc:"事件名称" gorm:"type:varchar(255);comment:事件名称"`
