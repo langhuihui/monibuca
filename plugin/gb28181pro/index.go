@@ -44,7 +44,7 @@ type GB28181ProPlugin struct {
 	m7s.Plugin
 	AutoInvite     bool   `default:"true" desc:"自动邀请"`
 	Serial         string `default:"34020000002000000001" desc:"sip 服务 id"` //sip 服务器 id, 默认 34020000002000000001
-	Realm          string `default:"3402000000" desc:"sip 服务域"`             //sip 服务器域，默认 3402000000
+	Realm          string `default:"3402000000" desc:"sip 服务域"`            //sip 服务器域，默认 3402000000
 	Username       string
 	Password       string
 	Sip            SipConfig
@@ -725,7 +725,7 @@ func (gb *GB28181ProPlugin) StoreDevice(deviceid string, req *sip.Request) (d *D
 		KeepaliveTime: now,
 		Status:        DeviceRegisterStatus,
 		Online:        false,
-		StreamMode:    "UDP",           // 默认UDP传输
+		StreamMode:    "TCP-PASSIVE",   // 默认UDP传输
 		Charset:       "GB2312",        // 默认GB2312字符集
 		GeoCoordSys:   "WGS84",         // 默认WGS84坐标系
 		Transport:     req.Transport(), // 传输协议
@@ -764,7 +764,7 @@ func (gb *GB28181ProPlugin) StoreDevice(deviceid string, req *sip.Request) (d *D
 	d.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(myIP))
 	d.dialogClient = sipgo.NewDialogClientCache(d.client, d.contactHDR)
 	d.channels.L = new(sync.RWMutex)
-	d.Info("StoreDevice", "source", source, "desc", desc, "myIP", myIP, "localLanIP", localLanIP, "localWanIP", localWanIP, "recipient", req.Recipient, "myPort", myPort, "myPort", myPort)
+	d.Info("StoreDevice", "source", source, "desc", desc, "myIP", myIP, "localLanIP", localLanIP, "localWanIP", localWanIP, "recipient", req.Recipient, "myPort", myPort)
 
 	// 使用简单的 hash 函数将设备 ID 转换为 uint32
 	var hash uint32

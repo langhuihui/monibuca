@@ -162,7 +162,7 @@ func (d *Dialog) Start() (err error) {
 			"a=connection:new",
 		)
 	case "UDP":
-
+		d.Stop(errors.New("do not support udp mode"))
 	default:
 		sdpInfo = append(sdpInfo,
 			"a=setup:passive",
@@ -193,15 +193,15 @@ func (d *Dialog) Start() (err error) {
 	//customCallID := fmt.Sprintf("%s-%s-%d@%s", device.DeviceID, channelId, time.Now().Unix(), device.LocalIP)
 	customCallID := fmt.Sprintf("%s@%s", GenerateCallID(32), device.LocalIP)
 	callID := sip.CallIDHeader(customCallID)
-	viaHeader := sip.ViaHeader{
-		ProtocolName:    "SIP",
-		ProtocolVersion: "2.0",
-		Transport:       "UDP",
-		Host:            device.LocalIP,
-		Port:            device.LocalPort,
-		Params:          sip.HeaderParams(sip.NewParams()),
-	}
-	viaHeader.Params.Add("branch", sip.GenerateBranchN(10)).Add("rport", "")
+	//viaHeader := sip.ViaHeader{
+	//	ProtocolName:    "SIP",
+	//	ProtocolVersion: "2.0",
+	//	Transport:       "UDP",
+	//	Host:            device.LocalIP,
+	//	Port:            device.LocalPort,
+	//	Params:          sip.HeaderParams(sip.NewParams()),
+	//}
+	//viaHeader.Params.Add("branch", sip.GenerateBranchN(10)).Add("rport", "")
 	maxforward := sip.MaxForwardsHeader(70)
 	//contentLengthHeader := sip.ContentLengthHeader(len(strings.Join(sdpInfo, "\r\n") + "\r\n"))
 	csqHeader := sip.CSeqHeader{
@@ -226,7 +226,7 @@ func (d *Dialog) Start() (err error) {
 	}
 	fromHDR.Params.Add("tag", sip.GenerateTagN(32))
 	// 创建会话
-	d.session, err = device.dialogClient.Invite(d.gb, recipient, []byte(strings.Join(sdpInfo, "\r\n")+"\r\n"), &callID, &csqHeader, &fromHDR, &toHeader, &viaHeader, &maxforward, userAgentHeader, &contactHDR, subjectHeader, &contentTypeHeader)
+	d.session, err = device.dialogClient.Invite(d.gb, recipient, []byte(strings.Join(sdpInfo, "\r\n")+"\r\n"), &callID, &csqHeader, &fromHDR, &toHeader, &maxforward, userAgentHeader, &contactHDR, subjectHeader, &contentTypeHeader)
 	// 最后添加Content-Length头部
 	return
 }
@@ -280,7 +280,6 @@ func (d *Dialog) Run() (err error) {
 		pub.Receiver.ListenAddr = fmt.Sprintf(":%d", d.MediaPort)
 	}
 	pub.Receiver.StreamMode = d.StreamMode
-	pub.Receiver.ListenPort = d.MediaPort
 	d.AddTask(&pub.Receiver)
 	pub.Demux()
 	return

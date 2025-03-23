@@ -44,7 +44,6 @@ type Receiver struct {
 	psAudio    PSAudio
 	RTPReader  *rtp2.TCP
 	ListenAddr string
-	ListenPort uint16
 	listener   net.Listener
 	StreamMode string // 数据流传输模式（UDP:udp传输/TCP-ACTIVE：tcp主动模式/TCP-PASSIVE：tcp被动模式）
 }

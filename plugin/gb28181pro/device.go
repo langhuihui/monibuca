@@ -372,16 +372,16 @@ func (d *Device) CreateRequest(Method sip.RequestMethod, Recipient any) *sip.Req
 		Address: sip.Uri{User: d.DeviceID, Host: d.HostAddress},
 	}
 	req.AppendHeader(&toHeader)
-	viaHeader := sip.ViaHeader{
-		ProtocolName:    "SIP",
-		ProtocolVersion: "2.0",
-		Transport:       "UDP",
-		Host:            d.LocalIP,
-		Port:            d.LocalPort,
-		Params:          sip.HeaderParams(sip.NewParams()),
-	}
-	viaHeader.Params.Add("branch", sip.GenerateBranchN(10)).Add("rport", "")
-	req.AppendHeader(&viaHeader)
+	//viaHeader := sip.ViaHeader{
+	//	ProtocolName:    "SIP",
+	//	ProtocolVersion: "2.0",
+	//	Transport:       "UDP",
+	//	Host:            d.LocalIP,
+	//	Port:            d.LocalPort,
+	//	Params:          sip.HeaderParams(sip.NewParams()),
+	//}
+	//viaHeader.Params.Add("branch", sip.GenerateBranchN(10)).Add("rport", "")
+	//req.AppendHeader(&viaHeader)
 	//req.AppendHeader(&d.contactHDR)
 	return req
 }
