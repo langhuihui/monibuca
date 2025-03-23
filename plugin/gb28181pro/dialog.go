@@ -3,13 +3,14 @@ package plugin_gb28181pro
 import (
 	"errors"
 	"fmt"
-	"m7s.live/v5/pkg/util"
 	"math/rand"
 	"net"
 	"net/url"
 	"strconv"
 	"strings"
 	"time"
+
+	"m7s.live/v5/pkg/util"
 
 	sipgo "github.com/emiago/sipgo"
 	"github.com/emiago/sipgo/sip"
@@ -22,11 +23,14 @@ type Dialog struct {
 	task.Job
 	Channel *Channel
 	gb28181.InviteOptions
-	gb      *GB28181ProPlugin
-	session *sipgo.DialogClientSession
-	pullCtx m7s.PullJob
-	start   string
-	end     string
+	gb         *GB28181ProPlugin
+	session    *sipgo.DialogClientSession
+	pullCtx    m7s.PullJob
+	start      string
+	end        string
+	StreamMode string // 数据流传输模式（UDP:udp传输/TCP-ACTIVE：tcp主动模式/TCP-PASSIVE：tcp被动模式）
+	targetIP   string // 目标设备的IP地址
+	targetPort int    // 目标设备的端口
 }
 
 func (d *Dialog) GetCallID() string {
@@ -71,6 +75,7 @@ func (d *Dialog) Start() (err error) {
 		device = deviceTmp
 		if channel, ok := deviceTmp.channels.Get(channelId); ok {
 			d.Channel = channel
+			d.StreamMode = device.StreamMode
 		} else {
 			return fmt.Errorf("channel %s not found", channelId)
 		}
@@ -107,14 +112,14 @@ func (d *Dialog) Start() (err error) {
 	// 构建 SDP 内容
 	sdpInfo := []string{
 		"v=0",
-		fmt.Sprintf("o=%s 0 0 IN IP4 %s", device.DeviceID, sdpIP),
+		fmt.Sprintf("o=%s 0 0 IN IP4 %s", channelId, sdpIP),
 		fmt.Sprintf("s=%s", util.Conditional(d.IsLive(), "Play", "Playback")), // 根据是否有时间参数决定
 	}
 
 	// 非直播模式下添加u行，保持在s=和c=之间
-	if !d.IsLive() {
-		sdpInfo = append(sdpInfo, fmt.Sprintf("u=%s:0", channelId))
-	}
+	//if !d.IsLive() {
+	sdpInfo = append(sdpInfo, fmt.Sprintf("u=%s:0", channelId))
+	//}
 
 	// 添加c行
 	sdpInfo = append(sdpInfo, "c=IN IP4 "+sdpIP)
@@ -132,27 +137,17 @@ func (d *Dialog) Start() (err error) {
 
 	// 添加媒体行和相关属性
 	var mediaLine string
-	//switch strings.ToUpper(device.StreamMode) {
-	//case "TCP-PASSIVE", "TCP-ACTIVE":
-	mediaLine = fmt.Sprintf("m=video %d TCP/RTP/AVP 96 97 98 99", d.MediaPort)
-	//case "UDP":
-	//	mediaLine = fmt.Sprintf("m=video %d TCP/RTP/AVP 96", d.MediaPort)
-	//default:
-	//	mediaLine = fmt.Sprintf("m=video %d RTP/AVP 96 126 125 99 34 98 97", d.MediaPort)
-	//}
+	switch strings.ToUpper(device.StreamMode) {
+	case "TCP-PASSIVE", "TCP-ACTIVE":
+		mediaLine = fmt.Sprintf("m=video %d TCP/RTP/AVP 96", d.MediaPort)
+	case "UDP":
+		mediaLine = fmt.Sprintf("m=video %d RTP/AVP 96", d.MediaPort)
+	default:
+		mediaLine = fmt.Sprintf("m=video %d TCP/RTP/AVP 96", d.MediaPort)
+	}
 
 	sdpInfo = append(sdpInfo, mediaLine)
-	sdpInfo = append(sdpInfo,
-		"a=recvonly",
-		"a=rtpmap:96 PS/90000",
-		//"a=fmtp:126 profile-level-id=42e01e",
-		//"a=rtpmap:126 H264/90000",
-		//"a=rtpmap:125 H264S/90000",
-		//"a=fmtp:125 profile-level-id=42e01e",
-		"a=rtpmap:98 H264/90000",
-		"a=rtpmap:97 MPEG4/90000",
-		"a=rtpmap:99 H265/90000",
-	)
+	sdpInfo = append(sdpInfo, "a=recvonly")
 
 	//根据传输模式添加 setup 和 connection 属性
 	switch strings.ToUpper(device.StreamMode) {
@@ -166,12 +161,15 @@ func (d *Dialog) Start() (err error) {
 			"a=setup:active",
 			"a=connection:new",
 		)
+	case "UDP":
+
 	default:
 		sdpInfo = append(sdpInfo,
 			"a=setup:passive",
 			"a=connection:new",
 		)
 	}
+	sdpInfo = append(sdpInfo, "a=rtpmap:96 PS/90000")
 
 	// 添加 SSRC
 	sdpInfo = append(sdpInfo, fmt.Sprintf("y=%s", ssrc))
@@ -190,8 +188,7 @@ func (d *Dialog) Start() (err error) {
 	toHeader := sip.ToHeader{
 		Address: sip.Uri{User: channelId, Host: device.HostAddress},
 	}
-	//userAgentHeader := sip.NewHeader("User-Agent", "M7S/"+m7s.Version)
-	userAgentHeader := sip.NewHeader("User-Agent", "WVP-Pro v2.7.3.20241218")
+	userAgentHeader := sip.NewHeader("User-Agent", "M7S/"+m7s.Version)
 
 	//customCallID := fmt.Sprintf("%s-%s-%d@%s", device.DeviceID, channelId, time.Now().Unix(), device.LocalIP)
 	customCallID := fmt.Sprintf("%s@%s", GenerateCallID(32), device.LocalIP)
@@ -246,21 +243,28 @@ func (d *Dialog) Run() (err error) {
 	ds := strings.Split(inviteResponseBody, "\r\n")
 	for _, l := range ds {
 		if ls := strings.Split(l, "="); len(ls) > 1 {
-			if ls[0] == "y" && len(ls[1]) > 0 {
-				if _ssrc, err := strconv.ParseInt(ls[1], 10, 0); err == nil {
-					d.SSRC = uint32(_ssrc)
-				} else {
-					d.gb.Error("read invite response y ", "err", err)
+			switch ls[0] {
+			case "y":
+				if len(ls[1]) > 0 {
+					if _ssrc, err := strconv.ParseInt(ls[1], 10, 0); err == nil {
+						d.SSRC = uint32(_ssrc)
+					} else {
+						d.gb.Error("read invite response y ", "err", err)
+					}
 				}
-				//	break
-			}
-			if ls[0] == "m" && len(ls[1]) > 0 {
-				netinfo := strings.Split(ls[1], " ")
-				if strings.ToUpper(netinfo[2]) == "TCP/RTP/AVP" {
-					d.gb.Debug("device support tcp")
-				} else {
-					d.gb.Error("device not support tcp")
-					return
+			case "c":
+				// 解析 c=IN IP4 xxx.xxx.xxx.xxx 格式
+				parts := strings.Split(ls[1], " ")
+				if len(parts) >= 3 {
+					d.targetIP = parts[len(parts)-1]
+				}
+			case "m":
+				// 解析 m=video port xxx 格式
+				parts := strings.Split(ls[1], " ")
+				if len(parts) >= 2 {
+					if port, err := strconv.Atoi(parts[1]); err == nil {
+						d.targetPort = port
+					}
 				}
 			}
 		}
@@ -270,7 +274,12 @@ func (d *Dialog) Run() (err error) {
 		d.gb.Error("ack session err", err)
 	}
 	pub := gb28181.NewPSPublisher(d.pullCtx.Publisher)
-	pub.Receiver.ListenAddr = fmt.Sprintf(":%d", d.MediaPort)
+	if d.StreamMode == "TCP-ACTIVE" {
+		pub.Receiver.ListenAddr = fmt.Sprintf("%s:%d", d.targetIP, d.targetPort)
+	} else {
+		pub.Receiver.ListenAddr = fmt.Sprintf(":%d", d.MediaPort)
+	}
+	pub.Receiver.StreamMode = d.StreamMode
 	pub.Receiver.ListenPort = d.MediaPort
 	d.AddTask(&pub.Receiver)
 	pub.Demux()
