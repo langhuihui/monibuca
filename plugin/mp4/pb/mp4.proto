@@ -36,6 +36,12 @@ service api {
       body: "*"
     };
   }
+  rpc StopRecord (ReqStopRecord) returns (ResponseStopRecord) {
+    option (google.api.http) = {
+      post: "/mp4/api/stop/{streamPath=**}"
+      body: "*"
+    };
+  }
 }
 
 message ReqRecordList {
@@ -82,6 +88,16 @@ message ReqStartRecord {
 }
 
 message ResponseStartRecord {
+  int32 code = 1;
+  string message = 2;
+  uint64 data = 3;
+}
+
+message ReqStopRecord {
+  string streamPath = 1;
+}
+
+message ResponseStopRecord {
   int32 code = 1;
   string message = 2;
   uint64 data = 3;

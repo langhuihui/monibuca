@@ -18,6 +18,7 @@ import (
 	"m7s.live/v5/pb"
 	"m7s.live/v5/pkg"
 	"m7s.live/v5/pkg/config"
+	"m7s.live/v5/pkg/task"
 	"m7s.live/v5/pkg/util"
 	mp4pb "m7s.live/v5/plugin/mp4/pb"
 	mp4 "m7s.live/v5/plugin/mp4/pkg"
@@ -351,6 +352,14 @@ func (p *MP4Plugin) download(w http.ResponseWriter, r *http.Request) {
 
 func (p *MP4Plugin) StartRecord(ctx context.Context, req *mp4pb.ReqStartRecord) (res *mp4pb.ResponseStartRecord, err error) {
 	var recordExists bool
+	var filePath = "."
+	var fragment = time.Minute
+	if req.Fragment != nil {
+		fragment = req.Fragment.AsDuration()
+	}
+	if req.FilePath != "" {
+		filePath = req.FilePath
+	}
 	res = &mp4pb.ResponseStartRecord{}
 	p.Server.Records.Call(func() error {
 		_, recordExists = p.Server.Records.Find(func(job *m7s.RecordJob) bool {
@@ -366,11 +375,32 @@ func (p *MP4Plugin) StartRecord(ctx context.Context, req *mp4pb.ReqStartRecord) 
 		if stream, ok := p.Server.Streams.Get(req.StreamPath); ok {
 			recordConf := config.Record{
 				Append:   false,
-				Fragment: req.Fragment.AsDuration(),
-				FilePath: req.FilePath,
+				Fragment: fragment,
+				FilePath: filePath,
 			}
 			job := p.Record(stream, recordConf, nil)
 			res.Data = uint64(uintptr(unsafe.Pointer(job.GetTask())))
+		} else {
+			err = pkg.ErrNotFound
+		}
+		return nil
+	})
+	return
+}
+
+func (p *MP4Plugin) StopRecord(ctx context.Context, req *mp4pb.ReqStopRecord) (res *mp4pb.ResponseStopRecord, err error) {
+	res = &mp4pb.ResponseStopRecord{}
+	var recordJob *m7s.RecordJob
+	p.Server.Records.Call(func() error {
+		recordJob, _ = p.Server.Records.Find(func(job *m7s.RecordJob) bool {
+			return job.StreamPath == req.StreamPath
+		})
+		if recordJob != nil {
+			t := recordJob.GetTask()
+			if t != nil {
+				res.Data = uint64(uintptr(unsafe.Pointer(t)))
+				t.Stop(task.ErrStopByUser)
+			}
 		}
 		return nil
 	})
