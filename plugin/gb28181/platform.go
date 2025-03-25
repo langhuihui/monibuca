@@ -14,7 +14,7 @@ import (
 	"github.com/emiago/sipgo/sip"
 	"github.com/icholy/digest"
 	"m7s.live/v5/pkg/task"
-	gb28181 "m7s.live/v5/plugin/gb28181pro/pkg"
+	gb28181 "m7s.live/v5/plugin/gb28181/pkg"
 )
 
 // Platform 表示GB28181平台的运行时实例
@@ -37,11 +37,11 @@ type Platform struct {
 
 	eventChan chan any
 	// 插件配置
-	plugin *GB28181ProPlugin
+	plugin *GB28181Plugin
 	ctx    context.Context
 }
 
-func NewPlatform(pm *gb28181.PlatformModel, plugin *GB28181ProPlugin) *Platform {
+func NewPlatform(pm *gb28181.PlatformModel, plugin *GB28181Plugin) *Platform {
 	p := &Platform{
 		PlatformModel: pm,
 		plugin:        plugin,

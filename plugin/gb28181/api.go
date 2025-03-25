@@ -1,23 +1,91 @@
-package plugin_gb28181
+package plugin_gb28181pro
 
 import (
 	"context"
+	"fmt"
 	"net/http"
+	"os"
+	"sort"
+	"strconv"
 	"strings"
+	"sync"
+	"time"
 
-	"google.golang.org/protobuf/types/known/emptypb"
+	"net/url"
+
+	"github.com/emiago/sipgo"
+	"github.com/emiago/sipgo/sip"
+	"github.com/rs/zerolog"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"m7s.live/v5/pkg/config"
+	"m7s.live/v5/pkg/util"
 	"m7s.live/v5/plugin/gb28181/pb"
 	gb28181 "m7s.live/v5/plugin/gb28181/pkg"
 )
 
-func (gb *GB28181Plugin) List(context.Context, *emptypb.Empty) (ret *pb.ResponseList, err error) {
-	ret = &pb.ResponseList{}
-	for d := range gb.devices.Range {
-		var channels []*pb.Channel
-		for c := range d.channels.Range {
-			channels = append(channels, &pb.Channel{
+func (gb *GB28181Plugin) List(ctx context.Context, req *pb.GetDevicesRequest) (*pb.DevicesPageInfo, error) {
+	resp := &pb.DevicesPageInfo{}
+
+	if gb.DB == nil {
+		resp.Code = 500
+		resp.Message = "数据库未初始化"
+		return resp, nil
+	}
+
+	var devices []Device
+	var total int64
+
+	// 构建查询条件
+	query := gb.DB.Model(&Device{})
+	if req.Query != "" {
+		query = query.Where("device_id LIKE ? OR name LIKE ?",
+			"%"+req.Query+"%", "%"+req.Query+"%")
+	}
+	if req.Status {
+		query = query.Where("online = ?", true)
+	}
+
+	// 获取总数
+	if err := query.Count(&total).Error; err != nil {
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("查询总数失败: %v", err)
+		return resp, nil
+	}
+
+	// 查询设备列表
+	// 当Page和Count都为0时，不做分页，返回所有数据
+	if req.Page == 0 && req.Count == 0 {
+		// 不分页，查询所有数据
+		if err := query.Find(&devices).Error; err != nil {
+			resp.Code = 500
+			resp.Message = fmt.Sprintf("查询设备列表失败: %v", err)
+			return resp, nil
+		}
+	} else {
+		// 分页查询设备列表
+		if err := query.
+			Offset(int(req.Page-1) * int(req.Count)).
+			Limit(int(req.Count)).
+			Find(&devices).Error; err != nil {
+			resp.Code = 500
+			resp.Message = fmt.Sprintf("查询设备列表失败: %v", err)
+			return resp, nil
+		}
+	}
+
+	// 转换为proto消息
+	var pbDevices []*pb.Device
+	for _, d := range devices {
+		// 查询设备对应的通道
+		var channels []gb28181.DeviceChannel
+		if err := gb.DB.Where(&gb28181.DeviceChannel{DeviceDBID: d.ID}).Find(&channels).Error; err != nil {
+			gb.Error("查询通道失败", "error", err)
+			continue
+		}
+
+		var pbChannels []*pb.Channel
+		for _, c := range channels {
+			pbChannels = append(pbChannels, &pb.Channel{
 				DeviceID:     c.DeviceID,
 				ParentID:     c.ParentID,
 				Name:         c.Name,
@@ -32,27 +100,35 @@ func (gb *GB28181Plugin) List(context.Context, *emptypb.Empty) (ret *pb.Response
 				RegisterWay:  int32(c.RegisterWay),
 				Secrecy:      int32(c.Secrecy),
 				Status:       string(c.Status),
-				Longitude:    c.Longitude,
-				Latitude:     c.Latitude,
-				GpsTime:      timestamppb.New(c.GpsTime),
+				Longitude:    fmt.Sprintf("%f", c.GbLongitude),
+				Latitude:     fmt.Sprintf("%f", c.GbLatitude),
+				GpsTime:      timestamppb.New(time.Now()),
 			})
 		}
-		ret.Data = append(ret.Data, &pb.Device{
-			Id:           d.ID,
-			Name:         d.Name,
-			Manufacturer: d.Manufacturer,
-			Model:        d.Model,
-			Owner:        d.Owner,
-			Status:       string(d.Status),
-			Longitude:    d.Longitude,
-			Latitude:     d.Latitude,
-			GpsTime:      timestamppb.New(d.GpsTime),
-			RegisterTime: timestamppb.New(d.StartTime),
-			UpdateTime:   timestamppb.New(d.UpdateTime),
-			Channels:     channels,
+
+		pbDevices = append(pbDevices, &pb.Device{
+			DeviceID:      d.DeviceID,
+			Name:          d.Name,
+			Manufacturer:  d.Manufacturer,
+			Model:         d.Model,
+			Status:        string(d.Status),
+			Online:        d.Online,
+			Longitude:     d.Longitude,
+			Latitude:      d.Latitude,
+			RegisterTime:  timestamppb.New(d.RegisterTime),
+			UpdateTime:    timestamppb.New(d.UpdateTime),
+			KeepAliveTime: timestamppb.New(d.KeepaliveTime),
+			ChannelCount:  int32(d.ChannelCount),
+			Channels:      pbChannels,
 		})
 	}
-	return
+
+	resp.Code = 0
+	resp.Message = "success"
+	resp.Total = int32(total)
+	resp.Data = pbDevices
+
+	return resp, nil
 }
 
 func (gb *GB28181Plugin) api_ps_replay(w http.ResponseWriter, r *http.Request) {
@@ -72,4 +148,1715 @@ func (gb *GB28181Plugin) api_ps_replay(w http.ResponseWriter, r *http.Request) {
 	puller.GetPullJob().Init(&puller, &gb.Plugin, streamPath, config.Pull{
 		URL: dump,
 	}, nil)
+}
+
+// GetDevice 实现获取单个设备信息
+func (gb *GB28181Plugin) GetDevice(ctx context.Context, req *pb.GetDeviceRequest) (*pb.DeviceResponse, error) {
+	resp := &pb.DeviceResponse{}
+
+	// 先从内存中获取
+	d, ok := gb.devices.Get(req.DeviceId)
+	if !ok && gb.DB != nil {
+		// 如果内存中没有且数据库存在，则从数据库查询
+		var device Device
+		if err := gb.DB.Where("id = ?", req.DeviceId).First(&device).Error; err == nil {
+			d = &device
+		}
+	}
+
+	if d != nil {
+		var channels []*pb.Channel
+		for c := range d.channels.Range {
+			channels = append(channels, &pb.Channel{
+				DeviceID:     c.DeviceID,
+				ParentID:     c.ParentID,
+				Name:         c.Name,
+				Manufacturer: c.Manufacturer,
+				Model:        c.Model,
+				Owner:        c.Owner,
+				CivilCode:    c.CivilCode,
+				Address:      c.Address,
+				Port:         int32(c.Port),
+				Parental:     int32(c.Parental),
+				SafetyWay:    int32(c.SafetyWay),
+				RegisterWay:  int32(c.RegisterWay),
+				Secrecy:      int32(c.Secrecy),
+				Status:       string(c.Status),
+				Longitude:    fmt.Sprintf("%f", c.GbLongitude),
+				Latitude:     fmt.Sprintf("%f", c.GbLatitude),
+				GpsTime:      timestamppb.New(time.Now()),
+			})
+		}
+		resp.Data = &pb.Device{
+			DeviceID:     d.DeviceID,
+			Name:         d.Name,
+			Manufacturer: d.Manufacturer,
+			Model:        d.Model,
+			Status:       string(d.Status),
+			Online:       d.Online,
+			Longitude:    d.Longitude,
+			Latitude:     d.Latitude,
+			RegisterTime: timestamppb.New(d.RegisterTime),
+			UpdateTime:   timestamppb.New(d.UpdateTime),
+			Channels:     channels,
+		}
+		resp.Code = 0
+		resp.Message = "success"
+	} else {
+		resp.Code = 404
+		resp.Message = "device not found"
+	}
+	return resp, nil
+}
+
+// GetDevices 实现分页查询设备列表
+func (gb *GB28181Plugin) GetDevices(ctx context.Context, req *pb.GetDevicesRequest) (*pb.DevicesPageInfo, error) {
+	resp := &pb.DevicesPageInfo{}
+
+	if gb.DB == nil {
+		resp.Code = 500
+		resp.Message = "数据库未初始化"
+		return resp, nil
+	}
+
+	var devices []Device
+	var total int64
+
+	// 构建查询条件
+	query := gb.DB.Model(&Device{})
+	if req.Query != "" {
+		query = query.Where("device_id LIKE ? OR name LIKE ?",
+			"%"+req.Query+"%", "%"+req.Query+"%")
+	}
+	if req.Status {
+		query = query.Where("online = ?", true)
+	}
+
+	// 获取总数
+	if err := query.Count(&total).Error; err != nil {
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("查询总数失败: %v", err)
+		return resp, nil
+	}
+
+	// 查询设备列表
+	// 当Page和Count都为0时，不做分页，返回所有数据
+	if req.Page == 0 && req.Count == 0 {
+		// 不分页，查询所有数据
+		if err := query.Find(&devices).Error; err != nil {
+			resp.Code = 500
+			resp.Message = fmt.Sprintf("查询设备列表失败: %v", err)
+			return resp, nil
+		}
+	} else {
+		// 分页查询设备，并预加载通道数据
+		if err := query.
+			Offset(int(req.Page-1) * int(req.Count)).
+			Limit(int(req.Count)).
+			Find(&devices).Error; err != nil {
+			resp.Code = 500
+			resp.Message = fmt.Sprintf("查询设备列表失败: %v", err)
+			return resp, nil
+		}
+	}
+
+	// 转换为proto消息
+	var pbDevices []*pb.Device
+	for _, d := range devices {
+		// 查询设备对应的通道
+		var channels []gb28181.DeviceChannel
+		if err := gb.DB.Where(&gb28181.DeviceChannel{DeviceDBID: d.ID}).Find(&channels).Error; err != nil {
+			gb.Error("查询通道失败", "error", err)
+			continue
+		}
+
+		var pbChannels []*pb.Channel
+		for _, c := range channels {
+			pbChannels = append(pbChannels, &pb.Channel{
+				DeviceID:     c.DeviceID,
+				ParentID:     c.ParentID,
+				Name:         c.Name,
+				Manufacturer: c.Manufacturer,
+				Model:        c.Model,
+				Owner:        c.Owner,
+				CivilCode:    c.CivilCode,
+				Address:      c.Address,
+				Port:         int32(c.Port),
+				Parental:     int32(c.Parental),
+				SafetyWay:    int32(c.SafetyWay),
+				RegisterWay:  int32(c.RegisterWay),
+				Secrecy:      int32(c.Secrecy),
+				Status:       string(c.Status),
+				Longitude:    fmt.Sprintf("%f", c.GbLongitude),
+				Latitude:     fmt.Sprintf("%f", c.GbLatitude),
+				GpsTime:      timestamppb.New(time.Now()),
+			})
+		}
+
+		pbDevice := &pb.Device{
+			DeviceID:      d.DeviceID,
+			Name:          d.Name,
+			Manufacturer:  d.Manufacturer,
+			Model:         d.Model,
+			Status:        string(d.Status),
+			Online:        d.Online,
+			Longitude:     d.Longitude,
+			Latitude:      d.Latitude,
+			RegisterTime:  timestamppb.New(d.RegisterTime),
+			UpdateTime:    timestamppb.New(d.UpdateTime),
+			KeepAliveTime: timestamppb.New(d.KeepaliveTime),
+			Channels:      pbChannels,
+		}
+		pbDevices = append(pbDevices, pbDevice)
+	}
+
+	resp.Total = int32(total)
+	resp.Data = pbDevices
+	resp.Code = 0
+	resp.Message = "success"
+	return resp, nil
+}
+
+// GetChannels 实现分页查询通道
+func (gb *GB28181Plugin) GetChannels(ctx context.Context, req *pb.GetChannelsRequest) (*pb.ChannelsPageInfo, error) {
+	resp := &pb.ChannelsPageInfo{}
+
+	// 先从内存中获取
+	d, ok := gb.devices.Get(req.DeviceId)
+	if !ok && gb.DB != nil {
+		// 如果内存中没有且数据库存在，则从数据库查询
+		var device Device
+		if err := gb.DB.Where(Device{DeviceID: req.DeviceId}).First(&device).Error; err == nil {
+			d = &device
+		}
+	}
+
+	if d != nil {
+		var channels []*pb.Channel
+		total := 0
+		for c := range d.channels.Range {
+			// TODO: 实现查询条件过滤
+			if req.Query != "" && !strings.Contains(c.DeviceID, req.Query) && !strings.Contains(c.Name, req.Query) {
+				continue
+			}
+			if req.Online && string(c.Status) != "ON" {
+				continue
+			}
+			if req.ChannelType && c.ParentID == "" {
+				continue
+			}
+			total++
+
+			// 当Page和Count都为0时，不做分页，返回所有数据
+			if req.Page == 0 && req.Count == 0 {
+				// 不分页，添加所有符合条件的通道
+				channels = append(channels, &pb.Channel{
+					DeviceID:     c.DeviceID,
+					ParentID:     c.ParentID,
+					Name:         c.Name,
+					Manufacturer: c.Manufacturer,
+					Model:        c.Model,
+					Owner:        c.Owner,
+					CivilCode:    c.CivilCode,
+					Address:      c.Address,
+					Port:         int32(c.Port),
+					Parental:     int32(c.Parental),
+					SafetyWay:    int32(c.SafetyWay),
+					RegisterWay:  int32(c.RegisterWay),
+					Secrecy:      int32(c.Secrecy),
+					Status:       string(c.Status),
+					Longitude:    fmt.Sprintf("%f", c.GbLongitude),
+					Latitude:     fmt.Sprintf("%f", c.GbLatitude),
+					GpsTime:      timestamppb.New(time.Now()),
+				})
+			} else {
+				// 分页处理
+				if total > int(req.Page*req.Count) {
+					continue
+				}
+				if total <= int((req.Page-1)*req.Count) {
+					continue
+				}
+				channels = append(channels, &pb.Channel{
+					DeviceID:     c.DeviceID,
+					ParentID:     c.ParentID,
+					Name:         c.Name,
+					Manufacturer: c.Manufacturer,
+					Model:        c.Model,
+					Owner:        c.Owner,
+					CivilCode:    c.CivilCode,
+					Address:      c.Address,
+					Port:         int32(c.Port),
+					Parental:     int32(c.Parental),
+					SafetyWay:    int32(c.SafetyWay),
+					RegisterWay:  int32(c.RegisterWay),
+					Secrecy:      int32(c.Secrecy),
+					Status:       string(c.Status),
+					Longitude:    fmt.Sprintf("%f", c.GbLongitude),
+					Latitude:     fmt.Sprintf("%f", c.GbLatitude),
+					GpsTime:      timestamppb.New(time.Now()),
+				})
+			}
+		}
+		resp.Total = int32(total)
+		resp.List = channels
+		resp.Code = 0
+		resp.Message = "success"
+	} else {
+		resp.Code = 404
+		resp.Message = "device not found"
+	}
+	return resp, nil
+}
+
+// SyncDevice 实现同步设备通道信息
+func (gb *GB28181Plugin) SyncDevice(ctx context.Context, req *pb.SyncDeviceRequest) (*pb.SyncStatus, error) {
+	resp := &pb.SyncStatus{
+		Code:    404,
+		Message: "device not found",
+	}
+
+	// 先从内存中获取设备
+	d, ok := gb.devices.Get(req.DeviceId)
+	if !ok && gb.DB != nil {
+		// 如果内存中没有且数据库存在，则从数据库查询
+		var device Device
+		if err := gb.DB.Where("id = ?", req.DeviceId).First(&device).Error; err == nil {
+			d = &device
+			// 恢复设备的必要字段
+			d.Logger = gb.With("id", req.DeviceId)
+			d.channels.L = new(sync.RWMutex)
+			d.plugin = gb
+
+			// 初始化 Task
+			var hash uint32
+			for i := 0; i < len(d.DeviceID); i++ {
+				ch := d.DeviceID[i]
+				hash = hash*31 + uint32(ch)
+			}
+			d.Task.ID = hash
+			d.Task.Logger = d.Logger
+			d.Task.Context, d.Task.CancelCauseFunc = context.WithCancelCause(context.Background())
+
+			// 初始化 SIP 相关字段
+			d.fromHDR = sip.FromHeader{
+				Address: sip.Uri{
+					User: gb.Serial,
+					Host: gb.Realm,
+				},
+				Params: sip.NewParams(),
+			}
+			d.fromHDR.Params.Add("tag", sip.GenerateTagN(16))
+
+			d.contactHDR = sip.ContactHeader{
+				Address: sip.Uri{
+					User: gb.Serial,
+					Host: d.LocalIP,
+					Port: d.Port,
+				},
+			}
+
+			d.Recipient = sip.Uri{
+				Host: d.IP,
+				Port: d.Port,
+				User: d.DeviceID,
+			}
+
+			// 初始化 SIP 客户端
+			d.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(d.LocalIP))
+			if d.client != nil {
+				d.dialogClient = sipgo.NewDialogClientCache(d.client, d.contactHDR)
+			} else {
+				return resp, fmt.Errorf("failed to create sip client")
+			}
+
+			// 将设备添加到内存中
+			gb.devices.Add(d)
+		}
+	}
+
+	if d != nil {
+		// 发送目录查询请求
+		_, err := d.catalog()
+		if err != nil {
+			resp.Code = 500
+			resp.Message = "catalog request failed"
+			resp.ErrorMsg = err.Error()
+		} else {
+			resp.Code = 0
+			resp.Message = "sync request sent"
+			resp.Total = int32(d.ChannelCount)
+			resp.Current = 0 // 初始化进度为0
+		}
+	}
+
+	return resp, nil
+}
+
+// AddPlatform 实现添加平台信息
+func (gb *GB28181Plugin) AddPlatform(ctx context.Context, req *pb.Platform) (*pb.BaseResponse, error) {
+	resp := &pb.BaseResponse{}
+
+	if gb.DB == nil {
+		resp.Code = 500
+		resp.Message = "database not initialized"
+		return resp, nil
+	}
+
+	// 必填字段校验
+	if req.Name == "" {
+		resp.Code = 400
+		resp.Message = "平台名称不可为空"
+		return resp, nil
+	}
+	if req.ServerGBId == "" {
+		resp.Code = 400
+		resp.Message = "上级平台国标编号不可为空"
+		return resp, nil
+	}
+	if req.ServerIp == "" {
+		resp.Code = 400
+		resp.Message = "上级平台IP不可为空"
+		return resp, nil
+	}
+	if req.ServerPort <= 0 || req.ServerPort > 65535 {
+		resp.Code = 400
+		resp.Message = "上级平台端口异常"
+		return resp, nil
+	}
+	if req.DeviceGBId == "" {
+		resp.Code = 400
+		resp.Message = "本平台国标编号不可为空"
+		return resp, nil
+	}
+
+	// 检查平台是否已存在
+	var existingPlatform gb28181.PlatformModel
+	if err := gb.DB.Where("server_gb_id = ?", req.ServerGBId).First(&existingPlatform).Error; err == nil {
+		resp.Code = 400
+		resp.Message = fmt.Sprintf("平台 %s 已存在", req.ServerGBId)
+		return resp, nil
+	}
+
+	// 设置默认值
+	if req.ServerGBDomain == "" {
+		req.ServerGBDomain = req.ServerGBId[:6] // 取前6位作为域
+	}
+	if req.Expires <= 0 {
+		req.Expires = 3600 // 默认3600秒
+	}
+	if req.KeepTimeout <= 0 {
+		req.KeepTimeout = 60 // 默认60秒
+	}
+	if req.Transport == "" {
+		req.Transport = "UDP" // 默认UDP
+	}
+	if req.CharacterSet == "" {
+		req.CharacterSet = "GB2312" // 默认GB2312
+	}
+
+	// 设置创建时间和更新时间
+	currentTime := time.Now().Format("2006-01-02 15:04:05")
+	req.CreateTime = currentTime
+	req.UpdateTime = currentTime
+
+	// 将proto消息转换为数据库模型
+	platformModel := &gb28181.PlatformModel{
+		Enable:                  &req.Enable,
+		Name:                    req.Name,
+		ServerGBID:              req.ServerGBId,
+		ServerGBDomain:          req.ServerGBDomain,
+		ServerIP:                req.ServerIp,
+		ServerPort:              int(req.ServerPort),
+		DeviceGBID:              req.DeviceGBId,
+		DeviceIP:                req.DeviceIp,
+		DevicePort:              int(req.DevicePort),
+		Username:                req.Username,
+		Password:                req.Password,
+		Expires:                 int(req.Expires),
+		KeepTimeout:             int(req.KeepTimeout),
+		Transport:               req.Transport,
+		CharacterSet:            req.CharacterSet,
+		PTZ:                     req.Ptz,
+		RTCP:                    req.Rtcp,
+		Status:                  req.Status,
+		ChannelCount:            int(req.ChannelCount),
+		CatalogSubscribe:        req.CatalogSubscribe,
+		AlarmSubscribe:          req.AlarmSubscribe,
+		MobilePositionSubscribe: req.MobilePositionSubscribe,
+		CatalogGroup:            int(req.CatalogGroup),
+		UpdateTime:              req.UpdateTime,
+		CreateTime:              req.CreateTime,
+		AsMessageChannel:        req.AsMessageChannel,
+		SendStreamIP:            req.SendStreamIp,
+		AutoPushChannel:         req.AutoPushChannel,
+		CatalogWithPlatform:     int(req.CatalogWithPlatform),
+		CatalogWithGroup:        int(req.CatalogWithGroup),
+		CatalogWithRegion:       int(req.CatalogWithRegion),
+		CivilCode:               req.CivilCode,
+		Manufacturer:            req.Manufacturer,
+		Model:                   req.Model,
+		Address:                 req.Address,
+		RegisterWay:             int(req.RegisterWay),
+		Secrecy:                 int(req.Secrecy),
+	}
+
+	// 保存到数据库
+	if err := gb.DB.Create(platformModel).Error; err != nil {
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("failed to create platform: %v", err)
+		return resp, nil
+	}
+
+	// 如果平台启用，则创建Platform实例并启动任务
+	if *platformModel.Enable {
+		// 创建Platform实例
+		platform := NewPlatform(platformModel, gb)
+		// 添加到任务系统
+		gb.AddTask(platform)
+	}
+
+	resp.Code = 0
+	resp.Message = "success"
+	return resp, nil
+}
+
+// GetPlatform 实现获取平台信息
+func (gb *GB28181Plugin) GetPlatform(ctx context.Context, req *pb.GetPlatformRequest) (*pb.PlatformResponse, error) {
+	resp := &pb.PlatformResponse{}
+
+	if gb.DB == nil {
+		resp.Code = 500
+		resp.Message = "database not initialized"
+		return resp, nil
+	}
+
+	var platform gb28181.PlatformModel
+	if err := gb.DB.First(&platform, req.Id).Error; err != nil {
+		resp.Code = 404
+		resp.Message = "platform not found"
+		return resp, nil
+	}
+
+	// 将数据库模型转换为proto消息
+	resp.Data = &pb.Platform{
+		ID:                      platform.ID,
+		Enable:                  *platform.Enable,
+		Name:                    platform.Name,
+		ServerGBId:              platform.ServerGBID,
+		ServerGBDomain:          platform.ServerGBDomain,
+		ServerIp:                platform.ServerIP,
+		ServerPort:              int32(platform.ServerPort),
+		DeviceGBId:              platform.DeviceGBID,
+		DeviceIp:                platform.DeviceIP,
+		DevicePort:              int32(platform.DevicePort),
+		Username:                platform.Username,
+		Password:                platform.Password,
+		Expires:                 int32(platform.Expires),
+		KeepTimeout:             int32(platform.KeepTimeout),
+		Transport:               platform.Transport,
+		CharacterSet:            platform.CharacterSet,
+		Ptz:                     platform.PTZ,
+		Rtcp:                    platform.RTCP,
+		Status:                  platform.Status,
+		ChannelCount:            int32(platform.ChannelCount),
+		CatalogSubscribe:        platform.CatalogSubscribe,
+		AlarmSubscribe:          platform.AlarmSubscribe,
+		MobilePositionSubscribe: platform.MobilePositionSubscribe,
+		CatalogGroup:            int32(platform.CatalogGroup),
+		UpdateTime:              platform.UpdateTime,
+		CreateTime:              platform.CreateTime,
+		AsMessageChannel:        platform.AsMessageChannel,
+		SendStreamIp:            platform.SendStreamIP,
+		AutoPushChannel:         platform.AutoPushChannel,
+		CatalogWithPlatform:     int32(platform.CatalogWithPlatform),
+		CatalogWithGroup:        int32(platform.CatalogWithGroup),
+		CatalogWithRegion:       int32(platform.CatalogWithRegion),
+		CivilCode:               platform.CivilCode,
+		Manufacturer:            platform.Manufacturer,
+		Model:                   platform.Model,
+		Address:                 platform.Address,
+		RegisterWay:             int32(platform.RegisterWay),
+		Secrecy:                 int32(platform.Secrecy),
+	}
+
+	resp.Code = 0
+	resp.Message = "success"
+	return resp, nil
+}
+
+// UpdatePlatform 实现更新平台信息
+func (gb *GB28181Plugin) UpdatePlatform(ctx context.Context, req *pb.Platform) (*pb.BaseResponse, error) {
+	resp := &pb.BaseResponse{}
+
+	if gb.DB == nil {
+		resp.Code = 500
+		resp.Message = "database not initialized"
+		return resp, nil
+	}
+
+	// 检查平台是否存在
+	var platform gb28181.PlatformModel
+	if err := gb.DB.First(&platform, req.ID).Error; err != nil {
+		resp.Code = 404
+		resp.Message = "platform not found"
+		return resp, nil
+	}
+
+	// 从请求中创建一个新的平台模型
+	updatedPlatform := gb28181.PlatformModel{
+		ID:                      req.ID,
+		Enable:                  &req.Enable,
+		Name:                    req.Name,
+		ServerGBID:              req.ServerGBId,
+		ServerGBDomain:          req.ServerGBDomain,
+		ServerIP:                req.ServerIp,
+		ServerPort:              int(req.ServerPort),
+		DeviceGBID:              req.DeviceGBId,
+		DeviceIP:                req.DeviceIp,
+		DevicePort:              int(req.DevicePort),
+		Username:                req.Username,
+		Password:                req.Password,
+		Expires:                 int(req.Expires),
+		KeepTimeout:             int(req.KeepTimeout),
+		Transport:               req.Transport,
+		CharacterSet:            req.CharacterSet,
+		PTZ:                     req.Ptz,
+		RTCP:                    req.Rtcp,
+		Status:                  req.Status,
+		ChannelCount:            int(req.ChannelCount),
+		CatalogSubscribe:        req.CatalogSubscribe,
+		AlarmSubscribe:          req.AlarmSubscribe,
+		MobilePositionSubscribe: req.MobilePositionSubscribe,
+		CatalogGroup:            int(req.CatalogGroup),
+		UpdateTime:              req.UpdateTime,
+		AsMessageChannel:        req.AsMessageChannel,
+		SendStreamIP:            req.SendStreamIp,
+		AutoPushChannel:         req.AutoPushChannel,
+		CatalogWithPlatform:     int(req.CatalogWithPlatform),
+		CatalogWithGroup:        int(req.CatalogWithGroup),
+		CatalogWithRegion:       int(req.CatalogWithRegion),
+		CivilCode:               req.CivilCode,
+		Manufacturer:            req.Manufacturer,
+		Model:                   req.Model,
+		Address:                 req.Address,
+		RegisterWay:             int(req.RegisterWay),
+		Secrecy:                 int(req.Secrecy),
+	}
+
+	// 使用 GORM 的 Updates 方法更新非零值字段
+	if err := gb.DB.Model(&platform).Updates(updatedPlatform).Error; err != nil {
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("failed to update platform: %v", err)
+		return resp, nil
+	}
+	gb.DB.Model(&platform).Find(&platform)
+	// 处理平台启用状态变化
+	if *platform.Enable {
+		// 如果存在旧的platform实例，先停止并移除
+		if oldPlatform, ok := gb.platforms.Get(platform.ID); ok {
+			oldPlatform.Unregister()
+			oldPlatform.Stop(fmt.Errorf("platform updated"))
+			gb.platforms.Remove(oldPlatform)
+		}
+		// 创建新的Platform实例
+		platformInstance := NewPlatform(&platform, gb)
+		// 添加到任务系统
+		gb.AddTask(platformInstance)
+	} else {
+		// 如果平台被禁用，停止并移除旧的platform实例
+		if oldPlatform, ok := gb.platforms.Get(platform.ID); ok {
+			oldPlatform.Unregister()
+			oldPlatform.Stop(fmt.Errorf("platform disabled"))
+			gb.platforms.Remove(oldPlatform)
+		}
+	}
+
+	resp.Code = 0
+	resp.Message = "success"
+	return resp, nil
+}
+
+// DeletePlatform 实现删除平台信息
+func (gb *GB28181Plugin) DeletePlatform(ctx context.Context, req *pb.DeletePlatformRequest) (*pb.BaseResponse, error) {
+	resp := &pb.BaseResponse{}
+
+	if gb.DB == nil {
+		resp.Code = 500
+		resp.Message = "database not initialized"
+		return resp, nil
+	}
+
+	// 删除平台
+	if err := gb.DB.Delete(&gb28181.PlatformModel{}, req.Id).Error; err != nil {
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("failed to delete platform: %v", err)
+		return resp, nil
+	}
+
+	resp.Code = 0
+	resp.Message = "success"
+	return resp, nil
+}
+
+// ListPlatforms 实现获取平台列表
+func (gb *GB28181Plugin) ListPlatforms(ctx context.Context, req *pb.ListPlatformsRequest) (*pb.PlatformsPageInfo, error) {
+	resp := &pb.PlatformsPageInfo{}
+
+	if gb.DB == nil {
+		resp.Code = 500
+		resp.Message = "database not initialized"
+		return resp, nil
+	}
+
+	var platforms []gb28181.PlatformModel
+	var total int64
+
+	// 构建查询条件
+	query := gb.DB.Model(&gb28181.PlatformModel{})
+	if req.Query != "" {
+		query = query.Where("name LIKE ? OR server_gb_id LIKE ? OR device_gb_id LIKE ?",
+			"%"+req.Query+"%", "%"+req.Query+"%", "%"+req.Query+"%")
+	}
+	if req.Status {
+		query = query.Where("status = ?", true)
+	}
+
+	// 获取总数
+	if err := query.Count(&total).Error; err != nil {
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("failed to count platforms: %v", err)
+		return resp, nil
+	}
+
+	// 查询平台列表
+	// 当Page和Count都为0时，不做分页，返回所有数据
+	if req.Page == 0 && req.Count == 0 {
+		// 不分页，查询所有数据
+		if err := query.Find(&platforms).Error; err != nil {
+			resp.Code = 500
+			resp.Message = fmt.Sprintf("failed to list platforms: %v", err)
+			return resp, nil
+		}
+	} else {
+		// 分页查询
+		if err := query.Offset(int(req.Page-1) * int(req.Count)).
+			Limit(int(req.Count)).
+			Find(&platforms).Error; err != nil {
+			resp.Code = 500
+			resp.Message = fmt.Sprintf("failed to list platforms: %v", err)
+			return resp, nil
+		}
+	}
+
+	// 转换为proto消息
+	var pbPlatforms []*pb.Platform
+	for _, p := range platforms {
+		pbPlatforms = append(pbPlatforms, &pb.Platform{
+			ID:                      p.ID,
+			Enable:                  *p.Enable,
+			Name:                    p.Name,
+			ServerGBId:              p.ServerGBID,
+			ServerGBDomain:          p.ServerGBDomain,
+			ServerIp:                p.ServerIP,
+			ServerPort:              int32(p.ServerPort),
+			DeviceGBId:              p.DeviceGBID,
+			DeviceIp:                p.DeviceIP,
+			DevicePort:              int32(p.DevicePort),
+			Username:                p.Username,
+			Password:                p.Password,
+			Expires:                 int32(p.Expires),
+			KeepTimeout:             int32(p.KeepTimeout),
+			Transport:               p.Transport,
+			CharacterSet:            p.CharacterSet,
+			Ptz:                     p.PTZ,
+			Rtcp:                    p.RTCP,
+			Status:                  p.Status,
+			ChannelCount:            int32(p.ChannelCount),
+			CatalogSubscribe:        p.CatalogSubscribe,
+			AlarmSubscribe:          p.AlarmSubscribe,
+			MobilePositionSubscribe: p.MobilePositionSubscribe,
+			CatalogGroup:            int32(p.CatalogGroup),
+			UpdateTime:              p.UpdateTime,
+			CreateTime:              p.CreateTime,
+			AsMessageChannel:        p.AsMessageChannel,
+			SendStreamIp:            p.SendStreamIP,
+			AutoPushChannel:         p.AutoPushChannel,
+			CatalogWithPlatform:     int32(p.CatalogWithPlatform),
+			CatalogWithGroup:        int32(p.CatalogWithGroup),
+			CatalogWithRegion:       int32(p.CatalogWithRegion),
+			CivilCode:               p.CivilCode,
+			Manufacturer:            p.Manufacturer,
+			Model:                   p.Model,
+			Address:                 p.Address,
+			RegisterWay:             int32(p.RegisterWay),
+			Secrecy:                 int32(p.Secrecy),
+		})
+	}
+
+	resp.Total = int32(total)
+	resp.List = pbPlatforms
+	resp.Code = 0
+	resp.Message = "success"
+	return resp, nil
+}
+
+// QueryRecord 实现录像查询接口
+func (gb *GB28181Plugin) QueryRecord(ctx context.Context, req *pb.QueryRecordRequest) (*pb.QueryRecordResponse, error) {
+	resp := &pb.QueryRecordResponse{
+		Code:    0,
+		Message: "",
+	}
+	startTime, endTime, err := util.TimeRangeQueryParse(url.Values{"range": []string{req.Range}, "start": []string{req.Start}, "end": []string{req.End}})
+	// 获取设备和通道
+	device, ok := gb.devices.Get(req.DeviceId)
+	if !ok {
+		resp.Code = 404
+		resp.Message = "device not found"
+		return resp, nil
+	}
+
+	channel, ok := device.channels.Get(req.ChannelId)
+	if !ok {
+		resp.Code = 404
+		resp.Message = "channel not found"
+		return resp, nil
+	}
+
+	// 生成随机序列号
+	sn := int(time.Now().UnixNano() / 1e6 % 1000000)
+
+	// 发送录像查询请求
+	promise, err := gb.RecordInfoQuery(req.DeviceId, req.ChannelId, startTime, endTime, sn)
+	if err != nil {
+		resp.Code = 500
+		resp.Message = err.Error()
+		return resp, nil
+	}
+
+	// 等待响应
+	err = promise.Await()
+	if err != nil {
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("query failed: %v", err)
+		return resp, nil
+	}
+
+	// 获取录像请求
+	recordReq, ok := channel.RecordReqs.Get(sn)
+	if !ok {
+		resp.Code = 500
+		resp.Message = "record request not found"
+		return resp, nil
+	}
+
+	// 转换结果
+	if len(recordReq.Response) > 0 {
+		firstResponse := recordReq.Response[0]
+		resp.DeviceId = req.DeviceId
+		resp.ChannelId = req.ChannelId
+		resp.Name = firstResponse.Name
+		resp.Count = int32(recordReq.ReceivedNum)
+		if !firstResponse.LastTime.IsZero() {
+			resp.LastTime = timestamppb.New(firstResponse.LastTime)
+		}
+	}
+
+	for _, record := range recordReq.Response {
+		for _, item := range record.RecordList.Item {
+			resp.Data = append(resp.Data, &pb.RecordItem{
+				DeviceId:   item.DeviceID,
+				Name:       item.Name,
+				FilePath:   item.FilePath,
+				Address:    item.Address,
+				StartTime:  item.StartTime,
+				EndTime:    item.EndTime,
+				Secrecy:    int32(item.Secrecy),
+				Type:       item.Type,
+				RecorderId: item.RecorderID,
+			})
+		}
+	}
+
+	resp.Code = 0
+	resp.Message = fmt.Sprintf("success, received %d/%d records", recordReq.ReceivedNum, recordReq.SumNum)
+
+	// 排序录像列表，按StartTime升序排序
+	sort.Slice(resp.Data, func(i, j int) bool {
+		return resp.Data[i].StartTime < resp.Data[j].StartTime
+	})
+
+	// 清理请求
+	channel.RecordReqs.Remove(recordReq)
+
+	return resp, nil
+}
+
+// PtzControl 实现云台控制功能
+func (gb *GB28181Plugin) PtzControl(ctx context.Context, req *pb.PtzControlRequest) (*pb.BaseResponse, error) {
+	resp := &pb.BaseResponse{}
+
+	// 参数校验
+	if req.DeviceId == "" {
+		resp.Code = 400
+		resp.Message = "设备ID不能为空"
+		return resp, nil
+	}
+	if req.ChannelId == "" {
+		resp.Code = 400
+		resp.Message = "通道ID不能为空"
+		return resp, nil
+	}
+
+	// 获取设备
+	device, ok := gb.devices.Get(req.DeviceId)
+	if !ok {
+		resp.Code = 404
+		resp.Message = "设备不存在"
+		return resp, nil
+	}
+
+	// 调用设备的前端控制命令
+	response, err := device.frontEndCmd(req.ChannelId, req.Ptzcmd)
+	if err != nil {
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("发送云台控制命令失败: %v", err)
+		return resp, nil
+	}
+
+	gb.Info("云台控制",
+		"deviceId", req.DeviceId,
+		"channelId", req.ChannelId,
+		"Ptzcmd", req.Ptzcmd,
+		"response", response.String())
+
+	resp.Code = 0
+	resp.Message = "success"
+	return resp, nil
+}
+
+// TestSip 实现测试SIP连接功能
+func (gb *GB28181Plugin) TestSip(ctx context.Context, req *pb.TestSipRequest) (*pb.TestSipResponse, error) {
+	resp := &pb.TestSipResponse{
+		Code:    0,
+		Message: "success",
+	}
+
+	// 创建一个临时设备用于测试
+	device := &Device{
+		DeviceID:   "34020000002000000001",
+		LocalIP:    "192.168.1.17",
+		Port:       5060,
+		IP:         "192.168.1.102",
+		StreamMode: "TCP-PASSIVE",
+	}
+
+	// 初始化设备的SIP相关字段
+	device.fromHDR = sip.FromHeader{
+		Address: sip.Uri{
+			User: gb.Serial,
+			Host: gb.Realm,
+		},
+		Params: sip.NewParams(),
+	}
+	device.fromHDR.Params.Add("tag", sip.GenerateTagN(16))
+
+	device.contactHDR = sip.ContactHeader{
+		Address: sip.Uri{
+			User: gb.Serial,
+			Host: device.LocalIP,
+			Port: device.Port,
+		},
+	}
+
+	// 初始化SIP客户端
+	device.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(device.LocalIP))
+	if device.client == nil {
+		resp.Code = 500
+		resp.Message = "failed to create sip client"
+		return resp, nil
+	}
+	device.dialogClient = sipgo.NewDialogClientCache(device.client, device.contactHDR)
+
+	// 构建目标URI
+	recipient := sip.Uri{
+		User: "34020000001320000006",
+		Host: "192.168.1.102",
+		Port: 5060,
+	}
+
+	// 创建INVITE请求
+	request := device.CreateRequest(sip.INVITE, recipient)
+	if request == nil {
+		resp.Code = 500
+		resp.Message = "failed to create request"
+		return resp, nil
+	}
+
+	// 构建SDP消息体
+	sdpInfo := []string{
+		"v=0",
+		fmt.Sprintf("o=%s 0 0 IN IP4 %s", "34020000001320000004", device.LocalIP),
+		"s=Play",
+		"c=IN IP4 " + device.LocalIP,
+		"t=0 0",
+		"m=video 43970 TCP/RTP/AVP 96 97 98 99",
+		"a=recvonly",
+		"a=rtpmap:96 PS/90000",
+		"a=rtpmap:98 H264/90000",
+		"a=rtpmap:97 MPEG4/90000",
+		"a=rtpmap:99 H265/90000",
+		"a=setup:passive",
+		"a=connection:new",
+		"y=0200005507",
+	}
+
+	// 设置必需的头部
+	contentTypeHeader := sip.ContentTypeHeader("APPLICATION/SDP")
+	subjectHeader := sip.NewHeader("Subject", "34020000001320000006:0200005507,34020000002000000001:0")
+	toHeader := sip.ToHeader{
+		Address: sip.Uri{
+			User: "34020000001320000006",
+			Host: device.IP,
+			Port: device.Port,
+		},
+	}
+	userAgentHeader := sip.NewHeader("User-Agent", "WVP-Pro v2.7.3.20241218")
+	viaHeader := sip.ViaHeader{
+		ProtocolName:    "SIP",
+		ProtocolVersion: "2.0",
+		Transport:       "UDP",
+		Host:            device.LocalIP,
+		Port:            device.Port,
+		Params:          sip.HeaderParams(sip.NewParams()),
+	}
+	viaHeader.Params.Add("branch", sip.GenerateBranchN(16)).Add("rport", "")
+
+	csqHeader := sip.CSeqHeader{
+		SeqNo:      13,
+		MethodName: "INVITE",
+	}
+	maxforward := sip.MaxForwardsHeader(70)
+	contentLengthHeader := sip.ContentLengthHeader(286)
+	request.AppendHeader(&contentTypeHeader)
+	request.AppendHeader(subjectHeader)
+	request.AppendHeader(&toHeader)
+	request.AppendHeader(userAgentHeader)
+	request.AppendHeader(&viaHeader)
+
+	// 设置消息体
+	request.SetBody([]byte(strings.Join(sdpInfo, "\r\n") + "\r\n"))
+
+	// 创建会话并发送请求
+	session, err := device.dialogClient.Invite(gb, recipient, request.Body(), &csqHeader, &device.fromHDR, &toHeader, &viaHeader, &maxforward, userAgentHeader, &device.contactHDR, subjectHeader, &contentTypeHeader, &contentLengthHeader)
+	if err != nil {
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("发送INVITE请求失败: %v", err)
+		resp.TestResult = "failed"
+		return resp, nil
+	}
+
+	// 等待响应
+	err = session.WaitAnswer(gb, sipgo.AnswerOptions{})
+	if err != nil {
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("等待响应失败: %v", err)
+		resp.TestResult = "failed"
+		return resp, nil
+	}
+
+	// 发送ACK
+	err = session.Ack(gb)
+	if err != nil {
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("发送ACK失败: %v", err)
+		resp.TestResult = "failed"
+		return resp, nil
+	}
+
+	resp.TestResult = "success"
+	return resp, nil
+}
+
+// GetDeviceAlarm 实现设备报警查询
+func (gb *GB28181Plugin) GetDeviceAlarm(ctx context.Context, req *pb.GetDeviceAlarmRequest) (*pb.DeviceAlarmResponse, error) {
+	resp := &pb.DeviceAlarmResponse{
+		Code:    0,
+		Message: "success",
+	}
+
+	if gb.DB == nil {
+		resp.Code = 500
+		resp.Message = "数据库未初始化"
+		return resp, nil
+	}
+
+	// 处理时间范围
+	startTime, endTime, err := util.TimeRangeQueryParse(url.Values{
+		"start": []string{req.StartTime},
+		"end":   []string{req.EndTime},
+	})
+	if err != nil {
+		resp.Code = 400
+		resp.Message = fmt.Sprintf("时间格式错误: %v", err)
+		return resp, nil
+	}
+
+	// 构建基础查询条件
+	baseCondition := gb28181.DeviceAlarm{
+		DeviceID: req.DeviceId,
+	}
+
+	// 构建查询
+	query := gb.DB.Model(&gb28181.DeviceAlarm{}).Where(&baseCondition)
+
+	// 添加时间范围条件
+	if !startTime.IsZero() {
+		query = query.Where("alarm_time >= ?", startTime)
+	}
+	if !endTime.IsZero() {
+		query = query.Where("alarm_time <= ?", endTime)
+	}
+
+	// 添加报警方式条件
+	if req.AlarmMethod != "" {
+		query = query.Where(&gb28181.DeviceAlarm{AlarmMethod: req.AlarmMethod})
+	}
+
+	// 添加报警类型条件
+	if req.AlarmType != "" {
+		query = query.Where(&gb28181.DeviceAlarm{AlarmType: req.AlarmType})
+	}
+
+	// 添加报警级别范围条件
+	if req.StartPriority != "" {
+		query = query.Where("alarm_priority >= ?", req.StartPriority)
+	}
+	if req.EndPriority != "" {
+		query = query.Where("alarm_priority <= ?", req.EndPriority)
+	}
+
+	// 查询报警记录
+	var alarms []gb28181.DeviceAlarm
+	if err := query.Order("alarm_time DESC").Find(&alarms).Error; err != nil {
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("查询报警记录失败: %v", err)
+		return resp, nil
+	}
+
+	// 转换为proto消息
+	for _, alarm := range alarms {
+		alarmInfo := &pb.AlarmInfo{
+			DeviceId:         alarm.DeviceID,
+			AlarmPriority:    alarm.AlarmPriority,
+			AlarmMethod:      alarm.AlarmMethod,
+			AlarmTime:        alarm.AlarmTime.Format("2006-01-02T15:04:05"),
+			AlarmDescription: alarm.AlarmDescription,
+		}
+		resp.Alarms = append(resp.Alarms, alarmInfo)
+	}
+
+	return resp, nil
+}
+
+// AddPlatformChannel 实现添加平台通道
+func (gb *GB28181Plugin) AddPlatformChannel(ctx context.Context, req *pb.AddPlatformChannelRequest) (*pb.BaseResponse, error) {
+	resp := &pb.BaseResponse{}
+
+	if gb.DB == nil {
+		resp.Code = 500
+		resp.Message = "数据库未初始化"
+		return resp, nil
+	}
+
+	// 开始事务
+	tx := gb.DB.Begin()
+
+	// 遍历通道ID列表，为每个通道ID创建一条记录
+	for _, channelId := range req.ChannelIds {
+		// 创建新的平台通道记录
+		platformChannel := &gb28181.PlatformChannel{
+			PlatformId:      int(req.PlatformId),
+			DeviceChannelId: int(channelId),
+		}
+
+		// 插入记录
+		if err := tx.Create(platformChannel).Error; err != nil {
+			tx.Rollback()
+			resp.Code = 500
+			resp.Message = fmt.Sprintf("添加平台通道失败: %v", err)
+			return resp, nil
+		}
+	}
+
+	// 提交事务
+	if err := tx.Commit().Error; err != nil {
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("提交事务失败: %v", err)
+		return resp, nil
+	}
+
+	resp.Code = 0
+	resp.Message = "success"
+	return resp, nil
+}
+
+// Recording 实现录制控制功能
+func (gb *GB28181Plugin) Recording(ctx context.Context, req *pb.RecordingRequest) (*pb.BaseResponse, error) {
+	resp := &pb.BaseResponse{}
+
+	// 检查命令类型是否有效
+	if req.CmdType != "Record" && req.CmdType != "RecordStop" {
+		resp.Code = 400
+		resp.Message = "无效的命令类型，只能是 Record 或 RecordStop"
+		return resp, nil
+	}
+
+	// 1. 先在 platforms 中查找设备
+	platform, found := gb.platforms.Find(func(p *Platform) bool {
+		return p.PlatformModel.ServerGBID == req.DeviceId
+	})
+	if found {
+		if gb.DB == nil {
+			resp.Code = 500
+			resp.Message = "数据库未初始化"
+			return resp, nil
+		}
+
+		// 使用SQL查询获取实际的设备ID和通道ID
+		var result struct {
+			DeviceID  string
+			ChannelID string
+		}
+		err := gb.DB.Raw(`
+			SELECT dg.device_id, cg.device_id as channelid 
+			FROM platform_gb28181pro pg
+			LEFT JOIN platform_channel_gb28181pro pcg on pcg.platform_id = pg.id
+			LEFT JOIN channel_gb28181pro cg on cg.id = pcg.device_channel_id
+			LEFT JOIN device_gb28181pro dg on dg.id = cg.device_db_id
+			WHERE pg.device_gb_id = ? AND cg.device_id = ?`,
+			req.DeviceId, req.ChannelId,
+		).Scan(&result).Error
+
+		if err != nil {
+			resp.Code = 500
+			resp.Message = fmt.Sprintf("查询设备通道关系失败: %v", err)
+			return resp, nil
+		}
+
+		if result.DeviceID == "" || result.ChannelID == "" {
+			resp.Code = 404
+			resp.Message = "未找到对应的设备和通道信息"
+			return resp, nil
+		}
+
+		// 从gb.devices中查找实际设备
+		actualDevice, ok := gb.devices.Get(result.DeviceID)
+		if !ok {
+			resp.Code = 404
+			resp.Message = "实际设备未找到"
+			return resp, nil
+		}
+
+		// 从device.channels中查找实际通道
+		_, ok = actualDevice.channels.Get(result.ChannelID)
+		if !ok {
+			resp.Code = 404
+			resp.Message = "实际通道未找到"
+			return resp, nil
+		}
+
+		// 发送录制控制命令
+		response, err := actualDevice.recordCmd(result.ChannelID, req.CmdType)
+		if err != nil {
+			resp.Code = 500
+			resp.Message = fmt.Sprintf("发送录制控制命令失败: %v", err)
+			return resp, nil
+		}
+
+		gb.Info("通过平台控制录制",
+			"command", req.CmdType,
+			"platformDeviceId", req.DeviceId,
+			"platformChannelId", req.ChannelId,
+			"actualDeviceId", result.DeviceID,
+			"actualChannelId", result.ChannelID,
+			"platformId", platform.PlatformModel.ID,
+			"response", response.String())
+	} else {
+		// 2. 如果在平台中没找到，则在本地设备中查找
+		device, ok := gb.devices.Get(req.DeviceId)
+		if !ok {
+			resp.Code = 404
+			resp.Message = "设备未找到"
+			return resp, nil
+		}
+
+		// 检查通道是否存在
+		_, ok = device.channels.Get(req.ChannelId)
+		if !ok {
+			resp.Code = 404
+			resp.Message = "通道未找到"
+			return resp, nil
+		}
+
+		// 发送录制控制命令
+		response, err := device.recordCmd(req.ChannelId, req.CmdType)
+		if err != nil {
+			resp.Code = 500
+			resp.Message = fmt.Sprintf("发送录制控制命令失败: %v", err)
+			return resp, nil
+		}
+
+		gb.Info("控制录制",
+			"command", req.CmdType,
+			"deviceId", req.DeviceId,
+			"channelId", req.ChannelId,
+			"response", response.String())
+	}
+
+	resp.Code = 0
+	resp.Message = "success"
+	return resp, nil
+}
+
+// GetSnap 实现抓拍功能
+func (gb *GB28181Plugin) GetSnap(ctx context.Context, req *pb.GetSnapRequest) (*pb.SnapResponse, error) {
+	resp := &pb.SnapResponse{}
+
+	// 参数校验
+	if req.DeviceId == "" {
+		resp.Code = 400
+		resp.Message = "设备ID不能为空"
+		return resp, nil
+	}
+	if req.ChannelId == "" {
+		resp.Code = 400
+		resp.Message = "通道ID不能为空"
+		return resp, nil
+	}
+
+	// 1. 先在 platforms 中查找设备
+	platform, found := gb.platforms.Find(func(p *Platform) bool {
+		return p.PlatformModel.ServerGBID == req.DeviceId
+	})
+	if found {
+		if gb.DB == nil {
+			resp.Code = 500
+			resp.Message = "数据库未初始化"
+			return resp, nil
+		}
+
+		// 使用SQL查询获取实际的设备ID和通道ID
+		var result struct {
+			DeviceID  string
+			ChannelID string
+		}
+		err := gb.DB.Raw(`
+			SELECT dg.device_id, cg.device_id as channelid 
+			FROM platform_gb28181pro pg
+			LEFT JOIN platform_channel_gb28181pro pcg on pcg.platform_id = pg.id
+			LEFT JOIN channel_gb28181pro cg on cg.id = pcg.device_channel_id
+			LEFT JOIN device_gb28181pro dg on dg.id = cg.device_db_id
+			WHERE pg.device_gb_id = ? AND cg.device_id = ?`,
+			req.DeviceId, req.ChannelId,
+		).Scan(&result).Error
+
+		if err != nil {
+			resp.Code = 500
+			resp.Message = fmt.Sprintf("查询设备通道关系失败: %v", err)
+			return resp, nil
+		}
+
+		if result.DeviceID == "" || result.ChannelID == "" {
+			resp.Code = 404
+			resp.Message = "未找到对应的设备和通道信息"
+			return resp, nil
+		}
+
+		// 从gb.devices中查找实际设备
+		actualDevice, ok := gb.devices.Get(result.DeviceID)
+		if !ok {
+			resp.Code = 404
+			resp.Message = "实际设备未找到"
+			return resp, nil
+		}
+
+		// 从device.channels中查找实际通道
+		_, ok = actualDevice.channels.Get(result.ChannelID)
+		if !ok {
+			resp.Code = 404
+			resp.Message = "实际通道未找到"
+			return resp, nil
+		}
+
+		// 构建抓拍配置
+		config := SnapshotConfig{
+			SnapNum:   1, // 默认抓拍1张
+			Interval:  1, // 默认间隔1秒
+			UploadURL: fmt.Sprintf("http://%s%s/gb28181/api/snap/upload", actualDevice.LocalIP, gb.GetCommonConf().HTTP.ListenAddr),
+			SessionID: fmt.Sprintf("%d", time.Now().UnixNano()),
+		}
+
+		// 生成XML并发送请求
+		xmlBody := actualDevice.BuildSnapshotConfigXML(config, result.ChannelID)
+		request := actualDevice.CreateRequest(sip.MESSAGE, nil)
+		request.SetBody([]byte(xmlBody))
+		response, err := actualDevice.send(request)
+		if err != nil {
+			resp.Code = 500
+			resp.Message = fmt.Sprintf("发送抓拍配置命令失败: %v", err)
+			return resp, nil
+		}
+
+		gb.Info("通过平台配置抓拍",
+			"platformDeviceId", req.DeviceId,
+			"platformChannelId", req.ChannelId,
+			"actualDeviceId", result.DeviceID,
+			"actualChannelId", result.ChannelID,
+			"platformId", platform.PlatformModel.ID,
+			"response", response.String())
+
+	} else {
+		// 2. 如果在平台中没找到，则在本地设备中查找
+		device, ok := gb.devices.Get(req.DeviceId)
+		if !ok {
+			resp.Code = 404
+			resp.Message = "设备未找到"
+			return resp, nil
+		}
+
+		// 检查通道是否存在
+		_, ok = device.channels.Get(req.ChannelId)
+		if !ok {
+			resp.Code = 404
+			resp.Message = "通道未找到"
+			return resp, nil
+		}
+
+		// 构建抓拍配置
+		config := SnapshotConfig{
+			SnapNum:   1, // 默认抓拍1张
+			Interval:  1, // 默认间隔1秒
+			UploadURL: fmt.Sprintf("http://%s%s/gb28181/api/snap/upload", device.LocalIP, gb.GetCommonConf().HTTP.ListenAddr),
+			SessionID: fmt.Sprintf("%d", time.Now().UnixNano()),
+		}
+
+		// 生成XML并发送请求
+		xmlBody := device.BuildSnapshotConfigXML(config, req.ChannelId)
+		request := device.CreateRequest(sip.MESSAGE, nil)
+		request.SetBody([]byte(xmlBody))
+		response, err := device.send(request)
+		if err != nil {
+			resp.Code = 500
+			resp.Message = fmt.Sprintf("发送抓拍配置命令失败: %v", err)
+			return resp, nil
+		}
+
+		gb.Info("配置抓拍",
+			"deviceId", req.DeviceId,
+			"channelId", req.ChannelId,
+			"response", response.String())
+	}
+
+	resp.Code = 0
+	resp.Message = "success"
+	return resp, nil
+}
+
+// UploadJpeg 实现接收JPEG文件功能
+func (gb *GB28181Plugin) UploadJpeg(ctx context.Context, req *pb.UploadJpegRequest) (*pb.BaseResponse, error) {
+	gb.Info("UploadJpeg", "req", req.String())
+	resp := &pb.BaseResponse{}
+
+	// 检查图片数据是否为空
+	if len(req.ImageData) == 0 {
+		resp.Code = 400
+		resp.Message = "图片数据不能为空"
+		return resp, nil
+	}
+
+	// 生成文件名
+	fileName := fmt.Sprintf("snap_%d.jpg", time.Now().UnixNano()/1e6)
+
+	// 确保目录存在
+	snapPath := "snaps"
+	if err := os.MkdirAll(snapPath, 0755); err != nil {
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("创建目录失败: %v", err)
+		return resp, nil
+	}
+
+	// 保存文件
+	filePath := fmt.Sprintf("%s/%s", snapPath, fileName)
+	if err := os.WriteFile(filePath, req.ImageData, 0644); err != nil {
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("保存文件失败: %v", err)
+		return resp, nil
+	}
+
+	gb.Info("保存抓拍图片",
+		"fileName", fileName,
+		"size", len(req.ImageData))
+
+	resp.Code = 0
+	resp.Message = "success"
+	return resp, nil
+}
+
+// AddPreset 实现添加预置位功能
+func (gb *GB28181Plugin) AddPreset(ctx context.Context, req *pb.PresetRequest) (*pb.BaseResponse, error) {
+	resp := &pb.BaseResponse{}
+
+	// 参数校验
+	if req.DeviceId == "" {
+		resp.Code = 400
+		resp.Message = "设备ID不能为空"
+		return resp, nil
+	}
+	if req.ChannelId == "" {
+		resp.Code = 400
+		resp.Message = "通道ID不能为空"
+		return resp, nil
+	}
+	if req.PresetId <= 0 || req.PresetId > 255 {
+		resp.Code = 400
+		resp.Message = "预置位ID必须在1-255之间"
+		return resp, nil
+	}
+
+	// 获取设备
+	device, ok := gb.devices.Get(req.DeviceId)
+	if !ok {
+		resp.Code = 404
+		resp.Message = "设备不存在"
+		return resp, nil
+	}
+
+	// 检查通道是否存在
+	_, ok = device.channels.Get(req.ChannelId)
+	if !ok {
+		resp.Code = 404
+		resp.Message = "通道不存在"
+		return resp, nil
+	}
+
+	// 发送预置位设置命令
+	response, err := device.frontEndCmd(req.ChannelId, device.frontEndCmdString(0x81, 1, int32(req.PresetId), 0))
+	if err != nil {
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("设置预置位失败: %v", err)
+		return resp, nil
+	}
+
+	gb.Info("设置预置位",
+		"deviceId", req.DeviceId,
+		"channelId", req.ChannelId,
+		"presetId", req.PresetId,
+		"response", response.String())
+
+	resp.Code = 0
+	resp.Message = "success"
+	return resp, nil
+}
+
+// QueryPreset 实现查询预置位功能
+func (gb *GB28181Plugin) QueryPreset(ctx context.Context, req *pb.PresetRequest) (*pb.PresetResponse, error) {
+	resp := &pb.PresetResponse{
+		Code:    200,
+		Message: "success",
+	}
+
+	if req.DeviceId == "" {
+		resp.Code = 400
+		resp.Message = "device id is empty"
+		return resp, nil
+	}
+
+	if req.ChannelId == "" {
+		resp.Code = 400
+		resp.Message = "channel id is empty"
+		return resp, nil
+	}
+
+	device, ok := gb.devices.Get(req.DeviceId)
+	if !ok {
+		resp.Code = 404
+		resp.Message = "device not found"
+		return resp, nil
+	}
+
+	channel, ok := device.channels.Get(req.ChannelId)
+	if !ok {
+		resp.Code = 404
+		resp.Message = "channel not found"
+		return resp, nil
+	}
+
+	// 生成随机序列号
+	sn := int(time.Now().UnixNano() / 1e6 % 1000000)
+
+	// 创建Promise并保存到channel的PresetReqs中
+	promise := util.NewPromise(ctx)
+	presetReq := &PresetRequest{
+		SN:      sn,
+		Promise: promise,
+	}
+
+	// 先保存请求到PresetReqs，确保能接收到响应
+	channel.PresetReqs.Set(presetReq)
+
+	// 创建请求
+	request := device.CreateRequest(sip.MESSAGE, nil)
+	if request == nil {
+		resp.Code = 500
+		resp.Message = "create request failed"
+		channel.PresetReqs.Remove(presetReq)
+		return resp, nil
+	}
+
+	// 构建预置位查询XML消息
+	request.SetBody(gb28181.BuildPresetQueryXML(sn, req.ChannelId))
+
+	// 发送预置位查询命令
+	_, err := device.send(request)
+	if err != nil {
+		channel.PresetReqs.Remove(presetReq)
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("查询预置位失败: %v", err)
+		return resp, nil
+	}
+
+	// 等待响应
+	err = promise.Await()
+	if err != nil {
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("等待预置位响应超时: %v", err)
+		return resp, nil
+	}
+
+	// 获取预置位响应
+	if presetReq.Response != nil {
+		resp.Data = make([]int32, len(presetReq.Response))
+		for i, item := range presetReq.Response {
+			// 将预置位ID转换为整数
+			presetID, _ := strconv.Atoi(item.PresetID)
+			resp.Data[i] = int32(presetID)
+		}
+	}
+
+	// 清理请求
+	channel.PresetReqs.Remove(presetReq)
+	return resp, nil
+}
+
+// DeletePreset 实现删除预置位功能
+func (gb *GB28181Plugin) DeletePreset(ctx context.Context, req *pb.PresetRequest) (*pb.BaseResponse, error) {
+	resp := &pb.BaseResponse{}
+
+	// 参数校验
+	if req.DeviceId == "" {
+		resp.Code = 400
+		resp.Message = "设备ID不能为空"
+		return resp, nil
+	}
+	if req.ChannelId == "" {
+		resp.Code = 400
+		resp.Message = "通道ID不能为空"
+		return resp, nil
+	}
+	if req.PresetId <= 0 || req.PresetId > 255 {
+		resp.Code = 400
+		resp.Message = "预置位ID必须在1-255之间"
+		return resp, nil
+	}
+
+	// 获取设备
+	device, ok := gb.devices.Get(req.DeviceId)
+	if !ok {
+		resp.Code = 404
+		resp.Message = "设备不存在"
+		return resp, nil
+	}
+
+	// 检查通道是否存在
+	_, ok = device.channels.Get(req.ChannelId)
+	if !ok {
+		resp.Code = 404
+		resp.Message = "通道不存在"
+		return resp, nil
+	}
+
+	// 发送删除预置位命令
+	response, err := device.frontEndCmd(req.ChannelId, device.frontEndCmdString(0x83, 3, int32(req.PresetId), 0))
+	if err != nil {
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("删除预置位失败: %v", err)
+		return resp, nil
+	}
+
+	gb.Info("删除预置位",
+		"deviceId", req.DeviceId,
+		"channelId", req.ChannelId,
+		"presetId", req.PresetId,
+		"response", response.String())
+
+	resp.Code = 0
+	resp.Message = "success"
+	return resp, nil
+}
+
+// CallPreset 实现调用预置位功能
+func (gb *GB28181Plugin) CallPreset(ctx context.Context, req *pb.PresetRequest) (*pb.BaseResponse, error) {
+	resp := &pb.BaseResponse{}
+
+	// 参数校验
+	if req.DeviceId == "" {
+		resp.Code = 400
+		resp.Message = "设备ID不能为空"
+		return resp, nil
+	}
+	if req.ChannelId == "" {
+		resp.Code = 400
+		resp.Message = "通道ID不能为空"
+		return resp, nil
+	}
+	if req.PresetId <= 0 || req.PresetId > 255 {
+		resp.Code = 400
+		resp.Message = "预置位ID必须在1-255之间"
+		return resp, nil
+	}
+
+	// 获取设备
+	device, ok := gb.devices.Get(req.DeviceId)
+	if !ok {
+		resp.Code = 404
+		resp.Message = "设备不存在"
+		return resp, nil
+	}
+
+	// 检查通道是否存在
+	_, ok = device.channels.Get(req.ChannelId)
+	if !ok {
+		resp.Code = 404
+		resp.Message = "通道不存在"
+		return resp, nil
+	}
+
+	// 发送调用预置位命令
+	response, err := device.frontEndCmd(req.ChannelId, device.frontEndCmdString(0x82, 2, int32(req.PresetId), 0))
+	if err != nil {
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("调用预置位失败: %v", err)
+		return resp, nil
+	}
+
+	gb.Info("调用预置位",
+		"deviceId", req.DeviceId,
+		"channelId", req.ChannelId,
+		"presetId", req.PresetId,
+		"response", response.String())
+
+	resp.Code = 0
+	resp.Message = "success"
+	return resp, nil
 }

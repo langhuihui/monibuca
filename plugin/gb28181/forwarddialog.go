@@ -7,7 +7,7 @@ import (
 	m7s "m7s.live/v5"
 	"m7s.live/v5/pkg/task"
 	"m7s.live/v5/pkg/util"
-	gb28181 "m7s.live/v5/plugin/gb28181pro/pkg"
+	gb28181 "m7s.live/v5/plugin/gb28181/pkg"
 	"strconv"
 	"strings"
 )
@@ -17,7 +17,7 @@ type ForwardDialog struct {
 	task.Job
 	channel *Channel
 	gb28181.InviteOptions
-	gb             *GB28181ProPlugin
+	gb             *GB28181Plugin
 	session        *sipgo.DialogClientSession
 	pullCtx        m7s.PullJob
 	forwarder      *gb28181.RTPForwarder

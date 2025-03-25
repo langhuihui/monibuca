@@ -3,15 +3,462 @@ import "google/api/annotations.proto";
 import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";
 //import "global.proto";
-package gb28181;
+package gb28181pro;
 option go_package="m7s.live/v5/plugin/gb28181/pb";
 
+// 基础响应消息
+message BaseResponse {
+  int32 code = 1;
+  string message = 2;
+}
+
 service api {
-  rpc List (google.protobuf.Empty) returns (ResponseList) {
+  // 获取设备列表
+  rpc List (GetDevicesRequest) returns (DevicesPageInfo) {
     option (google.api.http) = {
       get: "/gb28181/api/list"
     };
   }
+
+  // 使用ID查询国标设备
+  rpc GetDevice (GetDeviceRequest) returns (DeviceResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/devices/{deviceId}"
+    };
+  }
+
+  // 分页查询国标设备
+  rpc GetDevices (GetDevicesRequest) returns (DevicesPageInfo) {
+    option (google.api.http) = {
+      get: "/gb28181/api/devices"
+    };
+  }
+
+  // 分页查询通道
+  rpc GetChannels (GetChannelsRequest) returns (ChannelsPageInfo) {
+    option (google.api.http) = {
+      get: "/gb28181/api/devices/{deviceId}/channels"
+    };
+  }
+
+  // 同步设备通道
+  rpc SyncDevice (SyncDeviceRequest) returns (SyncStatus) {
+    option (google.api.http) = {
+      get: "/gb28181/api/devices/{deviceId}/sync"
+    };
+  }
+
+  // 移除设备
+  rpc DeleteDevice (DeleteDeviceRequest) returns (DeleteDeviceResponse) {
+    option (google.api.http) = {
+      delete: "/gb28181/api/devices/{deviceId}/delete"
+    };
+  }
+
+  // 分页查询子目录通道
+  rpc GetSubChannels (GetSubChannelsRequest) returns (ChannelsPageInfo) {
+    option (google.api.http) = {
+      get: "/gb28181/api/sub_channels/{deviceId}/{channelId}/channels"
+    };
+  }
+
+  // 开启/关闭通道的音频
+  rpc ChangeAudio (ChangeAudioRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      post: "/gb28181/api/channel/audio"
+      body: "*"
+    };
+  }
+
+  // 修改通道的码流类型
+  rpc UpdateChannelStreamIdentification (Channel) returns (BaseResponse) {
+    option (google.api.http) = {
+      post: "/gb28181/api/channel/stream/identification/update"
+      body: "*"
+    };
+  }
+
+  // 修改数据流传输模式
+  rpc UpdateTransport (UpdateTransportRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      post: "/gb28181/api/transport/{deviceId}/{streamMode}"
+    };
+  }
+
+  // 添加设备信息
+  rpc AddDevice (Device) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      post: "/gb28181/api/device/add"
+      body: "*"
+    };
+  }
+
+  // 更新设备信息
+  rpc UpdateDevice (Device) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      post: "/gb28181/api/device/update"
+      body: "*"
+    };
+  }
+
+  // 设备状态查询
+  rpc GetDeviceStatus (GetDeviceStatusRequest) returns (DeviceStatusResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/devices/{deviceId}/status"
+    };
+  }
+
+  // 设备报警查询
+  rpc GetDeviceAlarm (GetDeviceAlarmRequest) returns (DeviceAlarmResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/alarm/{deviceId}"
+    };
+  }
+
+  // 获取通道同步进度
+  rpc GetSyncStatus (GetSyncStatusRequest) returns (SyncStatus) {
+    option (google.api.http) = {
+      get: "/gb28181/api/{deviceId}/sync_status"
+    };
+  }
+
+  // 获取设备的订阅状态
+  rpc GetSubscribeInfo (GetSubscribeInfoRequest) returns (SubscribeInfoResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/{deviceId}/subscribe_info"
+    };
+  }
+
+  // 请求截图
+  rpc GetSnap (GetSnapRequest) returns (SnapResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/snap/{deviceId}/{channelId}"
+    };
+  }
+
+  // 结束转码
+  rpc StopConvert (ConvertStopRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      post: "/gb28181/api/play/convertStop/{key}"
+    };
+  }
+
+  // 语音广播命令
+  rpc StartBroadcast (BroadcastRequest) returns (BroadcastResponse) {
+    option (google.api.http) = {
+      post: "/gb28181/api/play/broadcast/{deviceId}/{channelId}"
+    };
+  }
+
+  // 停止语音广播
+  rpc StopBroadcast (BroadcastRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      post: "/gb28181/api/play/broadcast/stop/{deviceId}/{channelId}"
+    };
+  }
+
+  // 获取所有的ssrc
+  rpc GetAllSSRC (google.protobuf.Empty) returns (SSRCListResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/play/ssrc"
+    };
+  }
+
+  // 国标通道编辑时的数据回显
+  rpc GetRawChannel (GetRawChannelRequest) returns (Channel) {
+    option (google.api.http) = {
+      get: "/gb28181/api/channel/raw"
+    };
+  }
+
+  // 添加平台信息
+  rpc AddPlatform (Platform) returns (BaseResponse) {
+    option (google.api.http) = {
+      post: "/gb28181/api/platform/add"
+      body: "*"
+    };
+  }
+
+  // 获取平台信息
+  rpc GetPlatform (GetPlatformRequest) returns (PlatformResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/platform/{id}"
+    };
+  }
+
+  // 更新平台信息
+  rpc UpdatePlatform (Platform) returns (BaseResponse) {
+    option (google.api.http) = {
+      post: "/gb28181/api/platform/update"
+      body: "*"
+    };
+  }
+
+  // 删除平台信息
+  rpc DeletePlatform (DeletePlatformRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      delete: "/gb28181/api/platform/{id}"
+    };
+  }
+
+  // 获取平台列表
+  rpc ListPlatforms (ListPlatformsRequest) returns (PlatformsPageInfo) {
+    option (google.api.http) = {
+      get: "/gb28181/api/platform/list"
+    };
+  }
+
+
+  // 查询录像记录
+  rpc QueryRecord (QueryRecordRequest) returns (QueryRecordResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/records/{deviceId}/{channelId}"
+    };
+  }
+
+  // PTZ 云台控制
+  rpc PtzControl (PtzControlRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/ptz/{deviceId}/{channelId}"
+    };
+  }
+
+  // 光圈控制
+  rpc IrisControl (IrisControlRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/fi/iris/{deviceId}/{channelId}"
+    };
+  }
+
+  // 聚焦控制
+  rpc FocusControl (FocusControlRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/fi/focus/{deviceId}/{channelId}"
+    };
+  }
+
+  // 查询预置位
+  rpc QueryPreset (PresetRequest) returns (PresetResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/preset/query/{deviceId}/{channelId}"
+    };
+  }
+
+  // 设置预置位
+  rpc AddPreset (PresetRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/preset/{deviceId}/{channelId}"
+    };
+  }
+
+  // 调用预置位
+  rpc CallPreset (PresetRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/preset/call/{deviceId}/{channelId}"
+    };
+  }
+
+  // 删除预置位
+  rpc DeletePreset (PresetRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/preset/delete/{deviceId}/{channelId}"
+    };
+  }
+
+  // 巡航点控制 - 添加巡航点
+  rpc AddCruisePoint (CruisePointRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/cruise/point/add/{deviceId}/{channelId}"
+    };
+  }
+
+  // 巡航点控制 - 删除巡航点
+  rpc DeleteCruisePoint (CruisePointRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/cruise/point/delete/{deviceId}/{channelId}"
+    };
+  }
+
+  // 设置巡航速度
+  rpc SetCruiseSpeed (CruiseSpeedRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/cruise/speed/{deviceId}/{channelId}"
+    };
+  }
+
+  // 设置巡航停留时间
+  rpc SetCruiseTime (CruiseTimeRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/cruise/time/{deviceId}/{channelId}"
+    };
+  }
+
+  // 开始巡航
+  rpc StartCruise (CruiseRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/cruise/start/{deviceId}/{channelId}"
+    };
+  }
+
+  // 停止巡航
+  rpc StopCruise (CruiseRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/cruise/stop/{deviceId}/{channelId}"
+    };
+  }
+
+  // 开始自动扫描
+  rpc StartScan (ScanRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/scan/start/{deviceId}/{channelId}"
+    };
+  }
+
+  // 停止自动扫描
+  rpc StopScan (ScanRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/scan/stop/{deviceId}/{channelId}"
+    };
+  }
+
+  // 设置自动扫描左边界
+  rpc SetScanLeft (ScanRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/scan/set/left/{deviceId}/{channelId}"
+    };
+  }
+
+  // 设置自动扫描右边界
+  rpc SetScanRight (ScanRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/scan/set/right/{deviceId}/{channelId}"
+    };
+  }
+
+  // 设置自动扫描速度
+  rpc SetScanSpeed (ScanSpeedRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/scan/set/speed/{deviceId}/{channelId}"
+    };
+  }
+
+  // 雨刷控制
+  rpc WiperControl (WiperControlRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/wiper/{deviceId}/{channelId}"
+    };
+  }
+
+  // 辅助开关控制
+  rpc AuxiliaryControl (AuxiliaryControlRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/auxiliary/{deviceId}/{channelId}"
+    };
+  }
+
+  // 测试SIP连接
+  rpc TestSip (TestSipRequest) returns (TestSipResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/testsip"
+    };
+  }
+
+  // 分页查询报警记录
+  rpc SearchAlarms (SearchAlarmsRequest) returns (SearchAlarmsResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/alarms/{deviceId}"
+    };
+  }
+
+  // 添加平台通道
+  rpc AddPlatformChannel (AddPlatformChannelRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      post: "/gb28181/api/platform/channel/add"
+      body: "*"
+    };
+  }
+
+  // 录制控制
+  rpc Recording (RecordingRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/recording/{cmdType}/{deviceId}/{channelId}"
+    };
+  }
+
+  // 接收JPEG文件
+  rpc UploadJpeg (UploadJpegRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      post: "/gb28181/api/snap/upload"
+      body: "*"
+    };
+  }
+}
+
+// 请求和响应消息定义
+message GetDeviceRequest {
+  string deviceId = 1;
+}
+
+message GetDevicesRequest {
+  int32 page = 1;
+  int32 count = 2;
+  string query = 3;
+  bool status = 4;
+}
+
+message DevicesPageInfo {
+  int32 code = 1;
+  string message = 2;
+  int32 total = 3;
+  repeated Device data = 4;
+}
+
+message GetChannelsRequest {
+  string deviceId = 1;
+  int32 page = 2;
+  int32 count = 3;
+  string query = 4;
+  bool online = 5;
+  bool channelType = 6;
+}
+
+message ChannelsPageInfo {
+  int32 code = 1;
+  string message = 2;
+  int32 total = 3;
+  repeated Channel list = 4;
+}
+
+message SyncDeviceRequest {
+  string deviceId = 1;
+}
+
+message SyncStatus {
+  int32 code = 1;
+  string message = 2;
+  int32 total = 3;
+  int32 current = 4;
+  string errorMsg = 5;
+}
+
+message DeleteDeviceRequest {
+  string deviceId = 1;
+}
+
+message DeleteDeviceResponse {
+  int32 code = 1;
+  string message = 2;
+  string deviceId = 3;
+}
+
+message GetSubChannelsRequest {
+  string deviceId = 1;
+  string channelId = 2;
+  int32 page = 3;
+  int32 count = 4;
+  string query = 5;
+  bool online = 6;
+  bool channelType = 7;
 }
 
 message Channel {
@@ -29,28 +476,436 @@ message Channel {
   int32  RegisterWay = 12;
   int32 Secrecy     =13;
   string Status       =14;
-  google.protobuf.Timestamp gpsTime=15;
+  google.protobuf.Timestamp GpsTime=15;
   string Longitude = 16;
   string Latitude = 17;
 }
 
 message Device {
-  string id = 1;
-  string name = 2;
-  string manufacturer = 3;
-  string model = 4;
-  string owner = 5;
-  google.protobuf.Timestamp gpsTime=6;
-  string longitude = 7;
-  string latitude = 8;
-  string status = 9;
-  google.protobuf.Timestamp registerTime=10;
-  google.protobuf.Timestamp updateTime=11;
-  repeated Channel channels = 12;
+  string DeviceID = 1;
+  string Name = 2;
+  string Manufacturer = 3;
+  string Model = 4;
+  string Longitude = 5;
+  string Latitude = 6;
+  string Status = 9;
+  google.protobuf.Timestamp RegisterTime=10;
+  google.protobuf.Timestamp UpdateTime=11;
+  google.protobuf.Timestamp KeepAliveTime=12;
+  int32 ChannelCount = 13;
+  bool Online = 14;
+  repeated Channel Channels = 15;
 }
 
 message ResponseList {
   int32 code = 1;
   string message = 2;
   repeated Device data = 3;
+}
+
+// 新增的请求和响应消息定义
+message ChangeAudioRequest {
+  int32 channelId = 1;
+  bool audio = 2;
+}
+
+message UpdateTransportRequest {
+  string deviceId = 1;
+  string streamMode = 2; // UDP, TCP-ACTIVE, TCP-PASSIVE
+}
+
+message GetDeviceStatusRequest {
+  string deviceId = 1;
+}
+
+message DeviceStatusResponse {
+  int32 code = 1;
+  string message = 2;
+  string status = 3;
+}
+
+message GetDeviceAlarmRequest {
+  string deviceId = 1;
+  string startPriority = 2;
+  string endPriority = 3;
+  string alarmMethod = 4;
+  string alarmType = 5;
+  string startTime = 6;
+  string endTime = 7;
+}
+
+message DeviceAlarmResponse {
+  int32 code = 1;
+  string message = 2;
+  repeated AlarmInfo alarms = 3;
+}
+
+message AlarmInfo {
+  string deviceId = 1;
+  string alarmPriority = 2;
+  string alarmMethod = 3;
+  string alarmTime = 4;
+  string alarmDescription = 5;
+}
+
+message GetSyncStatusRequest {
+  string deviceId = 1;
+}
+
+message GetSubscribeInfoRequest {
+  string deviceId = 1;
+}
+
+message SubscribeInfoResponse {
+  int32 code = 1;
+  string message = 2;
+  map<string, int32> dialogState = 3;
+}
+
+message GetSnapRequest {
+  string deviceId = 1;
+  string channelId = 2;
+  string mark = 3;
+}
+
+message SnapResponse {
+  int32 code = 1;
+  string message = 2;
+  bytes imageData = 3;
+}
+
+message GetRawChannelRequest {
+  int32 id = 1;
+}
+
+message DeviceResponse {
+  int32 code = 1;
+  string message = 2;
+  Device data = 3;
+}
+
+message ChannelResponse {
+  int32 code = 1;
+  string message = 2;
+  Channel data = 3;
+}
+
+message PlayRequest {
+  string deviceId = 1;
+  string channelId = 2;
+}
+
+message PlaybackRequest {
+  string deviceId = 1;
+  string channelId = 2;
+  string start = 3;     // 开始时间
+  string end = 4;       // 结束时间
+  string range = 5;     // 时间范围，可选
+}
+
+message PlayResponse {
+  int32 code = 1;
+  string message = 2;
+  StreamInfo stream_info = 3;
+}
+
+message StreamInfo {
+  string stream = 1;
+  string app = 2;
+  string ip = 3;
+  int32 port = 4;
+  string ssrc = 5;
+}
+
+message ConvertStopRequest {
+  string key = 1;
+  string mediaServerId = 2;
+}
+
+message BroadcastRequest {
+  string deviceId = 1;
+  string channelId = 2;
+  int32 timeout = 3;
+  bool broadcastMode = 4;
+}
+
+message BroadcastResponse {
+  int32 code = 1;
+  string message = 2;
+  string streamId = 3;
+  string url = 4;
+}
+
+message SSRCInfo {
+  string deviceId = 1;
+  string channelId = 2;
+  string ssrc = 3;
+  string streamId = 4;
+}
+
+message SSRCListResponse {
+  int32 code = 1;
+  string message = 2;
+  repeated SSRCInfo data = 3;
+  int32 count = 4;
+}
+
+// Platform消息定义
+message Platform {
+  uint32 ID = 1;                      // ID(数据库中)
+  bool enable = 2;                   // 是否启用
+  string name = 3;                   // 名称
+  string serverGBId = 4;             // SIP服务国标编码
+  string serverGBDomain = 5;         // SIP服务国标域
+  string serverIp = 6;               // SIP服务IP
+  int32 serverPort = 7;              // SIP服务端口
+  string deviceGBId = 8;             // 设备国标编号
+  string deviceIp = 9;               // 设备ip
+  int32 devicePort = 10;             // 设备端口
+  string username = 11;              // SIP认证用户名
+  string password = 12;              // SIP认证密码
+  int32 expires = 13;                // 注册周期(秒)
+  int32 keepTimeout = 14;            // 心跳周期(秒)
+  string transport = 15;             // 传输协议
+  string characterSet = 16;          // 字符集
+  bool ptz = 17;                     // 允许云台控制
+  bool rtcp = 18;                    // RTCP流保活
+  bool status = 19;                  // 在线状态
+  int32 channelCount = 20;           // 通道数量
+  bool catalogSubscribe = 21;        // 已被订阅目录信息
+  bool alarmSubscribe = 22;          // 已被订阅报警信息
+  bool mobilePositionSubscribe = 23; // 已被订阅移动位置信息
+  int32 catalogGroup = 24;           // 目录分组大小
+  string updateTime = 25;            // 最后更新时间
+  string createTime = 26;            // 创建时间
+  bool asMessageChannel = 27;        // 是否作为消息通道
+  string sendStreamIp = 28;          // 点播回复200OK使用的IP
+  bool autoPushChannel = 29;         // 是否自动推送通道变化
+  int32 catalogWithPlatform = 30;    // 目录信息包含平台信息
+  int32 catalogWithGroup = 31;       // 目录信息包含分组信息
+  int32 catalogWithRegion = 32;      // 目录信息包含行政区划
+  string civilCode = 33;             // 行政区划代码
+  string manufacturer = 34;          // 平台厂商
+  string model = 35;                 // 平台型号
+  string address = 36;               // 平台安装地址
+  int32 registerWay = 37;            // 注册方式
+  int32 secrecy = 38;               // 保密属性
+}
+
+// 获取平台请求
+message GetPlatformRequest {
+  int32 id = 1;
+}
+
+// 删除平台请求
+message DeletePlatformRequest {
+  int32 id = 1;
+}
+
+// 平台列表请求
+message ListPlatformsRequest {
+  int32 page = 1;
+  int32 count = 2;
+  string query = 3;
+  bool status = 4;
+}
+
+// 平台响应
+message PlatformResponse {
+  int32 code = 1;
+  string message = 2;
+  Platform data = 3;
+}
+
+// 平台分页信息
+message PlatformsPageInfo {
+  int32 code = 1;
+  string message = 2;
+  int32 total = 3;
+  repeated Platform list = 4;
+}
+
+message QueryRecordRequest {
+  string deviceId = 1;
+  string channelId = 2;
+  string start = 3;
+  string end = 4;
+  string range = 5;
+}
+
+message QueryRecordResponse {
+  int32 code = 1;
+  string message = 2;
+  repeated RecordItem data = 3;
+  string device_id = 4;
+  string channel_id = 5;
+  string sn = 6;
+  string name = 7;
+  int32 sum_num = 8;
+  int32 count = 9;
+  google.protobuf.Timestamp last_time = 10;
+}
+
+message RecordItem {
+  string deviceId = 1;
+  string name = 2;
+  string filePath = 3;
+  string address = 4;
+  string startTime = 5;
+  string endTime = 6;
+  int32 secrecy = 7;
+  string type = 8;
+  string recorderId = 9;
+}
+
+
+message PtzControlRequest {
+  string deviceId = 1;
+  string channelId = 2;
+  string ptzcmd = 3;
+}
+
+message IrisControlRequest {
+  string deviceId = 1;
+  string channelId = 2;
+  string command = 3;  // in, out, stop
+  int32 speed = 4;     // 0-255
+}
+
+message FocusControlRequest {
+  string deviceId = 1;
+  string channelId = 2;
+  string command = 3;  // near, far, stop
+  int32 speed = 4;     // 0-255
+}
+
+message PresetRequest {
+  string deviceId = 1;
+  string channelId = 2;
+  int32 presetId = 3;  // 1-255
+}
+
+message PresetResponse {
+  int32 code = 1;
+  string message = 2;
+  repeated int32 data = 3;
+}
+
+message CruisePointRequest {
+  string deviceId = 1;
+  string channelId = 2;
+  int32 cruiseId = 3;   // 0-255
+  int32 presetId = 4;   // 1-255
+}
+
+message CruiseSpeedRequest {
+  string deviceId = 1;
+  string channelId = 2;
+  int32 cruiseId = 3;   // 0-255
+  int32 speed = 4;      // 1-4095
+}
+
+message CruiseTimeRequest {
+  string deviceId = 1;
+  string channelId = 2;
+  int32 cruiseId = 3;   // 0-255
+  int32 time = 4;       // 1-4095
+}
+
+message CruiseRequest {
+  string deviceId = 1;
+  string channelId = 2;
+  int32 cruiseId = 3;   // 0-255
+}
+
+message ScanRequest {
+  string deviceId = 1;
+  string channelId = 2;
+  int32 scanId = 3;     // 0-255
+}
+
+message ScanSpeedRequest {
+  string deviceId = 1;
+  string channelId = 2;
+  int32 scanId = 3;     // 0-255
+  int32 speed = 4;      // 1-4095
+}
+
+message WiperControlRequest {
+  string deviceId = 1;
+  string channelId = 2;
+  string command = 3;   // on, off
+}
+
+message AuxiliaryControlRequest {
+  string deviceId = 1;
+  string channelId = 2;
+  string command = 3;   // on, off
+  int32 switchId = 4;
+}
+
+// 测试SIP连接的消息定义
+message TestSipRequest {
+  string testParam = 1;  // 测试参数
+}
+
+message TestSipResponse {
+  int32 code = 1;        // 响应代码
+  string message = 2;    // 响应消息
+  string testResult = 3; // 测试结果
+}
+
+// 报警记录查询请求
+message SearchAlarmsRequest {
+  string deviceId = 1;           // 设备ID，可选
+  string start = 2;              // 开始时间
+  string end = 3;                // 结束时间
+  string range = 4;              // 时间范围，可选
+  int32 page = 5;               // 页码，从1开始
+  int32 count = 6;              // 每页大小
+}
+
+// 报警记录查询响应
+message SearchAlarmsResponse {
+  int32 code = 1;               // 响应代码
+  string message = 2;           // 响应消息
+  int32 total = 3;              // 总记录数
+  repeated AlarmRecord list = 4; // 报警记录列表
+}
+
+// 报警记录详情
+message AlarmRecord {
+  string id = 1;                // 报警记录ID
+  string deviceId = 2;          // 设备ID
+  string deviceName = 3;        // 设备名称
+  string channelId = 4;         // 通道ID
+  string alarmPriority = 5;     // 报警级别
+  string alarmMethod = 6;       // 报警方式
+  string alarmTime = 7;         // 报警时间
+  string alarmDescription = 8;  // 报警描述
+  double longitude = 9;         // 经度
+  double latitude = 10;         // 纬度
+  string alarmType = 11;        // 报警类型
+  string createTime = 12;       // 创建时间
+  string alarmPriorityDesc = 13;// 报警级别描述
+  string alarmMethodDesc = 14;  // 报警方式描述
+  string alarmTypeDesc = 15;    // 报警类型描述
+}
+
+// 添加平台通道请求
+message AddPlatformChannelRequest {
+  int32 platformId = 1;  // 平台ID
+  repeated int32 channelIds = 2;  // 通道ID列表
+}
+
+// 录制控制请求
+message RecordingRequest {
+  string cmdType = 1;    // 命令类型：start/stop
+  string deviceId = 2;   // 设备ID
+  string channelId = 3;  // 通道ID
+}
+
+// JPEG文件上传请求
+message UploadJpegRequest {
+  bytes imageData = 1;    // JPEG文件数据
 }

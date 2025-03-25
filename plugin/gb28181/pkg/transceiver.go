@@ -2,8 +2,10 @@ package gb28181
 
 import (
 	"errors"
+	"fmt"
 	"net"
 	"os"
+	"strings"
 
 	"github.com/pion/rtp"
 	"m7s.live/v5"
@@ -43,6 +45,7 @@ type Receiver struct {
 	RTPReader  *rtp2.TCP
 	ListenAddr string
 	listener   net.Listener
+	StreamMode string // 数据流传输模式（UDP:udp传输/TCP-ACTIVE：tcp主动模式/TCP-PASSIVE：tcp被动模式）
 }
 
 func NewPSPublisher(puber *m7s.Publisher) *PSPublisher {
@@ -141,39 +144,71 @@ func (dec *PSPublisher) decProgramStreamMap() (err error) {
 func (p *Receiver) ReadRTP(rtp util.Buffer) (err error) {
 	lastSeq := p.SequenceNumber
 	if err = p.Unmarshal(rtp); err != nil {
+		p.Error("unmarshal error", "err", err)
 		return
 	}
-	if p.SequenceNumber != lastSeq+1 {
-		return ErrRTPReceiveLost
+	if lastSeq == 0 || p.SequenceNumber == lastSeq+1 {
+		if p.Enabled(p, task.TraceLevel) {
+			p.Trace("rtp", "len", rtp.Len(), "seq", p.SequenceNumber, "payloadType", p.PayloadType, "ssrc", p.SSRC)
+		}
+		copyData := make([]byte, len(p.Payload))
+		copy(copyData, p.Payload)
+		p.FeedChan <- copyData
+		return
 	}
-	if p.Enabled(p, task.TraceLevel) {
-		p.Trace("rtp", "len", rtp.Len(), "seq", p.SequenceNumber, "payloadType", p.PayloadType, "ssrc", p.SSRC)
-	}
-	copyData := make([]byte, len(p.Payload))
-	copy(copyData, p.Payload)
-	p.FeedChan <- copyData
-	return
+	return ErrRTPReceiveLost
 }
 
 func (p *Receiver) Start() (err error) {
-	p.listener, err = net.Listen("tcp", p.ListenAddr)
+	if p.StreamMode == "TCP-ACTIVE" {
+		// TCP主动模式不需要监听，直接返回
+		p.Info("TCP-ACTIVE mode, no need to listen")
+		return nil
+	}
+	// TCP被动模式
+	p.listener, err = net.Listen("tcp4", p.ListenAddr)
 	if err != nil {
 		p.Error("start listen", "err", err)
-		return
+		return errors.New("start listen,err" + err.Error())
 	}
 	p.Info("start listen", "addr", p.ListenAddr)
 	return
 }
 
 func (p *Receiver) Dispose() {
-	p.listener.Close()
+	if p.listener != nil {
+		p.listener.Close()
+	}
 	if p.RTPReader != nil {
 		p.RTPReader.Close()
 	}
-	//close(p.FeedChan)
+	if p.FeedChan != nil {
+		close(p.FeedChan)
+	}
 }
 
 func (p *Receiver) Go() error {
+	if p.StreamMode == "TCP-ACTIVE" {
+		// TCP主动模式，主动连接设备
+		addr := p.ListenAddr
+		if !strings.Contains(addr, ":") {
+			addr = ":" + addr
+		}
+		if strings.HasPrefix(addr, ":") {
+			p.Error("invalid address, missing IP", "addr", addr)
+			return fmt.Errorf("invalid address %s, missing IP", addr)
+		}
+		p.Info("TCP-ACTIVE mode, connecting to device", "addr", addr)
+		conn, err := net.Dial("tcp", addr)
+		if err != nil {
+			p.Error("connect to device failed", "err", err)
+			return err
+		}
+		p.RTPReader = (*rtp2.TCP)(conn.(*net.TCPConn))
+		p.Info("connected to device", "addr", conn.RemoteAddr())
+		return p.RTPReader.Read(p.ReadRTP)
+	}
+	// TCP被动模式
 	p.Info("start accept")
 	conn, err := p.listener.Accept()
 	if err != nil {

@@ -1,4 +1,4 @@
-package plugin_gb28181
+package plugin_gb28181pro
 
 import (
 	"context"
