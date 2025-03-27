@@ -125,7 +125,7 @@ func (task *ListenTCPWork) listen(handler TCPHandler) {
 				if max := 1 * time.Second; tempDelay > max {
 					tempDelay = max
 				}
-				// slog.Warnf("%s: Accept error: %v; retrying in %v", tcp.ListenAddr, err, tempDelay)
+				// slog.Warnf("%s: Accept error: %v; retrying in %v", tcp.DownListenAddr, err, tempDelay)
 				time.Sleep(tempDelay)
 				continue
 			}

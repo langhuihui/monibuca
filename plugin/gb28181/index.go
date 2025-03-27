@@ -655,6 +655,7 @@ func (gb *GB28181Plugin) RecoverDevice(d *Device, req *sip.Request) {
 	d.StartTime = time.Now()
 	d.Status = DeviceRecoverStatus
 	d.UpdateTime = time.Now()
+	d.RegisterTime = time.Now()
 	d.Online = true
 
 	if gb.DB != nil {
@@ -1119,8 +1120,44 @@ func (gb *GB28181Plugin) OnInvite(req *sip.Request, tx sip.ServerTransaction) {
 				start:          inviteInfo.StartTime,
 				end:            inviteInfo.StopTime,
 				channel:        channelTmp,
+				upIP:           sdpIP,
+				upPort:         mediaPort,
+			}
+			forwardDialog.forwarder = gb28181.NewRTPForwarder()
+			forwardDialog.forwarder.TCP = forwardDialog.TCP
+			forwardDialog.forwarder.TCPActive = forwardDialog.TCPActive
+			forwardDialog.forwarder.StreamMode = forwardDialog.channel.Device.StreamMode
+
+			if forwardDialog.TCPActive {
+				forwardDialog.forwarder.UpListenAddr = fmt.Sprintf(":%d", forwardDialog.upPort)
+			} else {
+				forwardDialog.forwarder.UpListenAddr = fmt.Sprintf("%s:%d", forwardDialog.upIP, forwardDialog.platformPort)
 			}
 
+			// 设置监听地址和端口
+			if strings.ToUpper(forwardDialog.channel.Device.StreamMode) == "TCP-ACTIVE" {
+				forwardDialog.forwarder.DownListenAddr = fmt.Sprintf("%s:%d", forwardDialog.downIP, forwardDialog.downPort)
+			} else {
+				forwardDialog.forwarder.DownListenAddr = fmt.Sprintf(":%d", forwardDialog.MediaPort)
+			}
+
+			// 设置转发目标
+			if inviteInfo.IP != "" && forwardDialog.platformPort > 0 {
+				err = forwardDialog.forwarder.SetTarget(forwardDialog.platformIP, forwardDialog.platformPort)
+				if err != nil {
+					gb.Error("set target error", "err", err)
+					return
+				}
+			} else {
+				gb.Error("no target set, will only receive but not forward")
+				return
+			}
+
+			// 设置目标SSRC
+			if forwardDialog.platformSSRC != "" {
+				forwardDialog.forwarder.TargetSSRC = forwardDialog.platformSSRC
+				gb.Info("set target ssrc", "ssrc", forwardDialog.platformSSRC)
+			}
 			// 保存到集合中
 			gb.forwardDialogs.Set(forwardDialog)
 			gb.Info("OnInvite", "action", "sendRtpInfo created", "callId", req.CallID().Value())

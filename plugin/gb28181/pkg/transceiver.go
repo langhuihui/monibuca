@@ -160,7 +160,7 @@ func (p *Receiver) ReadRTP(rtp util.Buffer) (err error) {
 }
 
 func (p *Receiver) Start() (err error) {
-	if p.StreamMode == "TCP-ACTIVE" {
+	if strings.ToUpper(p.StreamMode) == "TCP-ACTIVE" {
 		// TCP主动模式不需要监听，直接返回
 		p.Info("TCP-ACTIVE mode, no need to listen")
 		return nil
@@ -188,7 +188,7 @@ func (p *Receiver) Dispose() {
 }
 
 func (p *Receiver) Go() error {
-	if p.StreamMode == "TCP-ACTIVE" {
+	if strings.ToUpper(p.StreamMode) == "TCP-ACTIVE" {
 		// TCP主动模式，主动连接设备
 		addr := p.ListenAddr
 		if !strings.Contains(addr, ":") {

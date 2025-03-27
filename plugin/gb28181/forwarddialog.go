@@ -1,6 +1,7 @@
 package plugin_gb28181pro
 
 import (
+	"errors"
 	"fmt"
 	sipgo "github.com/emiago/sipgo"
 	"github.com/emiago/sipgo/sip"
@@ -21,8 +22,10 @@ type ForwardDialog struct {
 	session        *sipgo.DialogClientSession
 	pullCtx        m7s.PullJob
 	forwarder      *gb28181.RTPForwarder
-	platformIP     string
-	platformPort   int
+	upIP           string //上级平台主动模式时接收数据的IP
+	upPort         uint16 //上级平台主动模式时接收数据的端口
+	platformIP     string //上级平台被动模式时发送数据的IP
+	platformPort   int    //上级平台被动模式时发送数据的端口
 	platformSSRC   string // 上级平台的SSRC
 	platformCallId string //上级平台发起invite的callid
 	// 是否为TCP传输
@@ -31,6 +34,8 @@ type ForwardDialog struct {
 	TCPActive bool
 	start     int64
 	end       int64
+	downIP    string
+	downPort  int
 }
 
 // GetCallID 获取会话的CallID
@@ -143,9 +148,27 @@ func (d *ForwardDialog) Start() (err error) {
 	sdpInfo = append(sdpInfo, "a=rtpmap:96 PS/90000")
 	//sdpInfo = append(sdpInfo, "a=rtpmap:98 H264/90000")
 	//sdpInfo = append(sdpInfo, "a=rtpmap:97 MPEG4/90000")
-	sdpInfo = append(sdpInfo, "a=setup:passive")
-	sdpInfo = append(sdpInfo, "a=connection:new")
 
+	//根据传输模式添加 setup 和 connection 属性
+	switch strings.ToUpper(device.StreamMode) {
+	case "TCP-PASSIVE":
+		sdpInfo = append(sdpInfo,
+			"a=setup:passive",
+			"a=connection:new",
+		)
+	case "TCP-ACTIVE":
+		sdpInfo = append(sdpInfo,
+			"a=setup:active",
+			"a=connection:new",
+		)
+	case "UDP":
+		d.Stop(errors.New("do not support udp mode"))
+	default:
+		sdpInfo = append(sdpInfo,
+			"a=setup:passive",
+			"a=connection:new",
+		)
+	}
 	if d.SSRC == 0 {
 		d.SSRC = uint32(ssrcValue)
 	}
@@ -204,59 +227,82 @@ func (d *ForwardDialog) Run() (err error) {
 	ds := strings.Split(inviteResponseBody, "\r\n")
 	for _, l := range ds {
 		if ls := strings.Split(l, "="); len(ls) > 1 {
-			if ls[0] == "y" && len(ls[1]) > 0 {
-				if _ssrc, err := strconv.ParseInt(ls[1], 10, 0); err == nil {
-					d.SSRC = uint32(_ssrc)
-				} else {
-					d.gb.Error("read invite response y ", "err", err)
+			switch ls[0] {
+			case "y":
+				if len(ls[1]) > 0 {
+					if _ssrc, err := strconv.ParseInt(ls[1], 10, 0); err == nil {
+						d.SSRC = uint32(_ssrc)
+					} else {
+						d.gb.Error("read invite response y ", "err", err)
+					}
 				}
-			}
-			if ls[0] == "m" && len(ls[1]) > 0 {
-				netinfo := strings.Split(ls[1], " ")
-				if strings.ToUpper(netinfo[2]) == "TCP/RTP/AVP" {
-					d.gb.Debug("device support tcp")
-				} else {
-					d.gb.Debug("device using udp")
+			case "c":
+				// 解析 c=IN IP4 xxx.xxx.xxx.xxx 格式
+				parts := strings.Split(ls[1], " ")
+				if len(parts) >= 3 {
+					d.downIP = parts[len(parts)-1]
+				}
+			case "m":
+				// 解析 m=video port xxx 格式
+				parts := strings.Split(ls[1], " ")
+				if len(parts) >= 2 {
+					if port, err := strconv.Atoi(parts[1]); err == nil {
+						d.downPort = port
+					}
 				}
 			}
 		}
 	}
 	err = d.session.Ack(d.gb)
-
+	if err != nil {
+		d.gb.Error("ack session err", err)
+		d.Stop(errors.New("ack session err" + err.Error()))
+	}
 	// 创建并初始化RTPForwarder
-	d.forwarder = gb28181.NewRTPForwarder()
-	d.forwarder.TCP = d.TCP
-	d.forwarder.TCPActive = d.TCPActive
-
+	//d.forwarder = gb28181.NewRTPForwarder()
+	//d.forwarder.TCP = d.TCP
+	//d.forwarder.TCPActive = d.TCPActive
+	//d.forwarder.StreamMode = d.channel.Device.StreamMode
+	//
+	//if d.TCPActive {
+	//	d.forwarder.UpListenAddr = fmt.Sprintf(":%d", d.upPort)
+	//} else {
+	//	d.forwarder.UpListenAddr = fmt.Sprintf("%s:%d", d.upIP, d.platformPort)
+	//}
+	//
 	// 设置监听地址和端口
-	d.forwarder.ListenAddr = fmt.Sprintf(":%d", d.MediaPort)
-	d.forwarder.ListenPort = d.MediaPort
-
-	// 设置转发目标
-	if d.platformIP != "" && d.platformPort > 0 {
-		err = d.forwarder.SetTarget(d.platformIP, d.platformPort)
-		if err != nil {
-			d.Error("set target error", "err", err)
-			return err
-		}
+	if strings.ToUpper(d.channel.Device.StreamMode) == "TCP-ACTIVE" {
+		d.forwarder.DownListenAddr = fmt.Sprintf("%s:%d", d.downIP, d.downPort)
 	} else {
-		d.Error("no target set, will only receive but not forward")
-		return
+		d.forwarder.DownListenAddr = fmt.Sprintf(":%d", d.MediaPort)
 	}
-
-	// 设置目标SSRC
-	if d.platformSSRC != "" {
-		d.forwarder.TargetSSRC = d.platformSSRC
-		d.Info("set target ssrc", "ssrc", d.platformSSRC)
-	}
+	//
+	//// 设置转发目标
+	//if d.platformIP != "" && d.platformPort > 0 {
+	//	err = d.forwarder.SetTarget(d.platformIP, d.platformPort)
+	//	if err != nil {
+	//		d.Error("set target error", "err", err)
+	//		return err
+	//	}
+	//} else {
+	//	d.Error("no target set, will only receive but not forward")
+	//	return
+	//}
+	//
+	//// 设置目标SSRC
+	//if d.platformSSRC != "" {
+	//	d.forwarder.TargetSSRC = d.platformSSRC
+	//	d.Info("set target ssrc", "ssrc", d.platformSSRC)
+	//}
 
 	// 将forwarder添加到任务中
 	d.AddTask(d.forwarder)
 
 	d.Info("forwarder started successfully",
+		"d.forwarder.UpListenAddr", d.forwarder.UpListenAddr,
 		"TCP", d.forwarder.TCP,
 		"TCPActive", d.forwarder.TCPActive,
-		"listen", d.forwarder.ListenAddr,
+		"listen", d.forwarder.DownListenAddr,
 		"target", fmt.Sprintf("%s:%d", d.platformIP, d.platformPort),
 		"ssrc", d.platformSSRC)
 
