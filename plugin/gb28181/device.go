@@ -1,8 +1,11 @@
 package plugin_gb28181pro
 
 import (
+	"context"
 	"fmt"
+	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -70,16 +73,23 @@ type Device struct {
 	Longitude, Latitude string // 经度,纬度
 	eventChan           chan any
 	client              *sipgo.Client
-	dialogClient        *sipgo.DialogClientCache
 	contactHDR          sip.ContactHeader
 	fromHDR             sip.FromHeader
 	toHDR               sip.ToHeader
 	plugin              *GB28181Plugin
 	LocalPort           int
+	WanIP               string
+	WanPort             int
 }
 
 func (d *Device) TableName() string {
 	return "device_gb28181pro"
+}
+
+func (d *Device) Dispose() {
+	if d.plugin.DB != nil {
+		d.plugin.DB.Save(d)
+	}
 }
 
 func (d *Device) GetKey() string {
@@ -87,10 +97,21 @@ func (d *Device) GetKey() string {
 }
 
 func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28181.Message) (err error) {
-	var body []byte
-	if d.Status == DeviceRecoverStatus {
-		d.Status = DeviceOnlineStatus
+	source := req.Source()
+	hostname, portStr, _ := net.SplitHostPort(source)
+	port, _ := strconv.Atoi(portStr)
+	if d.IP != hostname || d.Port != port {
+		d.Recipient.Host = hostname
+		d.Recipient.Port = port
 	}
+	d.IP = hostname
+	d.Port = port
+	d.HostAddress = hostname + ":" + portStr
+	var body []byte
+	//d.Online = true
+	//if d.Status != DeviceOnlineStatus {
+	//	d.Status = DeviceOnlineStatus
+	//}
 	//d.Debug("OnMessage", "cmdType", msg.CmdType, "body", string(req.Body()))
 	switch msg.CmdType {
 	case "Keepalive":
@@ -126,6 +147,7 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 			// 更新当前设备的通道数
 			d.ChannelCount = msg.SumNum
 			d.UpdateTime = time.Now()
+			d.Debug("save channel", "deviceid", d.DeviceID)
 			if err := d.plugin.DB.Save(d).Error; err != nil {
 				d.Error("save device failed", "error", err)
 			}
@@ -214,8 +236,6 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 			}
 		}
 	case "DeviceStatus":
-		d.Status = DeviceOnlineStatus
-		d.Online = true
 		if d.plugin.DB != nil {
 			d.UpdateTime = time.Now()
 			d.plugin.DB.Save(d)
@@ -280,7 +300,7 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 func (d *Device) send(req *sip.Request) (*sip.Response, error) {
 	d.SN++
 	d.Debug("send", "req", req.String())
-	return d.client.Do(d, req)
+	return d.client.Do(context.Background(), req)
 }
 
 func (d *Device) Go() (err error) {
@@ -331,6 +351,7 @@ func (d *Device) Go() (err error) {
 				d.Debug("catalogTick", "response", response.String())
 			}
 		case event := <-d.eventChan:
+			d.Debug("eventChan", "event", event)
 			switch v := event.(type) {
 			case []gb28181.DeviceChannel:
 				for _, c := range v {
@@ -364,7 +385,9 @@ func (d *Device) CreateRequest(Method sip.RequestMethod, Recipient any) *sip.Req
 	} else {
 		req = sip.NewRequest(Method, d.Recipient)
 	}
-	req.AppendHeader(&d.fromHDR)
+	fromHDR := d.fromHDR
+	fromHDR.Params.Add("tag", sip.GenerateTagN(32))
+	req.AppendHeader(&fromHDR)
 	contentType := sip.ContentTypeHeader("Application/MANSCDP+xml")
 	req.AppendHeader(sip.NewHeader("User-Agent", "M7S/"+m7s.Version))
 	req.AppendHeader(&contentType)
@@ -500,10 +523,6 @@ func (d *Device) GetStreamMode() string {
 
 func (d *Device) Send(req *sip.Request) (*sip.Response, error) {
 	return d.send(req)
-}
-
-func (d *Device) CreateDialogSession(req *sip.Request) (*sipgo.DialogClientSession, error) {
-	return d.dialogClient.Invite(d.plugin, d.Recipient, req.Body(), req.GetHeader("Content-Type"), req.GetHeader("Subject"), &d.fromHDR, req.GetHeader("Allow"))
 }
 
 func (d *Device) CreateSSRC(serial string) uint16 {

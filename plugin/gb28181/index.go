@@ -44,7 +44,7 @@ type GB28181Plugin struct {
 	m7s.Plugin
 	AutoInvite     bool   `default:"true" desc:"自动邀请"`
 	Serial         string `default:"34020000002000000001" desc:"sip 服务 id"` //sip 服务器 id, 默认 34020000002000000001
-	Realm          string `default:"3402000000" desc:"sip 服务域"`            //sip 服务器域，默认 3402000000
+	Realm          string `default:"3402000000" desc:"sip 服务域"`             //sip 服务器域，默认 3402000000
 	Username       string
 	Password       string
 	Sip            SipConfig
@@ -127,11 +127,6 @@ func (gb *GB28181Plugin) OnInit() (err error) {
 				gb.Error("检查设备过期状态失败", "error", err)
 			}
 
-			// 初始化数据库中的设备
-			if err := gb.checkDevices(); err != nil {
-				gb.Error("检查设备有效性失败", "error", err)
-			}
-
 			// 检查并初始化平台
 			gb.checkPlatform()
 		}
@@ -145,131 +140,100 @@ func (gb *GB28181Plugin) OnInit() (err error) {
 	return
 }
 
-// InitDevicesFromDB 从数据库中加载并初始化在线设备
-func (gb *GB28181Plugin) checkDevices() error {
-	// 检查数据库是否已初始化
-	if gb.DB == nil {
-		gb.Warn("InitDevicesFromDB", "warning", "数据库未初始化")
-		return nil
-	}
-
-	// 查询所有有效设备：在线且注册未过期
+func (gb *GB28181Plugin) checkDeviceExpire() (err error) {
+	// 从数据库中查询所有设备
 	var devices []*Device
-	now := time.Now()
-
-	// 先查询所有在线设备
-	if err := gb.DB.Where("online = ?", true).Find(&devices).Error; err != nil {
-		gb.Error("InitDevicesFromDB", "error", err.Error())
+	if err := gb.DB.Find(&devices).Error; err != nil {
+		gb.Error("查询设备列表失败", "error", err)
 		return err
 	}
 
-	// 过滤出未过期的设备
-	validDevices := make([]*Device, 0, len(devices))
-	for _, d := range devices {
-		expireTime := d.RegisterTime.Add(time.Duration(d.Expires) * time.Second)
-		if !now.After(expireTime) {
-			validDevices = append(validDevices, d)
-		} else {
-			gb.Debug("InitDevicesFromDB", "跳过过期设备", d.DeviceID, "注册时间", d.RegisterTime, "过期时间", expireTime)
-		}
-	}
-
-	gb.Info("InitDevicesFromDB", "找到有效设备数量", len(validDevices), "总在线设备数量", len(devices))
-
-	// 初始化每个设备
-	for _, device := range validDevices {
-		d := device // 创建副本以避免循环变量问题
+	now := time.Now()
+	for _, device := range devices {
+		// 检查设备是否过期
+		expireTime := device.RegisterTime.Add(time.Duration(device.Expires) * time.Second)
+		isExpired := now.After(expireTime)
 
 		// 设置设备基本属性
-		d.Status = DeviceRecoverStatus
+		device.Status = DeviceOfflineStatus
+		if !isExpired {
+			device.Status = DeviceOnlineStatus
+		}
+		device.Online = !isExpired
 
 		// 设置事件通道
-		d.eventChan = make(chan any, 10)
+		device.eventChan = make(chan any, 10)
 
 		// 设置Logger
-		d.Logger = gb.With("deviceid", d.DeviceID)
+		device.Logger = gb.With("deviceid", device.DeviceID)
 
 		// 初始化通道集合
-		d.channels.L = new(sync.RWMutex)
+		device.channels.L = new(sync.RWMutex)
 
 		// 设置plugin引用
-		d.plugin = gb
-
-		// 配置SIP相关参数
-		host := d.LocalIP
-		if host == "" {
-			host = myip.InternalIPv4()
-			d.LocalIP = host
-			d.mediaIp = host
-		}
-
-		// 获取公网或内网IP配置
-		if !net.ParseIP(d.IP).IsPrivate() {
-			host = gb.GetPublicIP(host)
-		}
+		device.plugin = gb
 
 		// 设置联系人头信息
-		d.contactHDR = sip.ContactHeader{
+		device.contactHDR = sip.ContactHeader{
 			Address: sip.Uri{
 				User: gb.Serial,
-				Host: host,
-				Port: d.LocalPort,
+				Host: device.LocalIP,
+				Port: device.LocalPort,
 			},
 		}
 
 		// 设置来源头信息
-		d.fromHDR = sip.FromHeader{
+		device.fromHDR = sip.FromHeader{
 			Address: sip.Uri{
 				User: gb.Serial,
-				Host: gb.Realm,
+				Host: device.LocalIP,
+				Port: device.LocalPort,
 			},
 			Params: sip.NewParams(),
 		}
-		d.fromHDR.Params.Add("tag", sip.GenerateTagN(16))
+		device.fromHDR.Params.Add("tag", sip.GenerateTagN(16))
 
 		// 设置接收者
-		d.Recipient = sip.Uri{
-			Host: d.IP,
-			Port: d.Port,
-			User: d.DeviceID,
+		device.Recipient = sip.Uri{
+			Host: device.IP,
+			Port: device.Port,
+			User: device.DeviceID,
 		}
 
 		// 创建SIP客户端
-		d.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(d.LocalIP))
-		d.dialogClient = sipgo.NewDialogClientCache(d.client, d.contactHDR)
-		d.Info("checkDevices", "d.LocalIP", d.LocalIP, "d.LocalPort", d.LocalPort, "d.contactHDR", d.contactHDR)
+		device.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(device.WanIP), sipgo.WithClientPort(device.WanPort))
+		device.Info("checkDeviceExpire", "d.LocalIP", device.LocalIP, "d.LocalPort", device.LocalPort, "d.contactHDR", device.contactHDR)
 
 		// 设置设备ID的hash值作为任务ID
 		var hash uint32
-		for i := 0; i < len(d.DeviceID); i++ {
-			ch := d.DeviceID[i]
+		for i := 0; i < len(device.DeviceID); i++ {
+			ch := device.DeviceID[i]
 			hash = hash*31 + uint32(ch)
 		}
-		d.Task.ID = hash
-
+		device.Task.ID = hash
 		// 设置启动和销毁回调
-		d.OnStart(func() {
-			gb.devices.Add(d)
-			d.channels.OnAdd(func(c *Channel) {
-				if absDevice, ok := gb.Server.PullProxies.Find(func(absDevice *m7s.PullProxy) bool {
-					return absDevice.Type == "gb28181" && absDevice.URL == fmt.Sprintf("%s/%s", d.DeviceID, c.DeviceID)
-				}); ok {
-					c.AbstractDevice = absDevice
-					absDevice.Handler = c
-					absDevice.ChangeStatus(m7s.PullProxyStatusOnline)
-				}
-				if gb.AutoInvite {
-					gb.Pull(fmt.Sprintf("%s/%s", d.DeviceID, c.DeviceID), config.Pull{
-						MaxRetry: 0,
-						URL:      fmt.Sprintf("%s/%s", d.DeviceID, c.DeviceID),
-					}, nil)
-				}
-			})
+		device.OnStart(func() {
+			gb.devices.Set(device)
 		})
-		d.OnDispose(func() {
-			d.Status = DeviceOfflineStatus
-			if gb.devices.RemoveByKey(d.DeviceID) {
-				for c := range d.channels.Range {
+		device.channels.OnAdd(func(c *Channel) {
+			if absDevice, ok := gb.Server.PullProxies.Find(func(absDevice *m7s.PullProxy) bool {
+				return absDevice.Type == "gb28181" && absDevice.URL == fmt.Sprintf("%s/%s", device.DeviceID, c.DeviceID)
+			}); ok {
+				c.AbstractDevice = absDevice
+				absDevice.Handler = c
+				absDevice.ChangeStatus(m7s.PullProxyStatusOnline)
+			}
+			if gb.AutoInvite {
+				gb.Pull(fmt.Sprintf("%s/%s", device.DeviceID, c.DeviceID), config.Pull{
+					MaxRetry: 0,
+					URL:      fmt.Sprintf("%s/%s", device.DeviceID, c.DeviceID),
+				}, nil)
+			}
+		})
+		device.OnDispose(func() {
+			device.Status = DeviceOfflineStatus
+			if gb.devices.RemoveByKey(device.DeviceID) {
+				for c := range device.channels.Range {
 					if c.AbstractDevice != nil {
 						c.AbstractDevice.ChangeStatus(m7s.PullProxyStatusOffline)
 					}
@@ -277,21 +241,50 @@ func (gb *GB28181Plugin) checkDevices() error {
 			}
 		})
 
-		// 添加设备任务
-		gb.AddTask(d)
-		expireTime := d.RegisterTime.Add(time.Duration(d.Expires) * time.Second)
-		gb.Info("InitDevicesFromDB", "已初始化设备", d.DeviceID, "注册时间", d.RegisterTime, "过期时间", expireTime)
-
 		// 加载设备的通道
 		var channels []gb28181.DeviceChannel
-		if err := gb.DB.Where(&gb28181.DeviceChannel{DeviceDBID: d.ID}).Find(&channels).Error; err != nil {
-			gb.Error("InitDevicesFromDB", "加载通道失败", d.DeviceID, "error", err.Error())
-		} else {
-			// 初始化设备通道
-			for _, channel := range channels {
-				d.addOrUpdateChannel(channel)
+		if err := gb.DB.Where(&gb28181.DeviceChannel{DeviceDBID: device.ID}).Find(&channels).Error; err != nil {
+			gb.Error("加载通道失败", "error", err, "deviceId", device.DeviceID)
+			continue
+		}
+
+		// 更新设备状态到数据库
+		if err := gb.DB.Model(&Device{}).Where(&Device{ID: device.ID}).Updates(map[string]interface{}{
+			"online": device.Online,
+			"status": device.Status,
+		}).Error; err != nil {
+			gb.Error("更新设备状态到数据库失败", "error", err, "deviceId", device.DeviceID)
+		}
+
+		// 初始化设备通道并更新到数据库
+		for _, channel := range channels {
+			if isExpired {
+				channel.Status = "OFF"
+			} else {
+				channel.Status = "ON"
 			}
-			gb.Info("InitDevicesFromDB", "已加载通道数量", len(channels), "设备ID", d.DeviceID)
+			// 更新通道状态到数据库
+			if err := gb.DB.Model(&gb28181.DeviceChannel{}).Where(&gb28181.DeviceChannel{ID: channel.ID}).Update("status", channel.Status).Error; err != nil {
+				gb.Error("更新通道状态到数据库失败", "error", err, "channelId", channel.DeviceID)
+			}
+			device.addOrUpdateChannel(channel)
+		}
+
+		// 添加设备任务
+		if !isExpired {
+			gb.AddTask(device)
+		} else {
+			//gb.devices.Set(device)
+			//_, err := device.queryDeviceInfo()
+			//if err != nil {
+			//	device.Error("queryDeviceInfo when checkDeviceExpire", "err", err)
+			//}
+		}
+
+		if isExpired {
+			gb.Info("设备已过期", "deviceId", device.DeviceID, "registerTime", device.RegisterTime, "expireTime", expireTime)
+		} else {
+			gb.Info("设备有效", "deviceId", device.DeviceID, "registerTime", device.RegisterTime, "expireTime", expireTime)
 		}
 	}
 
@@ -331,49 +324,6 @@ func (gb *GB28181Plugin) checkPlatform() {
 			gb.Info("平台初始化完成", "ID", platformModel.ID, "Name", platformModel.Name)
 		}
 	}
-}
-
-func (gb *GB28181Plugin) checkDeviceExpire() (err error) {
-	// 从数据库中查询所有设备
-	var devices []*Device
-	if err := gb.DB.Find(&devices).Error; err != nil {
-		gb.Error("查询设备列表失败", "error", err)
-		return err
-	}
-
-	now := time.Now()
-	for _, device := range devices {
-		// 检查设备是否过期
-		expireTime := device.RegisterTime.Add(time.Duration(device.Expires) * time.Second)
-		if now.After(expireTime) {
-			// 设备已过期，更新设备状态
-			device.Online = false
-			device.Status = "OFFLINE"
-			if err := gb.DB.Model(&Device{}).Where(&Device{ID: device.ID}).Updates(device).Error; err != nil {
-				gb.Error("更新设备状态失败", "error", err, "deviceId", device.DeviceID)
-				continue
-			}
-
-			// 更新关联的通道状态
-			var channels []gb28181.DeviceChannel
-			if err := gb.DB.Where(&gb28181.DeviceChannel{DeviceDBID: device.ID}).Find(&channels).Error; err != nil {
-				gb.Error("查询通道列表失败", "error", err, "deviceId", device.DeviceID)
-				continue
-			}
-
-			// 更新所有关联通道的状态
-			for _, channel := range channels {
-				channel.Status = "OFF"
-				if err := gb.DB.Model(&gb28181.DeviceChannel{}).Where(&gb28181.DeviceChannel{ID: channel.ID}).Updates(channel).Error; err != nil {
-					gb.Error("更新通道状态失败", "error", err, "channelId", channel.DeviceID)
-				}
-			}
-
-			gb.Info("设备已过期", "deviceId", device.DeviceID, "registerTime", device.RegisterTime, "expireTime", expireTime)
-		}
-	}
-
-	return nil
 }
 
 func (p *GB28181Plugin) OnPullProxyAdd(pullProxy *m7s.PullProxy) any {
@@ -485,15 +435,15 @@ func (gb *GB28181Plugin) OnRegister(req *sip.Request, tx sip.ServerTransaction) 
 	response.AppendHeader(sip.NewHeader("Date", time.Now().Local().Format(util.LocalTimeFormat)))
 	response.AppendHeader(sip.NewHeader("Server", "M7S/"+m7s.Version))
 	response.AppendHeader(sip.NewHeader("Allow", "INVITE,ACK,CANCEL,BYE,NOTIFY,OPTIONS,PRACK,UPDATE,REFER"))
-	hostname, portStr, _ := net.SplitHostPort(req.Source())
-	port, _ := strconv.Atoi(portStr)
-	response.AppendHeader(&sip.ContactHeader{
-		Address: sip.Uri{
-			User: deviceid,
-			Host: hostname,
-			Port: port,
-		},
-	})
+	//hostname, portStr, _ := net.SplitHostPort(req.Source())
+	//port, _ := strconv.Atoi(portStr)
+	//response.AppendHeader(&sip.ContactHeader{
+	//	Address: sip.Uri{
+	//		User: deviceid,
+	//		Host: hostname,
+	//		Port: port,
+	//	},
+	//})
 	if err = tx.Respond(response); err != nil {
 		gb.Error("respond OK", "error", err.Error())
 	}
@@ -519,10 +469,13 @@ func (gb *GB28181Plugin) OnRegister(req *sip.Request, tx sip.ServerTransaction) 
 			d.Stop(errors.New("unregister"))
 		}
 	} else {
-		if d, ok := gb.devices.Get(deviceid); ok {
+		if d, ok := gb.devices.Get(deviceid); ok && d.Online {
+			gb.Info("into recoverdevice ,deviceid is ", d.DeviceID)
 			d.Online = true
+			d.Status = DeviceOnlineStatus
 			gb.RecoverDevice(d, req)
 		} else {
+			gb.Info("into StoreDevice ,deviceid is ", from)
 			gb.StoreDevice(deviceid, req)
 		}
 	}
@@ -532,6 +485,7 @@ func (gb *GB28181Plugin) OnMessage(req *sip.Request, tx sip.ServerTransaction) {
 	// 解析消息内容
 	temp := &gb28181.Message{}
 	err := gb28181.DecodeXML(temp, req.Body())
+	gb.Debug("onmessage debug, message is ", temp)
 	if err != nil {
 		gb.Error("OnMessage", "error", err.Error())
 		response := sip.NewResponseFromRequest(req, sip.StatusBadRequest, "Bad Request", nil)
@@ -578,14 +532,11 @@ func (gb *GB28181Plugin) OnMessage(req *sip.Request, tx sip.ServerTransaction) {
 	if d == nil && p == nil {
 		var response *sip.Response
 		gb.Error("OnMessage", "error", "device/platform not found", "id", id)
-		if temp.CmdType == "Keepalive" {
-			response = sip.NewResponseFromRequest(req, sip.StatusUnauthorized, "需要重新注册", nil)
-		} else {
-			response = sip.NewResponseFromRequest(req, sip.StatusNotFound, "Not Found", nil)
-		}
+		response = sip.NewResponseFromRequest(req, sip.StatusNotFound, "Not Found", nil)
 		if err := tx.Respond(response); err != nil {
 			gb.Error("respond NotFound", "error", err.Error())
 		}
+		gb.Debug("after on message respond")
 		return
 	}
 
@@ -613,53 +564,61 @@ func (gb *GB28181Plugin) RecoverDevice(d *Device, req *sip.Request) {
 	from := req.From()
 	source := req.Source()
 	desc := req.Destination()
-	servIp, sPortStr, _ := net.SplitHostPort(desc)
-	deviceIP, _, _ := net.SplitHostPort(source)
-	hostname, portStr, _ := net.SplitHostPort(source)
-	port, _ := strconv.Atoi(portStr)
-	serverPort, _ := strconv.Atoi(sPortStr)
+	myIP, myPortStr, _ := net.SplitHostPort(desc)
+	sourceIP, sourcePortStr, _ := net.SplitHostPort(source)
+	sourcePort, _ := strconv.Atoi(sourcePortStr)
+	myPort, _ := strconv.Atoi(myPortStr)
 
 	// 优先使用内网IP
-	host := myip.InternalIPv4()
+	myLanIP := myip.InternalIPv4()
+	myWanIP := myip.ExternalIPv4()
+
 	// 如果设备IP是内网IP，则使用内网IP
-	deviceIPParsed := net.ParseIP(deviceIP)
-	if deviceIPParsed != nil {
-		if deviceIPParsed.IsPrivate() {
-			// 设备是内网IP，优先使用内网IP
-			servIPParsed := net.ParseIP(servIp)
-			if servIPParsed != nil && servIPParsed.IsPrivate() {
-				// 如果服务器配置的也是内网IP，则使用配置的IP
-				host = servIp
+	myIPParse := net.ParseIP(myIP)
+	sourceIPParse := net.ParseIP(sourceIP)
+
+	if myIPParse == nil { //dest有可能不是IP，可能是域名，域名的情况需要用其他方式获取自己的IP
+		if sourceIPParse != nil { //源IP转换成功，判断内外网
+			if sourceIPParse.IsPrivate() {
+				myWanIP = myLanIP
 			}
-		} else {
-			// 设备是公网IP，使用公网IP
-			host = gb.GetPublicIP(servIp)
+		}
+	} else {
+		if sourceIPParse != nil {
+			if sourceIPParse.IsPrivate() {
+				myLanIP = myIP
+				myWanIP = myIP
+			}
 		}
 	}
-
 	// 设置 Recipient
 	d.Recipient = sip.Uri{
-		Host: hostname,
-		Port: port,
+		Host: sourceIP,
+		Port: sourcePort,
 		User: from.Address.User,
 	}
 	// 设置 contactHDR
 	d.contactHDR = sip.ContactHeader{
 		Address: sip.Uri{
 			User: gb.Serial,
-			Host: host,
-			Port: serverPort,
+			Host: myIP,
+			Port: myPort,
 		},
 	}
 
+	d.LocalIP = myLanIP
+	d.WanIP = myWanIP
 	d.StartTime = time.Now()
-	d.Status = DeviceRecoverStatus
+	d.IP = sourceIP
+	d.Port = sourcePort
+	d.HostAddress = d.IP + ":" + sourcePortStr
+	d.Status = DeviceOnlineStatus
 	d.UpdateTime = time.Now()
 	d.RegisterTime = time.Now()
 	d.Online = true
-	d.IP = hostname
-	d.Port = port
-	d.HostAddress = hostname + ":" + portStr
+	d.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(myLanIP), sipgo.WithClientPort(myPort))
+	d.channels.L = new(sync.RWMutex)
+	d.Info("StoreDevice", "source", source, "desc", desc, "device.LocalIP", myLanIP, "device.WanIP", myWanIP, "recipient", req.Recipient, "myPort", myPort)
 
 	if gb.DB != nil {
 		var existing Device
@@ -676,10 +635,11 @@ func (gb *GB28181Plugin) RecoverDevice(d *Device, req *sip.Request) {
 
 func (gb *GB28181Plugin) StoreDevice(deviceid string, req *sip.Request) (d *Device) {
 	source := req.Source()
-	gb.Info("req.Source is ", source)
+	sourceIP, sourcePortStr, _ := net.SplitHostPort(source)
+	sourcePort, _ := strconv.Atoi(sourcePortStr)
 	desc := req.Destination()
-	gb.Info("req.Destination is ", desc)
 	myIP, myPortStr, _ := net.SplitHostPort(desc)
+	myPort, _ := strconv.Atoi(myPortStr)
 
 	exp := req.GetHeader("Expires")
 	if exp == nil {
@@ -692,20 +652,12 @@ func (gb *GB28181Plugin) StoreDevice(deviceid string, req *sip.Request) (d *Devi
 		return
 	}
 	// 优先使用内网IP
-	localLanIP := myip.InternalIPv4()
-	localWanIP := myip.ExternalIPv4()
-	// 如果设备IP是内网IP，则使用内网IP
-	//deviceIPParsed := net.ParseIP(myIP)
-	//if deviceIPParsed != nil {
-	//	if !deviceIPParsed.IsPrivate() { //公网情况就去获取本地网卡的公网IP
-	//		// 设备是公网IP，使用公网IP
-	//		localIp = gb.GetPublicIP(localIp)
-	//	}
-	//}
+	myLanIP := myip.InternalIPv4()
+	myWanIP := myip.ExternalIPv4()
 
-	sourceIP, sourcePortStr, _ := net.SplitHostPort(source)
-	sourcePort, _ := strconv.Atoi(sourcePortStr)
-	myPort, _ := strconv.Atoi(myPortStr)
+	// 如果设备IP是内网IP，则使用内网IP
+	myIPParse := net.ParseIP(myIP)
+	sourceIPParse := net.ParseIP(sourceIP)
 
 	// 检查myPort是否在sipPorts中，如果不在则使用sipPorts[0]
 	if len(gb.sipPorts) > 0 {
@@ -722,6 +674,21 @@ func (gb *GB28181Plugin) StoreDevice(deviceid string, req *sip.Request) (d *Devi
 		}
 	}
 
+	if myIPParse == nil { //dest有可能不是IP，可能是域名，域名的情况需要用其他方式获取自己的IP
+		if sourceIPParse != nil { //源IP转换成功，判断内外网
+			if sourceIPParse.IsPrivate() {
+				myWanIP = myLanIP
+			}
+		}
+	} else {
+		if sourceIPParse != nil {
+			if sourceIPParse.IsPrivate() {
+				myLanIP = myIP
+				myWanIP = myIP
+			}
+		}
+	}
+
 	now := time.Now()
 	d = &Device{
 		DeviceID:      deviceid,
@@ -730,7 +697,7 @@ func (gb *GB28181Plugin) StoreDevice(deviceid string, req *sip.Request) (d *Devi
 		RegisterTime:  now,
 		KeepaliveTime: now,
 		Status:        DeviceRegisterStatus,
-		Online:        false,
+		Online:        true,
 		StreamMode:    "TCP-PASSIVE",   // 默认UDP传输
 		Charset:       "GB2312",        // 默认GB2312字符集
 		GeoCoordSys:   "WGS84",         // 默认WGS84坐标系
@@ -738,8 +705,8 @@ func (gb *GB28181Plugin) StoreDevice(deviceid string, req *sip.Request) (d *Devi
 		IP:            sourceIP,
 		Port:          sourcePort,
 		HostAddress:   sourceIP + ":" + sourcePortStr,
-		LocalIP:       localLanIP,
-		mediaIp:       localLanIP,
+		LocalIP:       myLanIP,
+		mediaIp:       myIP,
 		Expires:       int(expSec),
 		eventChan:     make(chan any, 10),
 		Recipient: sip.Uri{
@@ -750,27 +717,29 @@ func (gb *GB28181Plugin) StoreDevice(deviceid string, req *sip.Request) (d *Devi
 		contactHDR: sip.ContactHeader{
 			Address: sip.Uri{
 				User: gb.Serial,
-				Host: localLanIP,
+				Host: myWanIP,
 				Port: myPort,
 			},
 		},
 		fromHDR: sip.FromHeader{
 			Address: sip.Uri{
 				User: gb.Serial,
-				Host: gb.Realm,
+				Host: myWanIP,
+				Port: myPort,
 			},
 			Params: sip.NewParams(),
 		},
 		plugin:    gb,
 		LocalPort: myPort,
+		WanIP:     myWanIP,
+		WanPort:   myPort,
 	}
 
 	d.Logger = gb.With("deviceid", deviceid)
 	d.fromHDR.Params.Add("tag", sip.GenerateTagN(16))
-	d.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(myIP))
-	d.dialogClient = sipgo.NewDialogClientCache(d.client, d.contactHDR)
+	d.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(myIP), sipgo.WithClientPort(myPort))
 	d.channels.L = new(sync.RWMutex)
-	d.Info("StoreDevice", "source", source, "desc", desc, "myIP", myIP, "localLanIP", localLanIP, "localWanIP", localWanIP, "recipient", req.Recipient, "myPort", myPort)
+	d.Info("StoreDevice", "source", source, "desc", desc, "device.LocalIP", myLanIP, "device.WanIP", myWanIP, "req.Recipient", req.Recipient, "myPort", myPort, "d.Recipient", d.Recipient)
 
 	// 使用简单的 hash 函数将设备 ID 转换为 uint32
 	var hash uint32
@@ -781,7 +750,7 @@ func (gb *GB28181Plugin) StoreDevice(deviceid string, req *sip.Request) (d *Devi
 	d.Task.ID = hash
 
 	d.OnStart(func() {
-		gb.devices.Add(d)
+		gb.devices.Set(d)
 		d.channels.OnAdd(func(c *Channel) {
 			if absDevice, ok := gb.Server.PullProxies.Find(func(absDevice *m7s.PullProxy) bool {
 				return absDevice.Type == "gb28181" && absDevice.URL == fmt.Sprintf("%s/%s", d.DeviceID, c.DeviceID)
@@ -814,11 +783,12 @@ func (gb *GB28181Plugin) StoreDevice(deviceid string, req *sip.Request) (d *Devi
 		var existing Device
 		if err := gb.DB.First(&existing, Device{DeviceID: d.DeviceID}).Error; err == nil {
 			d.ID = existing.ID // 保持原有的自增ID
+			gb.DB.Save(d).Omit("create_time")
 			gb.Info("StoreDevice", "type", "更新设备", "deviceId", d.DeviceID)
 		} else {
 			gb.Info("StoreDevice", "type", "新增设备", "deviceId", d.DeviceID)
+			gb.DB.Save(d)
 		}
-		gb.DB.Save(d)
 	}
 	return
 }

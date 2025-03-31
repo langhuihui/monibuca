@@ -210,7 +210,8 @@ func (d *ForwardDialog) Start() (err error) {
 	}
 	fromHDR.Params.Add("tag", sip.GenerateTagN(16))
 	// 创建会话 - 使用device的dialogClient创建
-	d.session, err = device.dialogClient.Invite(d.gb, recipient, request.Body(), &fromHDR, &viaHeader, &device.contactHDR, subjectHeader, &contentTypeHeader)
+	dialogClientCache := sipgo.NewDialogClientCache(device.client, device.contactHDR)
+	d.session, err = dialogClientCache.Invite(d.gb, recipient, request.Body(), &fromHDR, &viaHeader, &device.contactHDR, subjectHeader, &contentTypeHeader)
 	return
 }
 

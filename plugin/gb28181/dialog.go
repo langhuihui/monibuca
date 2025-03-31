@@ -186,22 +186,22 @@ func (d *Dialog) Start() (err error) {
 	//allowHeader := sip.NewHeader("Allow", "INVITE, ACK, CANCEL, REGISTER, MESSAGE, NOTIFY, BYE")
 	//Toheader里需要放入目录通道的id
 	toHeader := sip.ToHeader{
-		Address: sip.Uri{User: channelId, Host: device.HostAddress},
+		Address: sip.Uri{User: channelId, Host: channelId[0:10]},
 	}
 	userAgentHeader := sip.NewHeader("User-Agent", "M7S/"+m7s.Version)
 
 	//customCallID := fmt.Sprintf("%s-%s-%d@%s", device.DeviceID, channelId, time.Now().Unix(), device.LocalIP)
 	customCallID := fmt.Sprintf("%s@%s", GenerateCallID(32), device.LocalIP)
 	callID := sip.CallIDHeader(customCallID)
-	//viaHeader := sip.ViaHeader{
-	//	ProtocolName:    "SIP",
-	//	ProtocolVersion: "2.0",
-	//	Transport:       "UDP",
-	//	Host:            device.LocalIP,
-	//	Port:            device.LocalPort,
-	//	Params:          sip.HeaderParams(sip.NewParams()),
-	//}
-	//viaHeader.Params.Add("branch", sip.GenerateBranchN(10)).Add("rport", "")
+	viaHeader := sip.ViaHeader{
+		ProtocolName:    "SIP",
+		ProtocolVersion: "2.0",
+		Transport:       "UDP",
+		Host:            device.LocalIP,
+		Port:            device.LocalPort,
+		Params:          sip.NewParams(),
+	}
+	viaHeader.Params.Add("branch", sip.GenerateBranchN(10)).Add("rport", "")
 	maxforward := sip.MaxForwardsHeader(70)
 	//contentLengthHeader := sip.ContentLengthHeader(len(strings.Join(sdpInfo, "\r\n") + "\r\n"))
 	csqHeader := sip.CSeqHeader{
@@ -220,13 +220,16 @@ func (d *Dialog) Start() (err error) {
 	fromHDR := sip.FromHeader{
 		Address: sip.Uri{
 			User: d.gb.Serial,
-			Host: d.gb.Realm,
+			Host: device.WanIP,
+			Port: device.LocalPort,
 		},
 		Params: sip.NewParams(),
 	}
 	fromHDR.Params.Add("tag", sip.GenerateTagN(32))
+	dialogClientCache := sipgo.NewDialogClientCache(device.client, device.contactHDR)
 	// 创建会话
-	d.session, err = device.dialogClient.Invite(d.gb, recipient, []byte(strings.Join(sdpInfo, "\r\n")+"\r\n"), &callID, &csqHeader, &fromHDR, &toHeader, &maxforward, userAgentHeader, &contactHDR, subjectHeader, &contentTypeHeader)
+	d.gb.Info("start to invite,recipient:", recipient, " viaHeader:", viaHeader, " fromHDR:", fromHDR, " toHeader:", toHeader, " device.contactHDR:", device.contactHDR, "contactHDR:", contactHDR)
+	d.session, err = dialogClientCache.Invite(d.gb, recipient, []byte(strings.Join(sdpInfo, "\r\n")+"\r\n"), &callID, &csqHeader, &viaHeader, &fromHDR, &toHeader, &maxforward, userAgentHeader, subjectHeader, &contentTypeHeader)
 	// 最后添加Content-Length头部
 	return
 }
@@ -268,6 +271,9 @@ func (d *Dialog) Run() (err error) {
 				}
 			}
 		}
+	}
+	if &d.session.InviteRequest.Recipient != &d.session.InviteResponse.Contact().Address {
+		d.session.InviteResponse.Contact().Address = d.session.InviteRequest.Recipient
 	}
 	err = d.session.Ack(d.gb)
 	if err != nil {

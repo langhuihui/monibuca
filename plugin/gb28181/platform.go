@@ -32,7 +32,7 @@ type Platform struct {
 
 	// 运行时字段
 	KeepAliveReply int    `gorm:"-" json:"keepAliveReply"` // KeepAliveReply表示心跳未回复次数
-	CallID         string `gorm:"-" json:"callId"`         // CallID表示SIP会话的标识符
+	RegisterCallID string `gorm:"-" json:"registerCallID"` // CallID表示SIP会话的标识符
 	SN             int
 
 	eventChan chan any
@@ -1035,9 +1035,14 @@ func (p *Platform) DoRegister() error {
 	req := sip.NewRequest(sip.REGISTER, p.Recipient)
 
 	//callid
-	customCallID := fmt.Sprintf("%d@%s", time.Now().Unix(), p.PlatformModel.DeviceIP)
-	callID := sip.CallIDHeader(customCallID)
-	req.AppendHeader(&callID)
+	if p.RegisterCallID != "" {
+		callID := sip.CallIDHeader(p.RegisterCallID)
+		req.AppendHeader(&callID)
+	} else {
+		customCallID := fmt.Sprintf("%d@%s", time.Now().Unix(), p.PlatformModel.DeviceIP)
+		callID := sip.CallIDHeader(customCallID)
+		req.AppendHeader(&callID)
+	}
 
 	//cseqheader
 	csqHeader := sip.CSeqHeader{

@@ -464,11 +464,6 @@ func (gb *GB28181Plugin) SyncDevice(ctx context.Context, req *pb.SyncDeviceReque
 
 			// 初始化 SIP 客户端
 			d.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(d.LocalIP))
-			if d.client != nil {
-				d.dialogClient = sipgo.NewDialogClientCache(d.client, d.contactHDR)
-			} else {
-				return resp, fmt.Errorf("failed to create sip client")
-			}
 
 			// 将设备添加到内存中
 			gb.devices.Add(d)
@@ -1076,7 +1071,6 @@ func (gb *GB28181Plugin) TestSip(ctx context.Context, req *pb.TestSipRequest) (*
 		resp.Message = "failed to create sip client"
 		return resp, nil
 	}
-	device.dialogClient = sipgo.NewDialogClientCache(device.client, device.contactHDR)
 
 	// 构建目标URI
 	recipient := sip.Uri{
@@ -1148,7 +1142,8 @@ func (gb *GB28181Plugin) TestSip(ctx context.Context, req *pb.TestSipRequest) (*
 	request.SetBody([]byte(strings.Join(sdpInfo, "\r\n") + "\r\n"))
 
 	// 创建会话并发送请求
-	session, err := device.dialogClient.Invite(gb, recipient, request.Body(), &csqHeader, &device.fromHDR, &toHeader, &viaHeader, &maxforward, userAgentHeader, &device.contactHDR, subjectHeader, &contentTypeHeader, &contentLengthHeader)
+	dialogClientCache := sipgo.NewDialogClientCache(device.client, device.contactHDR)
+	session, err := dialogClientCache.Invite(gb, recipient, request.Body(), &csqHeader, &device.fromHDR, &toHeader, &viaHeader, &maxforward, userAgentHeader, &device.contactHDR, subjectHeader, &contentTypeHeader, &contentLengthHeader)
 	if err != nil {
 		resp.Code = 500
 		resp.Message = fmt.Sprintf("发送INVITE请求失败: %v", err)
