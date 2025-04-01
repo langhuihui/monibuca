@@ -201,7 +201,7 @@ func (gb *GB28181Plugin) checkDeviceExpire() (err error) {
 		}
 
 		// 创建SIP客户端
-		device.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(device.WanIP), sipgo.WithClientPort(device.WanPort))
+		device.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(device.WanIP))
 		device.Info("checkDeviceExpire", "d.LocalIP", device.LocalIP, "d.LocalPort", device.LocalPort, "d.contactHDR", device.contactHDR)
 
 		// 设置设备ID的hash值作为任务ID
@@ -616,7 +616,7 @@ func (gb *GB28181Plugin) RecoverDevice(d *Device, req *sip.Request) {
 	d.UpdateTime = time.Now()
 	d.RegisterTime = time.Now()
 	d.Online = true
-	d.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(myLanIP), sipgo.WithClientPort(myPort))
+	d.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(myLanIP))
 	d.channels.L = new(sync.RWMutex)
 	d.Info("StoreDevice", "source", source, "desc", desc, "device.LocalIP", myLanIP, "device.WanIP", myWanIP, "recipient", req.Recipient, "myPort", myPort)
 
@@ -737,7 +737,7 @@ func (gb *GB28181Plugin) StoreDevice(deviceid string, req *sip.Request) (d *Devi
 
 	d.Logger = gb.With("deviceid", deviceid)
 	d.fromHDR.Params.Add("tag", sip.GenerateTagN(16))
-	d.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(myIP), sipgo.WithClientPort(myPort))
+	d.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(myIP))
 	d.channels.L = new(sync.RWMutex)
 	d.Info("StoreDevice", "source", source, "desc", desc, "device.LocalIP", myLanIP, "device.WanIP", myWanIP, "req.Recipient", req.Recipient, "myPort", myPort, "d.Recipient", d.Recipient)
 
