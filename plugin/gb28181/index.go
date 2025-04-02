@@ -18,7 +18,6 @@ import (
 	"github.com/emiago/sipgo/sip"
 	"github.com/icholy/digest"
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 	m7s "m7s.live/v5"
 	"m7s.live/v5/pkg/config"
 	"m7s.live/v5/pkg/task"
@@ -44,8 +43,7 @@ type GB28181Plugin struct {
 	m7s.Plugin
 	AutoInvite     bool   `default:"true" desc:"自动邀请"`
 	Serial         string `default:"34020000002000000001" desc:"sip 服务 id"` //sip 服务器 id, 默认 34020000002000000001
-	Realm          string `default:"3402000000" desc:"sip 服务域"`             //sip 服务器域，默认 3402000000
-	Username       string
+	Realm          string `default:"3402000000" desc:"sip 服务域"`            //sip 服务器域，默认 3402000000
 	Password       string
 	Sip            SipConfig
 	MediaPort      util.Range[uint16] `default:"10001-20000" desc:"媒体端口范围"` //媒体端口范围
@@ -130,12 +128,8 @@ func (gb *GB28181Plugin) OnInit() (err error) {
 			// 检查并初始化平台
 			gb.checkPlatform()
 		}
-	}
-	if gb.Parent != "" {
-		var client Client
-		client.conf = gb
-		client.SetRetry(-1, time.Second*5)
-		gb.AddTask(&client)
+	} else {
+		gb.Error("GB28181 init failed,please set Sip.ListenAddr in GB28181 configuration like this   \nsip:\n  listenaddr:\n    - udp::5060\n")
 	}
 	return
 }
@@ -367,68 +361,109 @@ func (gb *GB28181Plugin) OnRegister(req *sip.Request, tx sip.ServerTransaction) 
 		isUnregister = true
 	}
 
-	// 不需要密码情况
-	if gb.Username != "" && gb.Password != "" {
+	// 需要密码认证的情况
+	if gb.Password != "" {
 		h := req.GetHeader("Authorization")
-		var chal digest.Challenge
-		var cred *digest.Credentials
-		var digCred *digest.Credentials
 		if h == nil {
-			chal = digest.Challenge{
+			// 生成认证挑战
+			nonce := fmt.Sprintf("%d", time.Now().UnixMicro())
+			chal := digest.Challenge{
 				Realm:     gb.Realm,
-				Nonce:     fmt.Sprintf("%d", time.Now().UnixMicro()),
+				Nonce:     nonce,
 				Opaque:    "monibuca",
 				Algorithm: "MD5",
+				QOP:       []string{"auth"},
 			}
 
-			res := sip.NewResponseFromRequest(req, sip.StatusUnauthorized, "Unathorized", nil)
+			res := sip.NewResponseFromRequest(req, sip.StatusUnauthorized, "Unauthorized", nil)
 			res.AppendHeader(sip.NewHeader("WWW-Authenticate", chal.String()))
+			gb.Debug("sending auth challenge", "nonce", nonce, "realm", gb.Realm)
 
 			if err = tx.Respond(res); err != nil {
-				gb.Error("respond Unathorized", "error", err.Error())
+				gb.Error("respond Unauthorized", "error", err.Error())
 			}
 			return
 		}
 
-		cred, err = digest.ParseCredentials(h.Value())
+		// 解析认证信息
+		cred, err := digest.ParseCredentials(h.Value())
 		if err != nil {
-			log.Error().Err(err).Msg("parsing creds failed")
+			gb.Error("parsing credentials failed", "error", err.Error())
 			if err = tx.Respond(sip.NewResponseFromRequest(req, sip.StatusUnauthorized, "Bad credentials", nil)); err != nil {
 				gb.Error("respond Bad credentials", "error", err.Error())
 			}
 			return
 		}
 
-		// Check registry
-		if cred.Username != gb.Username {
-			if err = tx.Respond(sip.NewResponseFromRequest(req, sip.StatusNotFound, "Bad authorization header", nil)); err != nil {
-				gb.Error("respond Bad authorization header", "error", err.Error())
+		gb.Debug("received auth info",
+			"username", cred.Username,
+			"realm", cred.Realm,
+			"nonce", cred.Nonce,
+			"uri", cred.URI,
+			"qop", cred.QOP,
+			"nc", cred.Nc,
+			"cnonce", cred.Cnonce,
+			"response", cred.Response)
+
+		// 使用设备ID作为用户名
+		if cred.Username != deviceid {
+			gb.Error("username mismatch", "expected", deviceid, "got", cred.Username)
+			if err = tx.Respond(sip.NewResponseFromRequest(req, sip.StatusForbidden, "Invalid username", nil)); err != nil {
+				gb.Error("respond Invalid username", "error", err.Error())
 			}
 			return
 		}
 
-		// Make digest and compare response
-		digCred, err = digest.Digest(&chal, digest.Options{
+		// 计算期望的响应
+		opts := digest.Options{
 			Method:   "REGISTER",
 			URI:      cred.URI,
-			Username: gb.Username,
+			Username: deviceid,
 			Password: gb.Password,
-		})
+			Cnonce:   cred.Cnonce,
+			Count:    int(cred.Nc),
+		}
+
+		digCred, err := digest.Digest(&digest.Challenge{
+			Realm:     cred.Realm,
+			Nonce:     cred.Nonce,
+			Opaque:    cred.Opaque,
+			Algorithm: cred.Algorithm,
+			QOP:       []string{cred.QOP},
+		}, opts)
 
 		if err != nil {
-			gb.Error("Calc digest failed")
+			gb.Error("calculating digest failed", "error", err.Error())
 			if err = tx.Respond(sip.NewResponseFromRequest(req, sip.StatusUnauthorized, "Bad credentials", nil)); err != nil {
 				gb.Error("respond Bad credentials", "error", err.Error())
 			}
 			return
 		}
 
+		gb.Debug("calculated response info",
+			"username", opts.Username,
+			"uri", opts.URI,
+			"qop", cred.QOP,
+			"nc", cred.Nc,
+			"cnonce", opts.Cnonce,
+			"count", opts.Count,
+			"response", digCred.Response)
+
+		// 比对响应
 		if cred.Response != digCred.Response {
-			if err = tx.Respond(sip.NewResponseFromRequest(req, sip.StatusUnauthorized, "Unathorized", nil)); err != nil {
-				gb.Error("respond Unathorized", "error", err.Error())
+			gb.Error("response mismatch",
+				"expected", digCred.Response,
+				"got", cred.Response,
+				"method", opts.Method,
+				"uri", opts.URI,
+				"username", opts.Username)
+			if err = tx.Respond(sip.NewResponseFromRequest(req, sip.StatusUnauthorized, "Invalid credentials", nil)); err != nil {
+				gb.Error("respond Invalid credentials", "error", err.Error())
 			}
 			return
 		}
+
+		gb.Debug("auth successful", "username", deviceid)
 	}
 	response := sip.NewResponseFromRequest(req, sip.StatusOK, "OK", nil)
 	response.AppendHeader(sip.NewHeader("Expires", fmt.Sprintf("%d", expSec)))

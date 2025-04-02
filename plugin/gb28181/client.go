@@ -91,7 +91,6 @@ func (c *Client) Start() (err error) {
 			cred, _ := digest.Digest(chal, digest.Options{
 				Method:   req.Method.String(),
 				URI:      c.recipient.Host,
-				Username: c.conf.Username,
 				Password: c.conf.Password,
 			})
 
