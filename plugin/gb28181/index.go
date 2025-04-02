@@ -43,7 +43,7 @@ type GB28181Plugin struct {
 	m7s.Plugin
 	AutoInvite     bool   `default:"true" desc:"自动邀请"`
 	Serial         string `default:"34020000002000000001" desc:"sip 服务 id"` //sip 服务器 id, 默认 34020000002000000001
-	Realm          string `default:"3402000000" desc:"sip 服务域"`            //sip 服务器域，默认 3402000000
+	Realm          string `default:"3402000000" desc:"sip 服务域"`             //sip 服务器域，默认 3402000000
 	Password       string
 	Sip            SipConfig
 	MediaPort      util.Range[uint16] `default:"10001-20000" desc:"媒体端口范围"` //媒体端口范围
@@ -309,14 +309,13 @@ func (gb *GB28181Plugin) checkPlatform() {
 		// 创建Platform实例
 		platform := NewPlatform(platformModel, gb)
 
-		_, err := platform.Unregister()
+		err := platform.Unregister()
 		if err != nil {
-			gb.Error("unregister err ", err)
-		} else {
-			// 添加到任务系统
-			gb.AddTask(platform)
-			gb.Info("平台初始化完成", "ID", platformModel.ID, "Name", platformModel.Name)
+			go gb.Error("unregister err ", err)
 		}
+		// 添加到任务系统
+		gb.AddTask(platform)
+		gb.Info("平台初始化完成", "ID", platformModel.ID, "Name", platformModel.Name)
 	}
 }
 

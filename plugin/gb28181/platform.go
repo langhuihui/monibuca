@@ -182,7 +182,7 @@ func (p *Platform) Keepalive() (*sipgo.DialogClientSession, error) {
 }
 
 // Unregister 发送注销请求到上级平台
-func (p *Platform) Unregister() (*sipgo.DialogClientSession, error) {
+func (p *Platform) Unregister() error {
 	// 创建注销请求的目标URI
 	recipient := sip.Uri{
 		User: p.PlatformModel.ServerGBID,
@@ -226,22 +226,22 @@ func (p *Platform) Unregister() (*sipgo.DialogClientSession, error) {
 	// 发送请求并获取响应
 	tx, err := p.Client.TransactionRequest(p.ctx, req)
 	if err != nil {
-		return nil, fmt.Errorf("创建事务失败: %v", err)
+		return fmt.Errorf("创建事务失败: %v", err)
 	}
 	defer tx.Terminate()
 
 	// 获取响应
 	res, err := p.getResponse(tx)
 	if err != nil {
-		return nil, fmt.Errorf("获取响应失败: %v", err)
+		return fmt.Errorf("获取响应失败: %v", err)
 	}
 
 	// 检查响应状态
 	if res.StatusCode != 200 {
-		return nil, fmt.Errorf("注销失败，状态码: %d", res.StatusCode)
+		return fmt.Errorf("注销失败，状态码: %d", res.StatusCode)
 	}
 
-	return nil, nil
+	return nil
 }
 
 // PlatformKeepAliveTask 任务
@@ -569,7 +569,7 @@ func (p *Platform) buildChannelItem(channel gb28181.CommonGBChannel) string {
 		channel.GbRegisterWay, // 直接使用整数值
 		channel.GbSecrecy,     // 直接使用整数值
 		parentID,
-		channel.GbParental,  // 直接使用整数值
+		channel.GbParental, // 直接使用整数值
 		channel.GbSafetyWay) // 直接使用整数值
 }
 
@@ -1127,13 +1127,34 @@ func (p *Platform) DoRegister() error {
 			return err
 		}
 
+		p.Debug("received auth challenge",
+			"realm", chal.Realm,
+			"nonce", chal.Nonce,
+			"algorithm", chal.Algorithm,
+			"qop", chal.QOP)
+
 		// 生成认证响应
-		cred, _ := digest.Digest(chal, digest.Options{
+		opts := digest.Options{
 			Method:   req.Method.String(),
-			URI:      p.Recipient.Host,
+			URI:      "sip:" + p.PlatformModel.ServerGBDomain,
 			Username: p.PlatformModel.Username,
 			Password: p.PlatformModel.Password,
-		})
+			Cnonce:   sip.GenerateTagN(16),
+			Count:    1,
+		}
+
+		cred, err := digest.Digest(chal, opts)
+		if err != nil {
+			p.Error("calculating digest failed", "error", err.Error())
+			return err
+		}
+
+		p.Debug("calculated response info",
+			"username", opts.Username,
+			"uri", opts.URI,
+			"cnonce", opts.Cnonce,
+			"count", opts.Count,
+			"response", cred.Response)
 
 		// 创建新的带认证信息的请求
 		newReq := req.Clone()
