@@ -568,6 +568,19 @@ func (s *Server) Dispose() {
 	}
 }
 
+func (s *Server) GetPublisher(streamPath string) (publisher *Publisher, err error) {
+	var ok bool
+	s.Streams.Call(func() error {
+		publisher, ok = s.Streams.Get(streamPath)
+		return nil
+	})
+	if !ok {
+		err = fmt.Errorf("src stream not found")
+		return
+	}
+	return
+}
+
 func (s *Server) OnPublish(p *Publisher) {
 	for plugin := range s.Plugins.Range {
 		plugin.OnPublish(p)

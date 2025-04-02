@@ -9,10 +9,9 @@ import (
 
 	"image/color"
 
-	snap_pkg "m7s.live/v5/plugin/snap/pkg"
+	snap "m7s.live/v5/plugin/snap/pkg"
 
 	m7s "m7s.live/v5"
-	snap "m7s.live/v5/plugin/snap/pkg"
 )
 
 var _ = m7s.InstallPlugin[SnapPlugin](snap.NewTransform)
@@ -67,7 +66,7 @@ func (p *SnapPlugin) OnInit() (err error) {
 
 	// 初始化数据库
 	if p.DB != nil {
-		err = p.DB.AutoMigrate(&snap_pkg.SnapRecord{})
+		err = p.DB.AutoMigrate(&snap.SnapRecord{})
 		if err != nil {
 			p.Error("failed to migrate database", "error", err.Error())
 			return
@@ -137,7 +136,7 @@ func (p *SnapPlugin) OnInit() (err error) {
 	}
 
 	//如果截图模式不是时间模式，则不加定时任务
-	if p.Mode != snap_pkg.SnapModeTimeInterval {
+	if p.Mode != snap.SnapModeTimeInterval {
 		return
 	}
 

@@ -6,19 +6,19 @@ Snap 插件提供了对流媒体的截图功能，支持定时截图、按关键
 
 ```yaml
 snap:
-  snapwatermark:
+  watermark:
     text: ""              # 水印文字内容
     fontpath: ""          # 水印字体文件路径
     fontcolor: "rgba(255,165,0,1)" # 水印字体颜色，支持rgba格式
     fontsize: 36          # 水印字体大小
     offsetx: 0           # 水印位置X偏移
     offsety: 0           # 水印位置Y偏移
-  snaptimeinterval: 1m   # 截图时间间隔，默认1分钟
-  snapsavepath: "snaps"  # 截图保存路径
+  timeinterval: 1s   # 截图时间间隔，默认1分钟
+  savepath: "snaps"  # 截图保存路径
   filter: ".*"           # 截图流过滤器，支持正则表达式
-  snapiframeinterval: 3  # 间隔多少帧截图
-  snapmode: 1            # 截图模式：0-时间间隔，1-关键帧间隔 2-HTTP请求模式（手动触发）
-  snapquerytimedelta: 3  # 查询截图时允许的最大时间差（秒）
+  iframeinterval: 3  # 间隔多少帧截图
+  mode: 0            # 截图模式：0-时间间隔，1-关键帧间隔 2-HTTP请求模式（手动触发）
+  querytimedelta: 3  # 查询截图时允许的最大时间差（秒）
 ```
 
 ## HTTP API
