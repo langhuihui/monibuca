@@ -6,7 +6,6 @@ import (
 	"math/rand"
 	"net"
 	"net/url"
-	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -231,11 +230,11 @@ func (d *Dialog) Start() (err error) {
 	// 创建会话
 	d.gb.Info("start to invite,recipient:", recipient, " viaHeader:", viaHeader, " fromHDR:", fromHDR, " toHeader:", toHeader, " device.contactHDR:", device.contactHDR, "contactHDR:", contactHDR)
 	// 判断当前系统类型
-	if runtime.GOOS == "windows" {
-		d.session, err = dialogClientCache.Invite(d.gb, recipient, []byte(strings.Join(sdpInfo, "\r\n")+"\r\n"), &callID, &csqHeader, &viaHeader, &fromHDR, &toHeader, &maxforward, userAgentHeader, subjectHeader, &contentTypeHeader)
-	} else {
-		d.session, err = dialogClientCache.Invite(d.gb, recipient, []byte(strings.Join(sdpInfo, "\r\n")+"\r\n"), &callID, &csqHeader, &fromHDR, &toHeader, &maxforward, userAgentHeader, subjectHeader, &contentTypeHeader)
-	}
+	//if runtime.GOOS == "windows" {
+	//	d.session, err = dialogClientCache.Invite(d.gb, recipient, []byte(strings.Join(sdpInfo, "\r\n")+"\r\n"), &callID, &csqHeader, &fromHDR, &toHeader, &maxforward, userAgentHeader, subjectHeader, &contentTypeHeader)
+	//} else {
+	d.session, err = dialogClientCache.Invite(d.gb, recipient, []byte(strings.Join(sdpInfo, "\r\n")+"\r\n"), &callID, &csqHeader, &fromHDR, &toHeader, &maxforward, userAgentHeader, subjectHeader, &contentTypeHeader)
+	//}
 	// 最后添加Content-Length头部
 	return
 }
