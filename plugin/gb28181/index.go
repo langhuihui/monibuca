@@ -307,12 +307,12 @@ func (gb *GB28181Plugin) checkPlatform() {
 	// 遍历所有平台进行初始化和注册
 	for _, platformModel := range platformModels {
 		// 创建Platform实例
-		platform := NewPlatform(platformModel, gb)
+		platform := NewPlatform(platformModel, gb, true)
 
-		err := platform.Unregister()
-		if err != nil {
-			go gb.Error("unregister err ", err)
-		}
+		//go platform.Unregister()
+		//if err != nil {
+		//	 gb.Error("unregister err ", err)
+		//}
 		// 添加到任务系统
 		gb.AddTask(platform)
 		gb.Info("平台初始化完成", "ID", platformModel.ID, "Name", platformModel.Name)
@@ -584,7 +584,7 @@ func (gb *GB28181Plugin) OnMessage(req *sip.Request, tx sip.ServerTransaction) {
 		var platform *Platform
 		if platformtmp, ok := gb.platforms.Get(p.ID); !ok {
 			// 创建 Platform 实例
-			platform = NewPlatform(p, gb)
+			platform = NewPlatform(p, gb, false)
 		} else {
 			platform = platformtmp
 		}

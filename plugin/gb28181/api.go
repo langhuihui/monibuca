@@ -606,7 +606,7 @@ func (gb *GB28181Plugin) AddPlatform(ctx context.Context, req *pb.Platform) (*pb
 	// 如果平台启用，则创建Platform实例并启动任务
 	if *platformModel.Enable {
 		// 创建Platform实例
-		platform := NewPlatform(platformModel, gb)
+		platform := NewPlatform(platformModel, gb, false)
 		// 添加到任务系统
 		gb.AddTask(platform)
 	}
@@ -755,7 +755,7 @@ func (gb *GB28181Plugin) UpdatePlatform(ctx context.Context, req *pb.Platform) (
 			gb.platforms.Remove(oldPlatform)
 		}
 		// 创建新的Platform实例
-		platformInstance := NewPlatform(&platform, gb)
+		platformInstance := NewPlatform(&platform, gb, false)
 		// 添加到任务系统
 		gb.AddTask(platformInstance)
 	} else {

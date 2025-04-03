@@ -37,14 +37,16 @@ type Platform struct {
 
 	eventChan chan any
 	// 插件配置
-	plugin *GB28181Plugin
-	ctx    context.Context
+	plugin     *GB28181Plugin
+	ctx        context.Context
+	unRegister bool
 }
 
-func NewPlatform(pm *gb28181.PlatformModel, plugin *GB28181Plugin) *Platform {
+func NewPlatform(pm *gb28181.PlatformModel, plugin *GB28181Plugin, unRegister bool) *Platform {
 	p := &Platform{
 		PlatformModel: pm,
 		plugin:        plugin,
+		unRegister:    unRegister,
 	}
 	p.ctx = context.Background()
 	client, err := sipgo.NewClient(p.plugin.ua, sipgo.WithClientHostname(p.PlatformModel.DeviceIP), sipgo.WithClientPort(p.PlatformModel.DevicePort))
@@ -92,6 +94,13 @@ func NewPlatform(pm *gb28181.PlatformModel, plugin *GB28181Plugin) *Platform {
 }
 
 func (p *Platform) Start() error {
+	if p.unRegister {
+		err := p.Unregister()
+		if err != nil {
+			p.Error("failed to unregister: %v", err)
+		}
+		p.unRegister = false
+	}
 	register := NewRegister(p, "firstRegister")
 	register.OnStart(func() {
 		register.Tick(nil)
@@ -183,30 +192,37 @@ func (p *Platform) Keepalive() (*sipgo.DialogClientSession, error) {
 
 // Unregister 发送注销请求到上级平台
 func (p *Platform) Unregister() error {
-	// 创建注销请求的目标URI
-	recipient := sip.Uri{
-		User: p.PlatformModel.ServerGBID,
-		Host: p.PlatformModel.ServerIP,
-		Port: p.PlatformModel.ServerPort,
+	// 创建基本的REGISTER请求
+	req := sip.NewRequest(sip.REGISTER, p.Recipient)
+
+	//callid
+	if p.RegisterCallID != "" {
+		callID := sip.CallIDHeader(p.RegisterCallID)
+		req.AppendHeader(&callID)
+	} else {
+		customCallID := fmt.Sprintf("%d@%s", time.Now().Unix(), p.PlatformModel.DeviceIP)
+		callID := sip.CallIDHeader(customCallID)
+		req.AppendHeader(&callID)
 	}
 
-	// 创建基本的REGISTER请求
-	req := sip.NewRequest(sip.REGISTER, recipient)
+	//cseqheader
+	csqHeader := sip.CSeqHeader{
+		SeqNo:      uint32(p.SN),
+		MethodName: "REGISTER",
+	}
+	p.SN++
+	req.AppendHeader(&csqHeader)
 
-	// 添加Contact头部
-	contactStr := fmt.Sprintf("<sip:%s@%s:%d>", p.PlatformModel.DeviceGBID, p.PlatformModel.DeviceIP, p.PlatformModel.DevicePort)
-	req.AppendHeader(sip.NewHeader("Contact", contactStr))
-
-	// 添加From头部
-	fromHeader := sip.FromHeader{
+	// 设置From头部，使用本地平台的信息
+	fromHdr := sip.FromHeader{
 		Address: sip.Uri{
 			User: p.PlatformModel.DeviceGBID,
 			Host: p.PlatformModel.ServerGBDomain,
 		},
 		Params: sip.NewParams(),
 	}
-	fromHeader.Params.Add("tag", sip.GenerateTagN(16))
-	req.AppendHeader(&fromHeader)
+	fromHdr.Params.Add("tag", sip.GenerateTagN(16))
+	req.AppendHeader(&fromHdr)
 
 	// 添加To头部
 	toHeader := sip.ToHeader{
@@ -217,15 +233,35 @@ func (p *Platform) Unregister() error {
 	}
 	req.AppendHeader(&toHeader)
 
-	// 添加Expires头部，设置为0表示注销
+	// 添加Via头部
+	viaHeader := sip.ViaHeader{
+		ProtocolName:    "SIP",
+		ProtocolVersion: "2.0",
+		Transport:       p.PlatformModel.Transport,
+		Host:            p.PlatformModel.DeviceIP,
+		Port:            p.PlatformModel.DevicePort,
+		Params:          sip.NewParams(),
+	}
+	viaHeader.Params.Add("branch", sip.GenerateBranchN(16)).Add("rport", "")
+	req.AppendHeader(&viaHeader)
+
+	req.AppendHeader(&p.MaxForwardsHDR)
+
+	// 添加Contact头部
+	req.AppendHeader(p.ContactHDR)
+
+	req.AppendHeader(p.UserAgentHDR)
+	// 添加Expires头部，注销时设置为0
 	req.AppendHeader(sip.NewHeader("Expires", "0"))
 
+	contentLengthHeader := sip.ContentLengthHeader(0)
+	req.AppendHeader(&contentLengthHeader)
 	// 设置传输协议
 	req.SetTransport(strings.ToUpper(p.PlatformModel.Transport))
 
-	// 发送请求并获取响应
 	tx, err := p.Client.TransactionRequest(p.ctx, req)
 	if err != nil {
+		p.Error("unregister", "error", err.Error())
 		return fmt.Errorf("创建事务失败: %v", err)
 	}
 	defer tx.Terminate()
@@ -233,14 +269,84 @@ func (p *Platform) Unregister() error {
 	// 获取响应
 	res, err := p.getResponse(tx)
 	if err != nil {
-		return fmt.Errorf("获取响应失败: %v", err)
+		p.Error("unregister", "error", err.Error())
+		return err
 	}
 
-	// 检查响应状态
+	// 处理401未授权响应
+	if res.StatusCode == 401 {
+		// 获取WWW-Authenticate头部
+		wwwAuth := res.GetHeader("WWW-Authenticate")
+		if wwwAuth == nil {
+			p.Error("unregister", "error", "no auth challenge")
+			return fmt.Errorf("no auth challenge")
+		}
+
+		// 解析认证质询
+		chal, err := digest.ParseChallenge(wwwAuth.Value())
+		if err != nil {
+			p.Error("unregister", "error", err.Error())
+			return err
+		}
+
+		p.plugin.Debug("received auth challenge",
+			"realm", chal.Realm,
+			"nonce", chal.Nonce,
+			"algorithm", chal.Algorithm,
+			"qop", chal.QOP)
+
+		// 生成认证响应
+		opts := digest.Options{
+			Method:   req.Method.String(),
+			URI:      "sip:" + p.PlatformModel.ServerGBDomain,
+			Username: p.PlatformModel.Username,
+			Password: p.PlatformModel.Password,
+			Cnonce:   sip.GenerateTagN(16),
+			Count:    1,
+		}
+
+		cred, err := digest.Digest(chal, opts)
+		if err != nil {
+			p.plugin.Error("calculating digest failed", "error", err.Error())
+			return err
+		}
+
+		p.plugin.Debug("calculated response info",
+			"username", opts.Username,
+			"uri", opts.URI,
+			"cnonce", opts.Cnonce,
+			"count", opts.Count,
+			"response", cred.Response)
+
+		// 创建新的带认证信息的请求
+		newReq := req.Clone()
+		newReq.RemoveHeader("Via") // 必须由传输层重新生成
+		newReq.AppendHeader(sip.NewHeader("Authorization", cred.String()))
+
+		// 发送认证请求
+		tx, err = p.Client.TransactionRequest(p.ctx, newReq, sipgo.ClientRequestAddVia)
+		if err != nil {
+			p.plugin.Error("unregister", "error", err.Error())
+			return err
+		}
+		defer tx.Terminate()
+
+		// 获取认证响应
+		res, err = p.getResponse(tx)
+		if err != nil {
+			p.plugin.Error("unregister", "error", err.Error())
+			return err
+		}
+	}
+
+	// 检查最终响应状态
 	if res.StatusCode != 200 {
+		p.plugin.Error("unregister", "status", res.StatusCode)
 		return fmt.Errorf("注销失败，状态码: %d", res.StatusCode)
 	}
 
+	p.plugin.Info("unregister", "status", "success")
+	p.PlatformModel.Status = false
 	return nil
 }
 
@@ -443,11 +549,95 @@ func (p *Platform) sendCatalogResponse(req *sip.Request, sn string, fromTag stri
 </DeviceList>
 </Response>`, sn, p.PlatformModel.DeviceGBID)
 		request.SetBody([]byte(xmlContent))
-		_, err := p.Client.Do(p.ctx, request)
+
+		// 修正：使用TransactionRequest替代Do
+		tx, err := p.Client.TransactionRequest(p.ctx, request)
 		if err != nil {
-			p.plugin.Error("p.Client.Do", err)
+			p.Error("sendCatalogResponse", "error", err.Error())
+			return fmt.Errorf("创建事务失败: %v", err)
 		}
-		return err
+		defer tx.Terminate()
+
+		// 获取响应
+		res, err := p.getResponse(tx)
+		if err != nil {
+			p.Error("sendCatalogResponse", "error", err.Error())
+			return err
+		}
+
+		// 处理401未授权响应
+		if res.StatusCode == 401 {
+			// 获取WWW-Authenticate头部
+			wwwAuth := res.GetHeader("WWW-Authenticate")
+			if wwwAuth == nil {
+				p.Error("sendCatalogResponse", "error", "no auth challenge")
+				return fmt.Errorf("no auth challenge")
+			}
+
+			// 解析认证质询
+			chal, err := digest.ParseChallenge(wwwAuth.Value())
+			if err != nil {
+				p.Error("sendCatalogResponse", "error", err.Error())
+				return err
+			}
+
+			p.Debug("received auth challenge",
+				"realm", chal.Realm,
+				"nonce", chal.Nonce,
+				"algorithm", chal.Algorithm,
+				"qop", chal.QOP)
+
+			// 生成认证响应
+			opts := digest.Options{
+				Method:   request.Method.String(),
+				URI:      "sip:" + p.PlatformModel.ServerGBDomain,
+				Username: p.PlatformModel.Username,
+				Password: p.PlatformModel.Password,
+				Cnonce:   sip.GenerateTagN(16),
+				Count:    1,
+			}
+
+			cred, err := digest.Digest(chal, opts)
+			if err != nil {
+				p.Error("calculating digest failed", "error", err.Error())
+				return err
+			}
+
+			p.Debug("calculated response info",
+				"username", opts.Username,
+				"uri", opts.URI,
+				"cnonce", opts.Cnonce,
+				"count", opts.Count,
+				"response", cred.Response)
+
+			// 创建新的带认证信息的请求
+			newReq := request.Clone()
+			newReq.RemoveHeader("Via") // 必须由传输层重新生成
+			newReq.AppendHeader(sip.NewHeader("Authorization", cred.String()))
+
+			// 发送认证请求
+			tx, err = p.Client.TransactionRequest(p.ctx, newReq, sipgo.ClientRequestAddVia)
+			if err != nil {
+				p.Error("sendCatalogResponse", "error", err.Error())
+				return err
+			}
+			defer tx.Terminate()
+
+			// 获取认证响应
+			res, err = p.getResponse(tx)
+			if err != nil {
+				p.Error("sendCatalogResponse", "error", err.Error())
+				return err
+			}
+		}
+
+		// 检查最终响应状态
+		if res.StatusCode != 200 {
+			p.Error("sendCatalogResponse", "status", res.StatusCode)
+			return fmt.Errorf("发送目录响应失败，状态码: %d", res.StatusCode)
+		}
+
+		return nil
 	}
 
 	// 有通道时，为每个通道单独发送一个XML
@@ -504,10 +694,94 @@ func (p *Platform) sendCatalogResponse(req *sip.Request, sn string, fromTag stri
 </Response>`, sn, p.PlatformModel.DeviceGBID, len(channels), channelXML)
 
 		request.SetBody([]byte(xmlContent))
-		_, err := p.Client.Do(p.ctx, request)
+
+		// 修正：使用TransactionRequest替代Do
+		tx, err := p.Client.TransactionRequest(p.ctx, request)
 		if err != nil {
-			p.plugin.Error("send catalog response", "error", err.Error(), "channel_index", i)
+			p.Error("sendCatalogResponse", "error", err.Error(), "channel_index", i)
+			return fmt.Errorf("创建事务失败: %v", err)
+		}
+		defer tx.Terminate()
+
+		// 获取响应
+		res, err := p.getResponse(tx)
+		if err != nil {
+			p.Error("sendCatalogResponse", "error", err.Error(), "channel_index", i)
 			return err
+		}
+
+		// 处理401未授权响应
+		if res.StatusCode == 401 {
+			// 获取WWW-Authenticate头部
+			wwwAuth := res.GetHeader("WWW-Authenticate")
+			if wwwAuth == nil {
+				p.Error("sendCatalogResponse", "error", "no auth challenge", "channel_index", i)
+				return fmt.Errorf("no auth challenge")
+			}
+
+			// 解析认证质询
+			chal, err := digest.ParseChallenge(wwwAuth.Value())
+			if err != nil {
+				p.Error("sendCatalogResponse", "error", err.Error(), "channel_index", i)
+				return err
+			}
+
+			p.Debug("received auth challenge",
+				"realm", chal.Realm,
+				"nonce", chal.Nonce,
+				"algorithm", chal.Algorithm,
+				"qop", chal.QOP,
+				"channel_index", i)
+
+			// 生成认证响应
+			opts := digest.Options{
+				Method:   request.Method.String(),
+				URI:      "sip:" + p.PlatformModel.ServerGBDomain,
+				Username: p.PlatformModel.Username,
+				Password: p.PlatformModel.Password,
+				Cnonce:   sip.GenerateTagN(16),
+				Count:    1,
+			}
+
+			cred, err := digest.Digest(chal, opts)
+			if err != nil {
+				p.Error("calculating digest failed", "error", err.Error(), "channel_index", i)
+				return err
+			}
+
+			p.Debug("calculated response info",
+				"username", opts.Username,
+				"uri", opts.URI,
+				"cnonce", opts.Cnonce,
+				"count", opts.Count,
+				"response", cred.Response,
+				"channel_index", i)
+
+			// 创建新的带认证信息的请求
+			newReq := request.Clone()
+			newReq.RemoveHeader("Via") // 必须由传输层重新生成
+			newReq.AppendHeader(sip.NewHeader("Authorization", cred.String()))
+
+			// 发送认证请求
+			tx, err = p.Client.TransactionRequest(p.ctx, newReq, sipgo.ClientRequestAddVia)
+			if err != nil {
+				p.Error("sendCatalogResponse", "error", err.Error(), "channel_index", i)
+				return err
+			}
+			defer tx.Terminate()
+
+			// 获取认证响应
+			res, err = p.getResponse(tx)
+			if err != nil {
+				p.Error("sendCatalogResponse", "error", err.Error(), "channel_index", i)
+				return err
+			}
+		}
+
+		// 检查最终响应状态
+		if res.StatusCode != 200 {
+			p.Error("sendCatalogResponse", "status", res.StatusCode, "channel_index", i)
+			return fmt.Errorf("发送目录响应失败，状态码: %d", res.StatusCode)
 		}
 
 		// 添加短暂延迟以防止发送过快
@@ -569,7 +843,7 @@ func (p *Platform) buildChannelItem(channel gb28181.CommonGBChannel) string {
 		channel.GbRegisterWay, // 直接使用整数值
 		channel.GbSecrecy,     // 直接使用整数值
 		parentID,
-		channel.GbParental, // 直接使用整数值
+		channel.GbParental,  // 直接使用整数值
 		channel.GbSafetyWay) // 直接使用整数值
 }
 
@@ -877,7 +1151,7 @@ func (p *Platform) sendDeviceInfoResponse(req *sip.Request, device *Device, sn s
 			Host: p.PlatformModel.ServerGBDomain,
 		},
 	}
-	req.AppendHeader(&toHeader)
+	request.AppendHeader(&toHeader)
 	// 添加Via头部
 	viaHeader := sip.ViaHeader{
 		ProtocolName:    "SIP",
@@ -888,7 +1162,7 @@ func (p *Platform) sendDeviceInfoResponse(req *sip.Request, device *Device, sn s
 		Params:          sip.NewParams(),
 	}
 	viaHeader.Params.Add("branch", sip.GenerateBranchN(16)).Add("rport", "")
-	req.AppendHeader(&viaHeader)
+	request.AppendHeader(&viaHeader)
 	contentTypeHeader := sip.ContentTypeHeader("Application/MANSCDP+xml")
 	request.AppendHeader(&contentTypeHeader)
 
@@ -923,8 +1197,96 @@ func (p *Platform) sendDeviceInfoResponse(req *sip.Request, device *Device, sn s
 	}
 
 	request.SetBody([]byte(xmlContent))
-	_, err := p.Client.Do(p, request)
-	return err
+
+	// 修正：使用正确的上下文参数
+	tx, err := p.Client.TransactionRequest(p.ctx, request)
+	if err != nil {
+		p.Error("sendDeviceInfoResponse", "error", err.Error())
+		return fmt.Errorf("创建事务失败: %v", err)
+	}
+	defer tx.Terminate()
+
+	// 获取响应
+	res, err := p.getResponse(tx)
+	if err != nil {
+		p.Error("sendDeviceInfoResponse", "error", err.Error())
+		return err
+	}
+
+	// 处理401未授权响应
+	if res.StatusCode == 401 {
+		// 获取WWW-Authenticate头部
+		wwwAuth := res.GetHeader("WWW-Authenticate")
+		if wwwAuth == nil {
+			p.Error("sendDeviceInfoResponse", "error", "no auth challenge")
+			return fmt.Errorf("no auth challenge")
+		}
+
+		// 解析认证质询
+		chal, err := digest.ParseChallenge(wwwAuth.Value())
+		if err != nil {
+			p.Error("sendDeviceInfoResponse", "error", err.Error())
+			return err
+		}
+
+		p.Debug("received auth challenge",
+			"realm", chal.Realm,
+			"nonce", chal.Nonce,
+			"algorithm", chal.Algorithm,
+			"qop", chal.QOP)
+
+		// 生成认证响应
+		opts := digest.Options{
+			Method:   request.Method.String(),
+			URI:      "sip:" + p.PlatformModel.ServerGBDomain,
+			Username: p.PlatformModel.Username,
+			Password: p.PlatformModel.Password,
+			Cnonce:   sip.GenerateTagN(16),
+			Count:    1,
+		}
+
+		cred, err := digest.Digest(chal, opts)
+		if err != nil {
+			p.Error("calculating digest failed", "error", err.Error())
+			return err
+		}
+
+		p.Debug("calculated response info",
+			"username", opts.Username,
+			"uri", opts.URI,
+			"cnonce", opts.Cnonce,
+			"count", opts.Count,
+			"response", cred.Response)
+
+		// 创建新的带认证信息的请求
+		newReq := request.Clone()
+		newReq.RemoveHeader("Via") // 必须由传输层重新生成
+		newReq.AppendHeader(sip.NewHeader("Authorization", cred.String()))
+
+		// 发送认证请求
+		tx, err = p.Client.TransactionRequest(p.ctx, newReq, sipgo.ClientRequestAddVia)
+		if err != nil {
+			p.Error("sendDeviceInfoResponse", "error", err.Error())
+			return err
+		}
+		defer tx.Terminate()
+
+		// 获取认证响应
+		res, err = p.getResponse(tx)
+		if err != nil {
+			p.Error("sendDeviceInfoResponse", "error", err.Error())
+			return err
+		}
+	}
+
+	// 检查最终响应状态
+	if res.StatusCode != 200 {
+		p.Error("sendDeviceInfoResponse", "status", res.StatusCode)
+		return fmt.Errorf("发送设备信息响应失败，状态码: %d", res.StatusCode)
+	}
+
+	p.Info("sendDeviceInfoResponse", "status", "success")
+	return nil
 }
 
 // handleAlarm 处理报警消息
