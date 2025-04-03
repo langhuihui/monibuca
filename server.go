@@ -409,9 +409,10 @@ func (s *Server) Start() (err error) {
 				}
 			}
 			if plugin.Meta.Transformer != nil {
-				for streamPath, conf := range plugin.config.Transform {
-					transformer := plugin.Meta.Transformer()
-					transformer.GetTransformJob().Init(transformer, plugin, streamPath, conf)
+				for streamPath, _ := range plugin.config.Transform {
+					plugin.OnSubscribe(streamPath, url.Values{}) //按需转换
+					// transformer := plugin.Meta.Transformer()
+					// transformer.GetTransformJob().Init(transformer, plugin, streamPath, conf)
 				}
 			}
 		}

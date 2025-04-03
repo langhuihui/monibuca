@@ -634,7 +634,7 @@ func (p *Plugin) Record(pub *Publisher, conf config.Record, subConf *config.Subs
 
 func (p *Plugin) Transform(pub *Publisher, conf config.Transform) {
 	transformer := p.Meta.Transformer()
-	job := transformer.GetTransformJob().Init(transformer, p, pub.StreamPath, conf)
+	job := transformer.GetTransformJob().Init(transformer, p, pub, conf)
 	job.Depend(pub)
 }
 

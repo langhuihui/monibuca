@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/disintegration/imaging"
+	m7s "m7s.live/v5"
 	"m7s.live/v5/pkg"
 	snap_pkg "m7s.live/v5/plugin/snap/pkg"
 	"m7s.live/v5/plugin/snap/pkg/watermark"
@@ -34,9 +35,10 @@ func parseRGBA(rgba string) (color.RGBA, error) {
 }
 
 // snap 方法负责实际的截图操作
-func (p *SnapPlugin) snap(streamPath string) (*bytes.Buffer, error) {
+func (p *SnapPlugin) snap(publisher *m7s.Publisher, watermarkConfig *snap_pkg.WatermarkConfig) (*bytes.Buffer, error) {
+
 	// 获取视频帧
-	annexb, _, err := snap_pkg.GetVideoFrame(streamPath, p.Server)
+	annexb, _, err := snap_pkg.GetVideoFrame(publisher, p.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -48,7 +50,12 @@ func (p *SnapPlugin) snap(streamPath string) (*bytes.Buffer, error) {
 	}
 
 	// 如果设置了水印文字，添加水印
-	if p.Watermark.Text != "" && snap_pkg.GlobalWatermarkConfig.Font != nil {
+	if watermarkConfig != nil && watermarkConfig.Text != "" {
+		// 加载字体
+		if err := watermarkConfig.LoadFont(); err != nil {
+			return nil, fmt.Errorf("load watermark font failed: %w", err)
+		}
+
 		// 解码图片
 		img, _, err := image.Decode(bytes.NewReader(buf.Bytes()))
 		if err != nil {
@@ -57,20 +64,20 @@ func (p *SnapPlugin) snap(streamPath string) (*bytes.Buffer, error) {
 
 		// 添加水印
 		result, err := watermark.DrawWatermarkSingle(img, watermark.TextConfig{
-			Text:       snap_pkg.GlobalWatermarkConfig.Text,
-			Font:       snap_pkg.GlobalWatermarkConfig.Font,
-			FontSize:   snap_pkg.GlobalWatermarkConfig.FontSize,
-			Spacing:    snap_pkg.GlobalWatermarkConfig.FontSpacing,
+			Text:       watermarkConfig.Text,
+			Font:       watermarkConfig.Font,
+			FontSize:   watermarkConfig.FontSize,
+			Spacing:    watermarkConfig.FontSpacing,
 			RowSpacing: 10,
 			ColSpacing: 20,
 			Rows:       1,
 			Cols:       1,
 			DPI:        72,
-			Color:      snap_pkg.GlobalWatermarkConfig.FontColor,
+			Color:      watermarkConfig.FontColor,
 			IsGrid:     false,
 			Angle:      0,
-			OffsetX:    snap_pkg.GlobalWatermarkConfig.OffsetX,
-			OffsetY:    snap_pkg.GlobalWatermarkConfig.OffsetY,
+			OffsetX:    watermarkConfig.OffsetX,
+			OffsetY:    watermarkConfig.OffsetY,
 		}, false)
 		if err != nil {
 			return nil, fmt.Errorf("add watermark failed: %w", err)
@@ -88,14 +95,39 @@ func (p *SnapPlugin) snap(streamPath string) (*bytes.Buffer, error) {
 
 func (p *SnapPlugin) doSnap(rw http.ResponseWriter, r *http.Request) {
 	streamPath := r.PathValue("streamPath")
-
-	if !p.Server.Streams.Has(streamPath) {
+	// 获取发布者
+	publisher, err := p.Server.GetPublisher(streamPath)
+	if err != nil {
 		http.Error(rw, pkg.ErrNotFound.Error(), http.StatusNotFound)
 		return
 	}
 
+	// 获取查询参数
+	query := r.URL.Query()
+
+	// 从查询参数中获取水印配置
+	var watermarkConfig *snap_pkg.WatermarkConfig
+	watermarkText := query.Get("watermark")
+	if watermarkText != "" {
+		watermarkConfig = &snap_pkg.WatermarkConfig{
+			Text:        watermarkText,
+			FontPath:    query.Get("fontPath"),
+			FontSize:    parseFloat64(query.Get("fontSize"), 36),
+			FontSpacing: parseFloat64(query.Get("fontSpacing"), 2),
+			OffsetX:     parseInt(query.Get("offsetX"), 0),
+			OffsetY:     parseInt(query.Get("offsetY"), 0),
+		}
+
+		// 解析颜色
+		if fontColor := query.Get("fontColor"); fontColor != "" {
+			if color, err := parseRGBA(fontColor); err == nil {
+				watermarkConfig.FontColor = color
+			}
+		}
+	}
+
 	// 调用 snap 进行截图
-	buf, err := p.snap(streamPath)
+	buf, err := p.snap(publisher, watermarkConfig)
 	if err != nil {
 		p.Error("snap failed", "error", err.Error())
 		http.Error(rw, err.Error(), http.StatusInternalServerError)
@@ -103,12 +135,12 @@ func (p *SnapPlugin) doSnap(rw http.ResponseWriter, r *http.Request) {
 	}
 
 	// 处理保存逻辑
-	var savePath string
-	if p.SavePath != "" && p.IsManualModeSave {
+	savePath := query.Get("savePath")
+	if savePath != "" {
 		now := time.Now()
 		filename := fmt.Sprintf("%s_%s.jpg", streamPath, now.Format("20060102150405.000"))
 		filename = strings.ReplaceAll(filename, "/", "_")
-		savePath = filepath.Join(p.SavePath, filename)
+		savePath = filepath.Join(savePath, filename)
 
 		// 保存到本地
 		if err := os.WriteFile(savePath, buf.Bytes(), 0644); err != nil {
@@ -138,13 +170,37 @@ func (p *SnapPlugin) doSnap(rw http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// 辅助函数：解析浮点数
+func parseFloat64(s string, defaultValue float64) float64 {
+	if s == "" {
+		return defaultValue
+	}
+	v, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return defaultValue
+	}
+	return v
+}
+
+// 辅助函数：解析整数
+func parseInt(s string, defaultValue int) int {
+	if s == "" {
+		return defaultValue
+	}
+	v, err := strconv.Atoi(s)
+	if err != nil {
+		return defaultValue
+	}
+	return v
+}
+
 func (p *SnapPlugin) querySnap(rw http.ResponseWriter, r *http.Request) {
 	if p.DB == nil {
 		http.Error(rw, "database not initialized", http.StatusInternalServerError)
 		return
 	}
 
-	streamPath := r.URL.Query().Get("streamPath")
+	streamPath := r.PathValue("streamPath")
 	if streamPath == "" {
 		http.Error(rw, "streamPath is required", http.StatusBadRequest)
 		return
@@ -194,7 +250,7 @@ func (p *SnapPlugin) querySnap(rw http.ResponseWriter, r *http.Request) {
 
 func (p *SnapPlugin) RegisterHandler() map[string]http.HandlerFunc {
 	return map[string]http.HandlerFunc{
-		"/{streamPath...}": p.doSnap,
-		"/query":           p.querySnap,
+		"/{streamPath...}":       p.doSnap,
+		"/query/{streamPath...}": p.querySnap,
 	}
 }

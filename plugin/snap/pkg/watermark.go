@@ -15,9 +15,8 @@ import (
 )
 
 var (
-	fontCache             = make(map[string]*truetype.Font)
-	fontCacheLock         sync.RWMutex
-	GlobalWatermarkConfig WatermarkConfig
+	fontCache     = make(map[string]*truetype.Font)
+	fontCacheLock sync.RWMutex
 )
 
 // WatermarkConfig 水印配置

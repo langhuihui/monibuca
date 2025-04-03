@@ -164,3 +164,36 @@ func (v HTTPValues) DeepClone() (ret HTTPValues) {
 	}
 	return
 }
+
+func (r *TransfromOutput) UnmarshalYAML(node *yaml.Node) error {
+	if node.Kind == yaml.ScalarNode {
+		// If it's a string, assign it to Target
+		return node.Decode(&r.Target)
+	}
+
+	if node.Kind == yaml.MappingNode {
+		var conf map[string]any
+		if err := node.Decode(&conf); err != nil {
+			return err
+		}
+		var normal bool
+		if conf["target"] != nil {
+			r.Target = conf["target"].(string)
+			normal = true
+		}
+		if conf["streampath"] != nil {
+			r.StreamPath = conf["streampath"].(string)
+			normal = true
+		}
+		if conf["conf"] != nil {
+			r.Conf = conf["conf"]
+			normal = true
+		}
+		if !normal {
+			r.Conf = conf
+		}
+		return nil
+	}
+
+	return fmt.Errorf("unsupported node kind: %v", node.Kind)
+}

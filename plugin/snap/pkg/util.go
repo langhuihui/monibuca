@@ -10,30 +10,25 @@ import (
 )
 
 // GetVideoFrame 获取视频帧数据
-func GetVideoFrame(streamPath string, server *m7s.Server) ([]*pkg.AnnexB, *pkg.AVTrack, error) {
-	// 获取发布者
-	publisher, err := server.GetPublisher(streamPath)
-	if err != nil {
-		return nil, nil, err
-	}
-
+func GetVideoFrame(publisher *m7s.Publisher, server *m7s.Server) ([]*pkg.AnnexB, *pkg.AVTrack, error) {
 	if publisher.VideoTrack.AVTrack == nil {
 		return nil, nil, pkg.ErrNotFound
 	}
 
 	// 等待视频就绪
-	if err = publisher.VideoTrack.WaitReady(); err != nil {
+	if err := publisher.VideoTrack.WaitReady(); err != nil {
 		return nil, nil, err
 	}
 
 	// 创建读取器并等待 I 帧
 	reader := pkg.NewAVRingReader(publisher.VideoTrack.AVTrack, "snapshot")
-	if err = reader.StartRead(publisher.VideoTrack.GetIDR()); err != nil {
+	if err := reader.StartRead(publisher.VideoTrack.GetIDR()); err != nil {
 		return nil, nil, err
 	}
 	defer reader.StopRead()
 	var track pkg.AVTrack
 	var annexb pkg.AnnexB
+	var err error
 	track.ICodecCtx, track.SequenceFrame, err = annexb.ConvertCtx(publisher.VideoTrack.ICodecCtx)
 	if err != nil {
 		return nil, nil, err

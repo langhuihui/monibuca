@@ -6,19 +6,22 @@ Snap 插件提供了对流媒体的截图功能，支持定时截图、按关键
 
 ```yaml
 snap:
-  watermark:
-    text: ""              # 水印文字内容
-    fontpath: ""          # 水印字体文件路径
-    fontcolor: "rgba(255,165,0,1)" # 水印字体颜色，支持rgba格式
-    fontsize: 36          # 水印字体大小
-    offsetx: 0           # 水印位置X偏移
-    offsety: 0           # 水印位置Y偏移
-  timeinterval: 1s   # 截图时间间隔，默认1分钟
-  savepath: "snaps"  # 截图保存路径
-  filter: ".*"           # 截图流过滤器，支持正则表达式
-  iframeinterval: 3  # 间隔多少帧截图
-  mode: 0            # 截图模式：0-时间间隔，1-关键帧间隔 2-HTTP请求模式（手动触发）
-  querytimedelta: 3  # 查询截图时允许的最大时间差（秒）
+  onpub:
+    transform:
+      .+: # 正则表达式过滤流
+        output:
+          -   watermark:
+                text: "abcd"              # 水印文字内容
+                fontpath: /Users/dexter/Library/Fonts/MapleMono-NF-CN-Medium.ttf          # 水印字体文件路径
+                fontcolor: "rgba(255,165,0,1)" # 水印字体颜色，支持rgba格式
+                fontsize: 36          # 水印字体大小
+                offsetx: 0           # 水印位置X偏移
+                offsety: 0           # 水印位置Y偏移
+              timeinterval: 1m   # 截图时间间隔
+              savepath: "snaps"  # 截图保存路径
+              iframeinterval: 3  # 间隔多少帧截图(在timeinterval为 0 时生效，都为 0 则为手动截图模式)
+              querytimedelta: 3  # 查询截图时允许的最大时间差（秒）
+
 ```
 
 ## HTTP API
@@ -90,15 +93,19 @@ GET /query?streamPath={streamPath}&snapTime={timestamp}
 配置示例：
 ```yaml
 snap:
-  watermark:
-    text: "测试水印 $T{2006-01-02 15:04:05}"
-    fontpath: "/path/to/font.ttf"
-    fontcolor: "rgba(255,0,0,0.5)"
-    fontsize: 48
-    offsetx: 20
-    offsety: 20
-  mode: 0
-  timeinterval: 1m
+  onpub:
+    transform:
+      .+: # 正则表达式过滤流
+        output:
+          - watermark:
+              text: "测试水印 $T{2006-01-02 15:04:05}"
+              fontpath: "/path/to/font.ttf"
+              fontcolor: "rgba(255,0,0,0.5)"
+              fontsize: 48
+              offsetx: 20
+              offsety: 20
+            timeinterval: 1m   # 截图时间间隔
+            savepath: "snaps"  # 截图保存路径
 ```
 
 ## 数据库记录
@@ -110,32 +117,9 @@ snap:
 - 截图路径（SnapPath）
 - 创建时间（CreatedAt）
 
-## 使用示例
 
-1. 基础配置示例：
-```yaml
-snap:
-  timeinterval: 30s
-  savepath: "./snapshots"
-  mode: 1
-  iframeinterval: 5
-```
 
-2. 带水印的配置示例：
-```yaml
-snap:
-  watermark:
-    text: "测试水印"
-    fontpath: "/path/to/font.ttf"
-    fontcolor: "rgba(255,0,0,0.5)"
-    fontsize: 48
-    offsetx: 20
-    offsety: 20
-  mode: 0
-  timeinterval: 1m
-```
-
-3. API调用示例：
+## API调用示例：
 ```bash
 # 手动触发截图
 curl http://localhost:8080/snap/live/stream1

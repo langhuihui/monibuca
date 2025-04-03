@@ -19,12 +19,13 @@ type (
 	Transformer  = func() ITransformer
 	TransformJob struct {
 		task.Job
-		StreamPath  string           // 对应本地流
-		Config      config.Transform // 对应目标流
-		Plugin      *Plugin
-		Publisher   *Publisher
-		Subscriber  *Subscriber
-		Transformer ITransformer
+		StreamPath      string           // 对应本地流
+		Config          config.Transform // 对应目标流
+		Plugin          *Plugin
+		OriginPublisher *Publisher
+		Publisher       *Publisher
+		Subscriber      *Subscriber
+		Transformer     ITransformer
 	}
 	DefaultTransformer struct {
 		task.Task
@@ -93,17 +94,18 @@ func (p *TransformJob) Publish(streamPath string) (err error) {
 	return
 }
 
-func (p *TransformJob) Init(transformer ITransformer, plugin *Plugin, streamPath string, conf config.Transform) *TransformJob {
+func (p *TransformJob) Init(transformer ITransformer, plugin *Plugin, pub *Publisher, conf config.Transform) *TransformJob {
 	p.Plugin = plugin
 	p.Config = conf
-	p.StreamPath = streamPath
+	p.StreamPath = pub.StreamPath
+	p.OriginPublisher = pub
 	p.Transformer = transformer
 	p.SetDescriptions(task.Description{
-		"streamPath": streamPath,
+		"streamPath": pub.StreamPath,
 		"conf":       conf,
 	})
 	transformer.SetRetry(-1, time.Second*2)
-	plugin.Server.Transforms.AddTask(p, plugin.Logger.With("streamPath", streamPath))
+	plugin.Server.Transforms.AddTask(p, plugin.Logger.With("streamPath", pub.StreamPath))
 	return p
 }
 
@@ -127,10 +129,6 @@ func (p *TransformJob) Start() (err error) {
 	p.AddTask(p.Transformer, p.Logger)
 	return
 }
-
-//func (p *TransformJob) TransformPublished(pub *Publisher) {
-//
-//}
 
 func (p *TransformJob) Dispose() {
 	transList := &p.Plugin.Server.Transforms
