@@ -43,7 +43,7 @@ type GB28181Plugin struct {
 	m7s.Plugin
 	AutoInvite     bool   `default:"true" desc:"自动邀请"`
 	Serial         string `default:"34020000002000000001" desc:"sip 服务 id"` //sip 服务器 id, 默认 34020000002000000001
-	Realm          string `default:"3402000000" desc:"sip 服务域"`             //sip 服务器域，默认 3402000000
+	Realm          string `default:"3402000000" desc:"sip 服务域"`            //sip 服务器域，默认 3402000000
 	Password       string
 	Sip            SipConfig
 	MediaPort      util.Range[uint16] `default:"10001-20000" desc:"媒体端口范围"` //媒体端口范围
@@ -545,7 +545,7 @@ func (gb *GB28181Plugin) OnMessage(req *sip.Request, tx sip.ServerTransaction) {
 	// 检查是否是平台
 	if gb.DB != nil {
 		var platform gb28181.PlatformModel
-		if err := gb.DB.First(&platform, gb28181.PlatformModel{ServerGBID: id}).Error; err == nil {
+		if err := gb.DB.First(&platform, gb28181.PlatformModel{ServerGBID: id, Status: true}).Error; err == nil {
 			p = &platform
 		}
 	}
