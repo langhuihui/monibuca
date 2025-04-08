@@ -383,7 +383,7 @@ func (k *PlatformKeepAliveTask) GetTickInterval() time.Duration {
 }
 
 func (k *PlatformKeepAliveTask) Tick(any) {
-	if !*k.platform.PlatformModel.Enable {
+	if !k.platform.PlatformModel.Enable {
 		return
 	}
 	_, err := k.platform.Keepalive()
@@ -1198,11 +1198,12 @@ func (p *Platform) sendDeviceInfoResponse(req *sip.Request, device *Device, sn s
 <SN>%s</SN>
 <DeviceID>%s</DeviceID>
 <Result>OK</Result>
+<DeviceName>%s</DeviceName>
 <Manufacturer>%s</Manufacturer>
 <Model>%s</Model>
 <Firmware>%s</Firmware>
 <Channel>%d</Channel>
-</Response>`, sn, p.PlatformModel.DeviceGBID, p.PlatformModel.Manufacturer, p.PlatformModel.Model, "", p.PlatformModel.ChannelCount)
+</Response>`, sn, p.PlatformModel.DeviceGBID, p.PlatformModel.Name, p.PlatformModel.Manufacturer, p.PlatformModel.Model, "", p.PlatformModel.ChannelCount)
 	} else {
 		// 返回设备信息
 		xmlContent = fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
@@ -1211,11 +1212,12 @@ func (p *Platform) sendDeviceInfoResponse(req *sip.Request, device *Device, sn s
 <SN>%s</SN>
 <DeviceID>%s</DeviceID>
 <Result>OK</Result>
+<DeviceName>%s</DeviceName>
 <Manufacturer>%s</Manufacturer>
 <Model>%s</Model>
 <Firmware>%s</Firmware>
 <Channel>%d</Channel>
-</Response>`, sn, device.DeviceID, device.Manufacturer, device.Model, device.Firmware, device.ChannelCount)
+</Response>`, sn, device.DeviceID, device.Name, device.Manufacturer, device.Model, device.Firmware, device.ChannelCount)
 	}
 
 	request.SetBody([]byte(xmlContent))

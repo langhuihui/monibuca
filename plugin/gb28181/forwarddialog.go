@@ -204,14 +204,19 @@ func (d *ForwardDialog) Start() (err error) {
 	fromHDR := sip.FromHeader{
 		Address: sip.Uri{
 			User: d.gb.Serial,
-			Host: d.gb.Realm,
+			Host: device.WanIP,
+			Port: device.LocalPort,
 		},
 		Params: sip.NewParams(),
+	}
+	toHeader := sip.ToHeader{
+		Address: sip.Uri{User: channelId, Host: channelId[0:10]},
 	}
 	fromHDR.Params.Add("tag", sip.GenerateTagN(16))
 	// 创建会话 - 使用device的dialogClient创建
 	dialogClientCache := sipgo.NewDialogClientCache(device.client, device.contactHDR)
-	d.session, err = dialogClientCache.Invite(d.gb, recipient, request.Body(), &fromHDR, &viaHeader, &device.contactHDR, subjectHeader, &contentTypeHeader)
+	//d.session, err = dialogClientCache.Invite(d.gb, recipient, request.Body(), &fromHDR, &toHeader, &viaHeader, subjectHeader, &contentTypeHeader)
+	d.session, err = dialogClientCache.Invite(d.gb, recipient, []byte(strings.Join(sdpInfo, "\r\n")+"\r\n"), &fromHDR, &toHeader, subjectHeader, &contentTypeHeader)
 	return
 }
 
@@ -252,6 +257,11 @@ func (d *ForwardDialog) Run() (err error) {
 					}
 				}
 			}
+		}
+	}
+	if d.session.InviteResponse.Contact() != nil {
+		if &d.session.InviteRequest.Recipient != &d.session.InviteResponse.Contact().Address {
+			d.session.InviteResponse.Contact().Address = d.session.InviteRequest.Recipient
 		}
 	}
 	err = d.session.Ack(d.gb)

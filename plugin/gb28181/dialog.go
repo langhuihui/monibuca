@@ -277,8 +277,10 @@ func (d *Dialog) Run() (err error) {
 			}
 		}
 	}
-	if &d.session.InviteRequest.Recipient != &d.session.InviteResponse.Contact().Address {
-		d.session.InviteResponse.Contact().Address = d.session.InviteRequest.Recipient
+	if d.session.InviteResponse.Contact() != nil {
+		if &d.session.InviteRequest.Recipient != &d.session.InviteResponse.Contact().Address {
+			d.session.InviteResponse.Contact().Address = d.session.InviteRequest.Recipient
+		}
 	}
 	err = d.session.Ack(d.gb)
 	if err != nil {

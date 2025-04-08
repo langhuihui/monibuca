@@ -22,59 +22,66 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	Api_List_FullMethodName                              = "/gb28181.api/List"
-	Api_GetDevice_FullMethodName                         = "/gb28181.api/GetDevice"
-	Api_GetDevices_FullMethodName                        = "/gb28181.api/GetDevices"
-	Api_GetChannels_FullMethodName                       = "/gb28181.api/GetChannels"
-	Api_SyncDevice_FullMethodName                        = "/gb28181.api/SyncDevice"
-	Api_DeleteDevice_FullMethodName                      = "/gb28181.api/DeleteDevice"
-	Api_GetSubChannels_FullMethodName                    = "/gb28181.api/GetSubChannels"
-	Api_ChangeAudio_FullMethodName                       = "/gb28181.api/ChangeAudio"
-	Api_UpdateChannelStreamIdentification_FullMethodName = "/gb28181.api/UpdateChannelStreamIdentification"
-	Api_UpdateTransport_FullMethodName                   = "/gb28181.api/UpdateTransport"
-	Api_AddDevice_FullMethodName                         = "/gb28181.api/AddDevice"
-	Api_UpdateDevice_FullMethodName                      = "/gb28181.api/UpdateDevice"
-	Api_GetDeviceStatus_FullMethodName                   = "/gb28181.api/GetDeviceStatus"
-	Api_GetDeviceAlarm_FullMethodName                    = "/gb28181.api/GetDeviceAlarm"
-	Api_GetSyncStatus_FullMethodName                     = "/gb28181.api/GetSyncStatus"
-	Api_GetSubscribeInfo_FullMethodName                  = "/gb28181.api/GetSubscribeInfo"
-	Api_GetSnap_FullMethodName                           = "/gb28181.api/GetSnap"
-	Api_StopConvert_FullMethodName                       = "/gb28181.api/StopConvert"
-	Api_StartBroadcast_FullMethodName                    = "/gb28181.api/StartBroadcast"
-	Api_StopBroadcast_FullMethodName                     = "/gb28181.api/StopBroadcast"
-	Api_GetAllSSRC_FullMethodName                        = "/gb28181.api/GetAllSSRC"
-	Api_GetRawChannel_FullMethodName                     = "/gb28181.api/GetRawChannel"
-	Api_AddPlatform_FullMethodName                       = "/gb28181.api/AddPlatform"
-	Api_GetPlatform_FullMethodName                       = "/gb28181.api/GetPlatform"
-	Api_UpdatePlatform_FullMethodName                    = "/gb28181.api/UpdatePlatform"
-	Api_DeletePlatform_FullMethodName                    = "/gb28181.api/DeletePlatform"
-	Api_ListPlatforms_FullMethodName                     = "/gb28181.api/ListPlatforms"
-	Api_QueryRecord_FullMethodName                       = "/gb28181.api/QueryRecord"
-	Api_PtzControl_FullMethodName                        = "/gb28181.api/PtzControl"
-	Api_IrisControl_FullMethodName                       = "/gb28181.api/IrisControl"
-	Api_FocusControl_FullMethodName                      = "/gb28181.api/FocusControl"
-	Api_QueryPreset_FullMethodName                       = "/gb28181.api/QueryPreset"
-	Api_AddPreset_FullMethodName                         = "/gb28181.api/AddPreset"
-	Api_CallPreset_FullMethodName                        = "/gb28181.api/CallPreset"
-	Api_DeletePreset_FullMethodName                      = "/gb28181.api/DeletePreset"
-	Api_AddCruisePoint_FullMethodName                    = "/gb28181.api/AddCruisePoint"
-	Api_DeleteCruisePoint_FullMethodName                 = "/gb28181.api/DeleteCruisePoint"
-	Api_SetCruiseSpeed_FullMethodName                    = "/gb28181.api/SetCruiseSpeed"
-	Api_SetCruiseTime_FullMethodName                     = "/gb28181.api/SetCruiseTime"
-	Api_StartCruise_FullMethodName                       = "/gb28181.api/StartCruise"
-	Api_StopCruise_FullMethodName                        = "/gb28181.api/StopCruise"
-	Api_StartScan_FullMethodName                         = "/gb28181.api/StartScan"
-	Api_StopScan_FullMethodName                          = "/gb28181.api/StopScan"
-	Api_SetScanLeft_FullMethodName                       = "/gb28181.api/SetScanLeft"
-	Api_SetScanRight_FullMethodName                      = "/gb28181.api/SetScanRight"
-	Api_SetScanSpeed_FullMethodName                      = "/gb28181.api/SetScanSpeed"
-	Api_WiperControl_FullMethodName                      = "/gb28181.api/WiperControl"
-	Api_AuxiliaryControl_FullMethodName                  = "/gb28181.api/AuxiliaryControl"
-	Api_TestSip_FullMethodName                           = "/gb28181.api/TestSip"
-	Api_SearchAlarms_FullMethodName                      = "/gb28181.api/SearchAlarms"
-	Api_AddPlatformChannel_FullMethodName                = "/gb28181.api/AddPlatformChannel"
-	Api_Recording_FullMethodName                         = "/gb28181.api/Recording"
-	Api_UploadJpeg_FullMethodName                        = "/gb28181.api/UploadJpeg"
+	Api_List_FullMethodName                              = "/gb28181pro.api/List"
+	Api_GetDevice_FullMethodName                         = "/gb28181pro.api/GetDevice"
+	Api_GetDevices_FullMethodName                        = "/gb28181pro.api/GetDevices"
+	Api_GetChannels_FullMethodName                       = "/gb28181pro.api/GetChannels"
+	Api_SyncDevice_FullMethodName                        = "/gb28181pro.api/SyncDevice"
+	Api_DeleteDevice_FullMethodName                      = "/gb28181pro.api/DeleteDevice"
+	Api_GetSubChannels_FullMethodName                    = "/gb28181pro.api/GetSubChannels"
+	Api_ChangeAudio_FullMethodName                       = "/gb28181pro.api/ChangeAudio"
+	Api_UpdateChannelStreamIdentification_FullMethodName = "/gb28181pro.api/UpdateChannelStreamIdentification"
+	Api_UpdateTransport_FullMethodName                   = "/gb28181pro.api/UpdateTransport"
+	Api_AddDevice_FullMethodName                         = "/gb28181pro.api/AddDevice"
+	Api_UpdateDevice_FullMethodName                      = "/gb28181pro.api/UpdateDevice"
+	Api_GetDeviceStatus_FullMethodName                   = "/gb28181pro.api/GetDeviceStatus"
+	Api_GetDeviceAlarm_FullMethodName                    = "/gb28181pro.api/GetDeviceAlarm"
+	Api_GetSyncStatus_FullMethodName                     = "/gb28181pro.api/GetSyncStatus"
+	Api_GetSubscribeInfo_FullMethodName                  = "/gb28181pro.api/GetSubscribeInfo"
+	Api_GetSnap_FullMethodName                           = "/gb28181pro.api/GetSnap"
+	Api_StopConvert_FullMethodName                       = "/gb28181pro.api/StopConvert"
+	Api_StartBroadcast_FullMethodName                    = "/gb28181pro.api/StartBroadcast"
+	Api_StopBroadcast_FullMethodName                     = "/gb28181pro.api/StopBroadcast"
+	Api_GetAllSSRC_FullMethodName                        = "/gb28181pro.api/GetAllSSRC"
+	Api_GetRawChannel_FullMethodName                     = "/gb28181pro.api/GetRawChannel"
+	Api_AddPlatform_FullMethodName                       = "/gb28181pro.api/AddPlatform"
+	Api_GetPlatform_FullMethodName                       = "/gb28181pro.api/GetPlatform"
+	Api_UpdatePlatform_FullMethodName                    = "/gb28181pro.api/UpdatePlatform"
+	Api_DeletePlatform_FullMethodName                    = "/gb28181pro.api/DeletePlatform"
+	Api_ListPlatforms_FullMethodName                     = "/gb28181pro.api/ListPlatforms"
+	Api_QueryRecord_FullMethodName                       = "/gb28181pro.api/QueryRecord"
+	Api_PtzControl_FullMethodName                        = "/gb28181pro.api/PtzControl"
+	Api_IrisControl_FullMethodName                       = "/gb28181pro.api/IrisControl"
+	Api_FocusControl_FullMethodName                      = "/gb28181pro.api/FocusControl"
+	Api_QueryPreset_FullMethodName                       = "/gb28181pro.api/QueryPreset"
+	Api_AddPreset_FullMethodName                         = "/gb28181pro.api/AddPreset"
+	Api_CallPreset_FullMethodName                        = "/gb28181pro.api/CallPreset"
+	Api_DeletePreset_FullMethodName                      = "/gb28181pro.api/DeletePreset"
+	Api_AddCruisePoint_FullMethodName                    = "/gb28181pro.api/AddCruisePoint"
+	Api_DeleteCruisePoint_FullMethodName                 = "/gb28181pro.api/DeleteCruisePoint"
+	Api_SetCruiseSpeed_FullMethodName                    = "/gb28181pro.api/SetCruiseSpeed"
+	Api_SetCruiseTime_FullMethodName                     = "/gb28181pro.api/SetCruiseTime"
+	Api_StartCruise_FullMethodName                       = "/gb28181pro.api/StartCruise"
+	Api_StopCruise_FullMethodName                        = "/gb28181pro.api/StopCruise"
+	Api_StartScan_FullMethodName                         = "/gb28181pro.api/StartScan"
+	Api_StopScan_FullMethodName                          = "/gb28181pro.api/StopScan"
+	Api_SetScanLeft_FullMethodName                       = "/gb28181pro.api/SetScanLeft"
+	Api_SetScanRight_FullMethodName                      = "/gb28181pro.api/SetScanRight"
+	Api_SetScanSpeed_FullMethodName                      = "/gb28181pro.api/SetScanSpeed"
+	Api_WiperControl_FullMethodName                      = "/gb28181pro.api/WiperControl"
+	Api_AuxiliaryControl_FullMethodName                  = "/gb28181pro.api/AuxiliaryControl"
+	Api_TestSip_FullMethodName                           = "/gb28181pro.api/TestSip"
+	Api_SearchAlarms_FullMethodName                      = "/gb28181pro.api/SearchAlarms"
+	Api_AddPlatformChannel_FullMethodName                = "/gb28181pro.api/AddPlatformChannel"
+	Api_Recording_FullMethodName                         = "/gb28181pro.api/Recording"
+	Api_UploadJpeg_FullMethodName                        = "/gb28181pro.api/UploadJpeg"
+	Api_GetGroups_FullMethodName                         = "/gb28181pro.api/GetGroups"
+	Api_AddGroup_FullMethodName                          = "/gb28181pro.api/AddGroup"
+	Api_UpdateGroup_FullMethodName                       = "/gb28181pro.api/UpdateGroup"
+	Api_DeleteGroup_FullMethodName                       = "/gb28181pro.api/DeleteGroup"
+	Api_AddGroupChannel_FullMethodName                   = "/gb28181pro.api/AddGroupChannel"
+	Api_DeleteGroupChannel_FullMethodName                = "/gb28181pro.api/DeleteGroupChannel"
+	Api_GetGroupChannels_FullMethodName                  = "/gb28181pro.api/GetGroupChannels"
 )
 
 // ApiClient is the client API for Api service.
@@ -187,6 +194,20 @@ type ApiClient interface {
 	Recording(ctx context.Context, in *RecordingRequest, opts ...grpc.CallOption) (*BaseResponse, error)
 	// 接收JPEG文件
 	UploadJpeg(ctx context.Context, in *UploadJpegRequest, opts ...grpc.CallOption) (*BaseResponse, error)
+	// 获取单个分组
+	GetGroups(ctx context.Context, in *GetGroupsRequest, opts ...grpc.CallOption) (*GroupsListResponse, error)
+	// 添加分组
+	AddGroup(ctx context.Context, in *Group, opts ...grpc.CallOption) (*BaseResponse, error)
+	// 更新分组
+	UpdateGroup(ctx context.Context, in *Group, opts ...grpc.CallOption) (*BaseResponse, error)
+	// 删除分组
+	DeleteGroup(ctx context.Context, in *DeleteGroupRequest, opts ...grpc.CallOption) (*BaseResponse, error)
+	// 添加分组与通道关联
+	AddGroupChannel(ctx context.Context, in *AddGroupChannelRequest, opts ...grpc.CallOption) (*BaseResponse, error)
+	// 删除分组与通道关联
+	DeleteGroupChannel(ctx context.Context, in *DeleteGroupChannelRequest, opts ...grpc.CallOption) (*BaseResponse, error)
+	// 获取分组下的通道列表
+	GetGroupChannels(ctx context.Context, in *GetGroupChannelsRequest, opts ...grpc.CallOption) (*GroupChannelsResponse, error)
 }
 
 type apiClient struct {
@@ -727,6 +748,76 @@ func (c *apiClient) UploadJpeg(ctx context.Context, in *UploadJpegRequest, opts 
 	return out, nil
 }
 
+func (c *apiClient) GetGroups(ctx context.Context, in *GetGroupsRequest, opts ...grpc.CallOption) (*GroupsListResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GroupsListResponse)
+	err := c.cc.Invoke(ctx, Api_GetGroups_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *apiClient) AddGroup(ctx context.Context, in *Group, opts ...grpc.CallOption) (*BaseResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BaseResponse)
+	err := c.cc.Invoke(ctx, Api_AddGroup_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *apiClient) UpdateGroup(ctx context.Context, in *Group, opts ...grpc.CallOption) (*BaseResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BaseResponse)
+	err := c.cc.Invoke(ctx, Api_UpdateGroup_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *apiClient) DeleteGroup(ctx context.Context, in *DeleteGroupRequest, opts ...grpc.CallOption) (*BaseResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BaseResponse)
+	err := c.cc.Invoke(ctx, Api_DeleteGroup_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *apiClient) AddGroupChannel(ctx context.Context, in *AddGroupChannelRequest, opts ...grpc.CallOption) (*BaseResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BaseResponse)
+	err := c.cc.Invoke(ctx, Api_AddGroupChannel_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *apiClient) DeleteGroupChannel(ctx context.Context, in *DeleteGroupChannelRequest, opts ...grpc.CallOption) (*BaseResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BaseResponse)
+	err := c.cc.Invoke(ctx, Api_DeleteGroupChannel_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *apiClient) GetGroupChannels(ctx context.Context, in *GetGroupChannelsRequest, opts ...grpc.CallOption) (*GroupChannelsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GroupChannelsResponse)
+	err := c.cc.Invoke(ctx, Api_GetGroupChannels_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ApiServer is the server API for Api service.
 // All implementations must embed UnimplementedApiServer
 // for forward compatibility.
@@ -837,6 +928,20 @@ type ApiServer interface {
 	Recording(context.Context, *RecordingRequest) (*BaseResponse, error)
 	// 接收JPEG文件
 	UploadJpeg(context.Context, *UploadJpegRequest) (*BaseResponse, error)
+	// 获取单个分组
+	GetGroups(context.Context, *GetGroupsRequest) (*GroupsListResponse, error)
+	// 添加分组
+	AddGroup(context.Context, *Group) (*BaseResponse, error)
+	// 更新分组
+	UpdateGroup(context.Context, *Group) (*BaseResponse, error)
+	// 删除分组
+	DeleteGroup(context.Context, *DeleteGroupRequest) (*BaseResponse, error)
+	// 添加分组与通道关联
+	AddGroupChannel(context.Context, *AddGroupChannelRequest) (*BaseResponse, error)
+	// 删除分组与通道关联
+	DeleteGroupChannel(context.Context, *DeleteGroupChannelRequest) (*BaseResponse, error)
+	// 获取分组下的通道列表
+	GetGroupChannels(context.Context, *GetGroupChannelsRequest) (*GroupChannelsResponse, error)
 	mustEmbedUnimplementedApiServer()
 }
 
@@ -1005,6 +1110,27 @@ func (UnimplementedApiServer) Recording(context.Context, *RecordingRequest) (*Ba
 }
 func (UnimplementedApiServer) UploadJpeg(context.Context, *UploadJpegRequest) (*BaseResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UploadJpeg not implemented")
+}
+func (UnimplementedApiServer) GetGroups(context.Context, *GetGroupsRequest) (*GroupsListResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetGroups not implemented")
+}
+func (UnimplementedApiServer) AddGroup(context.Context, *Group) (*BaseResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AddGroup not implemented")
+}
+func (UnimplementedApiServer) UpdateGroup(context.Context, *Group) (*BaseResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpdateGroup not implemented")
+}
+func (UnimplementedApiServer) DeleteGroup(context.Context, *DeleteGroupRequest) (*BaseResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DeleteGroup not implemented")
+}
+func (UnimplementedApiServer) AddGroupChannel(context.Context, *AddGroupChannelRequest) (*BaseResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AddGroupChannel not implemented")
+}
+func (UnimplementedApiServer) DeleteGroupChannel(context.Context, *DeleteGroupChannelRequest) (*BaseResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DeleteGroupChannel not implemented")
+}
+func (UnimplementedApiServer) GetGroupChannels(context.Context, *GetGroupChannelsRequest) (*GroupChannelsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetGroupChannels not implemented")
 }
 func (UnimplementedApiServer) mustEmbedUnimplementedApiServer() {}
 func (UnimplementedApiServer) testEmbeddedByValue()             {}
@@ -1981,11 +2107,137 @@ func _Api_UploadJpeg_Handler(srv interface{}, ctx context.Context, dec func(inte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Api_GetGroups_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetGroupsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).GetGroups(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_GetGroups_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).GetGroups(ctx, req.(*GetGroupsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Api_AddGroup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Group)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).AddGroup(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_AddGroup_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).AddGroup(ctx, req.(*Group))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Api_UpdateGroup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Group)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).UpdateGroup(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_UpdateGroup_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).UpdateGroup(ctx, req.(*Group))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Api_DeleteGroup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteGroupRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).DeleteGroup(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_DeleteGroup_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).DeleteGroup(ctx, req.(*DeleteGroupRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Api_AddGroupChannel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddGroupChannelRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).AddGroupChannel(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_AddGroupChannel_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).AddGroupChannel(ctx, req.(*AddGroupChannelRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Api_DeleteGroupChannel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteGroupChannelRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).DeleteGroupChannel(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_DeleteGroupChannel_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).DeleteGroupChannel(ctx, req.(*DeleteGroupChannelRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Api_GetGroupChannels_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetGroupChannelsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).GetGroupChannels(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_GetGroupChannels_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).GetGroupChannels(ctx, req.(*GetGroupChannelsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Api_ServiceDesc is the grpc.ServiceDesc for Api service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var Api_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "gb28181.api",
+	ServiceName: "gb28181pro.api",
 	HandlerType: (*ApiServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
@@ -2199,6 +2451,34 @@ var Api_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UploadJpeg",
 			Handler:    _Api_UploadJpeg_Handler,
+		},
+		{
+			MethodName: "GetGroups",
+			Handler:    _Api_GetGroups_Handler,
+		},
+		{
+			MethodName: "AddGroup",
+			Handler:    _Api_AddGroup_Handler,
+		},
+		{
+			MethodName: "UpdateGroup",
+			Handler:    _Api_UpdateGroup_Handler,
+		},
+		{
+			MethodName: "DeleteGroup",
+			Handler:    _Api_DeleteGroup_Handler,
+		},
+		{
+			MethodName: "AddGroupChannel",
+			Handler:    _Api_AddGroupChannel_Handler,
+		},
+		{
+			MethodName: "DeleteGroupChannel",
+			Handler:    _Api_DeleteGroupChannel_Handler,
+		},
+		{
+			MethodName: "GetGroupChannels",
+			Handler:    _Api_GetGroupChannels_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -392,6 +392,58 @@ service api {
       body: "*"
     };
   }
+  // 获取单个分组
+  rpc GetGroups (GetGroupsRequest) returns (GroupsListResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/groups/{pid}"
+    };
+  }
+
+  // 添加分组
+  rpc AddGroup (Group) returns (BaseResponse) {
+    option (google.api.http) = {
+      post: "/gb28181/api/groups/add"
+      body: "*"
+    };
+  }
+
+  // 更新分组
+  rpc UpdateGroup (Group) returns (BaseResponse) {
+    option (google.api.http) = {
+      post: "/gb28181/api/groups/update"
+      body: "*"
+    };
+  }
+
+  // 删除分组
+  rpc DeleteGroup (DeleteGroupRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      post: "/gb28181/api/groups/delete/{id}"
+    };
+  }
+
+  // 添加分组与通道关联
+  rpc AddGroupChannel (AddGroupChannelRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      post: "/gb28181/api/groups/channel/add/{groupId}"
+      body: "channels"
+    };
+  }
+  
+  // 删除分组与通道关联
+  rpc DeleteGroupChannel (DeleteGroupChannelRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      post: "/gb28181/api/groups/channel/delete/{groupId}"
+      body: "*"
+    };
+  }
+  
+  // 获取分组下的通道列表
+  rpc GetGroupChannels (GetGroupChannelsRequest) returns (GroupChannelsResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/groups/{groupId}/channels"
+    };
+  }
 }
 
 // 请求和响应消息定义
@@ -908,4 +960,99 @@ message RecordingRequest {
 // JPEG文件上传请求
 message UploadJpegRequest {
   bytes imageData = 1;    // JPEG文件数据
+}
+
+// 分组消息定义
+message Group {
+  int32 id = 1;                    // ID表示数据库中的唯一标识符
+  google.protobuf.Timestamp createTime = 2; // 创建时间
+  google.protobuf.Timestamp updateTime = 3; // 更新时间
+  string name = 4;                // 分组名称
+  int32 pid = 5;                  // 父分组ID
+  int32 level = 6;                // 分组层级
+}
+
+// 获取单个分组请求
+message GetGroupsRequest {
+  int32 pid = 1;
+}
+
+// 删除分组请求
+message DeleteGroupRequest {
+  int32 id = 1;
+}
+
+// 分组响应
+message GroupResponse {
+  int32 code = 1;
+  string message = 2;
+  Group data = 3;
+}
+
+// 分组列表响应（无分页）
+message GroupsListResponse {
+  int32 code = 1;
+  string message = 2;
+  repeated Group list = 3;
+}
+
+// 分组分页信息
+message GroupsPageInfo {
+  int32 code = 1;
+  string message = 2;
+  int32 total = 3;
+  repeated Group list = 4;
+}
+
+// GroupChannel相关消息定义
+// 通道信息
+message ChannelInfo {
+  string channelId = 1;     // 通道ID
+  string deviceId = 2;      // 设备ID
+}
+
+// 添加分组与通道关联请求
+message AddGroupChannelRequest {
+  message Channel {
+    string channelId = 1;     // 通道ID
+    string deviceId = 2;      // 设备ID
+  }
+  int32 groupId = 1;                // 分组ID，从URL路径中获取
+  repeated Channel channels = 2;     // 通道列表，支持批量添加
+}
+
+// 删除分组与通道关联请求
+message DeleteGroupChannelRequest {
+  int32 id = 1;             // 关联记录ID，可选，在请求体中
+  int32 groupId = 2;        // 分组ID，从URL路径中获取
+  string channelId = 3;     // 通道ID，可选，在请求体中
+  string deviceId = 4;      // 设备ID，可选，在请求体中
+}
+
+// 获取分组下的通道列表请求
+message GetGroupChannelsRequest {
+  int32 groupId = 1;        // 分组ID，从URL路径中获取
+  int32 page = 2;           // 页码
+  int32 count = 3;          // 每页数量
+  string deviceId = 4;      // 可选，按设备ID筛选
+}
+
+// 分组通道关联信息
+message GroupChannel {
+  int32 id = 1;                       // ID
+  int32 groupId = 4;                  // 分组ID
+  string channelId = 5;               // 通道ID 
+  string deviceId = 6;                // 设备ID
+  string channelName = 7;             // 通道名称，非数据库字段，查询时填充
+  string deviceName = 8;              // 设备名称，非数据库字段，查询时填充
+  string status = 9;                  // 通道状态，非数据库字段，查询时填充
+  string streamMode = 10;             // 传输协议(TCP-ACTIVE/TCP-PASSIVE/UDP)，非数据库字段，查询时从设备获取
+}
+
+// 分组通道列表响应
+message GroupChannelsResponse {
+  int32 code = 1;
+  string message = 2;
+  int32 total = 3;
+  repeated GroupChannel list = 4;
 }

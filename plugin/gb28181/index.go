@@ -43,12 +43,13 @@ type GB28181Plugin struct {
 	m7s.Plugin
 	AutoInvite     bool   `default:"true" desc:"自动邀请"`
 	Serial         string `default:"34020000002000000001" desc:"sip 服务 id"` //sip 服务器 id, 默认 34020000002000000001
-	Realm          string `default:"3402000000" desc:"sip 服务域"`            //sip 服务器域，默认 3402000000
+	Realm          string `default:"3402000000" desc:"sip 服务域"`             //sip 服务器域，默认 3402000000
 	Password       string
 	Sip            SipConfig
 	MediaPort      util.Range[uint16] `default:"10001-20000" desc:"媒体端口范围"` //媒体端口范围
 	Position       PositionConfig
 	Parent         string `desc:"父级设备"`
+	AutoMigrate    bool   `default:"true" desc:"自动迁移数据库结构并初始化根组织"`
 	ua             *sipgo.UserAgent
 	server         *sipgo.Server
 	devices        util.Collection[string, *Device]
@@ -69,6 +70,58 @@ var _ = m7s.InstallPlugin[GB28181Plugin](pb.RegisterApiHandler, &pb.Api_ServiceD
 func init() {
 	sip.SIPDebug = true
 }
+
+// initDatabase 初始化数据库，进行所有表结构迁移和初始化操作
+func (gb *GB28181Plugin) initDatabase() error {
+	if gb.DB == nil {
+		return errors.New("database not initialized")
+	}
+
+	// 根据配置决定是否执行自动迁移和初始化
+	if gb.AutoMigrate {
+		// 迁移设备、通道和平台相关表
+		if err := gb.DB.AutoMigrate(
+			&Device{},
+			&gb28181.DeviceChannel{},
+			&gb28181.PlatformModel{},
+			&gb28181.DeviceAlarm{},
+			&gb28181.PlatformChannel{},
+			&gb28181.GroupsModel{},
+			&gb28181.GroupsChannelModel{},
+		); err != nil {
+			return fmt.Errorf("auto migrate tables error: %v", err)
+		}
+		gb.Info("数据库表结构迁移成功")
+
+		// 查询是否存在根组织
+		var count int64
+		if err := gb.DB.Model(&gb28181.GroupsModel{}).Where("pid = ? AND level = ?", 0, 0).Count(&count).Error; err != nil {
+			return fmt.Errorf("查询根组织失败: %v", err)
+		}
+
+		// 如果不存在根组织，创建一个
+		if count == 0 {
+			rootGroup := gb28181.NewRootGroup()
+			if err := gb.DB.Create(rootGroup).Error; err != nil {
+				return fmt.Errorf("创建根组织失败: %v", err)
+			}
+			gb.Info("已创建根组织")
+		} else {
+			// 获取根组织信息
+			root := &gb28181.GroupsModel{}
+			if err := gb.DB.Where("pid = ? AND level = ?", 0, 0).First(root).Error; err != nil {
+				gb.Warn("根组织已存在但获取详情失败: %v", err)
+			} else {
+				gb.Info("根组织已存在，ID:", root.ID)
+			}
+		}
+	} else {
+		gb.Info("自动迁移已禁用，跳过表结构迁移和根组织初始化")
+	}
+
+	return nil
+}
+
 func (gb *GB28181Plugin) OnInit() (err error) {
 	logger := zerolog.New(os.Stdout)
 	gb.ua, err = sipgo.NewUA(sipgo.WithUserAgent("M7S/" + m7s.Version)) // Build user agent
@@ -116,10 +169,11 @@ func (gb *GB28181Plugin) OnInit() (err error) {
 			}
 		}
 		if gb.DB != nil {
-			err = gb.DB.AutoMigrate(&Device{}, &gb28181.DeviceChannel{}, &gb28181.PlatformModel{}, &gb28181.DeviceAlarm{}, &gb28181.PlatformChannel{})
+			err = gb.initDatabase()
 			if err != nil {
-				gb.Error("auto migrate DB error: %v", err)
+				gb.Error("initDatabase error: %v", err)
 			}
+
 			// 检查设备过期状态
 			if err := gb.checkDeviceExpire(); err != nil {
 				gb.Error("检查设备过期状态失败", "error", err)
@@ -295,8 +349,7 @@ func (gb *GB28181Plugin) checkPlatform() {
 
 	// 查询所有启用状态的平台
 	var platformModels []*gb28181.PlatformModel
-	enableTrue := true
-	platformModel := gb28181.PlatformModel{Enable: &enableTrue}
+	platformModel := gb28181.PlatformModel{Enable: true}
 	if err := gb.DB.Where(&platformModel).Find(&platformModels).Error; err != nil {
 		gb.Error("查询平台失败", "error", err.Error())
 		return
@@ -545,7 +598,7 @@ func (gb *GB28181Plugin) OnMessage(req *sip.Request, tx sip.ServerTransaction) {
 	// 检查是否是平台
 	if gb.DB != nil {
 		var platform gb28181.PlatformModel
-		if err := gb.DB.First(&platform, gb28181.PlatformModel{ServerGBID: id, Status: true}).Error; err == nil {
+		if err := gb.DB.First(&platform, gb28181.PlatformModel{ServerGBID: id, Enable: true}).Error; err == nil {
 			p = &platform
 		}
 	}
@@ -730,7 +783,7 @@ func (gb *GB28181Plugin) StoreDevice(deviceid string, req *sip.Request) (d *Devi
 		UpdateTime:    now,
 		RegisterTime:  now,
 		KeepaliveTime: now,
-		Status:        DeviceRegisterStatus,
+		Status:        DeviceOnlineStatus,
 		Online:        true,
 		StreamMode:    "TCP-PASSIVE",   // 默认UDP传输
 		Charset:       "GB2312",        // 默认GB2312字符集
@@ -1201,11 +1254,12 @@ func (gb *GB28181Plugin) OnAck(req *sip.Request, tx sip.ServerTransaction) {
 	if forwardDialog, ok := gb.forwardDialogs.Find(func(dialog *ForwardDialog) bool {
 		return dialog.platformCallId == callID
 	}); ok {
-		streamPath := fmt.Sprintf("%s/%s", forwardDialog.channel.Device.DeviceID, forwardDialog.channel.DeviceID)
+		pullUrl := fmt.Sprintf("%s/%s", forwardDialog.channel.Device.DeviceID, forwardDialog.channel.DeviceID)
+		streamPath := fmt.Sprintf("platform_%d/%s/%s", time.Now().UnixMilli(), forwardDialog.channel.Device.DeviceID, forwardDialog.channel.DeviceID)
 
 		// 创建配置
 		pullConf := config.Pull{
-			URL: streamPath,
+			URL: pullUrl,
 		}
 		// 初始化拉流任务
 		forwardDialog.GetPullJob().Init(forwardDialog, &gb.Plugin, streamPath, pullConf, nil)

@@ -4,21 +4,20 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"net/url"
-
 	"github.com/emiago/sipgo"
 	"github.com/emiago/sipgo/sip"
+	"m7s.live/v5/pkg/util"
+
 	"github.com/rs/zerolog"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"m7s.live/v5/pkg/config"
-	"m7s.live/v5/pkg/util"
 	"m7s.live/v5/plugin/gb28181/pb"
 	gb28181 "m7s.live/v5/plugin/gb28181/pkg"
 )
@@ -557,7 +556,7 @@ func (gb *GB28181Plugin) AddPlatform(ctx context.Context, req *pb.Platform) (*pb
 
 	// 将proto消息转换为数据库模型
 	platformModel := &gb28181.PlatformModel{
-		Enable:                  &req.Enable,
+		Enable:                  req.Enable,
 		Name:                    req.Name,
 		ServerGBID:              req.ServerGBId,
 		ServerGBDomain:          req.ServerGBDomain,
@@ -604,7 +603,7 @@ func (gb *GB28181Plugin) AddPlatform(ctx context.Context, req *pb.Platform) (*pb
 	}
 
 	// 如果平台启用，则创建Platform实例并启动任务
-	if *platformModel.Enable {
+	if platformModel.Enable {
 		// 创建Platform实例
 		platform := NewPlatform(platformModel, gb, false)
 		// 添加到任务系统
@@ -636,7 +635,7 @@ func (gb *GB28181Plugin) GetPlatform(ctx context.Context, req *pb.GetPlatformReq
 	// 将数据库模型转换为proto消息
 	resp.Data = &pb.Platform{
 		ID:                      platform.ID,
-		Enable:                  *platform.Enable,
+		Enable:                  platform.Enable,
 		Name:                    platform.Name,
 		ServerGBId:              platform.ServerGBID,
 		ServerGBDomain:          platform.ServerGBDomain,
@@ -701,7 +700,7 @@ func (gb *GB28181Plugin) UpdatePlatform(ctx context.Context, req *pb.Platform) (
 	// 从请求中创建一个新的平台模型
 	updatedPlatform := gb28181.PlatformModel{
 		ID:                      req.ID,
-		Enable:                  &req.Enable,
+		Enable:                  req.Enable,
 		Name:                    req.Name,
 		ServerGBID:              req.ServerGBId,
 		ServerGBDomain:          req.ServerGBDomain,
@@ -747,7 +746,7 @@ func (gb *GB28181Plugin) UpdatePlatform(ctx context.Context, req *pb.Platform) (
 	}
 	gb.DB.Model(&platform).Find(&platform)
 	// 处理平台启用状态变化
-	if *platform.Enable {
+	if platform.Enable {
 		// 如果存在旧的platform实例，先停止并移除
 		if oldPlatform, ok := gb.platforms.Get(platform.ID); ok {
 			oldPlatform.Unregister()
@@ -849,7 +848,7 @@ func (gb *GB28181Plugin) ListPlatforms(ctx context.Context, req *pb.ListPlatform
 	for _, p := range platforms {
 		pbPlatforms = append(pbPlatforms, &pb.Platform{
 			ID:                      p.ID,
-			Enable:                  *p.Enable,
+			Enable:                  p.Enable,
 			Name:                    p.Name,
 			ServerGBId:              p.ServerGBID,
 			ServerGBDomain:          p.ServerGBDomain,
@@ -1558,6 +1557,135 @@ func (gb *GB28181Plugin) GetSnap(ctx context.Context, req *pb.GetSnapRequest) (*
 	return resp, nil
 }
 
+// GetGroupChannels 获取分组下的通道列表
+func (gb *GB28181Plugin) GetGroupChannels(ctx context.Context, req *pb.GetGroupChannelsRequest) (*pb.GroupChannelsResponse, error) {
+	resp := &pb.GroupChannelsResponse{}
+
+	// 检查数据库连接
+	if gb.DB == nil {
+		resp.Code = 500
+		resp.Message = "数据库未初始化"
+		return resp, nil
+	}
+
+	// 验证分组ID参数
+	if req.GroupId <= 0 {
+		resp.Code = 400
+		resp.Message = "分组ID无效"
+		return resp, nil
+	}
+
+	// 检查分组是否存在
+	var group gb28181.GroupsModel
+	if err := gb.DB.First(&group, req.GroupId).Error; err != nil {
+		resp.Code = 404
+		resp.Message = fmt.Sprintf("分组不存在: %v", err)
+		return resp, nil
+	}
+
+	// 定义结果结构体，用于接收联查结果
+	type ChannelWithInfo struct {
+		ID          int64  // 关联ID
+		ChannelID   string // 通道ID
+		ChannelName string // 通道名称
+		DeviceID    string // 设备ID
+		DeviceName  string // 设备名称
+		Status      string // 通道状态
+		InGroup     bool   // 是否在分组中
+	}
+
+	// 正确获取模型对应的表名
+	deviceChannel := &gb28181.DeviceChannel{}
+	device := &Device{}
+	groupsChannel := &gb28181.GroupsChannelModel{}
+
+	deviceChannelTable := deviceChannel.TableName()
+	deviceTable := device.TableName()
+	groupsChannelTable := groupsChannel.TableName()
+
+	// 构建基础查询
+	baseQuery := gb.DB.Table(deviceChannelTable+" AS dc").
+		Select(`
+			IFNULL(gc.id, 0) AS id,
+			dc.device_id AS channel_id,
+			dc.name AS channel_name,
+			d.device_id AS device_id,
+			d.name AS device_name,
+			dc.status AS status,
+			CASE 
+				WHEN gc.id IS NULL THEN false 
+				ELSE true 
+			END AS in_group
+		`).
+		Joins("LEFT JOIN "+deviceTable+" AS d ON dc.device_db_id = d.id").
+		Joins("LEFT JOIN "+groupsChannelTable+" AS gc ON dc.device_id = gc.channel_id AND gc.group_id = ?", req.GroupId)
+
+	// 如果有设备ID过滤条件
+	if req.DeviceId != "" {
+		baseQuery = baseQuery.Where("d.device_id = ?", req.DeviceId)
+	}
+
+	// 统计符合条件的通道总数
+	var total int64
+	if err := baseQuery.Count(&total).Error; err != nil {
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("查询通道总数失败: %v", err)
+		return resp, nil
+	}
+
+	// 应用分页
+	var results []ChannelWithInfo
+	query := baseQuery
+
+	// 添加排序
+	query = query.Order("channel_id ASC")
+
+	// 如果指定了分页参数，则应用分页
+	if req.Page > 0 && req.Count > 0 {
+		offset := (req.Page - 1) * req.Count
+		query = query.Offset(int(offset)).Limit(int(req.Count))
+	}
+
+	// 执行查询
+	if err := query.Scan(&results).Error; err != nil {
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("查询通道列表失败: %v", err)
+		return resp, nil
+	}
+
+	// 转换结果为响应格式
+	var pbGroupChannels []*pb.GroupChannel
+	for _, result := range results {
+		channelInfo := &pb.GroupChannel{
+			ChannelId:   result.ChannelID,
+			DeviceId:    result.DeviceID,
+			ChannelName: result.ChannelName,
+			DeviceName:  result.DeviceName,
+			Status:      result.Status,
+		}
+
+		// 从内存中获取设备信息以获取传输协议
+		if device, ok := gb.devices.Get(result.DeviceID); ok {
+			channelInfo.StreamMode = device.StreamMode
+		}
+
+		if result.InGroup {
+			channelInfo.Id = int32(result.ID)
+			channelInfo.GroupId = int32(req.GroupId)
+		} else {
+			channelInfo.Id = 0
+		}
+
+		pbGroupChannels = append(pbGroupChannels, channelInfo)
+	}
+
+	resp.Code = 0
+	resp.Message = "获取通道列表成功"
+	resp.Total = int32(total)
+	resp.List = pbGroupChannels
+	return resp, nil
+}
+
 // UploadJpeg 实现接收JPEG文件功能
 func (gb *GB28181Plugin) UploadJpeg(ctx context.Context, req *pb.UploadJpegRequest) (*pb.BaseResponse, error) {
 	gb.Info("UploadJpeg", "req", req.String())
@@ -1598,260 +1726,290 @@ func (gb *GB28181Plugin) UploadJpeg(ctx context.Context, req *pb.UploadJpegReque
 	return resp, nil
 }
 
-// AddPreset 实现添加预置位功能
-func (gb *GB28181Plugin) AddPreset(ctx context.Context, req *pb.PresetRequest) (*pb.BaseResponse, error) {
-	resp := &pb.BaseResponse{}
+// GetGroups 实现获取子分组列表
+// 根据传入的id作为父id(pid)查询其下的所有子分组
+func (gb *GB28181Plugin) GetGroups(ctx context.Context, req *pb.GetGroupsRequest) (*pb.GroupsListResponse, error) {
+	resp := &pb.GroupsListResponse{}
 
-	// 参数校验
-	if req.DeviceId == "" {
-		resp.Code = 400
-		resp.Message = "设备ID不能为空"
-		return resp, nil
-	}
-	if req.ChannelId == "" {
-		resp.Code = 400
-		resp.Message = "通道ID不能为空"
-		return resp, nil
-	}
-	if req.PresetId <= 0 || req.PresetId > 255 {
-		resp.Code = 400
-		resp.Message = "预置位ID必须在1-255之间"
-		return resp, nil
-	}
-
-	// 获取设备
-	device, ok := gb.devices.Get(req.DeviceId)
-	if !ok {
-		resp.Code = 404
-		resp.Message = "设备不存在"
-		return resp, nil
-	}
-
-	// 检查通道是否存在
-	_, ok = device.channels.Get(req.ChannelId)
-	if !ok {
-		resp.Code = 404
-		resp.Message = "通道不存在"
-		return resp, nil
-	}
-
-	// 发送预置位设置命令
-	response, err := device.frontEndCmd(req.ChannelId, device.frontEndCmdString(0x81, 1, int32(req.PresetId), 0))
-	if err != nil {
+	if gb.DB == nil {
 		resp.Code = 500
-		resp.Message = fmt.Sprintf("设置预置位失败: %v", err)
+		resp.Message = "数据库未初始化"
 		return resp, nil
 	}
 
-	gb.Info("设置预置位",
-		"deviceId", req.DeviceId,
-		"channelId", req.ChannelId,
-		"presetId", req.PresetId,
-		"response", response.String())
+	// 查询符合pid=req.Pid的所有子分组
+	var childGroups []gb28181.GroupsModel
+	var total int64
 
+	// 统计总数
+	if err := gb.DB.Model(&gb28181.GroupsModel{}).Where("pid = ?", req.Pid).Count(&total).Error; err != nil {
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("查询子分组总数失败: %v", err)
+		return resp, nil
+	}
+
+	// 查询所有子分组
+	if err := gb.DB.Where("pid = ?", req.Pid).Order("id ASC").Find(&childGroups).Error; err != nil {
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("查询子分组列表失败: %v", err)
+		return resp, nil
+	}
+
+	// 转换为proto消息
+	var pbGroups []*pb.Group
+	for _, g := range childGroups {
+		pbGroups = append(pbGroups, &pb.Group{
+			Id:         int32(g.ID),
+			Name:       g.Name,
+			Pid:        int32(g.PID),
+			CreateTime: timestamppb.New(g.CreateTime),
+			UpdateTime: timestamppb.New(g.UpdateTime),
+			Level:      int32(g.Level),
+		})
+	}
+
+	resp.List = pbGroups
 	resp.Code = 0
 	resp.Message = "success"
 	return resp, nil
 }
 
-// QueryPreset 实现查询预置位功能
-func (gb *GB28181Plugin) QueryPreset(ctx context.Context, req *pb.PresetRequest) (*pb.PresetResponse, error) {
-	resp := &pb.PresetResponse{
-		Code:    200,
-		Message: "success",
+// AddGroup 实现添加分组功能
+func (gb *GB28181Plugin) AddGroup(ctx context.Context, req *pb.Group) (*pb.BaseResponse, error) {
+	resp := &pb.BaseResponse{}
+
+	// 检查数据库连接
+	if gb.DB == nil {
+		resp.Code = 500
+		resp.Message = "数据库未初始化"
+		return resp, nil
 	}
 
-	if req.DeviceId == "" {
+	// 验证参数
+	if req.Name == "" {
 		resp.Code = 400
-		resp.Message = "device id is empty"
+		resp.Message = "分组名称不能为空"
 		return resp, nil
 	}
 
-	if req.ChannelId == "" {
+	// 禁止添加pid为0的分组，保证只有一个根组织
+	if req.Pid == 0 {
 		resp.Code = 400
-		resp.Message = "channel id is empty"
+		resp.Message = "不能添加根级组织，系统已有一个根组织"
 		return resp, nil
 	}
 
-	device, ok := gb.devices.Get(req.DeviceId)
-	if !ok {
+	// 创建新的分组实例
+	now := time.Now()
+	group := &gb28181.GroupsModel{
+		Name:       req.Name,
+		PID:        int(req.Pid),
+		CreateTime: now,
+		UpdateTime: now,
+	}
+
+	// 检查父分组是否存在
+	var parentGroup gb28181.GroupsModel
+	if err := gb.DB.First(&parentGroup, req.Pid).Error; err != nil {
 		resp.Code = 404
-		resp.Message = "device not found"
+		resp.Message = fmt.Sprintf("父分组不存在: %v", err)
+		return resp, nil
+	}
+	// 设置新分组的level为父分组level+1
+	group.Level = parentGroup.Level + 1
+
+	// 保存到数据库
+	if err := gb.DB.Create(group).Error; err != nil {
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("创建分组失败: %v", err)
 		return resp, nil
 	}
 
-	channel, ok := device.channels.Get(req.ChannelId)
-	if !ok {
+	// 返回成功响应
+	resp.Code = 0
+	resp.Message = "分组创建成功"
+	return resp, nil
+}
+
+// UpdateGroup 实现更新分组功能
+func (gb *GB28181Plugin) UpdateGroup(ctx context.Context, req *pb.Group) (*pb.BaseResponse, error) {
+	resp := &pb.BaseResponse{}
+
+	// 检查数据库连接
+	if gb.DB == nil {
+		resp.Code = 500
+		resp.Message = "数据库未初始化"
+		return resp, nil
+	}
+
+	// 验证参数
+	if req.Id <= 0 {
+		resp.Code = 400
+		resp.Message = "分组ID不能为空"
+		return resp, nil
+	}
+
+	if req.Name == "" {
+		resp.Code = 400
+		resp.Message = "分组名称不能为空"
+		return resp, nil
+	}
+
+	// 禁止将分组改为根组织
+	if req.Pid == 0 {
+		resp.Code = 400
+		resp.Message = "不能修改为根级组织，系统已有一个根组织"
+		return resp, nil
+	}
+
+	// 查询现有分组
+	var existingGroup gb28181.GroupsModel
+	if err := gb.DB.First(&existingGroup, req.Id).Error; err != nil {
 		resp.Code = 404
-		resp.Message = "channel not found"
+		resp.Message = fmt.Sprintf("分组不存在: %v", err)
 		return resp, nil
 	}
 
-	// 生成随机序列号
-	sn := int(time.Now().UnixNano() / 1e6 % 1000000)
-
-	// 创建Promise并保存到channel的PresetReqs中
-	promise := util.NewPromise(ctx)
-	presetReq := &PresetRequest{
-		SN:      sn,
-		Promise: promise,
+	// 检查是否为根组织，根组织的特殊处理
+	if existingGroup.PID == 0 && existingGroup.Level == 0 {
+		resp.Code = 400
+		resp.Message = "根组织不能被修改"
+		return resp, nil
 	}
 
-	// 先保存请求到PresetReqs，确保能接收到响应
-	channel.PresetReqs.Set(presetReq)
+	// 如果父ID改变，需要检查新父分组是否存在
+	var newLevel int
+	if int(req.Pid) != existingGroup.PID {
+		var parentGroup gb28181.GroupsModel
+		if err := gb.DB.First(&parentGroup, req.Pid).Error; err != nil {
+			resp.Code = 404
+			resp.Message = fmt.Sprintf("父分组不存在: %v", err)
+			return resp, nil
+		}
 
-	// 创建请求
-	request := device.CreateRequest(sip.MESSAGE, nil)
-	if request == nil {
+		// 检查是否会导致循环引用（不能将一个分组的父级设置为其自身或其子级）
+		if req.Id == req.Pid {
+			resp.Code = 400
+			resp.Message = "不能将分组的父级设置为其自身"
+			return resp, nil
+		}
+
+		// 检查是否会导致循环引用（不能将一个分组的父级设置为其子级）
+		var childGroups []gb28181.GroupsModel
+		if err := gb.DB.Where("pid = ?", req.Id).Find(&childGroups).Error; err != nil {
+			resp.Code = 500
+			resp.Message = fmt.Sprintf("查询子分组失败: %v", err)
+			return resp, nil
+		}
+
+		for _, child := range childGroups {
+			if child.ID == int(req.Pid) {
+				resp.Code = 400
+				resp.Message = "不能将分组的父级设置为其子级"
+				return resp, nil
+			}
+		}
+
+		// 设置新的level值
+		newLevel = parentGroup.Level + 1
+	} else {
+		// 如果父ID未改变，保持原有level
+		newLevel = existingGroup.Level
+	}
+
+	// 更新分组信息
+	updates := map[string]interface{}{
+		"name":        req.Name,
+		"pid":         req.Pid,
+		"level":       newLevel,
+		"update_time": time.Now(),
+	}
+
+	// 执行更新
+	if err := gb.DB.Model(&existingGroup).Updates(updates).Error; err != nil {
 		resp.Code = 500
-		resp.Message = "create request failed"
-		channel.PresetReqs.Remove(presetReq)
+		resp.Message = fmt.Sprintf("更新分组失败: %v", err)
 		return resp, nil
 	}
 
-	// 构建预置位查询XML消息
-	request.SetBody(gb28181.BuildPresetQueryXML(sn, req.ChannelId))
-
-	// 发送预置位查询命令
-	_, err := device.send(request)
-	if err != nil {
-		channel.PresetReqs.Remove(presetReq)
-		resp.Code = 500
-		resp.Message = fmt.Sprintf("查询预置位失败: %v", err)
-		return resp, nil
-	}
-
-	// 等待响应
-	err = promise.Await()
-	if err != nil {
-		resp.Code = 500
-		resp.Message = fmt.Sprintf("等待预置位响应超时: %v", err)
-		return resp, nil
-	}
-
-	// 获取预置位响应
-	if presetReq.Response != nil {
-		resp.Data = make([]int32, len(presetReq.Response))
-		for i, item := range presetReq.Response {
-			// 将预置位ID转换为整数
-			presetID, _ := strconv.Atoi(item.PresetID)
-			resp.Data[i] = int32(presetID)
+	// 如果分组的父ID发生变化且有子分组，需要递归更新所有子分组的level
+	if int(req.Pid) != existingGroup.PID {
+		// 更新所有子分组的level
+		if err := gb.updateChildLevels(int(req.Id), newLevel); err != nil {
+			gb.Error("更新子分组level失败", "error", err)
+			// 这里不返回错误，因为主要更新已经成功
 		}
 	}
 
-	// 清理请求
-	channel.PresetReqs.Remove(presetReq)
+	resp.Code = 0
+	resp.Message = "分组更新成功"
 	return resp, nil
 }
 
-// DeletePreset 实现删除预置位功能
-func (gb *GB28181Plugin) DeletePreset(ctx context.Context, req *pb.PresetRequest) (*pb.BaseResponse, error) {
-	resp := &pb.BaseResponse{}
-
-	// 参数校验
-	if req.DeviceId == "" {
-		resp.Code = 400
-		resp.Message = "设备ID不能为空"
-		return resp, nil
-	}
-	if req.ChannelId == "" {
-		resp.Code = 400
-		resp.Message = "通道ID不能为空"
-		return resp, nil
-	}
-	if req.PresetId <= 0 || req.PresetId > 255 {
-		resp.Code = 400
-		resp.Message = "预置位ID必须在1-255之间"
-		return resp, nil
+// updateChildLevels 递归更新子分组的level值
+func (gb *GB28181Plugin) updateChildLevels(parentID int, parentLevel int) error {
+	// 查询所有直接子分组
+	var childGroups []gb28181.GroupsModel
+	if err := gb.DB.Where("pid = ?", parentID).Find(&childGroups).Error; err != nil {
+		return err
 	}
 
-	// 获取设备
-	device, ok := gb.devices.Get(req.DeviceId)
-	if !ok {
-		resp.Code = 404
-		resp.Message = "设备不存在"
-		return resp, nil
+	// 没有子分组，直接返回
+	if len(childGroups) == 0 {
+		return nil
 	}
 
-	// 检查通道是否存在
-	_, ok = device.channels.Get(req.ChannelId)
-	if !ok {
-		resp.Code = 404
-		resp.Message = "通道不存在"
-		return resp, nil
+	// 更新每个子分组的level，并递归更新它们的子分组
+	for _, child := range childGroups {
+		newLevel := parentLevel + 1
+
+		// 更新当前子分组的level
+		if err := gb.DB.Model(&child).Update("level", newLevel).Error; err != nil {
+			return err
+		}
+
+		// 递归更新其子分组
+		if err := gb.updateChildLevels(child.ID, newLevel); err != nil {
+			return err
+		}
 	}
 
-	// 发送删除预置位命令
-	response, err := device.frontEndCmd(req.ChannelId, device.frontEndCmdString(0x83, 3, int32(req.PresetId), 0))
-	if err != nil {
-		resp.Code = 500
-		resp.Message = fmt.Sprintf("删除预置位失败: %v", err)
-		return resp, nil
-	}
-
-	gb.Info("删除预置位",
-		"deviceId", req.DeviceId,
-		"channelId", req.ChannelId,
-		"presetId", req.PresetId,
-		"response", response.String())
-
-	resp.Code = 0
-	resp.Message = "success"
-	return resp, nil
+	return nil
 }
 
-// CallPreset 实现调用预置位功能
-func (gb *GB28181Plugin) CallPreset(ctx context.Context, req *pb.PresetRequest) (*pb.BaseResponse, error) {
-	resp := &pb.BaseResponse{}
-
-	// 参数校验
-	if req.DeviceId == "" {
-		resp.Code = 400
-		resp.Message = "设备ID不能为空"
-		return resp, nil
-	}
-	if req.ChannelId == "" {
-		resp.Code = 400
-		resp.Message = "通道ID不能为空"
-		return resp, nil
-	}
-	if req.PresetId <= 0 || req.PresetId > 255 {
-		resp.Code = 400
-		resp.Message = "预置位ID必须在1-255之间"
-		return resp, nil
+// AddGroupChannel 添加通道到分组
+func (gb *GB28181Plugin) AddGroupChannel(ctx context.Context, req *pb.AddGroupChannelRequest) (*pb.BaseResponse, error) {
+	if gb.DB == nil {
+		return &pb.BaseResponse{Code: 500, Message: "数据库未初始化"}, nil
 	}
 
-	// 获取设备
-	device, ok := gb.devices.Get(req.DeviceId)
-	if !ok {
-		resp.Code = 404
-		resp.Message = "设备不存在"
-		return resp, nil
+	// 开始事务
+	tx := gb.DB.Begin()
+
+	// 先删除该分组下的所有通道关联
+	if err := tx.Where("group_id = ?", req.GroupId).Delete(&gb28181.GroupsChannelModel{}).Error; err != nil {
+		tx.Rollback()
+		return &pb.BaseResponse{Code: 500, Message: fmt.Sprintf("删除分组下的所有通道关联失败: %v", err)}, nil
 	}
 
-	// 检查通道是否存在
-	_, ok = device.channels.Get(req.ChannelId)
-	if !ok {
-		resp.Code = 404
-		resp.Message = "通道不存在"
-		return resp, nil
+	// 遍历通道列表，为每个通道创建新的关联
+	for _, channel := range req.Channels {
+		newGroupChannel := &gb28181.GroupsChannelModel{
+			GroupID:   int(req.GroupId),
+			ChannelID: channel.ChannelId,
+			DeviceID:  channel.DeviceId,
+		}
+
+		if err := tx.Create(newGroupChannel).Error; err != nil {
+			tx.Rollback()
+			return &pb.BaseResponse{Code: 500, Message: fmt.Sprintf("创建分组通道关联失败: %v", err)}, nil
+		}
 	}
 
-	// 发送调用预置位命令
-	response, err := device.frontEndCmd(req.ChannelId, device.frontEndCmdString(0x82, 2, int32(req.PresetId), 0))
-	if err != nil {
-		resp.Code = 500
-		resp.Message = fmt.Sprintf("调用预置位失败: %v", err)
-		return resp, nil
+	// 提交事务
+	if err := tx.Commit().Error; err != nil {
+		return &pb.BaseResponse{Code: 500, Message: fmt.Sprintf("提交事务失败: %v", err)}, nil
 	}
 
-	gb.Info("调用预置位",
-		"deviceId", req.DeviceId,
-		"channelId", req.ChannelId,
-		"presetId", req.PresetId,
-		"response", response.String())
-
-	resp.Code = 0
-	resp.Message = "success"
-	return resp, nil
+	return &pb.BaseResponse{Code: 200, Message: "添加分组通道关联成功"}, nil
 }

@@ -10,7 +10,7 @@ import (
 // 用于存储和管理GB28181平台的所有相关参数。
 type PlatformModel struct {
 	ID                      uint32 `gorm:"primaryKey;autoIncrement"`                                          // ID表示数据库中的唯一标识符
-	Enable                  *bool  `gorm:"column:enable" json:"enable"`                                       // Enable表示该平台配置是否启用
+	Enable                  bool   `gorm:"column:enable" json:"enable"`                                       // Enable表示该平台配置是否启用
 	Name                    string `gorm:"column:name;omitempty" json:"name"`                                 // Name表示平台的名称
 	ServerGBID              string `gorm:"column:server_gb_id;omitempty" json:"serverGBId"`                   // ServerGBID表示SIP服务器的国标编码
 	ServerGBDomain          string `gorm:"column:server_gb_domain;omitempty" json:"serverGBDomain"`           // ServerGBDomain表示SIP服务器的国标域
