@@ -392,6 +392,35 @@ service api {
       body: "*"
     };
   }
+
+  // 回放暂停
+  rpc PlaybackPause (PlaybackPauseRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/playback/pause"
+    };
+  }
+
+  // 回放恢复
+  rpc PlaybackResume (PlaybackResumeRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/playback/resume"
+    };
+  }
+
+  // 回放拖动播放
+  rpc PlaybackSeek (PlaybackSeekRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/playback/seek"
+    };
+  }
+
+  // 回放倍速播放
+  rpc PlaybackSpeed (PlaybackSpeedRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/playback/speed"
+    };
+  }
+
   // 获取单个分组
   rpc GetGroups (GetGroupsRequest) returns (GroupsListResponse) {
     option (google.api.http) = {
@@ -1055,4 +1084,26 @@ message GroupChannelsResponse {
   string message = 2;
   int32 total = 3;
   repeated GroupChannel list = 4;
+}
+
+// 回放暂停请求
+message PlaybackPauseRequest {
+  string streampath = 1;  // 回放流路径
+}
+
+// 回放恢复请求
+message PlaybackResumeRequest {
+  string streampath = 1;  // 回放流路径
+}
+
+// 回放拖动播放请求
+message PlaybackSeekRequest {
+  string streampath = 1;  // 回放流路径
+  int64 seekTime = 2;   // 拖动偏移量，单位s
+}
+
+// 回放倍速播放请求
+message PlaybackSpeedRequest {
+  string streampath = 1;  // 回放流路径
+  double speed = 2;     // 倍速0.25 0.5 1、2、4
 }

@@ -2013,3 +2013,89 @@ func (gb *GB28181Plugin) AddGroupChannel(ctx context.Context, req *pb.AddGroupCh
 
 	return &pb.BaseResponse{Code: 200, Message: "添加分组通道关联成功"}, nil
 }
+
+// PlaybackPause 实现回放暂停功能
+func (gb *GB28181Plugin) PlaybackPause(ctx context.Context, req *pb.PlaybackPauseRequest) (*pb.BaseResponse, error) {
+	resp := &pb.BaseResponse{}
+
+	// 参数校验
+	if req.Streampath == "" {
+		resp.Code = 400
+		resp.Message = "流路径不能为空"
+		return resp, nil
+	}
+
+	// TODO: 实现暂停逻辑
+
+	gb.Info("暂停回放",
+		"streampath", req.Streampath)
+
+	resp.Code = 0
+	resp.Message = "success"
+	return resp, nil
+}
+
+// PlaybackResume 实现回放恢复功能
+func (gb *GB28181Plugin) PlaybackResume(ctx context.Context, req *pb.PlaybackResumeRequest) (*pb.BaseResponse, error) {
+	resp := &pb.BaseResponse{}
+
+	// 参数校验
+	if req.Streampath == "" {
+		resp.Code = 400
+		resp.Message = "流路径不能为空"
+		return resp, nil
+	}
+
+	// TODO: 实现恢复播放逻辑
+
+	gb.Info("恢复回放",
+		"streampath", req.Streampath)
+
+	resp.Code = 0
+	resp.Message = "success"
+	return resp, nil
+}
+
+// PlaybackSeek 实现回放拖动功能
+func (gb *GB28181Plugin) PlaybackSeek(ctx context.Context, req *pb.PlaybackSeekRequest) (*pb.BaseResponse, error) {
+	resp := &pb.BaseResponse{}
+
+	// 参数校验
+	if req.Streampath == "" {
+		resp.Code = 400
+		resp.Message = "流路径不能为空"
+		return resp, nil
+	}
+
+	// TODO: 实现拖动播放逻辑
+
+	gb.Info("拖动回放",
+		"streampath", req.Streampath,
+		"seekTime", req.SeekTime)
+
+	resp.Code = 0
+	resp.Message = "success"
+	return resp, nil
+}
+
+// PlaybackSpeed 实现回放倍速功能
+func (gb *GB28181Plugin) PlaybackSpeed(ctx context.Context, req *pb.PlaybackSpeedRequest) (*pb.BaseResponse, error) {
+	resp := &pb.BaseResponse{}
+
+	// 参数校验
+	if req.Streampath == "" {
+		resp.Code = 400
+		resp.Message = "流路径不能为空"
+		return resp, nil
+	}
+
+	// TODO: 实现倍速播放逻辑
+
+	gb.Info("倍速回放",
+		"streampath", req.Streampath,
+		"speed", req.Speed)
+
+	resp.Code = 0
+	resp.Message = "success"
+	return resp, nil
+}

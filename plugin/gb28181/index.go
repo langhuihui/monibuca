@@ -43,7 +43,7 @@ type GB28181Plugin struct {
 	m7s.Plugin
 	AutoInvite     bool   `default:"true" desc:"自动邀请"`
 	Serial         string `default:"34020000002000000001" desc:"sip 服务 id"` //sip 服务器 id, 默认 34020000002000000001
-	Realm          string `default:"3402000000" desc:"sip 服务域"`             //sip 服务器域，默认 3402000000
+	Realm          string `default:"3402000000" desc:"sip 服务域"`            //sip 服务器域，默认 3402000000
 	Password       string
 	Sip            SipConfig
 	MediaPort      util.Range[uint16] `default:"10001-20000" desc:"媒体端口范围"` //媒体端口范围
@@ -745,6 +745,7 @@ func (gb *GB28181Plugin) StoreDevice(deviceid string, req *sip.Request) (d *Devi
 	myLanIP := myip.InternalIPv4()
 	myWanIP := myip.ExternalIPv4()
 
+	gb.Info("Start StoreDevice", "source", source, "desc", desc, "myLanIP", myLanIP, "myWanIP", myWanIP)
 	// 如果设备IP是内网IP，则使用内网IP
 	myIPParse := net.ParseIP(myIP)
 	sourceIPParse := net.ParseIP(sourceIP)

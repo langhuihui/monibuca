@@ -75,6 +75,10 @@ const (
 	Api_AddPlatformChannel_FullMethodName                = "/gb28181pro.api/AddPlatformChannel"
 	Api_Recording_FullMethodName                         = "/gb28181pro.api/Recording"
 	Api_UploadJpeg_FullMethodName                        = "/gb28181pro.api/UploadJpeg"
+	Api_PlaybackPause_FullMethodName                     = "/gb28181pro.api/PlaybackPause"
+	Api_PlaybackResume_FullMethodName                    = "/gb28181pro.api/PlaybackResume"
+	Api_PlaybackSeek_FullMethodName                      = "/gb28181pro.api/PlaybackSeek"
+	Api_PlaybackSpeed_FullMethodName                     = "/gb28181pro.api/PlaybackSpeed"
 	Api_GetGroups_FullMethodName                         = "/gb28181pro.api/GetGroups"
 	Api_AddGroup_FullMethodName                          = "/gb28181pro.api/AddGroup"
 	Api_UpdateGroup_FullMethodName                       = "/gb28181pro.api/UpdateGroup"
@@ -194,6 +198,14 @@ type ApiClient interface {
 	Recording(ctx context.Context, in *RecordingRequest, opts ...grpc.CallOption) (*BaseResponse, error)
 	// 接收JPEG文件
 	UploadJpeg(ctx context.Context, in *UploadJpegRequest, opts ...grpc.CallOption) (*BaseResponse, error)
+	// 回放暂停
+	PlaybackPause(ctx context.Context, in *PlaybackPauseRequest, opts ...grpc.CallOption) (*BaseResponse, error)
+	// 回放恢复
+	PlaybackResume(ctx context.Context, in *PlaybackResumeRequest, opts ...grpc.CallOption) (*BaseResponse, error)
+	// 回放拖动播放
+	PlaybackSeek(ctx context.Context, in *PlaybackSeekRequest, opts ...grpc.CallOption) (*BaseResponse, error)
+	// 回放倍速播放
+	PlaybackSpeed(ctx context.Context, in *PlaybackSpeedRequest, opts ...grpc.CallOption) (*BaseResponse, error)
 	// 获取单个分组
 	GetGroups(ctx context.Context, in *GetGroupsRequest, opts ...grpc.CallOption) (*GroupsListResponse, error)
 	// 添加分组
@@ -748,6 +760,46 @@ func (c *apiClient) UploadJpeg(ctx context.Context, in *UploadJpegRequest, opts 
 	return out, nil
 }
 
+func (c *apiClient) PlaybackPause(ctx context.Context, in *PlaybackPauseRequest, opts ...grpc.CallOption) (*BaseResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BaseResponse)
+	err := c.cc.Invoke(ctx, Api_PlaybackPause_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *apiClient) PlaybackResume(ctx context.Context, in *PlaybackResumeRequest, opts ...grpc.CallOption) (*BaseResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BaseResponse)
+	err := c.cc.Invoke(ctx, Api_PlaybackResume_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *apiClient) PlaybackSeek(ctx context.Context, in *PlaybackSeekRequest, opts ...grpc.CallOption) (*BaseResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BaseResponse)
+	err := c.cc.Invoke(ctx, Api_PlaybackSeek_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *apiClient) PlaybackSpeed(ctx context.Context, in *PlaybackSpeedRequest, opts ...grpc.CallOption) (*BaseResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BaseResponse)
+	err := c.cc.Invoke(ctx, Api_PlaybackSpeed_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *apiClient) GetGroups(ctx context.Context, in *GetGroupsRequest, opts ...grpc.CallOption) (*GroupsListResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GroupsListResponse)
@@ -928,6 +980,14 @@ type ApiServer interface {
 	Recording(context.Context, *RecordingRequest) (*BaseResponse, error)
 	// 接收JPEG文件
 	UploadJpeg(context.Context, *UploadJpegRequest) (*BaseResponse, error)
+	// 回放暂停
+	PlaybackPause(context.Context, *PlaybackPauseRequest) (*BaseResponse, error)
+	// 回放恢复
+	PlaybackResume(context.Context, *PlaybackResumeRequest) (*BaseResponse, error)
+	// 回放拖动播放
+	PlaybackSeek(context.Context, *PlaybackSeekRequest) (*BaseResponse, error)
+	// 回放倍速播放
+	PlaybackSpeed(context.Context, *PlaybackSpeedRequest) (*BaseResponse, error)
 	// 获取单个分组
 	GetGroups(context.Context, *GetGroupsRequest) (*GroupsListResponse, error)
 	// 添加分组
@@ -1110,6 +1170,18 @@ func (UnimplementedApiServer) Recording(context.Context, *RecordingRequest) (*Ba
 }
 func (UnimplementedApiServer) UploadJpeg(context.Context, *UploadJpegRequest) (*BaseResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UploadJpeg not implemented")
+}
+func (UnimplementedApiServer) PlaybackPause(context.Context, *PlaybackPauseRequest) (*BaseResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PlaybackPause not implemented")
+}
+func (UnimplementedApiServer) PlaybackResume(context.Context, *PlaybackResumeRequest) (*BaseResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PlaybackResume not implemented")
+}
+func (UnimplementedApiServer) PlaybackSeek(context.Context, *PlaybackSeekRequest) (*BaseResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PlaybackSeek not implemented")
+}
+func (UnimplementedApiServer) PlaybackSpeed(context.Context, *PlaybackSpeedRequest) (*BaseResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PlaybackSpeed not implemented")
 }
 func (UnimplementedApiServer) GetGroups(context.Context, *GetGroupsRequest) (*GroupsListResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetGroups not implemented")
@@ -2107,6 +2179,78 @@ func _Api_UploadJpeg_Handler(srv interface{}, ctx context.Context, dec func(inte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Api_PlaybackPause_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PlaybackPauseRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).PlaybackPause(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_PlaybackPause_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).PlaybackPause(ctx, req.(*PlaybackPauseRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Api_PlaybackResume_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PlaybackResumeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).PlaybackResume(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_PlaybackResume_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).PlaybackResume(ctx, req.(*PlaybackResumeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Api_PlaybackSeek_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PlaybackSeekRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).PlaybackSeek(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_PlaybackSeek_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).PlaybackSeek(ctx, req.(*PlaybackSeekRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Api_PlaybackSpeed_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PlaybackSpeedRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).PlaybackSpeed(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_PlaybackSpeed_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).PlaybackSpeed(ctx, req.(*PlaybackSpeedRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Api_GetGroups_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetGroupsRequest)
 	if err := dec(in); err != nil {
@@ -2451,6 +2595,22 @@ var Api_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UploadJpeg",
 			Handler:    _Api_UploadJpeg_Handler,
+		},
+		{
+			MethodName: "PlaybackPause",
+			Handler:    _Api_PlaybackPause_Handler,
+		},
+		{
+			MethodName: "PlaybackResume",
+			Handler:    _Api_PlaybackResume_Handler,
+		},
+		{
+			MethodName: "PlaybackSeek",
+			Handler:    _Api_PlaybackSeek_Handler,
+		},
+		{
+			MethodName: "PlaybackSpeed",
+			Handler:    _Api_PlaybackSpeed_Handler,
 		},
 		{
 			MethodName: "GetGroups",
