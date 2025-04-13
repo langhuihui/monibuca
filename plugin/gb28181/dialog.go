@@ -84,7 +84,7 @@ func (d *Dialog) Start() (err error) {
 	}
 
 	d.gb.dialogs.Set(d)
-	defer d.gb.dialogs.Remove(d)
+	//defer d.gb.dialogs.Remove(d)
 	if d.gb.MediaPort.Valid() {
 		select {
 		case d.MediaPort = <-d.gb.tcpPorts:
@@ -311,4 +311,5 @@ func (d *Dialog) Dispose() {
 	if err != nil {
 		d.Error("dialog close session err", err)
 	}
+	d.gb.dialogs.Remove(d)
 }

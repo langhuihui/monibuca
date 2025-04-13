@@ -2025,7 +2025,35 @@ func (gb *GB28181Plugin) PlaybackPause(ctx context.Context, req *pb.PlaybackPaus
 		return resp, nil
 	}
 
-	// TODO: 实现暂停逻辑
+	// 查找对应的dialog
+	dialog, ok := gb.dialogs.Find(func(d *Dialog) bool {
+		return d.pullCtx.StreamPath == req.Streampath
+	})
+	if !ok {
+		resp.Code = 404
+		resp.Message = "未找到对应的回放会话"
+		return resp, nil
+	}
+
+	// 构建RTSP PAUSE消息内容
+	content := strings.Builder{}
+	content.WriteString("PAUSE RTSP/1.0\r\n")
+	content.WriteString(fmt.Sprintf("CSeq: %d\r\n", int(time.Now().UnixNano()/1e6%1000000)))
+	content.WriteString("PauseTime: now\r\n")
+
+	// 创建INFO请求
+	request := sip.NewRequest(sip.INFO, dialog.session.InviteRequest.Recipient)
+	request.SetBody([]byte(content.String()))
+	contentType := sip.ContentTypeHeader("Application/MANSRTSP")
+	request.AppendHeader(&contentType)
+
+	// 发送请求
+	_, err := dialog.session.TransactionRequest(ctx, request)
+	if err != nil {
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("发送暂停请求失败: %v", err)
+		return resp, nil
+	}
 
 	gb.Info("暂停回放",
 		"streampath", req.Streampath)
@@ -2046,7 +2074,35 @@ func (gb *GB28181Plugin) PlaybackResume(ctx context.Context, req *pb.PlaybackRes
 		return resp, nil
 	}
 
-	// TODO: 实现恢复播放逻辑
+	// 查找对应的dialog
+	dialog, ok := gb.dialogs.Find(func(d *Dialog) bool {
+		return d.pullCtx.StreamPath == req.Streampath
+	})
+	if !ok {
+		resp.Code = 404
+		resp.Message = "未找到对应的回放会话"
+		return resp, nil
+	}
+
+	// 构建RTSP PLAY消息内容
+	content := strings.Builder{}
+	content.WriteString("PLAY RTSP/1.0\r\n")
+	content.WriteString(fmt.Sprintf("CSeq: %d\r\n", int(time.Now().UnixNano()/1e6%1000000)))
+	content.WriteString("Range: npt=now-\r\n")
+
+	// 创建INFO请求
+	request := sip.NewRequest(sip.INFO, dialog.session.InviteRequest.Recipient)
+	request.SetBody([]byte(content.String()))
+	contentType := sip.ContentTypeHeader("Application/MANSRTSP")
+	request.AppendHeader(&contentType)
+
+	// 发送请求
+	_, err := dialog.session.TransactionRequest(ctx, request)
+	if err != nil {
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("发送恢复请求失败: %v", err)
+		return resp, nil
+	}
 
 	gb.Info("恢复回放",
 		"streampath", req.Streampath)
