@@ -88,8 +88,19 @@ func (d *Device) TableName() string {
 
 func (d *Device) Dispose() {
 	if d.plugin.DB != nil {
+		d.Status = DeviceOfflineStatus
 		d.plugin.DB.Save(d)
+		if d.channels.Length > 0 {
+			d.channels.Range(func(channel *Channel) bool {
+				d.plugin.DB.Model(&gb28181.DeviceChannel{}).Where("device_id = ? AND device_db_id = ?", channel.DeviceID, d.ID).Updates(channel.DeviceChannel)
+				return true
+			})
+		} else {
+			// 如果没有通道，则直接更新通道状态为 OFF
+			d.plugin.DB.Model(&gb28181.DeviceChannel{}).Where("device_db_id = ?", d.ID).Update("status", "OFF")
+		}
 	}
+	d.plugin.devices.Remove(d)
 }
 
 func (d *Device) GetKey() string {
@@ -322,10 +333,28 @@ func (d *Device) Go() (err error) {
 	subTick := time.NewTicker(time.Second * 3600)
 	defer subTick.Stop()
 	catalogTick := time.NewTicker(time.Second * 60)
+	keepaliveSeconds := 60
+	if d.KeepaliveInterval >= 5 {
+		keepaliveSeconds = d.KeepaliveInterval
+	}
+	keepLiveTick := time.NewTicker(time.Second * 10)
+	defer keepLiveTick.Stop()
 	defer catalogTick.Stop()
 	for {
 		select {
 		case <-d.Done():
+		case <-keepLiveTick.C:
+			if timeDiff := time.Since(d.KeepaliveTime); timeDiff > time.Duration(3*keepaliveSeconds)*time.Second {
+				d.Online = false
+				d.Status = DeviceOfflineStatus
+				// 设置所有通道状态为off
+				d.channels.Range(func(channel *Channel) bool {
+					channel.Status = "OFF"
+					return true
+				})
+				d.Stop(fmt.Errorf("device keepalive timeout after %v", timeDiff))
+				return
+			}
 		case <-subTick.C:
 			response, err = d.subscribeCatalog()
 			if err != nil {

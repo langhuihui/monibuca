@@ -1088,22 +1088,22 @@ message GroupChannelsResponse {
 
 // 回放暂停请求
 message PlaybackPauseRequest {
-  string streampath = 1;  // 回放流路径
+  string streamPath = 1;  // 回放流路径
 }
 
 // 回放恢复请求
 message PlaybackResumeRequest {
-  string streampath = 1;  // 回放流路径
+  string streamPath = 1;  // 回放流路径
 }
 
 // 回放拖动播放请求
 message PlaybackSeekRequest {
-  string streampath = 1;  // 回放流路径
+  string streamPath = 1;  // 回放流路径
   int64 seekTime = 2;   // 拖动偏移量，单位s
 }
 
 // 回放倍速播放请求
 message PlaybackSpeedRequest {
-  string streampath = 1;  // 回放流路径
+  string streamPath = 1;  // 回放流路径
   double speed = 2;     // 倍速0.25 0.5 1、2、4
 }

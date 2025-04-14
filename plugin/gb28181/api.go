@@ -2019,7 +2019,7 @@ func (gb *GB28181Plugin) PlaybackPause(ctx context.Context, req *pb.PlaybackPaus
 	resp := &pb.BaseResponse{}
 
 	// 参数校验
-	if req.Streampath == "" {
+	if req.StreamPath == "" {
 		resp.Code = 400
 		resp.Message = "流路径不能为空"
 		return resp, nil
@@ -2027,7 +2027,7 @@ func (gb *GB28181Plugin) PlaybackPause(ctx context.Context, req *pb.PlaybackPaus
 
 	// 查找对应的dialog
 	dialog, ok := gb.dialogs.Find(func(d *Dialog) bool {
-		return d.pullCtx.StreamPath == req.Streampath
+		return d.pullCtx.StreamPath == req.StreamPath
 	})
 	if !ok {
 		resp.Code = 404
@@ -2054,9 +2054,14 @@ func (gb *GB28181Plugin) PlaybackPause(ctx context.Context, req *pb.PlaybackPaus
 		resp.Message = fmt.Sprintf("发送暂停请求失败: %v", err)
 		return resp, nil
 	}
-
+	gb.Server.Streams.Call(func() error {
+		if s, ok := gb.Server.Streams.Get(req.StreamPath); ok {
+			s.Pause()
+		}
+		return nil
+	})
 	gb.Info("暂停回放",
-		"streampath", req.Streampath)
+		"streampath", req.StreamPath)
 
 	resp.Code = 0
 	resp.Message = "success"
@@ -2068,7 +2073,7 @@ func (gb *GB28181Plugin) PlaybackResume(ctx context.Context, req *pb.PlaybackRes
 	resp := &pb.BaseResponse{}
 
 	// 参数校验
-	if req.Streampath == "" {
+	if req.StreamPath == "" {
 		resp.Code = 400
 		resp.Message = "流路径不能为空"
 		return resp, nil
@@ -2076,7 +2081,7 @@ func (gb *GB28181Plugin) PlaybackResume(ctx context.Context, req *pb.PlaybackRes
 
 	// 查找对应的dialog
 	dialog, ok := gb.dialogs.Find(func(d *Dialog) bool {
-		return d.pullCtx.StreamPath == req.Streampath
+		return d.pullCtx.StreamPath == req.StreamPath
 	})
 	if !ok {
 		resp.Code = 404
@@ -2103,9 +2108,14 @@ func (gb *GB28181Plugin) PlaybackResume(ctx context.Context, req *pb.PlaybackRes
 		resp.Message = fmt.Sprintf("发送恢复请求失败: %v", err)
 		return resp, nil
 	}
-
+	gb.Server.Streams.Call(func() error {
+		if s, ok := gb.Server.Streams.Get(req.StreamPath); ok {
+			s.Resume()
+		}
+		return nil
+	})
 	gb.Info("恢复回放",
-		"streampath", req.Streampath)
+		"streampath", req.StreamPath)
 
 	resp.Code = 0
 	resp.Message = "success"
@@ -2117,7 +2127,7 @@ func (gb *GB28181Plugin) PlaybackSeek(ctx context.Context, req *pb.PlaybackSeekR
 	resp := &pb.BaseResponse{}
 
 	// 参数校验
-	if req.Streampath == "" {
+	if req.StreamPath == "" {
 		resp.Code = 400
 		resp.Message = "流路径不能为空"
 		return resp, nil
@@ -2126,7 +2136,7 @@ func (gb *GB28181Plugin) PlaybackSeek(ctx context.Context, req *pb.PlaybackSeekR
 	// TODO: 实现拖动播放逻辑
 
 	gb.Info("拖动回放",
-		"streampath", req.Streampath,
+		"streampath", req.StreamPath,
 		"seekTime", req.SeekTime)
 
 	resp.Code = 0
@@ -2139,16 +2149,54 @@ func (gb *GB28181Plugin) PlaybackSpeed(ctx context.Context, req *pb.PlaybackSpee
 	resp := &pb.BaseResponse{}
 
 	// 参数校验
-	if req.Streampath == "" {
+	if req.StreamPath == "" {
 		resp.Code = 400
 		resp.Message = "流路径不能为空"
 		return resp, nil
 	}
 
-	// TODO: 实现倍速播放逻辑
+	// 查找对应的dialog
+	dialog, ok := gb.dialogs.Find(func(d *Dialog) bool {
+		return d.pullCtx.StreamPath == req.StreamPath
+	})
+	if !ok {
+		resp.Code = 404
+		resp.Message = "未找到对应的回放会话"
+		return resp, nil
+	}
+
+	// 构建RTSP SCALE消息内容
+	content := strings.Builder{}
+	content.WriteString("PLAY RTSP/1.0\r\n")
+	content.WriteString(fmt.Sprintf("CSeq: %d\r\n", int(time.Now().UnixNano()/1e6%1000000)))
+	content.WriteString(fmt.Sprintf("Scale: %f\r\n", req.Speed))
+	content.WriteString("Range: npt=now-\r\n")
+
+	// 创建INFO请求
+	request := sip.NewRequest(sip.INFO, dialog.session.InviteRequest.Recipient)
+	request.SetBody([]byte(content.String()))
+	contentType := sip.ContentTypeHeader("Application/MANSRTSP")
+	request.AppendHeader(&contentType)
+
+	// 发送请求
+	_, err := dialog.session.TransactionRequest(ctx, request)
+
+	gb.Server.Streams.Call(func() error {
+		if s, ok := gb.Server.Streams.Get(req.StreamPath); ok {
+			s.Speed = float64(req.Speed)
+			s.Scale = float64(req.Speed)
+			s.Info("set stream speed", "speed", req.Speed)
+		}
+		return nil
+	})
+	if err != nil {
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("发送倍速请求失败: %v", err)
+		return resp, nil
+	}
 
 	gb.Info("倍速回放",
-		"streampath", req.Streampath,
+		"streampath", req.StreamPath,
 		"speed", req.Speed)
 
 	resp.Code = 0
