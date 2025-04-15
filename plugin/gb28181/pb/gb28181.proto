@@ -473,6 +473,13 @@ service api {
       get: "/gb28181/api/groups/{groupId}/channels"
     };
   }
+
+  // 删除设备
+  rpc RemoveDevice (RemoveDeviceRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/device/remove/{id}"
+    };
+  }
 }
 
 // 请求和响应消息定义
@@ -563,19 +570,20 @@ message Channel {
 }
 
 message Device {
-  string DeviceID = 1;
-  string Name = 2;
-  string Manufacturer = 3;
-  string Model = 4;
-  string Longitude = 5;
-  string Latitude = 6;
-  string Status = 9;
-  google.protobuf.Timestamp RegisterTime=10;
-  google.protobuf.Timestamp UpdateTime=11;
-  google.protobuf.Timestamp KeepAliveTime=12;
-  int32 ChannelCount = 13;
-  bool Online = 14;
-  repeated Channel Channels = 15;
+  int64 id = 1;
+  string DeviceID = 2;
+  string Name = 3;
+  string Manufacturer = 4;
+  string Model = 5;
+  string Longitude = 6;
+  string Latitude = 7;
+  string Status = 8;
+  google.protobuf.Timestamp RegisterTime=9;
+  google.protobuf.Timestamp UpdateTime=10;
+  google.protobuf.Timestamp KeepAliveTime=11;
+  int32 ChannelCount = 12;
+  bool Online = 13;
+  repeated Channel Channels = 14;
 }
 
 message ResponseList {
@@ -1106,4 +1114,8 @@ message PlaybackSeekRequest {
 message PlaybackSpeedRequest {
   string streamPath = 1;  // 回放流路径
   double speed = 2;     // 倍速0.25 0.5 1、2、4
+}
+
+message RemoveDeviceRequest {
+  string id = 1;  // 设备ID
 }

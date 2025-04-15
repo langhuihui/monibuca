@@ -86,6 +86,7 @@ const (
 	Api_AddGroupChannel_FullMethodName                   = "/gb28181pro.api/AddGroupChannel"
 	Api_DeleteGroupChannel_FullMethodName                = "/gb28181pro.api/DeleteGroupChannel"
 	Api_GetGroupChannels_FullMethodName                  = "/gb28181pro.api/GetGroupChannels"
+	Api_RemoveDevice_FullMethodName                      = "/gb28181pro.api/RemoveDevice"
 )
 
 // ApiClient is the client API for Api service.
@@ -220,6 +221,8 @@ type ApiClient interface {
 	DeleteGroupChannel(ctx context.Context, in *DeleteGroupChannelRequest, opts ...grpc.CallOption) (*BaseResponse, error)
 	// 获取分组下的通道列表
 	GetGroupChannels(ctx context.Context, in *GetGroupChannelsRequest, opts ...grpc.CallOption) (*GroupChannelsResponse, error)
+	// 删除设备
+	RemoveDevice(ctx context.Context, in *RemoveDeviceRequest, opts ...grpc.CallOption) (*BaseResponse, error)
 }
 
 type apiClient struct {
@@ -870,6 +873,16 @@ func (c *apiClient) GetGroupChannels(ctx context.Context, in *GetGroupChannelsRe
 	return out, nil
 }
 
+func (c *apiClient) RemoveDevice(ctx context.Context, in *RemoveDeviceRequest, opts ...grpc.CallOption) (*BaseResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BaseResponse)
+	err := c.cc.Invoke(ctx, Api_RemoveDevice_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ApiServer is the server API for Api service.
 // All implementations must embed UnimplementedApiServer
 // for forward compatibility.
@@ -1002,6 +1015,8 @@ type ApiServer interface {
 	DeleteGroupChannel(context.Context, *DeleteGroupChannelRequest) (*BaseResponse, error)
 	// 获取分组下的通道列表
 	GetGroupChannels(context.Context, *GetGroupChannelsRequest) (*GroupChannelsResponse, error)
+	// 删除设备
+	RemoveDevice(context.Context, *RemoveDeviceRequest) (*BaseResponse, error)
 	mustEmbedUnimplementedApiServer()
 }
 
@@ -1203,6 +1218,9 @@ func (UnimplementedApiServer) DeleteGroupChannel(context.Context, *DeleteGroupCh
 }
 func (UnimplementedApiServer) GetGroupChannels(context.Context, *GetGroupChannelsRequest) (*GroupChannelsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetGroupChannels not implemented")
+}
+func (UnimplementedApiServer) RemoveDevice(context.Context, *RemoveDeviceRequest) (*BaseResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RemoveDevice not implemented")
 }
 func (UnimplementedApiServer) mustEmbedUnimplementedApiServer() {}
 func (UnimplementedApiServer) testEmbeddedByValue()             {}
@@ -2377,6 +2395,24 @@ func _Api_GetGroupChannels_Handler(srv interface{}, ctx context.Context, dec fun
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Api_RemoveDevice_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RemoveDeviceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).RemoveDevice(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_RemoveDevice_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).RemoveDevice(ctx, req.(*RemoveDeviceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Api_ServiceDesc is the grpc.ServiceDesc for Api service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -2639,6 +2675,10 @@ var Api_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetGroupChannels",
 			Handler:    _Api_GetGroupChannels_Handler,
+		},
+		{
+			MethodName: "RemoveDevice",
+			Handler:    _Api_RemoveDevice_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -42,7 +42,7 @@ type GB28181Plugin struct {
 	pb.UnimplementedApiServer
 	m7s.Plugin
 	Serial         string `default:"34020000002000000001" desc:"sip 服务 id"` //sip 服务器 id, 默认 34020000002000000001
-	Realm          string `default:"3402000000" desc:"sip 服务域"`            //sip 服务器域，默认 3402000000
+	Realm          string `default:"3402000000" desc:"sip 服务域"`             //sip 服务器域，默认 3402000000
 	Password       string
 	Sip            SipConfig
 	MediaPort      util.Range[uint16] `default:"10001-20000" desc:"媒体端口范围"` //媒体端口范围
@@ -57,6 +57,8 @@ type GB28181Plugin struct {
 	platforms      util.Collection[uint32, *Platform]
 	tcpPorts       chan uint16
 	sipPorts       []int
+	sipIP          string `desc:"sip发送命令的IP，一般是本地IP，多网卡时需要配置正确的IP"`
+	mediaIP        string `desc:"流媒体IP，用于接收流"`
 }
 
 var _ = m7s.InstallPlugin[GB28181Plugin](m7s.PluginMeta{
@@ -230,8 +232,8 @@ func (gb *GB28181Plugin) checkDeviceExpire() (err error) {
 			device.contactHDR = sip.ContactHeader{
 				Address: sip.Uri{
 					User: gb.Serial,
-					Host: device.LocalIP,
-					Port: device.LocalPort,
+					Host: device.sipIP,
+					Port: device.localPort,
 				},
 			}
 
@@ -239,8 +241,8 @@ func (gb *GB28181Plugin) checkDeviceExpire() (err error) {
 			device.fromHDR = sip.FromHeader{
 				Address: sip.Uri{
 					User: gb.Serial,
-					Host: device.LocalIP,
-					Port: device.LocalPort,
+					Host: device.sipIP,
+					Port: device.localPort,
 				},
 				Params: sip.NewParams(),
 			}
@@ -254,8 +256,8 @@ func (gb *GB28181Plugin) checkDeviceExpire() (err error) {
 			}
 
 			// 创建SIP客户端
-			device.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(device.LocalIP))
-			device.Info("checkDeviceExpire", "d.LocalIP", device.LocalIP, "d.LocalPort", device.LocalPort, "d.contactHDR", device.contactHDR)
+			device.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(device.sipIP))
+			device.Info("checkDeviceExpire", "d.sipIP", device.sipIP, "d.localPort", device.localPort, "d.contactHDR", device.contactHDR)
 
 			// 设置设备ID的hash值作为任务ID
 			var hash uint32
@@ -642,27 +644,34 @@ func (gb *GB28181Plugin) RecoverDevice(d *Device, req *sip.Request) {
 	sourcePort, _ := strconv.Atoi(sourcePortStr)
 	myPort, _ := strconv.Atoi(myPortStr)
 
-	// 优先使用内网IP
-	myLanIP := myip.InternalIPv4()
-	myWanIP := myip.ExternalIPv4()
-
 	// 如果设备IP是内网IP，则使用内网IP
 	myIPParse := net.ParseIP(myIP)
 	sourceIPParse := net.ParseIP(sourceIP)
 
-	if myIPParse == nil { //dest有可能不是IP，可能是域名，域名的情况需要用其他方式获取自己的IP
-		if sourceIPParse != nil { //源IP转换成功，判断内外网
-			if sourceIPParse.IsPrivate() {
-				myWanIP = myLanIP
+	// 优先使用内网IP
+	myLanIP := myip.InternalIPv4()
+	myWanIP := myip.ExternalIPv4()
+
+	gb.Info("Start StoreDevice", "source", source, "desc", desc, "myLanIP", myLanIP, "myWanIP", myWanIP)
+
+	// 处理目标地址和源地址的IP映射关系
+	if sourceIPParse != nil { // 源IP有效时才进行处理
+		if myIPParse == nil { // 目标地址是域名
+			if sourceIPParse.IsPrivate() { // 源IP是内网IP
+				myWanIP = myLanIP // 使用内网IP作为外网IP
+			}
+		} else { // 目标地址是IP
+			if sourceIPParse.IsPrivate() { // 源IP是内网IP
+				myLanIP, myWanIP = myIP, myIP // 使用目标IP作为内外网IP
 			}
 		}
-	} else {
-		if sourceIPParse != nil {
-			if sourceIPParse.IsPrivate() {
-				myLanIP = myIP
-				myWanIP = myIP
-			}
-		}
+	}
+
+	if gb.mediaIP != "" {
+		myWanIP = gb.mediaIP
+	}
+	if gb.sipIP != "" {
+		myLanIP = gb.sipIP
 	}
 	// 设置 Recipient
 	d.Recipient = sip.Uri{
@@ -679,8 +688,7 @@ func (gb *GB28181Plugin) RecoverDevice(d *Device, req *sip.Request) {
 		},
 	}
 
-	d.LocalIP = myLanIP
-	d.WanIP = myWanIP
+	d.sipIP = myLanIP
 	d.StartTime = time.Now()
 	d.IP = sourceIP
 	d.Port = sourcePort
@@ -689,9 +697,9 @@ func (gb *GB28181Plugin) RecoverDevice(d *Device, req *sip.Request) {
 	d.UpdateTime = time.Now()
 	d.RegisterTime = time.Now()
 	d.Online = true
-	d.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(myLanIP))
+	d.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(d.sipIP))
 	d.channels.L = new(sync.RWMutex)
-	d.Info("StoreDevice", "source", source, "desc", desc, "device.LocalIP", myLanIP, "device.WanIP", myWanIP, "recipient", req.Recipient, "myPort", myPort)
+	d.Info("StoreDevice", "source", source, "desc", desc, "device.sipIP", myLanIP, "device.WanIP", myWanIP, "recipient", req.Recipient, "myPort", myPort)
 
 	if gb.DB != nil {
 		var existing Device
@@ -724,14 +732,6 @@ func (gb *GB28181Plugin) StoreDevice(deviceid string, req *sip.Request) (d *Devi
 		gb.Error("OnRegister", "error", err.Error())
 		return
 	}
-	// 优先使用内网IP
-	myLanIP := myip.InternalIPv4()
-	myWanIP := myip.ExternalIPv4()
-
-	gb.Info("Start StoreDevice", "source", source, "desc", desc, "myLanIP", myLanIP, "myWanIP", myWanIP)
-	// 如果设备IP是内网IP，则使用内网IP
-	myIPParse := net.ParseIP(myIP)
-	sourceIPParse := net.ParseIP(sourceIP)
 
 	// 检查myPort是否在sipPorts中，如果不在则使用sipPorts[0]
 	if len(gb.sipPorts) > 0 {
@@ -748,19 +748,34 @@ func (gb *GB28181Plugin) StoreDevice(deviceid string, req *sip.Request) (d *Devi
 		}
 	}
 
-	if myIPParse == nil { //dest有可能不是IP，可能是域名，域名的情况需要用其他方式获取自己的IP
-		if sourceIPParse != nil { //源IP转换成功，判断内外网
-			if sourceIPParse.IsPrivate() {
-				myWanIP = myLanIP
+	// 如果设备IP是内网IP，则使用内网IP
+	myIPParse := net.ParseIP(myIP)
+	sourceIPParse := net.ParseIP(sourceIP)
+
+	// 优先使用内网IP
+	myLanIP := myip.InternalIPv4()
+	myWanIP := myip.ExternalIPv4()
+
+	gb.Info("Start StoreDevice", "source", source, "desc", desc, "myLanIP", myLanIP, "myWanIP", myWanIP)
+
+	// 处理目标地址和源地址的IP映射关系
+	if sourceIPParse != nil { // 源IP有效时才进行处理
+		if myIPParse == nil { // 目标地址是域名
+			if sourceIPParse.IsPrivate() { // 源IP是内网IP
+				myWanIP = myLanIP // 使用内网IP作为外网IP
+			}
+		} else { // 目标地址是IP
+			if sourceIPParse.IsPrivate() { // 源IP是内网IP
+				myLanIP, myWanIP = myIP, myIP // 使用目标IP作为内外网IP
 			}
 		}
-	} else {
-		if sourceIPParse != nil {
-			if sourceIPParse.IsPrivate() {
-				myLanIP = myIP
-				myWanIP = myIP
-			}
-		}
+	}
+
+	if gb.mediaIP != "" {
+		myWanIP = gb.mediaIP
+	}
+	if gb.sipIP != "" {
+		myLanIP = gb.sipIP
 	}
 
 	now := time.Now()
@@ -779,8 +794,8 @@ func (gb *GB28181Plugin) StoreDevice(deviceid string, req *sip.Request) (d *Devi
 		IP:            sourceIP,
 		Port:          sourcePort,
 		HostAddress:   sourceIP + ":" + sourcePortStr,
-		LocalIP:       myLanIP,
-		mediaIp:       myWanIP,
+		sipIP:         myLanIP,
+		mediaIP:       myWanIP,
 		Expires:       int(expSec),
 		eventChan:     make(chan any, 10),
 		Recipient: sip.Uri{
@@ -804,16 +819,14 @@ func (gb *GB28181Plugin) StoreDevice(deviceid string, req *sip.Request) (d *Devi
 			Params: sip.NewParams(),
 		},
 		plugin:    gb,
-		LocalPort: myPort,
-		WanIP:     myWanIP,
-		WanPort:   myPort,
+		localPort: myPort,
 	}
 
 	d.Logger = gb.With("deviceid", deviceid)
 	d.fromHDR.Params.Add("tag", sip.GenerateTagN(16))
-	d.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(myLanIP))
+	d.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(d.sipIP))
 	d.channels.L = new(sync.RWMutex)
-	d.Info("StoreDevice", "source", source, "desc", desc, "device.LocalIP", myLanIP, "device.WanIP", myWanIP, "req.Recipient", req.Recipient, "myPort", myPort, "d.Recipient", d.Recipient)
+	d.Info("StoreDevice", "source", source, "desc", desc, "device.sipIP", myLanIP, "device.WanIP", myWanIP, "req.Recipient", req.Recipient, "myPort", myPort, "d.Recipient", d.Recipient)
 
 	// 使用简单的 hash 函数将设备 ID 转换为 uint32
 	var hash uint32

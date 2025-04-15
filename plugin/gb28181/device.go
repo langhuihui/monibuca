@@ -3,6 +3,7 @@ package plugin_gb28181pro
 import (
 	"context"
 	"fmt"
+	"gorm.io/gorm"
 	"net"
 	"net/http"
 	"strconv"
@@ -30,37 +31,37 @@ const (
 
 type Device struct {
 	task.Task             `gorm:"-:all"`
-	ID                    int64     `gorm:"primaryKey;autoIncrement"` // 数据库自增长ID
-	DeviceID              string    // 设备国标编号
-	Name                  string    // 设备名
-	Manufacturer          string    // 生产厂商
-	Model                 string    // 型号
-	Firmware              string    // 固件版本
-	Transport             string    // 传输协议（UDP/TCP）
-	StreamMode            string    // 数据流传输模式（UDP:udp传输/TCP-ACTIVE：tcp主动模式/TCP-PASSIVE：tcp被动模式）
-	IP                    string    // wan地址_ip
-	Port                  int       // wan地址_port
-	HostAddress           string    // wan地址
-	Online                bool      // 是否在线，true为在线，false为离线
-	RegisterTime          time.Time // 注册时间
-	KeepaliveTime         time.Time // 心跳时间
-	KeepaliveInterval     int       `gorm:"default:60"` // 心跳间隔
-	ChannelCount          int       // 通道个数
-	Expires               int       // 注册有效期
-	CreateTime            time.Time // 创建时间
-	UpdateTime            time.Time // 更新时间
-	Charset               string    // 字符集, 支持 UTF-8 与 GB2312
-	SubscribeCatalog      int       // 目录订阅周期，0为不订阅
-	SubscribePosition     int       // 移动设备位置订阅周期，0为不订阅
-	PositionInterval      int       // 移动设备位置信息上报时间间隔,单位:秒,默认值5
-	SubscribeAlarm        int       // 报警订阅周期，0为不订阅
-	SSRCCheck             bool      // 是否开启ssrc校验，默认关闭，开启可以防止串流
-	GeoCoordSys           string    // 地理坐标系， 目前支持 WGS84,GCJ02
-	Password              string    // 密码
-	SdpIP                 string    // 收流IP
-	LocalIP               string    // SIP交互IP（设备访问平台的IP）
-	AsMessageChannel      bool      // 是否作为消息通道
-	BroadcastPushAfterAck bool      // 控制语音对讲流程，释放收到ACK后发流
+	ID                    int64          `gorm:"primaryKey;autoIncrement"` // 数据库自增长ID
+	DeviceID              string         // 设备国标编号
+	Name                  string         // 设备名
+	Manufacturer          string         // 生产厂商
+	Model                 string         // 型号
+	Firmware              string         // 固件版本
+	Transport             string         // 传输协议（UDP/TCP）
+	StreamMode            string         // 数据流传输模式（UDP:udp传输/TCP-ACTIVE：tcp主动模式/TCP-PASSIVE：tcp被动模式）
+	IP                    string         // wan地址_ip
+	Port                  int            // wan地址_port
+	HostAddress           string         // wan地址
+	Online                bool           // 是否在线，true为在线，false为离线
+	RegisterTime          time.Time      // 注册时间
+	KeepaliveTime         time.Time      // 心跳时间
+	KeepaliveInterval     int            `gorm:"default:60"` // 心跳间隔
+	ChannelCount          int            // 通道个数
+	Expires               int            // 注册有效期
+	CreateTime            time.Time      // 创建时间
+	UpdateTime            time.Time      // 更新时间
+	Charset               string         // 字符集, 支持 UTF-8 与 GB2312
+	SubscribeCatalog      int            // 目录订阅周期，0为不订阅
+	SubscribePosition     int            // 移动设备位置订阅周期，0为不订阅
+	PositionInterval      int            // 移动设备位置信息上报时间间隔,单位:秒,默认值5
+	SubscribeAlarm        int            // 报警订阅周期，0为不订阅
+	SSRCCheck             bool           // 是否开启ssrc校验，默认关闭，开启可以防止串流
+	GeoCoordSys           string         // 地理坐标系， 目前支持 WGS84,GCJ02
+	Password              string         // 密码
+	sipIP                 string         // SIP交互IP（设备访问平台的IP）
+	AsMessageChannel      bool           // 是否作为消息通道
+	BroadcastPushAfterAck bool           // 控制语音对讲流程，释放收到ACK后发流
+	DeletedAt             gorm.DeletedAt `yaml:"-"`
 	// 删除强关联字段
 	// Channels              []gb28181.DeviceChannel `gorm:"foreignKey:DeviceDBID;references:ID"` // 设备通道列表
 
@@ -69,17 +70,15 @@ type Device struct {
 	SN                  int
 	Recipient           sip.Uri                           `gorm:"-:all"`
 	channels            util.Collection[string, *Channel] `gorm:"-:all"`
-	mediaIp             string
-	Longitude, Latitude string // 经度,纬度
+	mediaIP             string                            `desc:"收流IP"`
+	Longitude, Latitude string                            // 经度,纬度
 	eventChan           chan any
 	client              *sipgo.Client
 	contactHDR          sip.ContactHeader
 	fromHDR             sip.FromHeader
 	toHDR               sip.ToHeader
 	plugin              *GB28181Plugin
-	LocalPort           int
-	WanIP               string
-	WanPort             int
+	localPort           int
 }
 
 func (d *Device) TableName() string {
@@ -100,7 +99,6 @@ func (d *Device) Dispose() {
 			d.plugin.DB.Model(&gb28181.DeviceChannel{}).Where("device_db_id = ?", d.ID).Update("status", "OFF")
 		}
 	}
-	d.plugin.devices.Remove(d)
 }
 
 func (d *Device) GetKey() string {
@@ -428,8 +426,8 @@ func (d *Device) CreateRequest(Method sip.RequestMethod, Recipient any) *sip.Req
 	//	ProtocolName:    "SIP",
 	//	ProtocolVersion: "2.0",
 	//	Transport:       "UDP",
-	//	Host:            d.LocalIP,
-	//	Port:            d.LocalPort,
+	//	Host:            d.sipIP,
+	//	Port:            d.localPort,
 	//	Params:          sip.HeaderParams(sip.NewParams()),
 	//}
 	//viaHeader.Params.Add("branch", sip.GenerateBranchN(10)).Add("rport", "")
@@ -536,10 +534,6 @@ func (d *Device) addOrUpdateChannel(c gb28181.DeviceChannel) {
 
 func (d *Device) GetID() string {
 	return d.DeviceID
-}
-
-func (d *Device) GetSdpIP() string {
-	return d.SdpIP
 }
 
 func (d *Device) GetIP() string {

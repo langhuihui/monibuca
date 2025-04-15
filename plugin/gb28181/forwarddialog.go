@@ -114,16 +114,10 @@ func (d *ForwardDialog) Start() (err error) {
 		d.SSRC = uint32(ssrcValue)
 	}
 
-	// 获取 SDP IP
-	sdpIP := device.LocalIP
-	if sdpIP == "" {
-		sdpIP = device.mediaIp
-	}
-
 	// 构建 SDP 内容
 	sdpInfo := []string{
 		"v=0",
-		fmt.Sprintf("o=%s 0 0 IN IP4 %s", device.DeviceID, sdpIP),
+		fmt.Sprintf("o=%s 0 0 IN IP4 %s", device.DeviceID, device.mediaIP),
 		fmt.Sprintf("s=%s", util.Conditional(isLive, "Play", "Playback")), // 根据是否有时间参数决定
 	}
 
@@ -133,7 +127,7 @@ func (d *ForwardDialog) Start() (err error) {
 	}
 
 	// 添加c行
-	sdpInfo = append(sdpInfo, "c=IN IP4 "+sdpIP)
+	sdpInfo = append(sdpInfo, "c=IN IP4 "+device.mediaIP)
 
 	// 将字符串时间转换为 Unix 时间戳
 	if !isLive {
@@ -196,16 +190,16 @@ func (d *ForwardDialog) Start() (err error) {
 		ProtocolName:    "SIP",
 		ProtocolVersion: "2.0",
 		Transport:       "UDP",
-		Host:            device.LocalIP,
-		Port:            device.LocalPort,
+		Host:            device.sipIP,
+		Port:            device.localPort,
 		Params:          sip.HeaderParams(sip.NewParams()),
 	}
 	viaHeader.Params.Add("branch", sip.GenerateBranchN(16)).Add("rport", "")
 	fromHDR := sip.FromHeader{
 		Address: sip.Uri{
 			User: d.gb.Serial,
-			Host: device.WanIP,
-			Port: device.LocalPort,
+			Host: device.mediaIP,
+			Port: device.localPort,
 		},
 		Params: sip.NewParams(),
 	}

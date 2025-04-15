@@ -106,6 +106,7 @@ func (gb *GB28181Plugin) List(ctx context.Context, req *pb.GetDevicesRequest) (*
 		}
 
 		pbDevices = append(pbDevices, &pb.Device{
+			Id:            d.ID,
 			DeviceID:      d.DeviceID,
 			Name:          d.Name,
 			Manufacturer:  d.Manufacturer,
@@ -450,7 +451,7 @@ func (gb *GB28181Plugin) SyncDevice(ctx context.Context, req *pb.SyncDeviceReque
 			d.contactHDR = sip.ContactHeader{
 				Address: sip.Uri{
 					User: gb.Serial,
-					Host: d.LocalIP,
+					Host: d.sipIP,
 					Port: d.Port,
 				},
 			}
@@ -462,7 +463,7 @@ func (gb *GB28181Plugin) SyncDevice(ctx context.Context, req *pb.SyncDeviceReque
 			}
 
 			// 初始化 SIP 客户端
-			d.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(d.LocalIP))
+			d.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(d.sipIP))
 
 			// 将设备添加到内存中
 			gb.devices.Add(d)
@@ -1039,7 +1040,7 @@ func (gb *GB28181Plugin) TestSip(ctx context.Context, req *pb.TestSipRequest) (*
 	// 创建一个临时设备用于测试
 	device := &Device{
 		DeviceID:   "34020000002000000001",
-		LocalIP:    "192.168.1.17",
+		sipIP:      "192.168.1.17",
 		Port:       5060,
 		IP:         "192.168.1.102",
 		StreamMode: "TCP-PASSIVE",
@@ -1058,13 +1059,13 @@ func (gb *GB28181Plugin) TestSip(ctx context.Context, req *pb.TestSipRequest) (*
 	device.contactHDR = sip.ContactHeader{
 		Address: sip.Uri{
 			User: gb.Serial,
-			Host: device.LocalIP,
+			Host: device.sipIP,
 			Port: device.Port,
 		},
 	}
 
 	// 初始化SIP客户端
-	device.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(device.LocalIP))
+	device.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(device.sipIP))
 	if device.client == nil {
 		resp.Code = 500
 		resp.Message = "failed to create sip client"
@@ -1089,9 +1090,9 @@ func (gb *GB28181Plugin) TestSip(ctx context.Context, req *pb.TestSipRequest) (*
 	// 构建SDP消息体
 	sdpInfo := []string{
 		"v=0",
-		fmt.Sprintf("o=%s 0 0 IN IP4 %s", "34020000001320000004", device.LocalIP),
+		fmt.Sprintf("o=%s 0 0 IN IP4 %s", "34020000001320000004", device.sipIP),
 		"s=Play",
-		"c=IN IP4 " + device.LocalIP,
+		"c=IN IP4 " + device.sipIP,
 		"t=0 0",
 		"m=video 43970 TCP/RTP/AVP 96 97 98 99",
 		"a=recvonly",
@@ -1119,7 +1120,7 @@ func (gb *GB28181Plugin) TestSip(ctx context.Context, req *pb.TestSipRequest) (*
 		ProtocolName:    "SIP",
 		ProtocolVersion: "2.0",
 		Transport:       "UDP",
-		Host:            device.LocalIP,
+		Host:            device.sipIP,
 		Port:            device.Port,
 		Params:          sip.HeaderParams(sip.NewParams()),
 	}
@@ -1487,7 +1488,7 @@ func (gb *GB28181Plugin) GetSnap(ctx context.Context, req *pb.GetSnapRequest) (*
 		config := SnapshotConfig{
 			SnapNum:   1, // 默认抓拍1张
 			Interval:  1, // 默认间隔1秒
-			UploadURL: fmt.Sprintf("http://%s%s/gb28181/api/snap/upload", actualDevice.LocalIP, gb.GetCommonConf().HTTP.ListenAddr),
+			UploadURL: fmt.Sprintf("http://%s%s/gb28181/api/snap/upload", actualDevice.sipIP, gb.GetCommonConf().HTTP.ListenAddr),
 			SessionID: fmt.Sprintf("%d", time.Now().UnixNano()),
 		}
 
@@ -1531,7 +1532,7 @@ func (gb *GB28181Plugin) GetSnap(ctx context.Context, req *pb.GetSnapRequest) (*
 		config := SnapshotConfig{
 			SnapNum:   1, // 默认抓拍1张
 			Interval:  1, // 默认间隔1秒
-			UploadURL: fmt.Sprintf("http://%s%s/gb28181/api/snap/upload", device.LocalIP, gb.GetCommonConf().HTTP.ListenAddr),
+			UploadURL: fmt.Sprintf("http://%s%s/gb28181/api/snap/upload", device.sipIP, gb.GetCommonConf().HTTP.ListenAddr),
 			SessionID: fmt.Sprintf("%d", time.Now().UnixNano()),
 		}
 
@@ -2198,6 +2199,75 @@ func (gb *GB28181Plugin) PlaybackSpeed(ctx context.Context, req *pb.PlaybackSpee
 	gb.Info("倍速回放",
 		"streampath", req.StreamPath,
 		"speed", req.Speed)
+
+	resp.Code = 0
+	resp.Message = "success"
+	return resp, nil
+}
+
+// RemoveDevice 实现删除设备功能
+func (gb *GB28181Plugin) RemoveDevice(ctx context.Context, req *pb.RemoveDeviceRequest) (*pb.BaseResponse, error) {
+	resp := &pb.BaseResponse{}
+
+	// 参数校验
+	if req.Id == "" {
+		resp.Code = 400
+		resp.Message = "设备ID不能为空"
+		return resp, nil
+	}
+
+	// 检查数据库连接
+	if gb.DB == nil {
+		resp.Code = 500
+		resp.Message = "数据库未初始化"
+		return resp, nil
+	}
+
+	// 开启事务
+	tx := gb.DB.Begin()
+
+	// 先从数据库中查找设备
+	var dbDevice Device
+	if err := tx.Where("id = ?", req.Id).First(&dbDevice).Error; err != nil {
+		tx.Rollback()
+		resp.Code = 404
+		resp.Message = fmt.Sprintf("设备不存在: %v", err)
+		return resp, nil
+	}
+
+	// 使用数据库中的 DeviceID 从内存中查找设备
+	if device, ok := gb.devices.Get(dbDevice.DeviceID); ok {
+		// 停止设备相关任务
+		device.Stop(fmt.Errorf("device removed"))
+		// device.Stop() 会调用 Dispose()，其中已包含从 gb.devices 中移除设备的逻辑
+	}
+
+	// 删除设备关联的所有通道
+	if err := tx.Where("device_db_id = ?", dbDevice.ID).Delete(&gb28181.DeviceChannel{}).Error; err != nil {
+		tx.Rollback()
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("删除设备通道失败: %v", err)
+		return resp, nil
+	}
+
+	// 删除设备
+	if err := tx.Delete(&dbDevice).Error; err != nil {
+		tx.Rollback()
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("删除设备失败: %v", err)
+		return resp, nil
+	}
+
+	// 提交事务
+	if err := tx.Commit().Error; err != nil {
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("提交事务失败: %v", err)
+		return resp, nil
+	}
+
+	gb.Info("删除设备成功",
+		"deviceId", dbDevice.DeviceID,
+		"deviceName", dbDevice.Name)
 
 	resp.Code = 0
 	resp.Message = "success"

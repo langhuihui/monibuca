@@ -1,6 +1,7 @@
 package gb28181
 
 import (
+	"gorm.io/gorm"
 	"strconv"
 	"time"
 )
@@ -56,6 +57,7 @@ type DeviceChannel struct {
 	Status             ChannelStatus `json:"status" xml:"Status"`                               // 设备状态
 	Longitude          float64
 	Latitude           float64
+	DeletedAt          gorm.DeletedAt `yaml:"-"`
 
 	PTZTypeText string  `json:"ptzTypeText"` // 云台类型描述字符串
 	GbLongitude float64 `json:"gbLongitude"`

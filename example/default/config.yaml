@@ -9,7 +9,9 @@ srt:
   passphrase: foobarfoobar
 gb28181:
   enable: false
-  autoinvite: true
+  autoinvite: false
+  mediaip: 192.168.1.21  #流媒体收流IP
+  sipip: 192.168.1.21  #SIP通讯IP
   sip:
     listenaddr:
           - udp::5060
