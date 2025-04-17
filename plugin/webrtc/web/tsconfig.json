@@ -1,0 +1,13 @@
+{
+  "compilerOptions": {
+    "target": "ESNext", // 或者 "es6", "es2015", "es2020" 等，根据你的需求
+    "module": "esnext", // 或者 "commonjs", "amd", "umd" 等，根据你的需求
+    "lib": ["dom", "es6","ESNext"], // 包含浏览器相关的库
+    "moduleResolution": "node",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": ["BatchV2Client.ts"]
+}

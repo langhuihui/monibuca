@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WebRTC BatchV2 Test</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    .container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+    }
+
+    .control-panel {
+      flex: 1;
+      min-width: 300px;
+      border: 1px solid #ccc;
+      padding: 15px;
+      border-radius: 5px;
+    }
+
+    .video-container {
+      flex: 2;
+      min-width: 400px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .video-wrapper {
+      position: relative;
+      margin-bottom: 10px;
+    }
+
+    video {
+      width: 100%;
+      background-color: #000;
+      border-radius: 5px;
+    }
+
+    #remoteVideos {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      width: 100%;
+      justify-content: flex-start;
+      min-height: 200px;
+      max-height: 600px;
+      overflow-y: auto;
+    }
+
+    #remoteVideos .video-wrapper {
+      flex-grow: 1;
+      margin-bottom: 5px;
+    }
+
+    .stream-info {
+      position: absolute;
+      top: 5px;
+      left: 5px;
+      background-color: rgba(0, 0, 0, 0.7);
+      color: white;
+      padding: 3px 8px;
+      border-radius: 3px;
+      font-size: 12px;
+    }
+
+    button {
+      padding: 8px 12px;
+      margin: 5px 0;
+      cursor: pointer;
+    }
+
+    input,
+    select {
+      width: 100%;
+      padding: 8px;
+      margin: 5px 0 10px;
+      box-sizing: border-box;
+    }
+
+    .log-container {
+      margin-top: 20px;
+      border: 1px solid #ccc;
+      padding: 10px;
+      height: 1000px;
+      overflow-y: auto;
+      font-family: monospace;
+      font-size: 12px;
+      background-color: #f5f5f5;
+    }
+
+    .log-entry {
+      margin: 2px 0;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 2px;
+    }
+
+    .log-time {
+      color: #666;
+      margin-right: 5px;
+    }
+
+    .error {
+      color: red;
+    }
+
+    .success {
+      color: green;
+    }
+
+    .info {
+      color: blue;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>WebRTC BatchV2 Test</h1>
+  <p>Test the BatchV2 functionality with WebSocket signaling for multiple streams over a single PeerConnection</p>
+
+  <div class="container">
+    <div class="control-panel">
+      <h2>Controls</h2>
+
+      <h3>Connection</h3>
+      <button type="button" id="connectBtn">Connect</button>
+      <button type="button" id="disconnectBtn" disabled>Disconnect</button>
+
+      <h3>Publish Stream</h3>
+      <label for="publishStreamPath">Stream Path:</label>
+      <input type="text" id="publishStreamPath" value="live/test" placeholder="e.g., live/test">
+      <button type="button" id="startPublishBtn" disabled>Start Publishing</button>
+      <button type="button" id="stopPublishBtn" disabled>Stop Publishing</button>
+
+      <h3>Available Streams</h3>
+      <button type="button" id="getStreamsBtn" disabled>Get Stream List</button>
+      <div id="availableStreams">
+        <h4>Available Streams:</h4>
+        <label for="streamSelect">Select streams to play:</label>
+        <select id="streamSelect" size="5" multiple aria-label="Available streams"></select>
+      </div>
+
+      <div>
+        <button type="button" id="playSelectedBtn" disabled>Play Selected Streams</button>
+      </div>
+
+      <div id="subscribedStreams">
+        <h4>Subscribed Streams:</h4>
+        <ul id="streamList"></ul>
+      </div>
+    </div>
+
+    <div class="video-container">
+      <h2>Local Video</h2>
+      <div class="video-wrapper">
+        <video id="localVideo" autoplay muted></video>
+        <div class="stream-info" id="localStreamInfo">Not publishing</div>
+      </div>
+
+      <h2>Remote Videos</h2>
+      <div id="remoteVideos" class="remote-videos-container"></div>
+    </div>
+  </div>
+
+  <div class="log-container" id="logContainer"></div>
+
+  <script type="module">
+    import BatchV2Client from './BatchV2Client.js';
+
+    // DOM elements
+    const connectBtn = document.getElementById('connectBtn');
+    const disconnectBtn = document.getElementById('disconnectBtn');
+    const startPublishBtn = document.getElementById('startPublishBtn');
+    const stopPublishBtn = document.getElementById('stopPublishBtn');
+    const getStreamsBtn = document.getElementById('getStreamsBtn');
+    const playSelectedBtn = document.getElementById('playSelectedBtn');
+    const publishStreamPath = document.getElementById('publishStreamPath');
+    const streamSelect = document.getElementById('streamSelect');
+    const streamList = document.getElementById('streamList');
+    const localVideo = document.getElementById('localVideo');
+    const localStreamInfo = document.getElementById('localStreamInfo');
+    const remoteVideos = document.getElementById('remoteVideos');
+    const logContainer = document.getElementById('logContainer');
+
+    let client = null;
+    let remoteVideoCount = 0;
+
+    // Logging function
+    function log(message, type = 'info') {
+      const logEntry = document.createElement('div');
+      logEntry.className = `log-entry ${type}`;
+
+      const time = document.createElement('span');
+      time.className = 'log-time';
+      time.textContent = new Date().toLocaleTimeString();
+
+      logEntry.appendChild(time);
+      logEntry.appendChild(document.createTextNode(message));
+
+      logContainer.appendChild(logEntry);
+      logContainer.scrollTop = logContainer.scrollHeight;
+    }
+
+    // Function to remove video element for a specific stream
+    function removeVideoElement(streamId) {
+      const videoElement = document.getElementById(`video-${streamId}`);
+      if (videoElement) {
+        const wrapper = videoElement.closest('.video-wrapper');
+        if (wrapper) {
+          wrapper.remove();
+          remoteVideoCount--;
+          log(`Removed video element for stream ${streamId}`, 'info');
+          updateRemoteVideoLayout();
+        }
+      }
+    }
+
+    // Update stream list UI
+    function updateStreamListUI() {
+      streamList.innerHTML = '';
+      if (!client) return;
+
+      const subscribed = client.getSubscribedStreams();
+      subscribed.forEach(streamPath => {
+        const li = document.createElement('li');
+        li.textContent = streamPath;
+
+        const removeBtn = document.createElement('button');
+        removeBtn.textContent = 'Remove';
+        removeBtn.style.marginLeft = '10px';
+        removeBtn.onclick = async () => {
+          try {
+            await client.unsubscribeFromStream(streamPath);
+            // The 'streamRemoved' event will handle UI updates
+          } catch (error) {
+            log(`Error removing stream ${streamPath}: ${error.message}`, 'error');
+          }
+        };
+
+        li.appendChild(removeBtn);
+        streamList.appendChild(li);
+      });
+
+      if (remoteVideos.querySelectorAll('.video-wrapper').length > 0) {
+        updateRemoteVideoLayout();
+      }
+    }
+
+    // Cleanup function
+    function cleanupUI() {
+      // Clear remote videos
+      remoteVideos.innerHTML = '';
+      remoteVideoCount = 0;
+
+      // Clear subscribed streams UI
+      streamList.innerHTML = '';
+
+      // Reset UI elements state
+      localVideo.srcObject = null;
+      localStreamInfo.textContent = 'Not publishing';
+      connectBtn.disabled = false;
+      disconnectBtn.disabled = true;
+      startPublishBtn.disabled = true;
+      stopPublishBtn.disabled = true;
+      getStreamsBtn.disabled = true;
+      playSelectedBtn.disabled = true;
+
+      // Clear stream select
+      streamSelect.innerHTML = '';
+
+      log('UI cleaned up', 'info');
+    }
+
+    // Function to update the layout of remote videos
+    function updateRemoteVideoLayout() {
+      const videoWrappers = remoteVideos.querySelectorAll('.video-wrapper');
+      if (videoWrappers.length === 0) return;
+
+      // Get the local video dimensions as a reference
+      const localVideoWrapper = document.querySelector('.video-container .video-wrapper');
+      const localVideoHeight = localVideoWrapper ? localVideoWrapper.offsetHeight : 300;
+
+      // Calculate the optimal grid layout
+      const count = videoWrappers.length;
+      let columns;
+
+      // Determine the number of columns based on the count
+      if (count <= 1) {
+        columns = 1;
+      } else if (count <= 4) {
+        columns = 2;
+      } else if (count <= 9) {
+        columns = 3;
+      } else {
+        columns = 4;
+      }
+
+      // Calculate rows based on count and columns
+      const rows = Math.ceil(count / columns);
+
+      // Calculate the width percentage for each video
+      const widthPercentage = (100 / columns) - 1; // Subtract 1% for the gap
+
+      // Calculate the height for each video to fit within the container
+      // and maintain proper spacing
+      const containerHeight = Math.min(localVideoHeight, 600); // Cap at 600px max
+      const heightPerVideo = (containerHeight / rows) - 10; // 10px for gap
+
+      // Apply the width and height to each video wrapper
+      videoWrappers.forEach(wrapper => {
+        wrapper.style.width = `${widthPercentage}%`;
+        wrapper.style.minWidth = `${widthPercentage}%`;
+        wrapper.style.height = `${heightPerVideo}px`;
+        wrapper.style.minHeight = '120px'; // Minimum height
+      });
+
+      log(`Updated remote video layout: ${count} videos in ${columns} columns and ${rows} rows`, 'info');
+    }
+
+
+    // --- Event Listeners for UI elements ---
+
+    connectBtn.addEventListener('click', async () => {
+      if (client) return; // Already connected or connecting
+
+      client = new BatchV2Client();
+
+      // Setup event listeners for the client
+      client.on('log', (data) => log(data.message, data.level));
+      client.on('error', (data) => log(`Client Error: ${data.message}`, 'error'));
+
+      client.on('connected', () => {
+        log('Client connected successfully', 'success');
+        connectBtn.disabled = true;
+        disconnectBtn.disabled = false;
+        startPublishBtn.disabled = false;
+        getStreamsBtn.disabled = false;
+        playSelectedBtn.disabled = false;
+      });
+
+      client.on('disconnected', () => {
+        log('Client disconnected');
+        cleanupUI();
+        client = null;
+      });
+
+      client.on('publishStarted', (data) => {
+        log(`Publishing started for ${data.streamPath}`, 'success');
+        localVideo.srcObject = client.getLocalStream();
+        localStreamInfo.textContent = `Publishing: ${data.streamPath}`;
+        startPublishBtn.disabled = true;
+        stopPublishBtn.disabled = false;
+      });
+
+      client.on('publishStopped', (data) => {
+        log(`Publishing stopped for ${data.streamPath}`, 'success');
+        localVideo.srcObject = null;
+        localStreamInfo.textContent = 'Not publishing';
+        startPublishBtn.disabled = false;
+        stopPublishBtn.disabled = true;
+      });
+
+      client.on('streamList', (data) => {
+        log(`Received stream list with ${data.streams.length} streams`, 'info');
+        streamSelect.innerHTML = ''; // Clear previous options
+        if (data.streams.length === 0) {
+          const option = document.createElement('option');
+          option.disabled = true;
+          option.textContent = 'No H.264 streams available';
+          streamSelect.appendChild(option);
+        } else {
+          data.streams.forEach(stream => {
+            const option = document.createElement('option');
+            option.value = stream.path;
+            option.textContent = `${stream.path} (${stream.width}x${stream.height} @ ${stream.fps}fps)`;
+            option.dataset.width = stream.width;
+            option.dataset.height = stream.height;
+            option.dataset.fps = stream.fps;
+            streamSelect.appendChild(option);
+          });
+        }
+      });
+
+      client.on('streamAdded', (data) => {
+        log(`Stream added: ${data.streamId}`, 'success');
+        let videoElement = document.getElementById(`video-${data.streamId}`);
+        if (!videoElement) {
+          const videoWrapper = document.createElement('div');
+          videoWrapper.className = 'video-wrapper';
+
+          videoElement = document.createElement('video');
+          videoElement.id = `video-${data.streamId}`;
+          videoElement.autoplay = true;
+          videoElement.playsInline = true;
+          videoElement.srcObject = data.stream;
+          videoElement.style.width = '100%';
+          videoElement.style.height = '100%';
+
+          const streamInfo = document.createElement('div');
+          streamInfo.className = 'stream-info';
+          streamInfo.textContent = `Stream: ${data.streamId}`;
+
+          videoWrapper.appendChild(videoElement);
+          videoWrapper.appendChild(streamInfo);
+          remoteVideos.appendChild(videoWrapper);
+          videoElement.play().catch(e => log(`Autoplay failed for ${data.streamId}: ${e.message}`, 'warning'));
+          log(`Created video element for stream ${data.streamId}`, 'success');
+
+          remoteVideoCount++;
+          updateRemoteVideoLayout();
+          updateStreamListUI(); // Update the list of subscribed streams
+        } else {
+          videoElement.srcObject = data.stream;
+          log(`Updated existing video element for stream ${data.streamId}`, 'info');
+        }
+      });
+
+      client.on('streamRemoved', (data) => {
+        log(`Stream removed: ${data.streamPath}`, 'info');
+        removeVideoElement(data.streamPath);
+        updateStreamListUI(); // Update the list of subscribed streams
+      });
+
+      try {
+        await client.connect();
+      } catch (error) {
+        log(`Connection failed: ${error.message}`, 'error');
+        cleanupUI();
+        client = null;
+      }
+    });
+
+    disconnectBtn.addEventListener('click', () => {
+      if (client) {
+        client.disconnect(); // This will trigger the 'disconnected' event and cleanup
+      } else {
+        cleanupUI(); // Ensure UI is cleaned up even if client wasn't fully connected
+      }
+    });
+
+    startPublishBtn.addEventListener('click', async () => {
+      if (!client) return;
+      const streamPath = publishStreamPath.value.trim();
+      try {
+        await client.startPublishing(streamPath);
+      } catch (error) {
+        log(`Failed to start publishing: ${error.message}`, 'error');
+        // UI updates are handled by 'publishStarted'/'publishStopped' events
+      }
+    });
+
+    stopPublishBtn.addEventListener('click', async () => {
+      if (!client) return;
+      const streamPath = publishStreamPath.value.trim();
+      try {
+        await client.stopPublishing(streamPath);
+      } catch (error) {
+        log(`Failed to stop publishing: ${error.message}`, 'error');
+        // UI updates are handled by 'publishStarted'/'publishStopped' events
+      }
+    });
+
+    getStreamsBtn.addEventListener('click', () => {
+      if (client) {
+        client.getStreamList();
+      }
+    });
+
+    playSelectedBtn.addEventListener('click', async () => {
+      if (!client) return;
+      const selectedOptions = Array.from(streamSelect.selectedOptions);
+      const streamPaths = selectedOptions.map(option => option.value);
+
+      try {
+        await client.subscribeToStreams(streamPaths);
+        log(`Subscribing to ${streamPaths.length} streams`, 'info');
+        // UI updates (adding videos, updating list) are handled by 'streamAdded' event
+        updateStreamListUI(); // Ensure the list reflects the new subscriptions immediately
+      } catch (error) {
+        log(`Failed to subscribe to streams: ${error.message}`, 'error');
+      }
+    });
+
+    // Add window resize event listener
+    window.addEventListener('resize', () => {
+      if (remoteVideos.querySelectorAll('.video-wrapper').length > 0) {
+        updateRemoteVideoLayout();
+      }
+    });
+
+  </script>
+</body>
+
+</html>

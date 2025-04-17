@@ -169,6 +169,26 @@ func (p *WebRTCPlugin) testPage(w http.ResponseWriter, r *http.Request) {
 		name = "web/push.html"
 	case "pull":
 		name = "web/pull.html"
+	case "batchv2":
+		name = "web/batchv2.html"
+	default:
+		name = "web/" + name
+	}
+	// Set appropriate MIME type based on file extension
+	if strings.HasSuffix(name, ".html") {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	} else if strings.HasSuffix(name, ".js") {
+		w.Header().Set("Content-Type", "application/javascript")
+		// } else if strings.HasSuffix(name, ".css") {
+		// 	w.Header().Set("Content-Type", "text/css")
+		// } else if strings.HasSuffix(name, ".json") {
+		// 	w.Header().Set("Content-Type", "application/json")
+		// } else if strings.HasSuffix(name, ".png") {
+		// 	w.Header().Set("Content-Type", "image/png")
+		// } else if strings.HasSuffix(name, ".jpg") || strings.HasSuffix(name, ".jpeg") {
+		// 	w.Header().Set("Content-Type", "image/jpeg")
+		// } else if strings.HasSuffix(name, ".svg") {
+		// 	w.Header().Set("Content-Type", "image/svg+xml")
 	}
 	f, err := web.Open(name)
 	if err != nil {

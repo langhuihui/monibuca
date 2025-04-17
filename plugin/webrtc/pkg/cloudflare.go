@@ -14,7 +14,7 @@ import (
 
 type (
 	CFClient struct {
-		Connection
+		MultipleConnection
 		pullCtx   m7s.PullJob
 		pushCtx   m7s.PushJob
 		direction string

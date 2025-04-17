@@ -14,7 +14,7 @@ type PullRequest struct {
 }
 
 type Client struct {
-	Connection
+	MultipleConnection
 	pullCtx   m7s.PullJob
 	pushCtx   m7s.PushJob
 	direction string

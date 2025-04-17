@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/pion/rtcp"
@@ -19,40 +21,9 @@ import (
 )
 
 type Connection struct {
-	task.Task
 	*PeerConnection
-	SDP string
-	// LocalSDP *sdp.SessionDescription
-	Publisher  *m7s.Publisher
-	Subscriber *m7s.Subscriber
-	EnableDC   bool
-	PLI        time.Duration
-}
-
-func (IO *Connection) Start() (err error) {
-	if IO.Publisher != nil {
-		IO.Depend(IO.Publisher)
-		IO.Receive()
-	}
-	if IO.Subscriber != nil {
-		IO.Depend(IO.Subscriber)
-		IO.Send()
-	}
-	IO.OnICECandidate(func(ice *ICECandidate) {
-		if ice != nil {
-			IO.Info(ice.ToJSON().Candidate)
-		}
-	})
-	IO.OnConnectionStateChange(func(state PeerConnectionState) {
-		IO.Info("Connection State has changed:" + state.String())
-		switch state {
-		case PeerConnectionStateConnected:
-
-		case PeerConnectionStateDisconnected, PeerConnectionStateFailed, PeerConnectionStateClosed:
-			IO.Stop(errors.New("connection state:" + state.String()))
-		}
-	})
-	return
+	Publisher *m7s.Publisher
+	SDP       string
 }
 
 func (IO *Connection) GetOffer() (*SessionDescription, error) {
@@ -81,7 +52,50 @@ func (IO *Connection) GetAnswer() (*SessionDescription, error) {
 	return IO.LocalDescription(), nil
 }
 
-func (IO *Connection) Receive() {
+type MultipleConnection struct {
+	task.Task
+	Connection
+	// LocalSDP *sdp.SessionDescription
+	Subscriber *m7s.Subscriber
+	EnableDC   bool
+	PLI        time.Duration
+}
+
+func (IO *MultipleConnection) Start() (err error) {
+	if IO.Publisher != nil {
+		IO.Depend(IO.Publisher)
+		IO.Receive()
+	}
+	if IO.Subscriber != nil {
+		IO.Depend(IO.Subscriber)
+		IO.Send()
+	}
+	IO.OnICECandidate(func(ice *ICECandidate) {
+		if ice != nil {
+			IO.Info(ice.ToJSON().Candidate)
+		}
+	})
+	// 监听ICE连接状态变化
+	IO.OnICEConnectionStateChange(func(state ICEConnectionState) {
+		IO.Debug("ICE connection state changed", "state", state.String())
+		if state == ICEConnectionStateFailed {
+			IO.Error("ICE connection failed")
+		}
+	})
+
+	IO.OnConnectionStateChange(func(state PeerConnectionState) {
+		IO.Info("Connection State has changed:" + state.String())
+		switch state {
+		case PeerConnectionStateConnected:
+
+		case PeerConnectionStateDisconnected, PeerConnectionStateFailed, PeerConnectionStateClosed:
+			IO.Stop(errors.New("connection state:" + state.String()))
+		}
+	})
+	return
+}
+
+func (IO *MultipleConnection) Receive() {
 	puber := IO.Publisher
 	IO.OnTrack(func(track *TrackRemote, receiver *RTPReceiver) {
 		IO.Info("OnTrack", "kind", track.Kind().String(), "payloadType", uint8(track.Codec().PayloadType))
@@ -190,18 +204,216 @@ func (IO *Connection) Receive() {
 	})
 }
 
-func (IO *Connection) SendSubscriber(subscriber *m7s.Subscriber) (err error) {
-	var useDC bool
-	var audioTLSRTP, videoTLSRTP *TrackLocalStaticRTP
-	var audioSender, videoSender *RTPSender
-	vctx, actx := subscriber.Publisher.GetVideoCodecCtx(), subscriber.Publisher.GetAudioCodecCtx()
-	if IO.EnableDC && vctx != nil && vctx.FourCC() == codec.FourCC_H265 {
-		useDC = true
-	}
-	if IO.EnableDC && actx != nil && actx.FourCC() == codec.FourCC_MP4A {
-		useDC = true
+// H264CodecParams represents the parameters for an H.264 codec
+type H264CodecParams struct {
+	ProfileLevelID        string
+	PacketizationMode     string
+	LevelAsymmetryAllowed string
+	SpropParameterSets    string
+	OtherParams           map[string]string
+}
+
+// parseH264Params parses H.264 codec parameters from an fmtp line
+func parseH264Params(fmtpLine string) H264CodecParams {
+	params := H264CodecParams{
+		OtherParams: make(map[string]string),
 	}
 
+	// Split the fmtp line into key-value pairs
+	kvPairs := strings.Split(fmtpLine, ";")
+	for _, kv := range kvPairs {
+		kv = strings.TrimSpace(kv)
+		if kv == "" {
+			continue
+		}
+
+		parts := strings.SplitN(kv, "=", 2)
+		key := strings.TrimSpace(parts[0])
+		var value string
+		if len(parts) > 1 {
+			value = strings.TrimSpace(parts[1])
+		}
+
+		switch key {
+		case "profile-level-id":
+			params.ProfileLevelID = value
+		case "packetization-mode":
+			params.PacketizationMode = value
+		case "level-asymmetry-allowed":
+			params.LevelAsymmetryAllowed = value
+		case "sprop-parameter-sets":
+			params.SpropParameterSets = value
+		default:
+			params.OtherParams[key] = value
+		}
+	}
+
+	return params
+}
+
+// extractH264CodecParams extracts all H.264 codec parameters from an SDP
+func extractH264CodecParams(sdp string) []H264CodecParams {
+	var result []H264CodecParams
+
+	// Find all fmtp lines for H.264 codecs
+	// First, find all a=rtpmap lines for H.264
+	rtpmapRegex := regexp.MustCompile(`a=rtpmap:(\d+) H264/\d+`)
+	rtpmapMatches := rtpmapRegex.FindAllStringSubmatch(sdp, -1)
+
+	for _, rtpmapMatch := range rtpmapMatches {
+		if len(rtpmapMatch) < 2 {
+			continue
+		}
+
+		// Get the payload type
+		payloadType := rtpmapMatch[1]
+
+		// Find the corresponding fmtp line
+		fmtpRegex := regexp.MustCompile(`a=fmtp:` + payloadType + ` ([^\r\n]+)`)
+		fmtpMatch := fmtpRegex.FindStringSubmatch(sdp)
+
+		if len(fmtpMatch) >= 2 {
+			// Parse the fmtp line
+			params := parseH264Params(fmtpMatch[1])
+			result = append(result, params)
+		}
+	}
+
+	return result
+}
+
+// findClosestProfileLevelID finds the closest matching profile-level-id
+func findClosestProfileLevelID(availableIDs []string, currentID string) string {
+	// If current ID is empty, return the first available one
+	if currentID == "" && len(availableIDs) > 0 {
+		return availableIDs[0]
+	}
+
+	// If current ID is in the available ones, use it
+	for _, id := range availableIDs {
+		if strings.EqualFold(id, currentID) {
+			return currentID
+		}
+	}
+
+	// Try to match the profile part (first two characters)
+	if len(currentID) >= 2 {
+		currentProfile := currentID[:2]
+		for _, id := range availableIDs {
+			if len(id) >= 2 && strings.EqualFold(id[:2], currentProfile) {
+				return id
+			}
+		}
+	}
+
+	// If no match found, return the first available one
+	if len(availableIDs) > 0 {
+		return availableIDs[0]
+	}
+
+	// Fallback to the current one
+	return currentID
+}
+
+// findBestMatchingH264Codec finds the best matching H.264 codec configuration
+func findBestMatchingH264Codec(sdp string, currentFmtpLine string) string {
+	// If no SDP or no current fmtp line, return the current one
+	if sdp == "" || currentFmtpLine == "" {
+		return currentFmtpLine
+	}
+
+	// Parse current parameters
+	currentParams := parseH264Params(currentFmtpLine)
+
+	// Extract all H.264 codec parameters from the SDP
+	availableParams := extractH264CodecParams(sdp)
+
+	// If no available parameters found, return the current one
+	if len(availableParams) == 0 {
+		return currentFmtpLine
+	}
+
+	// Extract all available profile-level-ids
+	var availableProfileLevelIDs []string
+	var packetizationModeMap = make(map[string]string)
+
+	for _, params := range availableParams {
+		if params.ProfileLevelID != "" {
+			availableProfileLevelIDs = append(availableProfileLevelIDs, params.ProfileLevelID)
+			// Store packetization mode for each profile-level-id
+			if params.PacketizationMode != "" {
+				packetizationModeMap[params.ProfileLevelID] = params.PacketizationMode
+			}
+		}
+	}
+
+	// Find the closest matching profile-level-id
+	closestProfileLevelID := findClosestProfileLevelID(availableProfileLevelIDs, currentParams.ProfileLevelID)
+
+	// Create result parameters
+	resultParams := H264CodecParams{
+		ProfileLevelID:        closestProfileLevelID,
+		SpropParameterSets:    currentParams.SpropParameterSets, // Always use original sprop-parameter-sets
+		LevelAsymmetryAllowed: "1",                              // Default to 1
+	}
+
+	// Use matching packetization mode if available
+	if mode, ok := packetizationModeMap[closestProfileLevelID]; ok {
+		resultParams.PacketizationMode = mode
+	} else if currentParams.PacketizationMode != "" {
+		resultParams.PacketizationMode = currentParams.PacketizationMode
+	} else {
+		resultParams.PacketizationMode = "1" // Default to 1
+	}
+
+	// Build and return the fmtp line
+	return buildFmtpLine(resultParams)
+}
+
+// buildFmtpLine builds an fmtp line from H.264 codec parameters
+func buildFmtpLine(params H264CodecParams) string {
+	var parts []string
+
+	// Add profile-level-id if present
+	if params.ProfileLevelID != "" {
+		parts = append(parts, "profile-level-id="+params.ProfileLevelID)
+	}
+
+	// Add packetization-mode if present
+	if params.PacketizationMode != "" {
+		parts = append(parts, "packetization-mode="+params.PacketizationMode)
+	}
+
+	// Add level-asymmetry-allowed if present
+	if params.LevelAsymmetryAllowed != "" {
+		parts = append(parts, "level-asymmetry-allowed="+params.LevelAsymmetryAllowed)
+	}
+
+	// Add sprop-parameter-sets if present
+	if params.SpropParameterSets != "" {
+		parts = append(parts, "sprop-parameter-sets="+params.SpropParameterSets)
+	}
+
+	// Add other parameters
+	for k, v := range params.OtherParams {
+		parts = append(parts, k+"="+v)
+	}
+
+	return strings.Join(parts, ";")
+}
+
+func (IO *MultipleConnection) SendSubscriber(subscriber *m7s.Subscriber) (audioSender, videoSender *RTPSender, err error) {
+	var useDC bool
+	var audioTLSRTP, videoTLSRTP *TrackLocalStaticRTP
+	vctx, actx := subscriber.Publisher.GetVideoCodecCtx(), subscriber.Publisher.GetAudioCodecCtx()
+	if IO.EnableDC {
+		if IO.EnableDC && vctx != nil && vctx.FourCC() == codec.FourCC_H265 {
+			useDC = true
+		}
+		if IO.EnableDC && actx != nil && actx.FourCC() == codec.FourCC_MP4A {
+			useDC = true
+		}
+	}
 	if vctx != nil && !useDC {
 		videoCodec := vctx.FourCC()
 		var rcc RTPCodecParameters
@@ -217,6 +429,20 @@ func (IO *Connection) SendSubscriber(subscriber *m7s.Subscriber) (err error) {
 				return
 			}
 		}
+
+		// // For H.264, adjust codec parameters based on SDP
+		// if rcc.MimeType == MimeTypeH264 && IO.SDP != "" {
+		// 	// Find best matching codec configuration
+		// 	originalFmtpLine := rcc.SDPFmtpLine
+		// 	bestMatchingFmtpLine := findBestMatchingH264Codec(IO.SDP, rcc.SDPFmtpLine)
+
+		// 	// Update the codec parameters if a better match was found
+		// 	if bestMatchingFmtpLine != originalFmtpLine {
+		// 		rcc.SDPFmtpLine = bestMatchingFmtpLine
+		// 		IO.Info("Adjusted H.264 codec parameters", "from", originalFmtpLine, "to", bestMatchingFmtpLine)
+		// 	}
+		// }
+
 		videoTLSRTP, err = NewTrackLocalStaticRTP(rcc.RTPCodecCapability, videoCodec.String(), subscriber.StreamPath)
 		if err != nil {
 			return
@@ -324,49 +550,148 @@ func (IO *Connection) SendSubscriber(subscriber *m7s.Subscriber) (err error) {
 	return
 }
 
-func (IO *Connection) Send() (err error) {
+func (IO *MultipleConnection) Send() (err error) {
 	if IO.Subscriber != nil {
-		err = IO.SendSubscriber(IO.Subscriber)
+		_, _, err = IO.SendSubscriber(IO.Subscriber)
 	}
 	return
 }
 
-func (IO *Connection) Dispose() {
+func (IO *MultipleConnection) Dispose() {
 	IO.PeerConnection.Close()
+}
+
+type RemoteStream struct {
+	task.Task
+	pc          *Connection
+	suber       *m7s.Subscriber
+	videoTLSRTP *TrackLocalStaticRTP
+	videoSender *RTPSender
+}
+
+func (r *RemoteStream) GetKey() string {
+	return r.suber.StreamPath
+}
+
+func (r *RemoteStream) Start() (err error) {
+	vctx := r.suber.Publisher.GetVideoCodecCtx()
+	videoCodec := vctx.FourCC()
+	var rcc RTPCodecParameters
+	if ctx, ok := vctx.(mrtp.IRTPCtx); ok {
+		rcc = ctx.GetRTPCodecParameter()
+	} else {
+		var rtpCtx mrtp.RTPData
+		var tmpAVTrack AVTrack
+		tmpAVTrack.ICodecCtx, _, err = rtpCtx.ConvertCtx(vctx)
+		if err == nil {
+			rcc = tmpAVTrack.ICodecCtx.(mrtp.IRTPCtx).GetRTPCodecParameter()
+		} else {
+			return
+		}
+	}
+	// // For H.264, adjust codec parameters based on SDP
+	// if rcc.MimeType == MimeTypeH264 && r.pc.SDP != "" {
+	// 	// Find best matching codec configuration
+	// 	originalFmtpLine := rcc.SDPFmtpLine
+	// 	bestMatchingFmtpLine := findBestMatchingH264Codec(r.pc.SDP, rcc.SDPFmtpLine)
+
+	// 	// Update the codec parameters if a better match was found
+	// 	if bestMatchingFmtpLine != originalFmtpLine {
+	// 		rcc.SDPFmtpLine = bestMatchingFmtpLine
+	// 		r.Info("Adjusted H.264 codec parameters", "from", originalFmtpLine, "to", bestMatchingFmtpLine)
+	// 	}
+	// }
+
+	r.videoTLSRTP, err = NewTrackLocalStaticRTP(rcc.RTPCodecCapability, videoCodec.String(), r.suber.StreamPath)
+	if err != nil {
+		return
+	}
+	r.videoSender, err = r.pc.AddTrack(r.videoTLSRTP)
+	return
+}
+
+func (r *RemoteStream) Go() (err error) {
+	go func() {
+		rtcpBuf := make([]byte, 1500)
+		for {
+			if n, _, rtcpErr := r.videoSender.Read(rtcpBuf); rtcpErr != nil {
+				r.suber.Warn("rtcp read error", "error", rtcpErr)
+				return
+			} else {
+				if p, err := rtcp.Unmarshal(rtcpBuf[:n]); err == nil {
+					for _, pp := range p {
+						switch pp.(type) {
+						case *rtcp.PictureLossIndication:
+							// fmt.Println("PictureLossIndication")
+						}
+					}
+				}
+			}
+		}
+	}()
+	return m7s.PlayBlock(r.suber, (func(frame *mrtp.Audio) (err error))(nil), func(frame *mrtp.Video) error {
+		for _, p := range frame.Packets {
+			if err := r.videoTLSRTP.WriteRTP(p); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 // SingleConnection extends Connection to handle multiple subscribers in a single WebRTC connection
 type SingleConnection struct {
+	task.Manager[string, *RemoteStream]
 	Connection
-	Subscribers map[string]*m7s.Subscriber // map streamPath to subscriber
 }
 
-func NewSingleConnection() *SingleConnection {
-	return &SingleConnection{
-		Subscribers: make(map[string]*m7s.Subscriber),
-	}
+func (c *SingleConnection) Start() (err error) {
+	c.OnICECandidate(func(ice *ICECandidate) {
+		if ice != nil {
+			c.Info(ice.ToJSON().Candidate)
+		}
+	})
+	// 监听ICE连接状态变化
+	c.OnICEConnectionStateChange(func(state ICEConnectionState) {
+		c.Debug("ICE connection state changed", "state", state.String())
+		if state == ICEConnectionStateFailed {
+			c.Error("ICE connection failed")
+		}
+	})
+
+	c.OnConnectionStateChange(func(state PeerConnectionState) {
+		c.Info("Connection State has changed:" + state.String())
+		switch state {
+		case PeerConnectionStateConnected:
+
+		case PeerConnectionStateDisconnected, PeerConnectionStateFailed, PeerConnectionStateClosed:
+			c.Stop(errors.New("connection state:" + state.String()))
+		}
+	})
+	return
+}
+
+func (c *SingleConnection) Receive() {
+	c.OnTrack(func(track *TrackRemote, receiver *RTPReceiver) {
+		c.Info("OnTrack", "kind", track.Kind().String(), "payloadType", uint8(track.Codec().PayloadType))
+	})
 }
 
 // AddSubscriber adds a new subscriber to the connection and starts sending
-func (c *SingleConnection) AddSubscriber(streamPath string, subscriber *m7s.Subscriber) {
-	c.Subscribers[streamPath] = subscriber
-	if err := c.SendSubscriber(subscriber); err != nil {
-		c.Error("failed to start subscriber", "error", err, "streamPath", streamPath)
-		subscriber.Stop(err)
-		delete(c.Subscribers, streamPath)
-	}
+func (c *SingleConnection) AddSubscriber(subscriber *m7s.Subscriber) (remoteStream *RemoteStream) {
+	remoteStream = &RemoteStream{suber: subscriber, pc: &c.Connection}
+	subscriber.Depend(remoteStream)
+	c.Add(remoteStream)
+	return
 }
 
 // RemoveSubscriber removes a subscriber from the connection
-func (c *SingleConnection) RemoveSubscriber(streamPath string) {
-	if subscriber, ok := c.Subscribers[streamPath]; ok {
-		subscriber.Stop(task.ErrStopByUser)
-		delete(c.Subscribers, streamPath)
-	}
+func (c *SingleConnection) RemoveSubscriber(remoteStream *RemoteStream) {
+	c.RemoveTrack(remoteStream.videoSender)
+	remoteStream.Stop(task.ErrStopByUser)
 }
 
 // HasSubscriber checks if a stream is already subscribed
 func (c *SingleConnection) HasSubscriber(streamPath string) bool {
-	_, ok := c.Subscribers[streamPath]
-	return ok
+	return c.Has(streamPath)
 }

@@ -7,10 +7,12 @@ import (
 type SignalType string
 
 const (
-	SignalTypeSubscribe SignalType = "subscribe"
-	SignalTypePublish   SignalType = "publish"
-	SignalTypeUnpublish SignalType = "unpublish"
-	SignalTypeAnswer    SignalType = "answer"
+	SignalTypeSubscribe     SignalType = "subscribe"
+	SignalTypeUnsubscribe   SignalType = "unsubscribe"
+	SignalTypePublish       SignalType = "publish"
+	SignalTypeUnpublish     SignalType = "unpublish"
+	SignalTypeAnswer        SignalType = "answer"
+	SignalTypeGetStreamList SignalType = "getStreamList"
 )
 
 type Signal struct {
@@ -55,11 +57,33 @@ type SignalError struct {
 	StreamPath string `json:"streamPath,omitempty"`
 }
 
+type StreamInfo struct {
+	Path   string `json:"path"`
+	Codec  string `json:"codec"`
+	Width  uint32 `json:"width"`
+	Height uint32 `json:"height"`
+	Fps    uint32 `json:"fps"`
+}
+
+type StreamListResponse struct {
+	Type    string       `json:"type"`
+	Streams []StreamInfo `json:"streams"`
+}
+
 func NewErrorSignal(message string, streamPath string) string {
 	s := SignalError{
 		Type:       "error",
 		Message:    message,
 		StreamPath: streamPath,
+	}
+	b, _ := json.Marshal(s)
+	return string(b)
+}
+
+func NewStreamListResponse(streams []StreamInfo) string {
+	s := StreamListResponse{
+		Type:    "streamList",
+		Streams: streams,
 	}
 	b, _ := json.Marshal(s)
 	return string(b)
