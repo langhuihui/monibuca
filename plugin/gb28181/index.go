@@ -232,7 +232,7 @@ func (gb *GB28181Plugin) checkDeviceExpire() (err error) {
 			device.contactHDR = sip.ContactHeader{
 				Address: sip.Uri{
 					User: gb.Serial,
-					Host: device.sipIP,
+					Host: device.SipIP,
 					Port: device.localPort,
 				},
 			}
@@ -241,7 +241,7 @@ func (gb *GB28181Plugin) checkDeviceExpire() (err error) {
 			device.fromHDR = sip.FromHeader{
 				Address: sip.Uri{
 					User: gb.Serial,
-					Host: device.sipIP,
+					Host: device.SipIP,
 					Port: device.localPort,
 				},
 				Params: sip.NewParams(),
@@ -256,8 +256,8 @@ func (gb *GB28181Plugin) checkDeviceExpire() (err error) {
 			}
 
 			// 创建SIP客户端
-			device.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(device.sipIP))
-			device.Info("checkDeviceExpire", "d.sipIP", device.sipIP, "d.localPort", device.localPort, "d.contactHDR", device.contactHDR)
+			device.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(device.SipIP))
+			device.Info("checkDeviceExpire", "d.SipIP", device.SipIP, "d.localPort", device.localPort, "d.contactHDR", device.contactHDR)
 
 			// 设置设备ID的hash值作为任务ID
 			var hash uint32
@@ -533,7 +533,10 @@ func (gb *GB28181Plugin) OnRegister(req *sip.Request, tx sip.ServerTransaction) 
 					d.ID = dbDevice.ID
 				}
 				gb.DB.Save(d)
-
+				d.channels.Range(func(channel *Channel) bool {
+					channel.Status = "OFF"
+					return true
+				})
 				// 批量更新关联的通道状态
 				if err := gb.DB.Model(&gb28181.DeviceChannel{}).Where(&gb28181.DeviceChannel{DeviceDBID: d.ID}).Update("status", "OFF").Error; err != nil {
 					gb.Error("更新通道状态失败", "error", err, "deviceId", d.DeviceID)
@@ -688,7 +691,7 @@ func (gb *GB28181Plugin) RecoverDevice(d *Device, req *sip.Request) {
 		},
 	}
 
-	d.sipIP = myLanIP
+	d.SipIP = myLanIP
 	d.StartTime = time.Now()
 	d.IP = sourceIP
 	d.Port = sourcePort
@@ -697,9 +700,9 @@ func (gb *GB28181Plugin) RecoverDevice(d *Device, req *sip.Request) {
 	d.UpdateTime = time.Now()
 	d.RegisterTime = time.Now()
 	d.Online = true
-	d.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(d.sipIP))
+	d.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(d.SipIP))
 	d.channels.L = new(sync.RWMutex)
-	d.Info("StoreDevice", "source", source, "desc", desc, "device.sipIP", myLanIP, "device.WanIP", myWanIP, "recipient", req.Recipient, "myPort", myPort)
+	d.Info("StoreDevice", "source", source, "desc", desc, "device.SipIP", myLanIP, "device.WanIP", myWanIP, "recipient", req.Recipient, "myPort", myPort)
 
 	if gb.DB != nil {
 		var existing Device
@@ -794,8 +797,8 @@ func (gb *GB28181Plugin) StoreDevice(deviceid string, req *sip.Request) (d *Devi
 		IP:            sourceIP,
 		Port:          sourcePort,
 		HostAddress:   sourceIP + ":" + sourcePortStr,
-		sipIP:         myLanIP,
-		mediaIP:       myWanIP,
+		SipIP:         myLanIP,
+		MediaIP:       myWanIP,
 		Expires:       int(expSec),
 		eventChan:     make(chan any, 10),
 		Recipient: sip.Uri{
@@ -824,9 +827,9 @@ func (gb *GB28181Plugin) StoreDevice(deviceid string, req *sip.Request) (d *Devi
 
 	d.Logger = gb.With("deviceid", deviceid)
 	d.fromHDR.Params.Add("tag", sip.GenerateTagN(16))
-	d.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(d.sipIP))
+	d.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(d.SipIP))
 	d.channels.L = new(sync.RWMutex)
-	d.Info("StoreDevice", "source", source, "desc", desc, "device.sipIP", myLanIP, "device.WanIP", myWanIP, "req.Recipient", req.Recipient, "myPort", myPort, "d.Recipient", d.Recipient)
+	d.Info("StoreDevice", "source", source, "desc", desc, "device.SipIP", myLanIP, "device.WanIP", myWanIP, "req.Recipient", req.Recipient, "myPort", myPort, "d.Recipient", d.Recipient)
 
 	// 使用简单的 hash 函数将设备 ID 转换为 uint32
 	var hash uint32

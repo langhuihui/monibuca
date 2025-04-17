@@ -97,12 +97,12 @@ func (d *Dialog) Start() (err error) {
 		d.MediaPort = d.gb.MediaPort[0]
 	}
 	ssrc := d.CreateSSRC(d.gb.Serial)
-	d.Info("mediaIP is ", device.mediaIP)
+	d.Info("MediaIP is ", device.MediaIP)
 
 	// 构建 SDP 内容
 	sdpInfo := []string{
 		"v=0",
-		fmt.Sprintf("o=%s 0 0 IN IP4 %s", channelId, device.mediaIP),
+		fmt.Sprintf("o=%s 0 0 IN IP4 %s", channelId, device.MediaIP),
 		fmt.Sprintf("s=%s", util.Conditional(d.IsLive(), "Play", "Playback")), // 根据是否有时间参数决定
 	}
 
@@ -112,7 +112,7 @@ func (d *Dialog) Start() (err error) {
 	//}
 
 	// 添加c行
-	sdpInfo = append(sdpInfo, "c=IN IP4 "+device.mediaIP)
+	sdpInfo = append(sdpInfo, "c=IN IP4 "+device.MediaIP)
 
 	// 将字符串时间转换为 Unix 时间戳
 	if !d.IsLive() {
@@ -180,14 +180,14 @@ func (d *Dialog) Start() (err error) {
 	}
 	userAgentHeader := sip.NewHeader("User-Agent", "M7S/"+m7s.Version)
 
-	//customCallID := fmt.Sprintf("%s-%s-%d@%s", device.DeviceID, channelId, time.Now().Unix(), device.sipIP)
-	customCallID := fmt.Sprintf("%s@%s", GenerateCallID(32), device.mediaIP)
+	//customCallID := fmt.Sprintf("%s-%s-%d@%s", device.DeviceID, channelId, time.Now().Unix(), device.SipIP)
+	customCallID := fmt.Sprintf("%s@%s", GenerateCallID(32), device.MediaIP)
 	callID := sip.CallIDHeader(customCallID)
 	viaHeader := sip.ViaHeader{
 		ProtocolName:    "SIP",
 		ProtocolVersion: "2.0",
 		Transport:       "UDP",
-		Host:            device.mediaIP,
+		Host:            device.MediaIP,
 		Port:            device.localPort,
 		Params:          sip.NewParams(),
 	}
@@ -202,7 +202,7 @@ func (d *Dialog) Start() (err error) {
 	contactHDR := sip.ContactHeader{
 		Address: sip.Uri{
 			User: d.gb.Serial,
-			Host: device.sipIP,
+			Host: device.SipIP,
 			Port: device.localPort,
 		},
 	}
@@ -210,7 +210,7 @@ func (d *Dialog) Start() (err error) {
 	fromHDR := sip.FromHeader{
 		Address: sip.Uri{
 			User: d.gb.Serial,
-			Host: device.mediaIP,
+			Host: device.MediaIP,
 			Port: device.localPort,
 		},
 		Params: sip.NewParams(),

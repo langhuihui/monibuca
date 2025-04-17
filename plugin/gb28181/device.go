@@ -58,7 +58,7 @@ type Device struct {
 	SSRCCheck             bool           // 是否开启ssrc校验，默认关闭，开启可以防止串流
 	GeoCoordSys           string         // 地理坐标系， 目前支持 WGS84,GCJ02
 	Password              string         // 密码
-	sipIP                 string         // SIP交互IP（设备访问平台的IP）
+	SipIP                 string         // SIP交互IP（设备访问平台的IP）
 	AsMessageChannel      bool           // 是否作为消息通道
 	BroadcastPushAfterAck bool           // 控制语音对讲流程，释放收到ACK后发流
 	DeletedAt             gorm.DeletedAt `yaml:"-"`
@@ -70,7 +70,7 @@ type Device struct {
 	SN                  int
 	Recipient           sip.Uri                           `gorm:"-:all"`
 	channels            util.Collection[string, *Channel] `gorm:"-:all"`
-	mediaIP             string                            `desc:"收流IP"`
+	MediaIP             string                            `desc:"收流IP"`
 	Longitude, Latitude string                            // 经度,纬度
 	eventChan           chan any
 	client              *sipgo.Client
@@ -426,7 +426,7 @@ func (d *Device) CreateRequest(Method sip.RequestMethod, Recipient any) *sip.Req
 	//	ProtocolName:    "SIP",
 	//	ProtocolVersion: "2.0",
 	//	Transport:       "UDP",
-	//	Host:            d.sipIP,
+	//	Host:            d.SipIP,
 	//	Port:            d.localPort,
 	//	Params:          sip.HeaderParams(sip.NewParams()),
 	//}

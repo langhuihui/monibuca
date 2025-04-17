@@ -105,14 +105,16 @@ func (p *DeleteRecordTask) deleteOldestFile() {
 
 			err := p.DB.Where(&queryRecord).Where("end_time IS NOT NULL").
 				Where("file_path LIKE ?", searchPattern).
-				Order("end_time ASC").Limit(1).Find(&eventRecords).Error
+				Order("end_time ASC").Find(&eventRecords).Error
 			if err == nil {
 				if len(eventRecords) > 0 {
+					p.Info("deleteOldestFile", "found %d records", len(eventRecords))
 					for _, record := range eventRecords {
 						p.Info("deleteOldestFile", "ready to delete oldestfile,ID", record.ID, "create time", record.EndTime, "filepath", record.FilePath)
 						err = os.Remove(record.FilePath)
 						if err != nil {
 							p.Error("deleteOldestFile", "delete file from disk error", err)
+							continue
 						} else {
 							err = p.DB.Delete(&record).Error
 							if err != nil {
