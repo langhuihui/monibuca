@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -133,15 +134,18 @@ func (task *RTSPServer) Go() (err error) {
 
 		case MethodSetup:
 			tr := req.Header.Get("Transport")
-
 			res := &util.Response{
 				Header:  map[string][]string{},
 				Request: req,
 			}
 
-			const transport = "RTP/AVP/TCP;unicast;interleaved="
-			if strings.HasPrefix(tr, transport) {
+			// TCP传输模式
+			const tcpTransport = "RTP/AVP/TCP;unicast;interleaved="
+			// UDP传输模式前缀
+			const udpTransport = "RTP/AVP"
 
+			if strings.HasPrefix(tr, tcpTransport) {
+				// 原有的TCP传输处理逻辑
 				task.Session = util.RandomString(10)
 
 				if sendMode {
@@ -152,11 +156,68 @@ func (task *RTSPServer) Go() (err error) {
 						res.Status = "400 Bad Request"
 					}
 				} else {
-					res.Header.Set("Transport", tr[:len(transport)+3])
+					res.Header.Set("Transport", tr[:len(tcpTransport)+3])
+				}
+			} else if strings.HasPrefix(tr, udpTransport) && strings.Contains(tr, "unicast") && strings.Contains(tr, "client_port=") {
+				// UDP传输处理逻辑
+				task.Session = util.RandomString(10)
+
+				if sendMode {
+					if i := reqTrackID(req); i >= 0 {
+						// 解析客户端请求的端口
+						clientPortsRe := regexp.MustCompile(`client_port=(\d+)-(\d+)`)
+						matches := clientPortsRe.FindStringSubmatch(tr)
+
+						if len(matches) == 3 {
+							clientRTPPort, _ := strconv.Atoi(matches[1])
+							clientRTCPPort, _ := strconv.Atoi(matches[2])
+
+							// 从端口池获取服务器端口
+							serverRTPPort, serverRTCPPort, err := task.conf.GetUDPPort()
+							if err != nil {
+								task.Error("Failed to get UDP port from pool", "error", err)
+								res.Status = "500 Internal Server Error: No available UDP ports"
+								break
+							}
+
+							// 在sender中记录这些端口信息
+							if sender.UDPPorts == nil {
+								sender.UDPPorts = make(map[int][]int)
+							}
+							// 保存 [clientRTP, clientRTCP, serverRTP, serverRTCP]
+							sender.UDPPorts[i] = []int{clientRTPPort, clientRTCPPort, int(serverRTPPort), int(serverRTCPPort)}
+
+							// 记录分配的端口，用于在连接结束时释放
+							if sender.AllocatedUDPPorts == nil {
+								sender.AllocatedUDPPorts = make([]uint16, 0)
+							}
+							sender.AllocatedUDPPorts = append(sender.AllocatedUDPPorts, serverRTPPort)
+
+							// 设置插件引用，用于在Dispose时释放端口
+							sender.RTSPPlugin = task.conf
+
+							// 设置传输响应
+							udpResponse := fmt.Sprintf("RTP/AVP;unicast;client_port=%d-%d;server_port=%d-%d",
+								clientRTPPort, clientRTCPPort, serverRTPPort, serverRTCPPort)
+							res.Header.Set("Transport", udpResponse)
+
+							// 标记为UDP传输模式
+							task.Transport = "UDP"
+						} else {
+							res.Status = "400 Bad Request: Invalid client_port format"
+						}
+					} else {
+						res.Status = "400 Bad Request: Invalid track ID"
+					}
+				} else {
+					res.Status = "400 Bad Request: UDP only supported for PLAY mode"
 				}
 			} else {
 				res.Status = "461 Unsupported transport"
 			}
+
+			// 设置Session头
+			res.Header.Set("Session", task.Session)
 
 			if err = task.WriteResponse(res); err != nil {
 				return

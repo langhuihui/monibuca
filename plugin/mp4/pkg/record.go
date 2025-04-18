@@ -242,8 +242,6 @@ func (r *Recorder) Run() (err error) {
 
 	checkEventRecordStop := func(absTime uint32) (err error) {
 		if duration := int64(absTime); time.Duration(duration)*time.Millisecond >= recordJob.AfterDuration+recordJob.BeforeDuration {
-			now := time.Now()
-			r.writeTailer(now)
 			r.RecordJob.Stop(task.ErrStopByUser)
 		}
 		return
