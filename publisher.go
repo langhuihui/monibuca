@@ -335,19 +335,18 @@ func (p *Publisher) WriteVideo(data IAVFrame) (err error) {
 		p.VideoTrack.Set(t)
 		p.Call(p.trackAdded)
 	}
-	p.fixTimestamp(t, data)
-	defer t.SpeedControl(p.Speed)
-	oldCodecCtx := t.ICodecCtx
 	err = data.Parse(t)
 	if err != nil {
 		return nil
 	}
+	p.fixTimestamp(t, data)
+	defer t.SpeedControl(p.Speed)
+	oldCodecCtx := t.ICodecCtx
 	codecCtxChanged := oldCodecCtx != t.ICodecCtx
 	if err != nil {
 		p.Error("parse", "err", err)
 		return err
 	}
-
 	if t.ICodecCtx == nil {
 		return ErrUnsupportCodec
 	}
@@ -451,6 +450,10 @@ func (p *Publisher) WriteAudio(data IAVFrame) (err error) {
 		p.AudioTrack.Set(t)
 		p.Call(p.trackAdded)
 	}
+	err = data.Parse(t)
+	if err != nil {
+		return
+	}
 	p.fixTimestamp(t, data)
 	defer t.SpeedControl(p.Speed)
 	// 根据丢帧率进行音频帧丢弃
@@ -463,10 +466,6 @@ func (p *Publisher) WriteAudio(data IAVFrame) (err error) {
 		}
 	}
 	oldCodecCtx := t.ICodecCtx
-	err = data.Parse(t)
-	if err != nil {
-		return
-	}
 	codecCtxChanged := oldCodecCtx != t.ICodecCtx
 	if t.ICodecCtx == nil {
 		return ErrUnsupportCodec

@@ -12,6 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"m7s.live/v5/pkg"
 	"m7s.live/v5/pkg/task"
 
 	"m7s.live/v5"
@@ -357,7 +358,9 @@ func (c *NetConnection) Receive(sendMode bool, onReceive func(byte, []byte) erro
 							c.MemoryAllocator.Free(buf)
 							return
 						} else if onReceive != nil {
-							onReceive(channelID, buf)
+							if err := onReceive(channelID, buf); err != nil {
+								c.MemoryAllocator.Free(buf)
+							}
 						} else {
 							c.MemoryAllocator.Free(buf)
 						}
@@ -380,20 +383,36 @@ func (c *NetConnection) Receive(sendMode bool, onReceive func(byte, []byte) erro
 				c.MemoryAllocator.Free(buf)
 				return
 			}
-			if channelID&1 == 0 {
+
+			var needToFree = true // 默认需要释放内存
+			if channelID&1 == 0 { // 偶数通道，RTP数据
 				if onReceive != nil {
-					if onReceive(channelID, buf) != nil {
-						c.MemoryAllocator.Free(buf)
+					err := onReceive(channelID, buf)
+					if err == nil {
+						// 如果回调返回nil，表示内存被接管
+						needToFree = false
+					} else {
+						// 如果回调返回错误，检查是否是丢弃错误
+						needToFree = (err != pkg.ErrDiscard)
 					}
 					continue
 				}
-			} else if onRTCP != nil {
-				if onRTCP(channelID, buf) != nil {
-					c.MemoryAllocator.Free(buf)
+			} else if onRTCP != nil { // 奇数通道，RTCP数据
+				err := onRTCP(channelID, buf)
+				if err == nil {
+					// 如果回调返回nil，表示内存被接管
+					needToFree = false
+				} else {
+					// 如果回调返回错误，检查是否是丢弃错误
+					needToFree = (err != pkg.ErrDiscard)
 				}
 				continue
 			}
-			c.MemoryAllocator.Free(buf)
+
+			// 如果需要释放内存，则释放
+			if needToFree {
+				c.MemoryAllocator.Free(buf)
+			}
 		}
 
 		if ts.After(c.keepaliveTS) {

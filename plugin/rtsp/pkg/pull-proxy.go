@@ -47,8 +47,13 @@ func (d *RTSPPullProxy) Start() (err error) {
 }
 
 func (d *RTSPPullProxy) Dispose() {
-	d.conn.NetConnection.Dispose()
+	if d.conn.NetConnection != nil {
+		_ = d.conn.Teardown()
+		d.conn.NetConnection.Dispose()
+		d.conn.NetConnection = nil
+	}
 	d.TCPPullProxy.Dispose()
+	d.Info("RTSP pull proxy disposed and all resources cleaned up")
 }
 
 func (d *RTSPPullProxy) GetTickInterval() time.Duration {

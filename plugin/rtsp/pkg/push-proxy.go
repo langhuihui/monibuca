@@ -64,3 +64,19 @@ func (d *RTSPPushProxy) Tick(any) {
 		}
 	}
 }
+
+func (d *RTSPPushProxy) Dispose() {
+	// 先停止任何正在进行的操作
+	if d.conn.NetConnection != nil {
+		// 尝试发送TEARDOWN信令
+		_ = d.conn.Teardown()
+
+		// 确保所有资源正确释放
+		d.conn.NetConnection.Dispose()
+		d.conn.NetConnection = nil
+	}
+
+	// 调用父类的Dispose方法
+	d.TCPPushProxy.Dispose()
+	d.Info("RTSP push proxy disposed and all resources cleaned up")
+}

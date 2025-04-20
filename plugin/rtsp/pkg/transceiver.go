@@ -489,7 +489,7 @@ func (r *Receiver) Receive() (err error) {
 					audioFrame.Packets = []*rtp.Packet{packet}
 					audioFrame.RTPCodecParameters = r.AudioCodecParameters
 					audioFrame.SetAllocator(r.MemoryAllocator)
-					return nil
+					return pkg.ErrDiscard
 				} else if packet.Timestamp != r.lastAudioPacketTS {
 					// 时间戳有变化，重置检查
 					r.lastAudioPacketTS = packet.Timestamp
@@ -506,7 +506,7 @@ func (r *Receiver) Receive() (err error) {
 			if len(audioFrame.Packets) == 0 || packet.Timestamp == audioFrame.Packets[0].Timestamp {
 				audioFrame.AddRecycleBytes(buf)
 				audioFrame.Packets = append(audioFrame.Packets, packet)
-				return nil
+				return pkg.ErrDiscard
 			} else {
 				if err = r.WriteAudio(audioFrame); err != nil {
 					return err
@@ -516,7 +516,7 @@ func (r *Receiver) Receive() (err error) {
 				audioFrame.Packets = []*rtp.Packet{packet}
 				audioFrame.RTPCodecParameters = r.AudioCodecParameters
 				audioFrame.SetAllocator(r.MemoryAllocator)
-				return nil
+				return pkg.ErrDiscard
 			}
 		case r.VideoChannelID:
 			if !r.PubVideo {
@@ -533,7 +533,7 @@ func (r *Receiver) Receive() (err error) {
 			if len(videoFrame.Packets) == 0 || packet.Timestamp == videoFrame.Packets[0].Timestamp {
 				videoFrame.AddRecycleBytes(buf)
 				videoFrame.Packets = append(videoFrame.Packets, packet)
-				return nil
+				return pkg.ErrDiscard
 			} else {
 				// t := time.Now()
 				if err = r.WriteVideo(videoFrame); err != nil {
@@ -545,7 +545,7 @@ func (r *Receiver) Receive() (err error) {
 				videoFrame.Packets = []*rtp.Packet{packet}
 				videoFrame.RTPCodecParameters = r.VideoCodecParameters
 				videoFrame.SetAllocator(r.MemoryAllocator)
-				return nil
+				return pkg.ErrDiscard
 			}
 		default:
 
@@ -570,6 +570,18 @@ func (r *Receiver) Receive() (err error) {
 		}
 		return pkg.ErrDiscard
 	})
+}
+
+// 添加Dispose方法，清理资源
+func (r *Receiver) Dispose() {
+	// 清理可能持有的帧资源
+	if r.Publisher != nil {
+		// 如果必要，这里可以添加额外的Publisher清理代码
+	}
+
+	// 调用基类Dispose
+	r.Stream.Dispose()
+	r.Stream.Info("Receiver disposed and resources cleaned up")
 }
 
 // 添加Dispose方法，清理UDP资源

@@ -22,6 +22,22 @@ func (task *RTSPServer) Go() (err error) {
 	var sender *Sender
 	var req *util.Request
 	var sendMode bool
+
+	// 添加延迟函数在方法结束时清理资源
+	defer func() {
+		if receiver != nil {
+			receiver.Dispose()
+		}
+		if sender != nil {
+			sender.Dispose()
+		}
+		// 确保任何残留资源被清理
+		if task.NetConnection != nil {
+			task.NetConnection.Dispose()
+		}
+		task.Info("RTSP connection closed and resources cleaned up")
+	}()
+
 	for {
 		req, err = task.ReadRequest()
 		if err != nil {
@@ -226,20 +242,31 @@ func (task *RTSPServer) Go() (err error) {
 		case MethodRecord:
 			res := &util.Response{Request: req}
 			if err = task.WriteResponse(res); err != nil {
+				task.Error("Failed to write response", "error", err)
 				return
 			}
+			task.Info("Starting RTSP record session")
 			err = receiver.Receive()
+			if err != nil {
+				task.Error("RTSP receive error", "error", err)
+			}
 			return
 		case MethodPlay:
 			res := &util.Response{Request: req}
 			if err = task.WriteResponse(res); err != nil {
+				task.Error("Failed to write response", "error", err)
 				return
 			}
+			task.Info("Starting RTSP play session")
 			err = sender.Send()
+			if err != nil {
+				task.Error("RTSP send error", "error", err)
+			}
 			return
 		case MethodTeardown:
 			res := &util.Response{Request: req}
 			_ = task.WriteResponse(res)
+			task.Info("RTSP teardown received")
 			return
 
 		default:
