@@ -161,6 +161,7 @@ func (task *RTSPServer) Go() (err error) {
 			const udpTransport = "RTP/AVP"
 
 			if strings.HasPrefix(tr, tcpTransport) {
+				task.Debug("into tcp play")
 				// 原有的TCP传输处理逻辑
 				task.Session = util.RandomString(10)
 
@@ -175,6 +176,8 @@ func (task *RTSPServer) Go() (err error) {
 					res.Header.Set("Transport", tr[:len(tcpTransport)+3])
 				}
 			} else if strings.HasPrefix(tr, udpTransport) && strings.Contains(tr, "unicast") && strings.Contains(tr, "client_port=") {
+				task.Debug("into udp play")
+
 				// UDP传输处理逻辑
 				task.Session = util.RandomString(10)
 
@@ -189,13 +192,18 @@ func (task *RTSPServer) Go() (err error) {
 							clientRTCPPort, _ := strconv.Atoi(matches[2])
 
 							// 从端口池获取服务器端口
-							serverRTPPort, serverRTCPPort, err := task.conf.GetUDPPort()
+							serverRTPPort, err := task.conf.GetUDPPort()
 							if err != nil {
 								task.Error("Failed to get UDP port from pool", "error", err)
 								res.Status = "500 Internal Server Error: No available UDP ports"
 								break
 							}
-
+							serverRTCPPort, err := task.conf.GetUDPPort()
+							if err != nil {
+								task.Error("Failed to get UDP port from pool", "error", err)
+								res.Status = "500 Internal Server Error: No available UDP ports"
+								break
+							}
 							// 在sender中记录这些端口信息
 							if sender.UDPPorts == nil {
 								sender.UDPPorts = make(map[int][]int)
@@ -210,7 +218,6 @@ func (task *RTSPServer) Go() (err error) {
 							sender.AllocatedUDPPorts = append(sender.AllocatedUDPPorts, serverRTPPort)
 
 							// 设置插件引用，用于在Dispose时释放端口
-							sender.RTSPPlugin = task.conf
 
 							// 设置传输响应
 							udpResponse := fmt.Sprintf("RTP/AVP;unicast;client_port=%d-%d;server_port=%d-%d",

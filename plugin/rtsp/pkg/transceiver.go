@@ -17,10 +17,9 @@ import (
 type Sender struct {
 	*m7s.Subscriber
 	Stream
-	UDPPorts          map[int][]int                            // 保存媒体索引对应的UDP端口 [clientRTP, clientRTCP, serverRTP, serverRTCP]
-	UDPConns          map[int][]*net.UDPConn                   // 保存媒体索引对应的UDP连接 [RTP发送连接, RTCP发送连接]
-	AllocatedUDPPorts []uint16                                 // 记录从端口池分配的UDP端口，用于连接结束时释放回池
-	RTSPPlugin        interface{ ReleaseUDPPort(port uint16) } // 指向RTSP插件的引用
+	UDPPorts          map[int][]int          // 保存媒体索引对应的UDP端口 [clientRTP, clientRTCP, serverRTP, serverRTCP]
+	UDPConns          map[int][]*net.UDPConn // 保存媒体索引对应的UDP连接 [RTP发送连接, RTCP发送连接]
+	AllocatedUDPPorts []uint16               // 记录从端口池分配的UDP端口，用于连接结束时释放回池
 }
 
 type Receiver struct {
@@ -607,14 +606,6 @@ func (s *Sender) Dispose() {
 			}
 		}
 		s.UDPConns = nil
-	}
-
-	// 释放分配的UDP端口
-	if s.RTSPPlugin != nil && s.AllocatedUDPPorts != nil {
-		for _, port := range s.AllocatedUDPPorts {
-			s.RTSPPlugin.ReleaseUDPPort(port)
-			s.Stream.Debug("Released UDP port back to pool", "port", port)
-		}
 	}
 
 	// 调用基类Dispose
