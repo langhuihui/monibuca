@@ -14,10 +14,7 @@ import (
 
 var _ = m7s.InstallPlugin[RTSPPlugin](m7s.PluginMeta{
 	DefaultYaml: `tcp:
-  listenaddr: :554
-udp:
-  portrange: 20000-30000     # UDP端口范围，用于UDP传输模式
-  portpoolsize: 100          # 预分配的UDP端口池大小`,
+  listenaddr: :554`,
 	NewPuller:    NewPuller,
 	NewPusher:    NewPusher,
 	NewPullProxy: NewPullProxy,

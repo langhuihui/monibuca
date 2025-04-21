@@ -3,12 +3,13 @@ package plugin_gb28181pro
 import (
 	"context"
 	"fmt"
-	"gorm.io/gorm"
 	"net"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
+
+	"gorm.io/gorm"
 
 	"m7s.live/v5"
 
@@ -30,7 +31,7 @@ const (
 )
 
 type Device struct {
-	task.Task             `gorm:"-:all"`
+	task.Job              `gorm:"-:all"`
 	ID                    int64          `gorm:"primaryKey;autoIncrement"` // 数据库自增长ID
 	DeviceID              string         // 设备国标编号
 	Name                  string         // 设备名
@@ -63,7 +64,7 @@ type Device struct {
 	BroadcastPushAfterAck bool           // 控制语音对讲流程，释放收到ACK后发流
 	DeletedAt             gorm.DeletedAt `yaml:"-"`
 	// 删除强关联字段
-	// Channels              []gb28181.DeviceChannel `gorm:"foreignKey:DeviceDBID;references:ID"` // 设备通道列表
+	// channels              []gb28181.DeviceChannel `gorm:"foreignKey:DeviceDBID;references:ID"` // 设备通道列表
 
 	// 保留原有字段
 	Status              DeviceStatus
@@ -87,11 +88,11 @@ func (d *Device) TableName() string {
 
 func (d *Device) Dispose() {
 	if d.plugin.DB != nil {
-		d.Status = DeviceOfflineStatus
 		d.plugin.DB.Save(d)
 		if d.channels.Length > 0 {
 			d.channels.Range(func(channel *Channel) bool {
-				d.plugin.DB.Model(&gb28181.DeviceChannel{}).Where("device_id = ? AND device_db_id = ?", channel.DeviceID, d.ID).Updates(channel.DeviceChannel)
+				d.plugin.DB.Save(channel.DeviceChannel)
+				//d.plugin.DB.Model(&gb28181.DeviceChannel{}).Where("device_id = ? AND device_db_id = ?", channel.DeviceID, d.ID).Updates(channel.DeviceChannel)
 				return true
 			})
 		} else {
@@ -127,7 +128,12 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 		d.KeepaliveInterval = int(time.Since(d.KeepaliveTime).Seconds())
 		d.KeepaliveTime = time.Now()
 		if d.plugin.DB != nil {
-			d.plugin.DB.Save(d)
+			if err := d.plugin.DB.Model(d).Updates(map[string]interface{}{
+				"keepalive_interval": d.KeepaliveInterval,
+				"keepalive_time":     d.KeepaliveTime,
+			}).Error; err != nil {
+				d.Error("update keepalive info failed", "error", err)
+			}
 		}
 	case "Catalog":
 		d.eventChan <- msg.DeviceChannelList
@@ -152,12 +158,16 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 				if err := d.plugin.DB.Save(&c).Error; err != nil {
 					d.Error("save channel failed", "error", err)
 				}
+				d.addOrUpdateChannel(c)
 			}
 			// 更新当前设备的通道数
 			d.ChannelCount = msg.SumNum
 			d.UpdateTime = time.Now()
 			d.Debug("save channel", "deviceid", d.DeviceID)
-			if err := d.plugin.DB.Save(d).Error; err != nil {
+			if err := d.plugin.DB.Model(d).Updates(map[string]interface{}{
+				"channel_count": d.ChannelCount,
+				"update_time":   d.UpdateTime,
+			}).Error; err != nil {
 				d.Error("save device failed", "error", err)
 			}
 		}
@@ -247,7 +257,11 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 	case "DeviceStatus":
 		if d.plugin.DB != nil {
 			d.UpdateTime = time.Now()
-			d.plugin.DB.Save(d)
+			if err := d.plugin.DB.Model(d).Updates(map[string]interface{}{
+				"update_time": d.UpdateTime,
+			}).Error; err != nil {
+				d.Error("save device status failed", "error", err)
+			}
 		}
 	case "DeviceInfo":
 		// 主设备信息
@@ -255,10 +269,18 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 		d.Manufacturer = msg.Manufacturer
 		d.Model = msg.Model
 		d.Firmware = msg.Firmware
+		d.UpdateTime = time.Now()
 		// 更新设备信息到数据库
 		if d.plugin.DB != nil {
-			d.UpdateTime = time.Now()
-			d.plugin.DB.Save(d)
+			if err := d.plugin.DB.Model(d).Updates(map[string]interface{}{
+				"name":         d.Name,
+				"manufacturer": d.Manufacturer,
+				"model":        d.Model,
+				"firmware":     d.Firmware,
+				"update_time":  d.UpdateTime,
+			}).Error; err != nil {
+				d.Error("save device info failed", "error", err)
+			}
 		}
 	case "Alarm":
 		// 创建报警记录
@@ -377,30 +399,30 @@ func (d *Device) Go() (err error) {
 			} else {
 				d.Debug("catalogTick", "response", response.String())
 			}
-		case event := <-d.eventChan:
-			d.Debug("eventChan", "event", event)
-			switch v := event.(type) {
-			case []gb28181.DeviceChannel:
-				for _, c := range v {
-					//当父设备非空且存在时、父设备节点增加通道
-					if c.ParentID != "" {
-						path := strings.Split(c.ParentID, "/")
-						parentId := path[len(path)-1]
-						//如果父ID并非本身所属设备，一般情况下这是因为下级设备上传了目录信息，该信息通常不需要处理。
-						// 暂时不考虑级联目录的实现
-						if d.DeviceID != parentId {
-							if parent, ok := d.plugin.devices.Get(parentId); ok {
-								parent.addOrUpdateChannel(c)
-								continue
-							} else {
-								c.Model = "Directory " + c.Model
-								c.Status = "NoParent"
-							}
-						}
-					}
-					d.addOrUpdateChannel(c)
-				}
-			}
+			//case event := <-d.eventChan:
+			//	d.Debug("eventChan", "event", event)
+			//	switch v := event.(type) {
+			//	case []gb28181.DeviceChannel:
+			//		for _, c := range v {
+			//			//当父设备非空且存在时、父设备节点增加通道
+			//			if c.ParentID != "" {
+			//				path := strings.Split(c.ParentID, "/")
+			//				parentId := path[len(path)-1]
+			//				//如果父ID并非本身所属设备，一般情况下这是因为下级设备上传了目录信息，该信息通常不需要处理。
+			//				// 暂时不考虑级联目录的实现
+			//				if d.DeviceID != parentId {
+			//					if parent, ok := d.plugin.devices.Get(parentId); ok {
+			//						parent.addOrUpdateChannel(c)
+			//						continue
+			//					} else {
+			//						c.Model = "Directory " + c.Model
+			//						c.Status = "NoParent"
+			//					}
+			//				}
+			//			}
+			//			d.addOrUpdateChannel(c)
+			//		}
+			//	}
 		}
 	}
 }

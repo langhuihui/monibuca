@@ -532,24 +532,16 @@ func (gb *GB28181Plugin) OnRegister(req *sip.Request, tx sip.ServerTransaction) 
 				if err := gb.DB.First(&dbDevice, Device{DeviceID: deviceid}).Error; err == nil {
 					d.ID = dbDevice.ID
 				}
-				gb.DB.Save(d)
 				d.channels.Range(func(channel *Channel) bool {
 					channel.Status = "OFF"
 					return true
 				})
-				// 批量更新关联的通道状态
-				if err := gb.DB.Model(&gb28181.DeviceChannel{}).Where(&gb28181.DeviceChannel{DeviceDBID: d.ID}).Update("status", "OFF").Error; err != nil {
-					gb.Error("更新通道状态失败", "error", err, "deviceId", d.DeviceID)
-				} else {
-					gb.Info("更新通道状态成功", "deviceId", d.DeviceID)
-				}
 			}
 			d.Stop(errors.New("unregister"))
 		}
 	} else {
 		if d, ok := gb.devices.Get(deviceid); ok && d.Online {
 			gb.Info("into recoverdevice ,deviceid is ", d.DeviceID)
-			d.Online = true
 			d.Status = DeviceOnlineStatus
 			gb.RecoverDevice(d, req)
 		} else {
@@ -870,8 +862,8 @@ func (gb *GB28181Plugin) StoreDevice(deviceid string, req *sip.Request) (d *Devi
 			gb.DB.Save(d).Omit("create_time")
 			gb.Info("StoreDevice", "type", "更新设备", "deviceId", d.DeviceID)
 		} else {
-			gb.Info("StoreDevice", "type", "新增设备", "deviceId", d.DeviceID)
 			gb.DB.Save(d)
+			gb.Info("StoreDevice", "type", "新增设备", "deviceId", d.DeviceID)
 		}
 	}
 	return
