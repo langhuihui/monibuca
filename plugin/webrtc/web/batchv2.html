@@ -79,6 +79,15 @@
       cursor: pointer;
     }
 
+    .stream-selection-controls {
+      margin-top: 5px;
+    }
+
+    .small-button {
+      padding: 4px 8px;
+      font-size: 12px;
+    }
+
     input,
     select {
       width: 100%;
@@ -147,6 +156,10 @@
         <h4>Available Streams:</h4>
         <label for="streamSelect">Select streams to play:</label>
         <select id="streamSelect" size="5" multiple aria-label="Available streams"></select>
+        <div class="stream-selection-controls">
+          <button type="button" id="selectAllBtn" class="small-button">Select All</button>
+          <button type="button" id="deselectAllBtn" class="small-button">Deselect All</button>
+        </div>
       </div>
 
       <div>
@@ -183,6 +196,8 @@
     const stopPublishBtn = document.getElementById('stopPublishBtn');
     const getStreamsBtn = document.getElementById('getStreamsBtn');
     const playSelectedBtn = document.getElementById('playSelectedBtn');
+    const selectAllBtn = document.getElementById('selectAllBtn');
+    const deselectAllBtn = document.getElementById('deselectAllBtn');
     const publishStreamPath = document.getElementById('publishStreamPath');
     const streamSelect = document.getElementById('streamSelect');
     const streamList = document.getElementById('streamList');
@@ -273,6 +288,8 @@
       stopPublishBtn.disabled = true;
       getStreamsBtn.disabled = true;
       playSelectedBtn.disabled = true;
+      selectAllBtn.disabled = false;
+      deselectAllBtn.disabled = false;
 
       // Clear stream select
       streamSelect.innerHTML = '';
@@ -345,6 +362,8 @@
         startPublishBtn.disabled = false;
         getStreamsBtn.disabled = false;
         playSelectedBtn.disabled = false;
+        selectAllBtn.disabled = false;
+        deselectAllBtn.disabled = false;
       });
 
       client.on('disconnected', () => {
@@ -487,6 +506,28 @@
         updateStreamListUI(); // Ensure the list reflects the new subscriptions immediately
       } catch (error) {
         log(`Failed to subscribe to streams: ${error.message}`, 'error');
+      }
+    });
+
+    // Select All button event handler
+    selectAllBtn.addEventListener('click', () => {
+      if (streamSelect.options.length > 0) {
+        for (let i = 0; i < streamSelect.options.length; i++) {
+          streamSelect.options[i].selected = true;
+        }
+        log('Selected all available streams', 'info');
+      } else {
+        log('No streams available to select', 'warning');
+      }
+    });
+
+    // Deselect All button event handler
+    deselectAllBtn.addEventListener('click', () => {
+      if (streamSelect.options.length > 0) {
+        for (let i = 0; i < streamSelect.options.length; i++) {
+          streamSelect.options[i].selected = false;
+        }
+        log('Deselected all streams', 'info');
       }
     });
 

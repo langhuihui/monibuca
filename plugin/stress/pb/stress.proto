@@ -6,33 +6,15 @@ package stress;
 option go_package="m7s.live/v5/plugin/stress/pb";
 
 service api {
-  rpc PushRTMP (PushRequest) returns (m7s.SuccessResponse) {
+  rpc StartPush (PushRequest) returns (global.SuccessResponse) {
     option (google.api.http) = {
-      post: "/stress/api/push/rtmp/{pushCount}"
+      post: "/stress/api/push/{protocol}/{pushCount}"
       body: "*"
     };
   }
-  rpc PushRTSP (PushRequest) returns (m7s.SuccessResponse) {
+  rpc StartPull (PullRequest) returns (global.SuccessResponse) {
     option (google.api.http) = {
-      post: "/stress/api/push/rtsp/{pushCount}"
-      body: "*"
-    };
-  }
-  rpc PullRTMP (PullRequest) returns (m7s.SuccessResponse) {
-    option (google.api.http) = {
-      post: "/stress/api/pull/rtmp/{pullCount}"
-      body: "*"
-    };
-  }
-  rpc PullRTSP (PullRequest) returns (m7s.SuccessResponse) {
-    option (google.api.http) = {
-      post: "/stress/api/pull/rtsp/{pullCount}"
-      body: "*"
-    };
-  }
-  rpc PullHDL (PullRequest) returns (m7s.SuccessResponse) {
-    option (google.api.http) = {
-      post: "/stress/api/pull/flv/{pullCount}"
+      post: "/stress/api/pull/{protocol}/{pullCount}"
       body: "*"
     };
   }
@@ -41,12 +23,12 @@ service api {
       get: "/stress/api/count"
     };
   }
-  rpc StopPush (google.protobuf.Empty) returns (m7s.SuccessResponse) {
+  rpc StopPush (google.protobuf.Empty) returns (global.SuccessResponse) {
     option (google.api.http) = {
       post: "/stress/api/stop/push"
     };
   }
-  rpc StopPull (google.protobuf.Empty) returns (m7s.SuccessResponse) {
+  rpc StopPull (google.protobuf.Empty) returns (global.SuccessResponse) {
     option (google.api.http) = {
       post: "/stress/api/stop/pull"
     };
@@ -60,11 +42,13 @@ message CountResponse {
 }
 message PushRequest {
   string streamPath = 1;
-  string remoteHost = 2;
-  int32  pushCount = 3;
+  string protocol = 2;
+  string remoteURL = 3;
+  int32  pushCount = 4;
 }
 
 message PullRequest {
   string remoteURL = 1;
-  int32  pullCount = 2;
+  string protocol = 2;
+  int32  pullCount = 3;
 }

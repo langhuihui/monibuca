@@ -36,7 +36,7 @@ type (
 		IdleTimeout       time.Duration   `desc:"空闲(无订阅)超时"`                                                // 空闲(无订阅)超时
 		PauseTimeout      time.Duration   `default:"30s" desc:"暂停超时时间"`                                     // 暂停超时
 		BufferTime        time.Duration   `desc:"缓冲时长，0代表取最近关键帧"`                                           // 缓冲长度(单位：秒)，0代表取最近关键帧
-		Speed             float64         `default:"0" desc:"发送速率"`                                         // 发送速率，0 为不限速
+		Speed             float64         `default:"1" desc:"发送速率"`                                         // 发送速率，0 为不限速
 		Scale             float64         `default:"1" desc:"缩放倍数"`                                         // 缩放倍数
 		MaxFPS            int             `default:"60" desc:"最大FPS"`                                       // 最大FPS
 		Key               string          `desc:"发布鉴权key"`                                                  // 发布鉴权key

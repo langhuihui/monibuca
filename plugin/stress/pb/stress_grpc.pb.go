@@ -24,11 +24,8 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type ApiClient interface {
-	PushRTMP(ctx context.Context, in *PushRequest, opts ...grpc.CallOption) (*pb.SuccessResponse, error)
-	PushRTSP(ctx context.Context, in *PushRequest, opts ...grpc.CallOption) (*pb.SuccessResponse, error)
-	PullRTMP(ctx context.Context, in *PullRequest, opts ...grpc.CallOption) (*pb.SuccessResponse, error)
-	PullRTSP(ctx context.Context, in *PullRequest, opts ...grpc.CallOption) (*pb.SuccessResponse, error)
-	PullHDL(ctx context.Context, in *PullRequest, opts ...grpc.CallOption) (*pb.SuccessResponse, error)
+	StartPush(ctx context.Context, in *PushRequest, opts ...grpc.CallOption) (*pb.SuccessResponse, error)
+	StartPull(ctx context.Context, in *PullRequest, opts ...grpc.CallOption) (*pb.SuccessResponse, error)
 	GetCount(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*CountResponse, error)
 	StopPush(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*pb.SuccessResponse, error)
 	StopPull(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*pb.SuccessResponse, error)
@@ -42,45 +39,18 @@ func NewApiClient(cc grpc.ClientConnInterface) ApiClient {
 	return &apiClient{cc}
 }
 
-func (c *apiClient) PushRTMP(ctx context.Context, in *PushRequest, opts ...grpc.CallOption) (*pb.SuccessResponse, error) {
+func (c *apiClient) StartPush(ctx context.Context, in *PushRequest, opts ...grpc.CallOption) (*pb.SuccessResponse, error) {
 	out := new(pb.SuccessResponse)
-	err := c.cc.Invoke(ctx, "/stress.api/PushRTMP", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/stress.api/StartPush", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *apiClient) PushRTSP(ctx context.Context, in *PushRequest, opts ...grpc.CallOption) (*pb.SuccessResponse, error) {
+func (c *apiClient) StartPull(ctx context.Context, in *PullRequest, opts ...grpc.CallOption) (*pb.SuccessResponse, error) {
 	out := new(pb.SuccessResponse)
-	err := c.cc.Invoke(ctx, "/stress.api/PushRTSP", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *apiClient) PullRTMP(ctx context.Context, in *PullRequest, opts ...grpc.CallOption) (*pb.SuccessResponse, error) {
-	out := new(pb.SuccessResponse)
-	err := c.cc.Invoke(ctx, "/stress.api/PullRTMP", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *apiClient) PullRTSP(ctx context.Context, in *PullRequest, opts ...grpc.CallOption) (*pb.SuccessResponse, error) {
-	out := new(pb.SuccessResponse)
-	err := c.cc.Invoke(ctx, "/stress.api/PullRTSP", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *apiClient) PullHDL(ctx context.Context, in *PullRequest, opts ...grpc.CallOption) (*pb.SuccessResponse, error) {
-	out := new(pb.SuccessResponse)
-	err := c.cc.Invoke(ctx, "/stress.api/PullHDL", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/stress.api/StartPull", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -118,11 +88,8 @@ func (c *apiClient) StopPull(ctx context.Context, in *emptypb.Empty, opts ...grp
 // All implementations must embed UnimplementedApiServer
 // for forward compatibility
 type ApiServer interface {
-	PushRTMP(context.Context, *PushRequest) (*pb.SuccessResponse, error)
-	PushRTSP(context.Context, *PushRequest) (*pb.SuccessResponse, error)
-	PullRTMP(context.Context, *PullRequest) (*pb.SuccessResponse, error)
-	PullRTSP(context.Context, *PullRequest) (*pb.SuccessResponse, error)
-	PullHDL(context.Context, *PullRequest) (*pb.SuccessResponse, error)
+	StartPush(context.Context, *PushRequest) (*pb.SuccessResponse, error)
+	StartPull(context.Context, *PullRequest) (*pb.SuccessResponse, error)
 	GetCount(context.Context, *emptypb.Empty) (*CountResponse, error)
 	StopPush(context.Context, *emptypb.Empty) (*pb.SuccessResponse, error)
 	StopPull(context.Context, *emptypb.Empty) (*pb.SuccessResponse, error)
@@ -133,20 +100,11 @@ type ApiServer interface {
 type UnimplementedApiServer struct {
 }
 
-func (UnimplementedApiServer) PushRTMP(context.Context, *PushRequest) (*pb.SuccessResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method PushRTMP not implemented")
+func (UnimplementedApiServer) StartPush(context.Context, *PushRequest) (*pb.SuccessResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StartPush not implemented")
 }
-func (UnimplementedApiServer) PushRTSP(context.Context, *PushRequest) (*pb.SuccessResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method PushRTSP not implemented")
-}
-func (UnimplementedApiServer) PullRTMP(context.Context, *PullRequest) (*pb.SuccessResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method PullRTMP not implemented")
-}
-func (UnimplementedApiServer) PullRTSP(context.Context, *PullRequest) (*pb.SuccessResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method PullRTSP not implemented")
-}
-func (UnimplementedApiServer) PullHDL(context.Context, *PullRequest) (*pb.SuccessResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method PullHDL not implemented")
+func (UnimplementedApiServer) StartPull(context.Context, *PullRequest) (*pb.SuccessResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StartPull not implemented")
 }
 func (UnimplementedApiServer) GetCount(context.Context, *emptypb.Empty) (*CountResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetCount not implemented")
@@ -170,92 +128,38 @@ func RegisterApiServer(s grpc.ServiceRegistrar, srv ApiServer) {
 	s.RegisterService(&Api_ServiceDesc, srv)
 }
 
-func _Api_PushRTMP_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Api_StartPush_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(PushRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ApiServer).PushRTMP(ctx, in)
+		return srv.(ApiServer).StartPush(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/stress.api/PushRTMP",
+		FullMethod: "/stress.api/StartPush",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ApiServer).PushRTMP(ctx, req.(*PushRequest))
+		return srv.(ApiServer).StartPush(ctx, req.(*PushRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Api_PushRTSP_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(PushRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ApiServer).PushRTSP(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/stress.api/PushRTSP",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ApiServer).PushRTSP(ctx, req.(*PushRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _Api_PullRTMP_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Api_StartPull_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(PullRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ApiServer).PullRTMP(ctx, in)
+		return srv.(ApiServer).StartPull(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/stress.api/PullRTMP",
+		FullMethod: "/stress.api/StartPull",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ApiServer).PullRTMP(ctx, req.(*PullRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _Api_PullRTSP_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(PullRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ApiServer).PullRTSP(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/stress.api/PullRTSP",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ApiServer).PullRTSP(ctx, req.(*PullRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _Api_PullHDL_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(PullRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ApiServer).PullHDL(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/stress.api/PullHDL",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ApiServer).PullHDL(ctx, req.(*PullRequest))
+		return srv.(ApiServer).StartPull(ctx, req.(*PullRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -322,24 +226,12 @@ var Api_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*ApiServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "PushRTMP",
-			Handler:    _Api_PushRTMP_Handler,
+			MethodName: "StartPush",
+			Handler:    _Api_StartPush_Handler,
 		},
 		{
-			MethodName: "PushRTSP",
-			Handler:    _Api_PushRTSP_Handler,
-		},
-		{
-			MethodName: "PullRTMP",
-			Handler:    _Api_PullRTMP_Handler,
-		},
-		{
-			MethodName: "PullRTSP",
-			Handler:    _Api_PullRTSP_Handler,
-		},
-		{
-			MethodName: "PullHDL",
-			Handler:    _Api_PullHDL_Handler,
+			MethodName: "StartPull",
+			Handler:    _Api_StartPull_Handler,
 		},
 		{
 			MethodName: "GetCount",
