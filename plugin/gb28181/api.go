@@ -77,7 +77,7 @@ func (gb *GB28181Plugin) List(ctx context.Context, req *pb.GetDevicesRequest) (*
 	for _, d := range devices {
 		// 查询设备对应的通道
 		var channels []gb28181.DeviceChannel
-		if err := gb.DB.Where(&gb28181.DeviceChannel{DeviceDBID: d.ID}).Find(&channels).Error; err != nil {
+		if err := gb.DB.Where(&gb28181.DeviceChannel{DeviceID: d.DeviceID}).Find(&channels).Error; err != nil {
 			gb.Error("查询通道失败", "error", err)
 			continue
 		}
@@ -85,7 +85,7 @@ func (gb *GB28181Plugin) List(ctx context.Context, req *pb.GetDevicesRequest) (*
 		var pbChannels []*pb.Channel
 		for _, c := range channels {
 			pbChannels = append(pbChannels, &pb.Channel{
-				DeviceID:     c.DeviceID,
+				DeviceID:     c.ChannelID,
 				ParentID:     c.ParentID,
 				Name:         c.Name,
 				Manufacturer: c.Manufacturer,
@@ -106,7 +106,6 @@ func (gb *GB28181Plugin) List(ctx context.Context, req *pb.GetDevicesRequest) (*
 		}
 
 		pbDevices = append(pbDevices, &pb.Device{
-			Id:            d.ID,
 			DeviceID:      d.DeviceID,
 			Name:          d.Name,
 			Manufacturer:  d.Manufacturer,
@@ -265,7 +264,7 @@ func (gb *GB28181Plugin) GetDevices(ctx context.Context, req *pb.GetDevicesReque
 	for _, d := range devices {
 		// 查询设备对应的通道
 		var channels []gb28181.DeviceChannel
-		if err := gb.DB.Where(&gb28181.DeviceChannel{DeviceDBID: d.ID}).Find(&channels).Error; err != nil {
+		if err := gb.DB.Where(&gb28181.DeviceChannel{DeviceID: d.DeviceID}).Find(&channels).Error; err != nil {
 			gb.Error("查询通道失败", "error", err)
 			continue
 		}
@@ -635,7 +634,6 @@ func (gb *GB28181Plugin) GetPlatform(ctx context.Context, req *pb.GetPlatformReq
 
 	// 将数据库模型转换为proto消息
 	resp.Data = &pb.Platform{
-		ID:                      platform.ID,
 		Enable:                  platform.Enable,
 		Name:                    platform.Name,
 		ServerGBId:              platform.ServerGBID,
@@ -700,7 +698,6 @@ func (gb *GB28181Plugin) UpdatePlatform(ctx context.Context, req *pb.Platform) (
 
 	// 从请求中创建一个新的平台模型
 	updatedPlatform := gb28181.PlatformModel{
-		ID:                      req.ID,
 		Enable:                  req.Enable,
 		Name:                    req.Name,
 		ServerGBID:              req.ServerGBId,
@@ -749,7 +746,7 @@ func (gb *GB28181Plugin) UpdatePlatform(ctx context.Context, req *pb.Platform) (
 	// 处理平台启用状态变化
 	if platform.Enable {
 		// 如果存在旧的platform实例，先停止并移除
-		if oldPlatform, ok := gb.platforms.Get(platform.ID); ok {
+		if oldPlatform, ok := gb.platforms.Get(platform.ServerGBID); ok {
 			oldPlatform.Unregister()
 			oldPlatform.Stop(fmt.Errorf("platform updated"))
 			gb.platforms.Remove(oldPlatform)
@@ -760,7 +757,7 @@ func (gb *GB28181Plugin) UpdatePlatform(ctx context.Context, req *pb.Platform) (
 		gb.AddTask(platformInstance)
 	} else {
 		// 如果平台被禁用，停止并移除旧的platform实例
-		if oldPlatform, ok := gb.platforms.Get(platform.ID); ok {
+		if oldPlatform, ok := gb.platforms.Get(platform.ServerGBID); ok {
 			oldPlatform.Unregister()
 			oldPlatform.Stop(fmt.Errorf("platform disabled"))
 			gb.platforms.Remove(oldPlatform)
@@ -848,7 +845,6 @@ func (gb *GB28181Plugin) ListPlatforms(ctx context.Context, req *pb.ListPlatform
 	var pbPlatforms []*pb.Platform
 	for _, p := range platforms {
 		pbPlatforms = append(pbPlatforms, &pb.Platform{
-			ID:                      p.ID,
 			Enable:                  p.Enable,
 			Name:                    p.Name,
 			ServerGBId:              p.ServerGBID,
@@ -1271,8 +1267,8 @@ func (gb *GB28181Plugin) AddPlatformChannel(ctx context.Context, req *pb.AddPlat
 	for _, channelId := range req.ChannelIds {
 		// 创建新的平台通道记录
 		platformChannel := &gb28181.PlatformChannel{
-			PlatformId:      int(req.PlatformId),
-			DeviceChannelId: int(channelId),
+			PlatformServerGBID: req.PlatformId,
+			ChannelDBID:        channelId,
 		}
 
 		// 插入记录
@@ -1308,10 +1304,7 @@ func (gb *GB28181Plugin) Recording(ctx context.Context, req *pb.RecordingRequest
 	}
 
 	// 1. 先在 platforms 中查找设备
-	platform, found := gb.platforms.Find(func(p *Platform) bool {
-		return p.PlatformModel.ServerGBID == req.DeviceId
-	})
-	if found {
+	if platform, ok := gb.platforms.Get(req.DeviceId); ok {
 		if gb.DB == nil {
 			resp.Code = 500
 			resp.Message = "数据库未初始化"
@@ -1324,12 +1317,11 @@ func (gb *GB28181Plugin) Recording(ctx context.Context, req *pb.RecordingRequest
 			ChannelID string
 		}
 		err := gb.DB.Raw(`
-			SELECT dg.device_id, cg.device_id as channelid 
-			FROM platform_gb28181pro pg
-			LEFT JOIN platform_channel_gb28181pro pcg on pcg.platform_id = pg.id
-			LEFT JOIN channel_gb28181pro cg on cg.id = pcg.device_channel_id
-			LEFT JOIN device_gb28181pro dg on dg.id = cg.device_db_id
-			WHERE pg.device_gb_id = ? AND cg.device_id = ?`,
+			SELECT gc.device_id, gc.channel_id as channelid 
+			FROM gb28181_platform gp
+			LEFT JOIN gb28181_platform_channel gpc on gpc.platform_server_gb_id = pg.server_gb_id
+			LEFT JOIN gb28181_channel gc on gc.id = gpc.channel_db_id
+			WHERE gp.device_gb_id = ? AND gc.channel_id = ?`,
 			req.DeviceId, req.ChannelId,
 		).Scan(&result).Error
 
@@ -1375,7 +1367,7 @@ func (gb *GB28181Plugin) Recording(ctx context.Context, req *pb.RecordingRequest
 			"platformChannelId", req.ChannelId,
 			"actualDeviceId", result.DeviceID,
 			"actualChannelId", result.ChannelID,
-			"platformId", platform.PlatformModel.ID,
+			"ServerGBID", platform.PlatformModel.ServerGBID,
 			"response", response.String())
 	} else {
 		// 2. 如果在平台中没找到，则在本地设备中查找
@@ -1431,10 +1423,7 @@ func (gb *GB28181Plugin) GetSnap(ctx context.Context, req *pb.GetSnapRequest) (*
 	}
 
 	// 1. 先在 platforms 中查找设备
-	platform, found := gb.platforms.Find(func(p *Platform) bool {
-		return p.PlatformModel.ServerGBID == req.DeviceId
-	})
-	if found {
+	if platform, ok := gb.platforms.Get(req.DeviceId); ok {
 		if gb.DB == nil {
 			resp.Code = 500
 			resp.Message = "数据库未初始化"
@@ -1447,12 +1436,11 @@ func (gb *GB28181Plugin) GetSnap(ctx context.Context, req *pb.GetSnapRequest) (*
 			ChannelID string
 		}
 		err := gb.DB.Raw(`
-			SELECT dg.device_id, cg.device_id as channelid 
-			FROM platform_gb28181pro pg
-			LEFT JOIN platform_channel_gb28181pro pcg on pcg.platform_id = pg.id
-			LEFT JOIN channel_gb28181pro cg on cg.id = pcg.device_channel_id
-			LEFT JOIN device_gb28181pro dg on dg.id = cg.device_db_id
-			WHERE pg.device_gb_id = ? AND cg.device_id = ?`,
+			SELECT gc.device_id, gc.channel_id as channelid 
+			FROM gb28181_platform gp
+			LEFT JOIN gb28181_platform_channel gpc on gpc.platform_server_gb_id = pg.server_gb_id
+			LEFT JOIN gb28181_channel gc on gc.id = gpc.channel_db_id
+			WHERE gp.device_gb_id = ? AND gc.channel_id = ?`,
 			req.DeviceId, req.ChannelId,
 		).Scan(&result).Error
 
@@ -1508,7 +1496,7 @@ func (gb *GB28181Plugin) GetSnap(ctx context.Context, req *pb.GetSnapRequest) (*
 			"platformChannelId", req.ChannelId,
 			"actualDeviceId", result.DeviceID,
 			"actualChannelId", result.ChannelID,
-			"platformId", platform.PlatformModel.ID,
+			"ServerGBID", platform.PlatformModel.ServerGBID,
 			"response", response.String())
 
 	} else {
@@ -1779,6 +1767,505 @@ func (gb *GB28181Plugin) GetGroups(ctx context.Context, req *pb.GetGroupsRequest
 	}
 
 	resp.List = pbGroups
+	resp.Code = 0
+	resp.Message = "success"
+	return resp, nil
+}
+
+// AddGroup 实现添加分组功能
+func (gb *GB28181Plugin) AddGroup(ctx context.Context, req *pb.Group) (*pb.BaseResponse, error) {
+	resp := &pb.BaseResponse{}
+
+	// 检查数据库连接
+	if gb.DB == nil {
+		resp.Code = 500
+		resp.Message = "数据库未初始化"
+		return resp, nil
+	}
+
+	// 验证参数
+	if req.Name == "" {
+		resp.Code = 400
+		resp.Message = "分组名称不能为空"
+		return resp, nil
+	}
+
+	// 禁止添加pid为0的分组，保证只有一个根组织
+	if req.Pid == 0 {
+		resp.Code = 400
+		resp.Message = "不能添加根级组织，系统已有一个根组织"
+		return resp, nil
+	}
+
+	// 创建新的分组实例
+	now := time.Now()
+	group := &gb28181.GroupsModel{
+		Name:       req.Name,
+		PID:        int(req.Pid),
+		CreateTime: now,
+		UpdateTime: now,
+	}
+
+	// 检查父分组是否存在
+	var parentGroup gb28181.GroupsModel
+	if err := gb.DB.First(&parentGroup, req.Pid).Error; err != nil {
+		resp.Code = 404
+		resp.Message = fmt.Sprintf("父分组不存在: %v", err)
+		return resp, nil
+	}
+	// 设置新分组的level为父分组level+1
+	group.Level = parentGroup.Level + 1
+
+	// 保存到数据库
+	if err := gb.DB.Create(group).Error; err != nil {
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("创建分组失败: %v", err)
+		return resp, nil
+	}
+
+	// 返回成功响应
+	resp.Code = 0
+	resp.Message = "分组创建成功"
+	return resp, nil
+}
+
+// UpdateGroup 实现更新分组功能
+func (gb *GB28181Plugin) UpdateGroup(ctx context.Context, req *pb.Group) (*pb.BaseResponse, error) {
+	resp := &pb.BaseResponse{}
+
+	// 检查数据库连接
+	if gb.DB == nil {
+		resp.Code = 500
+		resp.Message = "数据库未初始化"
+		return resp, nil
+	}
+
+	// 验证参数
+	if req.Id <= 0 {
+		resp.Code = 400
+		resp.Message = "分组ID不能为空"
+		return resp, nil
+	}
+
+	if req.Name == "" {
+		resp.Code = 400
+		resp.Message = "分组名称不能为空"
+		return resp, nil
+	}
+
+	// 禁止将分组改为根组织
+	if req.Pid == 0 {
+		resp.Code = 400
+		resp.Message = "不能修改为根级组织，系统已有一个根组织"
+		return resp, nil
+	}
+
+	// 查询现有分组
+	var existingGroup gb28181.GroupsModel
+	if err := gb.DB.First(&existingGroup, req.Id).Error; err != nil {
+		resp.Code = 404
+		resp.Message = fmt.Sprintf("分组不存在: %v", err)
+		return resp, nil
+	}
+
+	// 检查是否为根组织，根组织的特殊处理
+	if existingGroup.PID == 0 && existingGroup.Level == 0 {
+		resp.Code = 400
+		resp.Message = "根组织不能被修改"
+		return resp, nil
+	}
+
+	// 如果父ID改变，需要检查新父分组是否存在
+	var newLevel int
+	if int(req.Pid) != existingGroup.PID {
+		var parentGroup gb28181.GroupsModel
+		if err := gb.DB.First(&parentGroup, req.Pid).Error; err != nil {
+			resp.Code = 404
+			resp.Message = fmt.Sprintf("父分组不存在: %v", err)
+			return resp, nil
+		}
+
+		// 检查是否会导致循环引用（不能将一个分组的父级设置为其自身或其子级）
+		if req.Id == req.Pid {
+			resp.Code = 400
+			resp.Message = "不能将分组的父级设置为其自身"
+			return resp, nil
+		}
+
+		// 检查是否会导致循环引用（不能将一个分组的父级设置为其子级）
+		var childGroups []gb28181.GroupsModel
+		if err := gb.DB.Where("pid = ?", req.Id).Find(&childGroups).Error; err != nil {
+			resp.Code = 500
+			resp.Message = fmt.Sprintf("查询子分组失败: %v", err)
+			return resp, nil
+		}
+
+		for _, child := range childGroups {
+			if child.ID == int(req.Pid) {
+				resp.Code = 400
+				resp.Message = "不能将分组的父级设置为其子级"
+				return resp, nil
+			}
+		}
+
+		// 设置新的level值
+		newLevel = parentGroup.Level + 1
+	} else {
+		// 如果父ID未改变，保持原有level
+		newLevel = existingGroup.Level
+	}
+
+	// 更新分组信息
+	updates := map[string]interface{}{
+		"name":        req.Name,
+		"pid":         req.Pid,
+		"level":       newLevel,
+		"update_time": time.Now(),
+	}
+
+	// 执行更新
+	if err := gb.DB.Model(&existingGroup).Updates(updates).Error; err != nil {
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("更新分组失败: %v", err)
+		return resp, nil
+	}
+
+	// 如果分组的父ID发生变化且有子分组，需要递归更新所有子分组的level
+	if int(req.Pid) != existingGroup.PID {
+		// 更新所有子分组的level
+		if err := gb.updateChildLevels(int(req.Id), newLevel); err != nil {
+			gb.Error("更新子分组level失败", "error", err)
+			// 这里不返回错误，因为主要更新已经成功
+		}
+	}
+
+	resp.Code = 0
+	resp.Message = "分组更新成功"
+	return resp, nil
+}
+
+// updateChildLevels 递归更新子分组的level值
+func (gb *GB28181Plugin) updateChildLevels(parentID int, parentLevel int) error {
+	// 查询所有直接子分组
+	var childGroups []gb28181.GroupsModel
+	if err := gb.DB.Where("pid = ?", parentID).Find(&childGroups).Error; err != nil {
+		return err
+	}
+
+	// 没有子分组，直接返回
+	if len(childGroups) == 0 {
+		return nil
+	}
+
+	// 更新每个子分组的level，并递归更新它们的子分组
+	for _, child := range childGroups {
+		newLevel := parentLevel + 1
+
+		// 更新当前子分组的level
+		if err := gb.DB.Model(&child).Update("level", newLevel).Error; err != nil {
+			return err
+		}
+
+		// 递归更新其子分组
+		if err := gb.updateChildLevels(child.ID, newLevel); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// AddGroupChannel 添加通道到分组
+func (gb *GB28181Plugin) AddGroupChannel(ctx context.Context, req *pb.AddGroupChannelRequest) (*pb.BaseResponse, error) {
+	if gb.DB == nil {
+		return &pb.BaseResponse{Code: 500, Message: "数据库未初始化"}, nil
+	}
+
+	// 开始事务
+	tx := gb.DB.Begin()
+
+	// 先删除该分组下的所有通道关联
+	if err := tx.Where("group_id = ?", req.GroupId).Delete(&gb28181.GroupsChannelModel{}).Error; err != nil {
+		tx.Rollback()
+		return &pb.BaseResponse{Code: 500, Message: fmt.Sprintf("删除分组下的所有通道关联失败: %v", err)}, nil
+	}
+
+	// 遍历通道列表，为每个通道创建新的关联
+	for _, channel := range req.Channels {
+		newGroupChannel := &gb28181.GroupsChannelModel{
+			GroupID:   int(req.GroupId),
+			ChannelID: channel.ChannelId,
+			DeviceID:  channel.DeviceId,
+		}
+
+		if err := tx.Create(newGroupChannel).Error; err != nil {
+			tx.Rollback()
+			return &pb.BaseResponse{Code: 500, Message: fmt.Sprintf("创建分组通道关联失败: %v", err)}, nil
+		}
+	}
+
+	// 提交事务
+	if err := tx.Commit().Error; err != nil {
+		return &pb.BaseResponse{Code: 500, Message: fmt.Sprintf("提交事务失败: %v", err)}, nil
+	}
+
+	return &pb.BaseResponse{Code: 200, Message: "添加分组通道关联成功"}, nil
+}
+
+// PlaybackPause 实现回放暂停功能
+func (gb *GB28181Plugin) PlaybackPause(ctx context.Context, req *pb.PlaybackPauseRequest) (*pb.BaseResponse, error) {
+	resp := &pb.BaseResponse{}
+
+	// 参数校验
+	if req.StreamPath == "" {
+		resp.Code = 400
+		resp.Message = "流路径不能为空"
+		return resp, nil
+	}
+
+	// 查找对应的dialog
+	dialog, ok := gb.dialogs.Find(func(d *Dialog) bool {
+		return d.pullCtx.StreamPath == req.StreamPath
+	})
+	if !ok {
+		resp.Code = 404
+		resp.Message = "未找到对应的回放会话"
+		return resp, nil
+	}
+
+	// 构建RTSP PAUSE消息内容
+	content := strings.Builder{}
+	content.WriteString("PAUSE RTSP/1.0\r\n")
+	content.WriteString(fmt.Sprintf("CSeq: %d\r\n", int(time.Now().UnixNano()/1e6%1000000)))
+	content.WriteString("PauseTime: now\r\n")
+
+	// 创建INFO请求
+	request := sip.NewRequest(sip.INFO, dialog.session.InviteRequest.Recipient)
+	request.SetBody([]byte(content.String()))
+	contentType := sip.ContentTypeHeader("Application/MANSRTSP")
+	request.AppendHeader(&contentType)
+
+	// 发送请求
+	_, err := dialog.session.TransactionRequest(ctx, request)
+	if err != nil {
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("发送暂停请求失败: %v", err)
+		return resp, nil
+	}
+	gb.Server.Streams.Call(func() error {
+		if s, ok := gb.Server.Streams.Get(req.StreamPath); ok {
+			s.Pause()
+		}
+		return nil
+	})
+	gb.Info("暂停回放",
+		"streampath", req.StreamPath)
+
+	resp.Code = 0
+	resp.Message = "success"
+	return resp, nil
+}
+
+// PlaybackResume 实现回放恢复功能
+func (gb *GB28181Plugin) PlaybackResume(ctx context.Context, req *pb.PlaybackResumeRequest) (*pb.BaseResponse, error) {
+	resp := &pb.BaseResponse{}
+
+	// 参数校验
+	if req.StreamPath == "" {
+		resp.Code = 400
+		resp.Message = "流路径不能为空"
+		return resp, nil
+	}
+
+	// 查找对应的dialog
+	dialog, ok := gb.dialogs.Find(func(d *Dialog) bool {
+		return d.pullCtx.StreamPath == req.StreamPath
+	})
+	if !ok {
+		resp.Code = 404
+		resp.Message = "未找到对应的回放会话"
+		return resp, nil
+	}
+
+	// 构建RTSP PLAY消息内容
+	content := strings.Builder{}
+	content.WriteString("PLAY RTSP/1.0\r\n")
+	content.WriteString(fmt.Sprintf("CSeq: %d\r\n", int(time.Now().UnixNano()/1e6%1000000)))
+	content.WriteString("Range: npt=now-\r\n")
+
+	// 创建INFO请求
+	request := sip.NewRequest(sip.INFO, dialog.session.InviteRequest.Recipient)
+	request.SetBody([]byte(content.String()))
+	contentType := sip.ContentTypeHeader("Application/MANSRTSP")
+	request.AppendHeader(&contentType)
+
+	// 发送请求
+	_, err := dialog.session.TransactionRequest(ctx, request)
+	if err != nil {
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("发送恢复请求失败: %v", err)
+		return resp, nil
+	}
+	gb.Server.Streams.Call(func() error {
+		if s, ok := gb.Server.Streams.Get(req.StreamPath); ok {
+			s.Resume()
+		}
+		return nil
+	})
+	gb.Info("恢复回放",
+		"streampath", req.StreamPath)
+
+	resp.Code = 0
+	resp.Message = "success"
+	return resp, nil
+}
+
+// PlaybackSeek 实现回放拖动功能
+func (gb *GB28181Plugin) PlaybackSeek(ctx context.Context, req *pb.PlaybackSeekRequest) (*pb.BaseResponse, error) {
+	resp := &pb.BaseResponse{}
+
+	// 参数校验
+	if req.StreamPath == "" {
+		resp.Code = 400
+		resp.Message = "流路径不能为空"
+		return resp, nil
+	}
+
+	// TODO: 实现拖动播放逻辑
+
+	gb.Info("拖动回放",
+		"streampath", req.StreamPath,
+		"seekTime", req.SeekTime)
+
+	resp.Code = 0
+	resp.Message = "success"
+	return resp, nil
+}
+
+// PlaybackSpeed 实现回放倍速功能
+func (gb *GB28181Plugin) PlaybackSpeed(ctx context.Context, req *pb.PlaybackSpeedRequest) (*pb.BaseResponse, error) {
+	resp := &pb.BaseResponse{}
+
+	// 参数校验
+	if req.StreamPath == "" {
+		resp.Code = 400
+		resp.Message = "流路径不能为空"
+		return resp, nil
+	}
+
+	// 查找对应的dialog
+	dialog, ok := gb.dialogs.Find(func(d *Dialog) bool {
+		return d.pullCtx.StreamPath == req.StreamPath
+	})
+	if !ok {
+		resp.Code = 404
+		resp.Message = "未找到对应的回放会话"
+		return resp, nil
+	}
+
+	// 构建RTSP SCALE消息内容
+	content := strings.Builder{}
+	content.WriteString("PLAY RTSP/1.0\r\n")
+	content.WriteString(fmt.Sprintf("CSeq: %d\r\n", int(time.Now().UnixNano()/1e6%1000000)))
+	content.WriteString(fmt.Sprintf("Scale: %f\r\n", req.Speed))
+	content.WriteString("Range: npt=now-\r\n")
+
+	// 创建INFO请求
+	request := sip.NewRequest(sip.INFO, dialog.session.InviteRequest.Recipient)
+	request.SetBody([]byte(content.String()))
+	contentType := sip.ContentTypeHeader("Application/MANSRTSP")
+	request.AppendHeader(&contentType)
+
+	// 发送请求
+	_, err := dialog.session.TransactionRequest(ctx, request)
+
+	gb.Server.Streams.Call(func() error {
+		if s, ok := gb.Server.Streams.Get(req.StreamPath); ok {
+			s.Speed = float64(req.Speed)
+			s.Scale = float64(req.Speed)
+			s.Info("set stream speed", "speed", req.Speed)
+		}
+		return nil
+	})
+	if err != nil {
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("发送倍速请求失败: %v", err)
+		return resp, nil
+	}
+
+	gb.Info("倍速回放",
+		"streampath", req.StreamPath,
+		"speed", req.Speed)
+
+	resp.Code = 0
+	resp.Message = "success"
+	return resp, nil
+}
+
+// RemoveDevice 实现删除设备功能
+func (gb *GB28181Plugin) RemoveDevice(ctx context.Context, req *pb.RemoveDeviceRequest) (*pb.BaseResponse, error) {
+	resp := &pb.BaseResponse{}
+
+	// 参数校验
+	if req.Id == "" {
+		resp.Code = 400
+		resp.Message = "设备ID不能为空"
+		return resp, nil
+	}
+
+	// 检查数据库连接
+	if gb.DB == nil {
+		resp.Code = 500
+		resp.Message = "数据库未初始化"
+		return resp, nil
+	}
+
+	// 开启事务
+	tx := gb.DB.Begin()
+
+	// 先从数据库中查找设备
+	var dbDevice Device
+	if err := tx.Where(&Device{DeviceID: req.Id}).First(&dbDevice).Error; err != nil {
+		tx.Rollback()
+		resp.Code = 404
+		resp.Message = fmt.Sprintf("设备不存在: %v", err)
+		return resp, nil
+	}
+
+	// 使用数据库中的 DeviceID 从内存中查找设备
+	if device, ok := gb.devices.Get(dbDevice.DeviceID); ok {
+		// 停止设备相关任务
+		device.Stop(fmt.Errorf("device removed"))
+		// device.Stop() 会调用 Dispose()，其中已包含从 gb.devices 中移除设备的逻辑
+	}
+
+	// 删除设备关联的所有通道
+	if err := tx.Where(&gb28181.DeviceChannel{DeviceID: dbDevice.DeviceID}).Delete(&gb28181.DeviceChannel{}).Error; err != nil {
+		tx.Rollback()
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("删除设备通道失败: %v", err)
+		return resp, nil
+	}
+
+	// 删除设备
+	if err := tx.Delete(&dbDevice).Error; err != nil {
+		tx.Rollback()
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("删除设备失败: %v", err)
+		return resp, nil
+	}
+
+	// 提交事务
+	if err := tx.Commit().Error; err != nil {
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("提交事务失败: %v", err)
+		return resp, nil
+	}
+
+	gb.Info("删除设备成功",
+		"deviceId", dbDevice.DeviceID,
+		"deviceName", dbDevice.Name)
+
 	resp.Code = 0
 	resp.Message = "success"
 	return resp, nil

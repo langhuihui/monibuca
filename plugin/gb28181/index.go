@@ -54,11 +54,11 @@ type GB28181Plugin struct {
 	devices        util.Collection[string, *Device]
 	dialogs        util.Collection[uint32, *Dialog]
 	forwardDialogs util.Collection[uint32, *ForwardDialog]
-	platforms      util.Collection[uint32, *Platform]
+	platforms      util.Collection[string, *Platform]
 	tcpPorts       chan uint16
 	sipPorts       []int
-	sipIP          string `desc:"sip发送命令的IP，一般是本地IP，多网卡时需要配置正确的IP"`
-	mediaIP        string `desc:"流媒体IP，用于接收流"`
+	SipIP          string `desc:"sip发送命令的IP，一般是本地IP，多网卡时需要配置正确的IP"`
+	MediaIP        string `desc:"流媒体IP，用于接收流"`
 }
 
 var _ = m7s.InstallPlugin[GB28181Plugin](m7s.PluginMeta{
@@ -273,7 +273,7 @@ func (gb *GB28181Plugin) checkDeviceExpire() (err error) {
 			device.channels.OnAdd(func(c *Channel) {
 				if absDevice, ok := gb.Server.PullProxies.Find(func(absDevice m7s.IPullProxy) bool {
 					conf := absDevice.GetConfig()
-					return conf.Type == "gb28181" && conf.URL == fmt.Sprintf("%s/%s", device.DeviceID, c.DeviceID)
+					return conf.Type == "gb28181" && conf.URL == fmt.Sprintf("%s/%s", device.DeviceID, c.ChannelID)
 				}); ok {
 					c.PullProxyTask = absDevice.(*PullProxy)
 					absDevice.ChangeStatus(m7s.PullProxyStatusOnline)
@@ -292,13 +292,13 @@ func (gb *GB28181Plugin) checkDeviceExpire() (err error) {
 
 			// 加载设备的通道
 			var channels []gb28181.DeviceChannel
-			if err := gb.DB.Where(&gb28181.DeviceChannel{DeviceDBID: device.ID}).Find(&channels).Error; err != nil {
+			if err := gb.DB.Where(&gb28181.DeviceChannel{DeviceID: device.DeviceID}).Find(&channels).Error; err != nil {
 				gb.Error("加载通道失败", "error", err, "deviceId", device.DeviceID)
 				continue
 			}
 
 			// 更新设备状态到数据库
-			if err := gb.DB.Model(&Device{}).Where(&Device{ID: device.ID}).Updates(map[string]interface{}{
+			if err := gb.DB.Model(&Device{}).Where(&Device{DeviceID: device.DeviceID}).Updates(map[string]interface{}{
 				"online": device.Online,
 				"status": device.Status,
 			}).Error; err != nil {
@@ -369,7 +369,7 @@ func (gb *GB28181Plugin) checkPlatform() {
 		//}
 		// 添加到任务系统
 		gb.AddTask(platform)
-		gb.Info("平台初始化完成", "ID", platformModel.ID, "Name", platformModel.Name)
+		gb.Info("平台初始化完成", "ID", platformModel.ServerGBID, "Name", platformModel.Name)
 	}
 }
 
@@ -618,7 +618,7 @@ func (gb *GB28181Plugin) OnMessage(req *sip.Request, tx sip.ServerTransaction) {
 		}
 	} else {
 		var platform *Platform
-		if platformtmp, ok := gb.platforms.Get(p.ID); !ok {
+		if platformtmp, ok := gb.platforms.Get(p.ServerGBID); !ok {
 			// 创建 Platform 实例
 			platform = NewPlatform(p, gb, false)
 		} else {
@@ -662,11 +662,11 @@ func (gb *GB28181Plugin) RecoverDevice(d *Device, req *sip.Request) {
 		}
 	}
 
-	if gb.mediaIP != "" {
-		myWanIP = gb.mediaIP
+	if gb.MediaIP != "" {
+		myWanIP = gb.MediaIP
 	}
-	if gb.sipIP != "" {
-		myLanIP = gb.sipIP
+	if gb.SipIP != "" {
+		myLanIP = gb.SipIP
 	}
 	// 设置 Recipient
 	d.Recipient = sip.Uri{
@@ -766,11 +766,11 @@ func (gb *GB28181Plugin) StoreDevice(deviceid string, req *sip.Request) (d *Devi
 		}
 	}
 
-	if gb.mediaIP != "" {
-		myWanIP = gb.mediaIP
+	if gb.MediaIP != "" {
+		myWanIP = gb.MediaIP
 	}
-	if gb.sipIP != "" {
-		myLanIP = gb.sipIP
+	if gb.SipIP != "" {
+		myLanIP = gb.SipIP
 	}
 
 	now := time.Now()
@@ -976,7 +976,7 @@ func (gb *GB28181Plugin) OnInvite(req *sip.Request, tx sip.ServerTransaction) {
 		result := gb.DB.Where("server_gb_id = ?", inviteInfo.RequesterId).First(&platformModel)
 		if result.Error == nil {
 			// 数据库中找到平台，根据平台ID从运行时实例中查找
-			if platformTmp, platformFound := gb.platforms.Get(platformModel.ID); !platformFound {
+			if platformTmp, platformFound := gb.platforms.Get(platformModel.ServerGBID); !platformFound {
 				gb.Error("OnInvite", "error", "platform found in DB but not in runtime", "platformId", inviteInfo.RequesterId)
 				_ = tx.Respond(sip.NewResponseFromRequest(req, sip.StatusNotFound, "Platform Not Found In Runtime", nil))
 				return
@@ -986,90 +986,39 @@ func (gb *GB28181Plugin) OnInvite(req *sip.Request, tx sip.ServerTransaction) {
 
 			gb.Info("OnInvite", "action", "platform found", "platformId", inviteInfo.RequesterId, "platformName", platform.PlatformModel.Name)
 
-			// 查询平台下是否有该通道
-			// 根据Java代码中的 channelService.queryOneWithPlatform 逻辑
-			var commonGBChannels []gb28181.CommonGBChannel
+			// 使用GORM的模型查询方式，更加符合GORM的使用习惯
+			// 默认情况下GORM会自动处理软删除，只查询未删除的记录
+			var deviceChannels []gb28181.DeviceChannel
+			channelResult := gb.DB.Model(&gb28181.DeviceChannel{}).
+				Joins("LEFT JOIN gb28181_platform_channel ON gb28181_channel.id = gb28181_platform_channel.channel_db_id").
+				Where("gb28181_platform_channel.platform_server_gb_id = ? AND gb28181_channel.channel_id = ?",
+					platform.PlatformModel.ServerGBID, inviteInfo.TargetChannelId).
+				Order("gb28181_channel.id").
+				Find(&deviceChannels)
 
-			// 使用类似Java代码中queryOneWithPlatform的SQL查询
-			// 进行JOIN查询，查找平台ID和通道ID匹配的记录
-			query := `
-				SELECT
-					wdc.id as gb_id,
-					wdc.device_db_id as gb_device_db_id,
-					wdc.stream_push_id,
-					wdc.stream_proxy_id,
-					wdc.create_time,
-					wdc.update_time,
-					COALESCE(NULLIF(wpgc.custom_device_id, ''), NULLIF(wdc.gb_device_id, ''), NULLIF(wdc.device_id, '')) as gb_device_id,
-					COALESCE(NULLIF(wpgc.custom_name, ''), NULLIF(wdc.gb_name, ''), NULLIF(wdc.name, '')) as gb_name,
-					COALESCE(NULLIF(wpgc.custom_manufacturer, ''), NULLIF(wdc.gb_manufacturer, ''), NULLIF(wdc.manufacturer, '')) as gb_manufacturer,
-					COALESCE(NULLIF(wpgc.custom_model, ''), NULLIF(wdc.gb_model, ''), NULLIF(wdc.model, '')) as gb_model,
-					COALESCE(NULLIF(wpgc.custom_owner, ''), NULLIF(wdc.gb_owner, ''), NULLIF(wdc.owner, '')) as gb_owner,
-					COALESCE(NULLIF(wpgc.custom_civil_code, ''), NULLIF(wdc.gb_civil_code, ''), NULLIF(wdc.civil_code, '')) as gb_civil_code,
-					COALESCE(NULLIF(wpgc.custom_block, ''), NULLIF(wdc.gb_block, ''), NULLIF(wdc.block, '')) as gb_block,
-					COALESCE(NULLIF(wpgc.custom_address, ''), NULLIF(wdc.gb_address, ''), NULLIF(wdc.address, '')) as gb_address,
-					COALESCE(NULLIF(wpgc.custom_parental, ''), NULLIF(wdc.gb_parental, ''), NULLIF(wdc.parental, '')) as gb_parental,
-					COALESCE(NULLIF(wpgc.custom_parent_id, ''), NULLIF(wdc.gb_parent_id, ''), NULLIF(wdc.parent_id, '')) as gb_parent_id,
-					COALESCE(NULLIF(wpgc.custom_safety_way, ''), NULLIF(wdc.gb_safety_way, ''), NULLIF(wdc.safety_way, '')) as gb_safety_way,
-					COALESCE(NULLIF(wpgc.custom_register_way, ''), NULLIF(wdc.gb_register_way, ''), NULLIF(wdc.register_way, '')) as gb_register_way,
-					COALESCE(NULLIF(wpgc.custom_cert_num, ''), NULLIF(wdc.gb_cert_num, ''), NULLIF(wdc.cert_num, '')) as gb_cert_num,
-					COALESCE(NULLIF(wpgc.custom_certifiable, ''), NULLIF(wdc.gb_certifiable, ''), NULLIF(wdc.certifiable, '')) as gb_certifiable,
-					COALESCE(NULLIF(wpgc.custom_err_code, ''), NULLIF(wdc.gb_err_code, ''), NULLIF(wdc.err_code, '')) as gb_err_code,
-					COALESCE(NULLIF(wpgc.custom_end_time, ''), NULLIF(wdc.gb_end_time, ''), NULLIF(wdc.end_time, '')) as gb_end_time,
-					COALESCE(NULLIF(wpgc.custom_secrecy, ''), NULLIF(wdc.gb_secrecy, ''), NULLIF(wdc.secrecy, '')) as gb_secrecy,
-					COALESCE(NULLIF(wpgc.custom_ip_address, ''), NULLIF(wdc.gb_ip_address, ''), NULLIF(wdc.ip_address, '')) as gb_ip_address,
-					COALESCE(NULLIF(wpgc.custom_port, ''), NULLIF(wdc.gb_port, ''), NULLIF(wdc.port, '')) as gb_port,
-					COALESCE(NULLIF(wpgc.custom_password, ''), NULLIF(wdc.gb_password, ''), NULLIF(wdc.password, '')) as gb_password,
-					COALESCE(NULLIF(wpgc.custom_status, ''), NULLIF(wdc.gb_status, ''), NULLIF(wdc.status, '')) as gb_status,
-					COALESCE(NULLIF(wpgc.custom_longitude, ''), NULLIF(wdc.gb_longitude, ''), NULLIF(wdc.longitude, '')) as gb_longitude,
-					COALESCE(NULLIF(wpgc.custom_latitude, ''), NULLIF(wdc.gb_latitude, ''), NULLIF(wdc.latitude, '')) as gb_latitude,
-					COALESCE(NULLIF(wpgc.custom_ptz_type, ''), NULLIF(wdc.gb_ptz_type, ''), NULLIF(wdc.ptz_type, '')) as gb_ptz_type,
-					COALESCE(NULLIF(wpgc.custom_position_type, ''), NULLIF(wdc.gb_position_type, ''), NULLIF(wdc.position_type, '')) as gb_position_type,
-					COALESCE(NULLIF(wpgc.custom_room_type, ''), NULLIF(wdc.gb_room_type, ''), NULLIF(wdc.room_type, '')) as gb_room_type,
-					COALESCE(NULLIF(wpgc.custom_use_type, ''), NULLIF(wdc.gb_use_type, ''), NULLIF(wdc.use_type, '')) as gb_use_type,
-					COALESCE(NULLIF(wpgc.custom_supply_light_type, ''), NULLIF(wdc.gb_supply_light_type, ''), NULLIF(wdc.supply_light_type, '')) as gb_supply_light_type,
-					COALESCE(NULLIF(wpgc.custom_direction_type, ''), NULLIF(wdc.gb_direction_type, ''), NULLIF(wdc.direction_type, '')) as gb_direction_type,
-					COALESCE(NULLIF(wpgc.custom_resolution, ''), NULLIF(wdc.gb_resolution, ''), NULLIF(wdc.resolution, '')) as gb_resolution,
-					COALESCE(NULLIF(wpgc.custom_business_group_id, ''), NULLIF(wdc.gb_business_group_id, ''), NULLIF(wdc.business_group_id, '')) as gb_business_group_id,
-					COALESCE(NULLIF(wpgc.custom_download_speed, ''), NULLIF(wdc.gb_download_speed, ''), NULLIF(wdc.download_speed, '')) as gb_download_speed,
-					COALESCE(NULLIF(wpgc.custom_svc_space_support_mod, ''), NULLIF(wdc.gb_svc_space_support_mod, ''), NULLIF(wdc.svc_space_support_mod, '')) as gb_svc_space_support_mod,
-					COALESCE(NULLIF(wpgc.custom_svc_time_support_mode, ''), NULLIF(wdc.gb_svc_time_support_mode, ''), NULLIF(wdc.svc_time_support_mode, '')) as gb_svc_time_support_mode
-				FROM
-					channel_gb28181pro wdc
-				LEFT JOIN
-					platform_channel_gb28181pro wpgc ON wdc.id = wpgc.device_channel_id
-				WHERE
-					wpgc.platform_id = ? AND
-					COALESCE(NULLIF(wpgc.custom_device_id,''), NULLIF(wdc.gb_device_id,''), NULLIF(wdc.device_id,'')) = ?
-				ORDER BY
-					wdc.id
-			`
-
-			// 执行查询
-			channelResult := gb.DB.Raw(query, platform.PlatformModel.ID, inviteInfo.TargetChannelId).Scan(&commonGBChannels)
-			if channelResult.Error != nil || len(commonGBChannels) == 0 {
+			if channelResult.Error != nil || len(deviceChannels) == 0 {
 				gb.Error("OnInvite", "error", "channel not found", "channelId", inviteInfo.TargetChannelId, "err", channelResult.Error)
 				_ = tx.Respond(sip.NewResponseFromRequest(req, sip.StatusNotFound, "Channel Not Found", nil))
 				return
 			}
 
 			// 找到了通道
-			channel := commonGBChannels[len(commonGBChannels)-1]
-			gb.Info("OnInvite", "action", "channel found", "channelId", channel.GbDeviceID, "channelName", channel.GbName)
+			channel := deviceChannels[len(deviceChannels)-1]
+			gb.Info("OnInvite", "action", "channel found", "channelId", channel.ChannelID, "channelName", channel.Name)
 
 			var channelTmp *Channel
 			if deviceFound, ok := gb.devices.Find(func(device *Device) bool {
-				return device.ID == int64(channel.GbDeviceDbID)
+				return device.DeviceID == channel.DeviceID
 			}); ok {
-				if channelFound, ok := deviceFound.channels.Get(channel.GbDeviceID); ok {
+				if channelFound, ok := deviceFound.channels.Get(channel.ChannelID); ok {
 					channelTmp = channelFound
 				} else {
-					gb.Error("OnInvite", "error", "channel not found memory,channel deviceid is ", channel.GbDeviceID)
+					gb.Error("OnInvite", "error", "channel not found memory,ChannelID is ", channel.ChannelID)
 					_ = tx.Respond(sip.NewResponseFromRequest(req, sip.StatusBadRequest, "SSRC Not Found", nil))
 					return
 				}
 			} else {
-				gb.Error("OnInvite", "error", "device not found memory,device dbid is ", channel.GbDeviceDbID)
+				gb.Error("OnInvite", "error", "device not found memory,deviceID is ", channel.DeviceID)
 				_ = tx.Respond(sip.NewResponseFromRequest(req, sip.StatusBadRequest, "SSRC Not Found", nil))
 				return
 			}
@@ -1116,7 +1065,7 @@ func (gb *GB28181Plugin) OnInvite(req *sip.Request, tx sip.ServerTransaction) {
 			// 构建SDP内容，参考Java代码createSendSdp方法
 			content := []string{
 				"v=0",
-				fmt.Sprintf("o=%s 0 0 IN IP4 %s", channel.GbDeviceID, sdpIP),
+				fmt.Sprintf("o=%s 0 0 IN IP4 %s", channel.ChannelID, sdpIP),
 				fmt.Sprintf("s=%s", inviteInfo.SessionName),
 				fmt.Sprintf("c=IN IP4 %s", sdpIP),
 			}
@@ -1216,7 +1165,7 @@ func (gb *GB28181Plugin) OnInvite(req *sip.Request, tx sip.ServerTransaction) {
 				return
 			}
 
-			gb.Info("OnInvite", "action", "complete", "platformId", inviteInfo.RequesterId, "channelId", channel.GbDeviceID,
+			gb.Info("OnInvite", "action", "complete", "platformId", inviteInfo.RequesterId, "channelId", channel.ChannelID,
 				"ip", inviteInfo.IP, "port", inviteInfo.Port, "tcp", inviteInfo.TCP, "tcpActive", inviteInfo.TCPActive)
 			return
 		} else {
@@ -1243,8 +1192,8 @@ func (gb *GB28181Plugin) OnAck(req *sip.Request, tx sip.ServerTransaction) {
 	if forwardDialog, ok := gb.forwardDialogs.Find(func(dialog *ForwardDialog) bool {
 		return dialog.platformCallId == callID
 	}); ok {
-		pullUrl := fmt.Sprintf("%s/%s", forwardDialog.channel.Device.DeviceID, forwardDialog.channel.DeviceID)
-		streamPath := fmt.Sprintf("platform_%d/%s/%s", time.Now().UnixMilli(), forwardDialog.channel.Device.DeviceID, forwardDialog.channel.DeviceID)
+		pullUrl := fmt.Sprintf("%s/%s", forwardDialog.channel.Device.DeviceID, forwardDialog.channel.ChannelID)
+		streamPath := fmt.Sprintf("platform_%d/%s/%s", time.Now().UnixMilli(), forwardDialog.channel.Device.DeviceID, forwardDialog.channel.ChannelID)
 
 		// 创建配置
 		pullConf := config.Pull{

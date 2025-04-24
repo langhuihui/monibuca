@@ -2,11 +2,10 @@ package gb28181
 
 // PlatformChannel 表示平台通道信息
 type PlatformChannel struct {
-	CommonGBChannel `gorm:"-"` // 通过组合继承 CommonGBChannel 的字段
+	//CommonGBChannel `gorm:"-"` // 通过组合继承 CommonGBChannel 的字段
 
-	Id                             int     // 数据库自增长ID
-	PlatformId                     int     // 平台ID
-	DeviceChannelId                int     // 设备通道ID
+	PlatformServerGBID             string  `gorm:"primaryKey;"`  // 平台ID
+	ChannelDBID                    string  `gorm:"primaryKey;"`  // 设备通道ID
 	CustomDeviceId                 string  `gorm:"default:null"` // 国标-编码
 	CustomName                     string  `gorm:"default:null"` // 国标-名称
 	CustomManufacturer             string  `gorm:"default:null"` // 国标-设备厂商
@@ -63,51 +62,7 @@ type PlatformChannel struct {
 	CustomIndustrialClassification string  // 国标-国民经济行业分类代码
 }
 
-// BuildFromCommonGBChannel 从 CommonGBChannel 构建 PlatformChannel 实例
-func BuildFromCommonGBChannel(common *CommonGBChannel, platformId int) *PlatformChannel {
-	if common == nil {
-		return nil
-	}
-
-	return &PlatformChannel{
-		CommonGBChannel:    *common,
-		PlatformId:         platformId,
-		CustomDeviceId:     common.GbDeviceID,
-		CustomName:         common.GbName,
-		CustomManufacturer: common.GbManufacturer,
-		CustomModel:        common.GbModel,
-		CustomOwner:        common.GbOwner,
-		CustomCivilCode:    common.GbCivilCode,
-		CustomAddress:      common.GbAddress,
-		CustomParental:     common.GbParental,
-		CustomParentId:     common.GbParentID,
-		CustomSafetyWay:    common.GbSafetyWay,
-		CustomRegisterWay:  common.GbRegisterWay,
-		CustomSecrecy:      common.GbSecrecy,
-		CustomStatus:       common.GbStatus,
-	}
-}
-
-// ToCommonGBChannel 将 PlatformChannel 转换为 CommonGBChannel
-func (p *PlatformChannel) ToCommonGBChannel() *CommonGBChannel {
-	return &CommonGBChannel{
-		GbDeviceID:     p.CustomDeviceId,
-		GbName:         p.CustomName,
-		GbManufacturer: p.CustomManufacturer,
-		GbModel:        p.CustomModel,
-		GbOwner:        p.CustomOwner,
-		GbCivilCode:    p.CustomCivilCode,
-		GbAddress:      p.CustomAddress,
-		GbParental:     p.CustomParental,
-		GbParentID:     p.CustomParentId,
-		GbSafetyWay:    p.CustomSafetyWay,
-		GbRegisterWay:  p.CustomRegisterWay,
-		GbSecrecy:      p.CustomSecrecy,
-		GbStatus:       p.CustomStatus,
-	}
-}
-
 // TableName 返回数据库表名
 func (*PlatformChannel) TableName() string {
-	return "platform_channel_gb28181pro"
+	return "gb28181_platform_channel"
 }

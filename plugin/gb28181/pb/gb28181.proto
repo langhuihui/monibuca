@@ -550,34 +550,35 @@ message GetSubChannelsRequest {
 }
 
 message Channel {
-  string DeviceID      =1;
-  string ParentID     =2;
-  string  Name        =3;
-  string Manufacturer =4;
-  string Model =5;
-  string  Owner =6;
-  string CivilCode = 7;
-  string Address = 8;
-  int32 Port = 9;
-  int32 Parental = 10;
-  int32 SafetyWay = 11;
-  int32  RegisterWay = 12;
-  int32 Secrecy     =13;
-  string Status       =14;
-  google.protobuf.Timestamp GpsTime=15;
-  string Longitude = 16;
-  string Latitude = 17;
+  string ID =1;
+  string DeviceID      =2;
+  string ChannelID    =3;
+  string ParentID     =4;
+  string  Name        =5;
+  string Manufacturer =6;
+  string Model =7;
+  string  Owner =8;
+  string CivilCode = 9;
+  string Address = 10;
+  int32 Port = 11;
+  int32 Parental = 12;
+  int32 SafetyWay = 13;
+  int32  RegisterWay = 14;
+  int32 Secrecy     =15;
+  string Status       =16;
+  google.protobuf.Timestamp GpsTime=17;
+  string Longitude = 18;
+  string Latitude = 19;
 }
 
 message Device {
-  int64 id = 1;
-  string DeviceID = 2;
-  string Name = 3;
-  string Manufacturer = 4;
-  string Model = 5;
-  string Longitude = 6;
-  string Latitude = 7;
-  string Status = 8;
+  string DeviceID = 1;
+  string Name = 2;
+  string Manufacturer = 3;
+  string Model = 4;
+  string Longitude = 5;
+  string Latitude = 6;
+  string Status = 7;
   google.protobuf.Timestamp RegisterTime=9;
   google.protobuf.Timestamp UpdateTime=10;
   google.protobuf.Timestamp KeepAliveTime=11;
@@ -983,8 +984,8 @@ message AlarmRecord {
 
 // 添加平台通道请求
 message AddPlatformChannelRequest {
-  int32 platformId = 1;  // 平台ID
-  repeated int32 channelIds = 2;  // 通道ID列表
+  string platformId = 1;  // 平台ID
+  repeated string channelIds = 2;  // 通道ID列表
 }
 
 // 录制控制请求

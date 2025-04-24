@@ -9,10 +9,9 @@ import (
 // 包含了平台的基本信息、SIP服务配置、设备信息、认证信息等。
 // 用于存储和管理GB28181平台的所有相关参数。
 type PlatformModel struct {
-	ID                      uint32 `gorm:"primaryKey;autoIncrement"`                                          // ID表示数据库中的唯一标识符
 	Enable                  bool   `gorm:"column:enable" json:"enable"`                                       // Enable表示该平台配置是否启用
 	Name                    string `gorm:"column:name;omitempty" json:"name"`                                 // Name表示平台的名称
-	ServerGBID              string `gorm:"column:server_gb_id;omitempty" json:"serverGBId"`                   // ServerGBID表示SIP服务器的国标编码
+	ServerGBID              string `gorm:"primaryKey;column:server_gb_id;omitempty" json:"serverGBId"`        // ServerGBID表示SIP服务器的国标编码
 	ServerGBDomain          string `gorm:"column:server_gb_domain;omitempty" json:"serverGBDomain"`           // ServerGBDomain表示SIP服务器的国标域
 	ServerIP                string `gorm:"column:server_ip;omitempty" json:"serverIp"`                        // ServerIP表示SIP服务器的IP地址
 	ServerPort              int    `gorm:"column:server_port;omitempty" json:"serverPort"`                    // ServerPort表示SIP服务器的端口号
@@ -51,7 +50,7 @@ type PlatformModel struct {
 
 // TableName 指定数据库表名
 func (p *PlatformModel) TableName() string {
-	return "platform_gb28181pro"
+	return "gb28181_platform"
 }
 
 // NewPlatform 创建并返回一个新的Platform实例。

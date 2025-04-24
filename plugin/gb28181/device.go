@@ -32,8 +32,7 @@ const (
 
 type Device struct {
 	task.Job              `gorm:"-:all"`
-	ID                    int64          `gorm:"primaryKey;autoIncrement"` // 数据库自增长ID
-	DeviceID              string         // 设备国标编号
+	DeviceID              string         `gorm:"primaryKey"` // 设备国标编号
 	Name                  string         // 设备名
 	Manufacturer          string         // 生产厂商
 	Model                 string         // 型号
@@ -83,7 +82,7 @@ type Device struct {
 }
 
 func (d *Device) TableName() string {
-	return "device_gb28181pro"
+	return "gb28181_device"
 }
 
 func (d *Device) Dispose() {
@@ -139,21 +138,15 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 		d.eventChan <- msg.DeviceChannelList
 		// 更新设备信息到数据库
 		if d.plugin.DB != nil {
+			//if err := d.plugin.DB.Where(&gb28181.DeviceChannel{DeviceID: d.DeviceID}).Delete(&gb28181.DeviceChannel{}).Error; err != nil {
+			//	d.Error("删除通道失败", "error", err, "deviceId", d.DeviceID)
+			//}
 			// 更新通道信息
 			for _, c := range msg.DeviceChannelList {
 				// 设置关联的设备数据库ID
-				c.DeviceDBID = d.ID
-				// 先查询是否存在
-				var existing gb28181.DeviceChannel
-				if err := d.plugin.DB.Where(&gb28181.DeviceChannel{
-					DeviceDBID: d.ID,
-					DeviceID:   c.DeviceID,
-				}).First(&existing).Error; err == nil {
-					c.ID = existing.ID // 保持原有的自增ID
-					d.Debug("update channel", "channelId", c.DeviceID)
-				} else {
-					d.Debug("create channel", "channelId", c.DeviceID)
-				}
+				c.ChannelID = c.DeviceID
+				c.DeviceID = d.DeviceID
+				c.ID = d.DeviceID + "_" + c.ChannelID
 				// 使用 Save 进行 upsert 操作
 				if err := d.plugin.DB.Save(&c).Error; err != nil {
 					d.Error("save channel failed", "error", err)
@@ -190,20 +183,20 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 		}
 		// 查询平台信息
 		type Result struct {
-			PlatformID uint32 `gorm:"column:platform_id"`
+			PlatformServerGBID string `gorm:"column:platform_server_gb_id"`
 		}
 		var result Result
 		if d.plugin.DB != nil {
-			if err := d.plugin.DB.Table("platform_channel_gb28181pro pcg").
-				Select("pcg.platform_id").
-				Joins("LEFT JOIN channel_gb28181pro cg on pcg.device_channel_id= cg.id").
-				Where("cg.device_id = ?", msg.DeviceID).
+			if err := d.plugin.DB.Table("gb28181_platform_channel gpc").
+				Select("gpc.platform_server_gb_id").
+				Joins("LEFT JOIN gb28181_channel gc on gpc.channel_db_id= gc.id").
+				Where("gc.channel_id = ?", msg.DeviceID).
 				First(&result).Error; err != nil {
 				d.Error("查询平台信息失败", "error", err)
 				return err
 			}
 			// 从platforms集合中获取平台实例
-			if platform, ok := d.plugin.platforms.Get(result.PlatformID); ok {
+			if platform, ok := d.plugin.platforms.Get(result.PlatformServerGBID); ok {
 				// 创建并发送响应消息
 				request := platform.CreateRequest("MESSAGE")
 				fromTag, _ := req.From().Params.Get("tag")
@@ -542,12 +535,12 @@ func (d *Device) frontEndCmdString(cmdCode int32, parameter1 int32, parameter2 i
 }
 
 func (d *Device) addOrUpdateChannel(c gb28181.DeviceChannel) {
-	if channel, ok := d.channels.Get(c.DeviceID); ok {
+	if channel, ok := d.channels.Get(c.ChannelID); ok {
 		channel.DeviceChannel = c
 	} else {
 		channel = &Channel{
 			Device:        d,
-			Logger:        d.Logger.With("channel", c.DeviceID),
+			Logger:        d.Logger.With("channel", c.ChannelID),
 			DeviceChannel: c,
 		}
 		d.channels.Set(channel)

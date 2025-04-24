@@ -16,11 +16,11 @@ const (
 
 // DeviceChannel 设备通道信息
 type DeviceChannel struct {
-	CommonGBChannel // 通过组合继承 CommonGBChannel 的字段
+	//CommonGBChannel // 通过组合继承 CommonGBChannel 的字段
 
-	ID                 int64         `gorm:"primaryKey;autoIncrement" json:"id"`                // 数据库自增长ID
-	DeviceDBID         int64         `json:"deviceDbId"`                                        // device表里的id
-	DeviceID           string        `json:"deviceId" xml:"DeviceID"`                           // 设备国标编号
+	ID                 string        `gorm:"primaryKey" json:"ID"` // 数据库自增长ID
+	ChannelID          string        `json:"channelID" xml:"ChannelID"`
+	DeviceID           string        `json:"deviceID" xml:"DeviceID"`                           // 设备国标编号
 	ParentID           string        `json:"parentId" xml:"ParentID"`                           // 父节点ID
 	Name               string        `json:"name" xml:"Name"`                                   // 通道名称
 	Manufacturer       string        `json:"manufacturer" xml:"Manufacturer"`                   // 设备厂商
@@ -102,7 +102,7 @@ func DecodeWithOnlyDeviceID(element interface{}) (*DeviceChannel, error) {
 
 // TableName 指定数据库表名
 func (d *DeviceChannel) TableName() string {
-	return "channel_gb28181pro"
+	return "gb28181_channel"
 }
 
 // NewDeviceChannel 创建新的设备通道实例

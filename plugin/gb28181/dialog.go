@@ -87,9 +87,6 @@ func (d *Dialog) Start() (err error) {
 	if d.gb.MediaPort.Valid() {
 		select {
 		case d.MediaPort = <-d.gb.tcpPorts:
-			defer func() {
-				d.gb.tcpPorts <- d.MediaPort
-			}()
 		default:
 			return fmt.Errorf("no available tcp port")
 		}
@@ -293,6 +290,7 @@ func (d *Dialog) GetKey() uint32 {
 }
 
 func (d *Dialog) Dispose() {
+	d.gb.tcpPorts <- d.MediaPort
 	err := d.session.Bye(d)
 	if err != nil {
 		d.Error("dialog bye bye err", err)

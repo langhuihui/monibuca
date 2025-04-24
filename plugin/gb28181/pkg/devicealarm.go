@@ -123,5 +123,5 @@ func (a *DeviceAlarm) GetAlarmTypeDescription() string {
 
 // TableName 返回数据库表名
 func (DeviceAlarm) TableName() string {
-	return "devicealarm_gb28181pro"
+	return "gb28181_devicealarm"
 }

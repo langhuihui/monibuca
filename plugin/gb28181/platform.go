@@ -82,7 +82,7 @@ func NewPlatform(pm *gb28181.PlatformModel, plugin *GB28181Plugin, unRegister bo
 	p.MaxForwardsHDR = sip.MaxForwardsHeader(70)
 	p.plugin.platforms.Set(p)
 	p.OnDispose(func() {
-		if plugin.platforms.RemoveByKey(p.ID) {
+		if plugin.platforms.RemoveByKey(p.PlatformModel.ServerGBID) {
 			//for c := range d.channels.Range {
 			//	if c.AbstractDevice != nil {
 			//		c.AbstractDevice.ChangeStatus(m7s.PullProxyStatusOffline)
@@ -453,54 +453,15 @@ func (p *Platform) handleCatalog(req *sip.Request, tx sip.ServerTransaction, msg
 	p.plugin.Info("catalog", "sn", sn, "fromTag", fromTag)
 
 	// 打印平台ID
-	p.plugin.Info("catalog query platform_id", "platform_id", p.PlatformModel.ID)
+	p.plugin.Info("catalog query platform_id", "platform_id", p.PlatformModel.ServerGBID)
 
 	// 查询通道列表
-	var channels []gb28181.CommonGBChannel
+	var channels []gb28181.DeviceChannel
 	if p.plugin.DB != nil {
-		if err := p.plugin.DB.Table("channel_gb28181pro c").
-			Select(`c.id as gb_id,
-				c.device_db_id as gb_device_db_id,
-				c.stream_push_id,
-				c.stream_proxy_id,
-				c.create_time,
-				c.update_time,
-				COALESCE(nullif(pc.custom_device_id,''), nullif(c.gb_device_id,''), nullif(c.device_id,'')) as gb_device_id,
-				COALESCE(nullif(pc.custom_name,''), nullif(c.gb_name,''), nullif(c.name,'')) as gb_name,
-				COALESCE(nullif(pc.custom_manufacturer,''), nullif(c.gb_manufacturer,''), nullif(c.manufacturer,'')) as gb_manufacturer,
-				COALESCE(nullif(pc.custom_model,''), nullif(c.gb_model,''), nullif(c.model,'')) as gb_model,
-				COALESCE(nullif(pc.custom_owner,''), nullif(c.gb_owner,''), nullif(c.owner,'')) as gb_owner,
-				COALESCE(nullif(pc.custom_civil_code,''), nullif(c.gb_civil_code,''), nullif(c.civil_code,'')) as gb_civil_code,
-				COALESCE(nullif(pc.custom_block,''), nullif(c.gb_block,''), nullif(c.block,'')) as gb_block,
-				COALESCE(nullif(pc.custom_address,''), nullif(c.gb_address,''), nullif(c.address,'')) as gb_address,
-				COALESCE(nullif(pc.custom_parental,''), nullif(c.gb_parental,''), nullif(c.parental,'')) as gb_parental,
-				COALESCE(nullif(pc.custom_parent_id,''), nullif(c.gb_parent_id,''), nullif(c.parent_id,'')) as gb_parent_id,
-				COALESCE(nullif(pc.custom_safety_way,''), nullif(c.gb_safety_way,''), nullif(c.safety_way,'')) as gb_safety_way,
-				COALESCE(nullif(pc.custom_register_way,''), nullif(c.gb_register_way,''), nullif(c.register_way,'')) as gb_register_way,
-				COALESCE(nullif(pc.custom_cert_num,''), nullif(c.gb_cert_num,''), nullif(c.cert_num,'')) as gb_cert_num,
-				COALESCE(nullif(pc.custom_certifiable,''), nullif(c.gb_certifiable,''), nullif(c.certifiable,'')) as gb_certifiable,
-				COALESCE(nullif(pc.custom_err_code,''), nullif(c.gb_err_code,''), nullif(c.err_code,'')) as gb_err_code,
-				COALESCE(nullif(pc.custom_end_time,''), nullif(c.gb_end_time,''), nullif(c.end_time,'')) as gb_end_time,
-				COALESCE(nullif(pc.custom_secrecy,''), nullif(c.gb_secrecy,''), nullif(c.secrecy,'')) as gb_secrecy,
-				COALESCE(nullif(pc.custom_ip_address,''), nullif(c.gb_ip_address,''), nullif(c.ip_address,'')) as gb_ip_address,
-				COALESCE(nullif(pc.custom_port,''), nullif(c.gb_port,''), nullif(c.port,'')) as gb_port,
-				COALESCE(nullif(pc.custom_password,''), nullif(c.gb_password,''), nullif(c.password,'')) as gb_password,
-				COALESCE(nullif(pc.custom_status,''), nullif(c.gb_status,''), nullif(c.status,'')) as gb_status,
-				COALESCE(nullif(pc.custom_longitude,''), nullif(c.gb_longitude,''), nullif(c.longitude,'')) as gb_longitude,
-				COALESCE(nullif(pc.custom_latitude,''), nullif(c.gb_latitude,''), nullif(c.latitude,'')) as gb_latitude,
-				COALESCE(nullif(pc.custom_ptz_type,''), nullif(c.gb_ptz_type,''), nullif(c.ptz_type,'')) as gb_ptz_type,
-				COALESCE(nullif(pc.custom_position_type,''), nullif(c.gb_position_type,''), nullif(c.position_type,'')) as gb_position_type,
-				COALESCE(nullif(pc.custom_room_type,''), nullif(c.gb_room_type,''), nullif(c.room_type,'')) as gb_room_type,
-				COALESCE(nullif(pc.custom_use_type,''), nullif(c.gb_use_type,''), nullif(c.use_type,'')) as gb_use_type,
-				COALESCE(nullif(pc.custom_supply_light_type,''), nullif(c.gb_supply_light_type,''), nullif(c.supply_light_type,'')) as gb_supply_light_type,
-				COALESCE(nullif(pc.custom_direction_type,''), nullif(c.gb_direction_type,''), nullif(c.direction_type,'')) as gb_direction_type,
-				COALESCE(nullif(pc.custom_resolution,''), nullif(c.gb_resolution,''), nullif(c.resolution,'')) as gb_resolution,
-				COALESCE(nullif(pc.custom_business_group_id,''), nullif(c.gb_business_group_id,''), nullif(c.business_group_id,'')) as gb_business_group_id,
-				COALESCE(nullif(pc.custom_download_speed,''), nullif(c.gb_download_speed,''), nullif(c.download_speed,'')) as gb_download_speed,
-				COALESCE(nullif(pc.custom_svc_space_support_mod,''), nullif(c.gb_svc_space_support_mod,''), nullif(c.svc_space_support_mod,'')) as gb_svc_space_support_mod,
-				COALESCE(nullif(pc.custom_svc_time_support_mode,''), nullif(c.gb_svc_time_support_mode,''), nullif(c.svc_time_support_mode,'')) as gb_svc_time_support_mode`).
-			Joins("left join platform_channel_gb28181pro pc on c.id = pc.device_channel_id").
-			Where("pc.platform_id = ?", p.PlatformModel.ID).
+		if err := p.plugin.DB.Table("gb28181_channel gc").
+			Select(`gc.*`).
+			Joins("left join gb28181_platform_channel gpc on gc.id=gpc.channel_db_id").
+			Where("gpc.platform_server_gb_id = ? and gc.status='ON'", p.PlatformModel.ServerGBID).
 			Find(&channels).Error; err != nil {
 			return fmt.Errorf("query channels error: %v", err)
 		}
@@ -519,7 +480,7 @@ func (p *Platform) CreateRequest(method string) *sip.Request {
 }
 
 // sendCatalogResponse 发送目录响应
-func (p *Platform) sendCatalogResponse(req *sip.Request, sn string, fromTag string, channels []gb28181.CommonGBChannel) error {
+func (p *Platform) sendCatalogResponse(req *sip.Request, sn string, fromTag string, channels []gb28181.DeviceChannel) error {
 	// 如果没有通道，发送一个空的目录列表
 	if len(channels) == 0 {
 		request := p.CreateRequest("MESSAGE")
@@ -814,33 +775,33 @@ func (p *Platform) sendCatalogResponse(req *sip.Request, sn string, fromTag stri
 }
 
 // buildChannelItem 构建单个通道的XML项
-func (p *Platform) buildChannelItem(channel gb28181.CommonGBChannel) string {
+func (p *Platform) buildChannelItem(channel gb28181.DeviceChannel) string {
 	// 确保字符串字段不为空
-	deviceID := channel.GbDeviceID
+	deviceID := channel.ChannelID
 	if deviceID == "" {
 		deviceID = "unknown_device" // 如果没有设备ID，使用默认值
 	}
-	name := channel.GbName
+	name := channel.Name
 	if name == "" {
 		name = "未命名设备"
 	}
-	manufacturer := channel.GbManufacturer
+	manufacturer := channel.Manufacturer
 	if manufacturer == "" {
 		manufacturer = "未知厂商"
 	}
-	model := channel.GbModel
+	model := channel.Model
 	if model == "" {
 		model = "未知型号"
 	}
-	owner := channel.GbOwner
+	owner := channel.Owner
 	if owner == "" {
 		owner = "未知所有者"
 	}
-	address := channel.GbAddress
+	address := channel.Address
 	if address == "" {
 		address = "未知地址"
 	}
-	parentID := channel.GbParentID
+	parentID := channel.ParentID
 	if parentID == "" {
 		parentID = p.PlatformModel.DeviceGBID // 使用平台ID作为父ID
 	}
@@ -862,11 +823,11 @@ func (p *Platform) buildChannelItem(channel gb28181.CommonGBChannel) string {
 </Info>
 </Item>`, deviceID, name, manufacturer, model,
 		owner, address,
-		channel.GbRegisterWay, // 直接使用整数值
-		channel.GbSecrecy,     // 直接使用整数值
+		channel.RegisterWay, // 直接使用整数值
+		channel.Secrecy,     // 直接使用整数值
 		parentID,
-		channel.GbParental,  // 直接使用整数值
-		channel.GbSafetyWay) // 直接使用整数值
+		channel.Parental,  // 直接使用整数值
+		channel.SafetyWay) // 直接使用整数值
 }
 
 // handleDeviceControl 处理设备控制请求
@@ -888,10 +849,10 @@ func (p *Platform) handleDeviceControl(req *sip.Request, tx sip.ServerTransactio
 
 	if p.plugin.DB != nil {
 		// 多表联查: channel_gb28181pro -> device_gb28181pro -> devices
-		if err := p.plugin.DB.Table("channel_gb28181pro c").
-			Select("d.device_id").
-			Joins("LEFT JOIN device_gb28181pro d ON c.device_db_id = d.id").
-			Where("c.device_id = ?", channelID).
+		if err := p.plugin.DB.Table("gb28181_channel gc").
+			Select("gd.device_id").
+			Joins("LEFT JOIN gb28181_device gd ON gc.device_id = gd.device_id").
+			Where("gc.channel_id = ?", channelID).
 			First(&result).Error; err != nil {
 			p.Error("查询通道和设备信息失败", "error", err.Error())
 			return fmt.Errorf("channel or device not found: %v", err)
@@ -981,10 +942,10 @@ func (p *Platform) handleDeviceStatus(req *sip.Request, tx sip.ServerTransaction
 
 	if p.plugin.DB != nil {
 		// 多表联查: channel_gb28181pro -> device_gb28181pro -> devices
-		if err := p.plugin.DB.Table("channel_gb28181pro c").
-			Select("d.device_id").
-			Joins("LEFT JOIN device_gb28181pro d ON c.device_db_id = d.id").
-			Where("c.device_id = ?", channelId).
+		if err := p.plugin.DB.Table("gb28181_channel gc").
+			Select("gd.device_id").
+			Joins("LEFT JOIN gb28181_device gd ON gc.device_id = gd.device_id").
+			Where("gc.channel_id = ?", channelId).
 			First(&result).Error; err != nil {
 			p.Error("查询通道和设备信息失败", "error", err.Error())
 			return fmt.Errorf("channel or device not found: %v", err)
@@ -1123,9 +1084,9 @@ func (p *Platform) handleDeviceInfo(req *sip.Request, tx sip.ServerTransaction, 
 	}
 
 	// 2. 查询通道信息
-	var channel gb28181.CommonGBChannel
+	var channel gb28181.DeviceChannel
 	if p.plugin.DB != nil {
-		if err := p.plugin.DB.Where("platform_id = ? AND gb_device_id = ?", p.PlatformModel.ID, channelId).First(&channel).Error; err != nil {
+		if err := p.plugin.DB.Where("device_id = ? AND channel_id = ?", p.PlatformModel.ServerGBID, channelId).First(&channel).Error; err != nil {
 			// 通道不存在，返回404
 			response := sip.NewResponseFromRequest(req, sip.StatusNotFound, "channel not found or offline", nil)
 			return tx.Respond(response)
@@ -1133,7 +1094,7 @@ func (p *Platform) handleDeviceInfo(req *sip.Request, tx sip.ServerTransaction, 
 	}
 
 	// 3. 判断通道类型
-	if channel.GbDeviceDbID == 0 {
+	if channel.DeviceID == "" {
 		// 非国标通道不支持设备信息查询
 		response := sip.NewResponseFromRequest(req, sip.StatusForbidden, "non-gb channel not supported", nil)
 		return tx.Respond(response)
@@ -1142,7 +1103,7 @@ func (p *Platform) handleDeviceInfo(req *sip.Request, tx sip.ServerTransaction, 
 	// 4. 查询设备信息
 	var device Device
 	if p.plugin.DB != nil {
-		if err := p.plugin.DB.First(&device, channel.GbDeviceDbID).Error; err != nil {
+		if err := p.plugin.DB.First(&device, channel.DeviceID).Error; err != nil {
 			// 设备不存在，返回404
 			response := sip.NewResponseFromRequest(req, sip.StatusNotFound, "device not found", nil)
 			return tx.Respond(response)
@@ -1346,10 +1307,10 @@ func (p *Platform) handlePresetQuery(req *sip.Request, tx sip.ServerTransaction,
 
 	if p.plugin.DB != nil {
 		// 多表联查: channel_gb28181pro -> device_gb28181pro -> devices
-		if err := p.plugin.DB.Table("channel_gb28181pro c").
-			Select("d.device_id").
-			Joins("LEFT JOIN device_gb28181pro d ON c.device_db_id = d.id").
-			Where("c.device_id = ?", channelID).
+		if err := p.plugin.DB.Table("gb28181_channel gc").
+			Select("gc.device_id").
+			Joins("LEFT JOIN gb28181_device gd ON gd.device_id = gc.device_id").
+			Where("gc.channel_id = ?", channelID).
 			First(&result).Error; err != nil {
 			p.Error("查询通道和设备信息失败", "error", err.Error())
 			return fmt.Errorf("channel or device not found: %v", err)
@@ -1411,6 +1372,6 @@ func (p *Platform) handlePresetQuery(req *sip.Request, tx sip.ServerTransaction,
 }
 
 // GetKey 返回平台的唯一标识符
-func (p *Platform) GetKey() uint32 {
-	return p.PlatformModel.ID
+func (p *Platform) GetKey() string {
+	return p.PlatformModel.ServerGBID
 }
