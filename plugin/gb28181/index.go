@@ -225,6 +225,9 @@ func (gb *GB28181Plugin) checkDeviceExpire() (err error) {
 			// 初始化通道集合
 			device.channels.L = new(sync.RWMutex)
 
+			// 初始化目录请求集合
+			device.catalogReqs.L = new(sync.RWMutex)
+
 			// 设置plugin引用
 			device.plugin = gb
 
@@ -601,7 +604,7 @@ func (gb *GB28181Plugin) OnMessage(req *sip.Request, tx sip.ServerTransaction) {
 	// 如果既不是设备也不是平台，返回404
 	if d == nil && p == nil {
 		var response *sip.Response
-		gb.Error("OnMessage", "error", "device/platform not found", "id", id)
+		gb.Info("OnMessage", "error", "device/platform not found", "id", id)
 		response = sip.NewResponseFromRequest(req, sip.StatusNotFound, "Not Found", nil)
 		if err := tx.Respond(response); err != nil {
 			gb.Error("respond NotFound", "error", err.Error())
@@ -694,6 +697,7 @@ func (gb *GB28181Plugin) RecoverDevice(d *Device, req *sip.Request) {
 	d.Online = true
 	d.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(d.SipIP))
 	d.channels.L = new(sync.RWMutex)
+	d.catalogReqs.L = new(sync.RWMutex)
 	d.Info("StoreDevice", "source", source, "desc", desc, "device.SipIP", myLanIP, "device.WanIP", myWanIP, "recipient", req.Recipient, "myPort", myPort)
 
 	if gb.DB != nil {
@@ -821,6 +825,7 @@ func (gb *GB28181Plugin) StoreDevice(deviceid string, req *sip.Request) (d *Devi
 	d.fromHDR.Params.Add("tag", sip.GenerateTagN(16))
 	d.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(d.SipIP))
 	d.channels.L = new(sync.RWMutex)
+	d.catalogReqs.L = new(sync.RWMutex)
 	d.Info("StoreDevice", "source", source, "desc", desc, "device.SipIP", myLanIP, "device.WanIP", myWanIP, "req.Recipient", req.Recipient, "myPort", myPort, "d.Recipient", d.Recipient)
 
 	// 使用简单的 hash 函数将设备 ID 转换为 uint32
