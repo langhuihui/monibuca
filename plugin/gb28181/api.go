@@ -272,7 +272,7 @@ func (gb *GB28181Plugin) GetDevices(ctx context.Context, req *pb.GetDevicesReque
 		var pbChannels []*pb.Channel
 		for _, c := range channels {
 			pbChannels = append(pbChannels, &pb.Channel{
-				DeviceID:     c.DeviceID,
+				DeviceID:     c.ChannelID,
 				ParentID:     c.ParentID,
 				Name:         c.Name,
 				Manufacturer: c.Manufacturer,
@@ -1719,57 +1719,87 @@ func (gb *GB28181Plugin) UploadJpeg(ctx context.Context, req *pb.UploadJpegReque
 // 根据传入的id作为父id(pid)查询其下的所有子分组
 // 当pid为空或为-1时，返回所有分组
 func (gb *GB28181Plugin) GetGroups(ctx context.Context, req *pb.GetGroupsRequest) (*pb.GroupsListResponse, error) {
-	resp := &pb.GroupsListResponse{}
+	var groups []*pb.Group
+	var dbGroups []gb28181.GroupsModel
 
+	// 检查数据库连接
 	if gb.DB == nil {
-		resp.Code = 500
-		resp.Message = "数据库未初始化"
-		return resp, nil
+		return &pb.GroupsListResponse{
+			Code:    500,
+			Message: "数据库未初始化",
+		}, nil
 	}
 
-	// 查询分组
-	var groups []gb28181.GroupsModel
-	var total int64
 	query := gb.DB
-
-	// 检查 pid 是否为空或-1
-	pidStr := fmt.Sprintf("%v", req.Pid)
-	if pidStr != "" && pidStr != "-1" {
-		// pid 不为空且不为-1时，查询指定 pid 的子分组
+	// 如果pid为-1，查询顶层组织(pid=0)
+	// 否则查询指定pid的子组织
+	if req.Pid == -1 {
+		query = query.Where("pid = ?", 0)
+	} else {
 		query = query.Where("pid = ?", req.Pid)
 	}
 
-	// 统计总数
-	if err := query.Model(&gb28181.GroupsModel{}).Count(&total).Error; err != nil {
-		resp.Code = 500
-		resp.Message = fmt.Sprintf("查询分组总数失败: %v", err)
-		return resp, nil
+	if err := query.Find(&dbGroups).Error; err != nil {
+		return nil, err
 	}
 
-	// 查询分组列表
-	if err := query.Order("id ASC").Find(&groups).Error; err != nil {
-		resp.Code = 500
-		resp.Message = fmt.Sprintf("查询分组列表失败: %v", err)
-		return resp, nil
+	for _, dbGroup := range dbGroups {
+		group := &pb.Group{
+			Id:         int32(dbGroup.ID),
+			Name:       dbGroup.Name,
+			Pid:        int32(dbGroup.PID),
+			Level:      int32(dbGroup.Level),
+			CreateTime: timestamppb.New(dbGroup.CreateTime),
+			UpdateTime: timestamppb.New(dbGroup.UpdateTime),
+		}
+
+		// 递归获取子组织
+		children, err := gb.getChildGroups(int32(dbGroup.ID))
+		if err != nil {
+			return nil, err
+		}
+		group.Children = children
+
+		groups = append(groups, group)
 	}
 
-	// 转换为proto消息
-	var pbGroups []*pb.Group
-	for _, g := range groups {
-		pbGroups = append(pbGroups, &pb.Group{
-			Id:         int32(g.ID),
-			Name:       g.Name,
-			Pid:        int32(g.PID),
-			CreateTime: timestamppb.New(g.CreateTime),
-			UpdateTime: timestamppb.New(g.UpdateTime),
-			Level:      int32(g.Level),
-		})
+	return &pb.GroupsListResponse{
+		Code:    0,
+		Message: "success",
+		Data:    groups,
+	}, nil
+}
+
+// 递归获取子组织
+func (gb *GB28181Plugin) getChildGroups(parentId int32) ([]*pb.Group, error) {
+	var children []*pb.Group
+	var dbGroups []gb28181.GroupsModel
+
+	if err := gb.DB.Where("pid = ?", parentId).Find(&dbGroups).Error; err != nil {
+		return nil, err
 	}
 
-	resp.List = pbGroups
-	resp.Code = 0
-	resp.Message = "success"
-	return resp, nil
+	for _, dbGroup := range dbGroups {
+		group := &pb.Group{
+			Id:         int32(dbGroup.ID),
+			Name:       dbGroup.Name,
+			Pid:        int32(dbGroup.PID),
+			Level:      int32(dbGroup.Level),
+			CreateTime: timestamppb.New(dbGroup.CreateTime),
+			UpdateTime: timestamppb.New(dbGroup.UpdateTime),
+		}
+
+		// 递归获取子组织
+		subChildren, err := gb.getChildGroups(int32(dbGroup.ID))
+		if err != nil {
+			return nil, err
+		}
+		group.Children = subChildren
+
+		children = append(children, group)
+	}
+
+	return children, nil
 }
 
 // AddGroup 实现添加分组功能

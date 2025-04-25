@@ -317,7 +317,7 @@ func (gb *GB28181Plugin) checkDeviceExpire() (err error) {
 				}
 				// 更新通道状态到数据库
 				if err := gb.DB.Model(&gb28181.DeviceChannel{}).Where(&gb28181.DeviceChannel{ID: channel.ID}).Update("status", channel.Status).Error; err != nil {
-					gb.Error("更新通道状态到数据库失败", "error", err, "channelId", channel.DeviceID)
+					gb.Error("更新通道状态到数据库失败", "error", err, "channelId", channel.ChannelID)
 				}
 				device.addOrUpdateChannel(channel)
 			}
@@ -841,7 +841,7 @@ func (gb *GB28181Plugin) StoreDevice(deviceid string, req *sip.Request) (d *Devi
 		d.channels.OnAdd(func(c *Channel) {
 			if absDevice, ok := gb.Server.PullProxies.Find(func(absDevice m7s.IPullProxy) bool {
 				conf := absDevice.GetConfig()
-				return conf.Type == "gb28181" && conf.URL == fmt.Sprintf("%s/%s", d.DeviceID, c.DeviceID)
+				return conf.Type == "gb28181" && conf.URL == fmt.Sprintf("%s/%s", d.DeviceID, c.ChannelID)
 			}); ok {
 				c.PullProxyTask = absDevice.(*PullProxy)
 				absDevice.ChangeStatus(m7s.PullProxyStatusOnline)

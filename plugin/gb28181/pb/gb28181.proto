@@ -1008,6 +1008,7 @@ message Group {
   string name = 4;                // 分组名称
   int32 pid = 5;                  // 父分组ID
   int32 level = 6;                // 分组层级
+  repeated Group children = 7;     // 子组织数组
 }
 
 // 获取单个分组请求
@@ -1031,7 +1032,7 @@ message GroupResponse {
 message GroupsListResponse {
   int32 code = 1;
   string message = 2;
-  repeated Group list = 3;
+  repeated Group data = 3;
 }
 
 // 分组分页信息
@@ -1039,7 +1040,7 @@ message GroupsPageInfo {
   int32 code = 1;
   string message = 2;
   int32 total = 3;
-  repeated Group list = 4;
+  repeated Group data = 4;
 }
 
 // GroupChannel相关消息定义
