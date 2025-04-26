@@ -525,7 +525,7 @@ func (d *Device) catalog() (*sip.Response, error) {
 
 func (d *Device) subscribeCatalog() (*sip.Response, error) {
 	request := d.CreateRequest(sip.SUBSCRIBE, nil)
-	request.AppendHeader(sip.NewHeader("Expires", "3600"))
+	request.AppendHeader(sip.NewHeader("Expires", strconv.Itoa(d.SubscribeCatalog)))
 	request.SetBody(gb28181.BuildCatalogXML(d.Charset, d.SN, d.DeviceID))
 	return d.send(request)
 }

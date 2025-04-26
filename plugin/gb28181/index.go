@@ -896,7 +896,7 @@ func (gb *GB28181Plugin) GetPullableList() []string {
 	return slices.Collect(func(yield func(string) bool) {
 		for d := range gb.devices.Range {
 			for c := range d.channels.Range {
-				yield(fmt.Sprintf("%s/%s", d.DeviceID, c.DeviceID))
+				yield(fmt.Sprintf("%s/%s", d.DeviceID, c.ChannelID))
 			}
 		}
 	})
@@ -1012,9 +1012,7 @@ func (gb *GB28181Plugin) OnInvite(req *sip.Request, tx sip.ServerTransaction) {
 			gb.Info("OnInvite", "action", "channel found", "channelId", channel.ChannelID, "channelName", channel.Name)
 
 			var channelTmp *Channel
-			if deviceFound, ok := gb.devices.Find(func(device *Device) bool {
-				return device.DeviceID == channel.DeviceID
-			}); ok {
+			if deviceFound, ok := gb.devices.Get(channel.DeviceID); ok {
 				if channelFound, ok := deviceFound.channels.Get(channel.ChannelID); ok {
 					channelTmp = channelFound
 				} else {
@@ -1197,8 +1195,8 @@ func (gb *GB28181Plugin) OnAck(req *sip.Request, tx sip.ServerTransaction) {
 	if forwardDialog, ok := gb.forwardDialogs.Find(func(dialog *ForwardDialog) bool {
 		return dialog.platformCallId == callID
 	}); ok {
-		pullUrl := fmt.Sprintf("%s/%s", forwardDialog.channel.Device.DeviceID, forwardDialog.channel.ChannelID)
-		streamPath := fmt.Sprintf("platform_%d/%s/%s", time.Now().UnixMilli(), forwardDialog.channel.Device.DeviceID, forwardDialog.channel.ChannelID)
+		pullUrl := fmt.Sprintf("%s/%s", forwardDialog.channel.DeviceID, forwardDialog.channel.ChannelID)
+		streamPath := fmt.Sprintf("platform_%d/%s/%s", time.Now().UnixMilli(), forwardDialog.channel.DeviceID, forwardDialog.channel.ChannelID)
 
 		// 创建配置
 		pullConf := config.Pull{
