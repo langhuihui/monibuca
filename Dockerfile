@@ -13,7 +13,7 @@ ENV HOME /monibuca
 
 WORKDIR /
 
-RUN git clone -b v5 --depth 1 https://github.com/langhuihui/monibuca
+RUN git clone --depth 1 https://github.com/langhuihui/monibuca
 
 # compile 
 WORKDIR /monibuca
@@ -28,7 +28,7 @@ WORKDIR /monibuca
 COPY --from=builder /monibuca/build /monibuca/
 RUN cp -r ./config.yaml /etc/monibuca
 # Export necessary ports 
-EXPOSE 8080 8443 1935 554 5060 9000-20000
-EXPOSE 5060/udp
+EXPOSE 6000 8080 8443 1935 554 5060 9000-20000
+EXPOSE 5060/udp 44944/udp
 
 CMD [ "./monibuca", "-c", "/etc/monibuca/config.yaml" ]

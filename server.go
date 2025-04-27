@@ -66,10 +66,13 @@ type (
 		PullProxy     []*PullProxyConfig
 		PushProxy     []*PushProxyConfig
 		Admin         struct {
-			EnableLogin bool   `default:"false" desc:"启用登录机制"` //启用登录机制
-			FilePath    string `default:"admin.zip" desc:"管理员界面文件路径"`
-			HomePage    string `default:"home" desc:"管理员界面首页"`
-			Users       []struct {
+			zipReader      *zip.ReadCloser
+			zipLastModTime time.Time
+			lastCheckTime  time.Time
+			EnableLogin    bool   `default:"false" desc:"启用登录机制"` //启用登录机制
+			FilePath       string `default:"admin.zip" desc:"管理员界面文件路径"`
+			HomePage       string `default:"home" desc:"管理员界面首页"`
+			Users          []struct {
 				Username string `desc:"用户名"`
 				Password string `desc:"密码"`
 				Role     string `default:"user" desc:"角色,可选值:admin,user"`
@@ -161,9 +164,6 @@ func exit() {
 	os.Exit(0)
 }
 
-var zipReader *zip.ReadCloser
-var adminZipLastModTime time.Time
-var lastCheckTime time.Time
 var checkInterval = time.Second * 3 // 检查间隔为3秒
 
 func init() {
@@ -172,17 +172,16 @@ func init() {
 		time.AfterFunc(3*time.Second, exit)
 	})
 	Servers.OnDispose(exit)
-	loadAdminZip()
 }
 
-func loadAdminZip() {
-	if zipReader != nil {
-		zipReader.Close()
-		zipReader = nil
+func (s *Server) loadAdminZip() {
+	if s.Admin.zipReader != nil {
+		s.Admin.zipReader.Close()
+		s.Admin.zipReader = nil
 	}
-	if info, err := os.Stat("admin.zip"); err == nil {
-		adminZipLastModTime = info.ModTime()
-		zipReader, _ = zip.OpenReader("admin.zip")
+	if info, err := os.Stat(s.Admin.FilePath); err == nil {
+		s.Admin.zipLastModTime = info.ModTime()
+		s.Admin.zipReader, _ = zip.OpenReader(s.Admin.FilePath)
 	}
 }
 
@@ -399,6 +398,7 @@ func (s *Server) Start() (err error) {
 	s.Streams.OnStart(func() {
 		s.Streams.AddTask(&CheckSubWaitTimeout{s: s})
 	})
+	s.loadAdminZip()
 	// s.Transforms.AddTask(&TransformsPublishEvent{Transforms: &s.Transforms})
 	s.Info("server started")
 	s.Post(func() error {
@@ -622,16 +622,16 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// 检查 admin.zip 是否需要重新加载
 	now := time.Now()
-	if now.Sub(lastCheckTime) > checkInterval {
-		if info, err := os.Stat("admin.zip"); err == nil && info.ModTime() != adminZipLastModTime {
+	if now.Sub(s.Admin.lastCheckTime) > checkInterval {
+		if info, err := os.Stat(s.Admin.FilePath); err == nil && info.ModTime() != s.Admin.zipLastModTime {
 			s.Info("admin.zip changed, reloading...")
-			loadAdminZip()
+			s.loadAdminZip()
 		}
-		lastCheckTime = now
+		s.Admin.lastCheckTime = now
 	}
 
-	if zipReader != nil {
-		http.ServeFileFS(w, r, zipReader, strings.TrimPrefix(r.URL.Path, "/admin"))
+	if s.Admin.zipReader != nil {
+		http.ServeFileFS(w, r, s.Admin.zipReader, strings.TrimPrefix(r.URL.Path, "/admin"))
 		return
 	}
 	if r.URL.Path == "/favicon.ico" {
