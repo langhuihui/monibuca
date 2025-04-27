@@ -50,15 +50,7 @@ func CreateStreamPathBox(streamPath string) *StreamPathBox {
 
 // WriteTo writes the UserDataBox to the given writer
 func (box *UserDataBox) WriteTo(w io.Writer) (n int64, err error) {
-	for _, entry := range box.Entries {
-		var nn int64
-		nn, err = entry.WriteTo(w)
-		n += nn
-		if err != nil {
-			return
-		}
-	}
-	return
+	return WriteTo(w, box.Entries...)
 }
 
 // Unmarshal parses the given buffer into a UserDataBox

@@ -360,7 +360,7 @@ func (p *Publisher) WriteVideo(data IAVFrame) (err error) {
 	var idr *util.Ring[AVFrame]
 	if t.IDRingList.Len() > 0 {
 		idr = t.IDRingList.Back().Value
-		if t.CheckIfNeedDropFrame(p.MaxFPS) {
+		if p.Speed != 1 && t.CheckIfNeedDropFrame(p.MaxFPS) {
 			p.dropAfterTs = t.LastTs
 			return ErrSkip
 		} else {
