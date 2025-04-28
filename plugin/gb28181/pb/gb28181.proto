@@ -627,7 +627,7 @@ message GetDeviceAlarmRequest {
 message DeviceAlarmResponse {
   int32 code = 1;
   string message = 2;
-  repeated AlarmInfo alarms = 3;
+  repeated AlarmInfo data = 3;
 }
 
 message AlarmInfo {
@@ -960,7 +960,7 @@ message SearchAlarmsResponse {
   int32 code = 1;               // 响应代码
   string message = 2;           // 响应消息
   int32 total = 3;              // 总记录数
-  repeated AlarmRecord list = 4; // 报警记录列表
+  repeated AlarmRecord data = 4; // 报警记录列表
 }
 
 // 报警记录详情

@@ -1227,6 +1227,14 @@ func (gb *GB28181Plugin) GetDeviceAlarm(ctx context.Context, req *pb.GetDeviceAl
 		query = query.Where("alarm_priority <= ?", req.EndPriority)
 	}
 
+	// 获取符合条件的总记录数
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("查询总数失败: %v", err)
+		return resp, nil
+	}
+
 	// 查询报警记录
 	var alarms []gb28181.DeviceAlarm
 	if err := query.Order("alarm_time DESC").Find(&alarms).Error; err != nil {
@@ -1244,8 +1252,11 @@ func (gb *GB28181Plugin) GetDeviceAlarm(ctx context.Context, req *pb.GetDeviceAl
 			AlarmTime:        alarm.AlarmTime.Format("2006-01-02T15:04:05"),
 			AlarmDescription: alarm.AlarmDescription,
 		}
-		resp.Alarms = append(resp.Alarms, alarmInfo)
+		resp.Data = append(resp.Data, alarmInfo)
 	}
+
+	// 在消息中添加总记录数信息
+	resp.Message = fmt.Sprintf("success, total: %d", total)
 
 	return resp, nil
 }
@@ -1317,7 +1328,7 @@ func (gb *GB28181Plugin) Recording(ctx context.Context, req *pb.RecordingRequest
 			ChannelID string
 		}
 		err := gb.DB.Raw(`
-			SELECT gc.device_id, gc.channel_id as channelid 
+			SELECT gc.device_id, gc.channel_id as channelid
 			FROM gb28181_platform gp
 			LEFT JOIN gb28181_platform_channel gpc on gpc.platform_server_gb_id = pg.server_gb_id
 			LEFT JOIN gb28181_channel gc on gc.id = gpc.channel_db_id
@@ -1436,7 +1447,7 @@ func (gb *GB28181Plugin) GetSnap(ctx context.Context, req *pb.GetSnapRequest) (*
 			ChannelID string
 		}
 		err := gb.DB.Raw(`
-			SELECT gc.device_id, gc.channel_id as channelid 
+			SELECT gc.device_id, gc.channel_id as channelid
 			FROM gb28181_platform gp
 			LEFT JOIN gb28181_platform_channel gpc on gpc.platform_server_gb_id = pg.server_gb_id
 			LEFT JOIN gb28181_channel gc on gc.id = gpc.channel_db_id
@@ -1601,9 +1612,9 @@ func (gb *GB28181Plugin) GetGroupChannels(ctx context.Context, req *pb.GetGroupC
 			d.device_id AS device_id,
 			d.name AS device_name,
 			dc.status AS status,
-			CASE 
-				WHEN gc.id IS NULL THEN false 
-				ELSE true 
+			CASE
+				WHEN gc.id IS NULL THEN false
+				ELSE true
 			END AS in_group
 		`).
 		Joins("LEFT JOIN "+deviceTable+" AS d ON dc.device_db_id = d.id").
@@ -2229,6 +2240,181 @@ func (gb *GB28181Plugin) PlaybackSpeed(ctx context.Context, req *pb.PlaybackSpee
 
 	resp.Code = 0
 	resp.Message = "success"
+	return resp, nil
+}
+
+// DeleteGroup 实现删除分组功能
+func (gb *GB28181Plugin) DeleteGroup(ctx context.Context, req *pb.DeleteGroupRequest) (*pb.BaseResponse, error) {
+	resp := &pb.BaseResponse{}
+
+	// 检查数据库连接
+	if gb.DB == nil {
+		resp.Code = 500
+		resp.Message = "数据库未初始化"
+		return resp, nil
+	}
+
+	// 验证参数
+	if req.Id <= 0 {
+		resp.Code = 400
+		resp.Message = "分组ID不能为空"
+		return resp, nil
+	}
+
+	// 查询分组是否存在
+	var group gb28181.GroupsModel
+	if err := gb.DB.First(&group, req.Id).Error; err != nil {
+		resp.Code = 404
+		resp.Message = fmt.Sprintf("分组不存在: %v", err)
+		return resp, nil
+	}
+
+	// 检查是否为根组织，根组织不能删除
+	if group.PID == 0 && group.Level == 0 {
+		resp.Code = 400
+		resp.Message = "根组织不能被删除"
+		return resp, nil
+	}
+
+	// 检查是否有子分组
+	var childCount int64
+	if err := gb.DB.Model(&gb28181.GroupsModel{}).Where("pid = ?", req.Id).Count(&childCount).Error; err != nil {
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("查询子分组失败: %v", err)
+		return resp, nil
+	}
+
+	if childCount > 0 {
+		resp.Code = 400
+		resp.Message = "该分组下有子分组，请先删除子分组"
+		return resp, nil
+	}
+
+	// 开始事务
+	tx := gb.DB.Begin()
+
+	// 删除分组下的所有通道关联
+	if err := tx.Where("group_id = ?", req.Id).Delete(&gb28181.GroupsChannelModel{}).Error; err != nil {
+		tx.Rollback()
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("删除分组下的通道关联失败: %v", err)
+		return resp, nil
+	}
+
+	// 删除分组
+	if err := tx.Delete(&group).Error; err != nil {
+		tx.Rollback()
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("删除分组失败: %v", err)
+		return resp, nil
+	}
+
+	// 提交事务
+	if err := tx.Commit().Error; err != nil {
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("提交事务失败: %v", err)
+		return resp, nil
+	}
+
+	gb.Info("删除分组成功",
+		"groupId", req.Id,
+		"groupName", group.Name)
+
+	resp.Code = 0
+	resp.Message = "分组删除成功"
+	return resp, nil
+}
+
+// SearchAlarms 实现分页查询报警记录
+func (gb *GB28181Plugin) SearchAlarms(ctx context.Context, req *pb.SearchAlarmsRequest) (*pb.SearchAlarmsResponse, error) {
+	resp := &pb.SearchAlarmsResponse{
+		Code:    0,
+		Message: "success",
+	}
+
+	if gb.DB == nil {
+		resp.Code = 500
+		resp.Message = "数据库未初始化"
+		return resp, nil
+	}
+
+	// 处理时间范围
+	startTime, endTime, err := util.TimeRangeQueryParse(url.Values{
+		"range": []string{req.Range},
+		"start": []string{req.Start},
+		"end":   []string{req.End},
+	})
+	if err != nil {
+		resp.Code = 400
+		resp.Message = fmt.Sprintf("时间格式错误: %v", err)
+		return resp, nil
+	}
+
+	// 构建基础查询条件
+	query := gb.DB.Model(&gb28181.DeviceAlarm{})
+
+	// 如果指定了设备ID，添加设备ID过滤条件
+	if req.DeviceId != "" {
+		query = query.Where("device_id = ?", req.DeviceId)
+	}
+
+	// 添加时间范围条件
+	if !startTime.IsZero() {
+		query = query.Where("alarm_time >= ?", startTime)
+	}
+	if !endTime.IsZero() {
+		query = query.Where("alarm_time <= ?", endTime)
+	}
+
+	// 获取符合条件的总记录数
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("查询总数失败: %v", err)
+		return resp, nil
+	}
+
+	// 查询报警记录，添加分页处理
+	var alarms []gb28181.DeviceAlarm
+	queryWithOrder := query.Order("alarm_time DESC")
+
+	// 当Page和Count都大于0时，应用分页
+	if req.Page > 0 && req.Count > 0 {
+		offset := (req.Page - 1) * req.Count
+		queryWithOrder = queryWithOrder.Offset(int(offset)).Limit(int(req.Count))
+	}
+
+	if err := queryWithOrder.Find(&alarms).Error; err != nil {
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("查询报警记录失败: %v", err)
+		return resp, nil
+	}
+
+	// 转换为proto消息
+	for _, alarm := range alarms {
+		alarmRecord := &pb.AlarmRecord{
+			Id:                fmt.Sprintf("%d", alarm.ID),
+			DeviceId:          alarm.DeviceID,
+			DeviceName:        alarm.DeviceName,
+			ChannelId:         alarm.ChannelID,
+			AlarmPriority:     alarm.AlarmPriority,
+			AlarmMethod:       alarm.AlarmMethod,
+			AlarmTime:         alarm.AlarmTime.Format("2006-01-02T15:04:05"),
+			AlarmDescription:  alarm.AlarmDescription,
+			Longitude:         alarm.Longitude,
+			Latitude:          alarm.Latitude,
+			AlarmType:         alarm.AlarmType,
+			CreateTime:        alarm.CreateTime.Format("2006-01-02T15:04:05"),
+			AlarmPriorityDesc: alarm.GetAlarmPriorityDescription(),
+			AlarmMethodDesc:   alarm.GetAlarmMethodDescription(),
+			AlarmTypeDesc:     alarm.GetAlarmTypeDescription(),
+		}
+		resp.Data = append(resp.Data, alarmRecord)
+	}
+
+	// 添加总记录数到响应中
+	resp.Total = int32(total)
+
 	return resp, nil
 }
 
