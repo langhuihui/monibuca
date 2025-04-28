@@ -5640,7 +5640,7 @@ type GroupChannelsResponse struct {
 	Code          int32                  `protobuf:"varint,1,opt,name=code,proto3" json:"code,omitempty"`
 	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
 	Total         int32                  `protobuf:"varint,3,opt,name=total,proto3" json:"total,omitempty"`
-	List          []*GroupChannel        `protobuf:"bytes,4,rep,name=list,proto3" json:"list,omitempty"`
+	Data          []*GroupChannel        `protobuf:"bytes,4,rep,name=data,proto3" json:"data,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -5696,9 +5696,9 @@ func (x *GroupChannelsResponse) GetTotal() int32 {
 	return 0
 }
 
-func (x *GroupChannelsResponse) GetList() []*GroupChannel {
+func (x *GroupChannelsResponse) GetData() []*GroupChannel {
 	if x != nil {
-		return x.List
+		return x.Data
 	}
 	return nil
 }
@@ -6479,7 +6479,7 @@ const file_gb28181_proto_rawDesc = "" +
 	"\x04code\x18\x01 \x01(\x05R\x04code\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12\x14\n" +
 	"\x05total\x18\x03 \x01(\x05R\x05total\x12,\n" +
-	"\x04list\x18\x04 \x03(\v2\x18.gb28181pro.GroupChannelR\x04list\"6\n" +
+	"\x04data\x18\x04 \x03(\v2\x18.gb28181pro.GroupChannelR\x04data\"6\n" +
 	"\x14PlaybackPauseRequest\x12\x1e\n" +
 	"\n" +
 	"streamPath\x18\x01 \x01(\tR\n" +
@@ -6705,7 +6705,7 @@ var file_gb28181_proto_depIdxs = []int32{
 	68, // 23: gb28181pro.GroupsListResponse.data:type_name -> gb28181pro.Group
 	68, // 24: gb28181pro.GroupsPageInfo.data:type_name -> gb28181pro.Group
 	86, // 25: gb28181pro.AddGroupChannelRequest.channels:type_name -> gb28181pro.AddGroupChannelRequest.Channel
-	78, // 26: gb28181pro.GroupChannelsResponse.list:type_name -> gb28181pro.GroupChannel
+	78, // 26: gb28181pro.GroupChannelsResponse.data:type_name -> gb28181pro.GroupChannel
 	2,  // 27: gb28181pro.api.List:input_type -> gb28181pro.GetDevicesRequest
 	1,  // 28: gb28181pro.api.GetDevice:input_type -> gb28181pro.GetDeviceRequest
 	2,  // 29: gb28181pro.api.GetDevices:input_type -> gb28181pro.GetDevicesRequest

@@ -1617,8 +1617,8 @@ func (gb *GB28181Plugin) GetGroupChannels(ctx context.Context, req *pb.GetGroupC
 				ELSE true
 			END AS in_group
 		`).
-		Joins("LEFT JOIN "+deviceTable+" AS d ON dc.device_db_id = d.id").
-		Joins("LEFT JOIN "+groupsChannelTable+" AS gc ON dc.device_id = gc.channel_id AND gc.group_id = ?", req.GroupId)
+		Joins("LEFT JOIN "+deviceTable+" AS d ON dc.device_id = d.device_id").
+		Joins("LEFT JOIN "+groupsChannelTable+" AS gc ON dc.channel_id = gc.channel_id AND gc.group_id = ?", req.GroupId)
 
 	// 如果有设备ID过滤条件
 	if req.DeviceId != "" {
@@ -1682,7 +1682,7 @@ func (gb *GB28181Plugin) GetGroupChannels(ctx context.Context, req *pb.GetGroupC
 	resp.Code = 0
 	resp.Message = "获取通道列表成功"
 	resp.Total = int32(total)
-	resp.List = pbGroupChannels
+	resp.Data = pbGroupChannels
 	return resp, nil
 }
 

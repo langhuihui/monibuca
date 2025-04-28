@@ -1093,7 +1093,7 @@ message GroupChannelsResponse {
   int32 code = 1;
   string message = 2;
   int32 total = 3;
-  repeated GroupChannel list = 4;
+  repeated GroupChannel data = 4;
 }
 
 // 回放暂停请求
