@@ -407,8 +407,19 @@ func (d *Device) Go() (err error) {
 	} else {
 		d.Debug("catalog", "response", response.String())
 	}
-	subTick := time.NewTicker(time.Second * 3600)
-	defer subTick.Stop()
+
+	// 创建并启动目录订阅任务
+	if d.SubscribeCatalog > 0 {
+		catalogSubTask := NewCatalogSubscribeTask(d)
+		d.AddTask(catalogSubTask)
+	}
+
+	// 创建并启动位置订阅任务
+	if d.SubscribePosition > 0 {
+		positionSubTask := NewPositionSubscribeTask(d)
+		d.AddTask(positionSubTask)
+	}
+
 	catalogTick := time.NewTicker(time.Minute * 10)
 	keepaliveSeconds := 60
 	if d.KeepaliveInterval >= 5 {
@@ -431,19 +442,6 @@ func (d *Device) Go() (err error) {
 				})
 				d.Stop(fmt.Errorf("device keepalive timeout after %v", timeDiff))
 				return
-			}
-		case <-subTick.C:
-			response, err = d.subscribeCatalog()
-			if err != nil {
-				d.Error("subCatalog", "err", err)
-			} else {
-				d.Debug("subCatalog", "response", response.String())
-			}
-			response, err = d.subscribePosition(int(6))
-			if err != nil {
-				d.Error("subPosition", "err", err)
-			} else {
-				d.Debug("subPosition", "response", response.String())
 			}
 		case <-catalogTick.C:
 			if time.Since(d.KeepaliveTime) > time.Second*time.Duration(d.Expires) {
@@ -544,7 +542,7 @@ func (d *Device) queryDeviceStatus() (*sip.Response, error) {
 
 func (d *Device) subscribePosition(interval int) (*sip.Response, error) {
 	request := d.CreateRequest(sip.SUBSCRIBE, nil)
-	request.AppendHeader(sip.NewHeader("Expires", "3600"))
+	request.AppendHeader(sip.NewHeader("Expires", strconv.Itoa(d.SubscribePosition)))
 	request.SetBody(gb28181.BuildDevicePositionXML(d.SN, d.DeviceID, interval))
 	return d.send(request)
 }
