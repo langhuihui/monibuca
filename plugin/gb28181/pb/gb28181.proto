@@ -458,7 +458,7 @@ service api {
       body: "channels"
     };
   }
-  
+
   // 删除分组与通道关联
   rpc DeleteGroupChannel (DeleteGroupChannelRequest) returns (BaseResponse) {
     option (google.api.http) = {
@@ -466,7 +466,7 @@ service api {
       body: "*"
     };
   }
-  
+
   // 获取分组下的通道列表
   rpc GetGroupChannels (GetGroupChannelsRequest) returns (GroupChannelsResponse) {
     option (google.api.http) = {
@@ -1009,6 +1009,7 @@ message Group {
   int32 pid = 5;                  // 父分组ID
   int32 level = 6;                // 分组层级
   repeated Group children = 7;     // 子组织数组
+  repeated GroupChannel channels = 8; // 该组关联的通道列表
 }
 
 // 获取单个分组请求
@@ -1080,7 +1081,7 @@ message GetGroupChannelsRequest {
 message GroupChannel {
   int32 id = 1;                       // ID
   int32 groupId = 4;                  // 分组ID
-  string channelId = 5;               // 通道ID 
+  string channelId = 5;               // 通道ID
   string deviceId = 6;                // 设备ID
   string channelName = 7;             // 通道名称，非数据库字段，查询时填充
   string deviceName = 8;              // 设备名称，非数据库字段，查询时填充

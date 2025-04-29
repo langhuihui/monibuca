@@ -1756,6 +1756,7 @@ func (gb *GB28181Plugin) GetGroups(ctx context.Context, req *pb.GetGroupsRequest
 	}
 
 	for _, dbGroup := range dbGroups {
+		// 创建组对象
 		group := &pb.Group{
 			Id:         int32(dbGroup.ID),
 			Name:       dbGroup.Name,
@@ -1765,8 +1766,17 @@ func (gb *GB28181Plugin) GetGroups(ctx context.Context, req *pb.GetGroupsRequest
 			UpdateTime: timestamppb.New(dbGroup.UpdateTime),
 		}
 
-		// 递归获取子组织
-		children, err := gb.getChildGroups(int32(dbGroup.ID))
+		// 获取该组关联的通道
+		channels, err := gb.getGroupChannels(int32(dbGroup.ID))
+		if err != nil {
+			gb.Error("获取组关联通道失败", "error", err, "groupId", dbGroup.ID)
+		} else {
+			// 设置该组的通道列表
+			group.Channels = channels
+		}
+
+		// 递归获取子组织及其通道
+		children, err := gb.getChildGroupsWithChannels(int32(dbGroup.ID))
 		if err != nil {
 			return nil, err
 		}
@@ -1775,14 +1785,125 @@ func (gb *GB28181Plugin) GetGroups(ctx context.Context, req *pb.GetGroupsRequest
 		groups = append(groups, group)
 	}
 
-	return &pb.GroupsListResponse{
+	// 创建响应
+	resp := &pb.GroupsListResponse{
 		Code:    0,
 		Message: "success",
 		Data:    groups,
-	}, nil
+	}
+
+	return resp, nil
 }
 
-// 递归获取子组织
+// getGroupChannels 获取指定组ID关联的通道列表
+func (gb *GB28181Plugin) getGroupChannels(groupId int32) ([]*pb.GroupChannel, error) {
+	// 正确获取模型对应的表名
+	deviceChannel := &gb28181.DeviceChannel{}
+	device := &Device{}
+	groupsChannel := &gb28181.GroupsChannelModel{}
+
+	deviceChannelTable := deviceChannel.TableName()
+	deviceTable := device.TableName()
+	groupsChannelTable := groupsChannel.TableName()
+
+	// 查询结果结构
+	type Result struct {
+		ID          int    `gorm:"column:id"`
+		ChannelID   string `gorm:"column:channel_id"`
+		DeviceID    string `gorm:"column:device_id"`
+		ChannelName string `gorm:"column:channel_name"`
+		DeviceName  string `gorm:"column:device_name"`
+		Status      string `gorm:"column:status"`
+		InGroup     bool   `gorm:"column:in_group"`
+	}
+
+	// 构建查询
+	query := gb.DB.Table(groupsChannelTable+" AS gc").
+		Select(`
+			gc.id AS id,
+			gc.channel_id AS channel_id,
+			gc.device_id AS device_id,
+			dc.name AS channel_name,
+			d.name AS device_name,
+			dc.status AS status,
+			true AS in_group
+		`).
+		Joins("LEFT JOIN "+deviceChannelTable+" AS dc ON gc.channel_id = dc.channel_id").
+		Joins("LEFT JOIN "+deviceTable+" AS d ON gc.device_id = d.device_id").
+		Where("gc.group_id = ?", groupId)
+
+	var results []Result
+	if err := query.Find(&results).Error; err != nil {
+		return nil, err
+	}
+
+	// 转换结果为响应格式
+	var pbGroupChannels []*pb.GroupChannel
+	for _, result := range results {
+		channelInfo := &pb.GroupChannel{
+			Id:          int32(result.ID),
+			GroupId:     groupId,
+			ChannelId:   result.ChannelID,
+			DeviceId:    result.DeviceID,
+			ChannelName: result.ChannelName,
+			DeviceName:  result.DeviceName,
+			Status:      result.Status,
+			InGroup:     result.InGroup,
+		}
+
+		// 从内存中获取设备信息以获取传输协议
+		if device, ok := gb.devices.Get(result.DeviceID); ok {
+			channelInfo.StreamMode = device.StreamMode
+		}
+
+		pbGroupChannels = append(pbGroupChannels, channelInfo)
+	}
+
+	return pbGroupChannels, nil
+}
+
+// 递归获取子组织及其通道
+func (gb *GB28181Plugin) getChildGroupsWithChannels(parentId int32) ([]*pb.Group, error) {
+	var children []*pb.Group
+	var dbGroups []gb28181.GroupsModel
+
+	if err := gb.DB.Where("pid = ?", parentId).Find(&dbGroups).Error; err != nil {
+		return nil, err
+	}
+
+	for _, dbGroup := range dbGroups {
+		group := &pb.Group{
+			Id:         int32(dbGroup.ID),
+			Name:       dbGroup.Name,
+			Pid:        int32(dbGroup.PID),
+			Level:      int32(dbGroup.Level),
+			CreateTime: timestamppb.New(dbGroup.CreateTime),
+			UpdateTime: timestamppb.New(dbGroup.UpdateTime),
+		}
+
+		// 获取该组关联的通道
+		channels, err := gb.getGroupChannels(int32(dbGroup.ID))
+		if err != nil {
+			gb.Error("获取组关联通道失败", "error", err, "groupId", dbGroup.ID)
+		} else {
+			// 设置该组的通道列表
+			group.Channels = channels
+		}
+
+		// 递归获取子组织及其通道
+		subChildren, err := gb.getChildGroupsWithChannels(int32(dbGroup.ID))
+		if err != nil {
+			return nil, err
+		}
+		group.Children = subChildren
+
+		children = append(children, group)
+	}
+
+	return children, nil
+}
+
+// 递归获取子组织（不包含通道信息，保留此方法以兼容其他可能的调用）
 func (gb *GB28181Plugin) getChildGroups(parentId int32) ([]*pb.Group, error) {
 	var children []*pb.Group
 	var dbGroups []gb28181.GroupsModel
@@ -2287,33 +2408,54 @@ func (gb *GB28181Plugin) DeleteGroup(ctx context.Context, req *pb.DeleteGroupReq
 		return resp, nil
 	}
 
-	// 检查是否有子分组
-	var childCount int64
-	if err := gb.DB.Model(&gb28181.GroupsModel{}).Where("pid = ?", req.Id).Count(&childCount).Error; err != nil {
+	// 查询所有子分组，用于递归删除
+	var childGroups []gb28181.GroupsModel
+	if err := gb.DB.Where("pid = ?", req.Id).Find(&childGroups).Error; err != nil {
 		resp.Code = 500
 		resp.Message = fmt.Sprintf("查询子分组失败: %v", err)
-		return resp, nil
-	}
-
-	if childCount > 0 {
-		resp.Code = 400
-		resp.Message = "该分组下有子分组，请先删除子分组"
 		return resp, nil
 	}
 
 	// 开始事务
 	tx := gb.DB.Begin()
 
-	// 删除分组下的所有通道关联
-	if err := tx.Where("group_id = ?", req.Id).Delete(&gb28181.GroupsChannelModel{}).Error; err != nil {
-		tx.Rollback()
-		resp.Code = 500
-		resp.Message = fmt.Sprintf("删除分组下的通道关联失败: %v", err)
-		return resp, nil
+	// 定义递归删除函数，返回删除的分组数量和错误
+	var deleteGroupAndChildren func(groupID int) (int, error)
+	deleteGroupAndChildren = func(groupID int) (int, error) {
+		// 查询所有子分组
+		var children []gb28181.GroupsModel
+		if err := tx.Where("pid = ?", groupID).Find(&children).Error; err != nil {
+			return 0, fmt.Errorf("查询子分组失败: %v", err)
+		}
+
+		count := 1 // 当前分组
+
+		// 递归删除每个子分组
+		for _, child := range children {
+			// 递归删除子分组及其子分组
+			subCount, err := deleteGroupAndChildren(child.ID)
+			if err != nil {
+				return 0, err
+			}
+			count += subCount
+		}
+
+		// 删除当前分组的通道关联
+		if err := tx.Where("group_id = ?", groupID).Delete(&gb28181.GroupsChannelModel{}).Error; err != nil {
+			return 0, fmt.Errorf("删除分组的通道关联失败: %v", err)
+		}
+
+		// 删除当前分组
+		if err := tx.Delete(&gb28181.GroupsModel{}, groupID).Error; err != nil {
+			return 0, fmt.Errorf("删除分组失败: %v", err)
+		}
+
+		return count, nil
 	}
 
-	// 删除分组
-	if err := tx.Delete(&group).Error; err != nil {
+	// 记录删除的分组数量
+	deletedCount, err := deleteGroupAndChildren(int(req.Id))
+	if err != nil {
 		tx.Rollback()
 		resp.Code = 500
 		resp.Message = fmt.Sprintf("删除分组失败: %v", err)
@@ -2329,10 +2471,11 @@ func (gb *GB28181Plugin) DeleteGroup(ctx context.Context, req *pb.DeleteGroupReq
 
 	gb.Info("删除分组成功",
 		"groupId", req.Id,
-		"groupName", group.Name)
+		"groupName", group.Name,
+		"deletedCount", deletedCount)
 
 	resp.Code = 0
-	resp.Message = "分组删除成功"
+	resp.Message = fmt.Sprintf("分组删除成功，共删除 %d 个分组", deletedCount)
 	return resp, nil
 }
 
