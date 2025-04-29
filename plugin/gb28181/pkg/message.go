@@ -145,6 +145,8 @@ type (
 		CmdType           string
 		SN                int // 请求序列号，一般用于对应 request 和 response
 		DeviceID          string
+		Longitude         string // 经度
+		Latitude          string // 纬度
 		DeviceName        string
 		Manufacturer      string
 		Model             string

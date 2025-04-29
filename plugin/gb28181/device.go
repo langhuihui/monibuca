@@ -312,6 +312,8 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 			d.UpdateTime = time.Now()
 			if err := d.plugin.DB.Model(d).Updates(map[string]interface{}{
 				"update_time": d.UpdateTime,
+				"longitude":   msg.Longitude,
+				"latitude":    msg.Latitude,
 			}).Error; err != nil {
 				d.Error("save device status failed", "error", err)
 			}
@@ -323,6 +325,8 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 		d.Model = msg.Model
 		d.Firmware = msg.Firmware
 		d.UpdateTime = time.Now()
+		d.Latitude = msg.Latitude
+		d.Longitude = msg.Longitude
 		// 更新设备信息到数据库
 		if d.plugin.DB != nil {
 			if err := d.plugin.DB.Model(d).Updates(map[string]interface{}{
@@ -331,6 +335,8 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 				"model":        d.Model,
 				"firmware":     d.Firmware,
 				"update_time":  d.UpdateTime,
+				"longitude":    d.Longitude,
+				"latitude":     d.Latitude,
 			}).Error; err != nil {
 				d.Error("save device info failed", "error", err)
 			}
