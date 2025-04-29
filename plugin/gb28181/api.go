@@ -1607,7 +1607,7 @@ func (gb *GB28181Plugin) GetGroupChannels(ctx context.Context, req *pb.GetGroupC
 	baseQuery := gb.DB.Table(deviceChannelTable+" AS dc").
 		Select(`
 			IFNULL(gc.id, 0) AS id,
-			dc.device_id AS channel_id,
+			dc.channel_id,
 			dc.name AS channel_name,
 			d.device_id AS device_id,
 			d.name AS device_name,
@@ -2039,7 +2039,7 @@ func (gb *GB28181Plugin) AddGroupChannel(ctx context.Context, req *pb.AddGroupCh
 		if err := tx.Commit().Error; err != nil {
 			return &pb.BaseResponse{Code: 500, Message: fmt.Sprintf("提交事务失败: %v", err)}, nil
 		}
-		return &pb.BaseResponse{Code: 200, Message: "清空分组下的所有通道关联成功"}, nil
+		return &pb.BaseResponse{Code: 0, Message: "清空分组下的所有通道关联成功"}, nil
 	}
 
 	// 遍历通道列表，为每个通道创建新的关联
@@ -2061,7 +2061,7 @@ func (gb *GB28181Plugin) AddGroupChannel(ctx context.Context, req *pb.AddGroupCh
 		return &pb.BaseResponse{Code: 500, Message: fmt.Sprintf("提交事务失败: %v", err)}, nil
 	}
 
-	return &pb.BaseResponse{Code: 200, Message: "添加分组通道关联成功"}, nil
+	return &pb.BaseResponse{Code: 0, Message: "添加分组通道关联成功"}, nil
 }
 
 // PlaybackPause 实现回放暂停功能
