@@ -1662,6 +1662,7 @@ func (gb *GB28181Plugin) GetGroupChannels(ctx context.Context, req *pb.GetGroupC
 			ChannelName: result.ChannelName,
 			DeviceName:  result.DeviceName,
 			Status:      result.Status,
+			InGroup:     result.InGroup, // 设置inGroup字段
 		}
 
 		// 从内存中获取设备信息以获取传输协议

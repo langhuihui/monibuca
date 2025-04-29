@@ -1086,6 +1086,7 @@ message GroupChannel {
   string deviceName = 8;              // 设备名称，非数据库字段，查询时填充
   string status = 9;                  // 通道状态，非数据库字段，查询时填充
   string streamMode = 10;             // 传输协议(TCP-ACTIVE/TCP-PASSIVE/UDP)，非数据库字段，查询时从设备获取
+  bool inGroup = 11; //是否加入组,true表示已经加入组,false表示未在组里
 }
 
 // 分组通道列表响应

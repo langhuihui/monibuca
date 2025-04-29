@@ -5544,6 +5544,7 @@ type GroupChannel struct {
 	DeviceName    string                 `protobuf:"bytes,8,opt,name=deviceName,proto3" json:"deviceName,omitempty"`   // 设备名称，非数据库字段，查询时填充
 	Status        string                 `protobuf:"bytes,9,opt,name=status,proto3" json:"status,omitempty"`           // 通道状态，非数据库字段，查询时填充
 	StreamMode    string                 `protobuf:"bytes,10,opt,name=streamMode,proto3" json:"streamMode,omitempty"`  // 传输协议(TCP-ACTIVE/TCP-PASSIVE/UDP)，非数据库字段，查询时从设备获取
+	InGroup       bool                   `protobuf:"varint,11,opt,name=inGroup,proto3" json:"inGroup,omitempty"`       //是否加入组,true表示已经加入组,false表示未在组里
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -5632,6 +5633,13 @@ func (x *GroupChannel) GetStreamMode() string {
 		return x.StreamMode
 	}
 	return ""
+}
+
+func (x *GroupChannel) GetInGroup() bool {
+	if x != nil {
+		return x.InGroup
+	}
+	return false
 }
 
 // 分组通道列表响应
@@ -6460,7 +6468,7 @@ const file_gb28181_proto_rawDesc = "" +
 	"\agroupId\x18\x01 \x01(\x05R\agroupId\x12\x12\n" +
 	"\x04page\x18\x02 \x01(\x05R\x04page\x12\x14\n" +
 	"\x05count\x18\x03 \x01(\x05R\x05count\x12\x1a\n" +
-	"\bdeviceId\x18\x04 \x01(\tR\bdeviceId\"\xec\x01\n" +
+	"\bdeviceId\x18\x04 \x01(\tR\bdeviceId\"\x86\x02\n" +
 	"\fGroupChannel\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x05R\x02id\x12\x18\n" +
 	"\agroupId\x18\x04 \x01(\x05R\agroupId\x12\x1c\n" +
@@ -6474,7 +6482,8 @@ const file_gb28181_proto_rawDesc = "" +
 	"\n" +
 	"streamMode\x18\n" +
 	" \x01(\tR\n" +
-	"streamMode\"\x89\x01\n" +
+	"streamMode\x12\x18\n" +
+	"\ainGroup\x18\v \x01(\bR\ainGroup\"\x89\x01\n" +
 	"\x15GroupChannelsResponse\x12\x12\n" +
 	"\x04code\x18\x01 \x01(\x05R\x04code\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12\x14\n" +
