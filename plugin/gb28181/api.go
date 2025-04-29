@@ -2031,6 +2031,16 @@ func (gb *GB28181Plugin) AddGroupChannel(ctx context.Context, req *pb.AddGroupCh
 		return &pb.BaseResponse{Code: 500, Message: fmt.Sprintf("删除分组下的所有通道关联失败: %v", err)}, nil
 	}
 
+	// 检查Channels是否为空数组
+	if len(req.Channels) == 0 {
+		// 如果是空数组，表示清空该分组下的所有通道关联
+		// 由于前面已经删除了所有关联，这里直接提交事务即可
+		if err := tx.Commit().Error; err != nil {
+			return &pb.BaseResponse{Code: 500, Message: fmt.Sprintf("提交事务失败: %v", err)}, nil
+		}
+		return &pb.BaseResponse{Code: 200, Message: "清空分组下的所有通道关联成功"}, nil
+	}
+
 	// 遍历通道列表，为每个通道创建新的关联
 	for _, channel := range req.Channels {
 		newGroupChannel := &gb28181.GroupsChannelModel{
