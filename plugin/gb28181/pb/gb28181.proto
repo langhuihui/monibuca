@@ -550,43 +550,43 @@ message GetSubChannelsRequest {
 }
 
 message Channel {
-  string ID =1;
-  string DeviceID      =2;
-  string ChannelID    =3;
-  string ParentID     =4;
-  string  Name        =5;
-  string Manufacturer =6;
-  string Model =7;
-  string  Owner =8;
-  string CivilCode = 9;
-  string Address = 10;
-  int32 Port = 11;
-  int32 Parental = 12;
-  int32 SafetyWay = 13;
-  int32  RegisterWay = 14;
-  int32 Secrecy     =15;
-  string Status       =16;
-  google.protobuf.Timestamp GpsTime=17;
-  string Longitude = 18;
-  string Latitude = 19;
+  string id =1;
+  string deviceId      =2;
+  string channelId    =3;
+  string parentId     =4;
+  string  name        =5;
+  string manufacturer =6;
+  string model =7;
+  string  owner =8;
+  string civilCode = 9;
+  string address = 10;
+  int32 port = 11;
+  int32 parental = 12;
+  int32 safetyWay = 13;
+  int32  registerWay = 14;
+  int32 secrecy     =15;
+  string status       =16;
+  google.protobuf.Timestamp gpsTime=17;
+  string longitude = 18;
+  string latitude = 19;
 }
 
 message Device {
-  string deviceID = 1;
+  string deviceId = 1;
   string name = 2;
   string manufacturer = 3;
   string model = 4;
   string longitude = 5;
   string latitude = 6;
   string status = 7;
-  string mediaIP = 8;
+  string mediaIp = 8;
   google.protobuf.Timestamp registerTime = 9;
   google.protobuf.Timestamp updateTime = 10;
   google.protobuf.Timestamp keepAliveTime = 11;
   int32 channelCount = 12;
   bool online = 13;
   repeated Channel channels = 14;
-  string sipIP = 15;
+  string sipIp = 15;
   string streamMode = 16;
   string password = 17;
   bool subscribeCatalog = 18;
@@ -748,7 +748,7 @@ message SSRCListResponse {
 
 // Platform消息定义
 message Platform {
-  uint32 ID = 1;                      // ID(数据库中)
+  uint32 id = 1;                      // id(数据库中)
   bool enable = 2;                   // 是否启用
   string name = 3;                   // 名称
   string serverGBId = 4;             // SIP服务国标编码

@@ -77,7 +77,7 @@ func (gb *GB28181Plugin) List(ctx context.Context, req *pb.GetDevicesRequest) (*
 	for _, d := range devices {
 		// 查询设备对应的通道
 		var channels []gb28181.DeviceChannel
-		if err := gb.DB.Where(&gb28181.DeviceChannel{DeviceID: d.DeviceID}).Find(&channels).Error; err != nil {
+		if err := gb.DB.Where(&gb28181.DeviceChannel{DeviceID: d.DeviceId}).Find(&channels).Error; err != nil {
 			gb.Error("查询通道失败", "error", err)
 			continue
 		}
@@ -85,8 +85,8 @@ func (gb *GB28181Plugin) List(ctx context.Context, req *pb.GetDevicesRequest) (*
 		var pbChannels []*pb.Channel
 		for _, c := range channels {
 			pbChannels = append(pbChannels, &pb.Channel{
-				DeviceID:     c.ChannelID,
-				ParentID:     c.ParentID,
+				DeviceId:     c.ChannelID,
+				ParentId:     c.ParentID,
 				Name:         c.Name,
 				Manufacturer: c.Manufacturer,
 				Model:        c.Model,
@@ -106,7 +106,7 @@ func (gb *GB28181Plugin) List(ctx context.Context, req *pb.GetDevicesRequest) (*
 		}
 
 		pbDevices = append(pbDevices, &pb.Device{
-			DeviceID:      d.DeviceID,
+			DeviceId:      d.DeviceId,
 			Name:          d.Name,
 			Manufacturer:  d.Manufacturer,
 			Model:         d.Model,
@@ -119,8 +119,8 @@ func (gb *GB28181Plugin) List(ctx context.Context, req *pb.GetDevicesRequest) (*
 			KeepAliveTime: timestamppb.New(d.KeepaliveTime),
 			ChannelCount:  int32(d.ChannelCount),
 			Channels:      pbChannels,
-			MediaIP:       d.MediaIP,
-			SipIP:         d.SipIP,
+			MediaIp:       d.MediaIp,
+			SipIp:         d.SipIp,
 			Password:      d.Password,
 			StreamMode:    d.StreamMode,
 		})
@@ -171,8 +171,8 @@ func (gb *GB28181Plugin) GetDevice(ctx context.Context, req *pb.GetDeviceRequest
 		var channels []*pb.Channel
 		for c := range d.channels.Range {
 			channels = append(channels, &pb.Channel{
-				DeviceID:     c.DeviceID,
-				ParentID:     c.ParentID,
+				DeviceId:     c.DeviceID,
+				ParentId:     c.ParentID,
 				Name:         c.Name,
 				Manufacturer: c.Manufacturer,
 				Model:        c.Model,
@@ -191,7 +191,7 @@ func (gb *GB28181Plugin) GetDevice(ctx context.Context, req *pb.GetDeviceRequest
 			})
 		}
 		resp.Data = &pb.Device{
-			DeviceID:     d.DeviceID,
+			DeviceId:     d.DeviceId,
 			Name:         d.Name,
 			Manufacturer: d.Manufacturer,
 			Model:        d.Model,
@@ -202,8 +202,8 @@ func (gb *GB28181Plugin) GetDevice(ctx context.Context, req *pb.GetDeviceRequest
 			RegisterTime: timestamppb.New(d.RegisterTime),
 			UpdateTime:   timestamppb.New(d.UpdateTime),
 			Channels:     channels,
-			MediaIP:      d.MediaIP,
-			SipIP:        d.SipIP,
+			MediaIp:      d.MediaIp,
+			SipIp:        d.SipIp,
 			Password:     d.Password,
 			StreamMode:   d.StreamMode,
 		}
@@ -272,7 +272,7 @@ func (gb *GB28181Plugin) GetDevices(ctx context.Context, req *pb.GetDevicesReque
 	for _, d := range devices {
 		// 查询设备对应的通道
 		var channels []gb28181.DeviceChannel
-		if err := gb.DB.Where(&gb28181.DeviceChannel{DeviceID: d.DeviceID}).Find(&channels).Error; err != nil {
+		if err := gb.DB.Where(&gb28181.DeviceChannel{DeviceID: d.DeviceId}).Find(&channels).Error; err != nil {
 			gb.Error("查询通道失败", "error", err)
 			continue
 		}
@@ -280,8 +280,8 @@ func (gb *GB28181Plugin) GetDevices(ctx context.Context, req *pb.GetDevicesReque
 		var pbChannels []*pb.Channel
 		for _, c := range channels {
 			pbChannels = append(pbChannels, &pb.Channel{
-				DeviceID:     c.ChannelID,
-				ParentID:     c.ParentID,
+				DeviceId:     c.ChannelID,
+				ParentId:     c.ParentID,
 				Name:         c.Name,
 				Manufacturer: c.Manufacturer,
 				Model:        c.Model,
@@ -301,7 +301,7 @@ func (gb *GB28181Plugin) GetDevices(ctx context.Context, req *pb.GetDevicesReque
 		}
 
 		pbDevice := &pb.Device{
-			DeviceID:      d.DeviceID,
+			DeviceId:      d.DeviceId,
 			Name:          d.Name,
 			Manufacturer:  d.Manufacturer,
 			Model:         d.Model,
@@ -313,8 +313,8 @@ func (gb *GB28181Plugin) GetDevices(ctx context.Context, req *pb.GetDevicesReque
 			UpdateTime:    timestamppb.New(d.UpdateTime),
 			KeepAliveTime: timestamppb.New(d.KeepaliveTime),
 			Channels:      pbChannels,
-			MediaIP:       d.MediaIP,
-			SipIP:         d.SipIP,
+			MediaIp:       d.MediaIp,
+			SipIp:         d.SipIp,
 			Password:      d.Password,
 			StreamMode:    d.StreamMode,
 		}
@@ -337,7 +337,7 @@ func (gb *GB28181Plugin) GetChannels(ctx context.Context, req *pb.GetChannelsReq
 	if !ok && gb.DB != nil {
 		// 如果内存中没有且数据库存在，则从数据库查询
 		var device Device
-		if err := gb.DB.Where(Device{DeviceID: req.DeviceId}).First(&device).Error; err == nil {
+		if err := gb.DB.Where(Device{DeviceId: req.DeviceId}).First(&device).Error; err == nil {
 			d = &device
 		}
 	}
@@ -362,8 +362,8 @@ func (gb *GB28181Plugin) GetChannels(ctx context.Context, req *pb.GetChannelsReq
 			if req.Page == 0 && req.Count == 0 {
 				// 不分页，添加所有符合条件的通道
 				channels = append(channels, &pb.Channel{
-					DeviceID:     c.DeviceID,
-					ParentID:     c.ParentID,
+					DeviceId:     c.DeviceID,
+					ParentId:     c.ParentID,
 					Name:         c.Name,
 					Manufacturer: c.Manufacturer,
 					Model:        c.Model,
@@ -389,8 +389,8 @@ func (gb *GB28181Plugin) GetChannels(ctx context.Context, req *pb.GetChannelsReq
 					continue
 				}
 				channels = append(channels, &pb.Channel{
-					DeviceID:     c.DeviceID,
-					ParentID:     c.ParentID,
+					DeviceId:     c.DeviceID,
+					ParentId:     c.ParentID,
 					Name:         c.Name,
 					Manufacturer: c.Manufacturer,
 					Model:        c.Model,
@@ -441,8 +441,8 @@ func (gb *GB28181Plugin) SyncDevice(ctx context.Context, req *pb.SyncDeviceReque
 
 			// 初始化 Task
 			var hash uint32
-			for i := 0; i < len(d.DeviceID); i++ {
-				ch := d.DeviceID[i]
+			for i := 0; i < len(d.DeviceId); i++ {
+				ch := d.DeviceId[i]
 				hash = hash*31 + uint32(ch)
 			}
 			d.Task.ID = hash
@@ -462,7 +462,7 @@ func (gb *GB28181Plugin) SyncDevice(ctx context.Context, req *pb.SyncDeviceReque
 			d.contactHDR = sip.ContactHeader{
 				Address: sip.Uri{
 					User: gb.Serial,
-					Host: d.SipIP,
+					Host: d.SipIp,
 					Port: d.Port,
 				},
 			}
@@ -470,11 +470,11 @@ func (gb *GB28181Plugin) SyncDevice(ctx context.Context, req *pb.SyncDeviceReque
 			d.Recipient = sip.Uri{
 				Host: d.IP,
 				Port: d.Port,
-				User: d.DeviceID,
+				User: d.DeviceId,
 			}
 
 			// 初始化 SIP 客户端
-			d.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(d.SipIP))
+			d.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(d.SipIp))
 
 			// 将设备添加到内存中
 			gb.devices.Add(d)
@@ -511,7 +511,10 @@ func (gb *GB28181Plugin) UpdateDevice(ctx context.Context, req *pb.Device) (*pb.
 	}
 
 	// 先从缓存中读取设备
-	if d, ok := gb.devices.Get(req.DeviceID); ok {
+	if d, ok := gb.devices.Get(req.DeviceId); ok {
+		// 保存原始密码，用于后续检查是否修改了密码
+		originalPassword := d.Password
+
 		// 先停止设备任务
 		d.Stop(fmt.Errorf("device updated"))
 
@@ -533,17 +536,17 @@ func (gb *GB28181Plugin) UpdateDevice(ctx context.Context, req *pb.Device) (*pb.
 		}
 
 		// 更新新增字段
-		if req.MediaIP != "" {
-			d.MediaIP = req.MediaIP
+		if req.MediaIp != "" {
+			d.MediaIp = req.MediaIp
 		}
-		if req.SipIP != "" {
-			d.SipIP = req.SipIP
+		if req.SipIp != "" {
+			d.SipIp = req.SipIp
 
 			// 更新SIP相关字段
 			d.contactHDR = sip.ContactHeader{
 				Address: sip.Uri{
 					User: gb.Serial,
-					Host: d.SipIP,
+					Host: d.SipIp,
 					Port: d.Port,
 				},
 			}
@@ -577,8 +580,8 @@ func (gb *GB28181Plugin) UpdateDevice(ctx context.Context, req *pb.Device) (*pb.
 			"model":              d.Model,
 			"longitude":          d.Longitude,
 			"latitude":           d.Latitude,
-			"media_ip":           d.MediaIP,
-			"sip_ip":             d.SipIP,
+			"media_ip":           d.MediaIp,
+			"sip_ip":             d.SipIp,
 			"stream_mode":        d.StreamMode,
 			"password":           d.Password,
 			"subscribe_catalog":  d.SubscribeCatalog,
@@ -586,25 +589,31 @@ func (gb *GB28181Plugin) UpdateDevice(ctx context.Context, req *pb.Device) (*pb.
 			"update_time":        d.UpdateTime,
 		}
 
-		if err := gb.DB.Model(&Device{}).Where("device_id = ?", req.DeviceID).Updates(updates).Error; err != nil {
+		if err := gb.DB.Model(&Device{}).Where("device_id = ?", req.DeviceId).Updates(updates).Error; err != nil {
 			resp.Code = 500
 			resp.Message = fmt.Sprintf("更新设备失败: %v", err)
 			return resp, nil
 		}
 
-		// 重新启动设备任务
-		gb.AddTask(d)
+		// 检查密码是否被修改
+		passwordChanged := req.Password != "" && req.Password != originalPassword
 
-		// 如果需要订阅目录，创建并启动目录订阅任务
-		if d.SubscribeCatalog > 0 && d.Online {
-			catalogSubTask := NewCatalogSubscribeTask(d)
-			d.AddTask(catalogSubTask)
-		}
+		// 如果密码没有被修改，则需要重新启动设备任务和订阅任务
+		if !passwordChanged {
+			// 重新启动设备任务
+			gb.AddTask(d)
 
-		// 如果需要订阅位置，创建并启动位置订阅任务
-		if d.SubscribePosition > 0 && d.Online {
-			positionSubTask := NewPositionSubscribeTask(d)
-			d.AddTask(positionSubTask)
+			// 如果需要订阅目录，创建并启动目录订阅任务
+			if d.SubscribeCatalog > 0 && d.Online {
+				catalogSubTask := NewCatalogSubscribeTask(d)
+				d.AddTask(catalogSubTask)
+			}
+
+			// 如果需要订阅位置，创建并启动位置订阅任务
+			if d.SubscribePosition > 0 && d.Online {
+				positionSubTask := NewPositionSubscribeTask(d)
+				d.AddTask(positionSubTask)
+			}
 		}
 
 		resp.Code = 0
@@ -614,7 +623,7 @@ func (gb *GB28181Plugin) UpdateDevice(ctx context.Context, req *pb.Device) (*pb.
 
 	// 如果缓存中没有，则从数据库中查找设备
 	var device Device
-	if err := gb.DB.Where("device_id = ?", req.DeviceID).First(&device).Error; err != nil {
+	if err := gb.DB.Where("device_id = ?", req.DeviceId).First(&device).Error; err != nil {
 		// 如果数据库中也没有找到设备，返回错误
 		resp.Code = 404
 		resp.Message = fmt.Sprintf("设备不存在: %v", err)
@@ -637,16 +646,17 @@ func (gb *GB28181Plugin) UpdateDevice(ctx context.Context, req *pb.Device) (*pb.
 	if req.Longitude != "" {
 		updates["longitude"] = req.Longitude
 	}
+
 	if req.Latitude != "" {
 		updates["latitude"] = req.Latitude
 	}
 
 	// 更新新增字段
-	if req.MediaIP != "" {
-		updates["media_ip"] = req.MediaIP
+	if req.MediaIp != "" {
+		updates["media_ip"] = req.MediaIp
 	}
-	if req.SipIP != "" {
-		updates["sip_ip"] = req.SipIP
+	if req.SipIp != "" {
+		updates["sip_ip"] = req.SipIp
 	}
 	if req.StreamMode != "" {
 		updates["stream_mode"] = req.StreamMode
@@ -885,7 +895,7 @@ func (gb *GB28181Plugin) UpdatePlatform(ctx context.Context, req *pb.Platform) (
 
 	// 检查平台是否存在
 	var platform gb28181.PlatformModel
-	if err := gb.DB.First(&platform, req.ID).Error; err != nil {
+	if err := gb.DB.First(&platform, req.Id).Error; err != nil {
 		resp.Code = 404
 		resp.Message = "platform not found"
 		return resp, nil
@@ -1230,8 +1240,8 @@ func (gb *GB28181Plugin) TestSip(ctx context.Context, req *pb.TestSipRequest) (*
 
 	// 创建一个临时设备用于测试
 	device := &Device{
-		DeviceID:   "34020000002000000001",
-		SipIP:      "192.168.1.17",
+		DeviceId:   "34020000002000000001",
+		SipIp:      "192.168.1.17",
 		Port:       5060,
 		IP:         "192.168.1.102",
 		StreamMode: "TCP-PASSIVE",
@@ -1250,13 +1260,13 @@ func (gb *GB28181Plugin) TestSip(ctx context.Context, req *pb.TestSipRequest) (*
 	device.contactHDR = sip.ContactHeader{
 		Address: sip.Uri{
 			User: gb.Serial,
-			Host: device.SipIP,
+			Host: device.SipIp,
 			Port: device.Port,
 		},
 	}
 
 	// 初始化SIP客户端
-	device.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(device.SipIP))
+	device.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(device.SipIp))
 	if device.client == nil {
 		resp.Code = 500
 		resp.Message = "failed to create sip client"
@@ -1281,9 +1291,9 @@ func (gb *GB28181Plugin) TestSip(ctx context.Context, req *pb.TestSipRequest) (*
 	// 构建SDP消息体
 	sdpInfo := []string{
 		"v=0",
-		fmt.Sprintf("o=%s 0 0 IN IP4 %s", "34020000001320000004", device.SipIP),
+		fmt.Sprintf("o=%s 0 0 IN IP4 %s", "34020000001320000004", device.SipIp),
 		"s=Play",
-		"c=IN IP4 " + device.SipIP,
+		"c=IN IP4 " + device.SipIp,
 		"t=0 0",
 		"m=video 43970 TCP/RTP/AVP 96 97 98 99",
 		"a=recvonly",
@@ -1311,7 +1321,7 @@ func (gb *GB28181Plugin) TestSip(ctx context.Context, req *pb.TestSipRequest) (*
 		ProtocolName:    "SIP",
 		ProtocolVersion: "2.0",
 		Transport:       "UDP",
-		Host:            device.SipIP,
+		Host:            device.SipIp,
 		Port:            device.Port,
 		Params:          sip.HeaderParams(sip.NewParams()),
 	}
@@ -1682,7 +1692,7 @@ func (gb *GB28181Plugin) GetSnap(ctx context.Context, req *pb.GetSnapRequest) (*
 		config := SnapshotConfig{
 			SnapNum:   1, // 默认抓拍1张
 			Interval:  1, // 默认间隔1秒
-			UploadURL: fmt.Sprintf("http://%s%s/gb28181/api/snap/upload", actualDevice.SipIP, gb.GetCommonConf().HTTP.ListenAddr),
+			UploadURL: fmt.Sprintf("http://%s%s/gb28181/api/snap/upload", actualDevice.SipIp, gb.GetCommonConf().HTTP.ListenAddr),
 			SessionID: fmt.Sprintf("%d", time.Now().UnixNano()),
 		}
 
@@ -1726,7 +1736,7 @@ func (gb *GB28181Plugin) GetSnap(ctx context.Context, req *pb.GetSnapRequest) (*
 		config := SnapshotConfig{
 			SnapNum:   1, // 默认抓拍1张
 			Interval:  1, // 默认间隔1秒
-			UploadURL: fmt.Sprintf("http://%s%s/gb28181/api/snap/upload", device.SipIP, gb.GetCommonConf().HTTP.ListenAddr),
+			UploadURL: fmt.Sprintf("http://%s%s/gb28181/api/snap/upload", device.SipIp, gb.GetCommonConf().HTTP.ListenAddr),
 			SessionID: fmt.Sprintf("%d", time.Now().UnixNano()),
 		}
 
@@ -2790,22 +2800,22 @@ func (gb *GB28181Plugin) RemoveDevice(ctx context.Context, req *pb.RemoveDeviceR
 
 	// 先从数据库中查找设备
 	var dbDevice Device
-	if err := tx.Where(&Device{DeviceID: req.Id}).First(&dbDevice).Error; err != nil {
+	if err := tx.Where(&Device{DeviceId: req.Id}).First(&dbDevice).Error; err != nil {
 		tx.Rollback()
 		resp.Code = 404
 		resp.Message = fmt.Sprintf("设备不存在: %v", err)
 		return resp, nil
 	}
 
-	// 使用数据库中的 DeviceID 从内存中查找设备
-	if device, ok := gb.devices.Get(dbDevice.DeviceID); ok {
+	// 使用数据库中的 DeviceId 从内存中查找设备
+	if device, ok := gb.devices.Get(dbDevice.DeviceId); ok {
 		// 停止设备相关任务
 		device.Stop(fmt.Errorf("device removed"))
 		// device.Stop() 会调用 Dispose()，其中已包含从 gb.devices 中移除设备的逻辑
 	}
 
 	// 删除设备关联的所有通道
-	if err := tx.Where(&gb28181.DeviceChannel{DeviceID: dbDevice.DeviceID}).Delete(&gb28181.DeviceChannel{}).Error; err != nil {
+	if err := tx.Where(&gb28181.DeviceChannel{DeviceID: dbDevice.DeviceId}).Delete(&gb28181.DeviceChannel{}).Error; err != nil {
 		tx.Rollback()
 		resp.Code = 500
 		resp.Message = fmt.Sprintf("删除设备通道失败: %v", err)
@@ -2828,7 +2838,7 @@ func (gb *GB28181Plugin) RemoveDevice(ctx context.Context, req *pb.RemoveDeviceR
 	}
 
 	gb.Info("删除设备成功",
-		"deviceId", dbDevice.DeviceID,
+		"deviceId", dbDevice.DeviceId,
 		"deviceName", dbDevice.Name)
 
 	resp.Code = 0

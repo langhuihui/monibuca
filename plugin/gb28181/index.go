@@ -220,7 +220,7 @@ func (gb *GB28181Plugin) checkDeviceExpire() (err error) {
 			device.eventChan = make(chan any, 10)
 
 			// 设置Logger
-			device.Logger = gb.With("deviceid", device.DeviceID)
+			device.Logger = gb.With("deviceid", device.DeviceId)
 
 			// 初始化通道集合
 			device.channels.L = new(sync.RWMutex)
@@ -235,7 +235,7 @@ func (gb *GB28181Plugin) checkDeviceExpire() (err error) {
 			device.contactHDR = sip.ContactHeader{
 				Address: sip.Uri{
 					User: gb.Serial,
-					Host: device.SipIP,
+					Host: device.SipIp,
 					Port: device.localPort,
 				},
 			}
@@ -244,7 +244,7 @@ func (gb *GB28181Plugin) checkDeviceExpire() (err error) {
 			device.fromHDR = sip.FromHeader{
 				Address: sip.Uri{
 					User: gb.Serial,
-					Host: device.SipIP,
+					Host: device.SipIp,
 					Port: device.localPort,
 				},
 				Params: sip.NewParams(),
@@ -255,17 +255,17 @@ func (gb *GB28181Plugin) checkDeviceExpire() (err error) {
 			device.Recipient = sip.Uri{
 				Host: device.IP,
 				Port: device.Port,
-				User: device.DeviceID,
+				User: device.DeviceId,
 			}
 
 			// 创建SIP客户端
-			device.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(device.SipIP))
-			device.Info("checkDeviceExpire", "d.SipIP", device.SipIP, "d.localPort", device.localPort, "d.contactHDR", device.contactHDR)
+			device.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(device.SipIp))
+			device.Info("checkDeviceExpire", "d.SipIp", device.SipIp, "d.localPort", device.localPort, "d.contactHDR", device.contactHDR)
 
 			// 设置设备ID的hash值作为任务ID
 			var hash uint32
-			for i := 0; i < len(device.DeviceID); i++ {
-				ch := device.DeviceID[i]
+			for i := 0; i < len(device.DeviceId); i++ {
+				ch := device.DeviceId[i]
 				hash = hash*31 + uint32(ch)
 			}
 			device.Task.ID = hash
@@ -276,7 +276,7 @@ func (gb *GB28181Plugin) checkDeviceExpire() (err error) {
 			device.channels.OnAdd(func(c *Channel) {
 				if absDevice, ok := gb.Server.PullProxies.Find(func(absDevice m7s.IPullProxy) bool {
 					conf := absDevice.GetConfig()
-					return conf.Type == "gb28181" && conf.URL == fmt.Sprintf("%s/%s", device.DeviceID, c.ChannelID)
+					return conf.Type == "gb28181" && conf.URL == fmt.Sprintf("%s/%s", device.DeviceId, c.ChannelID)
 				}); ok {
 					c.PullProxyTask = absDevice.(*PullProxy)
 					absDevice.ChangeStatus(m7s.PullProxyStatusOnline)
@@ -284,7 +284,7 @@ func (gb *GB28181Plugin) checkDeviceExpire() (err error) {
 			})
 			device.OnDispose(func() {
 				device.Status = DeviceOfflineStatus
-				if gb.devices.RemoveByKey(device.DeviceID) {
+				if gb.devices.RemoveByKey(device.DeviceId) {
 					for c := range device.channels.Range {
 						if c.PullProxyTask != nil {
 							c.PullProxyTask.ChangeStatus(m7s.PullProxyStatusOffline)
@@ -295,17 +295,17 @@ func (gb *GB28181Plugin) checkDeviceExpire() (err error) {
 
 			// 加载设备的通道
 			var channels []gb28181.DeviceChannel
-			if err := gb.DB.Where(&gb28181.DeviceChannel{DeviceID: device.DeviceID}).Find(&channels).Error; err != nil {
-				gb.Error("加载通道失败", "error", err, "deviceId", device.DeviceID)
+			if err := gb.DB.Where(&gb28181.DeviceChannel{DeviceID: device.DeviceId}).Find(&channels).Error; err != nil {
+				gb.Error("加载通道失败", "error", err, "deviceId", device.DeviceId)
 				continue
 			}
 
 			// 更新设备状态到数据库
-			if err := gb.DB.Model(&Device{}).Where(&Device{DeviceID: device.DeviceID}).Updates(map[string]interface{}{
+			if err := gb.DB.Model(&Device{}).Where(&Device{DeviceId: device.DeviceId}).Updates(map[string]interface{}{
 				"online": device.Online,
 				"status": device.Status,
 			}).Error; err != nil {
-				gb.Error("更新设备状态到数据库失败", "error", err, "deviceId", device.DeviceID)
+				gb.Error("更新设备状态到数据库失败", "error", err, "deviceId", device.DeviceId)
 			}
 
 			// 初始化设备通道并更新到数据库
@@ -334,9 +334,9 @@ func (gb *GB28181Plugin) checkDeviceExpire() (err error) {
 			}
 
 			if isExpired {
-				gb.Info("设备已过期", "deviceId", device.DeviceID, "registerTime", device.RegisterTime, "expireTime", expireTime)
+				gb.Info("设备已过期", "deviceId", device.DeviceId, "registerTime", device.RegisterTime, "expireTime", expireTime)
 			} else {
-				gb.Info("设备有效", "deviceId", device.DeviceID, "registerTime", device.RegisterTime, "expireTime", expireTime)
+				gb.Info("设备有效", "deviceId", device.DeviceId, "registerTime", device.RegisterTime, "expireTime", expireTime)
 			}
 		}
 	}
@@ -532,7 +532,7 @@ func (gb *GB28181Plugin) OnRegister(req *sip.Request, tx sip.ServerTransaction) 
 			if gb.DB != nil {
 				// 更新设备状态
 				var dbDevice Device
-				if err := gb.DB.First(&dbDevice, Device{DeviceID: deviceid}).Error; err == nil {
+				if err := gb.DB.First(&dbDevice, Device{DeviceId: deviceid}).Error; err == nil {
 					d.ID = dbDevice.ID
 				}
 				d.channels.Range(func(channel *Channel) bool {
@@ -544,7 +544,7 @@ func (gb *GB28181Plugin) OnRegister(req *sip.Request, tx sip.ServerTransaction) 
 		}
 	} else {
 		if d, ok := gb.devices.Get(deviceid); ok && d.Online {
-			gb.Info("into recoverdevice", "deviceId", d.DeviceID)
+			gb.Info("into recoverdevice", "deviceId", d.DeviceId)
 			d.Status = DeviceOnlineStatus
 			gb.RecoverDevice(d, req)
 		} else {
@@ -686,7 +686,7 @@ func (gb *GB28181Plugin) RecoverDevice(d *Device, req *sip.Request) {
 		},
 	}
 
-	d.SipIP = myLanIP
+	d.SipIp = myLanIP
 	d.StartTime = time.Now()
 	d.IP = sourceIP
 	d.Port = sourcePort
@@ -695,18 +695,18 @@ func (gb *GB28181Plugin) RecoverDevice(d *Device, req *sip.Request) {
 	d.UpdateTime = time.Now()
 	d.RegisterTime = time.Now()
 	d.Online = true
-	d.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(d.SipIP))
+	d.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(d.SipIp))
 	d.channels.L = new(sync.RWMutex)
 	d.catalogReqs.L = new(sync.RWMutex)
-	d.Info("StoreDevice", "source", source, "desc", desc, "device.SipIP", myLanIP, "device.WanIP", myWanIP, "recipient", req.Recipient, "myPort", myPort)
+	d.Info("StoreDevice", "source", source, "desc", desc, "device.SipIp", myLanIP, "device.WanIP", myWanIP, "recipient", req.Recipient, "myPort", myPort)
 
 	if gb.DB != nil {
 		var existing Device
-		if err := gb.DB.First(&existing, Device{DeviceID: d.DeviceID}).Error; err == nil {
+		if err := gb.DB.First(&existing, Device{DeviceId: d.DeviceId}).Error; err == nil {
 			d.ID = existing.ID // 保持原有的自增ID
-			gb.Info("RecoverDevice", "type", "更新设备", "deviceId", d.DeviceID)
+			gb.Info("RecoverDevice", "type", "更新设备", "deviceId", d.DeviceId)
 		} else {
-			gb.Info("RecoverDevice", "type", "新增设备", "deviceId", d.DeviceID)
+			gb.Info("RecoverDevice", "type", "新增设备", "deviceId", d.DeviceId)
 		}
 		gb.DB.Save(d)
 	}
@@ -778,7 +778,7 @@ func (gb *GB28181Plugin) StoreDevice(deviceid string, req *sip.Request) (d *Devi
 
 	now := time.Now()
 	d = &Device{
-		DeviceID:      deviceid,
+		DeviceId:      deviceid,
 		CreateTime:    now,
 		UpdateTime:    now,
 		RegisterTime:  now,
@@ -792,8 +792,8 @@ func (gb *GB28181Plugin) StoreDevice(deviceid string, req *sip.Request) (d *Devi
 		IP:            sourceIP,
 		Port:          sourcePort,
 		HostAddress:   sourceIP + ":" + sourcePortStr,
-		SipIP:         myLanIP,
-		MediaIP:       myWanIP,
+		SipIp:         myLanIP,
+		MediaIp:       myWanIP,
 		Expires:       int(expSec),
 		eventChan:     make(chan any, 10),
 		Recipient: sip.Uri{
@@ -822,15 +822,15 @@ func (gb *GB28181Plugin) StoreDevice(deviceid string, req *sip.Request) (d *Devi
 
 	d.Logger = gb.With("deviceid", deviceid)
 	d.fromHDR.Params.Add("tag", sip.GenerateTagN(16))
-	d.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(d.SipIP))
+	d.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(d.SipIp))
 	d.channels.L = new(sync.RWMutex)
 	d.catalogReqs.L = new(sync.RWMutex)
-	d.Info("StoreDevice", "source", source, "desc", desc, "device.SipIP", myLanIP, "device.WanIP", myWanIP, "req.Recipient", req.Recipient, "myPort", myPort, "d.Recipient", d.Recipient)
+	d.Info("StoreDevice", "source", source, "desc", desc, "device.SipIp", myLanIP, "device.WanIP", myWanIP, "req.Recipient", req.Recipient, "myPort", myPort, "d.Recipient", d.Recipient)
 
 	// 使用简单的 hash 函数将设备 ID 转换为 uint32
 	var hash uint32
-	for i := 0; i < len(d.DeviceID); i++ {
-		ch := d.DeviceID[i]
+	for i := 0; i < len(d.DeviceId); i++ {
+		ch := d.DeviceId[i]
 		hash = hash*31 + uint32(ch)
 	}
 	d.Task.ID = hash
@@ -840,7 +840,7 @@ func (gb *GB28181Plugin) StoreDevice(deviceid string, req *sip.Request) (d *Devi
 		d.channels.OnAdd(func(c *Channel) {
 			if absDevice, ok := gb.Server.PullProxies.Find(func(absDevice m7s.IPullProxy) bool {
 				conf := absDevice.GetConfig()
-				return conf.Type == "gb28181" && conf.URL == fmt.Sprintf("%s/%s", d.DeviceID, c.ChannelID)
+				return conf.Type == "gb28181" && conf.URL == fmt.Sprintf("%s/%s", d.DeviceId, c.ChannelID)
 			}); ok {
 				c.PullProxyTask = absDevice.(*PullProxy)
 				absDevice.ChangeStatus(m7s.PullProxyStatusOnline)
@@ -849,7 +849,7 @@ func (gb *GB28181Plugin) StoreDevice(deviceid string, req *sip.Request) (d *Devi
 	})
 	d.OnDispose(func() {
 		d.Status = DeviceOfflineStatus
-		if gb.devices.RemoveByKey(d.DeviceID) {
+		if gb.devices.RemoveByKey(d.DeviceId) {
 			for c := range d.channels.Range {
 				if c.PullProxyTask != nil {
 					c.PullProxyTask.ChangeStatus(m7s.PullProxyStatusOffline)
@@ -861,13 +861,13 @@ func (gb *GB28181Plugin) StoreDevice(deviceid string, req *sip.Request) (d *Devi
 
 	if gb.DB != nil {
 		var existing Device
-		if err := gb.DB.First(&existing, Device{DeviceID: d.DeviceID}).Error; err == nil {
+		if err := gb.DB.First(&existing, Device{DeviceId: d.DeviceId}).Error; err == nil {
 			d.ID = existing.ID // 保持原有的自增ID
 			gb.DB.Save(d).Omit("create_time")
-			gb.Info("StoreDevice", "type", "更新设备", "deviceId", d.DeviceID)
+			gb.Info("StoreDevice", "type", "更新设备", "deviceId", d.DeviceId)
 		} else {
 			gb.DB.Save(d)
-			gb.Info("StoreDevice", "type", "新增设备", "deviceId", d.DeviceID)
+			gb.Info("StoreDevice", "type", "新增设备", "deviceId", d.DeviceId)
 		}
 	}
 	return
@@ -895,7 +895,7 @@ func (gb *GB28181Plugin) GetPullableList() []string {
 	return slices.Collect(func(yield func(string) bool) {
 		for d := range gb.devices.Range {
 			for c := range d.channels.Range {
-				yield(fmt.Sprintf("%s/%s", d.DeviceID, c.ChannelID))
+				yield(fmt.Sprintf("%s/%s", d.DeviceId, c.ChannelID))
 			}
 		}
 	})

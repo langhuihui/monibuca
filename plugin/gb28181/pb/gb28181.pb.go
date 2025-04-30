@@ -730,25 +730,25 @@ func (x *GetSubChannelsRequest) GetChannelType() bool {
 
 type Channel struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	ID            string                 `protobuf:"bytes,1,opt,name=ID,proto3" json:"ID,omitempty"`
-	DeviceID      string                 `protobuf:"bytes,2,opt,name=DeviceID,proto3" json:"DeviceID,omitempty"`
-	ChannelID     string                 `protobuf:"bytes,3,opt,name=ChannelID,proto3" json:"ChannelID,omitempty"`
-	ParentID      string                 `protobuf:"bytes,4,opt,name=ParentID,proto3" json:"ParentID,omitempty"`
-	Name          string                 `protobuf:"bytes,5,opt,name=Name,proto3" json:"Name,omitempty"`
-	Manufacturer  string                 `protobuf:"bytes,6,opt,name=Manufacturer,proto3" json:"Manufacturer,omitempty"`
-	Model         string                 `protobuf:"bytes,7,opt,name=Model,proto3" json:"Model,omitempty"`
-	Owner         string                 `protobuf:"bytes,8,opt,name=Owner,proto3" json:"Owner,omitempty"`
-	CivilCode     string                 `protobuf:"bytes,9,opt,name=CivilCode,proto3" json:"CivilCode,omitempty"`
-	Address       string                 `protobuf:"bytes,10,opt,name=Address,proto3" json:"Address,omitempty"`
-	Port          int32                  `protobuf:"varint,11,opt,name=Port,proto3" json:"Port,omitempty"`
-	Parental      int32                  `protobuf:"varint,12,opt,name=Parental,proto3" json:"Parental,omitempty"`
-	SafetyWay     int32                  `protobuf:"varint,13,opt,name=SafetyWay,proto3" json:"SafetyWay,omitempty"`
-	RegisterWay   int32                  `protobuf:"varint,14,opt,name=RegisterWay,proto3" json:"RegisterWay,omitempty"`
-	Secrecy       int32                  `protobuf:"varint,15,opt,name=Secrecy,proto3" json:"Secrecy,omitempty"`
-	Status        string                 `protobuf:"bytes,16,opt,name=Status,proto3" json:"Status,omitempty"`
-	GpsTime       *timestamppb.Timestamp `protobuf:"bytes,17,opt,name=GpsTime,proto3" json:"GpsTime,omitempty"`
-	Longitude     string                 `protobuf:"bytes,18,opt,name=Longitude,proto3" json:"Longitude,omitempty"`
-	Latitude      string                 `protobuf:"bytes,19,opt,name=Latitude,proto3" json:"Latitude,omitempty"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	DeviceId      string                 `protobuf:"bytes,2,opt,name=deviceId,proto3" json:"deviceId,omitempty"`
+	ChannelId     string                 `protobuf:"bytes,3,opt,name=channelId,proto3" json:"channelId,omitempty"`
+	ParentId      string                 `protobuf:"bytes,4,opt,name=parentId,proto3" json:"parentId,omitempty"`
+	Name          string                 `protobuf:"bytes,5,opt,name=name,proto3" json:"name,omitempty"`
+	Manufacturer  string                 `protobuf:"bytes,6,opt,name=manufacturer,proto3" json:"manufacturer,omitempty"`
+	Model         string                 `protobuf:"bytes,7,opt,name=model,proto3" json:"model,omitempty"`
+	Owner         string                 `protobuf:"bytes,8,opt,name=owner,proto3" json:"owner,omitempty"`
+	CivilCode     string                 `protobuf:"bytes,9,opt,name=civilCode,proto3" json:"civilCode,omitempty"`
+	Address       string                 `protobuf:"bytes,10,opt,name=address,proto3" json:"address,omitempty"`
+	Port          int32                  `protobuf:"varint,11,opt,name=port,proto3" json:"port,omitempty"`
+	Parental      int32                  `protobuf:"varint,12,opt,name=parental,proto3" json:"parental,omitempty"`
+	SafetyWay     int32                  `protobuf:"varint,13,opt,name=safetyWay,proto3" json:"safetyWay,omitempty"`
+	RegisterWay   int32                  `protobuf:"varint,14,opt,name=registerWay,proto3" json:"registerWay,omitempty"`
+	Secrecy       int32                  `protobuf:"varint,15,opt,name=secrecy,proto3" json:"secrecy,omitempty"`
+	Status        string                 `protobuf:"bytes,16,opt,name=status,proto3" json:"status,omitempty"`
+	GpsTime       *timestamppb.Timestamp `protobuf:"bytes,17,opt,name=gpsTime,proto3" json:"gpsTime,omitempty"`
+	Longitude     string                 `protobuf:"bytes,18,opt,name=longitude,proto3" json:"longitude,omitempty"`
+	Latitude      string                 `protobuf:"bytes,19,opt,name=latitude,proto3" json:"latitude,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -783,30 +783,30 @@ func (*Channel) Descriptor() ([]byte, []int) {
 	return file_gb28181_proto_rawDescGZIP(), []int{11}
 }
 
-func (x *Channel) GetID() string {
+func (x *Channel) GetId() string {
 	if x != nil {
-		return x.ID
+		return x.Id
 	}
 	return ""
 }
 
-func (x *Channel) GetDeviceID() string {
+func (x *Channel) GetDeviceId() string {
 	if x != nil {
-		return x.DeviceID
+		return x.DeviceId
 	}
 	return ""
 }
 
-func (x *Channel) GetChannelID() string {
+func (x *Channel) GetChannelId() string {
 	if x != nil {
-		return x.ChannelID
+		return x.ChannelId
 	}
 	return ""
 }
 
-func (x *Channel) GetParentID() string {
+func (x *Channel) GetParentId() string {
 	if x != nil {
-		return x.ParentID
+		return x.ParentId
 	}
 	return ""
 }
@@ -918,21 +918,21 @@ func (x *Channel) GetLatitude() string {
 
 type Device struct {
 	state             protoimpl.MessageState `protogen:"open.v1"`
-	DeviceID          string                 `protobuf:"bytes,1,opt,name=deviceID,proto3" json:"deviceID,omitempty"`
+	DeviceId          string                 `protobuf:"bytes,1,opt,name=deviceId,proto3" json:"deviceId,omitempty"`
 	Name              string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
 	Manufacturer      string                 `protobuf:"bytes,3,opt,name=manufacturer,proto3" json:"manufacturer,omitempty"`
 	Model             string                 `protobuf:"bytes,4,opt,name=model,proto3" json:"model,omitempty"`
 	Longitude         string                 `protobuf:"bytes,5,opt,name=longitude,proto3" json:"longitude,omitempty"`
 	Latitude          string                 `protobuf:"bytes,6,opt,name=latitude,proto3" json:"latitude,omitempty"`
 	Status            string                 `protobuf:"bytes,7,opt,name=status,proto3" json:"status,omitempty"`
-	MediaIP           string                 `protobuf:"bytes,8,opt,name=mediaIP,proto3" json:"mediaIP,omitempty"`
+	MediaIp           string                 `protobuf:"bytes,8,opt,name=mediaIp,proto3" json:"mediaIp,omitempty"`
 	RegisterTime      *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=registerTime,proto3" json:"registerTime,omitempty"`
 	UpdateTime        *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=updateTime,proto3" json:"updateTime,omitempty"`
 	KeepAliveTime     *timestamppb.Timestamp `protobuf:"bytes,11,opt,name=keepAliveTime,proto3" json:"keepAliveTime,omitempty"`
 	ChannelCount      int32                  `protobuf:"varint,12,opt,name=channelCount,proto3" json:"channelCount,omitempty"`
 	Online            bool                   `protobuf:"varint,13,opt,name=online,proto3" json:"online,omitempty"`
 	Channels          []*Channel             `protobuf:"bytes,14,rep,name=channels,proto3" json:"channels,omitempty"`
-	SipIP             string                 `protobuf:"bytes,15,opt,name=sipIP,proto3" json:"sipIP,omitempty"`
+	SipIp             string                 `protobuf:"bytes,15,opt,name=sipIp,proto3" json:"sipIp,omitempty"`
 	StreamMode        string                 `protobuf:"bytes,16,opt,name=streamMode,proto3" json:"streamMode,omitempty"`
 	Password          string                 `protobuf:"bytes,17,opt,name=password,proto3" json:"password,omitempty"`
 	SubscribeCatalog  bool                   `protobuf:"varint,18,opt,name=subscribeCatalog,proto3" json:"subscribeCatalog,omitempty"`
@@ -971,9 +971,9 @@ func (*Device) Descriptor() ([]byte, []int) {
 	return file_gb28181_proto_rawDescGZIP(), []int{12}
 }
 
-func (x *Device) GetDeviceID() string {
+func (x *Device) GetDeviceId() string {
 	if x != nil {
-		return x.DeviceID
+		return x.DeviceId
 	}
 	return ""
 }
@@ -1020,9 +1020,9 @@ func (x *Device) GetStatus() string {
 	return ""
 }
 
-func (x *Device) GetMediaIP() string {
+func (x *Device) GetMediaIp() string {
 	if x != nil {
-		return x.MediaIP
+		return x.MediaIp
 	}
 	return ""
 }
@@ -1069,9 +1069,9 @@ func (x *Device) GetChannels() []*Channel {
 	return nil
 }
 
-func (x *Device) GetSipIP() string {
+func (x *Device) GetSipIp() string {
 	if x != nil {
-		return x.SipIP
+		return x.SipIp
 	}
 	return ""
 }
@@ -2624,7 +2624,7 @@ func (x *SSRCListResponse) GetCount() int32 {
 // Platform消息定义
 type Platform struct {
 	state                   protoimpl.MessageState `protogen:"open.v1"`
-	ID                      uint32                 `protobuf:"varint,1,opt,name=ID,proto3" json:"ID,omitempty"`                                            // ID(数据库中)
+	Id                      uint32                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`                                            // id(数据库中)
 	Enable                  bool                   `protobuf:"varint,2,opt,name=enable,proto3" json:"enable,omitempty"`                                    // 是否启用
 	Name                    string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`                                         // 名称
 	ServerGBId              string                 `protobuf:"bytes,4,opt,name=serverGBId,proto3" json:"serverGBId,omitempty"`                             // SIP服务国标编码
@@ -2696,9 +2696,9 @@ func (*Platform) Descriptor() ([]byte, []int) {
 	return file_gb28181_proto_rawDescGZIP(), []int{38}
 }
 
-func (x *Platform) GetID() uint32 {
+func (x *Platform) GetId() uint32 {
 	if x != nil {
-		return x.ID
+		return x.Id
 	}
 	return 0
 }
@@ -6116,35 +6116,35 @@ const file_gb28181_proto_rawDesc = "" +
 	"\x06online\x18\x06 \x01(\bR\x06online\x12 \n" +
 	"\vchannelType\x18\a \x01(\bR\vchannelType\"\x9d\x04\n" +
 	"\aChannel\x12\x0e\n" +
-	"\x02ID\x18\x01 \x01(\tR\x02ID\x12\x1a\n" +
-	"\bDeviceID\x18\x02 \x01(\tR\bDeviceID\x12\x1c\n" +
-	"\tChannelID\x18\x03 \x01(\tR\tChannelID\x12\x1a\n" +
-	"\bParentID\x18\x04 \x01(\tR\bParentID\x12\x12\n" +
-	"\x04Name\x18\x05 \x01(\tR\x04Name\x12\"\n" +
-	"\fManufacturer\x18\x06 \x01(\tR\fManufacturer\x12\x14\n" +
-	"\x05Model\x18\a \x01(\tR\x05Model\x12\x14\n" +
-	"\x05Owner\x18\b \x01(\tR\x05Owner\x12\x1c\n" +
-	"\tCivilCode\x18\t \x01(\tR\tCivilCode\x12\x18\n" +
-	"\aAddress\x18\n" +
-	" \x01(\tR\aAddress\x12\x12\n" +
-	"\x04Port\x18\v \x01(\x05R\x04Port\x12\x1a\n" +
-	"\bParental\x18\f \x01(\x05R\bParental\x12\x1c\n" +
-	"\tSafetyWay\x18\r \x01(\x05R\tSafetyWay\x12 \n" +
-	"\vRegisterWay\x18\x0e \x01(\x05R\vRegisterWay\x12\x18\n" +
-	"\aSecrecy\x18\x0f \x01(\x05R\aSecrecy\x12\x16\n" +
-	"\x06Status\x18\x10 \x01(\tR\x06Status\x124\n" +
-	"\aGpsTime\x18\x11 \x01(\v2\x1a.google.protobuf.TimestampR\aGpsTime\x12\x1c\n" +
-	"\tLongitude\x18\x12 \x01(\tR\tLongitude\x12\x1a\n" +
-	"\bLatitude\x18\x13 \x01(\tR\bLatitude\"\xb5\x05\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1a\n" +
+	"\bdeviceId\x18\x02 \x01(\tR\bdeviceId\x12\x1c\n" +
+	"\tchannelId\x18\x03 \x01(\tR\tchannelId\x12\x1a\n" +
+	"\bparentId\x18\x04 \x01(\tR\bparentId\x12\x12\n" +
+	"\x04name\x18\x05 \x01(\tR\x04name\x12\"\n" +
+	"\fmanufacturer\x18\x06 \x01(\tR\fmanufacturer\x12\x14\n" +
+	"\x05model\x18\a \x01(\tR\x05model\x12\x14\n" +
+	"\x05owner\x18\b \x01(\tR\x05owner\x12\x1c\n" +
+	"\tcivilCode\x18\t \x01(\tR\tcivilCode\x12\x18\n" +
+	"\aaddress\x18\n" +
+	" \x01(\tR\aaddress\x12\x12\n" +
+	"\x04port\x18\v \x01(\x05R\x04port\x12\x1a\n" +
+	"\bparental\x18\f \x01(\x05R\bparental\x12\x1c\n" +
+	"\tsafetyWay\x18\r \x01(\x05R\tsafetyWay\x12 \n" +
+	"\vregisterWay\x18\x0e \x01(\x05R\vregisterWay\x12\x18\n" +
+	"\asecrecy\x18\x0f \x01(\x05R\asecrecy\x12\x16\n" +
+	"\x06status\x18\x10 \x01(\tR\x06status\x124\n" +
+	"\agpsTime\x18\x11 \x01(\v2\x1a.google.protobuf.TimestampR\agpsTime\x12\x1c\n" +
+	"\tlongitude\x18\x12 \x01(\tR\tlongitude\x12\x1a\n" +
+	"\blatitude\x18\x13 \x01(\tR\blatitude\"\xb5\x05\n" +
 	"\x06Device\x12\x1a\n" +
-	"\bdeviceID\x18\x01 \x01(\tR\bdeviceID\x12\x12\n" +
+	"\bdeviceId\x18\x01 \x01(\tR\bdeviceId\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\"\n" +
 	"\fmanufacturer\x18\x03 \x01(\tR\fmanufacturer\x12\x14\n" +
 	"\x05model\x18\x04 \x01(\tR\x05model\x12\x1c\n" +
 	"\tlongitude\x18\x05 \x01(\tR\tlongitude\x12\x1a\n" +
 	"\blatitude\x18\x06 \x01(\tR\blatitude\x12\x16\n" +
 	"\x06status\x18\a \x01(\tR\x06status\x12\x18\n" +
-	"\amediaIP\x18\b \x01(\tR\amediaIP\x12>\n" +
+	"\amediaIp\x18\b \x01(\tR\amediaIp\x12>\n" +
 	"\fregisterTime\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\fregisterTime\x12:\n" +
 	"\n" +
 	"updateTime\x18\n" +
@@ -6154,7 +6154,7 @@ const file_gb28181_proto_rawDesc = "" +
 	"\fchannelCount\x18\f \x01(\x05R\fchannelCount\x12\x16\n" +
 	"\x06online\x18\r \x01(\bR\x06online\x12/\n" +
 	"\bchannels\x18\x0e \x03(\v2\x13.gb28181pro.ChannelR\bchannels\x12\x14\n" +
-	"\x05sipIP\x18\x0f \x01(\tR\x05sipIP\x12\x1e\n" +
+	"\x05sipIp\x18\x0f \x01(\tR\x05sipIp\x12\x1e\n" +
 	"\n" +
 	"streamMode\x18\x10 \x01(\tR\n" +
 	"streamMode\x12\x1a\n" +
@@ -6271,7 +6271,7 @@ const file_gb28181_proto_rawDesc = "" +
 	"\x04data\x18\x03 \x03(\v2\x14.gb28181pro.SSRCInfoR\x04data\x12\x14\n" +
 	"\x05count\x18\x04 \x01(\x05R\x05count\"\xe4\t\n" +
 	"\bPlatform\x12\x0e\n" +
-	"\x02ID\x18\x01 \x01(\rR\x02ID\x12\x16\n" +
+	"\x02id\x18\x01 \x01(\rR\x02id\x12\x16\n" +
 	"\x06enable\x18\x02 \x01(\bR\x06enable\x12\x12\n" +
 	"\x04name\x18\x03 \x01(\tR\x04name\x12\x1e\n" +
 	"\n" +
@@ -6755,7 +6755,7 @@ var file_gb28181_proto_goTypes = []any{
 var file_gb28181_proto_depIdxs = []int32{
 	12, // 0: gb28181pro.DevicesPageInfo.data:type_name -> gb28181pro.Device
 	11, // 1: gb28181pro.ChannelsPageInfo.list:type_name -> gb28181pro.Channel
-	87, // 2: gb28181pro.Channel.GpsTime:type_name -> google.protobuf.Timestamp
+	87, // 2: gb28181pro.Channel.gpsTime:type_name -> google.protobuf.Timestamp
 	87, // 3: gb28181pro.Device.registerTime:type_name -> google.protobuf.Timestamp
 	87, // 4: gb28181pro.Device.updateTime:type_name -> google.protobuf.Timestamp
 	87, // 5: gb28181pro.Device.keepAliveTime:type_name -> google.protobuf.Timestamp

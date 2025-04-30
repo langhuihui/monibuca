@@ -33,7 +33,7 @@ const (
 
 type Device struct {
 	task.Job              `gorm:"-:all"`
-	DeviceID              string         `gorm:"primaryKey"` // 设备国标编号
+	DeviceId              string         `gorm:"primaryKey"` // 设备国标编号
 	Name                  string         // 设备名
 	Manufacturer          string         // 生产厂商
 	Model                 string         // 型号
@@ -59,7 +59,7 @@ type Device struct {
 	SSRCCheck             bool           // 是否开启ssrc校验，默认关闭，开启可以防止串流
 	GeoCoordSys           string         // 地理坐标系， 目前支持 WGS84,GCJ02
 	Password              string         // 密码
-	SipIP                 string         // SIP交互IP（设备访问平台的IP）
+	SipIp                 string         // SIP交互IP（设备访问平台的IP）
 	AsMessageChannel      bool           // 是否作为消息通道
 	BroadcastPushAfterAck bool           // 控制语音对讲流程，释放收到ACK后发流
 	DeletedAt             gorm.DeletedAt `yaml:"-"`
@@ -72,7 +72,7 @@ type Device struct {
 	Recipient           sip.Uri                               `gorm:"-:all"`
 	channels            util.Collection[string, *Channel]     `gorm:"-:all"`
 	catalogReqs         util.Collection[int, *CatalogRequest] `gorm:"-:all"`
-	MediaIP             string                                `desc:"收流IP"`
+	MediaIp             string                                `desc:"收流IP"`
 	Longitude, Latitude string                                // 经度,纬度
 	eventChan           chan any
 	client              *sipgo.Client
@@ -93,7 +93,7 @@ func (d *Device) Dispose() {
 		if d.channels.Length > 0 {
 			d.channels.Range(func(channel *Channel) bool {
 				d.plugin.DB.Save(channel.DeviceChannel)
-				//d.plugin.DB.Model(&gb28181.DeviceChannel{}).Where("device_id = ? AND device_db_id = ?", channel.DeviceID, d.ID).Updates(channel.DeviceChannel)
+				//d.plugin.DB.Model(&gb28181.DeviceChannel{}).Where("device_id = ? AND device_db_id = ?", channel.DeviceId, d.ID).Updates(channel.DeviceChannel)
 				return true
 			})
 		} else {
@@ -104,7 +104,7 @@ func (d *Device) Dispose() {
 }
 
 func (d *Device) GetKey() string {
-	return d.DeviceID
+	return d.DeviceId
 }
 
 // CatalogRequest 目录请求结构体
@@ -186,9 +186,9 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 		if d.plugin.DB != nil {
 			// 如果是第一个响应，先清空现有通道
 			if isFirst {
-				d.Debug("清空现有通道", "deviceId", d.DeviceID)
-				if err := d.plugin.DB.Where("device_id = ?", d.DeviceID).Delete(&gb28181.DeviceChannel{}).Error; err != nil {
-					d.Error("删除通道失败", "error", err, "deviceId", d.DeviceID)
+				d.Debug("清空现有通道", "deviceId", d.DeviceId)
+				if err := d.plugin.DB.Where("device_id = ?", d.DeviceId).Delete(&gb28181.DeviceChannel{}).Error; err != nil {
+					d.Error("删除通道失败", "error", err, "deviceId", d.DeviceId)
 				}
 				// 清空内存中的通道缓存
 				d.channels.Clear()
@@ -198,8 +198,8 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 			for _, c := range msg.DeviceChannelList {
 				// 设置关联的设备数据库ID
 				c.ChannelID = c.DeviceID
-				c.DeviceID = d.DeviceID
-				c.ID = d.DeviceID + "_" + c.ChannelID
+				c.DeviceID = d.DeviceId
+				c.ID = d.DeviceId + "_" + c.ChannelID
 				// 使用 Save 进行 upsert 操作
 				if err := d.plugin.DB.Save(&c).Error; err != nil {
 					d.Error("save channel failed", "error", err)
@@ -210,7 +210,7 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 			// 更新当前设备的通道数
 			d.ChannelCount = msg.SumNum
 			d.UpdateTime = time.Now()
-			d.Debug("save channel", "deviceid", d.DeviceID, "channels count", d.channels.Length)
+			d.Debug("save channel", "deviceid", d.DeviceId, "channels count", d.channels.Length)
 			if err := d.plugin.DB.Model(d).Updates(map[string]interface{}{
 				"channel_count": d.ChannelCount,
 				"update_time":   d.UpdateTime,
@@ -338,7 +338,7 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 	case "Alarm":
 		// 创建报警记录
 		alarm := &gb28181.DeviceAlarm{
-			DeviceID:      d.DeviceID, // 使用当前设备的ID
+			DeviceID:      d.DeviceId, // 使用当前设备的ID
 			DeviceName:    d.Name,
 			ChannelID:     msg.DeviceID, // 使用消息中的DeviceID作为通道ID
 			AlarmPriority: msg.AlarmPriority,
@@ -465,7 +465,7 @@ func (d *Device) Go() (err error) {
 			//				parentId := path[len(path)-1]
 			//				//如果父ID并非本身所属设备，一般情况下这是因为下级设备上传了目录信息，该信息通常不需要处理。
 			//				// 暂时不考虑级联目录的实现
-			//				if d.DeviceID != parentId {
+			//				if d.DeviceId != parentId {
 			//					if parent, ok := d.plugin.devices.Get(parentId); ok {
 			//						parent.addOrUpdateChannel(c)
 			//						continue
@@ -496,14 +496,14 @@ func (d *Device) CreateRequest(Method sip.RequestMethod, Recipient any) *sip.Req
 	req.AppendHeader(sip.NewHeader("User-Agent", "M7S/"+m7s.Version))
 	req.AppendHeader(&contentType)
 	toHeader := sip.ToHeader{
-		Address: sip.Uri{User: d.DeviceID, Host: d.HostAddress},
+		Address: sip.Uri{User: d.DeviceId, Host: d.HostAddress},
 	}
 	req.AppendHeader(&toHeader)
 	//viaHeader := sip.ViaHeader{
 	//	ProtocolName:    "SIP",
 	//	ProtocolVersion: "2.0",
 	//	Transport:       "UDP",
-	//	Host:            d.SipIP,
+	//	Host:            d.SipIp,
 	//	Port:            d.localPort,
 	//	Params:          sip.HeaderParams(sip.NewParams()),
 	//}
@@ -517,33 +517,33 @@ func (d *Device) catalog() (*sip.Response, error) {
 	request := d.CreateRequest(sip.MESSAGE, nil)
 	//d.subscriber.Timeout = time.Now().Add(time.Second * time.Duration(expires))
 	request.AppendHeader(sip.NewHeader("Expires", "3600"))
-	request.SetBody(gb28181.BuildCatalogXML(d.Charset, d.SN, d.DeviceID))
+	request.SetBody(gb28181.BuildCatalogXML(d.Charset, d.SN, d.DeviceId))
 	return d.send(request)
 }
 
 func (d *Device) subscribeCatalog() (*sip.Response, error) {
 	request := d.CreateRequest(sip.SUBSCRIBE, nil)
 	request.AppendHeader(sip.NewHeader("Expires", strconv.Itoa(d.SubscribeCatalog)))
-	request.SetBody(gb28181.BuildCatalogXML(d.Charset, d.SN, d.DeviceID))
+	request.SetBody(gb28181.BuildCatalogXML(d.Charset, d.SN, d.DeviceId))
 	return d.send(request)
 }
 
 func (d *Device) queryDeviceInfo() (*sip.Response, error) {
 	request := d.CreateRequest(sip.MESSAGE, nil)
-	request.SetBody(gb28181.BuildDeviceInfoXML(d.SN, d.DeviceID, d.Charset))
+	request.SetBody(gb28181.BuildDeviceInfoXML(d.SN, d.DeviceId, d.Charset))
 	return d.send(request)
 }
 
 func (d *Device) queryDeviceStatus() (*sip.Response, error) {
 	request := d.CreateRequest(sip.MESSAGE, nil)
-	request.SetBody(gb28181.BuildDeviceStatusXML(d.SN, d.DeviceID, d.Charset))
+	request.SetBody(gb28181.BuildDeviceStatusXML(d.SN, d.DeviceId, d.Charset))
 	return d.send(request)
 }
 
 func (d *Device) subscribePosition(interval int) (*sip.Response, error) {
 	request := d.CreateRequest(sip.SUBSCRIBE, nil)
 	request.AppendHeader(sip.NewHeader("Expires", strconv.Itoa(d.SubscribePosition)))
-	request.SetBody(gb28181.BuildDevicePositionXML(d.SN, d.DeviceID, interval))
+	request.SetBody(gb28181.BuildDevicePositionXML(d.SN, d.DeviceId, interval))
 	return d.send(request)
 }
 
@@ -558,7 +558,7 @@ func (d *Device) frontEndCmd(channelId string, cmdStr string) (*sip.Response, er
 	ptzXml.WriteString("<Control>\r\n")
 	ptzXml.WriteString("<CmdType>DeviceControl</CmdType>\r\n")
 	ptzXml.WriteString(fmt.Sprintf("<SN>%d</SN>\r\n", int(time.Now().UnixNano()/1e6%1000000)))
-	ptzXml.WriteString(fmt.Sprintf("<DeviceID>%s</DeviceID>\r\n", channelId))
+	ptzXml.WriteString(fmt.Sprintf("<DeviceId>%s</DeviceId>\r\n", channelId))
 	ptzXml.WriteString(fmt.Sprintf("<PTZCmd>%s</PTZCmd>\r\n", cmdStr))
 	ptzXml.WriteString("<Info>\r\n")
 	ptzXml.WriteString("<ControlPriority>5</ControlPriority>\r\n")
@@ -610,7 +610,7 @@ func (d *Device) addOrUpdateChannel(c gb28181.DeviceChannel) {
 }
 
 func (d *Device) GetID() string {
-	return d.DeviceID
+	return d.DeviceId
 }
 
 func (d *Device) GetIP() string {
@@ -628,8 +628,8 @@ func (d *Device) Send(req *sip.Request) (*sip.Response, error) {
 func (d *Device) CreateSSRC(serial string) uint16 {
 	// 使用简单的 hash 函数将设备 ID 转换为 uint16
 	var hash uint16
-	for i := 0; i < len(d.DeviceID); i++ {
-		hash = hash*31 + uint16(d.DeviceID[i])
+	for i := 0; i < len(d.DeviceId); i++ {
+		hash = hash*31 + uint16(d.DeviceId[i])
 	}
 	return hash
 }
@@ -642,7 +642,7 @@ func (d *Device) recordCmd(channelId string, cmdType string) (*sip.Response, err
 	recordXml.WriteString("<Control>\r\n")
 	recordXml.WriteString("<CmdType>DeviceControl</CmdType>\r\n")
 	recordXml.WriteString(fmt.Sprintf("<SN>%d</SN>\r\n", int(time.Now().UnixNano()/1e6%1000000)))
-	recordXml.WriteString(fmt.Sprintf("<DeviceID>%s</DeviceID>\r\n", channelId))
+	recordXml.WriteString(fmt.Sprintf("<DeviceId>%s</DeviceId>\r\n", channelId))
 	recordXml.WriteString(fmt.Sprintf("<RecordCmd>%s</RecordCmd>\r\n", cmdType))
 	recordXml.WriteString("</Control>\r\n")
 
@@ -677,7 +677,7 @@ func (d *Device) BuildSnapshotConfigXML(config SnapshotConfig, channelID string)
 	xml.WriteString("<Control>\r\n")
 	xml.WriteString("<CmdType>DeviceConfig</CmdType>\r\n")
 	xml.WriteString(fmt.Sprintf("<SN>%d</SN>\r\n", d.SN))
-	xml.WriteString(fmt.Sprintf("<DeviceID>%s</DeviceID>\r\n", channelID))
+	xml.WriteString(fmt.Sprintf("<DeviceId>%s</DeviceId>\r\n", channelID))
 	xml.WriteString("<SnapShotConfig>\r\n")
 	xml.WriteString(fmt.Sprintf("<SnapNum>%d</SnapNum>\r\n", config.SnapNum))
 	xml.WriteString(fmt.Sprintf("<Interval>%d</Interval>\r\n", config.Interval))

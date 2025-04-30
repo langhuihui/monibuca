@@ -117,7 +117,7 @@ func (d *ForwardDialog) Start() (err error) {
 	// 构建 SDP 内容
 	sdpInfo := []string{
 		"v=0",
-		fmt.Sprintf("o=%s 0 0 IN IP4 %s", device.DeviceID, device.MediaIP),
+		fmt.Sprintf("o=%s 0 0 IN IP4 %s", device.DeviceId, device.MediaIp),
 		fmt.Sprintf("s=%s", util.Conditional(isLive, "Play", "Playback")), // 根据是否有时间参数决定
 	}
 
@@ -127,7 +127,7 @@ func (d *ForwardDialog) Start() (err error) {
 	}
 
 	// 添加c行
-	sdpInfo = append(sdpInfo, "c=IN IP4 "+device.MediaIP)
+	sdpInfo = append(sdpInfo, "c=IN IP4 "+device.MediaIp)
 
 	// 将字符串时间转换为 Unix 时间戳
 	if !isLive {
@@ -190,7 +190,7 @@ func (d *ForwardDialog) Start() (err error) {
 		ProtocolName:    "SIP",
 		ProtocolVersion: "2.0",
 		Transport:       "UDP",
-		Host:            device.SipIP,
+		Host:            device.SipIp,
 		Port:            device.localPort,
 		Params:          sip.HeaderParams(sip.NewParams()),
 	}
@@ -198,7 +198,7 @@ func (d *ForwardDialog) Start() (err error) {
 	fromHDR := sip.FromHeader{
 		Address: sip.Uri{
 			User: d.gb.Serial,
-			Host: device.MediaIP,
+			Host: device.MediaIp,
 			Port: device.localPort,
 		},
 		Params: sip.NewParams(),

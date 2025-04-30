@@ -526,7 +526,7 @@ func (p *Platform) sendCatalogResponse(req *sip.Request, sn string, fromTag stri
 <Response>
 <CmdType>Catalog</CmdType>
 <SN>%s</SN>
-<DeviceID>%s</DeviceID>
+<DeviceId>%s</DeviceId>
 <SumNum>0</SumNum>
 <DeviceList Num="0">
 </DeviceList>
@@ -669,7 +669,7 @@ func (p *Platform) sendCatalogResponse(req *sip.Request, sn string, fromTag stri
 <Response>
 <CmdType>Catalog</CmdType>
 <SN>%s</SN>
-<DeviceID>%s</DeviceID>
+<DeviceId>%s</DeviceId>
 <SumNum>%d</SumNum>
 <DeviceList Num="1">
 %s
@@ -807,7 +807,7 @@ func (p *Platform) buildChannelItem(channel gb28181.DeviceChannel) string {
 	}
 
 	return fmt.Sprintf(`<Item>
-<DeviceID>%s</DeviceID>
+<DeviceId>%s</DeviceId>
 <Name>%s</Name>
 <Manufacturer>%s</Manufacturer>
 <Model>%s</Model>
@@ -886,7 +886,7 @@ func (p *Platform) handleDeviceControl(req *sip.Request, tx sip.ServerTransactio
 		ProtocolName:    "SIP",
 		ProtocolVersion: "2.0",
 		Transport:       device.Transport,
-		Host:            device.SipIP,
+		Host:            device.SipIp,
 		Port:            device.localPort,
 		Params:          sip.NewParams(),
 	}
@@ -1017,7 +1017,7 @@ func (p *Platform) sendDeviceStatusResponse(req *sip.Request, device *Device, sn
 		record = "OFF"
 	} else {
 		// 设备状态
-		deviceID = device.DeviceID
+		deviceID = device.DeviceId
 		// 将布尔值转换为对应的状态字符串
 		if device.Online {
 			online = "ONLINE"
@@ -1037,7 +1037,7 @@ func (p *Platform) sendDeviceStatusResponse(req *sip.Request, device *Device, sn
 <Response>
 <CmdType>DeviceStatus</CmdType>
 <SN>%s</SN>
-<DeviceID>%s</DeviceID>
+<DeviceId>%s</DeviceId>
 <Result>OK</Result>
 <Online>%s</Online>
 <Status>%s</Status>
@@ -1157,7 +1157,7 @@ func (p *Platform) sendDeviceInfoResponse(req *sip.Request, device *Device, sn s
 <Response>
 <CmdType>DeviceInfo</CmdType>
 <SN>%s</SN>
-<DeviceID>%s</DeviceID>
+<DeviceId>%s</DeviceId>
 <Result>OK</Result>
 <DeviceName>%s</DeviceName>
 <Manufacturer>%s</Manufacturer>
@@ -1171,14 +1171,14 @@ func (p *Platform) sendDeviceInfoResponse(req *sip.Request, device *Device, sn s
 <Response>
 <CmdType>DeviceInfo</CmdType>
 <SN>%s</SN>
-<DeviceID>%s</DeviceID>
+<DeviceId>%s</DeviceId>
 <Result>OK</Result>
 <DeviceName>%s</DeviceName>
 <Manufacturer>%s</Manufacturer>
 <Model>%s</Model>
 <Firmware>%s</Firmware>
 <Channel>%d</Channel>
-</Response>`, sn, device.DeviceID, device.Name, device.Manufacturer, device.Model, device.Firmware, device.ChannelCount)
+</Response>`, sn, device.DeviceId, device.Name, device.Manufacturer, device.Model, device.Firmware, device.ChannelCount)
 	}
 
 	request.SetBody([]byte(xmlContent))
@@ -1344,7 +1344,7 @@ func (p *Platform) handlePresetQuery(req *sip.Request, tx sip.ServerTransaction,
 		ProtocolName:    "SIP",
 		ProtocolVersion: "2.0",
 		Transport:       device.Transport,
-		Host:            device.SipIP,
+		Host:            device.SipIp,
 		Port:            device.localPort,
 		Params:          sip.NewParams(),
 	}

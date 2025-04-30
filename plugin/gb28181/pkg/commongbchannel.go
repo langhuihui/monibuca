@@ -145,7 +145,7 @@ func (c *CommonGBChannel) Build(deviceID string, name string, manufacturer strin
 // GetFullContent 获取完整的通道信息内容
 func (c *CommonGBChannel) GetFullContent(deviceID string, name string, parentID string, event string) string {
 	content := "<Item>\n"
-	content += fmt.Sprintf("<DeviceID>%s</DeviceID>\n", deviceID)
+	content += fmt.Sprintf("<DeviceId>%s</DeviceId>\n", deviceID)
 	content += fmt.Sprintf("<Name>%s</Name>\n", name)
 
 	if len(deviceID) > 8 {
@@ -303,7 +303,7 @@ func (c *CommonGBChannel) Encode(deviceID string, event string) string {
 
 	switch event {
 	case "DEL", "DEFECT", "VLOST", "ON", "OFF":
-		return fmt.Sprintf("<Item>\n<DeviceID>%s</DeviceID>\n<Event>%s</Event>\n</Item>\n", deviceID, event)
+		return fmt.Sprintf("<Item>\n<DeviceId>%s</DeviceId>\n<Event>%s</Event>\n</Item>\n", deviceID, event)
 	case "ADD", "UPDATE":
 		return c.GetFullContent(deviceID, c.GbName, "", event)
 	default:

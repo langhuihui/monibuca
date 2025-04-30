@@ -32,7 +32,7 @@ func (gb *GB28181Plugin) RecordInfoQuery(deviceID string, channelID string, star
 <Query>
 <CmdType>RecordInfo</CmdType>
 <SN>%d</SN>
-<DeviceID>%s</DeviceID>
+<DeviceId>%s</DeviceId>
 <StartTime>%s</StartTime>
 <EndTime>%s</EndTime>
 <Secrecy>0</Secrecy>
