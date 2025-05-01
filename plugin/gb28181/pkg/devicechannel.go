@@ -20,7 +20,7 @@ type DeviceChannel struct {
 
 	ID                 string        `gorm:"primaryKey" json:"ID"` // 数据库自增长ID
 	ChannelID          string        `json:"channelID" xml:"ChannelID"`
-	DeviceID           string        `json:"deviceID" xml:"DeviceId"`                           // 设备国标编号
+	DeviceID           string        `json:"deviceID" xml:"DeviceID"`                           // 设备国标编号
 	ParentID           string        `json:"parentId" xml:"ParentID"`                           // 父节点ID
 	Name               string        `json:"name" xml:"Name"`                                   // 通道名称
 	Manufacturer       string        `json:"manufacturer" xml:"Manufacturer"`                   // 设备厂商

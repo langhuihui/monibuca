@@ -20,7 +20,7 @@ const (
 <Query>
 <CmdType>Catalog</CmdType>
 <SN>%d</SN>
-<DeviceId>%s</DeviceId>
+<DeviceID>%s</DeviceID>
 </Query>
 `
 	// RecordInfoXML 获取录像文件列表xml样式
@@ -28,7 +28,7 @@ const (
 <Query>
 <CmdType>RecordInfo</CmdType>
 <SN>%d</SN>
-<DeviceId>%s</DeviceId>
+<DeviceID>%s</DeviceID>
 <StartTime>%s</StartTime>
 <EndTime>%s</EndTime>
 <Secrecy>0</Secrecy>
@@ -40,7 +40,7 @@ const (
 <Query>
 <CmdType>DeviceInfo</CmdType>
 <SN>%d</SN>
-<DeviceId>%s</DeviceId>
+<DeviceID>%s</DeviceID>
 </Query>
 `
 	// DeviceStatusXML 查询设备详情xml样式
@@ -48,7 +48,7 @@ const (
 <Query>
 <CmdType>DeviceStatus</CmdType>
 <SN>%d</SN>
-<DeviceId>%s</DeviceId>
+<DeviceID>%s</DeviceID>
 </Query>
 `
 	// DevicePositionXML 订阅设备位置
@@ -56,7 +56,7 @@ const (
 <Query>
 <CmdType>MobilePosition</CmdType>
 <SN>%d</SN>
-<DeviceId>%s</DeviceId>
+<DeviceID>%s</DeviceID>
 <Interval>%d</Interval>
 </Query>
 `
@@ -65,20 +65,20 @@ const (
 <Query>
 <CmdType>PresetQuery</CmdType>
 <SN>%d</SN>
-<DeviceId>%s</DeviceId>
+<DeviceID>%s</DeviceID>
 </Query>
 `
 	AlarmResponseXML = `<?xml version="1.0"?><Response>
 <CmdType>Alarm</CmdType>
 <SN>17430</SN>
-<DeviceId>%s</DeviceId>
+<DeviceID>%s</DeviceID>
 </Response>
 `
 	KeepAliveXML = `<?xml version="1.0"?>
 <Notify>
 <CmdType>Keepalive</CmdType>
 <SN>%d</SN>
-<DeviceId>%s</DeviceId>
+<DeviceID>%s</DeviceID>
 <Status>OK</Status>
 </Notify>
 `

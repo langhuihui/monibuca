@@ -8,7 +8,7 @@ import (
 // RecordItem 设备录像信息
 type RecordItem struct {
 	// 设备编号
-	DeviceID string `xml:"DeviceId" json:"deviceId"`
+	DeviceID string `xml:"DeviceID" json:"deviceId"`
 
 	// 名称
 	Name string `xml:"Name" json:"name"`
