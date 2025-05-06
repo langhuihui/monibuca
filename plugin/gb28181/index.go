@@ -42,7 +42,7 @@ type GB28181Plugin struct {
 	pb.UnimplementedApiServer
 	m7s.Plugin
 	Serial         string `default:"34020000002000000001" desc:"sip 服务 id"` //sip 服务器 id, 默认 34020000002000000001
-	Realm          string `default:"3402000000" desc:"sip 服务域"`             //sip 服务器域，默认 3402000000
+	Realm          string `default:"3402000000" desc:"sip 服务域"`            //sip 服务器域，默认 3402000000
 	Password       string
 	Sip            SipConfig
 	MediaPort      util.Range[uint16] `default:"10001-20000" desc:"媒体端口范围"` //媒体端口范围
@@ -658,7 +658,7 @@ func (gb *GB28181Plugin) RecoverDevice(d *Device, req *sip.Request) {
 			if sourceIPParse.IsPrivate() { // 源IP是内网IP
 				myWanIP = myLanIP // 使用内网IP作为外网IP
 			}
-		} else { // 目标地址是IP
+		} else {                           // 目标地址是IP
 			if sourceIPParse.IsPrivate() { // 源IP是内网IP
 				myLanIP, myWanIP = myIP, myIP // 使用目标IP作为内外网IP
 			}
@@ -762,7 +762,7 @@ func (gb *GB28181Plugin) StoreDevice(deviceid string, req *sip.Request) (d *Devi
 			if sourceIPParse.IsPrivate() { // 源IP是内网IP
 				myWanIP = myLanIP // 使用内网IP作为外网IP
 			}
-		} else { // 目标地址是IP
+		} else {                           // 目标地址是IP
 			if sourceIPParse.IsPrivate() { // 源IP是内网IP
 				myLanIP, myWanIP = myIP, myIP // 使用目标IP作为内外网IP
 			}
@@ -895,10 +895,60 @@ func (gb *GB28181Plugin) GetPullableList() []string {
 	return slices.Collect(func(yield func(string) bool) {
 		for d := range gb.devices.Range {
 			for c := range d.channels.Range {
-				yield(fmt.Sprintf("%s/%s", d.DeviceId, c.ChannelID))
+				originalPath := fmt.Sprintf("%s/%s", d.DeviceId, c.ChannelID)
+
+				// 遍历配置中的正则表达式
+				pathGenerated := false
+				for reg, _ := range gb.GetCommonConf().OnSub.Pull {
+					regStr := reg.String()
+
+					// 尝试从正则表达式生成符合规则的路径
+					if generatedPath, ok := generatePathFromRegex(regStr, originalPath); ok {
+						if !yield(generatedPath) {
+							return
+						}
+						pathGenerated = true
+					}
+				}
+
+				// 如果没有生成任何符合规则的路径，则使用原始路径
+				if !pathGenerated {
+					if !yield(originalPath) {
+						return
+					}
+				}
 			}
 		}
 	})
+}
+
+// generatePathFromRegex 通过分析正则表达式生成符合规则的路径
+// 返回生成的路径和是否成功生成
+func generatePathFromRegex(regexStr string, originalPath string) (string, bool) {
+	// 确保正则表达式以^开头，$结尾
+	if !strings.HasPrefix(regexStr, "^") || !strings.HasSuffix(regexStr, "$") {
+		return "", false
+	}
+
+	// 移除^和$
+	pattern := regexStr[1 : len(regexStr)-1]
+
+	// 检查是否包含捕获组 (.+)
+	if !strings.Contains(pattern, "(.+)") {
+		return "", false
+	}
+
+	// 替换捕获组 (.+) 为原始路径
+	result := strings.Replace(pattern, "(.+)", originalPath, 1)
+
+	// 替换 \d+ 为随机数
+	if strings.Contains(result, "\\d+") {
+		// 生成一个随机数，例如当前时间戳的后三位
+		randomNum := fmt.Sprintf("%d", time.Now().Unix()%1000)
+		result = strings.Replace(result, "\\d+", randomNum, 1)
+	}
+
+	return result, true
 }
 
 //type PSServer struct {
