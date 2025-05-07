@@ -2811,6 +2811,7 @@ func (gb *GB28181Plugin) RemoveDevice(ctx context.Context, req *pb.RemoveDeviceR
 	if device, ok := gb.devices.Get(dbDevice.DeviceId); ok {
 		// 停止设备相关任务
 		device.Stop(fmt.Errorf("device removed"))
+		device.WaitStopped()
 		// device.Stop() 会调用 Dispose()，其中已包含从 gb.devices 中移除设备的逻辑
 	}
 

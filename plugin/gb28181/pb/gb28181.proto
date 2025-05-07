@@ -477,7 +477,7 @@ service api {
   // 删除设备
   rpc RemoveDevice (RemoveDeviceRequest) returns (BaseResponse) {
     option (google.api.http) = {
-      get: "/gb28181/api/device/remove/{id}"
+      post: "/gb28181/api/device/remove/{id}"
     };
   }
 }

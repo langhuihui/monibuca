@@ -6646,7 +6646,7 @@ const file_gb28181_proto_rawDesc = "" +
 	"\x0fAddGroupChannel\x12\".gb28181pro.AddGroupChannelRequest\x1a\x18.gb28181pro.BaseResponse\";\x82\xd3\xe4\x93\x025:\bchannels\")/gb28181/api/groups/channel/add/{groupId}\x12\x8e\x01\n" +
 	"\x12DeleteGroupChannel\x12%.gb28181pro.DeleteGroupChannelRequest\x1a\x18.gb28181pro.BaseResponse\"7\x82\xd3\xe4\x93\x021:\x01*\",/gb28181/api/groups/channel/delete/{groupId}\x12\x8a\x01\n" +
 	"\x10GetGroupChannels\x12#.gb28181pro.GetGroupChannelsRequest\x1a!.gb28181pro.GroupChannelsResponse\".\x82\xd3\xe4\x93\x02(\x12&/gb28181/api/groups/{groupId}/channels\x12r\n" +
-	"\fRemoveDevice\x12\x1f.gb28181pro.RemoveDeviceRequest\x1a\x18.gb28181pro.BaseResponse\"'\x82\xd3\xe4\x93\x02!\x12\x1f/gb28181/api/device/remove/{id}B\x1fZ\x1dm7s.live/v5/plugin/gb28181/pbb\x06proto3"
+	"\fRemoveDevice\x12\x1f.gb28181pro.RemoveDeviceRequest\x1a\x18.gb28181pro.BaseResponse\"'\x82\xd3\xe4\x93\x02!\"\x1f/gb28181/api/device/remove/{id}B\x1fZ\x1dm7s.live/v5/plugin/gb28181/pbb\x06proto3"
 
 var (
 	file_gb28181_proto_rawDescOnce sync.Once
