@@ -515,9 +515,6 @@ func (gb *GB28181Plugin) UpdateDevice(ctx context.Context, req *pb.Device) (*pb.
 		// 保存原始密码，用于后续检查是否修改了密码
 		originalPassword := d.Password
 
-		// 先停止设备任务
-		d.Stop(fmt.Errorf("device updated"))
-
 		// 更新基本字段
 		if req.Name != "" {
 			d.Name = req.Name
@@ -573,27 +570,29 @@ func (gb *GB28181Plugin) UpdateDevice(ctx context.Context, req *pb.Device) (*pb.
 
 		d.UpdateTime = time.Now()
 
+		// 先停止设备任务
+		d.Stop(fmt.Errorf("device updated"))
 		// 更新数据库中的设备信息
-		updates := map[string]interface{}{
-			"name":               d.Name,
-			"manufacturer":       d.Manufacturer,
-			"model":              d.Model,
-			"longitude":          d.Longitude,
-			"latitude":           d.Latitude,
-			"media_ip":           d.MediaIp,
-			"sip_ip":             d.SipIp,
-			"stream_mode":        d.StreamMode,
-			"password":           d.Password,
-			"subscribe_catalog":  d.SubscribeCatalog,
-			"subscribe_position": d.SubscribePosition,
-			"update_time":        d.UpdateTime,
-		}
-
-		if err := gb.DB.Model(&Device{}).Where("device_id = ?", req.DeviceId).Updates(updates).Error; err != nil {
-			resp.Code = 500
-			resp.Message = fmt.Sprintf("更新设备失败: %v", err)
-			return resp, nil
-		}
+		//updates := map[string]interface{}{
+		//	"name":               d.Name,
+		//	"manufacturer":       d.Manufacturer,
+		//	"model":              d.Model,
+		//	"longitude":          d.Longitude,
+		//	"latitude":           d.Latitude,
+		//	"media_ip":           d.MediaIp,
+		//	"sip_ip":             d.SipIp,
+		//	"stream_mode":        d.StreamMode,
+		//	"password":           d.Password,
+		//	"subscribe_catalog":  d.SubscribeCatalog,
+		//	"subscribe_position": d.SubscribePosition,
+		//	"update_time":        d.UpdateTime,
+		//}
+		//
+		//if err := gb.DB.Model(&Device{}).Where("device_id = ?", req.DeviceId).Updates(updates).Error; err != nil {
+		//	resp.Code = 500
+		//	resp.Message = fmt.Sprintf("更新设备失败: %v", err)
+		//	return resp, nil
+		//}
 
 		// 检查密码是否被修改
 		passwordChanged := req.Password != "" && req.Password != originalPassword
