@@ -14,9 +14,10 @@ type PositionSubscribeTask struct {
 
 // NewPositionSubscribeTask 创建新的位置订阅任务
 func NewPositionSubscribeTask(device *Device) *PositionSubscribeTask {
-	return &PositionSubscribeTask{
+	device.PositionSubscribeTask = &PositionSubscribeTask{
 		device: device,
 	}
+	return device.PositionSubscribeTask
 }
 
 // GetTickInterval 获取定时间隔
@@ -35,7 +36,7 @@ func (p *PositionSubscribeTask) Tick(any) {
 	if p.device.PositionInterval > 0 {
 		interval = p.device.PositionInterval
 	}
-	
+
 	response, err := p.device.subscribePosition(interval)
 	if err != nil {
 		p.Error("subPosition", "err", err)

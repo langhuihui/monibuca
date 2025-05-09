@@ -557,13 +557,13 @@ func (gb *GB28181Plugin) UpdateDevice(ctx context.Context, req *pb.Device) (*pb.
 
 		// 更新订阅相关字段
 		if req.SubscribeCatalog {
-			d.SubscribeCatalog = 3600 // 默认订阅周期为3600秒
+			d.SubscribeCatalog = 3600 // 默认订阅周期为60分钟
 		} else {
 			d.SubscribeCatalog = 0 // 不订阅
 		}
 
 		if req.SubscribePosition {
-			d.SubscribePosition = 3600 // 默认订阅周期为3600秒
+			d.SubscribePosition = 3600 // 默认订阅周期为60分钟
 		} else {
 			d.SubscribePosition = 0 // 不订阅
 		}
@@ -571,28 +571,28 @@ func (gb *GB28181Plugin) UpdateDevice(ctx context.Context, req *pb.Device) (*pb.
 		d.UpdateTime = time.Now()
 
 		// 先停止设备任务
-		d.Stop(fmt.Errorf("device updated"))
+		//d.Stop(fmt.Errorf("device updated"))
 		// 更新数据库中的设备信息
-		//updates := map[string]interface{}{
-		//	"name":               d.Name,
-		//	"manufacturer":       d.Manufacturer,
-		//	"model":              d.Model,
-		//	"longitude":          d.Longitude,
-		//	"latitude":           d.Latitude,
-		//	"media_ip":           d.MediaIp,
-		//	"sip_ip":             d.SipIp,
-		//	"stream_mode":        d.StreamMode,
-		//	"password":           d.Password,
-		//	"subscribe_catalog":  d.SubscribeCatalog,
-		//	"subscribe_position": d.SubscribePosition,
-		//	"update_time":        d.UpdateTime,
-		//}
-		//
-		//if err := gb.DB.Model(&Device{}).Where("device_id = ?", req.DeviceId).Updates(updates).Error; err != nil {
-		//	resp.Code = 500
-		//	resp.Message = fmt.Sprintf("更新设备失败: %v", err)
-		//	return resp, nil
-		//}
+		updates := map[string]interface{}{
+			"name":               d.Name,
+			"manufacturer":       d.Manufacturer,
+			"model":              d.Model,
+			"longitude":          d.Longitude,
+			"latitude":           d.Latitude,
+			"media_ip":           d.MediaIp,
+			"sip_ip":             d.SipIp,
+			"stream_mode":        d.StreamMode,
+			"password":           d.Password,
+			"subscribe_catalog":  d.SubscribeCatalog,
+			"subscribe_position": d.SubscribePosition,
+			"update_time":        d.UpdateTime,
+		}
+
+		if err := gb.DB.Model(&Device{}).Where("device_id = ?", req.DeviceId).Updates(updates).Error; err != nil {
+			resp.Code = 500
+			resp.Message = fmt.Sprintf("更新设备失败: %v", err)
+			return resp, nil
+		}
 
 		// 检查密码是否被修改
 		passwordChanged := req.Password != "" && req.Password != originalPassword
@@ -600,19 +600,33 @@ func (gb *GB28181Plugin) UpdateDevice(ctx context.Context, req *pb.Device) (*pb.
 		// 如果密码没有被修改，则需要重新启动设备任务和订阅任务
 		if !passwordChanged {
 			// 重新启动设备任务
-			gb.AddTask(d)
+			//gb.AddTask(d)
 
 			// 如果需要订阅目录，创建并启动目录订阅任务
 			if d.SubscribeCatalog > 0 && d.Online {
-				catalogSubTask := NewCatalogSubscribeTask(d)
-				d.AddTask(catalogSubTask)
+				if d.CatalogSubscribeTask != nil {
+					d.CatalogSubscribeTask.Ticker.Reset(time.Second * time.Duration(d.SubscribeCatalog))
+					d.CatalogSubscribeTask.Tick(nil)
+				} else {
+					catalogSubTask := NewCatalogSubscribeTask(d)
+					d.AddTask(catalogSubTask)
+					d.CatalogSubscribeTask.Tick(nil)
+				}
 			}
 
 			// 如果需要订阅位置，创建并启动位置订阅任务
 			if d.SubscribePosition > 0 && d.Online {
-				positionSubTask := NewPositionSubscribeTask(d)
-				d.AddTask(positionSubTask)
+				if d.PositionSubscribeTask != nil {
+					d.PositionSubscribeTask.Ticker.Reset(time.Second * time.Duration(d.SubscribePosition))
+					d.PositionSubscribeTask.Tick(nil)
+				} else {
+					positionSubTask := NewPositionSubscribeTask(d)
+					d.AddTask(positionSubTask)
+					d.PositionSubscribeTask.Tick(nil)
+				}
 			}
+		} else {
+			d.Stop(fmt.Errorf("password changed"))
 		}
 
 		resp.Code = 0

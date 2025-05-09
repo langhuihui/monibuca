@@ -67,20 +67,22 @@ type Device struct {
 	// channels              []gb28181.DeviceChannel `gorm:"foreignKey:DeviceDBID;references:ID"` // 设备通道列表
 
 	// 保留原有字段
-	Status              DeviceStatus
-	SN                  int
-	Recipient           sip.Uri                               `gorm:"-:all"`
-	channels            util.Collection[string, *Channel]     `gorm:"-:all"`
-	catalogReqs         util.Collection[int, *CatalogRequest] `gorm:"-:all"`
-	MediaIp             string                                `desc:"收流IP"`
-	Longitude, Latitude string                                // 经度,纬度
-	eventChan           chan any
-	client              *sipgo.Client
-	contactHDR          sip.ContactHeader
-	fromHDR             sip.FromHeader
-	toHDR               sip.ToHeader
-	plugin              *GB28181Plugin
-	localPort           int
+	Status                DeviceStatus
+	SN                    int
+	Recipient             sip.Uri                               `gorm:"-:all"`
+	channels              util.Collection[string, *Channel]     `gorm:"-:all"`
+	catalogReqs           util.Collection[int, *CatalogRequest] `gorm:"-:all"`
+	MediaIp               string                                `desc:"收流IP"`
+	Longitude, Latitude   string                                // 经度,纬度
+	eventChan             chan any                              `gorm:"-:all"`
+	client                *sipgo.Client
+	contactHDR            sip.ContactHeader
+	fromHDR               sip.FromHeader
+	toHDR                 sip.ToHeader
+	plugin                *GB28181Plugin `gorm:"-:all"`
+	localPort             int
+	CatalogSubscribeTask  *CatalogSubscribeTask  `gorm:"-:all"`
+	PositionSubscribeTask *PositionSubscribeTask `gorm:"-:all"`
 }
 
 func (d *Device) TableName() string {
@@ -426,7 +428,7 @@ func (d *Device) Go() (err error) {
 		d.AddTask(positionSubTask)
 	}
 
-	catalogTick := time.NewTicker(time.Minute * 10)
+	catalogTick := time.NewTicker(time.Minute * 1000)
 	keepaliveSeconds := 60
 	if d.KeepaliveInterval >= 5 {
 		keepaliveSeconds = d.KeepaliveInterval
@@ -515,7 +517,7 @@ func (d *Device) CreateRequest(Method sip.RequestMethod, Recipient any) *sip.Req
 	//}
 	//viaHeader.Params.Add("branch", sip.GenerateBranchN(10)).Add("rport", "")
 	//req.AppendHeader(&viaHeader)
-	//req.AppendHeader(&d.contactHDR)
+	req.AppendHeader(&d.contactHDR)
 	return req
 }
 
