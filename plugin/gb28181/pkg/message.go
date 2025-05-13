@@ -177,6 +177,29 @@ type (
 		PresetID   string `xml:"PresetID"`
 		PresetName string `xml:"PresetName"`
 	}
+
+	MobilePositionNotify struct {
+		XMLName   xml.Name `xml:"Notify"`
+		CmdType   string   `xml:"CmdType"`
+		SN        int      `xml:"SN"`
+		DeviceID  string   `xml:"DeviceID"`
+		Time      string   `xml:"Time"`
+		Longitude float64  `xml:"Longitude"`
+		Latitude  float64  `xml:"Latitude"`
+	}
+
+	AlarmNotify struct {
+		XMLName       xml.Name `xml:"Notify"`
+		CmdType       string   `xml:"CmdType"`
+		SN            int      `xml:"SN"`
+		DeviceID      string   `xml:"DeviceID"`
+		AlarmPriority string   `xml:"AlarmPriority"`
+		AlarmTime     string   `xml:"AlarmTime"`
+		AlarmMethod   string   `xml:"AlarmMethod"`
+		Info          struct {
+			AlarmType string `xml:"AlarmType"`
+		} `xml:"Info"`
+	}
 )
 
 func DecodeXML(v any, body []byte) error {

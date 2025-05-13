@@ -42,7 +42,7 @@ type GB28181Plugin struct {
 	pb.UnimplementedApiServer
 	m7s.Plugin
 	Serial         string `default:"34020000002000000001" desc:"sip 服务 id"` //sip 服务器 id, 默认 34020000002000000001
-	Realm          string `default:"3402000000" desc:"sip 服务域"`            //sip 服务器域，默认 3402000000
+	Realm          string `default:"3402000000" desc:"sip 服务域"`             //sip 服务器域，默认 3402000000
 	Password       string
 	Sip            SipConfig
 	MediaPort      util.Range[uint16] `default:"10001-20000" desc:"媒体端口范围"` //媒体端口范围
@@ -94,6 +94,7 @@ func (gb *GB28181Plugin) initDatabase() error {
 			&gb28181.PlatformChannel{},
 			&gb28181.GroupsModel{},
 			&gb28181.GroupsChannelModel{},
+			&gb28181.DevicePosition{},
 		); err != nil {
 			return fmt.Errorf("auto migrate tables error: %v", err)
 		}
@@ -140,6 +141,7 @@ func (gb *GB28181Plugin) OnInit() (err error) {
 		gb.devices.L = new(sync.RWMutex)
 		gb.server.OnInvite(gb.OnInvite)
 		gb.server.OnAck(gb.OnAck)
+		gb.server.OnNotify(gb.OnNotify)
 
 		if gb.MediaPort.Valid() {
 			gb.SetDescription("tcp", fmt.Sprintf("%d-%d", gb.MediaPort[0], gb.MediaPort[1]))
@@ -633,6 +635,93 @@ func (gb *GB28181Plugin) OnMessage(req *sip.Request, tx sip.ServerTransaction) {
 	}
 }
 
+func (gb *GB28181Plugin) OnNotify(req *sip.Request, tx sip.ServerTransaction) {
+	// 解析消息内容
+	temp := &gb28181.Message{}
+	err := gb28181.DecodeXML(temp, req.Body())
+	gb.Debug("onnotify debug", "message", temp)
+	if err != nil {
+		gb.Error("OnNotify", "error", err.Error())
+		response := sip.NewResponseFromRequest(req, sip.StatusBadRequest, "Bad Request", nil)
+		if err := tx.Respond(response); err != nil {
+			gb.Error("respond BadRequest", "error", err.Error())
+		}
+		return
+	}
+
+	from := req.From()
+	if from == nil || from.Address.User == "" {
+		gb.Error("OnNotify", "error", "no user")
+		return
+	}
+	id := from.Address.User
+
+	// 检查消息来源
+	var d *Device
+	var p *gb28181.PlatformModel
+
+	// 先从设备缓存中获取
+	d, _ = gb.devices.Get(id)
+
+	// 检查是否是平台
+	if gb.DB != nil {
+		var platform gb28181.PlatformModel
+		if err := gb.DB.First(&platform, gb28181.PlatformModel{ServerGBID: id, Enable: true}).Error; err == nil {
+			p = &platform
+		}
+	}
+
+	// 如果设备和平台都存在，通过源地址判断真实来源
+	if d != nil && p != nil {
+		source := req.Source()
+		if d.HostAddress == source {
+			// 如果源地址匹配设备地址，则确认是设备消息
+			p = nil
+		} else {
+			// 否则认为是平台消息
+			d = nil
+		}
+	}
+
+	// 如果既不是设备也不是平台，返回404
+	if d == nil && p == nil {
+		var response *sip.Response
+		gb.Info("OnNotify", "error", "device/platform not found", "id", id)
+		response = sip.NewResponseFromRequest(req, sip.StatusNotFound, "Not Found", nil)
+		if err := tx.Respond(response); err != nil {
+			gb.Error("respond NotFound", "error", err.Error())
+		}
+		gb.Debug("after on notify respond")
+		return
+	}
+
+	// 根据来源调用不同的处理方法
+	if d != nil {
+		d.UpdateTime = time.Now()
+		if err = d.onNotify(req, tx, temp); err != nil {
+			gb.Error("onNotify", "error", err.Error(), "type", "device")
+		}
+	} else {
+		//var platform *Platform
+		//if platformtmp, ok := gb.platforms.Get(p.ServerGBID); !ok {
+		//	// 创建 Platform 实例
+		//	platform = NewPlatform(p, gb, false)
+		//} else {
+		//	platform = platformtmp
+		//}
+		//if err = platform.OnNotify(req, tx, temp); err != nil {
+		//	gb.Error("onNotify", "error", err.Error(), "type", "platform")
+		//}
+	}
+
+	// 发送200 OK响应
+	response := sip.NewResponseFromRequest(req, sip.StatusOK, "OK", nil)
+	if err := tx.Respond(response); err != nil {
+		gb.Error("OnNotify", "error", "send response failed", "err", err.Error())
+		return
+	}
+}
+
 func (gb *GB28181Plugin) RecoverDevice(d *Device, req *sip.Request) {
 	from := req.From()
 	source := req.Source()
@@ -658,7 +747,7 @@ func (gb *GB28181Plugin) RecoverDevice(d *Device, req *sip.Request) {
 			if sourceIPParse.IsPrivate() { // 源IP是内网IP
 				myWanIP = myLanIP // 使用内网IP作为外网IP
 			}
-		} else {                           // 目标地址是IP
+		} else { // 目标地址是IP
 			if sourceIPParse.IsPrivate() { // 源IP是内网IP
 				myLanIP, myWanIP = myIP, myIP // 使用目标IP作为内外网IP
 			}
@@ -762,7 +851,7 @@ func (gb *GB28181Plugin) StoreDevice(deviceid string, req *sip.Request) (d *Devi
 			if sourceIPParse.IsPrivate() { // 源IP是内网IP
 				myWanIP = myLanIP // 使用内网IP作为外网IP
 			}
-		} else {                           // 目标地址是IP
+		} else { // 目标地址是IP
 			if sourceIPParse.IsPrivate() { // 源IP是内网IP
 				myLanIP, myWanIP = myIP, myIP // 使用目标IP作为内外网IP
 			}

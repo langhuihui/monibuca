@@ -54,8 +54,8 @@ type Device struct {
 	Charset               string         // 字符集, 支持 UTF-8 与 GB2312
 	SubscribeCatalog      int            `gorm:"default:0"` // 目录订阅周期，0为不订阅
 	SubscribePosition     int            `gorm:"default:0"` // 移动设备位置订阅周期，0为不订阅
-	PositionInterval      int            // 移动设备位置信息上报时间间隔,单位:秒,默认值5
-	SubscribeAlarm        int            // 报警订阅周期，0为不订阅
+	PositionInterval      int            `gorm:"default:6"` // 移动设备位置信息上报时间间隔,单位:秒,默认值6
+	SubscribeAlarm        int            `gorm:"default:0"` // 报警订阅周期，0为不订阅
 	SSRCCheck             bool           // 是否开启ssrc校验，默认关闭，开启可以防止串流
 	GeoCoordSys           string         // 地理坐标系， 目前支持 WGS84,GCJ02
 	Password              string         // 密码
@@ -83,6 +83,7 @@ type Device struct {
 	localPort             int
 	CatalogSubscribeTask  *CatalogSubscribeTask  `gorm:"-:all"`
 	PositionSubscribeTask *PositionSubscribeTask `gorm:"-:all"`
+	AlarmSubscribeTask    *AlarmSubscribeTask    `gorm:"-:all"`
 }
 
 func (d *Device) TableName() string {
@@ -356,12 +357,18 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 		}
 
 		// 尝试解析报警时间
-		if alarmTime, err := time.Parse("2006-01-02T15:04:05", msg.AlarmTime); err == nil {
-			alarm.AlarmTime = alarmTime
-		} else {
-			alarm.AlarmTime = time.Now()
-			d.Error("解析报警时间失败", "error", err)
+		loc, _ := time.LoadLocation("Local")
+		alarmTime, err := time.ParseInLocation("2006-1-2T15:4:5", msg.AlarmTime, loc)
+		if err != nil {
+			// 如果使用非标准格式解析失败，尝试使用标准格式
+			alarmTime, err = time.ParseInLocation("2006-01-02T15:04:05", msg.AlarmTime, loc)
+			if err != nil {
+				d.Error("解析报警时间失败", "error", err)
+				alarmTime = time.Now().UTC()
+			}
 		}
+		// 将本地时间转换为 UTC
+		alarm.AlarmTime = alarmTime.UTC()
 
 		// 保存到数据库
 		if d.plugin.DB != nil {
@@ -695,4 +702,206 @@ func (d *Device) BuildSnapshotConfigXML(config SnapshotConfig, channelID string)
 	xml.WriteString("</Control>\r\n")
 
 	return xml.String()
+}
+
+func (d *Device) onNotify(req *sip.Request, tx sip.ServerTransaction, msg *gb28181.Message) error {
+	// 首先尝试解析为 Notify 消息
+	notifyBody := req.Body()
+	if strings.Contains(string(notifyBody), "<Notify>") {
+		// 处理 Notify 通知
+		notify := &gb28181.AlarmNotify{}
+		if err := gb28181.DecodeXML(notify, notifyBody); err != nil {
+			return fmt.Errorf("decode notify xml error: %v", err)
+		}
+
+		if notify.CmdType == "MobilePosition" {
+			// 处理 MobilePosition 通知
+			posNotify := &gb28181.MobilePositionNotify{}
+			if err := gb28181.DecodeXML(posNotify, notifyBody); err != nil {
+				return fmt.Errorf("decode mobile position notify xml error: %v", err)
+			}
+
+			// 解析GPS时间
+			loc, _ := time.LoadLocation("Local")
+			gpsTime, err := time.ParseInLocation("2006-1-2T15:4:5", posNotify.Time, loc)
+			if err != nil {
+				// 如果使用非标准格式解析失败，尝试使用标准格式
+				gpsTime, err = time.ParseInLocation("2006-01-02T15:04:05", posNotify.Time, loc)
+				if err != nil {
+					d.Error("parse gps time error", "err", err)
+					gpsTime = time.Now().UTC() // 如果解析失败，使用当前UTC时间
+				}
+			}
+			// 将本地时间转换为 UTC
+			gpsTime = gpsTime.UTC()
+
+			// 更新设备的经纬度信息
+			d.Longitude = fmt.Sprintf("%.6f", posNotify.Longitude)
+			d.Latitude = fmt.Sprintf("%.6f", posNotify.Latitude)
+			d.UpdateTime = time.Now()
+
+			// 如果需要，可以将更新保存到数据库
+			if d.plugin.DB != nil {
+				// 更新设备表中的位置信息
+				if err := d.plugin.DB.Model(&Device{}).
+					Where("device_id = ?", d.DeviceId).
+					Updates(map[string]interface{}{
+						"longitude":   d.Longitude,
+						"latitude":    d.Latitude,
+						"update_time": d.UpdateTime,
+					}).Error; err != nil {
+					d.Error("update device position error", "err", err)
+				}
+
+				// 创建新的位置记录
+				position := &gb28181.DevicePosition{
+					DeviceID:   posNotify.DeviceID,
+					GpsTime:    gpsTime,
+					Longitude:  posNotify.Longitude,
+					Latitude:   posNotify.Latitude,
+					CreateTime: time.Now(),
+				}
+
+				// 保存位置记录到数据库
+				if err := d.plugin.DB.Create(position).Error; err != nil {
+					d.Error("save device position record error", "err", err)
+				} else {
+					d.Info("save device position record success",
+						"deviceId", posNotify.DeviceID,
+						"gpsTime", gpsTime,
+						"longitude", posNotify.Longitude,
+						"latitude", posNotify.Latitude)
+				}
+			}
+			return nil
+		} else if notify.CmdType == "Alarm" {
+			// 创建报警记录
+			alarm := &gb28181.DeviceAlarm{
+				DeviceID:      d.DeviceId, // 使用当前设备的ID
+				DeviceName:    d.Name,
+				ChannelID:     notify.DeviceID, // 使用通知中的DeviceID作为通道ID
+				AlarmPriority: notify.AlarmPriority,
+				AlarmMethod:   notify.AlarmMethod,
+				AlarmType:     notify.Info.AlarmType,
+				CreateTime:    time.Now(),
+			}
+
+			// 解析报警时间
+			loc, _ := time.LoadLocation("Local")
+			alarmTime, err := time.ParseInLocation("2006-1-2T15:4:5", notify.AlarmTime, loc)
+			if err != nil {
+				// 如果使用非标准格式解析失败，尝试使用标准格式
+				alarmTime, err = time.ParseInLocation("2006-01-02T15:04:05", notify.AlarmTime, loc)
+				if err != nil {
+					d.Error("解析报警时间失败", "error", err)
+					alarmTime = time.Now().UTC()
+				}
+			}
+			// 将本地时间转换为 UTC
+			alarm.AlarmTime = alarmTime.UTC()
+
+			// 保存到数据库
+			if d.plugin.DB != nil {
+				if err := d.plugin.DB.Create(alarm).Error; err != nil {
+					d.Error("保存报警信息失败", "error", err)
+				} else {
+					d.Info("保存报警信息成功",
+						"deviceId", alarm.DeviceID,
+						"channelId", alarm.ChannelID,
+						"alarmType", alarm.GetAlarmTypeDescription(),
+						"alarmMethod", alarm.GetAlarmMethodDescription(),
+						"alarmPriority", alarm.GetAlarmPriorityDescription())
+				}
+			}
+			return nil
+		}
+		return fmt.Errorf("unknown notify cmdtype: %s", notify.CmdType)
+	}
+
+	// 如果不是 Notify 消息，尝试按 Response 消息处理
+	if strings.Contains(string(notifyBody), "<Response>") {
+		// 重新解析为 Response 消息
+		response := &gb28181.Message{}
+		if err := gb28181.DecodeXML(response, notifyBody); err != nil {
+			return fmt.Errorf("decode response xml error: %v", err)
+		}
+
+		// 按照 Message 处理（与 OnMessage 相同的逻辑）
+		if response.CmdType == "Catalog" {
+			return d.handleCatalog(response)
+		}
+		return fmt.Errorf("unknown response cmdtype: %s", response.CmdType)
+	}
+
+	return fmt.Errorf("unknown notify message type")
+}
+
+// handleCatalog 处理设备目录更新
+func (d *Device) handleCatalog(msg *gb28181.Message) error {
+	if msg.DeviceChannelList == nil || len(msg.DeviceChannelList) == 0 {
+		return fmt.Errorf("no device items in catalog")
+	}
+
+	// 遍历并更新设备列表
+	for _, item := range msg.DeviceChannelList {
+		channel := &gb28181.DeviceChannel{
+			DeviceID:     item.DeviceID,
+			Name:         item.Name,
+			Manufacturer: item.Manufacturer,
+			Model:        item.Model,
+			Owner:        item.Owner,
+			CivilCode:    item.CivilCode,
+			Address:      item.Address,
+			Parental:     item.Parental,
+			ParentID:     item.ParentID,
+			SafetyWay:    item.SafetyWay,
+			RegisterWay:  item.RegisterWay,
+			Secrecy:      item.Secrecy,
+			Status:       item.Status,
+		}
+
+		// 添加或更新通道
+		d.addOrUpdateChannel(*channel)
+
+		// 如果需要，保存到数据库
+		if d.plugin.DB != nil {
+			var existingChannel gb28181.DeviceChannel
+			result := d.plugin.DB.Where("channel_id = ?", channel.DeviceID).First(&existingChannel)
+			if result.Error != nil {
+				// 通道不存在，创建新通道
+				channel.DeviceID = d.DeviceId // 设置设备ID
+				if err := d.plugin.DB.Create(channel).Error; err != nil {
+					d.Error("create channel error", "err", err)
+				}
+			} else {
+				// 通道存在，更新通道
+				if err := d.plugin.DB.Model(&existingChannel).Updates(channel).Error; err != nil {
+					d.Error("update channel error", "err", err)
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+// AlarmXML 报警订阅xml样式
+const AlarmXML = `<?xml version="1.0" encoding="GB2312"?>
+<Query>
+<CmdType>Alarm</CmdType>
+<SN>%d</SN>
+<DeviceID>%s</DeviceID>
+<StartAlarmPriority>0</StartAlarmPriority>
+<EndAlarmPriority>0</EndAlarmPriority>
+<AlarmMethod>0</AlarmMethod>
+</Query>
+`
+
+// subscribeAlarm 订阅报警信息
+func (d *Device) subscribeAlarm() (*sip.Response, error) {
+	request := d.CreateRequest(sip.SUBSCRIBE, nil)
+	request.AppendHeader(sip.NewHeader("Event", "presence"))
+	request.AppendHeader(sip.NewHeader("Expires", strconv.Itoa(d.SubscribeAlarm)))
+	request.SetBody([]byte(fmt.Sprintf(AlarmXML, d.SN, d.DeviceId)))
+	return d.send(request)
 }

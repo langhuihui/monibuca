@@ -596,6 +596,7 @@ message Device {
   string password = 17;
   bool subscribeCatalog = 18;
   bool subscribePosition = 19;
+  bool subscribeAlarm = 20;
 }
 
 message ResponseList {
@@ -982,12 +983,12 @@ message AlarmRecord {
   string channelId = 4;         // 通道ID
   string alarmPriority = 5;     // 报警级别
   string alarmMethod = 6;       // 报警方式
-  string alarmTime = 7;         // 报警时间
+  google.protobuf.Timestamp alarmTime = 7;         // 报警时间
   string alarmDescription = 8;  // 报警描述
   double longitude = 9;         // 经度
   double latitude = 10;         // 纬度
   string alarmType = 11;        // 报警类型
-  string createTime = 12;       // 创建时间
+  google.protobuf.Timestamp createTime = 12;       // 创建时间
   string alarmPriorityDesc = 13;// 报警级别描述
   string alarmMethodDesc = 14;  // 报警方式描述
   string alarmTypeDesc = 15;    // 报警类型描述

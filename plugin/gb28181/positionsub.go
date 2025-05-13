@@ -32,7 +32,7 @@ func (p *PositionSubscribeTask) GetTickInterval() time.Duration {
 // Tick 定时执行的方法
 func (p *PositionSubscribeTask) Tick(any) {
 	// 执行位置订阅，使用设备配置的位置间隔，如果未配置则使用默认值6
-	interval := 6
+	interval := 60
 	if p.device.PositionInterval > 0 {
 		interval = p.device.PositionInterval
 	}

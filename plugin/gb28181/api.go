@@ -568,6 +568,12 @@ func (gb *GB28181Plugin) UpdateDevice(ctx context.Context, req *pb.Device) (*pb.
 			d.SubscribePosition = 0 // 不订阅
 		}
 
+		//更新订阅报警信息的字段
+		if req.SubscribeAlarm {
+			d.SubscribeAlarm = 3600 // 默认订阅周期为60分钟
+		} else {
+			d.SubscribeAlarm = 0 // 不订阅
+		}
 		d.UpdateTime = time.Now()
 
 		// 先停止设备任务
@@ -585,6 +591,7 @@ func (gb *GB28181Plugin) UpdateDevice(ctx context.Context, req *pb.Device) (*pb.
 			"password":           d.Password,
 			"subscribe_catalog":  d.SubscribeCatalog,
 			"subscribe_position": d.SubscribePosition,
+			"subscribe_alarm":    d.SubscribeAlarm,
 			"update_time":        d.UpdateTime,
 		}
 
@@ -603,26 +610,36 @@ func (gb *GB28181Plugin) UpdateDevice(ctx context.Context, req *pb.Device) (*pb.
 			//gb.AddTask(d)
 
 			// 如果需要订阅目录，创建并启动目录订阅任务
-			if d.SubscribeCatalog > 0 && d.Online {
+			if d.Online {
 				if d.CatalogSubscribeTask != nil {
-					d.CatalogSubscribeTask.Ticker.Reset(time.Second * time.Duration(d.SubscribeCatalog))
+					if d.SubscribeCatalog > 0 {
+						d.CatalogSubscribeTask.Ticker.Reset(time.Second * time.Duration(d.SubscribeCatalog))
+					}
 					d.CatalogSubscribeTask.Tick(nil)
 				} else {
 					catalogSubTask := NewCatalogSubscribeTask(d)
 					d.AddTask(catalogSubTask)
 					d.CatalogSubscribeTask.Tick(nil)
 				}
-			}
-
-			// 如果需要订阅位置，创建并启动位置订阅任务
-			if d.SubscribePosition > 0 && d.Online {
 				if d.PositionSubscribeTask != nil {
-					d.PositionSubscribeTask.Ticker.Reset(time.Second * time.Duration(d.SubscribePosition))
+					if d.SubscribePosition > 0 {
+						d.PositionSubscribeTask.Ticker.Reset(time.Second * time.Duration(d.SubscribePosition))
+					}
 					d.PositionSubscribeTask.Tick(nil)
 				} else {
 					positionSubTask := NewPositionSubscribeTask(d)
 					d.AddTask(positionSubTask)
 					d.PositionSubscribeTask.Tick(nil)
+				}
+				if d.AlarmSubscribeTask != nil {
+					if d.SubscribeAlarm > 0 {
+						d.AlarmSubscribeTask.Ticker.Reset(time.Second * time.Duration(d.SubscribeAlarm))
+					}
+					d.AlarmSubscribeTask.Tick(nil)
+				} else {
+					alarmSubTask := NewAlarmSubscribeTask(d)
+					d.AddTask(alarmSubTask)
+					d.AlarmSubscribeTask.Tick(nil)
 				}
 			}
 		} else {
@@ -2732,10 +2749,10 @@ func (gb *GB28181Plugin) SearchAlarms(ctx context.Context, req *pb.SearchAlarmsR
 
 	// 添加时间范围条件
 	if !startTime.IsZero() {
-		query = query.Where("alarm_time >= ?", startTime)
+		query = query.Where("alarm_time > ?", startTime)
 	}
 	if !endTime.IsZero() {
-		query = query.Where("alarm_time <= ?", endTime)
+		query = query.Where("alarm_time < ?", endTime)
 	}
 
 	// 获取符合条件的总记录数
@@ -2771,12 +2788,12 @@ func (gb *GB28181Plugin) SearchAlarms(ctx context.Context, req *pb.SearchAlarmsR
 			ChannelId:         alarm.ChannelID,
 			AlarmPriority:     alarm.AlarmPriority,
 			AlarmMethod:       alarm.AlarmMethod,
-			AlarmTime:         alarm.AlarmTime.Format("2006-01-02T15:04:05"),
+			AlarmTime:         timestamppb.New(alarm.AlarmTime),
 			AlarmDescription:  alarm.AlarmDescription,
 			Longitude:         alarm.Longitude,
 			Latitude:          alarm.Latitude,
 			AlarmType:         alarm.AlarmType,
-			CreateTime:        alarm.CreateTime.Format("2006-01-02T15:04:05"),
+			CreateTime:        timestamppb.New(alarm.CreateTime),
 			AlarmPriorityDesc: alarm.GetAlarmPriorityDescription(),
 			AlarmMethodDesc:   alarm.GetAlarmMethodDescription(),
 			AlarmTypeDesc:     alarm.GetAlarmTypeDescription(),

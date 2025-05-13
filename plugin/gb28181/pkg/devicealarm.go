@@ -89,7 +89,7 @@ func (a *DeviceAlarm) GetAlarmTypeDescription() string {
 		}
 	}
 
-	if methodMap["5"] || methodMap["6"] { // 视频报警或设备故障报警
+	if methodMap["5"] { // 视频报警
 		switch a.AlarmType {
 		case "1":
 			return "人工视频报警"
@@ -115,6 +115,15 @@ func (a *DeviceAlarm) GetAlarmTypeDescription() string {
 			return "视频异常检测报警"
 		case "12":
 			return "快速移动报警"
+		}
+	}
+
+	if methodMap["6"] { // 设备故障报警
+		switch a.AlarmType {
+		case "1":
+			return "存储设备磁盘故障报警"
+		case "2":
+			return "存储设备风扇故障报警"
 		}
 	}
 
