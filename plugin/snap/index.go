@@ -1,9 +1,8 @@
 package plugin_snap
 
 import (
-	snap "m7s.live/v5/plugin/snap/pkg"
-
 	m7s "m7s.live/v5"
+	snap "m7s.live/v5/plugin/snap/pkg"
 )
 
 var _ = m7s.InstallPlugin[SnapPlugin](snap.NewTransform)

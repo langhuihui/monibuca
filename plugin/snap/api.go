@@ -2,6 +2,7 @@ package plugin_snap
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"image"
 	"image/color"
@@ -9,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -18,6 +20,12 @@ import (
 	"m7s.live/v5/pkg"
 	snap_pkg "m7s.live/v5/plugin/snap/pkg"
 	"m7s.live/v5/plugin/snap/pkg/watermark"
+)
+
+const (
+	MacFont   = "/System/Library/Fonts/STHeiti Light.ttc"                // mac字体路径
+	LinuxFont = "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc" // linux字体路径 思源黑体
+	WinFont   = "C:/Windows/Fonts/msyh.ttf"                              // windows字体路径 微软雅黑
 )
 
 func parseRGBA(rgba string) (color.RGBA, error) {
@@ -95,6 +103,8 @@ func (p *SnapPlugin) snap(publisher *m7s.Publisher, watermarkConfig *snap_pkg.Wa
 
 func (p *SnapPlugin) doSnap(rw http.ResponseWriter, r *http.Request) {
 	streamPath := r.PathValue("streamPath")
+	isUrl := r.URL.Query().Get("isUrl")
+
 	// 获取发布者
 	publisher, err := p.Server.GetPublisher(streamPath)
 	if err != nil {
@@ -109,9 +119,20 @@ func (p *SnapPlugin) doSnap(rw http.ResponseWriter, r *http.Request) {
 	var watermarkConfig *snap_pkg.WatermarkConfig
 	watermarkText := query.Get("watermark")
 	if watermarkText != "" {
+		fontPath := query.Get("fontPath")
+		if fontPath == "" {
+			switch {
+			case strings.Contains(runtime.GOOS, "darwin"):
+				fontPath = MacFont
+			case strings.Contains(runtime.GOOS, "linux"):
+				fontPath = LinuxFont
+			case strings.Contains(runtime.GOOS, "windows"):
+				fontPath = WinFont
+			}
+		}
 		watermarkConfig = &snap_pkg.WatermarkConfig{
 			Text:        watermarkText,
-			FontPath:    query.Get("fontPath"),
+			FontPath:    fontPath,
 			FontSize:    parseFloat64(query.Get("fontSize"), 36),
 			FontSpacing: parseFloat64(query.Get("fontSpacing"), 2),
 			OffsetX:     parseInt(query.Get("offsetX"), 0),
@@ -136,8 +157,9 @@ func (p *SnapPlugin) doSnap(rw http.ResponseWriter, r *http.Request) {
 
 	// 处理保存逻辑
 	savePath := query.Get("savePath")
+	now := time.Now()
 	if savePath != "" {
-		now := time.Now()
+		os.Mkdir(savePath, 0755)
 		filename := fmt.Sprintf("%s_%s.jpg", streamPath, now.Format("20060102150405.000"))
 		filename = strings.ReplaceAll(filename, "/", "_")
 		savePath = filepath.Join(savePath, filename)
@@ -162,12 +184,26 @@ func (p *SnapPlugin) doSnap(rw http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// 返回图片
-	rw.Header().Set("Content-Type", "image/jpeg")
-	rw.Header().Set("Content-Length", strconv.Itoa(buf.Len()))
-	if _, err := buf.WriteTo(rw); err != nil {
-		p.Error("write response failed", "error", err.Error())
+	if isUrl == "1" && savePath != "" {
+
+		url := fmt.Sprintf("http://%s/snap/query/%s?snapTime=%d", "localhost:8080", streamPath, now.Unix())
+		data := map[string]string{
+			"url":      url,
+			"markdown": fmt.Sprintf("![%s](%s)", streamPath, url),
+		}
+		rw.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(rw).Encode(data); err != nil {
+			http.Error(rw, err.Error(), http.StatusInternalServerError)
+		}
+	} else {
+		// 返回图片
+		rw.Header().Set("Content-Type", "image/jpeg")
+		rw.Header().Set("Content-Length", strconv.Itoa(buf.Len()))
+		if _, err := buf.WriteTo(rw); err != nil {
+			p.Error("write response failed", "error", err.Error())
+		}
 	}
+
 }
 
 // 辅助函数：解析浮点数
