@@ -24,6 +24,7 @@ require (
 	github.com/husanpao/ip v0.0.0-20220711082147-73160bb611a8
 	github.com/icholy/digest v0.1.22
 	github.com/jinzhu/copier v0.4.0
+	github.com/mark3labs/mcp-go v0.27.0
 	github.com/mattn/go-sqlite3 v1.14.24
 	github.com/mcuadros/go-defaults v1.2.0
 	github.com/mozillazg/go-pinyin v0.20.0
@@ -35,11 +36,13 @@ require (
 	github.com/pion/rtp v1.8.10
 	github.com/pion/sdp/v3 v3.0.9
 	github.com/pion/webrtc/v4 v4.0.7
+	github.com/quic-go/qpack v0.5.1
 	github.com/quic-go/quic-go v0.50.1
 	github.com/rs/zerolog v1.33.0
 	github.com/samber/slog-common v0.17.1
 	github.com/shirou/gopsutil/v4 v4.24.8
 	github.com/stretchr/testify v1.10.0
+	github.com/valyala/fasthttp v1.61.0
 	github.com/vishvananda/netlink v1.1.0
 	github.com/yapingcat/gomedia v0.0.0-20240601043430-920523f8e5c7
 	golang.org/x/image v0.22.0
@@ -86,7 +89,6 @@ require (
 	github.com/lufia/plan9stats v0.0.0-20211012122336-39d0f177ccd0 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/marcboeker/go-duckdb v1.0.5 // indirect
-	github.com/mark3labs/mcp-go v0.27.0 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
@@ -108,7 +110,6 @@ require (
 	github.com/prometheus/client_model v0.6.1 // indirect
 	github.com/prometheus/common v0.55.0 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
-	github.com/quic-go/qpack v0.5.1 // indirect
 	github.com/samber/lo v1.44.0 // indirect
 	github.com/satori/go.uuid v1.2.1-0.20181028125025-b2ce2384e17b // indirect
 	github.com/shoenig/go-m1cpu v0.1.6 // indirect
@@ -118,7 +119,6 @@ require (
 	github.com/tklauser/go-sysconf v0.3.12 // indirect
 	github.com/tklauser/numcpus v0.6.1 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
-	github.com/valyala/fasthttp v1.61.0 // indirect
 	github.com/valyala/fastjson v1.6.4 // indirect
 	github.com/valyala/fastrand v1.1.0 // indirect
 	github.com/valyala/gozstd v1.21.1 // indirect
