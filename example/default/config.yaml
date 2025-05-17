@@ -19,7 +19,9 @@ gb28181:
   #   live/test: dump/34020000001320000001
   onsub:
     pull:
-      .* : $0
+      ^\d{20}/\d{20}$: $0
+      ^gb_\d+/(.+)$: $1
+#      .* : $0
 mp4:
   # enable: false
   # publish:
