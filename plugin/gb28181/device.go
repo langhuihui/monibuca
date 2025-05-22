@@ -140,7 +140,7 @@ func (r *CatalogRequest) IsComplete(channelsLength int) bool {
 }
 
 func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28181.Message) (err error) {
-	d.Debug("into onMessage,deviceid is ", d.DeviceId)
+	d.plugin.Debug("into onMessage,deviceid is ", d.DeviceId)
 	source := req.Source()
 	hostname, portStr, _ := net.SplitHostPort(source)
 	port, _ := strconv.Atoi(portStr)
