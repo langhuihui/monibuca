@@ -392,8 +392,6 @@ func (gb *GB28181Plugin) OnRegister(req *sip.Request, tx sip.ServerTransaction) 
 	}
 	isUnregister := false
 	deviceid := from.Address.User
-	contact := req.Contact()
-	contact.Params
 	exp := req.GetHeader("Expires")
 	if exp == nil {
 		gb.Error("OnRegister", "error", "no expires")
