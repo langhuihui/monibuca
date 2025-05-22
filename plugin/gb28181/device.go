@@ -80,7 +80,7 @@ type Device struct {
 	fromHDR               sip.FromHeader
 	toHDR                 sip.ToHeader
 	plugin                *GB28181Plugin `gorm:"-:all"`
-	localPort             int
+	LocalPort             int
 	CatalogSubscribeTask  *CatalogSubscribeTask  `gorm:"-:all"`
 	PositionSubscribeTask *PositionSubscribeTask `gorm:"-:all"`
 	AlarmSubscribeTask    *AlarmSubscribeTask    `gorm:"-:all"`
@@ -101,7 +101,7 @@ func (d *Device) Dispose() {
 			})
 		} else {
 			// 如果没有通道，则直接更新通道状态为 OFF
-			d.plugin.DB.Model(&gb28181.DeviceChannel{}).Where("device_db_id = ?", d.ID).Update("status", "OFF")
+			d.plugin.DB.Model(&gb28181.DeviceChannel{}).Where("device_id = ?", d.ID).Update("status", "OFF")
 		}
 	}
 }
@@ -140,6 +140,7 @@ func (r *CatalogRequest) IsComplete(channelsLength int) bool {
 }
 
 func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28181.Message) (err error) {
+	d.Debug("into onMessage,deviceid is ", d.DeviceId)
 	source := req.Source()
 	hostname, portStr, _ := net.SplitHostPort(source)
 	port, _ := strconv.Atoi(portStr)
@@ -160,6 +161,7 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 	case "Keepalive":
 		d.KeepaliveInterval = int(time.Since(d.KeepaliveTime).Seconds())
 		d.KeepaliveTime = time.Now()
+		d.Debug("into keeplive,deviceid is ", d.DeviceId, "d.KeepaliveTime is", d.KeepaliveTime)
 		if d.plugin.DB != nil {
 			if err := d.plugin.DB.Model(d).Updates(map[string]interface{}{
 				"keepalive_interval": d.KeepaliveInterval,
@@ -403,6 +405,7 @@ func (d *Device) send(req *sip.Request) (*sip.Response, error) {
 }
 
 func (d *Device) Go() (err error) {
+	d.Debug("into device.Go,deviceid is ", d.DeviceId)
 	var response *sip.Response
 
 	// 初始化catalogReqs
@@ -447,6 +450,7 @@ func (d *Device) Go() (err error) {
 		select {
 		case <-d.Done():
 		case <-keepLiveTick.C:
+			d.Debug("keepLiveTick,deviceid is", d.DeviceId, "d.KeepaliveTime is ", d.KeepaliveTime)
 			if timeDiff := time.Since(d.KeepaliveTime); timeDiff > time.Duration(3*keepaliveSeconds)*time.Second {
 				d.Online = false
 				d.Status = DeviceOfflineStatus
@@ -455,7 +459,7 @@ func (d *Device) Go() (err error) {
 					channel.Status = "OFF"
 					return true
 				})
-				d.Stop(fmt.Errorf("device keepalive timeout after %v", timeDiff))
+				d.Stop(fmt.Errorf("device keepalive timeout after %v,deviceid is %s", timeDiff, d.DeviceId))
 				return
 			}
 		case <-catalogTick.C:
@@ -519,7 +523,7 @@ func (d *Device) CreateRequest(Method sip.RequestMethod, Recipient any) *sip.Req
 	//	ProtocolVersion: "2.0",
 	//	Transport:       "UDP",
 	//	Host:            d.SipIp,
-	//	Port:            d.localPort,
+	//	Port:            d.LocalPort,
 	//	Params:          sip.HeaderParams(sip.NewParams()),
 	//}
 	//viaHeader.Params.Add("branch", sip.GenerateBranchN(10)).Add("rport", "")

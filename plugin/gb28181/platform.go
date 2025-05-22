@@ -887,7 +887,7 @@ func (p *Platform) handleDeviceControl(req *sip.Request, tx sip.ServerTransactio
 		ProtocolVersion: "2.0",
 		Transport:       device.Transport,
 		Host:            device.SipIp,
-		Port:            device.localPort,
+		Port:            device.LocalPort,
 		Params:          sip.NewParams(),
 	}
 	viaHeader.Params.Add("branch", sip.GenerateBranchN(16)).Add("rport", "")
@@ -1345,7 +1345,7 @@ func (p *Platform) handlePresetQuery(req *sip.Request, tx sip.ServerTransaction,
 		ProtocolVersion: "2.0",
 		Transport:       device.Transport,
 		Host:            device.SipIp,
-		Port:            device.localPort,
+		Port:            device.LocalPort,
 		Params:          sip.NewParams(),
 	}
 	viaHeader.Params.Add("branch", sip.GenerateBranchN(16)).Add("rport", "")

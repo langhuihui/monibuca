@@ -185,7 +185,7 @@ func (d *Dialog) Start() (err error) {
 		ProtocolVersion: "2.0",
 		Transport:       "UDP",
 		Host:            device.MediaIp,
-		Port:            device.localPort,
+		Port:            device.LocalPort,
 		Params:          sip.NewParams(),
 	}
 	viaHeader.Params.Add("branch", sip.GenerateBranchN(10)).Add("rport", "")
@@ -199,8 +199,8 @@ func (d *Dialog) Start() (err error) {
 	contactHDR := sip.ContactHeader{
 		Address: sip.Uri{
 			User: d.gb.Serial,
-			Host: device.SipIp,
-			Port: device.localPort,
+			Host: device.MediaIp,
+			Port: device.LocalPort,
 		},
 	}
 
@@ -208,12 +208,12 @@ func (d *Dialog) Start() (err error) {
 		Address: sip.Uri{
 			User: d.gb.Serial,
 			Host: device.MediaIp,
-			Port: device.localPort,
+			Port: device.LocalPort,
 		},
 		Params: sip.NewParams(),
 	}
 	fromHDR.Params.Add("tag", sip.GenerateTagN(32))
-	dialogClientCache := sipgo.NewDialogClientCache(device.client, device.contactHDR)
+	dialogClientCache := sipgo.NewDialogClientCache(device.client, contactHDR)
 	// 创建会话
 	d.gb.Info("start to invite,recipient:", recipient, " viaHeader:", viaHeader, " fromHDR:", fromHDR, " toHeader:", toHeader, " device.contactHDR:", device.contactHDR, "contactHDR:", contactHDR)
 	// 判断当前系统类型
@@ -223,6 +223,9 @@ func (d *Dialog) Start() (err error) {
 	d.session, err = dialogClientCache.Invite(d.gb, recipient, []byte(strings.Join(sdpInfo, "\r\n")+"\r\n"), &callID, &csqHeader, &fromHDR, &toHeader, &maxforward, userAgentHeader, subjectHeader, &contentTypeHeader)
 	//}
 	// 最后添加Content-Length头部
+	if err != nil {
+		d.gb.Error("invite error", err)
+	}
 	return
 }
 
@@ -230,6 +233,7 @@ func (d *Dialog) Run() (err error) {
 	d.Channel.Info("before WaitAnswer")
 	err = d.session.WaitAnswer(d.gb, sipgo.AnswerOptions{})
 	d.Channel.Info("after WaitAnswer")
+	d.gb.Error(" WaitAnswer error", err)
 	if err != nil {
 		return
 	}

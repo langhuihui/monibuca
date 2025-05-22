@@ -191,7 +191,7 @@ func (d *ForwardDialog) Start() (err error) {
 		ProtocolVersion: "2.0",
 		Transport:       "UDP",
 		Host:            device.SipIp,
-		Port:            device.localPort,
+		Port:            device.LocalPort,
 		Params:          sip.HeaderParams(sip.NewParams()),
 	}
 	viaHeader.Params.Add("branch", sip.GenerateBranchN(16)).Add("rport", "")
@@ -199,7 +199,7 @@ func (d *ForwardDialog) Start() (err error) {
 		Address: sip.Uri{
 			User: d.gb.Serial,
 			Host: device.MediaIp,
-			Port: device.localPort,
+			Port: device.LocalPort,
 		},
 		Params: sip.NewParams(),
 	}

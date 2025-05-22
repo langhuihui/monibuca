@@ -238,7 +238,7 @@ func (gb *GB28181Plugin) checkDeviceExpire() (err error) {
 				Address: sip.Uri{
 					User: gb.Serial,
 					Host: device.SipIp,
-					Port: device.localPort,
+					Port: device.LocalPort,
 				},
 			}
 
@@ -247,7 +247,7 @@ func (gb *GB28181Plugin) checkDeviceExpire() (err error) {
 				Address: sip.Uri{
 					User: gb.Serial,
 					Host: device.SipIp,
-					Port: device.localPort,
+					Port: device.LocalPort,
 				},
 				Params: sip.NewParams(),
 			}
@@ -262,7 +262,7 @@ func (gb *GB28181Plugin) checkDeviceExpire() (err error) {
 
 			// 创建SIP客户端
 			device.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(device.SipIp))
-			device.Info("checkDeviceExpire", "d.SipIp", device.SipIp, "d.localPort", device.localPort, "d.contactHDR", device.contactHDR)
+			device.Info("checkDeviceExpire", "d.SipIp", device.SipIp, "d.LocalPort", device.LocalPort, "d.contactHDR", device.contactHDR)
 
 			// 设置设备ID的hash值作为任务ID
 			var hash uint32
@@ -392,6 +392,8 @@ func (gb *GB28181Plugin) OnRegister(req *sip.Request, tx sip.ServerTransaction) 
 	}
 	isUnregister := false
 	deviceid := from.Address.User
+	contact := req.Contact()
+	contact.Params
 	exp := req.GetHeader("Expires")
 	if exp == nil {
 		gb.Error("OnRegister", "error", "no expires")
@@ -560,7 +562,7 @@ func (gb *GB28181Plugin) OnMessage(req *sip.Request, tx sip.ServerTransaction) {
 	// 解析消息内容
 	temp := &gb28181.Message{}
 	err := gb28181.DecodeXML(temp, req.Body())
-	gb.Debug("onmessage debug", "message", temp)
+	gb.Debug("OnMessage debug", "message", temp)
 	if err != nil {
 		gb.Error("OnMessage", "error", err.Error())
 		response := sip.NewResponseFromRequest(req, sip.StatusBadRequest, "Bad Request", nil)
@@ -591,6 +593,7 @@ func (gb *GB28181Plugin) OnMessage(req *sip.Request, tx sip.ServerTransaction) {
 		}
 	}
 
+	gb.Debug("00000000000001,deviceid is ", id)
 	// 如果设备和平台都存在，通过源地址判断真实来源
 	if d != nil && p != nil {
 		source := req.Source()
@@ -602,6 +605,7 @@ func (gb *GB28181Plugin) OnMessage(req *sip.Request, tx sip.ServerTransaction) {
 			d = nil
 		}
 	}
+	gb.Debug("00000000000002,deviceid is ", id)
 
 	// 如果既不是设备也不是平台，返回404
 	if d == nil && p == nil {
@@ -614,12 +618,13 @@ func (gb *GB28181Plugin) OnMessage(req *sip.Request, tx sip.ServerTransaction) {
 		gb.Debug("after on message respond")
 		return
 	}
+	gb.Debug("00000000000003,deviceid is ", id)
 
 	// 根据来源调用不同的处理方法
 	if d != nil {
 		d.UpdateTime = time.Now()
 		if err = d.onMessage(req, tx, temp); err != nil {
-			gb.Error("onMessage", "error", err.Error(), "type", "device")
+			gb.Error("onMessage", "error", err.Error(), "type", "device,deviceid is", d.DeviceId)
 		}
 	} else {
 		var platform *Platform
@@ -906,7 +911,7 @@ func (gb *GB28181Plugin) StoreDevice(deviceid string, req *sip.Request) (d *Devi
 			Params: sip.NewParams(),
 		},
 		plugin:    gb,
-		localPort: myPort,
+		LocalPort: myPort,
 	}
 
 	d.Logger = gb.With("deviceid", deviceid)
