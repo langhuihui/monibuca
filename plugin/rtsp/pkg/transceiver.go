@@ -369,6 +369,7 @@ func (s *Sender) Send() (err error) {
 func (r *Receiver) SetMedia(medias []*Media) (err error) {
 	r.AudioChannelID = -1
 	r.VideoChannelID = -1
+	var hasAudio, hasVideo bool // 新增标志位
 	for i, media := range medias {
 		if codec := media.Codecs[0]; codec.IsAudio() {
 			r.AudioCodecParameters = &webrtc.RTPCodecParameters{
@@ -382,6 +383,7 @@ func (r *Receiver) SetMedia(medias []*Media) (err error) {
 				PayloadType: webrtc.PayloadType(codec.PayloadType),
 			}
 			r.AudioChannelID = i << 1
+			hasAudio = true // 标记找到音频
 		} else if codec.IsVideo() {
 			r.VideoChannelID = i << 1
 			r.VideoCodecParameters = &webrtc.RTPCodecParameters{
@@ -394,8 +396,21 @@ func (r *Receiver) SetMedia(medias []*Media) (err error) {
 				},
 				PayloadType: webrtc.PayloadType(codec.PayloadType),
 			}
+			hasVideo = true // 标记找到视频
 		} else {
 			r.Stream.Warn("media kind not support", "kind", codec.Kind())
+		}
+	}
+
+	// 在遍历后检查，如果 Publisher 存在且未找到对应媒体，则调用 NoAudio/NoVideo
+	if r.Publisher != nil {
+		if !hasAudio {
+			r.Publisher.NoAudio()
+			r.Stream.Info("SDP does not contain audio, calling Publisher.NoAudio()")
+		}
+		if !hasVideo {
+			r.Publisher.NoVideo()
+			r.Stream.Info("SDP does not contain video, calling Publisher.NoVideo()")
 		}
 	}
 	return
