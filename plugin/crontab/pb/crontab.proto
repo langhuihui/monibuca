@@ -1,0 +1,63 @@
+syntax = "proto3";
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+package crontab;
+option go_package="m7s.live/v5/plugin/crontab/pb";
+
+service api {
+  rpc List (ReqPlanList) returns (PlanResponseList) {
+    option (google.api.http) = {
+      get: "/plan/api/list"
+    };
+  }
+  rpc Add (Plan) returns (Response) {
+    option (google.api.http) = {
+      post: "/plan/api/add"
+      body: "*"
+    };
+  }
+  rpc Update (Plan) returns (Response) {
+    option (google.api.http) = {
+      post: "/plan/api/update/{id}"
+      body: "*"
+    };
+  }
+  rpc Remove (DeleteRequest) returns (Response) {
+    option (google.api.http) = {
+      post: "/plan/api/remove/{id}"
+      body: "*"
+    };
+  }
+}
+
+message PlanResponseList {
+  int32 code = 1;
+  string message = 2;
+  uint32 totalCount = 3;
+  uint32 pageNum = 4;
+  uint32 pageSize = 5;
+  repeated Plan data = 6;
+}
+
+message Plan {
+  uint32 id = 1;
+  string name = 2;
+  bool enable = 3;
+  google.protobuf.Timestamp createTime = 4;
+  google.protobuf.Timestamp updateTime = 5;
+  string plan = 6;
+}
+
+message ReqPlanList {
+  uint32 pageNum = 1;
+  uint32 pageSize = 2;
+}
+
+message DeleteRequest {
+  uint32 id = 1;
+}
+
+message Response {
+  int32 code = 1;
+  string message = 2;
+}
