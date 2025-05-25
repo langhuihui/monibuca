@@ -42,7 +42,7 @@ type GB28181Plugin struct {
 	pb.UnimplementedApiServer
 	m7s.Plugin
 	Serial         string `default:"34020000002000000001" desc:"sip 服务 id"` //sip 服务器 id, 默认 34020000002000000001
-	Realm          string `default:"3402000000" desc:"sip 服务域"`             //sip 服务器域，默认 3402000000
+	Realm          string `default:"3402000000" desc:"sip 服务域"`            //sip 服务器域，默认 3402000000
 	Password       string
 	Sip            SipConfig
 	MediaPort      util.Range[uint16] `default:"10001-20000" desc:"媒体端口范围"` //媒体端口范围
@@ -754,7 +754,7 @@ func (gb *GB28181Plugin) RecoverDevice(d *Device, req *sip.Request) {
 			if sourceIPParse.IsPrivate() { // 源IP是内网IP
 				myWanIP = myLanIP // 使用内网IP作为外网IP
 			}
-		} else { // 目标地址是IP
+		} else {                           // 目标地址是IP
 			if sourceIPParse.IsPrivate() { // 源IP是内网IP
 				myLanIP, myWanIP = myIP, myIP // 使用目标IP作为内外网IP
 			}
@@ -859,7 +859,7 @@ func (gb *GB28181Plugin) StoreDevice(deviceid string, req *sip.Request, d *Devic
 			if sourceIPParse.IsPrivate() { // 源IP是内网IP
 				myWanIP = myLanIP // 使用内网IP作为外网IP
 			}
-		} else { // 目标地址是IP
+		} else {                           // 目标地址是IP
 			if sourceIPParse.IsPrivate() { // 源IP是内网IP
 				myLanIP, myWanIP = myIP, myIP // 使用目标IP作为内外网IP
 			}
@@ -979,6 +979,9 @@ func (gb *GB28181Plugin) Pull(streamPath string, conf config.Pull, pubConf *conf
 		if conf.Args.Get(util.StartKey) != "" || conf.Args.Get(util.EndKey) != "" {
 			dialog.start = conf.Args.Get(util.StartKey)
 			dialog.end = conf.Args.Get(util.EndKey)
+		}
+		if conf.Args.Get("stream") != "" {
+			dialog.stream = conf.Args.Get("stream")
 		}
 	}
 	dialog.GetPullJob().Init(&dialog, &gb.Plugin, streamPath, conf, pubConf)

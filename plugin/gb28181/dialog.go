@@ -30,6 +30,17 @@ type Dialog struct {
 	StreamMode string // 数据流传输模式（UDP:udp传输/TCP-ACTIVE：tcp主动模式/TCP-PASSIVE：tcp被动模式）
 	targetIP   string // 目标设备的IP地址
 	targetPort int    // 目标设备的端口
+	/**
+	子码流的配置,默认格式为:
+	stream=stream:0;stream=stream:1
+	GB28181-2022:
+	stream=streanumber:0;stream=streamnumber:1
+	大华为:
+	stream=streamprofile:0;stream=streamprofile:1
+	水星,tp-link:
+	stream=streamMode:main;stream=streamMode:sub
+	*/
+	stream string
 }
 
 func (d *Dialog) GetCallID() string {
@@ -135,6 +146,9 @@ func (d *Dialog) Start() (err error) {
 
 	sdpInfo = append(sdpInfo, mediaLine)
 	sdpInfo = append(sdpInfo, "a=recvonly")
+	if d.stream != "" {
+		sdpInfo = append(sdpInfo, "a="+d.stream)
+	}
 
 	//根据传输模式添加 setup 和 connection 属性
 	switch strings.ToUpper(device.StreamMode) {

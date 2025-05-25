@@ -86,7 +86,8 @@ func (gb *GB28181Plugin) List(ctx context.Context, req *pb.GetDevicesRequest) (*
 		for _, c := range channels {
 			pbChannels = append(pbChannels, &pb.Channel{
 				DeviceId:     c.ChannelID,
-				ParentId:     c.ParentID,
+				ParentId:     c.DeviceID,
+				ChannelId:    c.ChannelID,
 				Name:         c.Name,
 				Manufacturer: c.Manufacturer,
 				Model:        c.Model,
