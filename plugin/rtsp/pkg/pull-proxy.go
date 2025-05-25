@@ -47,7 +47,7 @@ func (d *RTSPPullProxy) Start() (err error) {
 }
 
 func (d *RTSPPullProxy) Dispose() {
-	if d.conn.NetConnection != nil {
+	if d.conn.NetConnection != nil && d.conn.NetConnection.Conn != nil {
 		_ = d.conn.Teardown()
 		d.conn.NetConnection.Dispose()
 		d.conn.NetConnection = nil
