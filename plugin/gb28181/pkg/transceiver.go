@@ -153,7 +153,13 @@ func (p *Receiver) ReadRTP(rtp util.Buffer) (err error) {
 		}
 		copyData := make([]byte, len(p.Payload))
 		copy(copyData, p.Payload)
-		p.FeedChan <- copyData
+		select {
+		case p.FeedChan <- copyData:
+			// 成功发送数据
+		case <-p.Done():
+			// 任务已停止，返回错误
+			return task.ErrTaskComplete
+		}
 		return
 	}
 	return ErrRTPReceiveLost

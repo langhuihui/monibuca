@@ -49,7 +49,7 @@ func NewPlatform(pm *gb28181.PlatformModel, plugin *GB28181Plugin, unRegister bo
 		unRegister:    unRegister,
 	}
 	p.ctx = context.Background()
-	client, err := sipgo.NewClient(p.plugin.ua, sipgo.WithClientHostname(p.PlatformModel.DeviceIP), sipgo.WithClientPort(p.PlatformModel.DevicePort))
+	client, err := sipgo.NewClient(p.plugin.ua, sipgo.WithClientHostname(p.PlatformModel.DeviceIP))
 	if err != nil {
 		p.Error("failed to create sip client: %v", err)
 	}
@@ -155,16 +155,16 @@ func (p *Platform) Keepalive() (*sipgo.DialogClientSession, error) {
 	}
 	req.AppendHeader(&toHeader)
 
-	viaHeader := sip.ViaHeader{
-		ProtocolName:    "SIP",
-		ProtocolVersion: "2.0",
-		Transport:       p.PlatformModel.Transport,
-		Host:            p.PlatformModel.DeviceIP,
-		Port:            p.PlatformModel.DevicePort,
-		Params:          sip.NewParams(),
-	}
-	viaHeader.Params.Add("branch", sip.GenerateBranchN(16)).Add("rport", "")
-	req.AppendHeader(&viaHeader)
+	//viaHeader := sip.ViaHeader{
+	//	ProtocolName:    "SIP",
+	//	ProtocolVersion: "2.0",
+	//	Transport:       p.PlatformModel.Transport,
+	//	Host:            p.PlatformModel.DeviceIP,
+	//	Port:            p.PlatformModel.DevicePort,
+	//	Params:          sip.NewParams(),
+	//}
+	//viaHeader.Params.Add("branch", sip.GenerateBranchN(16)).Add("rport", "")
+	//req.AppendHeader(&viaHeader)
 
 	req.SetBody(gb28181.BuildKeepAliveXML(p.SN, p.PlatformModel.DeviceGBID))
 	p.SN++
@@ -240,16 +240,16 @@ func (p *Platform) Register(isUnregister bool) error {
 	req.AppendHeader(&toHeader)
 
 	// 添加Via头部
-	viaHeader := sip.ViaHeader{
-		ProtocolName:    "SIP",
-		ProtocolVersion: "2.0",
-		Transport:       p.PlatformModel.Transport,
-		Host:            p.PlatformModel.DeviceIP,
-		Port:            p.PlatformModel.DevicePort,
-		Params:          sip.NewParams(),
-	}
-	viaHeader.Params.Add("branch", sip.GenerateBranchN(16)).Add("rport", "")
-	req.AppendHeader(&viaHeader)
+	//viaHeader := sip.ViaHeader{
+	//	ProtocolName:    "SIP",
+	//	ProtocolVersion: "2.0",
+	//	Transport:       p.PlatformModel.Transport,
+	//	Host:            p.PlatformModel.DeviceIP,
+	//	Port:            p.PlatformModel.DevicePort,
+	//	Params:          sip.NewParams(),
+	//}
+	//viaHeader.Params.Add("branch", sip.GenerateBranchN(16)).Add("rport", "")
+	//req.AppendHeader(&viaHeader)
 
 	req.AppendHeader(&p.MaxForwardsHDR)
 
@@ -506,16 +506,16 @@ func (p *Platform) sendCatalogResponse(req *sip.Request, sn string, fromTag stri
 		request.AppendHeader(&toHeader)
 
 		// 添加Via头部
-		viaHeader := sip.ViaHeader{
-			ProtocolName:    "SIP",
-			ProtocolVersion: "2.0",
-			Transport:       p.PlatformModel.Transport,
-			Host:            p.PlatformModel.DeviceIP,
-			Port:            p.PlatformModel.DevicePort,
-			Params:          sip.NewParams(),
-		}
-		viaHeader.Params.Add("branch", sip.GenerateBranchN(16)).Add("rport", "")
-		request.AppendHeader(&viaHeader)
+		//viaHeader := sip.ViaHeader{
+		//	ProtocolName:    "SIP",
+		//	ProtocolVersion: "2.0",
+		//	Transport:       p.PlatformModel.Transport,
+		//	Host:            p.PlatformModel.DeviceIP,
+		//	Port:            p.PlatformModel.DevicePort,
+		//	Params:          sip.NewParams(),
+		//}
+		//viaHeader.Params.Add("branch", sip.GenerateBranchN(16)).Add("rport", "")
+		//request.AppendHeader(&viaHeader)
 
 		request.SetTransport(req.Transport())
 		contentTypeHeader := sip.ContentTypeHeader("Application/MANSCDP+xml")
@@ -526,7 +526,7 @@ func (p *Platform) sendCatalogResponse(req *sip.Request, sn string, fromTag stri
 <Response>
 <CmdType>Catalog</CmdType>
 <SN>%s</SN>
-<DeviceId>%s</DeviceId>
+<DeviceID>%s</DeviceID>
 <SumNum>0</SumNum>
 <DeviceList Num="0">
 </DeviceList>
@@ -648,16 +648,16 @@ func (p *Platform) sendCatalogResponse(req *sip.Request, sn string, fromTag stri
 		request.AppendHeader(&toHeader)
 
 		// 添加Via头部
-		viaHeader := sip.ViaHeader{
-			ProtocolName:    "SIP",
-			ProtocolVersion: "2.0",
-			Transport:       p.PlatformModel.Transport,
-			Host:            p.PlatformModel.DeviceIP,
-			Port:            p.PlatformModel.DevicePort,
-			Params:          sip.NewParams(),
-		}
-		viaHeader.Params.Add("branch", sip.GenerateBranchN(16)).Add("rport", "")
-		request.AppendHeader(&viaHeader)
+		//viaHeader := sip.ViaHeader{
+		//	ProtocolName:    "SIP",
+		//	ProtocolVersion: "2.0",
+		//	Transport:       p.PlatformModel.Transport,
+		//	Host:            p.PlatformModel.DeviceIP,
+		//	Port:            p.PlatformModel.DevicePort,
+		//	Params:          sip.NewParams(),
+		//}
+		//viaHeader.Params.Add("branch", sip.GenerateBranchN(16)).Add("rport", "")
+		//request.AppendHeader(&viaHeader)
 
 		request.SetTransport(req.Transport())
 		contentTypeHeader := sip.ContentTypeHeader("Application/MANSCDP+xml")
@@ -669,7 +669,7 @@ func (p *Platform) sendCatalogResponse(req *sip.Request, sn string, fromTag stri
 <Response>
 <CmdType>Catalog</CmdType>
 <SN>%s</SN>
-<DeviceId>%s</DeviceId>
+<DeviceID>%s</DeviceID>
 <SumNum>%d</SumNum>
 <DeviceList Num="1">
 %s
@@ -807,7 +807,7 @@ func (p *Platform) buildChannelItem(channel gb28181.DeviceChannel) string {
 	}
 
 	return fmt.Sprintf(`<Item>
-<DeviceId>%s</DeviceId>
+<DeviceID>%s</DeviceID>
 <Name>%s</Name>
 <Manufacturer>%s</Manufacturer>
 <Model>%s</Model>
@@ -826,7 +826,7 @@ func (p *Platform) buildChannelItem(channel gb28181.DeviceChannel) string {
 		channel.RegisterWay, // 直接使用整数值
 		channel.Secrecy,     // 直接使用整数值
 		parentID,
-		channel.Parental,  // 直接使用整数值
+		channel.Parental, // 直接使用整数值
 		channel.SafetyWay) // 直接使用整数值
 }
 
@@ -882,16 +882,16 @@ func (p *Platform) handleDeviceControl(req *sip.Request, tx sip.ServerTransactio
 	request.AppendHeader(&toHeader)
 
 	// 添加Via头部
-	viaHeader := sip.ViaHeader{
-		ProtocolName:    "SIP",
-		ProtocolVersion: "2.0",
-		Transport:       device.Transport,
-		Host:            device.SipIp,
-		Port:            device.LocalPort,
-		Params:          sip.NewParams(),
-	}
-	viaHeader.Params.Add("branch", sip.GenerateBranchN(16)).Add("rport", "")
-	request.AppendHeader(&viaHeader)
+	//viaHeader := sip.ViaHeader{
+	//	ProtocolName:    "SIP",
+	//	ProtocolVersion: "2.0",
+	//	Transport:       device.Transport,
+	//	Host:            device.SipIp,
+	//	Port:            device.LocalPort,
+	//	Params:          sip.NewParams(),
+	//}
+	//viaHeader.Params.Add("branch", sip.GenerateBranchN(16)).Add("rport", "")
+	//request.AppendHeader(&viaHeader)
 
 	// 设置Content-Type
 	contentTypeHeader := sip.ContentTypeHeader("Application/MANSCDP+xml")
@@ -988,16 +988,16 @@ func (p *Platform) sendDeviceStatusResponse(req *sip.Request, device *Device, sn
 	request.AppendHeader(&toHeader)
 
 	// 添加Via头部
-	viaHeader := sip.ViaHeader{
-		ProtocolName:    "SIP",
-		ProtocolVersion: "2.0",
-		Transport:       p.PlatformModel.Transport,
-		Host:            p.PlatformModel.DeviceIP,
-		Port:            p.PlatformModel.DevicePort,
-		Params:          sip.NewParams(),
-	}
-	viaHeader.Params.Add("branch", sip.GenerateBranchN(16)).Add("rport", "")
-	request.AppendHeader(&viaHeader)
+	//viaHeader := sip.ViaHeader{
+	//	ProtocolName:    "SIP",
+	//	ProtocolVersion: "2.0",
+	//	Transport:       p.PlatformModel.Transport,
+	//	Host:            p.PlatformModel.DeviceIP,
+	//	Port:            p.PlatformModel.DevicePort,
+	//	Params:          sip.NewParams(),
+	//}
+	//viaHeader.Params.Add("branch", sip.GenerateBranchN(16)).Add("rport", "")
+	//request.AppendHeader(&viaHeader)
 
 	// 设置Content-Type
 	contentTypeHeader := sip.ContentTypeHeader("Application/MANSCDP+xml")
@@ -1037,7 +1037,7 @@ func (p *Platform) sendDeviceStatusResponse(req *sip.Request, device *Device, sn
 <Response>
 <CmdType>DeviceStatus</CmdType>
 <SN>%s</SN>
-<DeviceId>%s</DeviceId>
+<DeviceID>%s</DeviceID>
 <Result>OK</Result>
 <Online>%s</Online>
 <Status>%s</Status>
@@ -1136,16 +1136,16 @@ func (p *Platform) sendDeviceInfoResponse(req *sip.Request, device *Device, sn s
 	}
 	request.AppendHeader(&toHeader)
 	// 添加Via头部
-	viaHeader := sip.ViaHeader{
-		ProtocolName:    "SIP",
-		ProtocolVersion: "2.0",
-		Transport:       p.PlatformModel.Transport,
-		Host:            p.PlatformModel.DeviceIP,
-		Port:            p.PlatformModel.DevicePort,
-		Params:          sip.NewParams(),
-	}
-	viaHeader.Params.Add("branch", sip.GenerateBranchN(16)).Add("rport", "")
-	request.AppendHeader(&viaHeader)
+	//viaHeader := sip.ViaHeader{
+	//	ProtocolName:    "SIP",
+	//	ProtocolVersion: "2.0",
+	//	Transport:       p.PlatformModel.Transport,
+	//	Host:            p.PlatformModel.DeviceIP,
+	//	Port:            p.PlatformModel.DevicePort,
+	//	Params:          sip.NewParams(),
+	//}
+	//viaHeader.Params.Add("branch", sip.GenerateBranchN(16)).Add("rport", "")
+	//request.AppendHeader(&viaHeader)
 	contentTypeHeader := sip.ContentTypeHeader("Application/MANSCDP+xml")
 	request.AppendHeader(&contentTypeHeader)
 
@@ -1157,7 +1157,7 @@ func (p *Platform) sendDeviceInfoResponse(req *sip.Request, device *Device, sn s
 <Response>
 <CmdType>DeviceInfo</CmdType>
 <SN>%s</SN>
-<DeviceId>%s</DeviceId>
+<DeviceID>%s</DeviceID>
 <Result>OK</Result>
 <DeviceName>%s</DeviceName>
 <Manufacturer>%s</Manufacturer>
@@ -1171,7 +1171,7 @@ func (p *Platform) sendDeviceInfoResponse(req *sip.Request, device *Device, sn s
 <Response>
 <CmdType>DeviceInfo</CmdType>
 <SN>%s</SN>
-<DeviceId>%s</DeviceId>
+<DeviceID>%s</DeviceID>
 <Result>OK</Result>
 <DeviceName>%s</DeviceName>
 <Manufacturer>%s</Manufacturer>
@@ -1340,16 +1340,16 @@ func (p *Platform) handlePresetQuery(req *sip.Request, tx sip.ServerTransaction,
 	request.AppendHeader(&toHeader)
 
 	// 添加Via头部
-	viaHeader := sip.ViaHeader{
-		ProtocolName:    "SIP",
-		ProtocolVersion: "2.0",
-		Transport:       device.Transport,
-		Host:            device.SipIp,
-		Port:            device.LocalPort,
-		Params:          sip.NewParams(),
-	}
-	viaHeader.Params.Add("branch", sip.GenerateBranchN(16)).Add("rport", "")
-	request.AppendHeader(&viaHeader)
+	//viaHeader := sip.ViaHeader{
+	//	ProtocolName:    "SIP",
+	//	ProtocolVersion: "2.0",
+	//	Transport:       device.Transport,
+	//	Host:            device.SipIp,
+	//	Port:            device.LocalPort,
+	//	Params:          sip.NewParams(),
+	//}
+	//viaHeader.Params.Add("branch", sip.GenerateBranchN(16)).Add("rport", "")
+	//request.AppendHeader(&viaHeader)
 
 	// 设置Content-Type
 	contentTypeHeader := sip.ContentTypeHeader("Application/MANSCDP+xml")

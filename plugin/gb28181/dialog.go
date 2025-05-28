@@ -110,7 +110,7 @@ func (d *Dialog) Start() (err error) {
 	// 构建 SDP 内容
 	sdpInfo := []string{
 		"v=0",
-		fmt.Sprintf("o=%s 0 0 IN IP4 %s", channelId, device.MediaIp),
+		fmt.Sprintf("o=%s 0 0 IN IP4 %s", channelId, device.SipIp),
 		fmt.Sprintf("s=%s", util.Conditional(d.IsLive(), "Play", "Playback")), // 根据是否有时间参数决定
 	}
 

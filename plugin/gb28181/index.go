@@ -233,6 +233,13 @@ func (gb *GB28181Plugin) checkDeviceExpire() (err error) {
 			// 设置plugin引用
 			device.plugin = gb
 
+			if gb.SipIP != "" {
+				device.SipIp = gb.SipIP
+			}
+			if gb.MediaIP != "" {
+				device.MediaIp = gb.MediaIP
+			}
+
 			// 设置联系人头信息
 			device.contactHDR = sip.ContactHeader{
 				Address: sip.Uri{
@@ -303,9 +310,11 @@ func (gb *GB28181Plugin) checkDeviceExpire() (err error) {
 			}
 
 			// 更新设备状态到数据库
-			if err := gb.DB.Model(&Device{}).Where(&Device{DeviceId: device.DeviceId}).Updates(map[string]interface{}{
-				"online": device.Online,
-				"status": device.Status,
+			if err := gb.DB.Model(&Device{}).Where(&Device{DeviceId: device.DeviceId}).Updates(Device{
+				Online:  device.Online,
+				Status:  device.Status,
+				MediaIp: device.MediaIp,
+				SipIp:   device.SipIp,
 			}).Error; err != nil {
 				gb.Error("更新设备状态到数据库失败", "error", err, "deviceId", device.DeviceId)
 			}
@@ -548,7 +557,7 @@ func (gb *GB28181Plugin) OnRegister(req *sip.Request, tx sip.ServerTransaction) 
 		if d, ok := gb.devices.Get(deviceid); ok {
 			gb.Info("into recoverdevice", "deviceId", d.DeviceId)
 			d.Status = DeviceOnlineStatus
-			gb.StoreDevice(deviceid, req, d)
+			gb.RecoverDevice(d, req)
 		} else {
 			d := &Device{
 				DeviceId: deviceid,
