@@ -309,13 +309,15 @@ func (d *Dialog) GetKey() uint32 {
 
 func (d *Dialog) Dispose() {
 	d.gb.tcpPorts <- d.MediaPort
-	err := d.session.Bye(d)
-	if err != nil {
-		d.Error("dialog bye bye err", err)
-	}
-	err = d.session.Close()
-	if err != nil {
-		d.Error("dialog close session err", err)
+	if d.session != nil {
+		err := d.session.Bye(d)
+		if err != nil {
+			d.Error("dialog bye bye err", err)
+		}
+		err = d.session.Close()
+		if err != nil {
+			d.Error("dialog close session err", err)
+		}
 	}
 	d.gb.dialogs.Remove(d)
 }
