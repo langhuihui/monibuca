@@ -45,8 +45,8 @@ func (r *Crontab) Tick(any) {
 
 	// 遍历所有计划
 	for _, plan := range plans {
-		if len(plan.Plan) != 144 {
-			r.Error("录制计划格式错误，plan长度应为144位:", plan.Name)
+		if len(plan.Plan) != 168 {
+			r.Error("录制计划格式错误，plan长度应为168位:", plan.Name)
 			continue
 		}
 
