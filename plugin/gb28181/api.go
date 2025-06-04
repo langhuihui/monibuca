@@ -436,7 +436,7 @@ func (gb *GB28181Plugin) SyncDevice(ctx context.Context, req *pb.SyncDeviceReque
 		if err := gb.DB.Where("device_id = ?", req.DeviceId).First(&device).Error; err == nil {
 			d = &device
 			// 恢复设备的必要字段
-			d.Logger = gb.With("deviceid", req.DeviceId)
+			d.Logger = gb.Logger.With("deviceid", req.DeviceId)
 			d.channels.L = new(sync.RWMutex)
 			d.plugin = gb
 
