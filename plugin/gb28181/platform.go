@@ -3,6 +3,7 @@ package plugin_gb28181pro
 import (
 	"context"
 	"fmt"
+	"m7s.live/v5/pkg/util"
 	"net/http"
 	"strconv"
 	"strings"
@@ -40,6 +41,7 @@ type Platform struct {
 	plugin     *GB28181Plugin
 	ctx        context.Context
 	unRegister bool
+	channels   util.Collection[string, *gb28181.DeviceChannel] `gorm:"-:all"`
 }
 
 func NewPlatform(pm *gb28181.PlatformModel, plugin *GB28181Plugin, unRegister bool) *Platform {
@@ -457,14 +459,17 @@ func (p *Platform) handleCatalog(req *sip.Request, tx sip.ServerTransaction, msg
 
 	// 查询通道列表
 	var channels []gb28181.DeviceChannel
-	if p.plugin.DB != nil {
-		if err := p.plugin.DB.Table("gb28181_channel gc").
-			Select(`gc.*`).
-			Joins("left join gb28181_platform_channel gpc on gc.id=gpc.channel_db_id").
-			Where("gpc.platform_server_gb_id = ? and gc.status='ON'", p.PlatformModel.ServerGBID).
-			Find(&channels).Error; err != nil {
-			return fmt.Errorf("query channels error: %v", err)
-		}
+	//if p.plugin.DB != nil {
+	//	if err := p.plugin.DB.Table("gb28181_channel gc").
+	//		Select(`gc.*`).
+	//		Joins("left join gb28181_platform_channel gpc on gc.id=gpc.channel_db_id").
+	//		Where("gpc.platform_server_gb_id = ? and gc.status='ON'", p.PlatformModel.ServerGBID).
+	//		Find(&channels).Error; err != nil {
+	//		return fmt.Errorf("query channels error: %v", err)
+	//	}
+	//}
+	for channel := range p.channels.Range {
+		channels = append(channels, *channel)
 	}
 
 	// 发送目录响应，无论是否有通道
@@ -826,7 +831,7 @@ func (p *Platform) buildChannelItem(channel gb28181.DeviceChannel) string {
 		channel.RegisterWay, // 直接使用整数值
 		channel.Secrecy,     // 直接使用整数值
 		parentID,
-		channel.Parental, // 直接使用整数值
+		channel.Parental,  // 直接使用整数值
 		channel.SafetyWay) // 直接使用整数值
 }
 

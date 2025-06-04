@@ -300,3 +300,7 @@ func (d *DeviceChannel) appendInfoContent(content *string) {
 		*content += "  <SVCTimeSupportMode>" + strconv.Itoa(d.SVCTimeSupportMode) + "</SVCTimeSupportMode>\n"
 	}
 }
+
+func (d *DeviceChannel) GetKey() string {
+	return d.ID
+}

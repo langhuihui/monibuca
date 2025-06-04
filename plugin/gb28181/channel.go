@@ -51,11 +51,11 @@ type Channel struct {
 	RecordReqs          util.Collection[int, *RecordRequest]
 	PresetReqs          util.Collection[int, *PresetRequest] // 预置位请求集合
 	*slog.Logger
-	gb28181.DeviceChannel
+	*gb28181.DeviceChannel
 }
 
 func (c *Channel) GetKey() string {
-	return c.ChannelID
+	return c.ID
 }
 
 type PullProxy struct {
@@ -75,7 +75,7 @@ func (p *PullProxy) Start() error {
 	streamPaths := strings.Split(p.GetStreamPath(), "/")
 	deviceId, channelId := streamPaths[0], streamPaths[1]
 	if device, ok := p.Plugin.GetHandler().(*GB28181Plugin).devices.Get(deviceId); ok {
-		if _, ok := device.channels.Get(channelId); ok {
+		if _, ok := device.channels.Get(deviceId + "_" + channelId); ok {
 			p.ChangeStatus(m7s.PullProxyStatusOnline)
 		}
 	}

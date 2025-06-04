@@ -230,7 +230,7 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 			d.catalogReqs.RemoveByKey(msg.SN)
 		}
 	case "RecordInfo":
-		if channel, ok := d.channels.Get(msg.DeviceID); ok {
+		if channel, ok := d.channels.Get(d.DeviceId + "_" + msg.DeviceID); ok {
 			if req, ok := channel.RecordReqs.Get(msg.SN); ok {
 				// 添加响应并检查是否完成
 				if req.AddResponse(*msg) {
@@ -239,7 +239,7 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 			}
 		}
 	case "PresetQuery":
-		if channel, ok := d.channels.Get(msg.DeviceID); ok {
+		if channel, ok := d.channels.Get(d.DeviceId + "_" + msg.DeviceID); ok {
 			if req, ok := channel.PresetReqs.Get(msg.SN); ok {
 				// 添加预置位响应
 				req.Response = msg.PresetList.Item
@@ -616,15 +616,16 @@ func (d *Device) frontEndCmdString(cmdCode int32, parameter1 int32, parameter2 i
 }
 
 func (d *Device) addOrUpdateChannel(c gb28181.DeviceChannel) {
-	if channel, ok := d.channels.Get(c.ChannelID); ok {
-		channel.DeviceChannel = c
+	if channel, ok := d.channels.Get(c.ID); ok {
+		channel.DeviceChannel = &c
 	} else {
 		channel = &Channel{
 			Device:        d,
-			Logger:        d.Logger.With("channel", c.ChannelID),
-			DeviceChannel: c,
+			Logger:        d.Logger.With("channel", c.ID),
+			DeviceChannel: &c,
 		}
 		d.channels.Set(channel)
+		d.plugin.channels.Set(channel.DeviceChannel)
 	}
 }
 

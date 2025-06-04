@@ -83,7 +83,7 @@ func (d *Dialog) Start() (err error) {
 	var device *Device
 	if deviceTmp, ok := d.gb.devices.Get(deviceId); ok {
 		device = deviceTmp
-		if channel, ok := deviceTmp.channels.Get(channelId); ok {
+		if channel, ok := deviceTmp.channels.Get(deviceId + "_" + channelId); ok {
 			d.Channel = channel
 			d.StreamMode = device.StreamMode
 		} else {

@@ -17,7 +17,7 @@ func (gb *GB28181Plugin) RecordInfoQuery(deviceID string, channelID string, star
 		return nil, fmt.Errorf("device not found: %s", deviceID)
 	}
 
-	channel, ok := device.channels.Get(channelID)
+	channel, ok := device.channels.Get(deviceID + "_" + channelID)
 	if !ok {
 		return nil, fmt.Errorf("channel not found: %s", channelID)
 	}

@@ -66,3 +66,8 @@ type PlatformChannel struct {
 func (*PlatformChannel) TableName() string {
 	return "gb28181_platform_channel"
 }
+
+func (p *PlatformChannel) GetKey() string {
+	return p.PlatformServerGBID + "_" + p.ChannelDBID
+
+}

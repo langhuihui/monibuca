@@ -70,7 +70,7 @@ func (d *ForwardDialog) Start() (err error) {
 	var device *Device
 	if deviceTmp, ok := d.gb.devices.Get(deviceId); ok {
 		device = deviceTmp
-		if channel, ok := deviceTmp.channels.Get(channelId); ok {
+		if channel, ok := deviceTmp.channels.Get(deviceId + "_" + channelId); ok {
 			d.channel = channel
 		} else {
 			return fmt.Errorf("channel %s not found", channelId)

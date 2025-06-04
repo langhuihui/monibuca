@@ -56,6 +56,8 @@ type GB28181Plugin struct {
 	SipIP          string `desc:"sip发送命令的IP，一般是本地IP，多网卡时需要配置正确的IP"`
 	MediaIP        string `desc:"流媒体IP，用于接收流"`
 	deviceManager  task.Manager[string, *DeviceRegisterQueueTask]
+	Platforms      []*gb28181.PlatformModel
+	channels       util.Collection[string, *gb28181.DeviceChannel]
 }
 
 var _ = m7s.InstallPlugin[GB28181Plugin](m7s.PluginMeta{
@@ -127,6 +129,7 @@ func (gb *GB28181Plugin) initDatabase() error {
 }
 
 func (gb *GB28181Plugin) OnInit() (err error) {
+	gb.Info("GB28181 initing", gb.Platforms)
 	gb.AddTask(&gb.deviceManager)
 	logger := zerolog.New(os.Stdout)
 	gb.ua, err = sipgo.NewUA(sipgo.WithUserAgent("M7S/" + m7s.Version)) // Build user agent
@@ -368,11 +371,44 @@ func (gb *GB28181Plugin) checkPlatform() {
 
 	gb.Info("找到启用状态的平台", "count", len(platformModels))
 
+	if gb.Platforms != nil && len(gb.Platforms) > 0 {
+		platformModels = append(platformModels, gb.Platforms...)
+	}
+
 	// 遍历所有平台进行初始化和注册
 	for _, platformModel := range platformModels {
 		// 创建Platform实例
 		platform := NewPlatform(platformModel, gb, true)
 
+		if platformModel.PlatformChannels != nil && len(platformModel.PlatformChannels) > 0 {
+			for i := range platformModel.PlatformChannels {
+				channelDbId := platformModel.PlatformChannels[i].ChannelDBID
+				if channelDbId != "" {
+					if channel, ok := gb.channels.Get(channelDbId); ok {
+						platform.channels.Set(channel)
+					}
+				}
+			}
+		} else {
+			// 查询通道列表
+			var channels []gb28181.DeviceChannel
+			if gb.DB != nil {
+				if err := gb.DB.Table("gb28181_channel gc").
+					Select(`gc.*`).
+					Joins("left join gb28181_platform_channel gpc on gc.id=gpc.channel_db_id").
+					Where("gpc.platform_server_gb_id = ? and gc.status='ON'", platformModel.ServerGBID).
+					Find(&channels).Error; err != nil {
+					gb.Error("<UNK>", "error", err.Error())
+				}
+				if channels != nil && len(channels) > 0 {
+					for i := range channels {
+						if channel, ok := gb.channels.Get(channels[i].ID); ok {
+							platform.channels.Set(channel)
+						}
+					}
+				}
+			}
+		}
 		//go platform.Unregister()
 		//if err != nil {
 		//	 gb.Error("unregister err ", err)
@@ -446,10 +482,15 @@ func (gb *GB28181Plugin) OnMessage(req *sip.Request, tx sip.ServerTransaction) {
 	d, _ = gb.devices.Get(id)
 
 	// 检查是否是平台
-	if gb.DB != nil {
-		var platform gb28181.PlatformModel
-		if err := gb.DB.First(&platform, gb28181.PlatformModel{ServerGBID: id, Enable: true}).Error; err == nil {
-			p = &platform
+	//if gb.DB != nil {
+	//	var platform gb28181.PlatformModel
+	//	if err := gb.DB.First(&platform, gb28181.PlatformModel{ServerGBID: id, Enable: true}).Error; err == nil {
+	//		p = &platform
+	//	}
+	//}
+	if platformtmp, ok := gb.platforms.Get(id); ok {
+		if platformtmp.PlatformModel.Enable {
+			p = platformtmp.PlatformModel
 		}
 	}
 
@@ -693,214 +734,222 @@ func (gb *GB28181Plugin) OnInvite(req *sip.Request, tx sip.ServerTransaction) {
 
 	// 首先从数据库中查询平台
 	var platform *Platform
-	var platformModel = &gb28181.PlatformModel{}
-	if gb.DB != nil {
-		// 使用requesterId查询平台，类似于Java代码中的queryPlatformByServerGBId
-		result := gb.DB.Where("server_gb_id = ?", inviteInfo.RequesterId).First(&platformModel)
-		if result.Error == nil {
-			// 数据库中找到平台，根据平台ID从运行时实例中查找
-			if platformTmp, platformFound := gb.platforms.Get(platformModel.ServerGBID); !platformFound {
-				gb.Error("OnInvite", "error", "platform found in DB but not in runtime", "platformId", inviteInfo.RequesterId)
-				_ = tx.Respond(sip.NewResponseFromRequest(req, sip.StatusNotFound, "Platform Not Found In Runtime", nil))
-				return
-			} else {
-				platform = platformTmp
-			}
+	//var platformModel = &gb28181.PlatformModel{}
+	//if gb.DB != nil {
+	//	// 使用requesterId查询平台，类似于Java代码中的queryPlatformByServerGBId
+	//	result := gb.DB.Where("server_gb_id = ?", inviteInfo.RequesterId).First(&platformModel)
+	//	if result.Error == nil {
+	// 数据库中找到平台，根据平台ID从运行时实例中查找
+	if platformTmp, platformFound := gb.platforms.Get(inviteInfo.RequesterId); !platformFound {
+		gb.Error("OnInvite", "error", "platform found in DB but not in runtime", "platformId", inviteInfo.RequesterId)
+		_ = tx.Respond(sip.NewResponseFromRequest(req, sip.StatusNotFound, "Platform Not Found In Runtime", nil))
+		return
+	} else {
+		platform = platformTmp
+	}
 
-			gb.Info("OnInvite", "action", "platform found", "platformId", inviteInfo.RequesterId, "platformName", platform.PlatformModel.Name)
+	gb.Info("OnInvite", "action", "platform found", "platformId", inviteInfo.RequesterId, "platformName", platform.PlatformModel.Name)
 
-			// 使用GORM的模型查询方式，更加符合GORM的使用习惯
-			// 默认情况下GORM会自动处理软删除，只查询未删除的记录
-			var deviceChannels []gb28181.DeviceChannel
-			channelResult := gb.DB.Model(&gb28181.DeviceChannel{}).
-				Joins("LEFT JOIN gb28181_platform_channel ON gb28181_channel.id = gb28181_platform_channel.channel_db_id").
-				Where("gb28181_platform_channel.platform_server_gb_id = ? AND gb28181_channel.channel_id = ?",
-					platform.PlatformModel.ServerGBID, inviteInfo.TargetChannelId).
-				Order("gb28181_channel.id").
-				Find(&deviceChannels)
+	// 使用GORM的模型查询方式，更加符合GORM的使用习惯
+	// 默认情况下GORM会自动处理软删除，只查询未删除的记录
+	//var deviceChannels []gb28181.DeviceChannel
+	//channelResult := gb.DB.Model(&gb28181.DeviceChannel{}).
+	//	Joins("LEFT JOIN gb28181_platform_channel ON gb28181_channel.id = gb28181_platform_channel.channel_db_id").
+	//	Where("gb28181_platform_channel.platform_server_gb_id = ? AND gb28181_channel.channel_id = ?",
+	//		platform.PlatformModel.ServerGBID, inviteInfo.TargetChannelId).
+	//	Order("gb28181_channel.id").
+	//	Find(&deviceChannels)
+	//
+	//if channelResult.Error != nil || len(deviceChannels) == 0 {
+	//	gb.Error("OnInvite", "error", "channel not found", "channelId", inviteInfo.TargetChannelId, "err", channelResult.Error)
+	//	_ = tx.Respond(sip.NewResponseFromRequest(req, sip.StatusNotFound, "Channel Not Found", nil))
+	//	return
+	//}
 
-			if channelResult.Error != nil || len(deviceChannels) == 0 {
-				gb.Error("OnInvite", "error", "channel not found", "channelId", inviteInfo.TargetChannelId, "err", channelResult.Error)
-				_ = tx.Respond(sip.NewResponseFromRequest(req, sip.StatusNotFound, "Channel Not Found", nil))
-				return
-			}
+	// 找到了通道
+	var channel *gb28181.DeviceChannel
 
-			// 找到了通道
-			channel := deviceChannels[len(deviceChannels)-1]
-			gb.Info("OnInvite", "action", "channel found", "channelId", channel.ChannelID, "channelName", channel.Name)
+	platform.channels.Range(func(channelTmp *gb28181.DeviceChannel) bool {
+		if channelTmp.ChannelID == inviteInfo.TargetChannelId {
+			channel = channelTmp
+		}
+		return true
+	})
 
-			var channelTmp *Channel
-			if deviceFound, ok := gb.devices.Get(channel.DeviceID); ok {
-				if channelFound, ok := deviceFound.channels.Get(channel.ChannelID); ok {
-					channelTmp = channelFound
-				} else {
-					gb.Error("OnInvite", "channel not found memory,ChannelID is ", channel.ChannelID)
-					_ = tx.Respond(sip.NewResponseFromRequest(req, sip.StatusBadRequest, "SSRC Not Found", nil))
-					return
-				}
-			} else {
-				gb.Error("OnInvite", "device not found memory,deviceID is ", channel.DeviceID)
-				_ = tx.Respond(sip.NewResponseFromRequest(req, sip.StatusBadRequest, "SSRC Not Found", nil))
-				return
-			}
+	gb.Info("OnInvite", "action", "channel found", "channelId", channel.ChannelID, "channelName", channel.Name)
 
-			// 通道存在，发送100 Trying响应
-			tryingResp := sip.NewResponseFromRequest(req, sip.StatusTrying, "Trying", nil)
-			if err := tx.Respond(tryingResp); err != nil {
-				gb.Error("OnInvite", "error", "send trying response failed", "err", err.Error())
-				return
-			}
-
-			// 检查SSRC
-			if inviteInfo.SSRC == "" {
-				gb.Error("OnInvite", "error", "ssrc not found in invite")
-				_ = tx.Respond(sip.NewResponseFromRequest(req, sip.StatusBadRequest, "SSRC Not Found", nil))
-				return
-			}
-
-			// 获取媒体信息
-			mediaPort := uint16(0)
-			if gb.MediaPort.Valid() {
-				select {
-				case port := <-gb.tcpPorts:
-					mediaPort = port
-					gb.Debug("OnInvite", "action", "allocate port", "port", port)
-				default:
-					gb.Error("OnInvite", "error", "no available port")
-					_ = tx.Respond(sip.NewResponseFromRequest(req, sip.StatusServiceUnavailable, "No Available Port", nil))
-					return
-				}
-			} else {
-				mediaPort = gb.MediaPort[0]
-				gb.Debug("OnInvite", "action", "use default port", "port", mediaPort)
-			}
-
-			// 构建SDP响应
-			// 使用平台和通道的信息构建响应
-			sdpIP := platform.PlatformModel.DeviceIP
-			// 如果平台配置了SendStreamIP，则使用此IP
-			if platform.PlatformModel.SendStreamIP != "" {
-				sdpIP = platform.PlatformModel.SendStreamIP
-			}
-
-			// 构建SDP内容，参考Java代码createSendSdp方法
-			content := []string{
-				"v=0",
-				fmt.Sprintf("o=%s 0 0 IN IP4 %s", channel.ChannelID, sdpIP),
-				fmt.Sprintf("s=%s", inviteInfo.SessionName),
-				fmt.Sprintf("c=IN IP4 %s", sdpIP),
-			}
-
-			// 处理播放时间
-			if strings.EqualFold("Playback", inviteInfo.SessionName) && inviteInfo.StartTime > 0 && inviteInfo.StopTime > 0 {
-				content = append(content, fmt.Sprintf("t=%d %d", inviteInfo.StartTime, inviteInfo.StopTime))
-			} else {
-				content = append(content, "t=0 0")
-			}
-
-			// 处理传输模式
-			if inviteInfo.TCP {
-				content = append(content, fmt.Sprintf("m=video %d TCP/RTP/AVP 96", mediaPort))
-				if inviteInfo.TCPActive {
-					content = append(content, "a=setup:passive")
-				} else {
-					content = append(content, "a=setup:active")
-				}
-				if inviteInfo.TCP {
-					content = append(content, "a=connection:new")
-				}
-			} else {
-				content = append(content, fmt.Sprintf("m=video %d RTP/AVP 96", mediaPort))
-			}
-
-			// 添加其他属性，参考Java代码
-			content = append(content,
-				"a=sendonly",
-				"a=rtpmap:96 PS/90000",
-				fmt.Sprintf("y=%s", inviteInfo.SSRC),
-				"f=",
-			)
-
-			// 发送200 OK响应
-			response := sip.NewResponseFromRequest(req, sip.StatusOK, "OK", nil)
-			contentType := sip.ContentTypeHeader("application/sdp")
-			response.AppendHeader(&contentType)
-			response.SetBody([]byte(strings.Join(content, "\r\n") + "\r\n"))
-
-			// 创建并保存SendRtpInfo，以供OnAck方法使用
-			forwardDialog := &ForwardDialog{
-				gb:             gb,
-				platformIP:     inviteInfo.IP,
-				platformPort:   inviteInfo.Port,
-				platformSSRC:   inviteInfo.SSRC,
-				TCP:            inviteInfo.TCP,
-				TCPActive:      inviteInfo.TCPActive,
-				platformCallId: req.CallID().Value(),
-				start:          inviteInfo.StartTime,
-				end:            inviteInfo.StopTime,
-				channel:        channelTmp,
-				upIP:           sdpIP,
-				upPort:         mediaPort,
-			}
-			forwardDialog.forwarder = gb28181.NewRTPForwarder()
-			forwardDialog.forwarder.TCP = forwardDialog.TCP
-			forwardDialog.forwarder.TCPActive = forwardDialog.TCPActive
-			forwardDialog.forwarder.StreamMode = forwardDialog.channel.Device.StreamMode
-
-			if forwardDialog.TCPActive {
-				forwardDialog.forwarder.UpListenAddr = fmt.Sprintf(":%d", forwardDialog.upPort)
-			} else {
-				forwardDialog.forwarder.UpListenAddr = fmt.Sprintf("%s:%d", forwardDialog.upIP, forwardDialog.platformPort)
-			}
-
-			// 设置监听地址和端口
-			if strings.ToUpper(forwardDialog.channel.Device.StreamMode) == "TCP-ACTIVE" {
-				forwardDialog.forwarder.DownListenAddr = fmt.Sprintf("%s:%d", forwardDialog.downIP, forwardDialog.downPort)
-			} else {
-				forwardDialog.forwarder.DownListenAddr = fmt.Sprintf(":%d", forwardDialog.MediaPort)
-			}
-
-			// 设置转发目标
-			if inviteInfo.IP != "" && forwardDialog.platformPort > 0 {
-				err = forwardDialog.forwarder.SetTarget(forwardDialog.platformIP, forwardDialog.platformPort)
-				if err != nil {
-					gb.Error("set target error", "err", err)
-					return
-				}
-			} else {
-				gb.Error("no target set, will only receive but not forward")
-				return
-			}
-
-			// 设置目标SSRC
-			if forwardDialog.platformSSRC != "" {
-				forwardDialog.forwarder.TargetSSRC = forwardDialog.platformSSRC
-				gb.Info("set target ssrc", "ssrc", forwardDialog.platformSSRC)
-			}
-			// 保存到集合中
-			gb.forwardDialogs.Set(forwardDialog)
-			gb.Info("OnInvite", "action", "sendRtpInfo created", "callId", req.CallID().Value())
-
-			if err := tx.Respond(response); err != nil {
-				gb.Error("OnInvite", "error", "send response failed", "err", err.Error())
-				return
-			}
-
-			gb.Info("OnInvite", "action", "complete", "platformId", inviteInfo.RequesterId, "channelId", channel.ChannelID,
-				"ip", inviteInfo.IP, "port", inviteInfo.Port, "tcp", inviteInfo.TCP, "tcpActive", inviteInfo.TCPActive)
-			return
+	var channelTmp *Channel
+	if deviceFound, ok := gb.devices.Get(channel.DeviceID); ok {
+		if channelFound, ok := deviceFound.channels.Get(channel.ID); ok {
+			channelTmp = channelFound
 		} else {
-			// 数据库中未找到平台，响应not found
-			gb.Error("OnInvite", "error", "platform not found in database", "platformId", inviteInfo.RequesterId)
-			_ = tx.Respond(sip.NewResponseFromRequest(req, sip.StatusNotFound, "Platform Not Found", nil))
+			gb.Error("OnInvite", "channel not found memory,ChannelID is ", channel.ChannelID)
+			_ = tx.Respond(sip.NewResponseFromRequest(req, sip.StatusBadRequest, "SSRC Not Found", nil))
 			return
 		}
 	} else {
-		// 数据库未初始化，响应服务不可用
-		gb.Error("OnInvite", "error", "database not initialized")
-		_ = tx.Respond(sip.NewResponseFromRequest(req, sip.StatusServiceUnavailable, "Database Not Initialized", nil))
+		gb.Error("OnInvite", "device not found memory,deviceID is ", channel.DeviceID)
+		_ = tx.Respond(sip.NewResponseFromRequest(req, sip.StatusBadRequest, "SSRC Not Found", nil))
 		return
 	}
+
+	// 通道存在，发送100 Trying响应
+	tryingResp := sip.NewResponseFromRequest(req, sip.StatusTrying, "Trying", nil)
+	if err := tx.Respond(tryingResp); err != nil {
+		gb.Error("OnInvite", "error", "send trying response failed", "err", err.Error())
+		return
+	}
+
+	// 检查SSRC
+	if inviteInfo.SSRC == "" {
+		gb.Error("OnInvite", "error", "ssrc not found in invite")
+		_ = tx.Respond(sip.NewResponseFromRequest(req, sip.StatusBadRequest, "SSRC Not Found", nil))
+		return
+	}
+
+	// 获取媒体信息
+	mediaPort := uint16(0)
+	if gb.MediaPort.Valid() {
+		select {
+		case port := <-gb.tcpPorts:
+			mediaPort = port
+			gb.Debug("OnInvite", "action", "allocate port", "port", port)
+		default:
+			gb.Error("OnInvite", "error", "no available port")
+			_ = tx.Respond(sip.NewResponseFromRequest(req, sip.StatusServiceUnavailable, "No Available Port", nil))
+			return
+		}
+	} else {
+		mediaPort = gb.MediaPort[0]
+		gb.Debug("OnInvite", "action", "use default port", "port", mediaPort)
+	}
+
+	// 构建SDP响应
+	// 使用平台和通道的信息构建响应
+	sdpIP := platform.PlatformModel.DeviceIP
+	// 如果平台配置了SendStreamIP，则使用此IP
+	if platform.PlatformModel.SendStreamIP != "" {
+		sdpIP = platform.PlatformModel.SendStreamIP
+	}
+
+	// 构建SDP内容，参考Java代码createSendSdp方法
+	content := []string{
+		"v=0",
+		fmt.Sprintf("o=%s 0 0 IN IP4 %s", channel.ChannelID, sdpIP),
+		fmt.Sprintf("s=%s", inviteInfo.SessionName),
+		fmt.Sprintf("c=IN IP4 %s", sdpIP),
+	}
+
+	// 处理播放时间
+	if strings.EqualFold("Playback", inviteInfo.SessionName) && inviteInfo.StartTime > 0 && inviteInfo.StopTime > 0 {
+		content = append(content, fmt.Sprintf("t=%d %d", inviteInfo.StartTime, inviteInfo.StopTime))
+	} else {
+		content = append(content, "t=0 0")
+	}
+
+	// 处理传输模式
+	if inviteInfo.TCP {
+		content = append(content, fmt.Sprintf("m=video %d TCP/RTP/AVP 96", mediaPort))
+		if inviteInfo.TCPActive {
+			content = append(content, "a=setup:passive")
+		} else {
+			content = append(content, "a=setup:active")
+		}
+		if inviteInfo.TCP {
+			content = append(content, "a=connection:new")
+		}
+	} else {
+		content = append(content, fmt.Sprintf("m=video %d RTP/AVP 96", mediaPort))
+	}
+
+	// 添加其他属性，参考Java代码
+	content = append(content,
+		"a=sendonly",
+		"a=rtpmap:96 PS/90000",
+		fmt.Sprintf("y=%s", inviteInfo.SSRC),
+		"f=",
+	)
+
+	// 发送200 OK响应
+	response := sip.NewResponseFromRequest(req, sip.StatusOK, "OK", nil)
+	contentType := sip.ContentTypeHeader("application/sdp")
+	response.AppendHeader(&contentType)
+	response.SetBody([]byte(strings.Join(content, "\r\n") + "\r\n"))
+
+	// 创建并保存SendRtpInfo，以供OnAck方法使用
+	forwardDialog := &ForwardDialog{
+		gb:             gb,
+		platformIP:     inviteInfo.IP,
+		platformPort:   inviteInfo.Port,
+		platformSSRC:   inviteInfo.SSRC,
+		TCP:            inviteInfo.TCP,
+		TCPActive:      inviteInfo.TCPActive,
+		platformCallId: req.CallID().Value(),
+		start:          inviteInfo.StartTime,
+		end:            inviteInfo.StopTime,
+		channel:        channelTmp,
+		upIP:           sdpIP,
+		upPort:         mediaPort,
+	}
+	forwardDialog.forwarder = gb28181.NewRTPForwarder()
+	forwardDialog.forwarder.TCP = forwardDialog.TCP
+	forwardDialog.forwarder.TCPActive = forwardDialog.TCPActive
+	forwardDialog.forwarder.StreamMode = forwardDialog.channel.Device.StreamMode
+
+	if forwardDialog.TCPActive {
+		forwardDialog.forwarder.UpListenAddr = fmt.Sprintf(":%d", forwardDialog.upPort)
+	} else {
+		forwardDialog.forwarder.UpListenAddr = fmt.Sprintf("%s:%d", forwardDialog.upIP, forwardDialog.platformPort)
+	}
+
+	// 设置监听地址和端口
+	if strings.ToUpper(forwardDialog.channel.Device.StreamMode) == "TCP-ACTIVE" {
+		forwardDialog.forwarder.DownListenAddr = fmt.Sprintf("%s:%d", forwardDialog.downIP, forwardDialog.downPort)
+	} else {
+		forwardDialog.forwarder.DownListenAddr = fmt.Sprintf(":%d", forwardDialog.MediaPort)
+	}
+
+	// 设置转发目标
+	if inviteInfo.IP != "" && forwardDialog.platformPort > 0 {
+		err = forwardDialog.forwarder.SetTarget(forwardDialog.platformIP, forwardDialog.platformPort)
+		if err != nil {
+			gb.Error("set target error", "err", err)
+			return
+		}
+	} else {
+		gb.Error("no target set, will only receive but not forward")
+		return
+	}
+
+	// 设置目标SSRC
+	if forwardDialog.platformSSRC != "" {
+		forwardDialog.forwarder.TargetSSRC = forwardDialog.platformSSRC
+		gb.Info("set target ssrc", "ssrc", forwardDialog.platformSSRC)
+	}
+	// 保存到集合中
+	gb.forwardDialogs.Set(forwardDialog)
+	gb.Info("OnInvite", "action", "sendRtpInfo created", "callId", req.CallID().Value())
+
+	if err := tx.Respond(response); err != nil {
+		gb.Error("OnInvite", "error", "send response failed", "err", err.Error())
+		return
+	}
+
+	gb.Info("OnInvite", "action", "complete", "platformId", inviteInfo.RequesterId, "channelId", channel.ChannelID,
+		"ip", inviteInfo.IP, "port", inviteInfo.Port, "tcp", inviteInfo.TCP, "tcpActive", inviteInfo.TCPActive)
+	return
+	//} else {
+	//	// 数据库中未找到平台，响应not found
+	//	gb.Error("OnInvite", "error", "platform not found in database", "platformId", inviteInfo.RequesterId)
+	//	_ = tx.Respond(sip.NewResponseFromRequest(req, sip.StatusNotFound, "Platform Not Found", nil))
+	//	return
+	//}
+	//} else {
+	//	// 数据库未初始化，响应服务不可用
+	//	gb.Error("OnInvite", "error", "database not initialized")
+	//	_ = tx.Respond(sip.NewResponseFromRequest(req, sip.StatusServiceUnavailable, "Database Not Initialized", nil))
+	//	return
+	//}
 }
 
 func (gb *GB28181Plugin) OnAck(req *sip.Request, tx sip.ServerTransaction) {

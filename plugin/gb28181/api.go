@@ -433,10 +433,10 @@ func (gb *GB28181Plugin) SyncDevice(ctx context.Context, req *pb.SyncDeviceReque
 	if !ok && gb.DB != nil {
 		// 如果内存中没有且数据库存在，则从数据库查询
 		var device Device
-		if err := gb.DB.Where("id = ?", req.DeviceId).First(&device).Error; err == nil {
+		if err := gb.DB.Where("device_id = ?", req.DeviceId).First(&device).Error; err == nil {
 			d = &device
 			// 恢复设备的必要字段
-			d.Logger = gb.Logger.With("id", req.DeviceId)
+			d.Logger = gb.With("deviceid", req.DeviceId)
 			d.channels.L = new(sync.RWMutex)
 			d.plugin = gb
 
@@ -1143,7 +1143,7 @@ func (gb *GB28181Plugin) QueryRecord(ctx context.Context, req *pb.QueryRecordReq
 		return resp, nil
 	}
 
-	channel, ok := device.channels.Get(req.ChannelId)
+	channel, ok := device.channels.Get(req.DeviceId + "_" + req.ChannelId)
 	if !ok {
 		resp.Code = 404
 		resp.Message = "channel not found"
@@ -1533,6 +1533,13 @@ func (gb *GB28181Plugin) AddPlatformChannel(ctx context.Context, req *pb.AddPlat
 		resp.Message = fmt.Sprintf("提交事务失败: %v", err)
 		return resp, nil
 	}
+	if platform, ok := gb.platforms.Get(req.PlatformId); !ok {
+		for _, channelId := range req.ChannelIds {
+			if channel, ok := gb.channels.Get(channelId); ok {
+				platform.channels.Set(channel)
+			}
+		}
+	}
 
 	resp.Code = 0
 	resp.Message = "success"
@@ -1593,7 +1600,7 @@ func (gb *GB28181Plugin) Recording(ctx context.Context, req *pb.RecordingRequest
 		}
 
 		// 从device.channels中查找实际通道
-		_, ok = actualDevice.channels.Get(result.ChannelID)
+		_, ok = actualDevice.channels.Get(result.DeviceID + "_" + result.ChannelID)
 		if !ok {
 			resp.Code = 404
 			resp.Message = "实际通道未找到"
@@ -1626,7 +1633,7 @@ func (gb *GB28181Plugin) Recording(ctx context.Context, req *pb.RecordingRequest
 		}
 
 		// 检查通道是否存在
-		_, ok = device.channels.Get(req.ChannelId)
+		_, ok = device.channels.Get(req.DeviceId + "_" + req.ChannelId)
 		if !ok {
 			resp.Code = 404
 			resp.Message = "通道未找到"
@@ -1712,7 +1719,7 @@ func (gb *GB28181Plugin) GetSnap(ctx context.Context, req *pb.GetSnapRequest) (*
 		}
 
 		// 从device.channels中查找实际通道
-		_, ok = actualDevice.channels.Get(result.ChannelID)
+		_, ok = actualDevice.channels.Get(result.DeviceID + "_" + result.ChannelID)
 		if !ok {
 			resp.Code = 404
 			resp.Message = "实际通道未找到"
@@ -1756,7 +1763,7 @@ func (gb *GB28181Plugin) GetSnap(ctx context.Context, req *pb.GetSnapRequest) (*
 		}
 
 		// 检查通道是否存在
-		_, ok = device.channels.Get(req.ChannelId)
+		_, ok = device.channels.Get(req.DeviceId + "_" + req.ChannelId)
 		if !ok {
 			resp.Code = 404
 			resp.Message = "通道未找到"
