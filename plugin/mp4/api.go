@@ -465,16 +465,27 @@ func (p *MP4Plugin) StartRecord(ctx context.Context, req *mp4pb.ReqStartRecord) 
 		err = pkg.ErrRecordExists
 		return
 	}
+
+	recordConf := config.Record{
+		Append:   false,
+		Fragment: fragment,
+		FilePath: filePath,
+	}
 	if stream, ok := p.Server.Streams.SafeGet(req.StreamPath); ok {
-		recordConf := config.Record{
-			Append:   false,
-			Fragment: fragment,
-			FilePath: filePath,
-		}
 		job := p.Record(stream, recordConf, nil)
 		res.Data = uint64(uintptr(unsafe.Pointer(job.GetTask())))
 	} else {
-		err = pkg.ErrNotFound
+		sub, err := p.Subscribe(ctx, req.StreamPath)
+		if err == nil && sub != nil {
+			if stream, ok := p.Server.Streams.SafeGet(req.StreamPath); ok {
+				job := p.Record(stream, recordConf, nil)
+				res.Data = uint64(uintptr(unsafe.Pointer(job.GetTask())))
+			} else {
+				err = pkg.ErrNotFound
+			}
+		} else {
+			err = pkg.ErrNotFound
+		}
 	}
 	return
 }
