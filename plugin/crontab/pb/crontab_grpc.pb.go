@@ -19,10 +19,14 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	Api_List_FullMethodName   = "/crontab.api/List"
-	Api_Add_FullMethodName    = "/crontab.api/Add"
-	Api_Update_FullMethodName = "/crontab.api/Update"
-	Api_Remove_FullMethodName = "/crontab.api/Remove"
+	Api_List_FullMethodName                   = "/crontab.api/List"
+	Api_Add_FullMethodName                    = "/crontab.api/Add"
+	Api_Update_FullMethodName                 = "/crontab.api/Update"
+	Api_Remove_FullMethodName                 = "/crontab.api/Remove"
+	Api_ListRecordPlanStreams_FullMethodName  = "/crontab.api/ListRecordPlanStreams"
+	Api_AddRecordPlanStream_FullMethodName    = "/crontab.api/AddRecordPlanStream"
+	Api_UpdateRecordPlanStream_FullMethodName = "/crontab.api/UpdateRecordPlanStream"
+	Api_RemoveRecordPlanStream_FullMethodName = "/crontab.api/RemoveRecordPlanStream"
 )
 
 // ApiClient is the client API for Api service.
@@ -33,6 +37,11 @@ type ApiClient interface {
 	Add(ctx context.Context, in *Plan, opts ...grpc.CallOption) (*Response, error)
 	Update(ctx context.Context, in *Plan, opts ...grpc.CallOption) (*Response, error)
 	Remove(ctx context.Context, in *DeleteRequest, opts ...grpc.CallOption) (*Response, error)
+	// RecordPlanStream 相关接口
+	ListRecordPlanStreams(ctx context.Context, in *ReqRecordPlanStreamList, opts ...grpc.CallOption) (*RecordPlanStreamResponseList, error)
+	AddRecordPlanStream(ctx context.Context, in *RecordPlanStream, opts ...grpc.CallOption) (*Response, error)
+	UpdateRecordPlanStream(ctx context.Context, in *RecordPlanStream, opts ...grpc.CallOption) (*Response, error)
+	RemoveRecordPlanStream(ctx context.Context, in *DeleteRecordPlanStreamRequest, opts ...grpc.CallOption) (*Response, error)
 }
 
 type apiClient struct {
@@ -83,6 +92,46 @@ func (c *apiClient) Remove(ctx context.Context, in *DeleteRequest, opts ...grpc.
 	return out, nil
 }
 
+func (c *apiClient) ListRecordPlanStreams(ctx context.Context, in *ReqRecordPlanStreamList, opts ...grpc.CallOption) (*RecordPlanStreamResponseList, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RecordPlanStreamResponseList)
+	err := c.cc.Invoke(ctx, Api_ListRecordPlanStreams_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *apiClient) AddRecordPlanStream(ctx context.Context, in *RecordPlanStream, opts ...grpc.CallOption) (*Response, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Response)
+	err := c.cc.Invoke(ctx, Api_AddRecordPlanStream_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *apiClient) UpdateRecordPlanStream(ctx context.Context, in *RecordPlanStream, opts ...grpc.CallOption) (*Response, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Response)
+	err := c.cc.Invoke(ctx, Api_UpdateRecordPlanStream_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *apiClient) RemoveRecordPlanStream(ctx context.Context, in *DeleteRecordPlanStreamRequest, opts ...grpc.CallOption) (*Response, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Response)
+	err := c.cc.Invoke(ctx, Api_RemoveRecordPlanStream_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ApiServer is the server API for Api service.
 // All implementations must embed UnimplementedApiServer
 // for forward compatibility.
@@ -91,6 +140,11 @@ type ApiServer interface {
 	Add(context.Context, *Plan) (*Response, error)
 	Update(context.Context, *Plan) (*Response, error)
 	Remove(context.Context, *DeleteRequest) (*Response, error)
+	// RecordPlanStream 相关接口
+	ListRecordPlanStreams(context.Context, *ReqRecordPlanStreamList) (*RecordPlanStreamResponseList, error)
+	AddRecordPlanStream(context.Context, *RecordPlanStream) (*Response, error)
+	UpdateRecordPlanStream(context.Context, *RecordPlanStream) (*Response, error)
+	RemoveRecordPlanStream(context.Context, *DeleteRecordPlanStreamRequest) (*Response, error)
 	mustEmbedUnimplementedApiServer()
 }
 
@@ -112,6 +166,18 @@ func (UnimplementedApiServer) Update(context.Context, *Plan) (*Response, error) 
 }
 func (UnimplementedApiServer) Remove(context.Context, *DeleteRequest) (*Response, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Remove not implemented")
+}
+func (UnimplementedApiServer) ListRecordPlanStreams(context.Context, *ReqRecordPlanStreamList) (*RecordPlanStreamResponseList, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListRecordPlanStreams not implemented")
+}
+func (UnimplementedApiServer) AddRecordPlanStream(context.Context, *RecordPlanStream) (*Response, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AddRecordPlanStream not implemented")
+}
+func (UnimplementedApiServer) UpdateRecordPlanStream(context.Context, *RecordPlanStream) (*Response, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpdateRecordPlanStream not implemented")
+}
+func (UnimplementedApiServer) RemoveRecordPlanStream(context.Context, *DeleteRecordPlanStreamRequest) (*Response, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RemoveRecordPlanStream not implemented")
 }
 func (UnimplementedApiServer) mustEmbedUnimplementedApiServer() {}
 func (UnimplementedApiServer) testEmbeddedByValue()             {}
@@ -206,6 +272,78 @@ func _Api_Remove_Handler(srv interface{}, ctx context.Context, dec func(interfac
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Api_ListRecordPlanStreams_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReqRecordPlanStreamList)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).ListRecordPlanStreams(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_ListRecordPlanStreams_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).ListRecordPlanStreams(ctx, req.(*ReqRecordPlanStreamList))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Api_AddRecordPlanStream_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RecordPlanStream)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).AddRecordPlanStream(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_AddRecordPlanStream_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).AddRecordPlanStream(ctx, req.(*RecordPlanStream))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Api_UpdateRecordPlanStream_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RecordPlanStream)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).UpdateRecordPlanStream(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_UpdateRecordPlanStream_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).UpdateRecordPlanStream(ctx, req.(*RecordPlanStream))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Api_RemoveRecordPlanStream_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteRecordPlanStreamRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).RemoveRecordPlanStream(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_RemoveRecordPlanStream_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).RemoveRecordPlanStream(ctx, req.(*DeleteRecordPlanStreamRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Api_ServiceDesc is the grpc.ServiceDesc for Api service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -228,6 +366,22 @@ var Api_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Remove",
 			Handler:    _Api_Remove_Handler,
+		},
+		{
+			MethodName: "ListRecordPlanStreams",
+			Handler:    _Api_ListRecordPlanStreams_Handler,
+		},
+		{
+			MethodName: "AddRecordPlanStream",
+			Handler:    _Api_AddRecordPlanStream_Handler,
+		},
+		{
+			MethodName: "UpdateRecordPlanStream",
+			Handler:    _Api_UpdateRecordPlanStream_Handler,
+		},
+		{
+			MethodName: "RemoveRecordPlanStream",
+			Handler:    _Api_RemoveRecordPlanStream_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

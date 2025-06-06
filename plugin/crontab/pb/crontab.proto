@@ -28,6 +28,31 @@ service api {
       body: "*"
     };
   }
+
+  // RecordPlanStream 相关接口
+  rpc ListRecordPlanStreams (ReqRecordPlanStreamList) returns (RecordPlanStreamResponseList) {
+    option (google.api.http) = {
+      get: "/recordplanstream/api/list"
+    };
+  }
+  rpc AddRecordPlanStream (RecordPlanStream) returns (Response) {
+    option (google.api.http) = {
+      post: "/recordplanstream/api/add"
+      body: "*"
+    };
+  }
+  rpc UpdateRecordPlanStream (RecordPlanStream) returns (Response) {
+    option (google.api.http) = {
+      post: "/recordplanstream/api/update"
+      body: "*"
+    };
+  }
+  rpc RemoveRecordPlanStream (DeleteRecordPlanStreamRequest) returns (Response) {
+    option (google.api.http) = {
+      post: "/recordplanstream/api/remove"
+      body: "*"
+    };
+  }
 }
 
 message PlanResponseList {
@@ -60,4 +85,35 @@ message DeleteRequest {
 message Response {
   int32 code = 1;
   string message = 2;
+}
+
+// RecordPlanStream 相关消息定义
+message RecordPlanStream {
+  uint32 record_plan_id = 1;
+  string stream_path = 2;
+  string fragment = 3;
+  string file_path = 4;
+  google.protobuf.Timestamp created_at = 5;
+  google.protobuf.Timestamp updated_at = 6;
+}
+
+message ReqRecordPlanStreamList {
+  uint32 pageNum = 1;
+  uint32 pageSize = 2;
+  uint32 record_plan_id = 3;  // 可选的按录制计划ID筛选
+  string stream_path = 4;     // 可选的按流路径筛选
+}
+
+message RecordPlanStreamResponseList {
+  int32 code = 1;
+  string message = 2;
+  uint32 totalCount = 3;
+  uint32 pageNum = 4;
+  uint32 pageSize = 5;
+  repeated RecordPlanStream data = 6;
+}
+
+message DeleteRecordPlanStreamRequest {
+  uint32 record_plan_id = 1;
+  string stream_path = 2;
 }
