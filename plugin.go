@@ -156,6 +156,10 @@ func (plugin *PluginMeta) Init(s *Server, userConfig map[string]any) (p *Plugin)
 			p.disable(fmt.Sprintf("auto migrate record stream failed %v", err))
 			return
 		}
+		if err = p.DB.AutoMigrate(&EventRecordStream{}); err != nil {
+			p.disable(fmt.Sprintf("auto migrate event record stream failed %v", err))
+			return
+		}
 	}
 	if err := s.AddTask(instance).WaitStarted(); err != nil {
 		p.disable(instance.StopReason().Error())

@@ -1,6 +1,8 @@
 package m7s
 
 import (
+	"os"
+	"path/filepath"
 	"time"
 
 	"gorm.io/gorm"
@@ -12,58 +14,46 @@ import (
 	"m7s.live/v5/pkg"
 )
 
-const (
-	RecordModeAuto  RecordMode = "auto"
-	RecordModeEvent RecordMode = "event"
-	EventLevelLow   EventLevel = "low"
-	EventLevelHigh  EventLevel = "high"
-)
-
 type (
-	EventLevel = string
-	RecordMode = string
-	IRecorder  interface {
+	IRecorder interface {
 		task.ITask
 		GetRecordJob() *RecordJob
 	}
 	RecorderFactory = func(config.Record) IRecorder
-	RecordJob       struct {
+	// RecordEvent 包含录像事件的公共字段
+
+	EventRecordStream struct {
+		CreatedAt time.Time
+		*config.RecordEvent
+		RecordStream
+	}
+	RecordJob struct {
 		task.Job
-		StreamPath     string // 对应本地流
-		Plugin         *Plugin
-		Subscriber     *Subscriber
-		SubConf        *config.Subscribe
-		RecConf        *config.Record
-		recorder       IRecorder
-		EventId        string        `json:"eventId" desc:"事件编号"`
-		Mode           RecordMode    `json:"mode" desc:"事件类型,auto=连续录像模式，event=事件录像模式"`
-		BeforeDuration time.Duration `json:"beforeDuration" desc:"事件前缓存时长"`
-		AfterDuration  time.Duration `json:"afterDuration" desc:"事件后缓存时长"`
-		EventDesc      string        `json:"eventDesc" desc:"事件描述"`
-		EventLevel     EventLevel    `json:"eventLevel" desc:"事件级别"`
-		EventName      string        `json:"eventName" desc:"事件名称"`
+		Event      *config.RecordEvent
+		StreamPath string // 对应本地流
+		Plugin     *Plugin
+		Subscriber *Subscriber
+		SubConf    *config.Subscribe
+		RecConf    *config.Record
+		recorder   IRecorder
 	}
 	DefaultRecorder struct {
 		task.Task
 		RecordJob RecordJob
+		Event     EventRecordStream
 	}
 	RecordStream struct {
-		ID                     uint          `gorm:"primarykey"`
-		StartTime, EndTime     time.Time     `gorm:"type:datetime;default:NULL"`
-		Duration               uint32        `gorm:"comment:录像时长;default:0"`
-		EventId                string        `json:"eventId" desc:"事件编号" gorm:"type:varchar(255);comment:事件编号"`
-		Mode                   RecordMode    `json:"mode" desc:"事件类型,auto=连续录像模式，event=事件录像模式" gorm:"type:varchar(255);comment:事件类型,auto=连续录像模式，event=事件录像模式;default:'auto'"`
-		EventName              string        `json:"eventName" desc:"事件名称" gorm:"type:varchar(255);comment:事件名称"`
-		BeforeDuration         time.Duration `json:"beforeDuration" desc:"事件前缓存时长" gorm:"type:BIGINT;comment:事件前缓存时长;default:30000000000"`
-		AfterDuration          time.Duration `json:"afterDuration" desc:"事件后缓存时长" gorm:"type:BIGINT;comment:事件后缓存时长;default:30000000000"`
-		Filename               string        `json:"fileName" desc:"文件名" gorm:"type:varchar(255);comment:文件名"`
-		EventDesc              string        `json:"eventDesc" desc:"事件描述" gorm:"type:varchar(255);comment:事件描述"`
-		Type                   string        `json:"type" desc:"录像文件类型" gorm:"type:varchar(255);comment:录像文件类型,flv,mp4,raw,fmp4,hls"`
-		EventLevel             EventLevel    `json:"eventLevel" desc:"事件级别" gorm:"type:varchar(255);comment:事件级别,high表示重要事件，无法删除且表示无需自动删除,low表示非重要事件,达到自动删除时间后，自动删除;default:'low'"`
-		FilePath               string
-		StreamPath             string
-		AudioCodec, VideoCodec string
-		DeletedAt              gorm.DeletedAt `gorm:"index" yaml:"-"`
+		ID         uint      `gorm:"primarykey"`
+		StartTime  time.Time `gorm:"type:datetime;default:NULL"`
+		EndTime    time.Time `gorm:"type:datetime;default:NULL"`
+		Duration   uint32    `gorm:"comment:录像时长;default:0"`
+		Filename   string    `json:"fileName" desc:"文件名" gorm:"type:varchar(255);comment:文件名"`
+		Type       string    `json:"type" desc:"录像文件类型" gorm:"type:varchar(255);comment:录像文件类型,flv,mp4,raw,fmp4,hls"`
+		FilePath   string
+		StreamPath string
+		AudioCodec string
+		VideoCodec string
+		DeletedAt  gorm.DeletedAt `gorm:"index" yaml:"-"`
 	}
 )
 
@@ -73,6 +63,52 @@ func (r *DefaultRecorder) GetRecordJob() *RecordJob {
 
 func (r *DefaultRecorder) Start() (err error) {
 	return r.RecordJob.Subscribe()
+}
+
+func (r *DefaultRecorder) CreateStream(start time.Time, customFileName func(*RecordJob) string) (err error) {
+	recordJob := &r.RecordJob
+	sub := recordJob.Subscriber
+	r.Event.RecordStream = RecordStream{
+		StartTime:  start,
+		StreamPath: sub.StreamPath,
+		FilePath:   customFileName(recordJob),
+		Type:       recordJob.RecConf.Type,
+	}
+	dir := filepath.Dir(r.Event.FilePath)
+	if err = os.MkdirAll(dir, 0755); err != nil {
+		return
+	}
+	if sub.Publisher.HasAudioTrack() {
+		r.Event.AudioCodec = sub.Publisher.AudioTrack.ICodecCtx.String()
+	}
+	if sub.Publisher.HasVideoTrack() {
+		r.Event.VideoCodec = sub.Publisher.VideoTrack.ICodecCtx.String()
+	}
+	if recordJob.Plugin.DB != nil {
+		if recordJob.Event != nil {
+			r.Event.RecordEvent = recordJob.Event
+			recordJob.Plugin.DB.Save(&r.Event)
+		} else {
+			recordJob.Plugin.DB.Save(&r.Event.RecordStream)
+		}
+	}
+	return
+}
+
+func (r *DefaultRecorder) WriteTail(end time.Time, tailJob task.IJob) {
+	r.Event.EndTime = end
+	if r.RecordJob.Plugin.DB != nil {
+		// 将事件和录像记录关联
+		if r.RecordJob.Event != nil {
+			r.RecordJob.Plugin.DB.Save(&r.Event)
+		} else {
+			r.RecordJob.Plugin.DB.Save(&r.Event.RecordStream)
+		}
+	}
+	if tailJob == nil {
+		return
+	}
+	tailJob.AddTask(NewEventRecordCheck(r.Event.Type, r.Event.StreamPath, r.RecordJob.Plugin.DB))
 }
 
 func (p *RecordJob) GetKey() string {
@@ -148,5 +184,29 @@ func (p *RecordJob) Start() (err error) {
 	// 	return
 	// }
 	p.AddTask(p.recorder, p.Logger)
+	return
+}
+
+func NewEventRecordCheck(t string, streamPath string, db *gorm.DB) *eventRecordCheck {
+	return &eventRecordCheck{
+		DB:         db,
+		streamPath: streamPath,
+		Type:       t,
+	}
+}
+
+type eventRecordCheck struct {
+	task.Task
+	DB         *gorm.DB
+	streamPath string
+	Type       string
+}
+
+func (t *eventRecordCheck) Run() (err error) {
+	var eventRecordStreams []EventRecordStream
+	t.DB.Find(&eventRecordStreams, "type=? AND level=high AND stream_path=?", t.Type, t.streamPath) //搜索事件录像，且为重要事件（无法自动删除）
+	for _, recordStream := range eventRecordStreams {
+		t.DB.Model(&EventRecordStream{}).Where(`level=low AND start_time <= ? and end_time >= ?`, recordStream.EndTime, recordStream.StartTime).Update("level", config.EventLevelHigh)
+	}
 	return
 }

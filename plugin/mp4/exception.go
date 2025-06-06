@@ -91,9 +91,6 @@ func (p *DeleteRecordTask) deleteOldestFile() {
 	}
 	for _, filePath := range filePaths {
 		for p.getDiskOutOfSpace(filePath) {
-			queryRecord := m7s.RecordStream{
-				EventLevel: m7s.EventLevelLow, // 查询条件：event_level = 1,非重要事件
-			}
 			var eventRecords []m7s.RecordStream
 			// 使用不同的方法进行路径匹配，避免ESCAPE语法问题
 			// 解决方案：用MySQL能理解的简单方式匹配路径前缀
@@ -103,7 +100,7 @@ func (p *DeleteRecordTask) deleteOldestFile() {
 			searchPattern := basePath + "%"
 			p.Info("deleteOldestFile", "searching with path pattern", searchPattern)
 
-			err := p.DB.Where(&queryRecord).Where("end_time IS NOT NULL").
+			err := p.DB.Where("event_id=0 AND end_time IS NOT NULL").
 				Where("file_path LIKE ?", searchPattern).
 				Order("end_time ASC").Find(&eventRecords).Error
 			if err == nil {
@@ -149,14 +146,11 @@ func (t *DeleteRecordTask) Tick(any) {
 	if t.RecordFileExpireDays <= 0 {
 		return
 	}
-	//搜索event_records表中event_level值为1的（非重要）数据，并将其create_time与当前时间比对，大于RecordFileExpireDays则进行删除，数据库标记is_delete为1，磁盘上删除录像文件
+	//搜索event_records表中event_id值为0的（非事件）录像，并将其create_time与当前时间比对，大于RecordFileExpireDays则进行删除，数据库标记is_delete为1，磁盘上删除录像文件
 	var eventRecords []m7s.RecordStream
 	expireTime := time.Now().AddDate(0, 0, -t.RecordFileExpireDays)
 	t.Debug("RecordFileExpireDays is set to auto delete oldestfile", "expireTime", expireTime.Format("2006-01-02 15:04:05"))
-	queryRecord := m7s.RecordStream{
-		EventLevel: m7s.EventLevelLow, // 查询条件：event_level = low,非重要事件
-	}
-	err := t.DB.Where(&queryRecord).Find(&eventRecords, "end_time < ? AND end_time IS NOT NULL", expireTime).Error
+	err := t.DB.Find(&eventRecords, "event_id=0 AND end_time < ? AND end_time IS NOT NULL", expireTime).Error
 	if err == nil {
 		for _, record := range eventRecords {
 			t.Info("RecordFileExpireDays is set to auto delete oldestfile", "ID", record.ID, "create time", record.EndTime, "filepath", record.FilePath)

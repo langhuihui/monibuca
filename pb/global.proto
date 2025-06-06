@@ -664,7 +664,7 @@ message ReqRecordList {
   string end = 4;
   uint32 pageNum = 5;
   uint32 pageSize = 6;
-  string mode = 7;
+  string eventId = 7;
   string type = 8;
   string eventLevel = 9;
 }

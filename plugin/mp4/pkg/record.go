@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"gorm.io/gorm"
 	m7s "m7s.live/v5"
 	"m7s.live/v5/pkg"
 	"m7s.live/v5/pkg/codec"
@@ -107,39 +106,6 @@ func (t *writeTrailerTask) Run() (err error) {
 	return
 }
 
-type eventRecordCheck struct {
-	task.Task
-	DB         *gorm.DB
-	streamPath string
-}
-
-func (t *eventRecordCheck) Run() (err error) {
-	var eventRecordStreams []m7s.RecordStream
-	queryRecord := m7s.RecordStream{
-		EventLevel: m7s.EventLevelHigh,
-		Mode:       m7s.RecordModeEvent,
-		Type:       "mp4",
-		StreamPath: t.streamPath,
-	}
-	t.DB.Where(&queryRecord).Find(&eventRecordStreams) //搜索事件录像，且为重要事件（无法自动删除）
-	if len(eventRecordStreams) > 0 {
-		for _, recordStream := range eventRecordStreams {
-			var unimportantEventRecordStreams []m7s.RecordStream
-			queryRecord.EventLevel = m7s.EventLevelLow
-			queryRecord.Mode = m7s.RecordModeAuto
-			query := `start_time <= ? and end_time >= ?`
-			t.DB.Where(&queryRecord).Where(query, recordStream.EndTime, recordStream.StartTime).Find(&unimportantEventRecordStreams)
-			if len(unimportantEventRecordStreams) > 0 {
-				for _, unimportantEventRecordStream := range unimportantEventRecordStreams {
-					unimportantEventRecordStream.EventLevel = m7s.EventLevelHigh
-					t.DB.Save(&unimportantEventRecordStream)
-				}
-			}
-		}
-	}
-	return
-}
-
 func init() {
 	m7s.Servers.AddTask(&writeTrailerQueueTask)
 }
@@ -150,20 +116,12 @@ func NewRecorder(conf config.Record) m7s.IRecorder {
 
 type Recorder struct {
 	m7s.DefaultRecorder
-	muxer  *Muxer
-	file   *os.File
-	stream m7s.RecordStream
+	muxer *Muxer
+	file  *os.File
 }
 
 func (r *Recorder) writeTailer(end time.Time) {
-	r.stream.EndTime = end
-	if r.RecordJob.Plugin.DB != nil {
-		r.RecordJob.Plugin.DB.Save(&r.stream)
-		writeTrailerQueueTask.AddTask(&eventRecordCheck{
-			DB:         r.RecordJob.Plugin.DB,
-			streamPath: r.stream.StreamPath,
-		})
-	}
+	r.WriteTail(end, &writeTrailerQueueTask)
 	writeTrailerQueueTask.AddTask(&writeTrailerTask{
 		muxer: r.muxer,
 		file:  r.file,
@@ -178,46 +136,7 @@ var CustomFileName = func(job *m7s.RecordJob) string {
 }
 
 func (r *Recorder) createStream(start time.Time) (err error) {
-	recordJob := &r.RecordJob
-	sub := recordJob.Subscriber
-	r.stream = m7s.RecordStream{
-		StartTime:      start,
-		StreamPath:     sub.StreamPath,
-		FilePath:       CustomFileName(&r.RecordJob),
-		EventId:        recordJob.EventId,
-		EventDesc:      recordJob.EventDesc,
-		EventName:      recordJob.EventName,
-		EventLevel:     recordJob.EventLevel,
-		BeforeDuration: recordJob.BeforeDuration,
-		AfterDuration:  recordJob.AfterDuration,
-		Mode:           recordJob.Mode,
-		Type:           "mp4",
-	}
-	dir := filepath.Dir(r.stream.FilePath)
-	if err = os.MkdirAll(dir, 0755); err != nil {
-		return
-	}
-	r.file, err = os.Create(r.stream.FilePath)
-	if err != nil {
-		return
-	}
-	if recordJob.RecConf.Type == "fmp4" {
-		r.stream.Type = "fmp4"
-		r.muxer = NewMuxerWithStreamPath(FLAG_FRAGMENT, r.stream.StreamPath)
-	} else {
-		r.muxer = NewMuxerWithStreamPath(0, r.stream.StreamPath)
-	}
-	r.muxer.WriteInitSegment(r.file)
-	if sub.Publisher.HasAudioTrack() {
-		r.stream.AudioCodec = sub.Publisher.AudioTrack.ICodecCtx.String()
-	}
-	if sub.Publisher.HasVideoTrack() {
-		r.stream.VideoCodec = sub.Publisher.VideoTrack.ICodecCtx.String()
-	}
-	if recordJob.Plugin.DB != nil {
-		recordJob.Plugin.DB.Save(&r.stream)
-	}
-	return
+	return r.CreateStream(start, CustomFileName)
 }
 
 func (r *Recorder) Dispose() {
@@ -231,17 +150,28 @@ func (r *Recorder) Run() (err error) {
 	sub := recordJob.Subscriber
 	var audioTrack, videoTrack *Track
 	startTime := time.Now()
-	if recordJob.BeforeDuration > 0 {
-		startTime = startTime.Add(-recordJob.BeforeDuration)
+	if recordJob.Event != nil {
+		startTime = startTime.Add(-time.Duration(recordJob.Event.BeforeDuration) * time.Millisecond)
 	}
 	err = r.createStream(startTime)
 	if err != nil {
 		return
 	}
+	r.file, err = os.Create(r.Event.FilePath)
+	if err != nil {
+		return
+	}
+	if recordJob.RecConf.Type == "fmp4" {
+		r.Event.Type = "fmp4"
+		r.muxer = NewMuxerWithStreamPath(FLAG_FRAGMENT, r.Event.StreamPath)
+	} else {
+		r.muxer = NewMuxerWithStreamPath(0, r.Event.StreamPath)
+	}
+	r.muxer.WriteInitSegment(r.file)
 	var at, vt *pkg.AVTrack
 
 	checkEventRecordStop := func(absTime uint32) (err error) {
-		if duration := int64(absTime); time.Duration(duration)*time.Millisecond >= recordJob.AfterDuration+recordJob.BeforeDuration {
+		if absTime >= recordJob.Event.AfterDuration+recordJob.Event.BeforeDuration {
 			r.RecordJob.Stop(task.ErrStopByUser)
 		}
 		return
@@ -269,9 +199,9 @@ func (r *Recorder) Run() (err error) {
 	}
 
 	return m7s.PlayBlock(sub, func(audio *pkg.RawAudio) error {
-		r.stream.Duration = sub.AudioReader.AbsTime
+		r.Event.Duration = sub.AudioReader.AbsTime
 		if sub.VideoReader == nil {
-			if recordJob.AfterDuration != 0 {
+			if recordJob.Event != nil {
 				err := checkEventRecordStop(sub.VideoReader.AbsTime)
 				if err != nil {
 					return err
@@ -314,9 +244,9 @@ func (r *Recorder) Run() (err error) {
 			Timestamp: uint32(dts),
 		})
 	}, func(video *rtmp.RTMPVideo) error {
-		r.stream.Duration = sub.VideoReader.AbsTime
+		r.Event.Duration = sub.VideoReader.AbsTime
 		if sub.VideoReader.Value.IDR {
-			if recordJob.AfterDuration != 0 {
+			if recordJob.Event != nil {
 				err := checkEventRecordStop(sub.VideoReader.AbsTime)
 				if err != nil {
 					return err

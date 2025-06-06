@@ -16,6 +16,9 @@ const (
 	RelayModeRelay = "relay"
 	RelayModeMix   = "mix"
 
+	RecordModeAuto  RecordMode = "auto"
+	RecordModeEvent RecordMode = "event"
+
 	HookOnServerKeepAlive HookType = "server_keep_alive"
 	HookOnPublishStart    HookType = "publish_start"
 	HookOnPublishEnd      HookType = "publish_end"
@@ -29,11 +32,16 @@ const (
 	HookOnRecordEnd       HookType = "record_end"
 	HookOnTransformStart  HookType = "transform_start"
 	HookOnTransformEnd    HookType = "transform_end"
+
+	EventLevelLow  EventLevel = "low"
+	EventLevelHigh EventLevel = "high"
 )
 
 type (
-	HookType string
-	Publish  struct {
+	EventLevel = string
+	RecordMode = string
+	HookType   string
+	Publish    struct {
 		MaxCount          int             `default:"0" desc:"最大发布者数量"` // 最大发布者数量
 		PubAudio          bool            `default:"true" desc:"是否发布音频"`
 		PubVideo          bool            `default:"true" desc:"是否发布视频"`
@@ -84,11 +92,21 @@ type (
 		Proxy         string        `desc:"代理地址"`                    // 代理地址
 		Header        HTTPValues
 	}
+	RecordEvent struct {
+		EventId        string
+		BeforeDuration uint32     `json:"beforeDuration" desc:"事件前缓存时长" gorm:"comment:事件前缓存时长;default:30000"`
+		AfterDuration  uint32     `json:"afterDuration" desc:"事件后缓存时长" gorm:"comment:事件后缓存时长;default:30000"`
+		EventDesc      string     `json:"eventDesc" desc:"事件描述" gorm:"type:varchar(255);comment:事件描述"`
+		EventLevel     EventLevel `json:"eventLevel" desc:"事件级别" gorm:"type:varchar(255);comment:事件级别,high表示重要事件，无法删除且表示无需自动删除,low表示非重要事件,达到自动删除时间后，自动删除;default:'low'"`
+		EventName      string     `json:"eventName" desc:"事件名称" gorm:"type:varchar(255);comment:事件名称"`
+	}
 	Record struct {
-		Type     string        `desc:"录制类型"`   // 录制类型 mp4、flv、hls、hlsv7
-		FilePath string        `desc:"录制文件路径"` // 录制文件路径
-		Fragment time.Duration `desc:"分片时长"`   // 分片时长
-		Append   bool          `desc:"是否追加录制"` // 是否追加录制
+		Mode     RecordMode    `json:"mode" desc:"事件类型,auto=连续录像模式，event=事件录像模式" gorm:"type:varchar(255);comment:事件类型,auto=连续录像模式，event=事件录像模式;default:'auto'"`
+		Type     string        `desc:"录制类型"`                // 录制类型 mp4、flv、hls、hlsv7
+		FilePath string        `desc:"录制文件路径"`              // 录制文件路径
+		Fragment time.Duration `desc:"分片时长"`                // 分片时长
+		Append   bool          `desc:"是否追加录制"`              // 是否追加录制
+		Event    *RecordEvent  `json:"event" desc:"事件录像配置"` // 事件录像配置
 	}
 	TransfromOutput struct {
 		Target     string `desc:"转码目标"` // 转码目标
