@@ -377,45 +377,48 @@ func (gb *GB28181Plugin) checkPlatform() {
 
 	// 遍历所有平台进行初始化和注册
 	for _, platformModel := range platformModels {
-		// 创建Platform实例
-		platform := NewPlatform(platformModel, gb, true)
+		if platformModel.Enable {
 
-		if platformModel.PlatformChannels != nil && len(platformModel.PlatformChannels) > 0 {
-			for i := range platformModel.PlatformChannels {
-				channelDbId := platformModel.PlatformChannels[i].ChannelDBID
-				if channelDbId != "" {
-					if channel, ok := gb.channels.Get(channelDbId); ok {
-						platform.channels.Set(channel)
-					}
-				}
-			}
-		} else {
-			// 查询通道列表
-			var channels []gb28181.DeviceChannel
-			if gb.DB != nil {
-				if err := gb.DB.Table("gb28181_channel gc").
-					Select(`gc.*`).
-					Joins("left join gb28181_platform_channel gpc on gc.id=gpc.channel_db_id").
-					Where("gpc.platform_server_gb_id = ? and gc.status='ON'", platformModel.ServerGBID).
-					Find(&channels).Error; err != nil {
-					gb.Error("<UNK>", "error", err.Error())
-				}
-				if channels != nil && len(channels) > 0 {
-					for i := range channels {
-						if channel, ok := gb.channels.Get(channels[i].ID); ok {
+			// 创建Platform实例
+			platform := NewPlatform(platformModel, gb, true)
+
+			if platformModel.PlatformChannels != nil && len(platformModel.PlatformChannels) > 0 {
+				for i := range platformModel.PlatformChannels {
+					channelDbId := platformModel.PlatformChannels[i].ChannelDBID
+					if channelDbId != "" {
+						if channel, ok := gb.channels.Get(channelDbId); ok {
 							platform.channels.Set(channel)
 						}
 					}
 				}
+			} else {
+				// 查询通道列表
+				var channels []gb28181.DeviceChannel
+				if gb.DB != nil {
+					if err := gb.DB.Table("gb28181_channel gc").
+						Select(`gc.*`).
+						Joins("left join gb28181_platform_channel gpc on gc.id=gpc.channel_db_id").
+						Where("gpc.platform_server_gb_id = ? and gc.status='ON'", platformModel.ServerGBID).
+						Find(&channels).Error; err != nil {
+						gb.Error("<UNK>", "error", err.Error())
+					}
+					if channels != nil && len(channels) > 0 {
+						for i := range channels {
+							if channel, ok := gb.channels.Get(channels[i].ID); ok {
+								platform.channels.Set(channel)
+							}
+						}
+					}
+				}
 			}
+			//go platform.Unregister()
+			//if err != nil {
+			//	 gb.Error("unregister err ", err)
+			//}
+			// 添加到任务系统
+			gb.AddTask(platform)
+			gb.Info("平台初始化完成", "ID", platformModel.ServerGBID, "Name", platformModel.Name)
 		}
-		//go platform.Unregister()
-		//if err != nil {
-		//	 gb.Error("unregister err ", err)
-		//}
-		// 添加到任务系统
-		gb.AddTask(platform)
-		gb.Info("平台初始化完成", "ID", platformModel.ServerGBID, "Name", platformModel.Name)
 	}
 }
 

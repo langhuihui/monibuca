@@ -44,7 +44,11 @@ type Dialog struct {
 }
 
 func (d *Dialog) GetCallID() string {
-	return d.session.InviteRequest.CallID().Value()
+	if d.session != nil && d.session.InviteRequest != nil && d.session.InviteRequest.CallID() != nil {
+		return d.session.InviteRequest.CallID().Value()
+	} else {
+		return ""
+	}
 }
 
 func (d *Dialog) GetPullJob() *m7s.PullJob {
@@ -126,7 +130,7 @@ func (d *Dialog) Start() (err error) {
 	if !d.IsLive() {
 		startTime, endTime, err := util.TimeRangeQueryParse(url.Values{"start": []string{d.start}, "end": []string{d.end}})
 		if err != nil {
-			d.Stop(errors.New("parse end time error"))
+			return errors.New("parse end time error")
 		}
 		sdpInfo = append(sdpInfo, fmt.Sprintf("t=%d %d", startTime.Unix(), endTime.Unix()))
 	} else {
@@ -163,7 +167,7 @@ func (d *Dialog) Start() (err error) {
 			"a=connection:new",
 		)
 	case "UDP":
-		d.Stop(errors.New("do not support udp mode"))
+		return errors.New("do not support udp mode")
 	default:
 		sdpInfo = append(sdpInfo,
 			"a=setup:passive",
@@ -238,7 +242,7 @@ func (d *Dialog) Start() (err error) {
 	//}
 	// 最后添加Content-Length头部
 	if err != nil {
-		d.gb.Error("invite error", err)
+		return errors.New("dialog invite error" + err.Error())
 	}
 	return
 }
@@ -247,9 +251,8 @@ func (d *Dialog) Run() (err error) {
 	d.Channel.Info("before WaitAnswer")
 	err = d.session.WaitAnswer(d.gb, sipgo.AnswerOptions{})
 	d.Channel.Info("after WaitAnswer")
-	d.gb.Error(" WaitAnswer error", err)
 	if err != nil {
-		return
+		return errors.New("wait answer error" + err.Error())
 	}
 	inviteResponseBody := string(d.session.InviteResponse.Body())
 	d.Channel.Info("inviteResponse", "body", inviteResponseBody)

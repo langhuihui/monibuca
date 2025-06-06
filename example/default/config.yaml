@@ -15,13 +15,33 @@ gb28181:
   sip:
     listenaddr:
           - udp::5060
-  # pull:
-  #   live/test: dump/34020000001320000001
   onsub:
     pull:
       ^\d{20}/\d{20}$: $0
       ^gb_\d+/(.+)$: $1
 #      .* : $0
+  platforms:
+    - enable: false  #是否启用平台
+      name: "测试平台" #平台名称
+      servergbid: "34020000002000000002" #上级平台GBID
+      servergbdomain: "3402000000" #上级平台GB域
+      serverip: 192.168.1.106 #上级平台IP
+      serverport: 5061 #上级平台端口
+      devicegbid: "34020000002000000001" #本平台设备GBID
+      deviceip: 192.168.1.106 #本平台设备IP
+      deviceport: 5060 #本平台设备端口
+      username: "34020000002000000001" #SIP账号
+      password: "123456" #SIP密码
+      expires: 3600 #注册有效期，单位秒
+      keeptimeout: 60 #注册保持超时时间，单位秒
+      civilCode: "340200" #行政区划代码
+      manufacturer: "Monibuca" #设备制造商
+      model: "GB28181" #设备型号
+      address: "江苏南京" #设备地址
+      register_way: 1
+      platformchannels:
+        - platformservergbid: "34020000002000000002" #上级平台GBID
+          channeldbid: "34020000001110000003_34020000001320000005" #通道DBID,格式为设备ID_通道ID
 mp4:
   # enable: false
   # publish:
