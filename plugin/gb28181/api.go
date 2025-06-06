@@ -612,35 +612,35 @@ func (gb *GB28181Plugin) UpdateDevice(ctx context.Context, req *pb.Device) (*pb.
 
 			// 如果需要订阅目录，创建并启动目录订阅任务
 			if d.Online {
-				if d.CatalogSubscribeTask != nil {
-					if d.SubscribeCatalog > 0 {
+				if d.SubscribeCatalog > 0 {
+					if d.CatalogSubscribeTask != nil {
 						d.CatalogSubscribeTask.Ticker.Reset(time.Second * time.Duration(d.SubscribeCatalog))
+						d.CatalogSubscribeTask.Tick(nil)
+					} else {
+						catalogSubTask := NewCatalogSubscribeTask(d)
+						d.AddTask(catalogSubTask)
+						d.CatalogSubscribeTask.Tick(nil)
 					}
-					d.CatalogSubscribeTask.Tick(nil)
-				} else {
-					catalogSubTask := NewCatalogSubscribeTask(d)
-					d.AddTask(catalogSubTask)
-					d.CatalogSubscribeTask.Tick(nil)
 				}
-				if d.PositionSubscribeTask != nil {
-					if d.SubscribePosition > 0 {
+				if d.SubscribePosition > 0 {
+					if d.PositionSubscribeTask != nil {
 						d.PositionSubscribeTask.Ticker.Reset(time.Second * time.Duration(d.SubscribePosition))
+						d.PositionSubscribeTask.Tick(nil)
+					} else {
+						positionSubTask := NewPositionSubscribeTask(d)
+						d.AddTask(positionSubTask)
+						d.PositionSubscribeTask.Tick(nil)
 					}
-					d.PositionSubscribeTask.Tick(nil)
-				} else {
-					positionSubTask := NewPositionSubscribeTask(d)
-					d.AddTask(positionSubTask)
-					d.PositionSubscribeTask.Tick(nil)
 				}
-				if d.AlarmSubscribeTask != nil {
-					if d.SubscribeAlarm > 0 {
+				if d.SubscribeAlarm > 0 {
+					if d.AlarmSubscribeTask != nil {
 						d.AlarmSubscribeTask.Ticker.Reset(time.Second * time.Duration(d.SubscribeAlarm))
+						d.AlarmSubscribeTask.Tick(nil)
+					} else {
+						alarmSubTask := NewAlarmSubscribeTask(d)
+						d.AddTask(alarmSubTask)
+						d.AlarmSubscribeTask.Tick(nil)
 					}
-					d.AlarmSubscribeTask.Tick(nil)
-				} else {
-					alarmSubTask := NewAlarmSubscribeTask(d)
-					d.AddTask(alarmSubTask)
-					d.AlarmSubscribeTask.Tick(nil)
 				}
 			}
 		} else {

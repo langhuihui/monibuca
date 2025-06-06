@@ -36,6 +36,14 @@ type registerHandlerTask struct {
 	tx  sip.ServerTransaction
 }
 
+// getDevicePassword 获取设备密码
+func (task *registerHandlerTask) getDevicePassword(device *Device) string {
+	if device != nil && device.Password != "" {
+		return device.Password
+	}
+	return task.gb.Password
+}
+
 func (task *registerHandlerTask) Run() (err error) {
 	var password string
 	var device *Device
@@ -47,22 +55,25 @@ func (task *registerHandlerTask) Run() (err error) {
 	}
 	isUnregister := false
 	deviceid := from.Address.User
-	if devicetmp, ok := task.gb.devices.Get(deviceid); ok {
-		device = devicetmp
+
+	if existingDevice, exists := task.gb.devices.Get(deviceid); exists && existingDevice != nil {
+		device = existingDevice
 		recover = true
 	} else {
-		if err := task.gb.DB.First(&device, Device{DeviceId: deviceid}).Error; err == nil {
-			if device.Password != "" {
-				password = device.Password
-			} else if task.gb.Password != "" {
-				password = task.gb.Password
-			}
-		} else {
-			if !errors.Is(err, gorm.ErrRecordNotFound) {
-				task.gb.Error("OnRegister", "error", err)
+		// 尝试从数据库加载设备信息
+		device = &Device{DeviceId: deviceid}
+		if task.gb.DB != nil {
+			if err := task.gb.DB.First(device, Device{DeviceId: deviceid}).Error; err != nil {
+				if !errors.Is(err, gorm.ErrRecordNotFound) {
+					task.gb.Error("OnRegister", "error", err)
+				}
+				device = nil
 			}
 		}
 	}
+
+	// 获取设备密码
+	password = task.getDevicePassword(device)
 
 	exp := task.req.GetHeader("Expires")
 	if exp == nil {
@@ -136,7 +147,7 @@ func (task *registerHandlerTask) Run() (err error) {
 			Method:   "REGISTER",
 			URI:      cred.URI,
 			Username: deviceid,
-			Password: task.gb.Password,
+			Password: password,
 			Cnonce:   cred.Cnonce,
 			Count:    int(cred.Nc),
 		}

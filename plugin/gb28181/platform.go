@@ -335,6 +335,8 @@ func (p *Platform) Register(isUnregister bool) error {
 		newReq := req.Clone()
 		newReq.RemoveHeader("Via") // 必须由传输层重新生成
 		newReq.AppendHeader(sip.NewHeader("Authorization", cred.String()))
+		newReq.CSeq().SeqNo = uint32(p.SN) // 更新CSeq序号
+		p.SN++
 
 		// 发送认证请求
 		tx, err = p.Client.TransactionRequest(p.ctx, newReq, sipgo.ClientRequestAddVia)

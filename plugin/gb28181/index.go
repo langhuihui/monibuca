@@ -3,6 +3,7 @@ package plugin_gb28181pro
 import (
 	"errors"
 	"fmt"
+	"m7s.live/v5/pkg"
 	"net/http"
 	"os"
 	"slices"
@@ -38,7 +39,7 @@ type GB28181Plugin struct {
 	pb.UnimplementedApiServer
 	m7s.Plugin
 	Serial         string `default:"34020000002000000001" desc:"sip 服务 id"` //sip 服务器 id, 默认 34020000002000000001
-	Realm          string `default:"3402000000" desc:"sip 服务域"`             //sip 服务器域，默认 3402000000
+	Realm          string `default:"3402000000" desc:"sip 服务域"`            //sip 服务器域，默认 3402000000
 	Password       string
 	Sip            SipConfig
 	MediaPort      util.Range[uint16] `default:"10001-20000" desc:"媒体端口范围"` //媒体端口范围
@@ -129,6 +130,9 @@ func (gb *GB28181Plugin) initDatabase() error {
 }
 
 func (gb *GB28181Plugin) OnInit() (err error) {
+	if gb.DB == nil {
+		return pkg.ErrNoDB
+	}
 	gb.Info("GB28181 initing", gb.Platforms)
 	gb.AddTask(&gb.deviceManager)
 	logger := zerolog.New(os.Stdout)

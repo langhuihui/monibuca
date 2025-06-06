@@ -325,7 +325,9 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 		}
 	case "DeviceInfo":
 		// 主设备信息
-		d.Name = msg.DeviceName
+		if d.Name == "" && msg.DeviceName != "" {
+			d.Name = msg.DeviceName
+		}
 		d.Manufacturer = msg.Manufacturer
 		d.Model = msg.Model
 		d.Firmware = msg.Firmware
