@@ -92,18 +92,16 @@ func (d *Device) TableName() string {
 
 func (d *Device) Dispose() {
 	if d.plugin.DB != nil {
-		d.plugin.DB.Save(d)
 		if d.channels.Length > 0 {
 			d.channels.Range(func(channel *Channel) bool {
 				d.plugin.DB.Save(channel.DeviceChannel)
 				//d.plugin.DB.Model(&gb28181.DeviceChannel{}).Where("device_id = ? AND device_db_id = ?", channel.DeviceId, d.ID).Updates(channel.DeviceChannel)
 				return true
 			})
-		} else {
-			// 如果没有通道，则直接更新通道状态为 OFF
-			d.plugin.DB.Model(&gb28181.DeviceChannel{}).Where("device_id = ?", d.ID).Update("status", "OFF")
 		}
+		d.plugin.DB.Save(d)
 	}
+	d.plugin.devices.RemoveByKey(d.DeviceId)
 }
 
 func (d *Device) GetKey() string {
@@ -325,6 +323,7 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 		}
 	case "DeviceInfo":
 		// 主设备信息
+		d.Info("DeviceInfo message", "body", req.Body(), "d.Name", d.Name, "d.DeviceId", d.DeviceId, "msg.DeviceName", msg.DeviceName)
 		if d.Name == "" && msg.DeviceName != "" {
 			d.Name = msg.DeviceName
 		}

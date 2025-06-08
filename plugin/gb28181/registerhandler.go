@@ -67,7 +67,6 @@ func (task *registerHandlerTask) Run() (err error) {
 				if !errors.Is(err, gorm.ErrRecordNotFound) {
 					task.gb.Error("OnRegister", "error", err)
 				}
-				device = nil
 			}
 		}
 	}
@@ -233,11 +232,14 @@ func (task *registerHandlerTask) Run() (err error) {
 			device.Status = DeviceOnlineStatus
 			task.RecoverDevice(device, task.req)
 		} else {
-			device := &Device{
-				DeviceId: deviceid,
+			var newDevice *Device
+			if device == nil {
+				newDevice = &Device{DeviceId: deviceid}
+			} else {
+				newDevice = device
 			}
 			task.gb.Info("into StoreDevice", "deviceId", from)
-			task.StoreDevice(deviceid, task.req, device)
+			task.StoreDevice(deviceid, task.req, newDevice)
 		}
 	}
 	task.gb.Info("registerHandlerTask start end", "deviceid", deviceid, "expires", expSec, "isUnregister", isUnregister)

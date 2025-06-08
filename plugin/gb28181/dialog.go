@@ -119,9 +119,9 @@ func (d *Dialog) Start() (err error) {
 	}
 
 	// 非直播模式下添加u行，保持在s=和c=之间
-	//if !d.IsLive() {
-	sdpInfo = append(sdpInfo, fmt.Sprintf("u=%s:0", channelId))
-	//}
+	if !d.IsLive() {
+		sdpInfo = append(sdpInfo, fmt.Sprintf("u=%s:0", channelId))
+	}
 
 	// 添加c行
 	sdpInfo = append(sdpInfo, "c=IN IP4 "+device.MediaIp)
@@ -153,6 +153,7 @@ func (d *Dialog) Start() (err error) {
 	if d.stream != "" {
 		sdpInfo = append(sdpInfo, "a="+d.stream)
 	}
+	sdpInfo = append(sdpInfo, "a=rtpmap:96 PS/90000")
 
 	//根据传输模式添加 setup 和 connection 属性
 	switch strings.ToUpper(device.StreamMode) {
@@ -174,7 +175,6 @@ func (d *Dialog) Start() (err error) {
 			"a=connection:new",
 		)
 	}
-	sdpInfo = append(sdpInfo, "a=rtpmap:96 PS/90000")
 
 	// 添加 SSRC
 	sdpInfo = append(sdpInfo, fmt.Sprintf("y=%s", ssrc))

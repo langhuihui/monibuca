@@ -3,6 +3,7 @@ package plugin_gb28181pro
 import (
 	"context"
 	"fmt"
+	"gorm.io/gorm"
 	"net/http"
 	"net/url"
 	"os"
@@ -621,6 +622,10 @@ func (gb *GB28181Plugin) UpdateDevice(ctx context.Context, req *pb.Device) (*pb.
 						d.AddTask(catalogSubTask)
 						d.CatalogSubscribeTask.Tick(nil)
 					}
+				} else {
+					if d.CatalogSubscribeTask != nil {
+						d.CatalogSubscribeTask.Stop(fmt.Errorf("catalog subscription disabled"))
+					}
 				}
 				if d.SubscribePosition > 0 {
 					if d.PositionSubscribeTask != nil {
@@ -631,6 +636,10 @@ func (gb *GB28181Plugin) UpdateDevice(ctx context.Context, req *pb.Device) (*pb.
 						d.AddTask(positionSubTask)
 						d.PositionSubscribeTask.Tick(nil)
 					}
+				} else {
+					if d.PositionSubscribeTask != nil {
+						d.PositionSubscribeTask.Stop(fmt.Errorf("position subscription disabled"))
+					}
 				}
 				if d.SubscribeAlarm > 0 {
 					if d.AlarmSubscribeTask != nil {
@@ -640,6 +649,10 @@ func (gb *GB28181Plugin) UpdateDevice(ctx context.Context, req *pb.Device) (*pb.
 						alarmSubTask := NewAlarmSubscribeTask(d)
 						d.AddTask(alarmSubTask)
 						d.AlarmSubscribeTask.Tick(nil)
+					}
+				} else {
+					if d.AlarmSubscribeTask != nil {
+						d.AlarmSubscribeTask.Stop(fmt.Errorf("alarm subscription disabled"))
 					}
 				}
 			}
@@ -1272,32 +1285,36 @@ func (gb *GB28181Plugin) TestSip(ctx context.Context, req *pb.TestSipRequest) (*
 	// 创建一个临时设备用于测试
 	device := &Device{
 		DeviceId:   "34020000002000000001",
-		SipIp:      "192.168.1.17",
+		SipIp:      "192.168.1.106",
 		Port:       5060,
 		IP:         "192.168.1.102",
 		StreamMode: "TCP-PASSIVE",
 	}
-
+	//From: <sip:41010500002000000001@4101050000>;tag=4183af2ecc934758ad393dfe588f2dfd
 	// 初始化设备的SIP相关字段
 	device.fromHDR = sip.FromHeader{
 		Address: sip.Uri{
-			User: gb.Serial,
-			Host: gb.Realm,
+			User: "41010500002000000001",
+			Host: "4101050000",
 		},
 		Params: sip.NewParams(),
 	}
-	device.fromHDR.Params.Add("tag", sip.GenerateTagN(16))
-
+	device.fromHDR.Params.Add("tag", "4183af2ecc934758ad393dfe588f2dfd")
+	//Contact: <sip:41010500002000000001@192.168.1.106:5060>
 	device.contactHDR = sip.ContactHeader{
 		Address: sip.Uri{
-			User: gb.Serial,
-			Host: device.SipIp,
-			Port: device.Port,
+			User: "41010500002000000001",
+			Host: "192.168.1.106",
+			Port: 5060,
 		},
 	}
 
+	//Request-Line: INVITE sip:34020000001320000006@192.168.1.102:5060 SIP/2.0
+	//    Method: INVITE
+	//    Request-URI: sip:34020000001320000006@192.168.1.102:5060
+	//    [Resent Packet: False]
 	// 初始化SIP客户端
-	device.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(device.SipIp))
+	device.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname("192.168.1.106"))
 	if device.client == nil {
 		resp.Code = 500
 		resp.Message = "failed to create sip client"
@@ -1322,11 +1339,11 @@ func (gb *GB28181Plugin) TestSip(ctx context.Context, req *pb.TestSipRequest) (*
 	// 构建SDP消息体
 	sdpInfo := []string{
 		"v=0",
-		fmt.Sprintf("o=%s 0 0 IN IP4 %s", "34020000001320000004", device.SipIp),
+		fmt.Sprintf("o=%s 0 0 IN IP4 %s", "34020000001320000102", "192.168.1.106"),
 		"s=Play",
-		"c=IN IP4 " + device.SipIp,
+		"c=IN IP4 192.168.1.106",
 		"t=0 0",
-		"m=video 43970 TCP/RTP/AVP 96 97 98 99",
+		"m=video 40940 TCP/RTP/AVP 96 97 98 99",
 		"a=recvonly",
 		"a=rtpmap:96 PS/90000",
 		"a=rtpmap:98 H264/90000",
@@ -1334,36 +1351,40 @@ func (gb *GB28181Plugin) TestSip(ctx context.Context, req *pb.TestSipRequest) (*
 		"a=rtpmap:99 H265/90000",
 		"a=setup:passive",
 		"a=connection:new",
-		"y=0200005507",
+		"y=0105006213",
 	}
 
 	// 设置必需的头部
 	contentTypeHeader := sip.ContentTypeHeader("APPLICATION/SDP")
-	subjectHeader := sip.NewHeader("Subject", "34020000001320000006:0200005507,34020000002000000001:0")
+	//Subject: 34020000001320000006:0105006213,41010500002000000001:0
+	subjectHeader := sip.NewHeader("Subject", "34020000001320000006:0105006213,41010500002000000001:0")
+
+	//To: <sip:34020000001320000006@192.168.1.102:5060>
 	toHeader := sip.ToHeader{
 		Address: sip.Uri{
 			User: "34020000001320000006",
-			Host: device.IP,
-			Port: device.Port,
+			Host: "192.168.1.102",
+			Port: 5060,
 		},
 	}
 	userAgentHeader := sip.NewHeader("User-Agent", "WVP-Pro v2.7.3.20241218")
+	//Via: SIP/2.0/UDP 192.168.1.106:5060;branch=z9hG4bK9279674404;rport
 	viaHeader := sip.ViaHeader{
 		ProtocolName:    "SIP",
 		ProtocolVersion: "2.0",
 		Transport:       "UDP",
-		Host:            device.SipIp,
-		Port:            device.Port,
+		Host:            "192.168.1.106",
+		Port:            5060,
 		Params:          sip.HeaderParams(sip.NewParams()),
 	}
-	viaHeader.Params.Add("branch", sip.GenerateBranchN(16)).Add("rport", "")
+	viaHeader.Params.Add("branch", "z9hG4bK9279674404").Add("rport", "")
 
 	csqHeader := sip.CSeqHeader{
-		SeqNo:      13,
+		SeqNo:      3,
 		MethodName: "INVITE",
 	}
 	maxforward := sip.MaxForwardsHeader(70)
-	contentLengthHeader := sip.ContentLengthHeader(286)
+	//contentLengthHeader := sip.ContentLengthHeader(288)
 	request.AppendHeader(&contentTypeHeader)
 	request.AppendHeader(subjectHeader)
 	request.AppendHeader(&toHeader)
@@ -1375,7 +1396,7 @@ func (gb *GB28181Plugin) TestSip(ctx context.Context, req *pb.TestSipRequest) (*
 
 	// 创建会话并发送请求
 	dialogClientCache := sipgo.NewDialogClientCache(device.client, device.contactHDR)
-	session, err := dialogClientCache.Invite(gb, recipient, request.Body(), &csqHeader, &device.fromHDR, &toHeader, &viaHeader, &maxforward, userAgentHeader, &device.contactHDR, subjectHeader, &contentTypeHeader, &contentLengthHeader)
+	session, err := dialogClientCache.Invite(gb, recipient, request.Body(), &csqHeader, &device.fromHDR, &toHeader, &maxforward, userAgentHeader, &device.contactHDR, subjectHeader, &contentTypeHeader)
 	if err != nil {
 		resp.Code = 500
 		resp.Message = fmt.Sprintf("发送INVITE请求失败: %v", err)
@@ -2817,59 +2838,22 @@ func (gb *GB28181Plugin) RemoveDevice(ctx context.Context, req *pb.RemoveDeviceR
 		return resp, nil
 	}
 
-	// 检查数据库连接
-	if gb.DB == nil {
-		resp.Code = 500
-		resp.Message = "数据库未初始化"
-		return resp, nil
-	}
-
-	// 开启事务
-	tx := gb.DB.Begin()
-
-	// 先从数据库中查找设备
-	var dbDevice Device
-	if err := tx.Where(&Device{DeviceId: req.Id}).First(&dbDevice).Error; err != nil {
-		tx.Rollback()
-		resp.Code = 404
-		resp.Message = fmt.Sprintf("设备不存在: %v", err)
-		return resp, nil
-	}
-
 	// 使用数据库中的 DeviceId 从内存中查找设备
-	if device, ok := gb.devices.Get(dbDevice.DeviceId); ok {
+	if device, ok := gb.devices.Get(req.Id); ok {
+		device.DeletedAt = gorm.DeletedAt{Time: time.Now(), Valid: true}
+		device.channels.Range(func(channel *Channel) bool {
+			channel.DeletedAt = gorm.DeletedAt{Time: time.Now(), Valid: true}
+			return true
+		})
 		// 停止设备相关任务
 		device.Stop(fmt.Errorf("device removed"))
 		device.WaitStopped()
 		// device.Stop() 会调用 Dispose()，其中已包含从 gb.devices 中移除设备的逻辑
-	}
-
-	// 删除设备关联的所有通道
-	if err := tx.Where(&gb28181.DeviceChannel{DeviceID: dbDevice.DeviceId}).Delete(&gb28181.DeviceChannel{}).Error; err != nil {
-		tx.Rollback()
-		resp.Code = 500
-		resp.Message = fmt.Sprintf("删除设备通道失败: %v", err)
+	} else {
+		resp.Code = 404
+		resp.Message = "设备未找到"
 		return resp, nil
 	}
-
-	// 删除设备
-	if err := tx.Delete(&dbDevice).Error; err != nil {
-		tx.Rollback()
-		resp.Code = 500
-		resp.Message = fmt.Sprintf("删除设备失败: %v", err)
-		return resp, nil
-	}
-
-	// 提交事务
-	if err := tx.Commit().Error; err != nil {
-		resp.Code = 500
-		resp.Message = fmt.Sprintf("提交事务失败: %v", err)
-		return resp, nil
-	}
-
-	gb.Info("删除设备成功",
-		"deviceId", dbDevice.DeviceId,
-		"deviceName", dbDevice.Name)
 
 	resp.Code = 0
 	resp.Message = "success"
