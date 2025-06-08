@@ -44,7 +44,7 @@ func (ct *CrontabPlugin) List(ctx context.Context, req *cronpb.ReqPlanList) (*cr
 		data = append(data, &cronpb.Plan{
 			Id:         uint32(plan.ID),
 			Name:       plan.Name,
-			Enable:     plan.Enabled,
+			Enable:     plan.Enable,
 			CreateTime: timestamppb.New(plan.CreatedAt),
 			UpdateTime: timestamppb.New(plan.UpdatedAt),
 			Plan:       plan.Plan,
@@ -94,9 +94,9 @@ func (ct *CrontabPlugin) Add(ctx context.Context, req *cronpb.Plan) (*cronpb.Res
 	}
 
 	plan := &pkg.RecordPlan{
-		Name:    req.Name,
-		Plan:    req.Plan,
-		Enabled: req.Enable,
+		Name:   req.Name,
+		Plan:   req.Plan,
+		Enable: req.Enable,
 	}
 
 	if err := ct.DB.Create(plan).Error; err != nil {
@@ -210,7 +210,7 @@ func (ct *CrontabPlugin) Remove(ctx context.Context, req *cronpb.DeleteRequest) 
 	}, nil
 }
 
-func (ct *CrontabPlugin) ListRecordPlanStreams(ctx context.Context, req *cronpb.ReqRecordPlanStreamList) (*cronpb.RecordPlanStreamResponseList, error) {
+func (ct *CrontabPlugin) ListRecordPlanStreams(ctx context.Context, req *cronpb.ReqPlanStreamList) (*cronpb.RecordPlanStreamResponseList, error) {
 	if req.PageNum < 1 {
 		req.PageNum = 1
 	}
@@ -225,7 +225,7 @@ func (ct *CrontabPlugin) ListRecordPlanStreams(ctx context.Context, req *cronpb.
 	// 构建查询条件
 	query := ct.DB.Model(model).
 		Scopes(
-			pkg.ScopeRecordPlanID(uint(req.RecordPlanId)),
+			pkg.ScopeRecordPlanID(uint(req.PlanId)),
 			pkg.ScopeStreamPathLike(req.StreamPath),
 			pkg.ScopeOrderByCreatedAtDesc(),
 		)
@@ -248,15 +248,16 @@ func (ct *CrontabPlugin) ListRecordPlanStreams(ctx context.Context, req *cronpb.
 		}, nil
 	}
 
-	data := make([]*cronpb.RecordPlanStream, 0, len(streams))
+	data := make([]*cronpb.PlanStream, 0, len(streams))
 	for _, stream := range streams {
-		data = append(data, &cronpb.RecordPlanStream{
-			RecordPlanId: uint32(stream.RecordPlanID),
-			StreamPath:   stream.StreamPath,
-			Fragment:     stream.Fragment,
-			FilePath:     stream.FilePath,
-			CreatedAt:    timestamppb.New(stream.CreatedAt),
-			UpdatedAt:    timestamppb.New(stream.UpdatedAt),
+		data = append(data, &cronpb.PlanStream{
+			PlanId:     uint32(stream.PlanID),
+			StreamPath: stream.StreamPath,
+			Fragment:   stream.Fragment,
+			FilePath:   stream.FilePath,
+			CreatedAt:  timestamppb.New(stream.CreatedAt),
+			UpdatedAt:  timestamppb.New(stream.UpdatedAt),
+			Enable:     stream.Enable,
 		})
 	}
 
@@ -270,8 +271,8 @@ func (ct *CrontabPlugin) ListRecordPlanStreams(ctx context.Context, req *cronpb.
 	}, nil
 }
 
-func (ct *CrontabPlugin) AddRecordPlanStream(ctx context.Context, req *cronpb.RecordPlanStream) (*cronpb.Response, error) {
-	if req.RecordPlanId == 0 {
+func (ct *CrontabPlugin) AddRecordPlanStream(ctx context.Context, req *cronpb.PlanStream) (*cronpb.Response, error) {
+	if req.PlanId == 0 {
 		return &cronpb.Response{
 			Code:    400,
 			Message: "record_plan_id is required",
@@ -287,7 +288,7 @@ func (ct *CrontabPlugin) AddRecordPlanStream(ctx context.Context, req *cronpb.Re
 
 	// 检查录制计划是否存在
 	var plan pkg.RecordPlan
-	if err := ct.DB.First(&plan, req.RecordPlanId).Error; err != nil {
+	if err := ct.DB.First(&plan, req.PlanId).Error; err != nil {
 		return &cronpb.Response{
 			Code:    404,
 			Message: "record plan not found",
@@ -297,8 +298,8 @@ func (ct *CrontabPlugin) AddRecordPlanStream(ctx context.Context, req *cronpb.Re
 	// 检查是否已存在相同的记录
 	var count int64
 	searchModel := pkg.RecordPlanStream{
-		RecordPlanID: uint(req.RecordPlanId),
-		StreamPath:   req.StreamPath,
+		PlanID:     uint(req.PlanId),
+		StreamPath: req.StreamPath,
 	}
 	if err := ct.DB.Model(&searchModel).Where(&searchModel).Count(&count).Error; err != nil {
 		return &cronpb.Response{
@@ -315,10 +316,10 @@ func (ct *CrontabPlugin) AddRecordPlanStream(ctx context.Context, req *cronpb.Re
 	}
 
 	stream := &pkg.RecordPlanStream{
-		RecordPlanID: uint(req.RecordPlanId),
-		StreamPath:   req.StreamPath,
-		Fragment:     req.Fragment,
-		FilePath:     req.FilePath,
+		PlanID:     uint(req.PlanId),
+		StreamPath: req.StreamPath,
+		Fragment:   req.Fragment,
+		FilePath:   req.FilePath,
 	}
 
 	if err := ct.DB.Create(stream).Error; err != nil {
@@ -334,8 +335,8 @@ func (ct *CrontabPlugin) AddRecordPlanStream(ctx context.Context, req *cronpb.Re
 	}, nil
 }
 
-func (ct *CrontabPlugin) UpdateRecordPlanStream(ctx context.Context, req *cronpb.RecordPlanStream) (*cronpb.Response, error) {
-	if req.RecordPlanId == 0 {
+func (ct *CrontabPlugin) UpdateRecordPlanStream(ctx context.Context, req *cronpb.PlanStream) (*cronpb.Response, error) {
+	if req.PlanId == 0 {
 		return &cronpb.Response{
 			Code:    400,
 			Message: "record_plan_id is required",
@@ -352,8 +353,8 @@ func (ct *CrontabPlugin) UpdateRecordPlanStream(ctx context.Context, req *cronpb
 	// 检查记录是否存在
 	var existingStream pkg.RecordPlanStream
 	searchModel := pkg.RecordPlanStream{
-		RecordPlanID: uint(req.RecordPlanId),
-		StreamPath:   req.StreamPath,
+		PlanID:     uint(req.PlanId),
+		StreamPath: req.StreamPath,
 	}
 	if err := ct.DB.Where(&searchModel).First(&existingStream).Error; err != nil {
 		return &cronpb.Response{
@@ -365,6 +366,9 @@ func (ct *CrontabPlugin) UpdateRecordPlanStream(ctx context.Context, req *cronpb
 	// 更新记录
 	existingStream.Fragment = req.Fragment
 	existingStream.FilePath = req.FilePath
+	if req.Enable != existingStream.Enable {
+		existingStream.Enable = req.Enable
+	}
 
 	if err := ct.DB.Save(&existingStream).Error; err != nil {
 		return &cronpb.Response{
@@ -379,8 +383,8 @@ func (ct *CrontabPlugin) UpdateRecordPlanStream(ctx context.Context, req *cronpb
 	}, nil
 }
 
-func (ct *CrontabPlugin) RemoveRecordPlanStream(ctx context.Context, req *cronpb.DeleteRecordPlanStreamRequest) (*cronpb.Response, error) {
-	if req.RecordPlanId == 0 {
+func (ct *CrontabPlugin) RemoveRecordPlanStream(ctx context.Context, req *cronpb.DeletePlanStreamRequest) (*cronpb.Response, error) {
+	if req.PlanId == 0 {
 		return &cronpb.Response{
 			Code:    400,
 			Message: "record_plan_id is required",
@@ -397,8 +401,8 @@ func (ct *CrontabPlugin) RemoveRecordPlanStream(ctx context.Context, req *cronpb
 	// 检查记录是否存在
 	var existingStream pkg.RecordPlanStream
 	searchModel := pkg.RecordPlanStream{
-		RecordPlanID: uint(req.RecordPlanId),
-		StreamPath:   req.StreamPath,
+		PlanID:     uint(req.PlanId),
+		StreamPath: req.StreamPath,
 	}
 	if err := ct.DB.Where(&searchModel).First(&existingStream).Error; err != nil {
 		return &cronpb.Response{

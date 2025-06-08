@@ -36,7 +36,7 @@ func (r *Crontab) Tick(any) {
 	// 查询所有启用的录制计划
 	var plans []pkg.RecordPlan
 	model := pkg.RecordPlan{
-		Enabled: true,
+		Enable: true,
 	}
 	if err := r.ctp.DB.Where(&model).Find(&plans).Error; err != nil {
 		r.Error("查询录制计划失败:", err)

@@ -30,26 +30,26 @@ service api {
   }
 
   // RecordPlanStream 相关接口
-  rpc ListRecordPlanStreams (ReqRecordPlanStreamList) returns (RecordPlanStreamResponseList) {
+  rpc ListRecordPlanStreams (ReqPlanStreamList) returns (RecordPlanStreamResponseList) {
     option (google.api.http) = {
-      get: "/recordplanstream/api/list"
+      get: "/planstream/api/list"
     };
   }
-  rpc AddRecordPlanStream (RecordPlanStream) returns (Response) {
+  rpc AddRecordPlanStream (PlanStream) returns (Response) {
     option (google.api.http) = {
-      post: "/recordplanstream/api/add"
+      post: "/planstream/api/add"
       body: "*"
     };
   }
-  rpc UpdateRecordPlanStream (RecordPlanStream) returns (Response) {
+  rpc UpdateRecordPlanStream (PlanStream) returns (Response) {
     option (google.api.http) = {
-      post: "/recordplanstream/api/update"
+      post: "/planstream/api/update"
       body: "*"
     };
   }
-  rpc RemoveRecordPlanStream (DeleteRecordPlanStreamRequest) returns (Response) {
+  rpc RemoveRecordPlanStream (DeletePlanStreamRequest) returns (Response) {
     option (google.api.http) = {
-      post: "/recordplanstream/api/remove"
+      post: "/planstream/api/remove/{planId}/{streamPath=**}"
       body: "*"
     };
   }
@@ -88,19 +88,21 @@ message Response {
 }
 
 // RecordPlanStream 相关消息定义
-message RecordPlanStream {
-  uint32 record_plan_id = 1;
+message PlanStream {
+  uint32 planId = 1;
   string stream_path = 2;
   string fragment = 3;
-  string file_path = 4;
-  google.protobuf.Timestamp created_at = 5;
-  google.protobuf.Timestamp updated_at = 6;
+  string filePath = 4;
+  string record_type = 5; // 录制类型，例如 "mp4", "flv"
+  google.protobuf.Timestamp created_at = 6;
+  google.protobuf.Timestamp updated_at = 7;
+  bool enable = 8; // 是否启用该录制流
 }
 
-message ReqRecordPlanStreamList {
+message ReqPlanStreamList {
   uint32 pageNum = 1;
   uint32 pageSize = 2;
-  uint32 record_plan_id = 3;  // 可选的按录制计划ID筛选
+  uint32 planId = 3;  // 可选的按录制计划ID筛选
   string stream_path = 4;     // 可选的按流路径筛选
 }
 
@@ -110,10 +112,10 @@ message RecordPlanStreamResponseList {
   uint32 totalCount = 3;
   uint32 pageNum = 4;
   uint32 pageSize = 5;
-  repeated RecordPlanStream data = 6;
+  repeated PlanStream data = 6;
 }
 
-message DeleteRecordPlanStreamRequest {
-  uint32 record_plan_id = 1;
-  string stream_path = 2;
+message DeletePlanStreamRequest {
+  uint32 planId = 1;
+  string streamPath = 2;
 }

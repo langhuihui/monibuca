@@ -340,32 +340,34 @@ func (x *Response) GetMessage() string {
 }
 
 // RecordPlanStream 相关消息定义
-type RecordPlanStream struct {
+type PlanStream struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	RecordPlanId  uint32                 `protobuf:"varint,1,opt,name=record_plan_id,json=recordPlanId,proto3" json:"record_plan_id,omitempty"`
+	PlanId        uint32                 `protobuf:"varint,1,opt,name=planId,proto3" json:"planId,omitempty"`
 	StreamPath    string                 `protobuf:"bytes,2,opt,name=stream_path,json=streamPath,proto3" json:"stream_path,omitempty"`
 	Fragment      string                 `protobuf:"bytes,3,opt,name=fragment,proto3" json:"fragment,omitempty"`
-	FilePath      string                 `protobuf:"bytes,4,opt,name=file_path,json=filePath,proto3" json:"file_path,omitempty"`
-	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	UpdatedAt     *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	FilePath      string                 `protobuf:"bytes,4,opt,name=filePath,proto3" json:"filePath,omitempty"`
+	RecordType    string                 `protobuf:"bytes,5,opt,name=record_type,json=recordType,proto3" json:"record_type,omitempty"` // 录制类型，例如 "mp4", "flv"
+	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt     *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	Enable        bool                   `protobuf:"varint,8,opt,name=enable,proto3" json:"enable,omitempty"` // 是否启用该录制流
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *RecordPlanStream) Reset() {
-	*x = RecordPlanStream{}
+func (x *PlanStream) Reset() {
+	*x = PlanStream{}
 	mi := &file_crontab_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *RecordPlanStream) String() string {
+func (x *PlanStream) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*RecordPlanStream) ProtoMessage() {}
+func (*PlanStream) ProtoMessage() {}
 
-func (x *RecordPlanStream) ProtoReflect() protoreflect.Message {
+func (x *PlanStream) ProtoReflect() protoreflect.Message {
 	mi := &file_crontab_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -377,77 +379,91 @@ func (x *RecordPlanStream) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use RecordPlanStream.ProtoReflect.Descriptor instead.
-func (*RecordPlanStream) Descriptor() ([]byte, []int) {
+// Deprecated: Use PlanStream.ProtoReflect.Descriptor instead.
+func (*PlanStream) Descriptor() ([]byte, []int) {
 	return file_crontab_proto_rawDescGZIP(), []int{5}
 }
 
-func (x *RecordPlanStream) GetRecordPlanId() uint32 {
+func (x *PlanStream) GetPlanId() uint32 {
 	if x != nil {
-		return x.RecordPlanId
+		return x.PlanId
 	}
 	return 0
 }
 
-func (x *RecordPlanStream) GetStreamPath() string {
+func (x *PlanStream) GetStreamPath() string {
 	if x != nil {
 		return x.StreamPath
 	}
 	return ""
 }
 
-func (x *RecordPlanStream) GetFragment() string {
+func (x *PlanStream) GetFragment() string {
 	if x != nil {
 		return x.Fragment
 	}
 	return ""
 }
 
-func (x *RecordPlanStream) GetFilePath() string {
+func (x *PlanStream) GetFilePath() string {
 	if x != nil {
 		return x.FilePath
 	}
 	return ""
 }
 
-func (x *RecordPlanStream) GetCreatedAt() *timestamppb.Timestamp {
+func (x *PlanStream) GetRecordType() string {
+	if x != nil {
+		return x.RecordType
+	}
+	return ""
+}
+
+func (x *PlanStream) GetCreatedAt() *timestamppb.Timestamp {
 	if x != nil {
 		return x.CreatedAt
 	}
 	return nil
 }
 
-func (x *RecordPlanStream) GetUpdatedAt() *timestamppb.Timestamp {
+func (x *PlanStream) GetUpdatedAt() *timestamppb.Timestamp {
 	if x != nil {
 		return x.UpdatedAt
 	}
 	return nil
 }
 
-type ReqRecordPlanStreamList struct {
+func (x *PlanStream) GetEnable() bool {
+	if x != nil {
+		return x.Enable
+	}
+	return false
+}
+
+type ReqPlanStreamList struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	PageNum       uint32                 `protobuf:"varint,1,opt,name=pageNum,proto3" json:"pageNum,omitempty"`
 	PageSize      uint32                 `protobuf:"varint,2,opt,name=pageSize,proto3" json:"pageSize,omitempty"`
-	RecordPlanId  uint32                 `protobuf:"varint,3,opt,name=record_plan_id,json=recordPlanId,proto3" json:"record_plan_id,omitempty"` // 可选的按录制计划ID筛选
-	StreamPath    string                 `protobuf:"bytes,4,opt,name=stream_path,json=streamPath,proto3" json:"stream_path,omitempty"`          // 可选的按流路径筛选
+	PlanId        uint32                 `protobuf:"varint,3,opt,name=planId,proto3" json:"planId,omitempty"`                          // 可选的按录制计划ID筛选
+	StreamPath    string                 `protobuf:"bytes,4,opt,name=stream_path,json=streamPath,proto3" json:"stream_path,omitempty"` // 可选的按流路径筛选
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *ReqRecordPlanStreamList) Reset() {
-	*x = ReqRecordPlanStreamList{}
+func (x *ReqPlanStreamList) Reset() {
+	*x = ReqPlanStreamList{}
 	mi := &file_crontab_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ReqRecordPlanStreamList) String() string {
+func (x *ReqPlanStreamList) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ReqRecordPlanStreamList) ProtoMessage() {}
+func (*ReqPlanStreamList) ProtoMessage() {}
 
-func (x *ReqRecordPlanStreamList) ProtoReflect() protoreflect.Message {
+func (x *ReqPlanStreamList) ProtoReflect() protoreflect.Message {
 	mi := &file_crontab_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -459,33 +475,33 @@ func (x *ReqRecordPlanStreamList) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ReqRecordPlanStreamList.ProtoReflect.Descriptor instead.
-func (*ReqRecordPlanStreamList) Descriptor() ([]byte, []int) {
+// Deprecated: Use ReqPlanStreamList.ProtoReflect.Descriptor instead.
+func (*ReqPlanStreamList) Descriptor() ([]byte, []int) {
 	return file_crontab_proto_rawDescGZIP(), []int{6}
 }
 
-func (x *ReqRecordPlanStreamList) GetPageNum() uint32 {
+func (x *ReqPlanStreamList) GetPageNum() uint32 {
 	if x != nil {
 		return x.PageNum
 	}
 	return 0
 }
 
-func (x *ReqRecordPlanStreamList) GetPageSize() uint32 {
+func (x *ReqPlanStreamList) GetPageSize() uint32 {
 	if x != nil {
 		return x.PageSize
 	}
 	return 0
 }
 
-func (x *ReqRecordPlanStreamList) GetRecordPlanId() uint32 {
+func (x *ReqPlanStreamList) GetPlanId() uint32 {
 	if x != nil {
-		return x.RecordPlanId
+		return x.PlanId
 	}
 	return 0
 }
 
-func (x *ReqRecordPlanStreamList) GetStreamPath() string {
+func (x *ReqPlanStreamList) GetStreamPath() string {
 	if x != nil {
 		return x.StreamPath
 	}
@@ -499,7 +515,7 @@ type RecordPlanStreamResponseList struct {
 	TotalCount    uint32                 `protobuf:"varint,3,opt,name=totalCount,proto3" json:"totalCount,omitempty"`
 	PageNum       uint32                 `protobuf:"varint,4,opt,name=pageNum,proto3" json:"pageNum,omitempty"`
 	PageSize      uint32                 `protobuf:"varint,5,opt,name=pageSize,proto3" json:"pageSize,omitempty"`
-	Data          []*RecordPlanStream    `protobuf:"bytes,6,rep,name=data,proto3" json:"data,omitempty"`
+	Data          []*PlanStream          `protobuf:"bytes,6,rep,name=data,proto3" json:"data,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -569,35 +585,35 @@ func (x *RecordPlanStreamResponseList) GetPageSize() uint32 {
 	return 0
 }
 
-func (x *RecordPlanStreamResponseList) GetData() []*RecordPlanStream {
+func (x *RecordPlanStreamResponseList) GetData() []*PlanStream {
 	if x != nil {
 		return x.Data
 	}
 	return nil
 }
 
-type DeleteRecordPlanStreamRequest struct {
+type DeletePlanStreamRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	RecordPlanId  uint32                 `protobuf:"varint,1,opt,name=record_plan_id,json=recordPlanId,proto3" json:"record_plan_id,omitempty"`
-	StreamPath    string                 `protobuf:"bytes,2,opt,name=stream_path,json=streamPath,proto3" json:"stream_path,omitempty"`
+	PlanId        uint32                 `protobuf:"varint,1,opt,name=planId,proto3" json:"planId,omitempty"`
+	StreamPath    string                 `protobuf:"bytes,2,opt,name=streamPath,proto3" json:"streamPath,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *DeleteRecordPlanStreamRequest) Reset() {
-	*x = DeleteRecordPlanStreamRequest{}
+func (x *DeletePlanStreamRequest) Reset() {
+	*x = DeletePlanStreamRequest{}
 	mi := &file_crontab_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *DeleteRecordPlanStreamRequest) String() string {
+func (x *DeletePlanStreamRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*DeleteRecordPlanStreamRequest) ProtoMessage() {}
+func (*DeletePlanStreamRequest) ProtoMessage() {}
 
-func (x *DeleteRecordPlanStreamRequest) ProtoReflect() protoreflect.Message {
+func (x *DeletePlanStreamRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_crontab_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -609,19 +625,19 @@ func (x *DeleteRecordPlanStreamRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use DeleteRecordPlanStreamRequest.ProtoReflect.Descriptor instead.
-func (*DeleteRecordPlanStreamRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use DeletePlanStreamRequest.ProtoReflect.Descriptor instead.
+func (*DeletePlanStreamRequest) Descriptor() ([]byte, []int) {
 	return file_crontab_proto_rawDescGZIP(), []int{8}
 }
 
-func (x *DeleteRecordPlanStreamRequest) GetRecordPlanId() uint32 {
+func (x *DeletePlanStreamRequest) GetPlanId() uint32 {
 	if x != nil {
-		return x.RecordPlanId
+		return x.PlanId
 	}
 	return 0
 }
 
-func (x *DeleteRecordPlanStreamRequest) GetStreamPath() string {
+func (x *DeletePlanStreamRequest) GetStreamPath() string {
 	if x != nil {
 		return x.StreamPath
 	}
@@ -660,23 +676,27 @@ const file_crontab_proto_rawDesc = "" +
 	"\x02id\x18\x01 \x01(\rR\x02id\"8\n" +
 	"\bResponse\x12\x12\n" +
 	"\x04code\x18\x01 \x01(\x05R\x04code\x12\x18\n" +
-	"\amessage\x18\x02 \x01(\tR\amessage\"\x88\x02\n" +
-	"\x10RecordPlanStream\x12$\n" +
-	"\x0erecord_plan_id\x18\x01 \x01(\rR\frecordPlanId\x12\x1f\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\"\xac\x02\n" +
+	"\n" +
+	"PlanStream\x12\x16\n" +
+	"\x06planId\x18\x01 \x01(\rR\x06planId\x12\x1f\n" +
 	"\vstream_path\x18\x02 \x01(\tR\n" +
 	"streamPath\x12\x1a\n" +
-	"\bfragment\x18\x03 \x01(\tR\bfragment\x12\x1b\n" +
-	"\tfile_path\x18\x04 \x01(\tR\bfilePath\x129\n" +
+	"\bfragment\x18\x03 \x01(\tR\bfragment\x12\x1a\n" +
+	"\bfilePath\x18\x04 \x01(\tR\bfilePath\x12\x1f\n" +
+	"\vrecord_type\x18\x05 \x01(\tR\n" +
+	"recordType\x129\n" +
 	"\n" +
-	"created_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
+	"created_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +
-	"updated_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\x96\x01\n" +
-	"\x17ReqRecordPlanStreamList\x12\x18\n" +
+	"updated_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12\x16\n" +
+	"\x06enable\x18\b \x01(\bR\x06enable\"\x82\x01\n" +
+	"\x11ReqPlanStreamList\x12\x18\n" +
 	"\apageNum\x18\x01 \x01(\rR\apageNum\x12\x1a\n" +
-	"\bpageSize\x18\x02 \x01(\rR\bpageSize\x12$\n" +
-	"\x0erecord_plan_id\x18\x03 \x01(\rR\frecordPlanId\x12\x1f\n" +
+	"\bpageSize\x18\x02 \x01(\rR\bpageSize\x12\x16\n" +
+	"\x06planId\x18\x03 \x01(\rR\x06planId\x12\x1f\n" +
 	"\vstream_path\x18\x04 \x01(\tR\n" +
-	"streamPath\"\xd1\x01\n" +
+	"streamPath\"\xcb\x01\n" +
 	"\x1cRecordPlanStreamResponseList\x12\x12\n" +
 	"\x04code\x18\x01 \x01(\x05R\x04code\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12\x1e\n" +
@@ -684,21 +704,22 @@ const file_crontab_proto_rawDesc = "" +
 	"totalCount\x18\x03 \x01(\rR\n" +
 	"totalCount\x12\x18\n" +
 	"\apageNum\x18\x04 \x01(\rR\apageNum\x12\x1a\n" +
-	"\bpageSize\x18\x05 \x01(\rR\bpageSize\x12-\n" +
-	"\x04data\x18\x06 \x03(\v2\x19.crontab.RecordPlanStreamR\x04data\"f\n" +
-	"\x1dDeleteRecordPlanStreamRequest\x12$\n" +
-	"\x0erecord_plan_id\x18\x01 \x01(\rR\frecordPlanId\x12\x1f\n" +
-	"\vstream_path\x18\x02 \x01(\tR\n" +
-	"streamPath2\x9f\x06\n" +
+	"\bpageSize\x18\x05 \x01(\rR\bpageSize\x12'\n" +
+	"\x04data\x18\x06 \x03(\v2\x13.crontab.PlanStreamR\x04data\"Q\n" +
+	"\x17DeletePlanStreamRequest\x12\x16\n" +
+	"\x06planId\x18\x01 \x01(\rR\x06planId\x12\x1e\n" +
+	"\n" +
+	"streamPath\x18\x02 \x01(\tR\n" +
+	"streamPath2\x88\x06\n" +
 	"\x03api\x12O\n" +
 	"\x04List\x12\x14.crontab.ReqPlanList\x1a\x19.crontab.PlanResponseList\"\x16\x82\xd3\xe4\x93\x02\x10\x12\x0e/plan/api/list\x12A\n" +
 	"\x03Add\x12\r.crontab.Plan\x1a\x11.crontab.Response\"\x18\x82\xd3\xe4\x93\x02\x12:\x01*\"\r/plan/api/add\x12L\n" +
 	"\x06Update\x12\r.crontab.Plan\x1a\x11.crontab.Response\" \x82\xd3\xe4\x93\x02\x1a:\x01*\"\x15/plan/api/update/{id}\x12U\n" +
-	"\x06Remove\x12\x16.crontab.DeleteRequest\x1a\x11.crontab.Response\" \x82\xd3\xe4\x93\x02\x1a:\x01*\"\x15/plan/api/remove/{id}\x12\x84\x01\n" +
-	"\x15ListRecordPlanStreams\x12 .crontab.ReqRecordPlanStreamList\x1a%.crontab.RecordPlanStreamResponseList\"\"\x82\xd3\xe4\x93\x02\x1c\x12\x1a/recordplanstream/api/list\x12i\n" +
-	"\x13AddRecordPlanStream\x12\x19.crontab.RecordPlanStream\x1a\x11.crontab.Response\"$\x82\xd3\xe4\x93\x02\x1e:\x01*\"\x19/recordplanstream/api/add\x12o\n" +
-	"\x16UpdateRecordPlanStream\x12\x19.crontab.RecordPlanStream\x1a\x11.crontab.Response\"'\x82\xd3\xe4\x93\x02!:\x01*\"\x1c/recordplanstream/api/update\x12|\n" +
-	"\x16RemoveRecordPlanStream\x12&.crontab.DeleteRecordPlanStreamRequest\x1a\x11.crontab.Response\"'\x82\xd3\xe4\x93\x02!:\x01*\"\x1c/recordplanstream/api/removeB\x1fZ\x1dm7s.live/v5/plugin/crontab/pbb\x06proto3"
+	"\x06Remove\x12\x16.crontab.DeleteRequest\x1a\x11.crontab.Response\" \x82\xd3\xe4\x93\x02\x1a:\x01*\"\x15/plan/api/remove/{id}\x12x\n" +
+	"\x15ListRecordPlanStreams\x12\x1a.crontab.ReqPlanStreamList\x1a%.crontab.RecordPlanStreamResponseList\"\x1c\x82\xd3\xe4\x93\x02\x16\x12\x14/planstream/api/list\x12]\n" +
+	"\x13AddRecordPlanStream\x12\x13.crontab.PlanStream\x1a\x11.crontab.Response\"\x1e\x82\xd3\xe4\x93\x02\x18:\x01*\"\x13/planstream/api/add\x12c\n" +
+	"\x16UpdateRecordPlanStream\x12\x13.crontab.PlanStream\x1a\x11.crontab.Response\"!\x82\xd3\xe4\x93\x02\x1b:\x01*\"\x16/planstream/api/update\x12\x89\x01\n" +
+	"\x16RemoveRecordPlanStream\x12 .crontab.DeletePlanStreamRequest\x1a\x11.crontab.Response\":\x82\xd3\xe4\x93\x024:\x01*\"//planstream/api/remove/{planId}/{streamPath=**}B\x1fZ\x1dm7s.live/v5/plugin/crontab/pbb\x06proto3"
 
 var (
 	file_crontab_proto_rawDescOnce sync.Once
@@ -714,32 +735,32 @@ func file_crontab_proto_rawDescGZIP() []byte {
 
 var file_crontab_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_crontab_proto_goTypes = []any{
-	(*PlanResponseList)(nil),              // 0: crontab.PlanResponseList
-	(*Plan)(nil),                          // 1: crontab.Plan
-	(*ReqPlanList)(nil),                   // 2: crontab.ReqPlanList
-	(*DeleteRequest)(nil),                 // 3: crontab.DeleteRequest
-	(*Response)(nil),                      // 4: crontab.Response
-	(*RecordPlanStream)(nil),              // 5: crontab.RecordPlanStream
-	(*ReqRecordPlanStreamList)(nil),       // 6: crontab.ReqRecordPlanStreamList
-	(*RecordPlanStreamResponseList)(nil),  // 7: crontab.RecordPlanStreamResponseList
-	(*DeleteRecordPlanStreamRequest)(nil), // 8: crontab.DeleteRecordPlanStreamRequest
-	(*timestamppb.Timestamp)(nil),         // 9: google.protobuf.Timestamp
+	(*PlanResponseList)(nil),             // 0: crontab.PlanResponseList
+	(*Plan)(nil),                         // 1: crontab.Plan
+	(*ReqPlanList)(nil),                  // 2: crontab.ReqPlanList
+	(*DeleteRequest)(nil),                // 3: crontab.DeleteRequest
+	(*Response)(nil),                     // 4: crontab.Response
+	(*PlanStream)(nil),                   // 5: crontab.PlanStream
+	(*ReqPlanStreamList)(nil),            // 6: crontab.ReqPlanStreamList
+	(*RecordPlanStreamResponseList)(nil), // 7: crontab.RecordPlanStreamResponseList
+	(*DeletePlanStreamRequest)(nil),      // 8: crontab.DeletePlanStreamRequest
+	(*timestamppb.Timestamp)(nil),        // 9: google.protobuf.Timestamp
 }
 var file_crontab_proto_depIdxs = []int32{
 	1,  // 0: crontab.PlanResponseList.data:type_name -> crontab.Plan
 	9,  // 1: crontab.Plan.createTime:type_name -> google.protobuf.Timestamp
 	9,  // 2: crontab.Plan.updateTime:type_name -> google.protobuf.Timestamp
-	9,  // 3: crontab.RecordPlanStream.created_at:type_name -> google.protobuf.Timestamp
-	9,  // 4: crontab.RecordPlanStream.updated_at:type_name -> google.protobuf.Timestamp
-	5,  // 5: crontab.RecordPlanStreamResponseList.data:type_name -> crontab.RecordPlanStream
+	9,  // 3: crontab.PlanStream.created_at:type_name -> google.protobuf.Timestamp
+	9,  // 4: crontab.PlanStream.updated_at:type_name -> google.protobuf.Timestamp
+	5,  // 5: crontab.RecordPlanStreamResponseList.data:type_name -> crontab.PlanStream
 	2,  // 6: crontab.api.List:input_type -> crontab.ReqPlanList
 	1,  // 7: crontab.api.Add:input_type -> crontab.Plan
 	1,  // 8: crontab.api.Update:input_type -> crontab.Plan
 	3,  // 9: crontab.api.Remove:input_type -> crontab.DeleteRequest
-	6,  // 10: crontab.api.ListRecordPlanStreams:input_type -> crontab.ReqRecordPlanStreamList
-	5,  // 11: crontab.api.AddRecordPlanStream:input_type -> crontab.RecordPlanStream
-	5,  // 12: crontab.api.UpdateRecordPlanStream:input_type -> crontab.RecordPlanStream
-	8,  // 13: crontab.api.RemoveRecordPlanStream:input_type -> crontab.DeleteRecordPlanStreamRequest
+	6,  // 10: crontab.api.ListRecordPlanStreams:input_type -> crontab.ReqPlanStreamList
+	5,  // 11: crontab.api.AddRecordPlanStream:input_type -> crontab.PlanStream
+	5,  // 12: crontab.api.UpdateRecordPlanStream:input_type -> crontab.PlanStream
+	8,  // 13: crontab.api.RemoveRecordPlanStream:input_type -> crontab.DeletePlanStreamRequest
 	0,  // 14: crontab.api.List:output_type -> crontab.PlanResponseList
 	4,  // 15: crontab.api.Add:output_type -> crontab.Response
 	4,  // 16: crontab.api.Update:output_type -> crontab.Response

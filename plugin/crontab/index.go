@@ -22,7 +22,7 @@ func (ct *CrontabPlugin) OnInit() (err error) {
 	if ct.DB == nil {
 		ct.Error("DB is nil")
 	} else {
-		err = ct.DB.AutoMigrate(&pkg.RecordPlan{})
+		err = ct.DB.AutoMigrate(&pkg.RecordPlan{}, &pkg.RecordPlanStream{})
 		if err != nil {
 			return fmt.Errorf("auto migrate tables error: %v", err)
 		}
