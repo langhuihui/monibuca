@@ -143,7 +143,7 @@ func (plugin *PluginMeta) Init(s *Server, userConfig map[string]any) (p *Plugin)
 		p.DB = s.DB
 	} else if p.config.DSN != "" {
 		if factory, ok := db.Factory[p.config.DBType]; ok {
-			s.DB, err = gorm.Open(factory(p.config.DSN), &gorm.Config{})
+			p.DB, err = gorm.Open(factory(p.config.DSN), &gorm.Config{})
 			if err != nil {
 				s.Error("failed to connect database", "error", err, "dsn", s.config.DSN, "type", s.config.DBType)
 				p.disable(fmt.Sprintf("database %v", err))
