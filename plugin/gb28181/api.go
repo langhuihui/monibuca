@@ -3,7 +3,6 @@ package plugin_gb28181pro
 import (
 	"context"
 	"fmt"
-	"gorm.io/gorm"
 	"net/http"
 	"net/url"
 	"os"
@@ -11,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"gorm.io/gorm"
 
 	"github.com/emiago/sipgo"
 	"github.com/emiago/sipgo/sip"
@@ -2849,14 +2850,43 @@ func (gb *GB28181Plugin) RemoveDevice(ctx context.Context, req *pb.RemoveDeviceR
 		device.Stop(fmt.Errorf("device removed"))
 		device.WaitStopped()
 		// device.Stop() 会调用 Dispose()，其中已包含从 gb.devices 中移除设备的逻辑
-	} else {
-		resp.Code = 404
-		resp.Message = "设备未找到"
-		return resp, nil
+
+		// 开启数据库事务
+		tx := gb.DB.Begin()
+		if tx.Error != nil {
+			resp.Code = 500
+			resp.Message = "开启事务失败"
+			return resp, tx.Error
+		}
+
+		// 删除设备
+		if err := tx.Delete(&Device{DeviceId: req.Id}).Error; err != nil {
+			tx.Rollback()
+			resp.Code = 500
+			resp.Message = "删除设备失败"
+			return resp, err
+		}
+
+		// 删除设备关联的通道
+		if err := tx.Delete(&gb28181.DeviceChannel{DeviceID: req.Id}).Error; err != nil {
+			tx.Rollback()
+			resp.Code = 500
+			resp.Message = "删除设备通道失败"
+			return resp, err
+		}
+
+		// 提交事务
+		if err := tx.Commit().Error; err != nil {
+			tx.Rollback()
+			resp.Code = 500
+			resp.Message = "提交事务失败"
+			return resp, err
+		}
+
+		resp.Code = 200
+		resp.Message = "设备删除成功"
 	}
 
-	resp.Code = 0
-	resp.Message = "success"
 	return resp, nil
 }
 

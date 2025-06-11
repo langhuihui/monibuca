@@ -3,14 +3,16 @@ package plugin_gb28181pro
 import (
 	"errors"
 	"fmt"
-	"m7s.live/v5/pkg"
 	"net/http"
 	"os"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"m7s.live/v5/pkg"
 
 	"github.com/emiago/sipgo"
 	"github.com/emiago/sipgo/sip"
@@ -39,7 +41,7 @@ type GB28181Plugin struct {
 	pb.UnimplementedApiServer
 	m7s.Plugin
 	Serial         string `default:"34020000002000000001" desc:"sip 服务 id"` //sip 服务器 id, 默认 34020000002000000001
-	Realm          string `default:"3402000000" desc:"sip 服务域"`            //sip 服务器域，默认 3402000000
+	Realm          string `default:"3402000000" desc:"sip 服务域"`             //sip 服务器域，默认 3402000000
 	Password       string
 	Sip            SipConfig
 	MediaPort      util.Range[uint16] `default:"10001-20000" desc:"媒体端口范围"` //媒体端口范围
@@ -436,9 +438,22 @@ func (gb *GB28181Plugin) OnRegister(req *sip.Request, tx sip.ServerTransaction) 
 	from := req.From()
 	if from == nil || from.Address.User == "" {
 		gb.Error("OnRegister", "error", "no user")
+		response := sip.NewResponseFromRequest(req, sip.StatusBadRequest, "Invalid sip from format", nil)
+		if err := tx.Respond(response); err != nil {
+			gb.Error("respond BadRequest", "error", err.Error())
+		}
 		return
 	}
 	deviceId := from.Address.User
+	// 验证设备ID是否符合GB28181规范(20位数字)
+	if match, _ := regexp.MatchString(`^\d{20}$`, deviceId); !match {
+		gb.Error("OnRegister", "error", "invalid device id format, must be 20 digits", "deviceId", deviceId)
+		response := sip.NewResponseFromRequest(req, sip.StatusBadRequest, "Invalid device ID format", nil)
+		if err := tx.Respond(response); err != nil {
+			gb.Error("respond BadRequest", "error", err.Error())
+		}
+		return
+	}
 	registerHandlerTask := registerHandlerTask{
 		gb:  gb,
 		req: req,
@@ -501,7 +516,6 @@ func (gb *GB28181Plugin) OnMessage(req *sip.Request, tx sip.ServerTransaction) {
 		}
 	}
 
-	gb.Debug("00000000000001,deviceid is ", id)
 	// 如果设备和平台都存在，通过源地址判断真实来源
 	if d != nil && d.Online && p != nil {
 		source := req.Source()
@@ -513,7 +527,6 @@ func (gb *GB28181Plugin) OnMessage(req *sip.Request, tx sip.ServerTransaction) {
 			d = nil
 		}
 	}
-	gb.Debug("00000000000002,deviceid is ", id)
 
 	// 如果既不是设备也不是平台，返回404
 	if (d == nil && p == nil) || (d != nil && !d.Online) {
@@ -526,7 +539,6 @@ func (gb *GB28181Plugin) OnMessage(req *sip.Request, tx sip.ServerTransaction) {
 		gb.Debug("after on message respond")
 		return
 	}
-	gb.Debug("00000000000003,deviceid is ", id)
 
 	// 根据来源调用不同的处理方法
 	if d != nil && d.Online {

@@ -149,6 +149,7 @@ func (d *Dialog) Start() (err error) {
 	}
 
 	sdpInfo = append(sdpInfo, mediaLine)
+
 	sdpInfo = append(sdpInfo, "a=recvonly")
 	if d.stream != "" {
 		sdpInfo = append(sdpInfo, "a="+d.stream)
@@ -248,14 +249,14 @@ func (d *Dialog) Start() (err error) {
 }
 
 func (d *Dialog) Run() (err error) {
-	d.Channel.Info("before WaitAnswer")
+	d.gb.Info("before WaitAnswer")
 	err = d.session.WaitAnswer(d.gb, sipgo.AnswerOptions{})
-	d.Channel.Info("after WaitAnswer")
+	d.gb.Info("after WaitAnswer")
 	if err != nil {
 		return errors.New("wait answer error" + err.Error())
 	}
 	inviteResponseBody := string(d.session.InviteResponse.Body())
-	d.Channel.Info("inviteResponse", "body", inviteResponseBody)
+	d.gb.Info("inviteResponse", "body", inviteResponseBody)
 	ds := strings.Split(inviteResponseBody, "\r\n")
 	for _, l := range ds {
 		if ls := strings.Split(l, "="); len(ls) > 1 {
@@ -302,6 +303,10 @@ func (d *Dialog) Run() (err error) {
 	}
 	pub.Receiver.StreamMode = d.StreamMode
 	d.AddTask(&pub.Receiver)
+	startResult := pub.Receiver.WaitStarted()
+	if startResult != nil {
+		return fmt.Errorf("pub.Receiver.WaitStarted %s", startResult)
+	}
 	pub.Demux()
 	return
 }
