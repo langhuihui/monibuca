@@ -11,3 +11,7 @@ type RecordPlan struct {
 	Plan   string `json:"plan" gorm:"type:text"`
 	Enable bool   `json:"enable" gorm:"default:false"` // 是否启用
 }
+
+func (r *RecordPlan) GetKey() uint {
+	return r.ID
+}
