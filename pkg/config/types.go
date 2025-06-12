@@ -102,11 +102,11 @@ type (
 	}
 	Record struct {
 		Mode     RecordMode    `json:"mode" desc:"事件类型,auto=连续录像模式，event=事件录像模式" gorm:"type:varchar(255);comment:事件类型,auto=连续录像模式，event=事件录像模式;default:'auto'"`
-		Type     string        `desc:"录制类型"`                // 录制类型 mp4、flv、hls、hlsv7
-		FilePath string        `desc:"录制文件路径"`              // 录制文件路径
-		Fragment time.Duration `desc:"分片时长"`                // 分片时长
-		Append   bool          `desc:"是否追加录制"`              // 是否追加录制
-		Event    *RecordEvent  `json:"event" desc:"事件录像配置"` // 事件录像配置
+		Type     string        `desc:"录制类型"`                         // 录制类型 mp4、flv、hls、hlsv7
+		FilePath string        `desc:"录制文件路径"`                       // 录制文件路径
+		Fragment time.Duration `desc:"分片时长"`                         // 分片时长
+		Append   bool          `desc:"是否追加录制"`                       // 是否追加录制
+		Event    *RecordEvent  `json:"event" desc:"事件录像配置" gorm:"-"` // 事件录像配置
 	}
 	TransfromOutput struct {
 		Target     string `desc:"转码目标"` // 转码目标
