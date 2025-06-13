@@ -37,12 +37,13 @@ var (
 
 type WebRTCPlugin struct {
 	m7s.Plugin
-	ICEServers []ICEServer   `desc:"ice服务器配置"`
-	Port       string        `default:"tcp:9000" desc:"监听端口"`
-	PLI        time.Duration `default:"2s" desc:"发送PLI请求间隔"`         // 视频流丢包后，发送PLI请求
-	EnableDC   bool          `default:"true" desc:"是否启用DataChannel"` // 在不支持编码格式的情况下是否启用DataChannel传输
-	MimeType   []string      `desc:"MimeType过滤列表，为空则不过滤"`            // MimeType过滤列表，支持的格式如：video/H264, audio/opus
-	s          SettingEngine
+	ICEServers  []ICEServer   `desc:"ice服务器配置"`
+	Port        string        `default:"tcp:9000" desc:"监听端口"`
+	PLI         time.Duration `default:"2s" desc:"发送PLI请求间隔"`         // 视频流丢包后，发送PLI请求
+	EnableDC    bool          `default:"true" desc:"是否启用DataChannel"` // 在不支持编码格式的情况下是否启用DataChannel传输
+	MimeType    []string      `desc:"MimeType过滤列表，为空则不过滤"`            // MimeType过滤列表，支持的格式如：video/H264, audio/opus
+	s           SettingEngine
+	portMapping map[int]int // 内部端口到外部端口的映射
 }
 
 func (p *WebRTCPlugin) RegisterHandler() map[string]http.HandlerFunc {
@@ -306,50 +307,90 @@ func (p *WebRTCPlugin) initSettingEngine() error {
 
 // configurePort 配置端口设置
 func (p *WebRTCPlugin) configurePort() error {
-	ports, err := ParsePort2(p.Port)
+	// 使用 ParsePort 而不是 ParsePort2 来获取端口映射信息
+	portInfo, err := ParsePort(p.Port)
 	if err != nil {
 		p.Error("webrtc port config error", "error", err, "port", p.Port)
 		return err
 	}
 
-	switch v := ports.(type) {
-	case TCPPort:
-		tcpport := int(v)
-		tcpl, err := net.ListenTCP("tcp", &net.TCPAddr{
-			IP:   net.IP{0, 0, 0, 0},
-			Port: tcpport,
-		})
-		p.OnDispose(func() {
-			_ = tcpl.Close()
-		})
-		if err != nil {
-			p.Error("webrtc listener tcp", "error", err)
+	// 初始化端口映射
+	p.portMapping = make(map[int]int)
+
+	// 如果有端口映射，存储映射关系
+	if portInfo.HasMapping() {
+		if portInfo.IsRange() {
+			// 端口范围映射
+			for i := 0; i <= portInfo.Ports[1]-portInfo.Ports[0]; i++ {
+				internalPort := portInfo.Ports[0] + i
+				var externalPort int
+				if portInfo.IsRangeMapping() {
+					// 映射端口也是范围
+					externalPort = portInfo.Map[0] + i
+				} else {
+					// 映射端口是单个端口
+					externalPort = portInfo.Map[0]
+				}
+				p.portMapping[internalPort] = externalPort
+			}
+		} else {
+			// 单端口映射
+			p.portMapping[portInfo.Ports[0]] = portInfo.Map[0]
 		}
-		p.SetDescription("tcp", fmt.Sprintf("%d", tcpport))
-		p.Info("webrtc start listen", "port", tcpport)
-		p.s.SetICETCPMux(NewICETCPMux(nil, tcpl, 4096))
-		p.s.SetNetworkTypes([]NetworkType{NetworkTypeTCP4, NetworkTypeTCP6})
-		p.s.DisableSRTPReplayProtection(true)
-	case UDPRangePort:
-		p.s.SetEphemeralUDPPortRange(uint16(v[0]), uint16(v[1]))
-		p.SetDescription("udp", fmt.Sprintf("%d-%d", v[0], v[1]))
-	case UDPPort:
-		// 创建共享WEBRTC端口 默认9000
-		udpListener, err := net.ListenUDP("udp", &net.UDPAddr{
-			IP:   net.IP{0, 0, 0, 0},
-			Port: int(v),
-		})
-		p.OnDispose(func() {
-			_ = udpListener.Close()
-		})
-		if err != nil {
-			p.Error("webrtc listener udp", "error", err)
-			return err
+		p.Info("Port mapping configured", "mapping", p.portMapping)
+	}
+
+	// 根据协议类型进行配置
+	if portInfo.IsTCP() {
+		if portInfo.IsRange() {
+			// TCP端口范围，这里可能需要特殊处理
+			p.Error("TCP port range not supported in current implementation")
+			return fmt.Errorf("TCP port range not supported")
+		} else {
+			// TCP单端口
+			tcpport := portInfo.Ports[0]
+			tcpl, err := net.ListenTCP("tcp", &net.TCPAddr{
+				IP:   net.IP{0, 0, 0, 0},
+				Port: tcpport,
+			})
+			p.OnDispose(func() {
+				_ = tcpl.Close()
+			})
+			if err != nil {
+				p.Error("webrtc listener tcp", "error", err)
+				return err
+			}
+			p.SetDescription("tcp", fmt.Sprintf("%d", tcpport))
+			p.Info("webrtc start listen", "port", tcpport)
+			p.s.SetICETCPMux(NewICETCPMux(nil, tcpl, 4096))
+			p.s.SetNetworkTypes([]NetworkType{NetworkTypeTCP4, NetworkTypeTCP6})
+			p.s.DisableSRTPReplayProtection(true)
 		}
-		p.SetDescription("udp", fmt.Sprintf("%d", v))
-		p.Info("webrtc start listen", "port", v)
-		p.s.SetICEUDPMux(NewICEUDPMux(nil, udpListener))
-		p.s.SetNetworkTypes([]NetworkType{NetworkTypeUDP4, NetworkTypeUDP6})
+	} else {
+		// UDP配置
+		if portInfo.IsRange() {
+			// UDP端口范围
+			p.s.SetEphemeralUDPPortRange(uint16(portInfo.Ports[0]), uint16(portInfo.Ports[1]))
+			p.SetDescription("udp", fmt.Sprintf("%d-%d", portInfo.Ports[0], portInfo.Ports[1]))
+		} else {
+			// UDP单端口
+			udpport := portInfo.Ports[0]
+			udpListener, err := net.ListenUDP("udp", &net.UDPAddr{
+				IP:   net.IP{0, 0, 0, 0},
+				Port: udpport,
+			})
+			p.OnDispose(func() {
+				_ = udpListener.Close()
+			})
+			if err != nil {
+				p.Error("webrtc listener udp", "error", err)
+				return err
+			}
+			p.SetDescription("udp", fmt.Sprintf("%d", udpport))
+			p.Info("webrtc start listen", "port", udpport)
+			p.s.SetICEUDPMux(NewICEUDPMux(nil, udpListener))
+			p.s.SetNetworkTypes([]NetworkType{NetworkTypeUDP4, NetworkTypeUDP6})
+		}
 	}
 
 	return nil
@@ -368,9 +409,33 @@ func (p *WebRTCPlugin) CreatePC(sd SessionDescription, conf Configuration) (pc *
 		return
 	}
 	pc, err = api.NewPeerConnection(conf)
-	if err == nil {
-		err = pc.SetRemoteDescription(sd)
+	if err != nil {
+		return
 	}
+
+	// 如果有端口映射配置，记录 ICE 候选者信息以供调试
+	if len(p.portMapping) > 0 {
+		pc.OnICECandidate(func(candidate *ICECandidate) {
+			if candidate != nil {
+				// 记录端口映射信息（用于调试和监控）
+				if mappedPort, exists := p.portMapping[int(candidate.Port)]; exists {
+					p.Debug("ICE candidate with port mapping detected",
+						"original_port", candidate.Port,
+						"mapped_port", mappedPort,
+						"candidate_address", candidate.Address,
+						"candidate_type", candidate.Typ)
+					candidate.Port = uint16(mappedPort) // 更新候选者端口为映射后的端口
+				} else {
+					p.Debug("ICE candidate generated",
+						"port", candidate.Port,
+						"address", candidate.Address,
+						"type", candidate.Typ)
+				}
+			}
+		})
+	}
+
+	err = pc.SetRemoteDescription(sd)
 	return
 }
 
