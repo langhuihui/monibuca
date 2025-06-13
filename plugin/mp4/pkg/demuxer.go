@@ -6,8 +6,10 @@ import (
 	"slices"
 
 	"m7s.live/v5/pkg"
+	"m7s.live/v5/pkg/codec"
+	"m7s.live/v5/pkg/util"
 	"m7s.live/v5/plugin/mp4/pkg/box"
-	. "m7s.live/v5/plugin/mp4/pkg/box"
+	rtmp "m7s.live/v5/plugin/rtmp/pkg"
 )
 
 type (
@@ -30,7 +32,7 @@ type (
 		Number         uint32
 		CryptByteBlock uint8
 		SkipByteBlock  uint8
-		PsshBoxes      []*PsshBox
+		PsshBoxes      []*box.PsshBox
 	}
 	SubSamplePattern struct {
 		BytesClear     uint16
@@ -43,16 +45,28 @@ type (
 		chunkoffset uint64
 	}
 
+	RTMPFrame struct {
+		Frame any // 可以是 *rtmp.RTMPVideo 或 *rtmp.RTMPAudio
+	}
+
 	Demuxer struct {
 		reader        io.ReadSeeker
 		Tracks        []*Track
 		ReadSampleIdx []uint32
 		IsFragment    bool
-		// pssh          []*PsshBox
-		moov       *MoovBox
-		mdat       *MediaDataBox
+		// pssh          []*box.PsshBox
+		moov       *box.MoovBox
+		mdat       *box.MediaDataBox
 		mdatOffset uint64
 		QuicTime   bool
+
+		// 预生成的 RTMP 帧
+		RTMPVideoSequence *rtmp.RTMPVideo
+		RTMPAudioSequence *rtmp.RTMPAudio
+		RTMPFrames        []RTMPFrame
+
+		// RTMP 帧生成配置
+		RTMPAllocator *util.ScalableMemoryAllocator
 	}
 )
 
@@ -63,6 +77,10 @@ func NewDemuxer(r io.ReadSeeker) *Demuxer {
 }
 
 func (d *Demuxer) Demux() (err error) {
+	return d.DemuxWithAllocator(nil)
+}
+
+func (d *Demuxer) DemuxWithAllocator(allocator *util.ScalableMemoryAllocator) (err error) {
 
 	// decodeVisualSampleEntry := func() (offset int, err error) {
 	// 	var encv VisualSampleEntry
@@ -96,7 +114,7 @@ func (d *Demuxer) Demux() (err error) {
 	// 	}
 	// 	return
 	// }
-	var b IBox
+	var b box.IBox
 	var offset uint64
 	for {
 		b, err = box.ReadFrom(d.reader)
@@ -107,53 +125,59 @@ func (d *Demuxer) Demux() (err error) {
 			return err
 		}
 		offset += b.Size()
-		switch box := b.(type) {
-		case *FileTypeBox:
-			if slices.Contains(box.CompatibleBrands, [4]byte{'q', 't', ' ', ' '}) {
+		switch boxData := b.(type) {
+		case *box.FileTypeBox:
+			if slices.Contains(boxData.CompatibleBrands, [4]byte{'q', 't', ' ', ' '}) {
 				d.QuicTime = true
 			}
-		case *FreeBox:
-		case *MediaDataBox:
-			d.mdat = box
-			d.mdatOffset = offset - b.Size() + uint64(box.HeaderSize())
-		case *MoovBox:
-			if box.MVEX != nil {
+		case *box.FreeBox:
+		case *box.MediaDataBox:
+			d.mdat = boxData
+			d.mdatOffset = offset - b.Size() + uint64(boxData.HeaderSize())
+		case *box.MoovBox:
+			if boxData.MVEX != nil {
 				d.IsFragment = true
 			}
-			for _, trak := range box.Tracks {
+			for _, trak := range boxData.Tracks {
 				track := &Track{}
 				track.TrackId = trak.TKHD.TrackID
 				track.Duration = uint32(trak.TKHD.Duration)
 				track.Timescale = trak.MDIA.MDHD.Timescale
-				track.Samplelist = trak.ParseSamples()
+				// 创建RTMP样本处理回调
+				var sampleCallback box.SampleCallback
+				if d.RTMPAllocator != nil {
+					sampleCallback = d.createRTMPSampleCallback(track, trak)
+				}
+
+				track.Samplelist = trak.ParseSamplesWithCallback(sampleCallback)
 				if len(trak.MDIA.MINF.STBL.STSD.Entries) > 0 {
 					entryBox := trak.MDIA.MINF.STBL.STSD.Entries[0]
 					switch entry := entryBox.(type) {
-					case *AudioSampleEntry:
+					case *box.AudioSampleEntry:
 						switch entry.Type() {
-						case TypeMP4A:
-							track.Cid = MP4_CODEC_AAC
-						case TypeALAW:
-							track.Cid = MP4_CODEC_G711A
-						case TypeULAW:
-							track.Cid = MP4_CODEC_G711U
-						case TypeOPUS:
-							track.Cid = MP4_CODEC_OPUS
+						case box.TypeMP4A:
+							track.Cid = box.MP4_CODEC_AAC
+						case box.TypeALAW:
+							track.Cid = box.MP4_CODEC_G711A
+						case box.TypeULAW:
+							track.Cid = box.MP4_CODEC_G711U
+						case box.TypeOPUS:
+							track.Cid = box.MP4_CODEC_OPUS
 						}
 						track.SampleRate = entry.Samplerate
 						track.ChannelCount = uint8(entry.ChannelCount)
 						track.SampleSize = entry.SampleSize
 						switch extra := entry.ExtraData.(type) {
-						case *ESDSBox:
-							track.Cid, track.ExtraData = DecodeESDescriptor(extra.Data)
+						case *box.ESDSBox:
+							track.Cid, track.ExtraData = box.DecodeESDescriptor(extra.Data)
 						}
-					case *VisualSampleEntry:
-						track.ExtraData = entry.ExtraData.(*DataBox).Data
+					case *box.VisualSampleEntry:
+						track.ExtraData = entry.ExtraData.(*box.DataBox).Data
 						switch entry.Type() {
-						case TypeAVC1:
-							track.Cid = MP4_CODEC_H264
-						case TypeHVC1, TypeHEV1:
-							track.Cid = MP4_CODEC_H265
+						case box.TypeAVC1:
+							track.Cid = box.MP4_CODEC_H264
+						case box.TypeHVC1, box.TypeHEV1:
+							track.Cid = box.MP4_CODEC_H265
 						}
 						track.Width = uint32(entry.Width)
 						track.Height = uint32(entry.Height)
@@ -161,9 +185,9 @@ func (d *Demuxer) Demux() (err error) {
 				}
 				d.Tracks = append(d.Tracks, track)
 			}
-			d.moov = box
-		case *MovieFragmentBox:
-			for _, traf := range box.TRAFs {
+			d.moov = boxData
+		case *box.MovieFragmentBox:
+			for _, traf := range boxData.TRAFs {
 				track := d.Tracks[traf.TFHD.TrackID-1]
 				track.defaultSize = traf.TFHD.DefaultSampleSize
 				track.defaultDuration = traf.TFHD.DefaultSampleDuration
@@ -171,6 +195,7 @@ func (d *Demuxer) Demux() (err error) {
 		}
 	}
 	d.ReadSampleIdx = make([]uint32, len(d.Tracks))
+
 	// for _, track := range d.Tracks {
 	// 	if len(track.Samplelist) > 0 {
 	// 		track.StartDts = uint64(track.Samplelist[0].DTS) * 1000 / uint64(track.Timescale)
@@ -180,7 +205,7 @@ func (d *Demuxer) Demux() (err error) {
 	return nil
 }
 
-func (d *Demuxer) SeekTime(dts uint64) (sample *Sample, err error) {
+func (d *Demuxer) SeekTime(dts uint64) (sample *box.Sample, err error) {
 	var audioTrack, videoTrack *Track
 	for _, track := range d.Tracks {
 		if track.Cid.IsAudio() {
@@ -425,10 +450,10 @@ func (d *Demuxer) SeekTimePreIDR(dts uint64) (sample *Sample, err error) {
 // 	return nil
 // }
 
-func (d *Demuxer) ReadSample(yield func(*Track, Sample) bool) {
+func (d *Demuxer) ReadSample(yield func(*Track, box.Sample) bool) {
 	for {
 		maxdts := int64(-1)
-		minTsSample := Sample{Timestamp: uint32(maxdts)}
+		minTsSample := box.Sample{Timestamp: uint32(maxdts)}
 		var whichTrack *Track
 		whichTracki := 0
 		for i, track := range d.Tracks {
@@ -462,9 +487,9 @@ func (d *Demuxer) ReadSample(yield func(*Track, Sample) bool) {
 	}
 }
 
-func (d *Demuxer) RangeSample(yield func(*Track, *Sample) bool) {
+func (d *Demuxer) RangeSample(yield func(*Track, *box.Sample) bool) {
 	for {
-		var minTsSample *Sample
+		var minTsSample *box.Sample
 		var whichTrack *Track
 		whichTracki := 0
 		for i, track := range d.Tracks {
@@ -496,6 +521,244 @@ func (d *Demuxer) RangeSample(yield func(*Track, *Sample) bool) {
 }
 
 // GetMoovBox returns the Movie Box from the demuxer
-func (d *Demuxer) GetMoovBox() *MoovBox {
+func (d *Demuxer) GetMoovBox() *box.MoovBox {
 	return d.moov
+}
+
+// CreateRTMPSequenceFrame 创建 RTMP 序列帧
+func (d *Demuxer) CreateRTMPSequenceFrame(track *Track, allocator *util.ScalableMemoryAllocator) (videoSeq *rtmp.RTMPVideo, audioSeq *rtmp.RTMPAudio, err error) {
+	switch track.Cid {
+	case box.MP4_CODEC_H264:
+		videoSeq = &rtmp.RTMPVideo{}
+		videoSeq.SetAllocator(allocator)
+		videoSeq.Append([]byte{0x17, 0x00, 0x00, 0x00, 0x00}, track.ExtraData)
+	case box.MP4_CODEC_H265:
+		videoSeq = &rtmp.RTMPVideo{}
+		videoSeq.SetAllocator(allocator)
+		videoSeq.Append([]byte{0b1001_0000 | rtmp.PacketTypeSequenceStart}, codec.FourCC_H265[:], track.ExtraData)
+	case box.MP4_CODEC_AAC:
+		audioSeq = &rtmp.RTMPAudio{}
+		audioSeq.SetAllocator(allocator)
+		audioSeq.Append([]byte{0xaf, 0x00}, track.ExtraData)
+	}
+	return
+}
+
+// ConvertSampleToRTMP 将 MP4 sample 转换为 RTMP 格式
+func (d *Demuxer) ConvertSampleToRTMP(track *Track, sample box.Sample, allocator *util.ScalableMemoryAllocator, timestampOffset uint64) (videoFrame *rtmp.RTMPVideo, audioFrame *rtmp.RTMPAudio, err error) {
+	switch track.Cid {
+	case box.MP4_CODEC_H264:
+		videoFrame = &rtmp.RTMPVideo{}
+		videoFrame.SetAllocator(allocator)
+		videoFrame.CTS = sample.CTS
+		videoFrame.Timestamp = uint32(uint64(sample.Timestamp)*1000/uint64(track.Timescale) + timestampOffset)
+		videoFrame.AppendOne([]byte{util.Conditional[byte](sample.KeyFrame, 0x17, 0x27), 0x01, byte(videoFrame.CTS >> 24), byte(videoFrame.CTS >> 8), byte(videoFrame.CTS)})
+		videoFrame.AddRecycleBytes(sample.Data)
+	case box.MP4_CODEC_H265:
+		videoFrame = &rtmp.RTMPVideo{}
+		videoFrame.SetAllocator(allocator)
+		videoFrame.CTS = uint32(sample.CTS)
+		videoFrame.Timestamp = uint32(uint64(sample.Timestamp)*1000/uint64(track.Timescale) + timestampOffset)
+		var head []byte
+		var b0 byte = 0b1010_0000
+		if sample.KeyFrame {
+			b0 = 0b1001_0000
+		}
+		if videoFrame.CTS == 0 {
+			head = videoFrame.NextN(5)
+			head[0] = b0 | rtmp.PacketTypeCodedFramesX
+		} else {
+			head = videoFrame.NextN(8)
+			head[0] = b0 | rtmp.PacketTypeCodedFrames
+			util.PutBE(head[5:8], videoFrame.CTS) // cts
+		}
+		copy(head[1:], codec.FourCC_H265[:])
+		videoFrame.AddRecycleBytes(sample.Data)
+	case box.MP4_CODEC_AAC:
+		audioFrame = &rtmp.RTMPAudio{}
+		audioFrame.SetAllocator(allocator)
+		audioFrame.Timestamp = uint32(uint64(sample.Timestamp)*1000/uint64(track.Timescale) + timestampOffset)
+		audioFrame.AppendOne([]byte{0xaf, 0x01})
+		audioFrame.AddRecycleBytes(sample.Data)
+	case box.MP4_CODEC_G711A:
+		audioFrame = &rtmp.RTMPAudio{}
+		audioFrame.SetAllocator(allocator)
+		audioFrame.Timestamp = uint32(uint64(sample.Timestamp)*1000/uint64(track.Timescale) + timestampOffset)
+		audioFrame.AppendOne([]byte{0x72})
+		audioFrame.AddRecycleBytes(sample.Data)
+	case box.MP4_CODEC_G711U:
+		audioFrame = &rtmp.RTMPAudio{}
+		audioFrame.SetAllocator(allocator)
+		audioFrame.Timestamp = uint32(uint64(sample.Timestamp)*1000/uint64(track.Timescale) + timestampOffset)
+		audioFrame.AppendOne([]byte{0x82})
+		audioFrame.AddRecycleBytes(sample.Data)
+	}
+	return
+}
+
+// GetRTMPSequenceFrames 获取预生成的 RTMP 序列帧
+func (d *Demuxer) GetRTMPSequenceFrames() (videoSeq *rtmp.RTMPVideo, audioSeq *rtmp.RTMPAudio) {
+	return d.RTMPVideoSequence, d.RTMPAudioSequence
+}
+
+// IterateRTMPFrames 迭代预生成的 RTMP 帧
+func (d *Demuxer) IterateRTMPFrames(timestampOffset uint64, yield func(*RTMPFrame) bool) {
+	for i := range d.RTMPFrames {
+		frame := &d.RTMPFrames[i]
+
+		// 应用时间戳偏移
+		switch f := frame.Frame.(type) {
+		case *rtmp.RTMPVideo:
+			f.Timestamp += uint32(timestampOffset)
+		case *rtmp.RTMPAudio:
+			f.Timestamp += uint32(timestampOffset)
+		}
+
+		if !yield(frame) {
+			return
+		}
+	}
+}
+
+// GetMaxTimestamp 获取所有帧中的最大时间戳
+func (d *Demuxer) GetMaxTimestamp() uint64 {
+	var maxTimestamp uint64
+	for _, frame := range d.RTMPFrames {
+		var timestamp uint64
+		switch f := frame.Frame.(type) {
+		case *rtmp.RTMPVideo:
+			timestamp = uint64(f.Timestamp)
+		case *rtmp.RTMPAudio:
+			timestamp = uint64(f.Timestamp)
+		}
+		if timestamp > maxTimestamp {
+			maxTimestamp = timestamp
+		}
+	}
+	return maxTimestamp
+}
+
+// generateRTMPFrames 生成RTMP序列帧和所有帧数据
+func (d *Demuxer) generateRTMPFrames(allocator *util.ScalableMemoryAllocator) (err error) {
+	// 生成序列帧
+	for _, track := range d.Tracks {
+		if track.Cid.IsVideo() && d.RTMPVideoSequence == nil {
+			d.RTMPVideoSequence, _, err = d.CreateRTMPSequenceFrame(track, allocator)
+			if err != nil {
+				return err
+			}
+		} else if track.Cid.IsAudio() && d.RTMPAudioSequence == nil {
+			_, d.RTMPAudioSequence, err = d.CreateRTMPSequenceFrame(track, allocator)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	// 预生成所有 RTMP 帧
+	d.RTMPFrames = make([]RTMPFrame, 0)
+
+	// 收集所有样本并按时间戳排序
+	type sampleInfo struct {
+		track       *Track
+		sample      box.Sample
+		sampleIndex uint32
+		trackIndex  int
+	}
+
+	var allSamples []sampleInfo
+	for trackIdx, track := range d.Tracks {
+		for sampleIdx, sample := range track.Samplelist {
+			// 读取样本数据
+			if _, err = d.reader.Seek(sample.Offset, io.SeekStart); err != nil {
+				return err
+			}
+			sample.Data = allocator.Malloc(sample.Size)
+			if _, err = io.ReadFull(d.reader, sample.Data); err != nil {
+				allocator.Free(sample.Data)
+				return err
+			}
+
+			allSamples = append(allSamples, sampleInfo{
+				track:       track,
+				sample:      sample,
+				sampleIndex: uint32(sampleIdx),
+				trackIndex:  trackIdx,
+			})
+		}
+	}
+
+	// 按时间戳排序样本
+	slices.SortFunc(allSamples, func(a, b sampleInfo) int {
+		timeA := uint64(a.sample.Timestamp) * uint64(d.moov.MVHD.Timescale) / uint64(a.track.Timescale)
+		timeB := uint64(b.sample.Timestamp) * uint64(d.moov.MVHD.Timescale) / uint64(b.track.Timescale)
+		if timeA < timeB {
+			return -1
+		} else if timeA > timeB {
+			return 1
+		}
+		return 0
+	})
+
+	// 预生成 RTMP 帧
+	for _, sampleInfo := range allSamples {
+		videoFrame, audioFrame, err := d.ConvertSampleToRTMP(sampleInfo.track, sampleInfo.sample, allocator, 0)
+		if err != nil {
+			return err
+		}
+
+		if videoFrame != nil {
+			d.RTMPFrames = append(d.RTMPFrames, RTMPFrame{Frame: videoFrame})
+		}
+
+		if audioFrame != nil {
+			d.RTMPFrames = append(d.RTMPFrames, RTMPFrame{Frame: audioFrame})
+		}
+	}
+
+	return nil
+}
+
+// createRTMPSampleCallback 创建RTMP样本处理回调函数
+func (d *Demuxer) createRTMPSampleCallback(track *Track, trak *box.TrakBox) box.SampleCallback {
+	// 首先生成序列帧
+	if track.Cid.IsVideo() && d.RTMPVideoSequence == nil {
+		videoSeq, _, err := d.CreateRTMPSequenceFrame(track, d.RTMPAllocator)
+		if err == nil {
+			d.RTMPVideoSequence = videoSeq
+		}
+	} else if track.Cid.IsAudio() && d.RTMPAudioSequence == nil {
+		_, audioSeq, err := d.CreateRTMPSequenceFrame(track, d.RTMPAllocator)
+		if err == nil {
+			d.RTMPAudioSequence = audioSeq
+		}
+	}
+
+	return func(sample *box.Sample, sampleIndex int) error {
+		// 读取样本数据
+		if _, err := d.reader.Seek(sample.Offset, io.SeekStart); err != nil {
+			return err
+		}
+		sample.Data = d.RTMPAllocator.Malloc(sample.Size)
+		if _, err := io.ReadFull(d.reader, sample.Data); err != nil {
+			d.RTMPAllocator.Free(sample.Data)
+			return err
+		}
+
+		// 转换为 RTMP 格式
+		videoFrame, audioFrame, err := d.ConvertSampleToRTMP(track, *sample, d.RTMPAllocator, 0)
+		if err != nil {
+			return err
+		}
+
+		// 内部收集RTMP帧
+		if videoFrame != nil {
+			d.RTMPFrames = append(d.RTMPFrames, RTMPFrame{Frame: videoFrame})
+		}
+		if audioFrame != nil {
+			d.RTMPFrames = append(d.RTMPFrames, RTMPFrame{Frame: audioFrame})
+		}
+
+		return nil
+	}
 }

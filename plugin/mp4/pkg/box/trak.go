@@ -54,8 +54,16 @@ func (t *TrakBox) Unmarshal(buf []byte) (b IBox, err error) {
 	return t, err
 }
 
+// SampleCallback 定义样本处理回调函数类型
+type SampleCallback func(sample *Sample, sampleIndex int) error
+
 // ParseSamples parses the sample table and builds the sample list
 func (t *TrakBox) ParseSamples() (samplelist []Sample) {
+	return t.ParseSamplesWithCallback(nil)
+}
+
+// ParseSamplesWithCallback parses the sample table and builds the sample list with optional callback
+func (t *TrakBox) ParseSamplesWithCallback(callback SampleCallback) (samplelist []Sample) {
 	stbl := t.MDIA.MINF.STBL
 	var chunkOffsets []uint64
 	if stbl.STCO != nil {
@@ -147,6 +155,17 @@ func (t *TrakBox) ParseSamples() (samplelist []Sample) {
 	if stbl.STSS != nil {
 		for _, keyIndex := range stbl.STSS.Entries {
 			samplelist[keyIndex-1].KeyFrame = true
+		}
+	}
+
+	// 调用回调函数处理每个样本
+	if callback != nil {
+		for i := range samplelist {
+			if err := callback(&samplelist[i], i); err != nil {
+				// 如果回调返回错误，可以选择记录或处理，但不中断解析
+				// 这里为了保持向后兼容性，我们继续处理
+				continue
+			}
 		}
 	}
 

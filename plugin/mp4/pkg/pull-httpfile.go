@@ -3,13 +3,12 @@ package mp4
 import (
 	"errors"
 	"io"
+	"slices"
 	"strings"
 	"time"
 
 	m7s "m7s.live/v5"
-	"m7s.live/v5/pkg/codec"
 	"m7s.live/v5/pkg/util"
-	"m7s.live/v5/plugin/mp4/pkg/box"
 	rtmp "m7s.live/v5/plugin/rtmp/pkg"
 )
 
@@ -35,9 +34,40 @@ func (p *HTTPReader) Run() (err error) {
 		content, err = io.ReadAll(p.ReadCloser)
 		demuxer = NewDemuxer(strings.NewReader(string(content)))
 	}
-	if err = demuxer.Demux(); err != nil {
+
+	// 设置RTMP分配器以启用RTMP帧收集
+	demuxer.RTMPAllocator = allocator
+
+	if err = demuxer.DemuxWithAllocator(allocator); err != nil {
 		return
 	}
+
+	// 获取demuxer内部收集的RTMP帧
+	rtmpFrames := demuxer.RTMPFrames
+
+	// 按时间戳排序所有帧
+	slices.SortFunc(rtmpFrames, func(a, b RTMPFrame) int {
+		var timeA, timeB uint64
+		switch f := a.Frame.(type) {
+		case *rtmp.RTMPVideo:
+			timeA = uint64(f.Timestamp)
+		case *rtmp.RTMPAudio:
+			timeA = uint64(f.Timestamp)
+		}
+		switch f := b.Frame.(type) {
+		case *rtmp.RTMPVideo:
+			timeB = uint64(f.Timestamp)
+		case *rtmp.RTMPAudio:
+			timeB = uint64(f.Timestamp)
+		}
+		if timeA < timeB {
+			return -1
+		} else if timeA > timeB {
+			return 1
+		}
+		return 0
+	})
+
 	publisher.OnSeek = func(seekTime time.Time) {
 		p.Stop(errors.New("seek"))
 		pullJob.Connection.Args.Set(util.StartKey, seekTime.Local().Format(util.LocalTimeFormat))
@@ -48,103 +78,61 @@ func (p *HTTPReader) Run() (err error) {
 		seekTime, _ := time.Parse(util.LocalTimeFormat, pullJob.Connection.Args.Get(util.StartKey))
 		demuxer.SeekTime(uint64(seekTime.UnixMilli()))
 	}
-	for _, track := range demuxer.Tracks {
-		switch track.Cid {
-		case box.MP4_CODEC_H264:
-			var sequence rtmp.RTMPVideo
-			sequence.SetAllocator(allocator)
-			sequence.Append([]byte{0x17, 0x00, 0x00, 0x00, 0x00}, track.ExtraData)
-			err = publisher.WriteVideo(&sequence)
-		case box.MP4_CODEC_H265:
-			var sequence rtmp.RTMPVideo
-			sequence.SetAllocator(allocator)
-			sequence.Append([]byte{0b1001_0000 | rtmp.PacketTypeSequenceStart}, codec.FourCC_H265[:], track.ExtraData)
-			err = publisher.WriteVideo(&sequence)
-		case box.MP4_CODEC_AAC:
-			var sequence rtmp.RTMPAudio
-			sequence.SetAllocator(allocator)
-			sequence.Append([]byte{0xaf, 0x00}, track.ExtraData)
-			err = publisher.WriteAudio(&sequence)
+
+	// 读取预生成的 RTMP 序列帧
+	videoSeq, audioSeq := demuxer.GetRTMPSequenceFrames()
+	if videoSeq != nil {
+		err = publisher.WriteVideo(videoSeq)
+		if err != nil {
+			return err
+		}
+	}
+	if audioSeq != nil {
+		err = publisher.WriteAudio(audioSeq)
+		if err != nil {
+			return err
 		}
 	}
 
 	// 计算最大时间戳用于累计偏移
 	var maxTimestamp uint64
-	for track, sample := range demuxer.ReadSample {
-		timestamp := uint64(sample.Timestamp) * 1000 / uint64(track.Timescale)
+	for _, frame := range rtmpFrames {
+		var timestamp uint64
+		switch f := frame.Frame.(type) {
+		case *rtmp.RTMPVideo:
+			timestamp = uint64(f.Timestamp)
+		case *rtmp.RTMPAudio:
+			timestamp = uint64(f.Timestamp)
+		}
 		if timestamp > maxTimestamp {
 			maxTimestamp = timestamp
 		}
 	}
+
 	var timestampOffset uint64
 	loop := p.PullJob.Loop
 	for {
-		demuxer.ReadSampleIdx = make([]uint32, len(demuxer.Tracks))
-		for track, sample := range demuxer.ReadSample {
+		// 使用预生成的 RTMP 帧进行播放
+		for _, frame := range rtmpFrames {
 			if p.IsStopped() {
-				return
+				return nil
 			}
-			if _, err = demuxer.reader.Seek(sample.Offset, io.SeekStart); err != nil {
-				return
+
+			// 应用时间戳偏移
+			switch f := frame.Frame.(type) {
+			case *rtmp.RTMPVideo:
+				f.Timestamp += uint32(timestampOffset)
+				err = publisher.WriteVideo(f)
+			case *rtmp.RTMPAudio:
+				f.Timestamp += uint32(timestampOffset)
+				err = publisher.WriteAudio(f)
 			}
-			sample.Data = allocator.Malloc(sample.Size)
-			if _, err = io.ReadFull(demuxer.reader, sample.Data); err != nil {
-				allocator.Free(sample.Data)
-				return
-			}
-			switch track.Cid {
-			case box.MP4_CODEC_H264:
-				var videoFrame rtmp.RTMPVideo
-				videoFrame.SetAllocator(allocator)
-				videoFrame.CTS = sample.CTS
-				videoFrame.Timestamp = uint32(uint64(sample.Timestamp)*1000/uint64(track.Timescale) + timestampOffset)
-				videoFrame.AppendOne([]byte{util.Conditional[byte](sample.KeyFrame, 0x17, 0x27), 0x01, byte(videoFrame.CTS >> 24), byte(videoFrame.CTS >> 8), byte(videoFrame.CTS)})
-				videoFrame.AddRecycleBytes(sample.Data)
-				err = publisher.WriteVideo(&videoFrame)
-			case box.MP4_CODEC_H265:
-				var videoFrame rtmp.RTMPVideo
-				videoFrame.SetAllocator(allocator)
-				videoFrame.CTS = uint32(sample.CTS)
-				videoFrame.Timestamp = uint32(uint64(sample.Timestamp)*1000/uint64(track.Timescale) + timestampOffset)
-				var head []byte
-				var b0 byte = 0b1010_0000
-				if sample.KeyFrame {
-					b0 = 0b1001_0000
-				}
-				if videoFrame.CTS == 0 {
-					head = videoFrame.NextN(5)
-					head[0] = b0 | rtmp.PacketTypeCodedFramesX
-				} else {
-					head = videoFrame.NextN(8)
-					head[0] = b0 | rtmp.PacketTypeCodedFrames
-					util.PutBE(head[5:8], videoFrame.CTS) // cts
-				}
-				copy(head[1:], codec.FourCC_H265[:])
-				videoFrame.AddRecycleBytes(sample.Data)
-				err = publisher.WriteVideo(&videoFrame)
-			case box.MP4_CODEC_AAC:
-				var audioFrame rtmp.RTMPAudio
-				audioFrame.SetAllocator(allocator)
-				audioFrame.Timestamp = uint32(uint64(sample.Timestamp)*1000/uint64(track.Timescale) + timestampOffset)
-				audioFrame.AppendOne([]byte{0xaf, 0x01})
-				audioFrame.AddRecycleBytes(sample.Data)
-				err = publisher.WriteAudio(&audioFrame)
-			case box.MP4_CODEC_G711A:
-				var audioFrame rtmp.RTMPAudio
-				audioFrame.SetAllocator(allocator)
-				audioFrame.Timestamp = uint32(uint64(sample.Timestamp)*1000/uint64(track.Timescale) + timestampOffset)
-				audioFrame.AppendOne([]byte{0x72})
-				audioFrame.AddRecycleBytes(sample.Data)
-				err = publisher.WriteAudio(&audioFrame)
-			case box.MP4_CODEC_G711U:
-				var audioFrame rtmp.RTMPAudio
-				audioFrame.SetAllocator(allocator)
-				audioFrame.Timestamp = uint32(uint64(sample.Timestamp)*1000/uint64(track.Timescale) + timestampOffset)
-				audioFrame.AppendOne([]byte{0x82})
-				audioFrame.AddRecycleBytes(sample.Data)
-				err = publisher.WriteAudio(&audioFrame)
+
+			if err != nil {
+				return err
 			}
 		}
+
 		if loop >= 0 {
 			loop--
 			if loop == -1 {

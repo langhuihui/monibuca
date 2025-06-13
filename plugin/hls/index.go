@@ -59,6 +59,7 @@ func (p *HLSPlugin) OnInit() (err error) {
 func (p *HLSPlugin) RegisterHandler() map[string]http.HandlerFunc {
 	return map[string]http.HandlerFunc{
 		"/vod/{streamPath...}":              p.vod,
+		"/download/{streamPath...}":         p.download,
 		"/api/record/start/{streamPath...}": p.API_record_start,
 		"/api/record/stop/{id}":             p.API_record_stop,
 	}
