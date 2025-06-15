@@ -102,6 +102,28 @@ func (track *Track) Seek(dts uint64) int {
 	return -1
 }
 
+/**
+* @brief 函数跳帧到dts 前面的第一个关键帧位置
+*
+* @param 参数名dts 跳帧位置
+*
+* @author erroot
+* @date 250614
+*
+**/
+func (track *Track) SeekPreIDR(dts uint64) int {
+	idx := 0
+	for i, sample := range track.Samplelist {
+		if track.Cid.IsVideo() && sample.KeyFrame {
+			idx = i
+		}
+		if sample.Timestamp*1000/uint32(track.Timescale) > uint32(dts) {
+			break
+		}
+	}
+	return idx
+}
+
 func (track *Track) makeEdtsBox() *ContainerBox {
 	return CreateContainerBox(TypeEDTS, track.makeElstBox())
 }

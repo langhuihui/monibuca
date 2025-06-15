@@ -218,6 +218,54 @@ func (d *Demuxer) SeekTime(dts uint64) (sample *Sample, err error) {
 	return
 }
 
+/**
+* @brief 函数跳帧到dts 前面的第一个关键帧位置
+*
+* @param 参数名dts 跳帧位置
+*
+* @todo 待实现的功能或改进点   audioTrack 没有同步改进
+* @author erroot
+* @date 250614
+*
+**/
+func (d *Demuxer) SeekTimePreIDR(dts uint64) (sample *Sample, err error) {
+	var audioTrack, videoTrack *Track
+	for _, track := range d.Tracks {
+		if track.Cid.IsAudio() {
+			audioTrack = track
+		} else if track.Cid.IsVideo() {
+			videoTrack = track
+		}
+	}
+	if videoTrack != nil {
+		idx := videoTrack.SeekPreIDR(dts)
+		if idx == -1 {
+			return nil, errors.New("seek failed")
+		}
+		d.ReadSampleIdx[videoTrack.TrackId-1] = uint32(idx)
+		sample = &videoTrack.Samplelist[idx]
+		if audioTrack != nil {
+			for i, sample := range audioTrack.Samplelist {
+				if sample.Offset < int64(videoTrack.Samplelist[idx].Offset) {
+					continue
+				}
+				d.ReadSampleIdx[audioTrack.TrackId-1] = uint32(i)
+				break
+			}
+		}
+	} else if audioTrack != nil {
+		idx := audioTrack.Seek(dts)
+		if idx == -1 {
+			return nil, errors.New("seek failed")
+		}
+		d.ReadSampleIdx[audioTrack.TrackId-1] = uint32(idx)
+		sample = &audioTrack.Samplelist[idx]
+	} else {
+		return nil, pkg.ErrNoTrack
+	}
+	return
+}
+
 // func (d *Demuxer) decodeTRUN(trun *TrackRunBox) {
 // 	dataOffset := trun.Dataoffset
 // 	nextDts := d.currentTrack.StartDts
