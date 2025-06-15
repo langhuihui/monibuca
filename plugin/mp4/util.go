@@ -75,7 +75,7 @@ func ExtractH264SPSPPS(extraData []byte) (sps, pps []byte, err error) {
 }
 
 // 转换函数（支持动态插入参数集）
-func ConvertAVCCH264ToAnnexB(data []byte, extraData []byte, isFirst *bool) []byte {
+func ConvertAVCCH264ToAnnexB(data []byte, extraData []byte, isFirst *bool) ([]byte, error) {
 	var buf bytes.Buffer
 	pos := 0
 
@@ -97,7 +97,8 @@ func ConvertAVCCH264ToAnnexB(data []byte, extraData []byte, isFirst *bool) []byt
 		if *isFirst && nalType == 5 {
 			sps, pps, err := ExtractH264SPSPPS(extraData)
 			if err != nil {
-				panic(err)
+				//panic(err)
+				return nil, err
 			}
 			buf.Write([]byte{0x00, 0x00, 0x00, 0x01})
 			buf.Write(sps)
@@ -115,7 +116,7 @@ func ConvertAVCCH264ToAnnexB(data []byte, extraData []byte, isFirst *bool) []byt
 		}
 		buf.Write(nalu)
 	}
-	return buf.Bytes()
+	return buf.Bytes(), nil
 }
 
 /*
@@ -191,7 +192,7 @@ func ExtractHEVCParams(extraData []byte) (vps, sps, pps []byte, err error) {
 }
 
 // H.265的AVCC转Annex B
-func ConvertAVCCHEVCToAnnexB(data []byte, extraData []byte, isFirst *bool) []byte {
+func ConvertAVCCHEVCToAnnexB(data []byte, extraData []byte, isFirst *bool) ([]byte, error) {
 	var buf bytes.Buffer
 	pos := 0
 
@@ -205,6 +206,8 @@ func ConvertAVCCHEVCToAnnexB(data []byte, extraData []byte, isFirst *bool) []byt
 			buf.Write(sps)
 			buf.Write([]byte{0x00, 0x00, 0x00, 0x01})
 			buf.Write(pps)
+		} else {
+			return nil, err
 		}
 	}
 
@@ -231,7 +234,7 @@ func ConvertAVCCHEVCToAnnexB(data []byte, extraData []byte, isFirst *bool) []byt
 		}
 		buf.Write(nalu)
 	}
-	return buf.Bytes()
+	return buf.Bytes(), nil
 }
 
 // ffmpeg -hide_banner -i gop.mp4 -vf "select=eq(n\,15)" -vframes 1 -f image2 -pix_fmt bgr24 output.bmp
@@ -279,13 +282,13 @@ func ProcessWithFFmpeg(samples []box.Sample, index int, videoTrack *mp4.Track) (
 		for _, sample := range samples {
 
 			if videoTrack.Cid == box.MP4_CODEC_H264 {
-				annexb := ConvertAVCCH264ToAnnexB(sample.Data, videoTrack.ExtraData, &isFirst)
+				annexb, _ := ConvertAVCCH264ToAnnexB(sample.Data, videoTrack.ExtraData, &isFirst)
 				if _, err := stdin.Write(annexb); err != nil {
 					log.Printf("写入失败: %v", err)
 					break
 				}
 			} else {
-				annexb := ConvertAVCCHEVCToAnnexB(sample.Data, videoTrack.ExtraData, &isFirst)
+				annexb, _ := ConvertAVCCHEVCToAnnexB(sample.Data, videoTrack.ExtraData, &isFirst)
 				if _, err := stdin.Write(annexb); err != nil {
 					log.Printf("写入失败: %v", err)
 					break
@@ -305,7 +308,7 @@ func ProcessWithFFmpeg(samples []box.Sample, index int, videoTrack *mp4.Track) (
 		return nil, err
 	}
 
-	log.Printf("ffmpeg 提取成功: data size:%v", buf.Len())
+	//log.Printf("ffmpeg 提取成功: data size:%v", buf.Len())
 
 	// 转换为image.Image对象
 	data := buf.Bytes()
