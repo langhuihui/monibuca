@@ -1873,8 +1873,8 @@ func (gb *GB28181Plugin) GetGroupChannels(ctx context.Context, req *pb.GetGroupC
 		Select(`
 			IFNULL(gc.id, 0) AS id,
 			dc.channel_id,
+			dc.device_id,
 			dc.name AS channel_name,
-			d.device_id AS device_id,
 			d.name AS device_name,
 			dc.status AS status,
 			CASE
@@ -1883,11 +1883,11 @@ func (gb *GB28181Plugin) GetGroupChannels(ctx context.Context, req *pb.GetGroupC
 			END AS in_group
 		`).
 		Joins("LEFT JOIN "+deviceTable+" AS d ON dc.device_id = d.device_id").
-		Joins("LEFT JOIN "+groupsChannelTable+" AS gc ON dc.channel_id = gc.channel_id AND gc.group_id = ?", req.GroupId)
+		Joins("LEFT JOIN "+groupsChannelTable+" AS gc ON dc.channel_id = gc.channel_id AND dc.device_id = gc.device_id AND gc.group_id = ?", req.GroupId)
 
 	// 如果有设备ID过滤条件
 	if req.DeviceId != "" {
-		baseQuery = baseQuery.Where("d.device_id = ?", req.DeviceId)
+		baseQuery = baseQuery.Where("dc.device_id = ?", req.DeviceId)
 	}
 
 	// 统计符合条件的通道总数
@@ -1903,7 +1903,7 @@ func (gb *GB28181Plugin) GetGroupChannels(ctx context.Context, req *pb.GetGroupC
 	query := baseQuery
 
 	// 添加排序
-	query = query.Order("channel_id ASC")
+	query = query.Order("dc.device_id ASC, dc.channel_id ASC")
 
 	// 如果指定了分页参数，则应用分页
 	if req.Page > 0 && req.Count > 0 {
@@ -1922,24 +1922,19 @@ func (gb *GB28181Plugin) GetGroupChannels(ctx context.Context, req *pb.GetGroupC
 	var pbGroupChannels []*pb.GroupChannel
 	for _, result := range results {
 		channelInfo := &pb.GroupChannel{
+			Id:          int32(result.ID),
+			GroupId:     req.GroupId,
 			ChannelId:   result.ChannelID,
 			DeviceId:    result.DeviceID,
 			ChannelName: result.ChannelName,
 			DeviceName:  result.DeviceName,
 			Status:      result.Status,
-			InGroup:     result.InGroup, // 设置inGroup字段
+			InGroup:     result.InGroup,
 		}
 
 		// 从内存中获取设备信息以获取传输协议
 		if device, ok := gb.devices.Get(result.DeviceID); ok {
 			channelInfo.StreamMode = device.StreamMode
-		}
-
-		if result.InGroup {
-			channelInfo.Id = int32(result.ID)
-			channelInfo.GroupId = int32(req.GroupId)
-		} else {
-			channelInfo.Id = 0
 		}
 
 		pbGroupChannels = append(pbGroupChannels, channelInfo)
@@ -2082,19 +2077,19 @@ func (gb *GB28181Plugin) getGroupChannels(groupId int32) ([]*pb.GroupChannel, er
 		InGroup     bool   `gorm:"column:in_group"`
 	}
 
-	// 构建查询
+	// 构建优化后的查询
 	query := gb.DB.Table(groupsChannelTable+" AS gc").
 		Select(`
 			gc.id AS id,
 			gc.channel_id AS channel_id,
 			gc.device_id AS device_id,
-			dc.name AS channel_name,
-			d.name AS device_name,
-			dc.status AS status,
+			ch.name AS channel_name,
+			dev.name AS device_name,
+			ch.status AS status,
 			true AS in_group
 		`).
-		Joins("LEFT JOIN "+deviceChannelTable+" AS dc ON gc.channel_id = dc.channel_id").
-		Joins("LEFT JOIN "+deviceTable+" AS d ON gc.device_id = d.device_id").
+		Joins("LEFT JOIN "+deviceChannelTable+" AS ch ON gc.device_id = ch.device_id AND gc.channel_id = ch.channel_id").
+		Joins("LEFT JOIN "+deviceTable+" AS dev ON ch.device_id = dev.device_id").
 		Where("gc.group_id = ?", groupId)
 
 	var results []Result
@@ -2107,7 +2102,7 @@ func (gb *GB28181Plugin) getGroupChannels(groupId int32) ([]*pb.GroupChannel, er
 	for _, result := range results {
 		channelInfo := &pb.GroupChannel{
 			Id:          int32(result.ID),
-			GroupId:     groupId,
+			GroupId:     groupId, // 使用函数参数 groupId
 			ChannelId:   result.ChannelID,
 			DeviceId:    result.DeviceID,
 			ChannelName: result.ChannelName,
