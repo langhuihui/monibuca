@@ -27,6 +27,8 @@ const (
 	Api_AddRecordPlanStream_FullMethodName    = "/crontab.api/AddRecordPlanStream"
 	Api_UpdateRecordPlanStream_FullMethodName = "/crontab.api/UpdateRecordPlanStream"
 	Api_RemoveRecordPlanStream_FullMethodName = "/crontab.api/RemoveRecordPlanStream"
+	Api_ParsePlanTime_FullMethodName          = "/crontab.api/ParsePlanTime"
+	Api_GetCrontabStatus_FullMethodName       = "/crontab.api/GetCrontabStatus"
 )
 
 // ApiClient is the client API for Api service.
@@ -42,6 +44,10 @@ type ApiClient interface {
 	AddRecordPlanStream(ctx context.Context, in *PlanStream, opts ...grpc.CallOption) (*Response, error)
 	UpdateRecordPlanStream(ctx context.Context, in *PlanStream, opts ...grpc.CallOption) (*Response, error)
 	RemoveRecordPlanStream(ctx context.Context, in *DeletePlanStreamRequest, opts ...grpc.CallOption) (*Response, error)
+	// 解析计划字符串，返回时间段信息
+	ParsePlanTime(ctx context.Context, in *ParsePlanRequest, opts ...grpc.CallOption) (*ParsePlanResponse, error)
+	// 获取当前Crontab任务状态
+	GetCrontabStatus(ctx context.Context, in *CrontabStatusRequest, opts ...grpc.CallOption) (*CrontabStatusResponse, error)
 }
 
 type apiClient struct {
@@ -132,6 +138,26 @@ func (c *apiClient) RemoveRecordPlanStream(ctx context.Context, in *DeletePlanSt
 	return out, nil
 }
 
+func (c *apiClient) ParsePlanTime(ctx context.Context, in *ParsePlanRequest, opts ...grpc.CallOption) (*ParsePlanResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ParsePlanResponse)
+	err := c.cc.Invoke(ctx, Api_ParsePlanTime_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *apiClient) GetCrontabStatus(ctx context.Context, in *CrontabStatusRequest, opts ...grpc.CallOption) (*CrontabStatusResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CrontabStatusResponse)
+	err := c.cc.Invoke(ctx, Api_GetCrontabStatus_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ApiServer is the server API for Api service.
 // All implementations must embed UnimplementedApiServer
 // for forward compatibility.
@@ -145,6 +171,10 @@ type ApiServer interface {
 	AddRecordPlanStream(context.Context, *PlanStream) (*Response, error)
 	UpdateRecordPlanStream(context.Context, *PlanStream) (*Response, error)
 	RemoveRecordPlanStream(context.Context, *DeletePlanStreamRequest) (*Response, error)
+	// 解析计划字符串，返回时间段信息
+	ParsePlanTime(context.Context, *ParsePlanRequest) (*ParsePlanResponse, error)
+	// 获取当前Crontab任务状态
+	GetCrontabStatus(context.Context, *CrontabStatusRequest) (*CrontabStatusResponse, error)
 	mustEmbedUnimplementedApiServer()
 }
 
@@ -178,6 +208,12 @@ func (UnimplementedApiServer) UpdateRecordPlanStream(context.Context, *PlanStrea
 }
 func (UnimplementedApiServer) RemoveRecordPlanStream(context.Context, *DeletePlanStreamRequest) (*Response, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RemoveRecordPlanStream not implemented")
+}
+func (UnimplementedApiServer) ParsePlanTime(context.Context, *ParsePlanRequest) (*ParsePlanResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ParsePlanTime not implemented")
+}
+func (UnimplementedApiServer) GetCrontabStatus(context.Context, *CrontabStatusRequest) (*CrontabStatusResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetCrontabStatus not implemented")
 }
 func (UnimplementedApiServer) mustEmbedUnimplementedApiServer() {}
 func (UnimplementedApiServer) testEmbeddedByValue()             {}
@@ -344,6 +380,42 @@ func _Api_RemoveRecordPlanStream_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Api_ParsePlanTime_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ParsePlanRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).ParsePlanTime(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_ParsePlanTime_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).ParsePlanTime(ctx, req.(*ParsePlanRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Api_GetCrontabStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CrontabStatusRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).GetCrontabStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_GetCrontabStatus_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).GetCrontabStatus(ctx, req.(*CrontabStatusRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Api_ServiceDesc is the grpc.ServiceDesc for Api service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -382,6 +454,14 @@ var Api_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RemoveRecordPlanStream",
 			Handler:    _Api_RemoveRecordPlanStream_Handler,
+		},
+		{
+			MethodName: "ParsePlanTime",
+			Handler:    _Api_ParsePlanTime_Handler,
+		},
+		{
+			MethodName: "GetCrontabStatus",
+			Handler:    _Api_GetCrontabStatus_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

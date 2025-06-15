@@ -3,7 +3,7 @@ package plugin_gb28181pro
 import (
 	"errors"
 	"fmt"
-	"m7s.live/v5/pkg"
+	"net"
 	"net/http"
 	"os"
 	"slices"
@@ -11,6 +11,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"m7s.live/v5/pkg"
 
 	"github.com/emiago/sipgo"
 	"github.com/emiago/sipgo/sip"
@@ -53,12 +55,14 @@ type GB28181Plugin struct {
 	forwardDialogs util.Collection[uint32, *ForwardDialog]
 	platforms      util.Collection[string, *Platform]
 	tcpPorts       chan uint16
+	tcpPort        uint16
 	sipPorts       []int
 	SipIP          string `desc:"sip发送命令的IP，一般是本地IP，多网卡时需要配置正确的IP"`
 	MediaIP        string `desc:"流媒体IP，用于接收流"`
 	deviceManager  task.Manager[string, *DeviceRegisterQueueTask]
 	Platforms      []*gb28181.PlatformModel
 	channels       util.Collection[string, *gb28181.DeviceChannel]
+	netListener    net.Listener
 }
 
 var _ = m7s.InstallPlugin[GB28181Plugin](m7s.PluginMeta{
@@ -72,6 +76,18 @@ var _ = m7s.InstallPlugin[GB28181Plugin](m7s.PluginMeta{
 	},
 	NewPullProxy: NewPullProxy,
 })
+
+func (gb *GB28181Plugin) Dispose() {
+	if gb.netListener != nil {
+		gb.Info("gb28181 plugin dispose")
+		err := gb.netListener.Close()
+		if err != nil {
+			gb.Error("Close netListener error", "error", err)
+		} else {
+			gb.Info("netListener closed")
+		}
+	}
+}
 
 func init() {
 	sip.SIPDebug = true
@@ -151,8 +167,16 @@ func (gb *GB28181Plugin) OnInit() (err error) {
 		if gb.MediaPort.Valid() {
 			gb.SetDescription("tcp", fmt.Sprintf("%d-%d", gb.MediaPort[0], gb.MediaPort[1]))
 			gb.tcpPorts = make(chan uint16, gb.MediaPort.Size())
-			for i := range gb.MediaPort.Size() {
-				gb.tcpPorts <- gb.MediaPort[0] + i
+			if gb.MediaPort.Size() == 0 {
+				gb.tcpPort = gb.MediaPort[0]
+				gb.netListener, _ = net.Listen("tcp4", fmt.Sprintf(":%d", gb.tcpPort))
+			} else if gb.MediaPort.Size() == 1 {
+				gb.tcpPort = gb.MediaPort[0] + 1
+				gb.netListener, _ = net.Listen("tcp4", fmt.Sprintf(":%d", gb.tcpPort))
+			} else {
+				for i := range gb.MediaPort.Size() {
+					gb.tcpPorts <- gb.MediaPort[0] + i
+				}
 			}
 		} else {
 			gb.SetDescription("tcp", fmt.Sprintf("%d", gb.MediaPort[0]))
@@ -501,7 +525,6 @@ func (gb *GB28181Plugin) OnMessage(req *sip.Request, tx sip.ServerTransaction) {
 		}
 	}
 
-	gb.Debug("00000000000001,deviceid is ", id)
 	// 如果设备和平台都存在，通过源地址判断真实来源
 	if d != nil && d.Online && p != nil {
 		source := req.Source()
@@ -513,7 +536,6 @@ func (gb *GB28181Plugin) OnMessage(req *sip.Request, tx sip.ServerTransaction) {
 			d = nil
 		}
 	}
-	gb.Debug("00000000000002,deviceid is ", id)
 
 	// 如果既不是设备也不是平台，返回404
 	if (d == nil && p == nil) || (d != nil && !d.Online) {
@@ -526,7 +548,6 @@ func (gb *GB28181Plugin) OnMessage(req *sip.Request, tx sip.ServerTransaction) {
 		gb.Debug("after on message respond")
 		return
 	}
-	gb.Debug("00000000000003,deviceid is ", id)
 
 	// 根据来源调用不同的处理方法
 	if d != nil && d.Online {

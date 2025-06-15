@@ -99,3 +99,12 @@ jobs:
       run:  |
         docker tag langhuihui/monibuca:v5 langhuihui/monibuca:${{ env.version }}
         docker push langhuihui/monibuca:${{ env.version }}
+    - name: docker build lite version
+      if: success() && startsWith(github.ref, 'refs/tags/')
+      run:  |
+        docker buildx build --platform linux/amd64,linux/arm64 -f DockerfileLite -t monibuca/v5:latest --push .
+    - name: docker lite push version tag
+      if: success() && !contains(env.version, 'beta')
+      run:  |
+        docker tag monibuca/v5 monibuca/v5:${{ env.version }}
+        docker push lmonibuca/v5:${{ env.version }}

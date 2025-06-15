@@ -2,6 +2,7 @@ package plugin_webrtc
 
 import (
 	"encoding/json"
+	"errors"
 	"net"
 	"net/http"
 	"strings"
@@ -35,17 +36,7 @@ func (conf *WebRTCPlugin) BatchV2(w http.ResponseWriter, r *http.Request) {
 		conn:   wsConn,
 		config: conf,
 	}
-	// 创建PeerConnection并设置高级配置
-	if wsHandler.PeerConnection, err = conf.api.NewPeerConnection(Configuration{
-		// 本地测试不需要配置 ICE 服务器
-		ICETransportPolicy:   ICETransportPolicyAll,
-		BundlePolicy:         BundlePolicyMaxBundle,
-		RTCPMuxPolicy:        RTCPMuxPolicyRequire,
-		ICECandidatePoolSize: 1,
-	}); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+
 	// 添加任务
 	conf.AddTask(wsHandler).WaitStopped()
 }
@@ -89,14 +80,42 @@ func (wsh *WebSocketHandler) Go() (err error) {
 	if strings.Contains(strings.ToLower(wsh.SDP), "h265") {
 		wsh.SupportsH265 = true
 	}
-	// 设置远程描述
-	if err = wsh.SetRemoteDescription(SessionDescription{
+
+	if wsh.PeerConnection, err = wsh.config.CreatePC(SessionDescription{
 		Type: SDPTypeOffer,
 		SDP:  initialSignal.SDP,
+	}, Configuration{
+		// 本地测试不需要配置 ICE 服务器
+		ICETransportPolicy:   ICETransportPolicyAll,
+		BundlePolicy:         BundlePolicyMaxBundle,
+		RTCPMuxPolicy:        RTCPMuxPolicyRequire,
+		ICECandidatePoolSize: 1,
 	}); err != nil {
-		wsh.Error("Failed to set remote description", "error", err)
-		return err
+		return
 	}
+
+	wsh.OnICECandidate(func(ice *ICECandidate) {
+		if ice != nil {
+			wsh.Info(ice.ToJSON().Candidate)
+		}
+	})
+	// 监听ICE连接状态变化
+	wsh.OnICEConnectionStateChange(func(state ICEConnectionState) {
+		wsh.Debug("ICE connection state changed", "state", state.String())
+		if state == ICEConnectionStateFailed {
+			wsh.Error("ICE connection failed")
+		}
+	})
+
+	wsh.OnConnectionStateChange(func(state PeerConnectionState) {
+		wsh.Info("Connection State has changed:" + state.String())
+		switch state {
+		case PeerConnectionStateConnected:
+
+		case PeerConnectionStateDisconnected, PeerConnectionStateFailed, PeerConnectionStateClosed:
+			wsh.Stop(errors.New("connection state:" + state.String()))
+		}
+	})
 
 	// 创建并发送应答
 	if answer, err := wsh.GetAnswer(); err == nil {

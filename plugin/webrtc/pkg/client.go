@@ -2,6 +2,7 @@ package webrtc
 
 import (
 	"m7s.live/v5"
+	"m7s.live/v5/pkg/config"
 )
 
 const (
@@ -31,7 +32,7 @@ func (c *Client) GetPushJob() *m7s.PushJob {
 	return &c.pushCtx
 }
 
-func NewPuller() m7s.IPuller {
+func NewPuller(config.Pull) m7s.IPuller {
 	return &Client{
 		direction: DIRECTION_PULL,
 	}

@@ -185,8 +185,6 @@ func (t *RecordRecoveryTask) recoverRecordFromFile(filePath string) error {
 		FilePath:   filePath,
 		StreamPath: streamPath,
 		Type:       "mp4",
-		Mode:       m7s.RecordModeAuto, // 默认为自动录制模式
-		EventLevel: m7s.EventLevelLow,  // 默认为低级别事件
 	}
 
 	// 设置开始和结束时间

@@ -2,16 +2,13 @@ package hls
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"time"
 
-	"gorm.io/gorm"
 	"m7s.live/v5"
 	"m7s.live/v5/pkg"
 	"m7s.live/v5/pkg/codec"
 	"m7s.live/v5/pkg/config"
-	"m7s.live/v5/pkg/task"
 	"m7s.live/v5/pkg/util"
 	mpegts "m7s.live/v5/plugin/hls/pkg/ts"
 )
@@ -22,7 +19,6 @@ func NewRecorder(conf config.Record) m7s.IRecorder {
 
 type Recorder struct {
 	m7s.DefaultRecorder
-	stream       m7s.RecordStream
 	ts           *TsInFile
 	pesAudio     *mpegts.MpegtsPESFrame
 	pesVideo     *mpegts.MpegtsPESFrame
@@ -39,81 +35,11 @@ var CustomFileName = func(job *m7s.RecordJob) string {
 }
 
 func (r *Recorder) createStream(start time.Time) (err error) {
-	recordJob := &r.RecordJob
-	sub := recordJob.Subscriber
-	r.stream = m7s.RecordStream{
-		StartTime:      start,
-		StreamPath:     sub.StreamPath,
-		FilePath:       CustomFileName(&r.RecordJob),
-		EventId:        recordJob.EventId,
-		EventDesc:      recordJob.EventDesc,
-		EventName:      recordJob.EventName,
-		EventLevel:     recordJob.EventLevel,
-		BeforeDuration: recordJob.BeforeDuration,
-		AfterDuration:  recordJob.AfterDuration,
-		Mode:           recordJob.Mode,
-		Type:           "hls",
-	}
-	dir := filepath.Dir(r.stream.FilePath)
-	dir = filepath.Clean(dir)
-	if err = os.MkdirAll(dir, 0755); err != nil {
-		r.Error("create directory failed", "err", err, "dir", dir)
-		return
-	}
-	if sub.Publisher.HasAudioTrack() {
-		r.stream.AudioCodec = sub.Publisher.AudioTrack.ICodecCtx.String()
-	}
-	if sub.Publisher.HasVideoTrack() {
-		r.stream.VideoCodec = sub.Publisher.VideoTrack.ICodecCtx.String()
-	}
-	if recordJob.Plugin.DB != nil {
-		recordJob.Plugin.DB.Save(&r.stream)
-	}
-	return
-}
-
-type eventRecordCheck struct {
-	task.Task
-	DB         *gorm.DB
-	streamPath string
-}
-
-func (t *eventRecordCheck) Run() (err error) {
-	var eventRecordStreams []m7s.RecordStream
-	queryRecord := m7s.RecordStream{
-		EventLevel: m7s.EventLevelHigh,
-		Mode:       m7s.RecordModeEvent,
-		Type:       "hls",
-	}
-	t.DB.Where(&queryRecord).Find(&eventRecordStreams, "stream_path=?", t.streamPath) //搜索事件录像，且为重要事件（无法自动删除）
-	if len(eventRecordStreams) > 0 {
-		for _, recordStream := range eventRecordStreams {
-			var unimportantEventRecordStreams []m7s.RecordStream
-			queryRecord.EventLevel = m7s.EventLevelLow
-			query := `(start_time BETWEEN ? AND ?)
-							OR (end_time BETWEEN ? AND ?) 
-							OR (? BETWEEN start_time AND end_time) 
-							OR (? BETWEEN start_time AND end_time) AND stream_path=? `
-			t.DB.Where(&queryRecord).Where(query, recordStream.StartTime, recordStream.EndTime, recordStream.StartTime, recordStream.EndTime, recordStream.StartTime, recordStream.EndTime, recordStream.StreamPath).Find(&unimportantEventRecordStreams)
-			if len(unimportantEventRecordStreams) > 0 {
-				for _, unimportantEventRecordStream := range unimportantEventRecordStreams {
-					unimportantEventRecordStream.EventLevel = m7s.EventLevelHigh
-					t.DB.Save(&unimportantEventRecordStream)
-				}
-			}
-		}
-	}
-	return
+	return r.CreateStream(start, CustomFileName)
 }
 
 func (r *Recorder) writeTailer(end time.Time) {
-	if r.stream.EndTime.After(r.stream.StartTime) {
-		return
-	}
-	r.stream.EndTime = end
-	if r.RecordJob.Plugin.DB != nil {
-		r.RecordJob.Plugin.DB.Save(&r.stream)
-	}
+	r.WriteTail(end, nil)
 }
 
 func (r *Recorder) Dispose() {
@@ -131,9 +57,9 @@ func (r *Recorder) createNewTs() {
 		r.ts.Close()
 	}
 	var err error
-	r.ts, err = NewTsInFile(r.stream.FilePath)
+	r.ts, err = NewTsInFile(r.Event.FilePath)
 	if err != nil {
-		r.Error("create ts file failed", "err", err, "path", r.stream.FilePath)
+		r.Error("create ts file failed", "err", err, "path", r.Event.FilePath)
 		return
 	}
 	if oldPMT.Len() > 0 {
@@ -175,8 +101,8 @@ func (r *Recorder) Run() (err error) {
 	ctx := &r.RecordJob
 	suber := ctx.Subscriber
 	startTime := time.Now()
-	if ctx.BeforeDuration > 0 {
-		startTime = startTime.Add(-ctx.BeforeDuration)
+	if ctx.Event.BeforeDuration > 0 {
+		startTime = startTime.Add(-time.Duration(ctx.Event.BeforeDuration) * time.Millisecond)
 	}
 
 	// 创建第一个片段记录

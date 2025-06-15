@@ -138,7 +138,7 @@ func (r *CatalogRequest) IsComplete(channelsLength int) bool {
 }
 
 func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28181.Message) (err error) {
-	d.plugin.Debug("into onMessage,deviceid is ", d.DeviceId)
+	d.plugin.Trace("into onMessage,deviceid is ", d.DeviceId)
 	source := req.Source()
 	hostname, portStr, _ := net.SplitHostPort(source)
 	port, _ := strconv.Atoi(portStr)
@@ -159,7 +159,7 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 	case "Keepalive":
 		d.KeepaliveInterval = int(time.Since(d.KeepaliveTime).Seconds())
 		d.KeepaliveTime = time.Now()
-		d.Debug("into keeplive,deviceid is ", d.DeviceId, "d.KeepaliveTime is", d.KeepaliveTime)
+		d.Trace("into keeplive,deviceid is ", d.DeviceId, "d.KeepaliveTime is", d.KeepaliveTime)
 		if d.plugin.DB != nil {
 			if err := d.plugin.DB.Model(d).Updates(map[string]interface{}{
 				"keepalive_interval": d.KeepaliveInterval,
@@ -189,7 +189,7 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 		if d.plugin.DB != nil {
 			// 如果是第一个响应，先清空现有通道
 			if isFirst {
-				d.Debug("清空现有通道", "deviceId", d.DeviceId)
+				d.Trace("清空现有通道", "deviceId", d.DeviceId)
 				if err := d.plugin.DB.Where("device_id = ?", d.DeviceId).Delete(&gb28181.DeviceChannel{}).Error; err != nil {
 					d.Error("删除通道失败", "error", err, "deviceId", d.DeviceId)
 				}
@@ -213,7 +213,7 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 			// 更新当前设备的通道数
 			d.ChannelCount = msg.SumNum
 			d.UpdateTime = time.Now()
-			d.Debug("save channel", "deviceid", d.DeviceId, "channels count", d.channels.Length)
+			d.Trace("save channel", "deviceid", d.DeviceId, "channels count", d.channels.Length)
 			if err := d.plugin.DB.Model(d).Updates(map[string]interface{}{
 				"channel_count": d.ChannelCount,
 				"update_time":   d.UpdateTime,
@@ -401,12 +401,12 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 
 func (d *Device) send(req *sip.Request) (*sip.Response, error) {
 	d.SN++
-	d.Debug("send", "req", req.String())
+	d.Trace("send", "req", req.String())
 	return d.client.Do(context.Background(), req)
 }
 
 func (d *Device) Go() (err error) {
-	d.Debug("into device.Go,deviceid is ", d.DeviceId)
+	d.Trace("into device.Go,deviceid is ", d.DeviceId)
 	var response *sip.Response
 
 	// 初始化catalogReqs
@@ -424,7 +424,7 @@ func (d *Device) Go() (err error) {
 	if err != nil {
 		d.Error("catalog", "err", err)
 	} else {
-		d.Debug("catalog", "response", response.String())
+		d.Trace("catalog", "response", response.String())
 	}
 
 	// 创建并启动目录订阅任务
@@ -451,7 +451,7 @@ func (d *Device) Go() (err error) {
 		select {
 		case <-d.Done():
 		case <-keepLiveTick.C:
-			d.Debug("keepLiveTick,deviceid is", d.DeviceId, "d.KeepaliveTime is ", d.KeepaliveTime)
+			d.Trace("keepLiveTick,deviceid is", d.DeviceId, "d.KeepaliveTime is ", d.KeepaliveTime)
 			if timeDiff := time.Since(d.KeepaliveTime); timeDiff > time.Duration(3*keepaliveSeconds)*time.Second {
 				d.Online = false
 				d.Status = DeviceOfflineStatus
@@ -472,7 +472,7 @@ func (d *Device) Go() (err error) {
 			if err != nil {
 				d.Error("catalog", "err", err)
 			} else {
-				d.Debug("catalogTick", "response", response.String())
+				d.Trace("catalogTick", "response", response.String())
 			}
 			//case event := <-d.eventChan:
 			//	d.Debug("eventChan", "event", event)

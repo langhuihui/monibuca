@@ -53,6 +53,20 @@ service api {
       body: "*"
     };
   }
+
+  // 解析计划字符串，返回时间段信息
+  rpc ParsePlanTime (ParsePlanRequest) returns (ParsePlanResponse) {
+    option (google.api.http) = {
+      get: "/plan/api/parse/{plan}"
+    };
+  }
+  
+  // 获取当前Crontab任务状态
+  rpc GetCrontabStatus (CrontabStatusRequest) returns (CrontabStatusResponse) {
+    option (google.api.http) = {
+      get: "/crontab/api/status"
+    };
+  }
 }
 
 message PlanResponseList {
@@ -118,4 +132,59 @@ message RecordPlanStreamResponseList {
 message DeletePlanStreamRequest {
   uint32 planId = 1;
   string streamPath = 2;
+}
+
+// 解析计划请求
+message ParsePlanRequest {
+  string plan = 1;  // 168位的0/1字符串，表示一周的每个小时是否录制
+}
+
+// 时间段信息
+message TimeSlotInfo {
+  google.protobuf.Timestamp start = 1;  // 开始时间
+  google.protobuf.Timestamp end = 2;    // 结束时间
+  string weekday = 3;                   // 周几（例如：周一）
+  string time_range = 4;                // 时间范围（例如：09:00-10:00）
+}
+
+// 解析计划响应
+message ParsePlanResponse {
+  int32 code = 1;                     // 响应码
+  string message = 2;                 // 响应消息
+  repeated TimeSlotInfo slots = 3;    // 所有计划的时间段
+  TimeSlotInfo next_slot = 4;        // 从当前时间开始的下一个时间段
+}
+
+// 新增的消息定义
+// 获取Crontab状态请求
+message CrontabStatusRequest {
+  // 可以为空，表示获取所有任务
+  string stream_path = 1; // 可选，按流路径过滤
+}
+
+// 任务信息
+message CrontabTaskInfo {
+  uint32 plan_id = 1;           // 计划ID
+  string plan_name = 2;         // 计划名称
+  string stream_path = 3;       // 流路径
+  bool is_recording = 4;        // 是否正在录制
+  google.protobuf.Timestamp start_time = 5;  // 当前/下一个任务开始时间
+  google.protobuf.Timestamp end_time = 6;    // 当前/下一个任务结束时间
+  string time_range = 7;        // 时间范围（例如：09:00-10:00）
+  string weekday = 8;           // 周几（例如：周一）
+  string file_path = 9;         // 文件保存路径
+  string fragment = 10;         // 分片设置
+  uint32 elapsed_seconds = 11;  // 已运行时间（秒，仅对正在运行的任务有效）
+  uint32 remaining_seconds = 12; // 剩余时间（秒）
+  repeated TimeSlotInfo plan_slots = 13; // 完整的计划时间段列表
+}
+
+// 获取Crontab状态响应
+message CrontabStatusResponse {
+  int32 code = 1;                      // 响应码
+  string message = 2;                  // 响应消息
+  repeated CrontabTaskInfo running_tasks = 3;  // 当前正在执行的任务列表
+  repeated CrontabTaskInfo next_tasks = 4;     // 下一个计划执行的任务列表
+  uint32 total_running = 5;            // 正在运行的任务总数
+  uint32 total_planned = 6;            // 计划中的任务总数
 }

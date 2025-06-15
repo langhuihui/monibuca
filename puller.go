@@ -238,10 +238,9 @@ func (p *RecordFilePuller) queryRecordStreams(startTime, endTime time.Time) (err
 		return pkg.ErrNoDB
 	}
 	queryRecord := RecordStream{
-		Mode: RecordModeAuto,
 		Type: p.Type,
 	}
-	tx := p.PullJob.Plugin.DB.Where(&queryRecord).Find(&p.Streams, "end_time>=? AND start_time<=? AND stream_path=?", startTime, endTime, p.PullJob.RemoteURL)
+	tx := p.PullJob.Plugin.DB.Where(&queryRecord).Find(&p.Streams, "event_id=0 AND end_time>=? AND start_time<=? AND stream_path=?", startTime, endTime, p.PullJob.RemoteURL)
 	if tx.Error != nil {
 		return tx.Error
 	}

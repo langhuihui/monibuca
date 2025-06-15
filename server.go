@@ -441,9 +441,9 @@ func (s *Server) Start() (err error) {
 }
 
 func (s *Server) initPullProxies() {
-	// 1. First read all pull proxies from database
+	// 1. First read all pull proxies from database, excluding disabled ones
 	var pullProxies []*PullProxyConfig
-	s.DB.Find(&pullProxies)
+	s.DB.Where("status != ?", PullProxyStatusDisabled).Find(&pullProxies)
 
 	// Create a map for quick lookup of existing proxies
 	existingPullProxies := make(map[uint]*PullProxyConfig)
@@ -473,9 +473,11 @@ func (s *Server) initPullProxies() {
 		}
 	}
 
-	// 3. Finally add all proxies to collections
+	// 3. Finally add all proxies to collections, excluding disabled ones
 	for _, proxy := range pullProxies {
-		s.createPullProxy(proxy)
+		if proxy.Status != PullProxyStatusDisabled {
+			s.createPullProxy(proxy)
+		}
 	}
 }
 

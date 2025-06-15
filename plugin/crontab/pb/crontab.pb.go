@@ -644,6 +644,462 @@ func (x *DeletePlanStreamRequest) GetStreamPath() string {
 	return ""
 }
 
+// 解析计划请求
+type ParsePlanRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Plan          string                 `protobuf:"bytes,1,opt,name=plan,proto3" json:"plan,omitempty"` // 168位的0/1字符串，表示一周的每个小时是否录制
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ParsePlanRequest) Reset() {
+	*x = ParsePlanRequest{}
+	mi := &file_crontab_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ParsePlanRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ParsePlanRequest) ProtoMessage() {}
+
+func (x *ParsePlanRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_crontab_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ParsePlanRequest.ProtoReflect.Descriptor instead.
+func (*ParsePlanRequest) Descriptor() ([]byte, []int) {
+	return file_crontab_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *ParsePlanRequest) GetPlan() string {
+	if x != nil {
+		return x.Plan
+	}
+	return ""
+}
+
+// 时间段信息
+type TimeSlotInfo struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Start         *timestamppb.Timestamp `protobuf:"bytes,1,opt,name=start,proto3" json:"start,omitempty"`                          // 开始时间
+	End           *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=end,proto3" json:"end,omitempty"`                              // 结束时间
+	Weekday       string                 `protobuf:"bytes,3,opt,name=weekday,proto3" json:"weekday,omitempty"`                      // 周几（例如：周一）
+	TimeRange     string                 `protobuf:"bytes,4,opt,name=time_range,json=timeRange,proto3" json:"time_range,omitempty"` // 时间范围（例如：09:00-10:00）
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TimeSlotInfo) Reset() {
+	*x = TimeSlotInfo{}
+	mi := &file_crontab_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TimeSlotInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TimeSlotInfo) ProtoMessage() {}
+
+func (x *TimeSlotInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_crontab_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TimeSlotInfo.ProtoReflect.Descriptor instead.
+func (*TimeSlotInfo) Descriptor() ([]byte, []int) {
+	return file_crontab_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *TimeSlotInfo) GetStart() *timestamppb.Timestamp {
+	if x != nil {
+		return x.Start
+	}
+	return nil
+}
+
+func (x *TimeSlotInfo) GetEnd() *timestamppb.Timestamp {
+	if x != nil {
+		return x.End
+	}
+	return nil
+}
+
+func (x *TimeSlotInfo) GetWeekday() string {
+	if x != nil {
+		return x.Weekday
+	}
+	return ""
+}
+
+func (x *TimeSlotInfo) GetTimeRange() string {
+	if x != nil {
+		return x.TimeRange
+	}
+	return ""
+}
+
+// 解析计划响应
+type ParsePlanResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Code          int32                  `protobuf:"varint,1,opt,name=code,proto3" json:"code,omitempty"`                        // 响应码
+	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`                   // 响应消息
+	Slots         []*TimeSlotInfo        `protobuf:"bytes,3,rep,name=slots,proto3" json:"slots,omitempty"`                       // 所有计划的时间段
+	NextSlot      *TimeSlotInfo          `protobuf:"bytes,4,opt,name=next_slot,json=nextSlot,proto3" json:"next_slot,omitempty"` // 从当前时间开始的下一个时间段
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ParsePlanResponse) Reset() {
+	*x = ParsePlanResponse{}
+	mi := &file_crontab_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ParsePlanResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ParsePlanResponse) ProtoMessage() {}
+
+func (x *ParsePlanResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_crontab_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ParsePlanResponse.ProtoReflect.Descriptor instead.
+func (*ParsePlanResponse) Descriptor() ([]byte, []int) {
+	return file_crontab_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *ParsePlanResponse) GetCode() int32 {
+	if x != nil {
+		return x.Code
+	}
+	return 0
+}
+
+func (x *ParsePlanResponse) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+func (x *ParsePlanResponse) GetSlots() []*TimeSlotInfo {
+	if x != nil {
+		return x.Slots
+	}
+	return nil
+}
+
+func (x *ParsePlanResponse) GetNextSlot() *TimeSlotInfo {
+	if x != nil {
+		return x.NextSlot
+	}
+	return nil
+}
+
+// 新增的消息定义
+// 获取Crontab状态请求
+type CrontabStatusRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 可以为空，表示获取所有任务
+	StreamPath    string `protobuf:"bytes,1,opt,name=stream_path,json=streamPath,proto3" json:"stream_path,omitempty"` // 可选，按流路径过滤
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CrontabStatusRequest) Reset() {
+	*x = CrontabStatusRequest{}
+	mi := &file_crontab_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CrontabStatusRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CrontabStatusRequest) ProtoMessage() {}
+
+func (x *CrontabStatusRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_crontab_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CrontabStatusRequest.ProtoReflect.Descriptor instead.
+func (*CrontabStatusRequest) Descriptor() ([]byte, []int) {
+	return file_crontab_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *CrontabStatusRequest) GetStreamPath() string {
+	if x != nil {
+		return x.StreamPath
+	}
+	return ""
+}
+
+// 任务信息
+type CrontabTaskInfo struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	PlanId           uint32                 `protobuf:"varint,1,opt,name=plan_id,json=planId,proto3" json:"plan_id,omitempty"`                                // 计划ID
+	PlanName         string                 `protobuf:"bytes,2,opt,name=plan_name,json=planName,proto3" json:"plan_name,omitempty"`                           // 计划名称
+	StreamPath       string                 `protobuf:"bytes,3,opt,name=stream_path,json=streamPath,proto3" json:"stream_path,omitempty"`                     // 流路径
+	IsRecording      bool                   `protobuf:"varint,4,opt,name=is_recording,json=isRecording,proto3" json:"is_recording,omitempty"`                 // 是否正在录制
+	StartTime        *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=start_time,json=startTime,proto3" json:"start_time,omitempty"`                        // 当前/下一个任务开始时间
+	EndTime          *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=end_time,json=endTime,proto3" json:"end_time,omitempty"`                              // 当前/下一个任务结束时间
+	TimeRange        string                 `protobuf:"bytes,7,opt,name=time_range,json=timeRange,proto3" json:"time_range,omitempty"`                        // 时间范围（例如：09:00-10:00）
+	Weekday          string                 `protobuf:"bytes,8,opt,name=weekday,proto3" json:"weekday,omitempty"`                                             // 周几（例如：周一）
+	FilePath         string                 `protobuf:"bytes,9,opt,name=file_path,json=filePath,proto3" json:"file_path,omitempty"`                           // 文件保存路径
+	Fragment         string                 `protobuf:"bytes,10,opt,name=fragment,proto3" json:"fragment,omitempty"`                                          // 分片设置
+	ElapsedSeconds   uint32                 `protobuf:"varint,11,opt,name=elapsed_seconds,json=elapsedSeconds,proto3" json:"elapsed_seconds,omitempty"`       // 已运行时间（秒，仅对正在运行的任务有效）
+	RemainingSeconds uint32                 `protobuf:"varint,12,opt,name=remaining_seconds,json=remainingSeconds,proto3" json:"remaining_seconds,omitempty"` // 剩余时间（秒）
+	PlanSlots        []*TimeSlotInfo        `protobuf:"bytes,13,rep,name=plan_slots,json=planSlots,proto3" json:"plan_slots,omitempty"`                       // 完整的计划时间段列表
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *CrontabTaskInfo) Reset() {
+	*x = CrontabTaskInfo{}
+	mi := &file_crontab_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CrontabTaskInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CrontabTaskInfo) ProtoMessage() {}
+
+func (x *CrontabTaskInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_crontab_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CrontabTaskInfo.ProtoReflect.Descriptor instead.
+func (*CrontabTaskInfo) Descriptor() ([]byte, []int) {
+	return file_crontab_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *CrontabTaskInfo) GetPlanId() uint32 {
+	if x != nil {
+		return x.PlanId
+	}
+	return 0
+}
+
+func (x *CrontabTaskInfo) GetPlanName() string {
+	if x != nil {
+		return x.PlanName
+	}
+	return ""
+}
+
+func (x *CrontabTaskInfo) GetStreamPath() string {
+	if x != nil {
+		return x.StreamPath
+	}
+	return ""
+}
+
+func (x *CrontabTaskInfo) GetIsRecording() bool {
+	if x != nil {
+		return x.IsRecording
+	}
+	return false
+}
+
+func (x *CrontabTaskInfo) GetStartTime() *timestamppb.Timestamp {
+	if x != nil {
+		return x.StartTime
+	}
+	return nil
+}
+
+func (x *CrontabTaskInfo) GetEndTime() *timestamppb.Timestamp {
+	if x != nil {
+		return x.EndTime
+	}
+	return nil
+}
+
+func (x *CrontabTaskInfo) GetTimeRange() string {
+	if x != nil {
+		return x.TimeRange
+	}
+	return ""
+}
+
+func (x *CrontabTaskInfo) GetWeekday() string {
+	if x != nil {
+		return x.Weekday
+	}
+	return ""
+}
+
+func (x *CrontabTaskInfo) GetFilePath() string {
+	if x != nil {
+		return x.FilePath
+	}
+	return ""
+}
+
+func (x *CrontabTaskInfo) GetFragment() string {
+	if x != nil {
+		return x.Fragment
+	}
+	return ""
+}
+
+func (x *CrontabTaskInfo) GetElapsedSeconds() uint32 {
+	if x != nil {
+		return x.ElapsedSeconds
+	}
+	return 0
+}
+
+func (x *CrontabTaskInfo) GetRemainingSeconds() uint32 {
+	if x != nil {
+		return x.RemainingSeconds
+	}
+	return 0
+}
+
+func (x *CrontabTaskInfo) GetPlanSlots() []*TimeSlotInfo {
+	if x != nil {
+		return x.PlanSlots
+	}
+	return nil
+}
+
+// 获取Crontab状态响应
+type CrontabStatusResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Code          int32                  `protobuf:"varint,1,opt,name=code,proto3" json:"code,omitempty"`                                     // 响应码
+	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`                                // 响应消息
+	RunningTasks  []*CrontabTaskInfo     `protobuf:"bytes,3,rep,name=running_tasks,json=runningTasks,proto3" json:"running_tasks,omitempty"`  // 当前正在执行的任务列表
+	NextTasks     []*CrontabTaskInfo     `protobuf:"bytes,4,rep,name=next_tasks,json=nextTasks,proto3" json:"next_tasks,omitempty"`           // 下一个计划执行的任务列表
+	TotalRunning  uint32                 `protobuf:"varint,5,opt,name=total_running,json=totalRunning,proto3" json:"total_running,omitempty"` // 正在运行的任务总数
+	TotalPlanned  uint32                 `protobuf:"varint,6,opt,name=total_planned,json=totalPlanned,proto3" json:"total_planned,omitempty"` // 计划中的任务总数
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CrontabStatusResponse) Reset() {
+	*x = CrontabStatusResponse{}
+	mi := &file_crontab_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CrontabStatusResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CrontabStatusResponse) ProtoMessage() {}
+
+func (x *CrontabStatusResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_crontab_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CrontabStatusResponse.ProtoReflect.Descriptor instead.
+func (*CrontabStatusResponse) Descriptor() ([]byte, []int) {
+	return file_crontab_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *CrontabStatusResponse) GetCode() int32 {
+	if x != nil {
+		return x.Code
+	}
+	return 0
+}
+
+func (x *CrontabStatusResponse) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+func (x *CrontabStatusResponse) GetRunningTasks() []*CrontabTaskInfo {
+	if x != nil {
+		return x.RunningTasks
+	}
+	return nil
+}
+
+func (x *CrontabStatusResponse) GetNextTasks() []*CrontabTaskInfo {
+	if x != nil {
+		return x.NextTasks
+	}
+	return nil
+}
+
+func (x *CrontabStatusResponse) GetTotalRunning() uint32 {
+	if x != nil {
+		return x.TotalRunning
+	}
+	return 0
+}
+
+func (x *CrontabStatusResponse) GetTotalPlanned() uint32 {
+	if x != nil {
+		return x.TotalPlanned
+	}
+	return 0
+}
+
 var File_crontab_proto protoreflect.FileDescriptor
 
 const file_crontab_proto_rawDesc = "" +
@@ -710,7 +1166,50 @@ const file_crontab_proto_rawDesc = "" +
 	"\x06planId\x18\x01 \x01(\rR\x06planId\x12\x1e\n" +
 	"\n" +
 	"streamPath\x18\x02 \x01(\tR\n" +
-	"streamPath2\x88\x06\n" +
+	"streamPath\"&\n" +
+	"\x10ParsePlanRequest\x12\x12\n" +
+	"\x04plan\x18\x01 \x01(\tR\x04plan\"\xa7\x01\n" +
+	"\fTimeSlotInfo\x120\n" +
+	"\x05start\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\x05start\x12,\n" +
+	"\x03end\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\x03end\x12\x18\n" +
+	"\aweekday\x18\x03 \x01(\tR\aweekday\x12\x1d\n" +
+	"\n" +
+	"time_range\x18\x04 \x01(\tR\ttimeRange\"\xa2\x01\n" +
+	"\x11ParsePlanResponse\x12\x12\n" +
+	"\x04code\x18\x01 \x01(\x05R\x04code\x12\x18\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\x12+\n" +
+	"\x05slots\x18\x03 \x03(\v2\x15.crontab.TimeSlotInfoR\x05slots\x122\n" +
+	"\tnext_slot\x18\x04 \x01(\v2\x15.crontab.TimeSlotInfoR\bnextSlot\"7\n" +
+	"\x14CrontabStatusRequest\x12\x1f\n" +
+	"\vstream_path\x18\x01 \x01(\tR\n" +
+	"streamPath\"\xfb\x03\n" +
+	"\x0fCrontabTaskInfo\x12\x17\n" +
+	"\aplan_id\x18\x01 \x01(\rR\x06planId\x12\x1b\n" +
+	"\tplan_name\x18\x02 \x01(\tR\bplanName\x12\x1f\n" +
+	"\vstream_path\x18\x03 \x01(\tR\n" +
+	"streamPath\x12!\n" +
+	"\fis_recording\x18\x04 \x01(\bR\visRecording\x129\n" +
+	"\n" +
+	"start_time\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\tstartTime\x125\n" +
+	"\bend_time\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\aendTime\x12\x1d\n" +
+	"\n" +
+	"time_range\x18\a \x01(\tR\ttimeRange\x12\x18\n" +
+	"\aweekday\x18\b \x01(\tR\aweekday\x12\x1b\n" +
+	"\tfile_path\x18\t \x01(\tR\bfilePath\x12\x1a\n" +
+	"\bfragment\x18\n" +
+	" \x01(\tR\bfragment\x12'\n" +
+	"\x0felapsed_seconds\x18\v \x01(\rR\x0eelapsedSeconds\x12+\n" +
+	"\x11remaining_seconds\x18\f \x01(\rR\x10remainingSeconds\x124\n" +
+	"\n" +
+	"plan_slots\x18\r \x03(\v2\x15.crontab.TimeSlotInfoR\tplanSlots\"\x87\x02\n" +
+	"\x15CrontabStatusResponse\x12\x12\n" +
+	"\x04code\x18\x01 \x01(\x05R\x04code\x12\x18\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\x12=\n" +
+	"\rrunning_tasks\x18\x03 \x03(\v2\x18.crontab.CrontabTaskInfoR\frunningTasks\x127\n" +
+	"\n" +
+	"next_tasks\x18\x04 \x03(\v2\x18.crontab.CrontabTaskInfoR\tnextTasks\x12#\n" +
+	"\rtotal_running\x18\x05 \x01(\rR\ftotalRunning\x12#\n" +
+	"\rtotal_planned\x18\x06 \x01(\rR\ftotalPlanned2\xe0\a\n" +
 	"\x03api\x12O\n" +
 	"\x04List\x12\x14.crontab.ReqPlanList\x1a\x19.crontab.PlanResponseList\"\x16\x82\xd3\xe4\x93\x02\x10\x12\x0e/plan/api/list\x12A\n" +
 	"\x03Add\x12\r.crontab.Plan\x1a\x11.crontab.Response\"\x18\x82\xd3\xe4\x93\x02\x12:\x01*\"\r/plan/api/add\x12L\n" +
@@ -719,7 +1218,9 @@ const file_crontab_proto_rawDesc = "" +
 	"\x15ListRecordPlanStreams\x12\x1a.crontab.ReqPlanStreamList\x1a%.crontab.RecordPlanStreamResponseList\"\x1c\x82\xd3\xe4\x93\x02\x16\x12\x14/planstream/api/list\x12]\n" +
 	"\x13AddRecordPlanStream\x12\x13.crontab.PlanStream\x1a\x11.crontab.Response\"\x1e\x82\xd3\xe4\x93\x02\x18:\x01*\"\x13/planstream/api/add\x12c\n" +
 	"\x16UpdateRecordPlanStream\x12\x13.crontab.PlanStream\x1a\x11.crontab.Response\"!\x82\xd3\xe4\x93\x02\x1b:\x01*\"\x16/planstream/api/update\x12\x89\x01\n" +
-	"\x16RemoveRecordPlanStream\x12 .crontab.DeletePlanStreamRequest\x1a\x11.crontab.Response\":\x82\xd3\xe4\x93\x024:\x01*\"//planstream/api/remove/{planId}/{streamPath=**}B\x1fZ\x1dm7s.live/v5/plugin/crontab/pbb\x06proto3"
+	"\x16RemoveRecordPlanStream\x12 .crontab.DeletePlanStreamRequest\x1a\x11.crontab.Response\":\x82\xd3\xe4\x93\x024:\x01*\"//planstream/api/remove/{planId}/{streamPath=**}\x12f\n" +
+	"\rParsePlanTime\x12\x19.crontab.ParsePlanRequest\x1a\x1a.crontab.ParsePlanResponse\"\x1e\x82\xd3\xe4\x93\x02\x18\x12\x16/plan/api/parse/{plan}\x12n\n" +
+	"\x10GetCrontabStatus\x12\x1d.crontab.CrontabStatusRequest\x1a\x1e.crontab.CrontabStatusResponse\"\x1b\x82\xd3\xe4\x93\x02\x15\x12\x13/crontab/api/statusB\x1fZ\x1dm7s.live/v5/plugin/crontab/pbb\x06proto3"
 
 var (
 	file_crontab_proto_rawDescOnce sync.Once
@@ -733,7 +1234,7 @@ func file_crontab_proto_rawDescGZIP() []byte {
 	return file_crontab_proto_rawDescData
 }
 
-var file_crontab_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_crontab_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
 var file_crontab_proto_goTypes = []any{
 	(*PlanResponseList)(nil),             // 0: crontab.PlanResponseList
 	(*Plan)(nil),                         // 1: crontab.Plan
@@ -744,36 +1245,55 @@ var file_crontab_proto_goTypes = []any{
 	(*ReqPlanStreamList)(nil),            // 6: crontab.ReqPlanStreamList
 	(*RecordPlanStreamResponseList)(nil), // 7: crontab.RecordPlanStreamResponseList
 	(*DeletePlanStreamRequest)(nil),      // 8: crontab.DeletePlanStreamRequest
-	(*timestamppb.Timestamp)(nil),        // 9: google.protobuf.Timestamp
+	(*ParsePlanRequest)(nil),             // 9: crontab.ParsePlanRequest
+	(*TimeSlotInfo)(nil),                 // 10: crontab.TimeSlotInfo
+	(*ParsePlanResponse)(nil),            // 11: crontab.ParsePlanResponse
+	(*CrontabStatusRequest)(nil),         // 12: crontab.CrontabStatusRequest
+	(*CrontabTaskInfo)(nil),              // 13: crontab.CrontabTaskInfo
+	(*CrontabStatusResponse)(nil),        // 14: crontab.CrontabStatusResponse
+	(*timestamppb.Timestamp)(nil),        // 15: google.protobuf.Timestamp
 }
 var file_crontab_proto_depIdxs = []int32{
 	1,  // 0: crontab.PlanResponseList.data:type_name -> crontab.Plan
-	9,  // 1: crontab.Plan.createTime:type_name -> google.protobuf.Timestamp
-	9,  // 2: crontab.Plan.updateTime:type_name -> google.protobuf.Timestamp
-	9,  // 3: crontab.PlanStream.created_at:type_name -> google.protobuf.Timestamp
-	9,  // 4: crontab.PlanStream.updated_at:type_name -> google.protobuf.Timestamp
+	15, // 1: crontab.Plan.createTime:type_name -> google.protobuf.Timestamp
+	15, // 2: crontab.Plan.updateTime:type_name -> google.protobuf.Timestamp
+	15, // 3: crontab.PlanStream.created_at:type_name -> google.protobuf.Timestamp
+	15, // 4: crontab.PlanStream.updated_at:type_name -> google.protobuf.Timestamp
 	5,  // 5: crontab.RecordPlanStreamResponseList.data:type_name -> crontab.PlanStream
-	2,  // 6: crontab.api.List:input_type -> crontab.ReqPlanList
-	1,  // 7: crontab.api.Add:input_type -> crontab.Plan
-	1,  // 8: crontab.api.Update:input_type -> crontab.Plan
-	3,  // 9: crontab.api.Remove:input_type -> crontab.DeleteRequest
-	6,  // 10: crontab.api.ListRecordPlanStreams:input_type -> crontab.ReqPlanStreamList
-	5,  // 11: crontab.api.AddRecordPlanStream:input_type -> crontab.PlanStream
-	5,  // 12: crontab.api.UpdateRecordPlanStream:input_type -> crontab.PlanStream
-	8,  // 13: crontab.api.RemoveRecordPlanStream:input_type -> crontab.DeletePlanStreamRequest
-	0,  // 14: crontab.api.List:output_type -> crontab.PlanResponseList
-	4,  // 15: crontab.api.Add:output_type -> crontab.Response
-	4,  // 16: crontab.api.Update:output_type -> crontab.Response
-	4,  // 17: crontab.api.Remove:output_type -> crontab.Response
-	7,  // 18: crontab.api.ListRecordPlanStreams:output_type -> crontab.RecordPlanStreamResponseList
-	4,  // 19: crontab.api.AddRecordPlanStream:output_type -> crontab.Response
-	4,  // 20: crontab.api.UpdateRecordPlanStream:output_type -> crontab.Response
-	4,  // 21: crontab.api.RemoveRecordPlanStream:output_type -> crontab.Response
-	14, // [14:22] is the sub-list for method output_type
-	6,  // [6:14] is the sub-list for method input_type
-	6,  // [6:6] is the sub-list for extension type_name
-	6,  // [6:6] is the sub-list for extension extendee
-	0,  // [0:6] is the sub-list for field type_name
+	15, // 6: crontab.TimeSlotInfo.start:type_name -> google.protobuf.Timestamp
+	15, // 7: crontab.TimeSlotInfo.end:type_name -> google.protobuf.Timestamp
+	10, // 8: crontab.ParsePlanResponse.slots:type_name -> crontab.TimeSlotInfo
+	10, // 9: crontab.ParsePlanResponse.next_slot:type_name -> crontab.TimeSlotInfo
+	15, // 10: crontab.CrontabTaskInfo.start_time:type_name -> google.protobuf.Timestamp
+	15, // 11: crontab.CrontabTaskInfo.end_time:type_name -> google.protobuf.Timestamp
+	10, // 12: crontab.CrontabTaskInfo.plan_slots:type_name -> crontab.TimeSlotInfo
+	13, // 13: crontab.CrontabStatusResponse.running_tasks:type_name -> crontab.CrontabTaskInfo
+	13, // 14: crontab.CrontabStatusResponse.next_tasks:type_name -> crontab.CrontabTaskInfo
+	2,  // 15: crontab.api.List:input_type -> crontab.ReqPlanList
+	1,  // 16: crontab.api.Add:input_type -> crontab.Plan
+	1,  // 17: crontab.api.Update:input_type -> crontab.Plan
+	3,  // 18: crontab.api.Remove:input_type -> crontab.DeleteRequest
+	6,  // 19: crontab.api.ListRecordPlanStreams:input_type -> crontab.ReqPlanStreamList
+	5,  // 20: crontab.api.AddRecordPlanStream:input_type -> crontab.PlanStream
+	5,  // 21: crontab.api.UpdateRecordPlanStream:input_type -> crontab.PlanStream
+	8,  // 22: crontab.api.RemoveRecordPlanStream:input_type -> crontab.DeletePlanStreamRequest
+	9,  // 23: crontab.api.ParsePlanTime:input_type -> crontab.ParsePlanRequest
+	12, // 24: crontab.api.GetCrontabStatus:input_type -> crontab.CrontabStatusRequest
+	0,  // 25: crontab.api.List:output_type -> crontab.PlanResponseList
+	4,  // 26: crontab.api.Add:output_type -> crontab.Response
+	4,  // 27: crontab.api.Update:output_type -> crontab.Response
+	4,  // 28: crontab.api.Remove:output_type -> crontab.Response
+	7,  // 29: crontab.api.ListRecordPlanStreams:output_type -> crontab.RecordPlanStreamResponseList
+	4,  // 30: crontab.api.AddRecordPlanStream:output_type -> crontab.Response
+	4,  // 31: crontab.api.UpdateRecordPlanStream:output_type -> crontab.Response
+	4,  // 32: crontab.api.RemoveRecordPlanStream:output_type -> crontab.Response
+	11, // 33: crontab.api.ParsePlanTime:output_type -> crontab.ParsePlanResponse
+	14, // 34: crontab.api.GetCrontabStatus:output_type -> crontab.CrontabStatusResponse
+	25, // [25:35] is the sub-list for method output_type
+	15, // [15:25] is the sub-list for method input_type
+	15, // [15:15] is the sub-list for extension type_name
+	15, // [15:15] is the sub-list for extension extendee
+	0,  // [0:15] is the sub-list for field type_name
 }
 
 func init() { file_crontab_proto_init() }
@@ -787,7 +1307,7 @@ func file_crontab_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_crontab_proto_rawDesc), len(file_crontab_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   9,
+			NumMessages:   15,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

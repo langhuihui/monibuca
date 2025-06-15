@@ -241,7 +241,7 @@ func (IO *MultipleConnection) SendSubscriber(subscriber *m7s.Subscriber) (audioS
 				return
 			}
 		}
-
+		rcc.RTCPFeedback = videoRTCPFeedback
 		videoTLSRTP, err = NewTrackLocalStaticRTP(rcc.RTPCodecCapability, videoCodec.String(), subscriber.StreamPath)
 		if err != nil {
 			return
@@ -450,32 +450,6 @@ func (r *RemoteStream) Go() (err error) {
 type SingleConnection struct {
 	task.Manager[string, *RemoteStream]
 	Connection
-}
-
-func (c *SingleConnection) Start() (err error) {
-	c.OnICECandidate(func(ice *ICECandidate) {
-		if ice != nil {
-			c.Info(ice.ToJSON().Candidate)
-		}
-	})
-	// 监听ICE连接状态变化
-	c.OnICEConnectionStateChange(func(state ICEConnectionState) {
-		c.Debug("ICE connection state changed", "state", state.String())
-		if state == ICEConnectionStateFailed {
-			c.Error("ICE connection failed")
-		}
-	})
-
-	c.OnConnectionStateChange(func(state PeerConnectionState) {
-		c.Info("Connection State has changed:" + state.String())
-		switch state {
-		case PeerConnectionStateConnected:
-
-		case PeerConnectionStateDisconnected, PeerConnectionStateFailed, PeerConnectionStateClosed:
-			c.Stop(errors.New("connection state:" + state.String()))
-		}
-	})
-	return
 }
 
 func (c *SingleConnection) Receive() {

@@ -165,10 +165,9 @@ func (p *MP4Plugin) download(w http.ResponseWriter, r *http.Request) {
 
 	// 构建查询条件，查找指定时间范围内的录制记录
 	queryRecord := m7s.RecordStream{
-		Mode: m7s.RecordModeAuto,
 		Type: "mp4",
 	}
-	p.DB.Where(&queryRecord).Find(&streams, "end_time>? AND start_time<? AND stream_path=?", startTime, endTime, streamPath)
+	p.DB.Where(&queryRecord).Find(&streams, "event_id=0 AND end_time>? AND start_time<? AND stream_path=?", startTime, endTime, streamPath)
 
 	// 创建 MP4 混合器
 	muxer := mp4.NewMuxer(flag)
@@ -533,42 +532,44 @@ func (p *MP4Plugin) EventStart(ctx context.Context, req *mp4pb.ReqEventRecord) (
 				Append:   false,
 				Fragment: 0,
 				FilePath: filepath.Join(p.EventRecordFilePath, stream.StreamPath, time.Now().Local().Format("2006-01-02-15-04-05")),
+				Mode:     config.RecordModeEvent,
+				Event: &config.RecordEvent{
+					EventId:        req.EventId,
+					EventLevel:     req.EventLevel,
+					EventName:      req.EventName,
+					EventDesc:      req.EventDesc,
+					BeforeDuration: uint32(beforeDuration / time.Millisecond),
+					AfterDuration:  uint32(afterDuration / time.Millisecond),
+				},
 			}
 			//recordJob := recorder.GetRecordJob()
 			var subconfig config.Subscribe
 			defaults.SetDefaults(&subconfig)
 			subconfig.BufferTime = beforeDuration
-			recordJob := p.Record(stream, recordConf, &subconfig)
-			recordJob.EventId = req.EventId
-			recordJob.EventLevel = req.EventLevel
-			recordJob.EventName = req.EventName
-			recordJob.EventDesc = req.EventDesc
-			recordJob.AfterDuration = afterDuration
-			recordJob.BeforeDuration = beforeDuration
-			recordJob.Mode = m7s.RecordModeEvent
+			p.Record(stream, recordConf, &subconfig)
 		}
 	} else {
-		if tmpJob.AfterDuration != 0 { //当前有事件录像正在录制，则更新该录像的结束时间
-			tmpJob.AfterDuration = time.Duration(tmpJob.Subscriber.VideoReader.AbsTime)*time.Millisecond + afterDuration
+		if tmpJob.Event != nil { //当前有事件录像正在录制，则更新该录像的结束时间
+			tmpJob.Event.AfterDuration = tmpJob.Subscriber.VideoReader.AbsTime + uint32(afterDuration/time.Millisecond)
+			if p.DB != nil {
+				p.DB.Save(&tmpJob.Event)
+			}
 		} else { //当前有自动录像正在录制，则生成事件录像的记录，而不去生成事件录像的文件
-			recordStream := &m7s.RecordStream{
-				StreamPath:     req.StreamPath,
+			newEvent := &config.RecordEvent{
 				EventId:        req.EventId,
 				EventLevel:     req.EventLevel,
-				EventDesc:      req.EventDesc,
 				EventName:      req.EventName,
-				Mode:           m7s.RecordModeEvent,
-				BeforeDuration: beforeDuration,
-				AfterDuration:  afterDuration,
-				Type:           "mp4",
+				EventDesc:      req.EventDesc,
+				BeforeDuration: uint32(beforeDuration / time.Millisecond),
+				AfterDuration:  uint32(afterDuration / time.Millisecond),
 			}
-			now := time.Now()
-			startTime := now.Add(-beforeDuration)
-			endTime := now.Add(afterDuration)
-			recordStream.StartTime = startTime
-			recordStream.EndTime = endTime
 			if p.DB != nil {
-				p.DB.Save(&recordStream)
+				p.DB.Save(&m7s.EventRecordStream{
+					RecordEvent: newEvent,
+					RecordStream: m7s.RecordStream{
+						StreamPath: req.StreamPath,
+					},
+				})
 			}
 		}
 	}

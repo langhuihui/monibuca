@@ -40,7 +40,11 @@ func (conf *WebRTCPlugin) servePush(w http.ResponseWriter, r *http.Request) {
 	}
 	conn.SDP = string(bytes)
 	conn.Logger = conf.Logger
-	if conn.PeerConnection, err = conf.api.NewPeerConnection(Configuration{
+
+	if conn.PeerConnection, err = conf.CreatePC(SessionDescription{
+		Type: SDPTypeOffer,
+		SDP:  conn.SDP,
+	}, Configuration{
 		ICEServers: conf.ICEServers,
 	}); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -56,10 +60,7 @@ func (conf *WebRTCPlugin) servePush(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if err := conn.SetRemoteDescription(SessionDescription{Type: SDPTypeOffer, SDP: conn.SDP}); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
+
 	if answer, err := conn.GetAnswer(); err == nil {
 		w.WriteHeader(http.StatusCreated)
 		fmt.Fprint(w, answer.SDP)
@@ -89,9 +90,15 @@ func (conf *WebRTCPlugin) servePlay(w http.ResponseWriter, r *http.Request) {
 	if strings.Contains(strings.ToLower(conn.SDP), "h265") {
 		conn.SupportsH265 = true
 	}
-	if conn.PeerConnection, err = conf.api.NewPeerConnection(Configuration{
+
+	conn.PeerConnection, err = conf.CreatePC(SessionDescription{
+		Type: SDPTypeOffer,
+		SDP:  conn.SDP,
+	}, Configuration{
 		ICEServers: conf.ICEServers,
-	}); err != nil {
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	if rawQuery != "" {
@@ -106,10 +113,7 @@ func (conf *WebRTCPlugin) servePlay(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if err = conn.SetRemoteDescription(SessionDescription{Type: SDPTypeOffer, SDP: conn.SDP}); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+
 	if sdp, err := conn.GetAnswer(); err == nil {
 		w.Write([]byte(sdp.SDP))
 	} else {

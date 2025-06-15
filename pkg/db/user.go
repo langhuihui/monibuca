@@ -9,14 +9,11 @@ import (
 
 // User represents a user in the system
 type User struct {
-	ID        uint `gorm:"primarykey"`
-	CreatedAt time.Time
-	UpdatedAt time.Time
-	DeletedAt gorm.DeletedAt `gorm:"index"`
-	Username  string         `gorm:"uniqueIndex;size:64"`
-	Password  string         `gorm:"size:60"`                // bcrypt hash
-	Role      string         `gorm:"size:20;default:'user'"` // admin or user
-	LastLogin time.Time      `gorm:"type:datetime;default:CURRENT_TIMESTAMP"`
+	gorm.Model
+	Username  string    `gorm:"uniqueIndex;size:64"`
+	Password  string    `gorm:"size:60"`                // bcrypt hash
+	Role      string    `gorm:"size:20;default:'user'"` // admin or user
+	LastLogin time.Time `gorm:"default:CURRENT_TIMESTAMP"`
 }
 
 // BeforeCreate hook to hash password before saving

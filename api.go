@@ -184,7 +184,7 @@ func (s *Server) StreamInfo(ctx context.Context, req *pb.StreamSnapRequest) (res
 		if record.StreamPath == req.StreamPath {
 			recordings = append(recordings, &pb.RecordingDetail{
 				FilePath:   record.RecConf.FilePath,
-				Mode:       record.Mode,
+				Mode:       record.RecConf.Mode,
 				Fragment:   durationpb.New(record.RecConf.Fragment),
 				Append:     record.RecConf.Append,
 				PluginName: record.Plugin.Meta.Name,
@@ -554,7 +554,7 @@ func (s *Server) StreamList(_ context.Context, req *pb.StreamListRequest) (res *
 	for record := range s.Records.SafeRange {
 		recordingMap[record.StreamPath] = append(recordingMap[record.StreamPath], &pb.RecordingDetail{
 			FilePath:   record.RecConf.FilePath,
-			Mode:       record.Mode,
+			Mode:       record.RecConf.Mode,
 			Fragment:   durationpb.New(record.RecConf.Fragment),
 			Append:     record.RecConf.Append,
 			PluginName: record.Plugin.Meta.Name,
@@ -750,7 +750,7 @@ func (s *Server) GetRecordList(ctx context.Context, req *pb.ReqRecordList) (resp
 	offset := (req.PageNum - 1) * req.PageSize // 计算偏移量
 	var totalCount int64                       //总条数
 
-	var result []*RecordStream
+	var result []*EventRecordStream
 	query := s.DB.Model(&RecordStream{})
 	if strings.Contains(req.StreamPath, "*") {
 		query = query.Where("stream_path like ?", strings.ReplaceAll(req.StreamPath, "*", "%"))
