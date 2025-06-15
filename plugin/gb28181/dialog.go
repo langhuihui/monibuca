@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"net"
 	"net/url"
 	"strconv"
 	"strings"
@@ -99,15 +100,20 @@ func (d *Dialog) Start() (err error) {
 
 	d.gb.dialogs.Set(d)
 	//defer d.gb.dialogs.Remove(d)
-	if d.gb.MediaPort.Valid() {
-		select {
-		case d.MediaPort = <-d.gb.tcpPorts:
-		default:
-			return fmt.Errorf("no available tcp port")
-		}
+	if d.gb.tcpPort > 0 {
+		d.MediaPort = d.gb.tcpPort
 	} else {
-		d.MediaPort = d.gb.MediaPort[0]
+		if d.gb.MediaPort.Valid() {
+			select {
+			case d.MediaPort = <-d.gb.tcpPorts:
+			default:
+				return fmt.Errorf("no available tcp port")
+			}
+		} else {
+			d.MediaPort = d.gb.MediaPort[0]
+		}
 	}
+
 	ssrc := d.CreateSSRC(d.gb.Serial)
 	d.Info("MediaIp is ", device.MediaIp)
 
@@ -266,7 +272,7 @@ func (d *Dialog) Run() (err error) {
 					if _ssrc, err := strconv.ParseInt(ls[1], 10, 0); err == nil {
 						d.SSRC = uint32(_ssrc)
 					} else {
-						d.gb.Error("read invite response y ", "err", err)
+						return errors.New("read invite respose y error" + err.Error())
 					}
 				}
 			case "c":
@@ -299,6 +305,18 @@ func (d *Dialog) Run() (err error) {
 	if d.StreamMode == "TCP-ACTIVE" {
 		pub.Receiver.ListenAddr = fmt.Sprintf("%s:%d", d.targetIP, d.targetPort)
 	} else {
+		if d.gb.tcpPort > 0 {
+			d.Info("into single port mode,use gb.tcpPort", d.gb.tcpPort)
+			if d.gb.netListener != nil {
+				d.Info("use gb.netListener", d.gb.netListener.Addr())
+				pub.Receiver.Listener = d.gb.netListener
+			} else {
+				d.Info("listen tcp4", fmt.Sprintf(":%d", d.gb.tcpPort))
+				pub.Receiver.Listener, _ = net.Listen("tcp4", fmt.Sprintf(":%d", d.gb.tcpPort))
+				d.gb.netListener = pub.Receiver.Listener
+			}
+			pub.Receiver.SSRC = d.SSRC
+		}
 		pub.Receiver.ListenAddr = fmt.Sprintf(":%d", d.MediaPort)
 	}
 	pub.Receiver.StreamMode = d.StreamMode
@@ -316,7 +334,11 @@ func (d *Dialog) GetKey() uint32 {
 }
 
 func (d *Dialog) Dispose() {
-	d.gb.tcpPorts <- d.MediaPort
+	if d.gb.tcpPort == 0 {
+		// 如果没有设置tcp端口，则将MediaPort设置为0，表示不再使用
+		d.gb.tcpPorts <- d.MediaPort
+	}
+	d.Info("dialog dispose", "ssrc", d.SSRC, "mediaPort", d.MediaPort, "streamMode", d.StreamMode, "deviceId", d.Channel.DeviceID, "channelId", d.Channel.ChannelID)
 	if d.session != nil {
 		err := d.session.Bye(d)
 		if err != nil {

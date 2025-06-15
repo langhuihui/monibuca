@@ -2868,7 +2868,7 @@ func (gb *GB28181Plugin) RemoveDevice(ctx context.Context, req *pb.RemoveDeviceR
 		}
 
 		// 删除设备关联的通道
-		if err := tx.Delete(&gb28181.DeviceChannel{DeviceID: req.Id}).Error; err != nil {
+		if err := tx.Where("device_id = ?", req.Id).Delete(&gb28181.DeviceChannel{}).Error; err != nil {
 			tx.Rollback()
 			resp.Code = 500
 			resp.Message = "删除设备通道失败"

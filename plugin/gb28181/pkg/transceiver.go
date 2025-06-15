@@ -44,8 +44,9 @@ type Receiver struct {
 	psAudio    PSAudio
 	RTPReader  *rtp2.TCP
 	ListenAddr string
-	listener   net.Listener
+	Listener   net.Listener
 	StreamMode string // 数据流传输模式（UDP:udp传输/TCP-ACTIVE：tcp主动模式/TCP-PASSIVE：tcp被动模式）
+	SSRC       uint32 // RTP SSRC
 }
 
 func NewPSPublisher(puber *m7s.Publisher) *PSPublisher {
@@ -147,9 +148,19 @@ func (p *Receiver) ReadRTP(rtp util.Buffer) (err error) {
 		p.Error("unmarshal error", "err", err)
 		return
 	}
+
+	// 如果设置了SSRC过滤，只处理匹配的SSRC
+	if p.SSRC != 0 && p.SSRC != p.Packet.SSRC {
+		p.Info("into single port mode, ssrc mismatch", "expected", p.SSRC, "actual", p.Packet.SSRC)
+		if p.TraceEnabled() {
+			p.Trace("rtp ssrc mismatch, skip", "expected", p.SSRC, "actual", p.Packet.SSRC)
+		}
+		return nil
+	}
+
 	if lastSeq == 0 || p.SequenceNumber == lastSeq+1 {
 		if p.TraceEnabled() {
-			p.Trace("rtp", "len", rtp.Len(), "seq", p.SequenceNumber, "payloadType", p.PayloadType, "ssrc", p.SSRC)
+			p.Trace("rtp", "len", rtp.Len(), "seq", p.SequenceNumber, "payloadType", p.PayloadType, "ssrc", p.Packet.SSRC)
 		}
 		copyData := make([]byte, len(p.Payload))
 		copy(copyData, p.Payload)
@@ -172,18 +183,24 @@ func (p *Receiver) Start() (err error) {
 		return nil
 	}
 	// TCP被动模式
-	p.listener, err = net.Listen("tcp4", p.ListenAddr)
-	if err != nil {
-		p.Error("start listen", "err", err)
-		return errors.New("start listen,err" + err.Error())
+	if p.Listener == nil {
+		p.Info("start new listener", "addr", p.ListenAddr)
+		p.Listener, err = net.Listen("tcp4", p.ListenAddr)
+		if err != nil {
+			p.Error("start listen", "err", err)
+			return errors.New("start listen,err" + err.Error())
+		}
 	}
 	p.Info("start listen", "addr", p.ListenAddr)
 	return
 }
 
 func (p *Receiver) Dispose() {
-	if p.listener != nil {
-		p.listener.Close()
+	if p.SSRC == 0 {
+		p.Info("into multiport mode ,close listener ", p.SSRC)
+		if p.Listener != nil {
+			p.Listener.Close()
+		}
 	}
 	if p.RTPReader != nil {
 		p.RTPReader.Close()
@@ -216,7 +233,7 @@ func (p *Receiver) Go() error {
 	}
 	// TCP被动模式
 	p.Info("start accept")
-	conn, err := p.listener.Accept()
+	conn, err := p.Listener.Accept()
 	if err != nil {
 		p.Error("accept", "err", err)
 		return err

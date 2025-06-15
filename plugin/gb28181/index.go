@@ -3,9 +3,9 @@ package plugin_gb28181pro
 import (
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -41,7 +41,7 @@ type GB28181Plugin struct {
 	pb.UnimplementedApiServer
 	m7s.Plugin
 	Serial         string `default:"34020000002000000001" desc:"sip 服务 id"` //sip 服务器 id, 默认 34020000002000000001
-	Realm          string `default:"3402000000" desc:"sip 服务域"`             //sip 服务器域，默认 3402000000
+	Realm          string `default:"3402000000" desc:"sip 服务域"`            //sip 服务器域，默认 3402000000
 	Password       string
 	Sip            SipConfig
 	MediaPort      util.Range[uint16] `default:"10001-20000" desc:"媒体端口范围"` //媒体端口范围
@@ -55,12 +55,14 @@ type GB28181Plugin struct {
 	forwardDialogs util.Collection[uint32, *ForwardDialog]
 	platforms      util.Collection[string, *Platform]
 	tcpPorts       chan uint16
+	tcpPort        uint16
 	sipPorts       []int
 	SipIP          string `desc:"sip发送命令的IP，一般是本地IP，多网卡时需要配置正确的IP"`
 	MediaIP        string `desc:"流媒体IP，用于接收流"`
 	deviceManager  task.Manager[string, *DeviceRegisterQueueTask]
 	Platforms      []*gb28181.PlatformModel
 	channels       util.Collection[string, *gb28181.DeviceChannel]
+	netListener    net.Listener
 }
 
 var _ = m7s.InstallPlugin[GB28181Plugin](m7s.PluginMeta{
@@ -74,6 +76,18 @@ var _ = m7s.InstallPlugin[GB28181Plugin](m7s.PluginMeta{
 	},
 	NewPullProxy: NewPullProxy,
 })
+
+func (gb *GB28181Plugin) Dispose() {
+	if gb.netListener != nil {
+		gb.Info("gb28181 plugin dispose")
+		err := gb.netListener.Close()
+		if err != nil {
+			gb.Error("Close netListener error", "error", err)
+		} else {
+			gb.Info("netListener closed")
+		}
+	}
+}
 
 func init() {
 	sip.SIPDebug = true
@@ -153,8 +167,16 @@ func (gb *GB28181Plugin) OnInit() (err error) {
 		if gb.MediaPort.Valid() {
 			gb.SetDescription("tcp", fmt.Sprintf("%d-%d", gb.MediaPort[0], gb.MediaPort[1]))
 			gb.tcpPorts = make(chan uint16, gb.MediaPort.Size())
-			for i := range gb.MediaPort.Size() {
-				gb.tcpPorts <- gb.MediaPort[0] + i
+			if gb.MediaPort.Size() == 0 {
+				gb.tcpPort = gb.MediaPort[0]
+				gb.netListener, _ = net.Listen("tcp4", fmt.Sprintf(":%d", gb.tcpPort))
+			} else if gb.MediaPort.Size() == 1 {
+				gb.tcpPort = gb.MediaPort[0] + 1
+				gb.netListener, _ = net.Listen("tcp4", fmt.Sprintf(":%d", gb.tcpPort))
+			} else {
+				for i := range gb.MediaPort.Size() {
+					gb.tcpPorts <- gb.MediaPort[0] + i
+				}
 			}
 		} else {
 			gb.SetDescription("tcp", fmt.Sprintf("%d", gb.MediaPort[0]))
@@ -438,22 +460,9 @@ func (gb *GB28181Plugin) OnRegister(req *sip.Request, tx sip.ServerTransaction) 
 	from := req.From()
 	if from == nil || from.Address.User == "" {
 		gb.Error("OnRegister", "error", "no user")
-		response := sip.NewResponseFromRequest(req, sip.StatusBadRequest, "Invalid sip from format", nil)
-		if err := tx.Respond(response); err != nil {
-			gb.Error("respond BadRequest", "error", err.Error())
-		}
 		return
 	}
 	deviceId := from.Address.User
-	// 验证设备ID是否符合GB28181规范(20位数字)
-	if match, _ := regexp.MatchString(`^\d{20}$`, deviceId); !match {
-		gb.Error("OnRegister", "error", "invalid device id format, must be 20 digits", "deviceId", deviceId)
-		response := sip.NewResponseFromRequest(req, sip.StatusBadRequest, "Invalid device ID format", nil)
-		if err := tx.Respond(response); err != nil {
-			gb.Error("respond BadRequest", "error", err.Error())
-		}
-		return
-	}
 	registerHandlerTask := registerHandlerTask{
 		gb:  gb,
 		req: req,
