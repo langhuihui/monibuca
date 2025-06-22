@@ -29,6 +29,10 @@ class PacketReplayer:
         self.first_data_packet = True  # 标记是否是第一个数据包
         self.total_packets_sent = 0  # 发送的数据包数量
         self.total_bytes_sent = 0  # 发送的总字节数
+        # 添加时间控制相关属性
+        self.first_packet_time = None  # 第一个包的时间戳
+        self.use_original_timing = True  # 是否使用原始时间间隔
+        self.last_packet_time = None  # 上一个包的时间戳
 
     def establish_tcp_connection(self, src_port):
         """建立TCP连接"""
@@ -185,6 +189,7 @@ class PacketReplayer:
     def replay_packets(self, src_ip=None, src_port=None, protocol=None, delay=0):
         """边读取边重放数据包"""
         print(f"开始读取并重放数据包到 {self.target_ip}:{self.target_port}")
+        print(f"使用原始时间间隔发送数据包")
         
         try:
             reader = PcapReader(self.pcap_file)
@@ -233,6 +238,19 @@ class PacketReplayer:
                     reader_thread.start()
                     connection_established = True
                 
+                # 处理时间间隔
+                current_time = float(packet.time)
+                if self.first_packet_time is None:
+                    self.first_packet_time = current_time
+                    self.last_packet_time = current_time
+                elif self.use_original_timing:
+                    # 计算与上一个包的时间差
+                    time_diff = current_time - self.last_packet_time
+                    if time_diff > 0:
+                        print(f"等待 {time_diff:.3f} 秒后发送下一个包...")
+                        time.sleep(time_diff)
+                    self.last_packet_time = current_time
+                
                 if not self.send_packet(packet, packet_count):
                     print("发送数据包失败，退出")
                     return
@@ -244,6 +262,10 @@ class PacketReplayer:
             print(f"总共处理了 {packet_count} 个数据包")
             print(f"成功发送了 {self.total_packets_sent} 个数据包")
             print(f"总共发送了 {self.total_bytes_sent} 字节数据")
+            if self.first_packet_time is not None:
+                total_time = float(self.last_packet_time - self.first_packet_time)
+                print(f"总耗时: {total_time:.3f} 秒")
+                print(f"平均发送速率: {self.total_bytes_sent / total_time:.2f} 字节/秒")
             
         except Exception as e:
             print(f"处理数据包时出错: {e}")
