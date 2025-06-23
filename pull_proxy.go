@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/url"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -287,6 +288,12 @@ func (s *Server) AddPullProxy(ctx context.Context, req *pb.PullProxyInfo) (res *
 				pullProxyConfig.Type = "flv"
 			case ".mp4":
 				pullProxyConfig.Type = "mp4"
+			default:
+				pattern := `^\d{20}/\d{20}$`
+				re := regexp.MustCompile(pattern)
+				if re.MatchString(u.Path) {
+					pullProxyConfig.Type = "gb28181"
+				}
 			}
 		}
 	}
