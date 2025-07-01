@@ -121,29 +121,33 @@ func (p *PullJob) Init(puller IPuller, plugin *Plugin, streamPath string, conf c
 	})
 	puller.SetRetry(conf.MaxRetry, conf.RetryInterval)
 
-	if sender := plugin.getHookSender(config.HookOnPullStart); sender != nil {
+	if sender, webhook := plugin.getHookSender(config.HookOnPullStart); sender != nil {
 		puller.OnStart(func() {
 			webhookData := map[string]interface{}{
+				"alarmDesc":  config.HookOnPullStart,
 				"event":      config.HookOnPullStart,
 				"streamPath": streamPath,
 				"url":        conf.URL,
 				"args":       conf.Args,
 				"pluginName": plugin.Meta.Name,
 				"timestamp":  time.Now().Unix(),
+				"alarmType":  config.AlarmPullRecover,
 			}
-			sender(config.HookOnPullStart, webhookData)
+			sender(webhook, webhookData)
 		})
 	}
 
-	if sender := plugin.getHookSender(config.HookOnPullEnd); sender != nil {
+	if sender, webhook := plugin.getHookSender(config.HookOnPullEnd); sender != nil {
 		puller.OnDispose(func() {
 			webhookData := map[string]interface{}{
+				"alarmDesc":  puller.StopReason().Error(),
 				"event":      config.HookOnPullEnd,
 				"streamPath": streamPath,
 				"reason":     puller.StopReason().Error(),
 				"timestamp":  time.Now().Unix(),
+				"alarmType":  config.AlarmPullOffline,
 			}
-			sender(config.HookOnPullEnd, webhookData)
+			sender(webhook, webhookData)
 		})
 	}
 

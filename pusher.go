@@ -43,20 +43,20 @@ func (p *PushJob) Init(pusher IPusher, plugin *Plugin, streamPath string, conf c
 		"maxRetry":   conf.MaxRetry,
 	})
 	pusher.SetRetry(conf.MaxRetry, conf.RetryInterval)
-	if sender := plugin.getHookSender(config.HookOnPushStart); sender != nil {
+	if sender, webhook := plugin.getHookSender(config.HookOnPushStart); sender != nil {
 		pusher.OnStart(func() {
 			webhookData := map[string]interface{}{
-				"event":      config.HookOnPullStart,
+				"event":      config.HookOnPushStart,
 				"streamPath": streamPath,
 				"url":        conf.URL,
 				"pluginName": plugin.Meta.Name,
 				"timestamp":  time.Now().Unix(),
 			}
-			sender(config.HookOnPullStart, webhookData)
+			sender(webhook, webhookData)
 		})
 	}
 
-	if sender := plugin.getHookSender(config.HookOnPushEnd); sender != nil {
+	if sender, webhook := plugin.getHookSender(config.HookOnPushEnd); sender != nil {
 		pusher.OnDispose(func() {
 			webhookData := map[string]interface{}{
 				"event":      config.HookOnPullEnd,
@@ -64,7 +64,7 @@ func (p *PushJob) Init(pusher IPusher, plugin *Plugin, streamPath string, conf c
 				"reason":     pusher.StopReason().Error(),
 				"timestamp":  time.Now().Unix(),
 			}
-			sender(config.HookOnPullEnd, webhookData)
+			sender(webhook, webhookData)
 		})
 	}
 	plugin.Server.Pushs.Add(p, plugin.Logger.With("pushURL", conf.URL, "streamPath", streamPath))

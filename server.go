@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"gopkg.in/yaml.v3"
 	"log/slog"
 	"net"
 	"net/http"
@@ -34,7 +35,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
-	"gopkg.in/yaml.v3"
 	"gorm.io/gorm"
 	"m7s.live/v5/pb"
 	. "m7s.live/v5/pkg"
@@ -45,7 +45,7 @@ import (
 
 var (
 	Version      = "v5.0.0"
-	MergeConfigs = [...]string{"Publish", "Subscribe", "HTTP", "PublicIP", "PublicIPv6", "LogLevel", "EnableAuth", "DB"}
+	MergeConfigs = [...]string{"Publish", "Subscribe", "HTTP", "PublicIP", "PublicIPv6", "LogLevel", "EnableAuth", "DB", "Hook"}
 	ExecPath     = os.Args[0]
 	ExecDir      = filepath.Dir(ExecPath)
 	ServerMeta   = PluginMeta{
@@ -292,7 +292,7 @@ func (s *Server) Start() (err error) {
 				return
 			}
 			// Auto-migrate models
-			if err = s.DB.AutoMigrate(&db.User{}, &PullProxyConfig{}, &PushProxyConfig{}, &StreamAliasDB{}); err != nil {
+			if err = s.DB.AutoMigrate(&db.User{}, &PullProxyConfig{}, &PushProxyConfig{}, &StreamAliasDB{}, &AlarmInfo{}); err != nil {
 				s.Error("failed to auto-migrate models", "error", err)
 				return
 			}
@@ -438,6 +438,14 @@ func (s *Server) Start() (err error) {
 		}
 		return nil
 	}, "serverStart")
+	if sender, webhook := s.getHookSender(config.HookOnSystemStart); sender != nil {
+		webhookData := map[string]interface{}{
+			"alarmDesc":  config.HookOnSystemStart,
+			"streamPath": "",
+			"alarmType":  config.AlarmStartupRunning,
+		}
+		sender(webhook, webhookData)
+	}
 	return
 }
 

@@ -27,6 +27,7 @@ import (
 	"google.golang.org/grpc"
 	"gopkg.in/yaml.v3"
 	"gorm.io/gorm"
+
 	. "m7s.live/v5/pkg"
 	"m7s.live/v5/pkg/config"
 	"m7s.live/v5/pkg/db"
@@ -386,6 +387,7 @@ type WebHookTask struct {
 	conf     config.Webhook
 	data     any
 	jsonData []byte
+	alarm    AlarmInfo
 }
 
 func (t *WebHookTask) Start() error {
@@ -393,10 +395,60 @@ func (t *WebHookTask) Start() error {
 		return task.ErrTaskComplete
 	}
 
-	var err error
-	t.jsonData, err = json.Marshal(t.data)
-	if err != nil {
-		return fmt.Errorf("marshal webhook data: %w", err)
+	// 将t.data转换为AlarmInfo格式的JSON
+	var alarmInfo AlarmInfo
+
+	if t.data != nil {
+		// 先转成JSON，再转成AlarmInfo结构体
+		jsonData, err := json.Marshal(t.data)
+		if err != nil {
+			return fmt.Errorf("marshal data to json: %w", err)
+		}
+
+		// 获取主机名和IP地址
+		hostname, err := os.Hostname()
+		if err != nil {
+			hostname = "unknown"
+		}
+
+		// 获取本机IP地址
+		var ipAddr string
+		addrs, err := net.InterfaceAddrs()
+		if err == nil {
+			for _, addr := range addrs {
+				if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+					if ipnet.IP.To4() != nil {
+						ipAddr = ipnet.IP.String()
+						break
+					}
+				}
+			}
+		}
+		if ipAddr == "" {
+			ipAddr = "unknown"
+		}
+
+		// 将jsonData反序列化为map，添加ServerInfo字段，然后重新序列化
+		var dataMap map[string]interface{}
+		if err := json.Unmarshal(jsonData, &dataMap); err == nil {
+			dataMap["server_info"] = fmt.Sprintf("%s (%s)", hostname, ipAddr)
+			// 添加ISO格式的createAt字段
+			dataMap["createAt"] = time.Now().UTC().Format(time.RFC3339)
+			if newJsonData, err := json.Marshal(dataMap); err == nil {
+				jsonData = newJsonData
+			}
+		}
+
+		t.jsonData = jsonData
+
+		err = json.Unmarshal(jsonData, &alarmInfo)
+		if err != nil {
+			return fmt.Errorf("unmarshal json to AlarmInfo: %w", err)
+		}
+		alarmInfo.CreatedAt = time.Now()
+		alarmInfo.UpdatedAt = time.Now()
+
+		t.alarm = alarmInfo
 	}
 
 	t.SetRetry(t.conf.RetryTimes, t.conf.RetryInterval)
@@ -404,6 +456,19 @@ func (t *WebHookTask) Start() error {
 }
 
 func (t *WebHookTask) Go() error {
+	// 检查是否需要保存告警到数据库
+	var dbID uint
+	if t.conf.SaveAlarm && t.plugin.DB != nil {
+		// 默认 IsSent 为 false
+		t.alarm.IsSent = false
+		if err := t.plugin.DB.Create(&t.alarm).Error; err != nil {
+			t.plugin.Error("保存告警到数据库失败", "error", err)
+		} else {
+			dbID = t.alarm.ID
+			t.plugin.Info("告警已保存到数据库", "id", dbID)
+		}
+	}
+
 	req, err := http.NewRequest(t.conf.Method, t.conf.URL, bytes.NewBuffer(t.jsonData))
 	if err != nil {
 		return err
@@ -420,26 +485,36 @@ func (t *WebHookTask) Go() error {
 
 	resp, err := client.Do(req)
 	if err != nil {
-		t.plugin.Error("webhook request failed", "error", err)
+		t.plugin.Error("webhook请求失败", "error", err)
 		return err
 	}
 	defer resp.Body.Close()
+
+	// 如果发送成功且已保存到数据库，则更新IsSent字段为true
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 && t.conf.SaveAlarm && t.plugin.DB != nil && dbID > 0 {
+		t.alarm.IsSent = true
+		if err := t.plugin.DB.Model(&AlarmInfo{}).Where("id = ?", dbID).Update("is_sent", true).Error; err != nil {
+			t.plugin.Error("更新告警发送状态失败", "error", err)
+		} else {
+			t.plugin.Info("告警发送状态已更新", "id", dbID, "is_sent", true)
+		}
+		return task.ErrTaskComplete
+	}
 
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		return task.ErrTaskComplete
 	}
 
-	err = fmt.Errorf("webhook request failed with status: %d", resp.StatusCode)
-	t.plugin.Error("webhook response error", "status", resp.StatusCode)
+	err = fmt.Errorf("webhook请求失败，状态码：%d", resp.StatusCode)
+	t.plugin.Error("webhook响应错误", "状态码", resp.StatusCode)
 	return err
 }
 
-func (p *Plugin) SendWebhook(hookType config.HookType, data any) *task.Task {
+func (p *Plugin) SendWebhook(conf config.Webhook, data any) *task.Task {
 	webhookTask := &WebHookTask{
-		plugin:   p,
-		hookType: hookType,
-		conf:     p.config.Hook[hookType],
-		data:     data,
+		plugin: p,
+		conf:   conf,
+		data:   data,
 	}
 	return p.AddTask(webhookTask)
 }
@@ -536,6 +611,7 @@ func (p *Plugin) OnSubscribe(streamPath string, args url.Values) {
 	//	}
 	//}
 }
+
 func (p *Plugin) PublishWithConfig(ctx context.Context, streamPath string, conf config.Publish) (publisher *Publisher, err error) {
 	publisher = createPublisher(p, streamPath, conf)
 	if p.config.EnableAuth && publisher.Type == PublishTypeServer {
@@ -557,30 +633,29 @@ func (p *Plugin) PublishWithConfig(ctx context.Context, streamPath string, conf 
 	}
 	err = p.Server.Streams.AddTask(publisher, ctx).WaitStarted()
 	if err == nil {
-		if sender := p.getHookSender(config.HookOnPublishEnd); sender != nil {
+		if sender, webhook := p.getHookSender(config.HookOnPublishEnd); sender != nil {
 			publisher.OnDispose(func() {
 				webhookData := map[string]interface{}{
-					"event":      config.HookOnPublishEnd,
+					"alarmType":  config.AlarmPullOffline,
 					"streamPath": publisher.StreamPath,
 					"publishId":  publisher.ID,
-					"reason":     publisher.StopReason().Error(),
-					"timestamp":  time.Now().Unix(),
+					"alarmDesc":  publisher.StopReason().Error(),
 				}
-				sender(config.HookOnPublishEnd, webhookData)
+				sender(webhook, webhookData)
 			})
 		}
-		if sender := p.getHookSender(config.HookOnPublishStart); sender != nil {
+		if sender, webhook := p.getHookSender(config.HookOnPublishStart); sender != nil {
 			webhookData := map[string]interface{}{
-				"event":      config.HookOnPublishStart,
+				"alarmType":  config.AlarmPullRecover,
+				"alarmDesc":  config.HookOnPublishStart,
 				"streamPath": publisher.StreamPath,
 				"args":       publisher.Args,
 				"publishId":  publisher.ID,
 				"remoteAddr": publisher.RemoteAddr,
 				"type":       publisher.Type,
 				"pluginName": p.Meta.Name,
-				"timestamp":  time.Now().Unix(),
 			}
-			sender(config.HookOnPublishStart, webhookData)
+			sender(webhook, webhookData)
 		}
 	}
 	return
@@ -621,7 +696,7 @@ func (p *Plugin) SubscribeWithConfig(ctx context.Context, streamPath string, con
 		}
 	}
 	if err == nil {
-		if sender := p.getHookSender(config.HookOnSubscribeEnd); sender != nil {
+		if sender, webhook := p.getHookSender(config.HookOnSubscribeEnd); sender != nil {
 			subscriber.OnDispose(func() {
 				webhookData := map[string]interface{}{
 					"event":        config.HookOnSubscribeEnd,
@@ -633,10 +708,10 @@ func (p *Plugin) SubscribeWithConfig(ctx context.Context, streamPath string, con
 				if subscriber.Publisher != nil {
 					webhookData["publishId"] = subscriber.Publisher.ID
 				}
-				sender(config.HookOnSubscribeEnd, webhookData)
+				sender(webhook, webhookData)
 			})
 		}
-		if sender := p.getHookSender(config.HookOnSubscribeStart); sender != nil {
+		if sender, webhook := p.getHookSender(config.HookOnSubscribeStart); sender != nil {
 			webhookData := map[string]interface{}{
 				"event":        config.HookOnSubscribeStart,
 				"streamPath":   subscriber.StreamPath,
@@ -647,7 +722,7 @@ func (p *Plugin) SubscribeWithConfig(ctx context.Context, streamPath string, con
 				"args":         subscriber.Args,
 				"timestamp":    time.Now().Unix(),
 			}
-			sender(config.HookOnSubscribeStart, webhookData)
+			sender(webhook, webhookData)
 		}
 	}
 	return
@@ -760,13 +835,21 @@ func (p *Plugin) handle(pattern string, handler http.Handler) {
 	p.Server.apiList = append(p.Server.apiList, pattern)
 }
 
-func (p *Plugin) getHookSender(hookType config.HookType) (sender func(hookType config.HookType, data any) *task.Task) {
+func (p *Plugin) getHookSender(hookType config.HookType) (sender func(webhook config.Webhook, data any) *task.Task, conf config.Webhook) {
 	if p.config.Hook != nil {
 		if _, ok := p.config.Hook[hookType]; ok {
 			sender = p.SendWebhook
+			conf = p.config.Hook[hookType]
+		} else if _, ok := p.config.Hook[config.HookDefault]; ok {
+			sender = p.SendWebhook
+			conf = p.config.Hook[config.HookDefault]
 		} else if p.Server.config.Hook != nil {
 			if _, ok := p.Server.config.Hook[hookType]; ok {
+				conf = p.config.Hook[hookType]
 				sender = p.Server.SendWebhook
+			} else if _, ok := p.Server.config.Hook[config.HookDefault]; ok {
+				sender = p.Server.SendWebhook
+				conf = p.config.Hook[config.HookDefault]
 			}
 		}
 	}
@@ -783,7 +866,7 @@ func (t *ServerKeepAliveTask) GetTickInterval() time.Duration {
 }
 
 func (t *ServerKeepAliveTask) Tick(now any) {
-	sender := t.plugin.getHookSender(config.HookOnServerKeepAlive)
+	sender, webhook := t.plugin.getHookSender(config.HookOnServerKeepAlive)
 	if sender == nil {
 		return
 	}
@@ -797,5 +880,5 @@ func (t *ServerKeepAliveTask) Tick(now any) {
 		"subscriberCount": s.Subscribers.Length,
 		"uptime":          time.Since(s.StartTime).Seconds(),
 	}
-	sender(config.HookOnServerKeepAlive, webhookData)
+	sender(webhook, webhookData)
 }

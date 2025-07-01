@@ -208,7 +208,6 @@ service api {
     };
   }
 
-
   // 查询录像记录
   rpc QueryRecord (QueryRecordRequest) returns (QueryRecordResponse) {
     option (google.api.http) = {
@@ -480,6 +479,15 @@ service api {
       post: "/gb28181/api/device/remove/{id}"
     };
   }
+
+  // 接收报警信息
+  rpc ReceiveAlarm (AlarmInfoRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      post: "/gb28181/api/alarm/receive"
+      body: "*"
+    };
+  }
+
   rpc OpenRTPServer(OpenRTPServerRequest) returns (OpenRTPServerResponse) {
     option (google.api.http) = {
       post: "/gb28181/api/rtp/open"
@@ -860,7 +868,6 @@ message RecordItem {
   string recorderId = 9;
 }
 
-
 message PtzControlRequest {
   string deviceId = 1;
   string channelId = 2;
@@ -1146,4 +1153,14 @@ message OpenRTPServerResponse {
   int32 code = 1;
   string message = 2;
   int32 data = 3;
+}
+
+// AlarmInfoRequest 接收报警信息的请求
+message AlarmInfoRequest {
+  string server_info = 1;           // 服务器信息
+  string stream_name = 2;           // 流名称
+  string stream_path = 3;           // 流的streampath
+  string alarm_desc = 4;            // 报警描述
+  int32 alarm_type = 5;             // 报警类型（对应之前定义的常量）
+  google.protobuf.Timestamp createAt=6;//创建时间
 }

@@ -87,6 +87,7 @@ const (
 	Api_DeleteGroupChannel_FullMethodName                = "/gb28181pro.api/DeleteGroupChannel"
 	Api_GetGroupChannels_FullMethodName                  = "/gb28181pro.api/GetGroupChannels"
 	Api_RemoveDevice_FullMethodName                      = "/gb28181pro.api/RemoveDevice"
+	Api_ReceiveAlarm_FullMethodName                      = "/gb28181pro.api/ReceiveAlarm"
 	Api_OpenRTPServer_FullMethodName                     = "/gb28181pro.api/OpenRTPServer"
 )
 
@@ -224,6 +225,8 @@ type ApiClient interface {
 	GetGroupChannels(ctx context.Context, in *GetGroupChannelsRequest, opts ...grpc.CallOption) (*GroupChannelsResponse, error)
 	// 删除设备
 	RemoveDevice(ctx context.Context, in *RemoveDeviceRequest, opts ...grpc.CallOption) (*BaseResponse, error)
+	// 接收报警信息
+	ReceiveAlarm(ctx context.Context, in *AlarmInfoRequest, opts ...grpc.CallOption) (*BaseResponse, error)
 	OpenRTPServer(ctx context.Context, in *OpenRTPServerRequest, opts ...grpc.CallOption) (*OpenRTPServerResponse, error)
 }
 
@@ -885,6 +888,16 @@ func (c *apiClient) RemoveDevice(ctx context.Context, in *RemoveDeviceRequest, o
 	return out, nil
 }
 
+func (c *apiClient) ReceiveAlarm(ctx context.Context, in *AlarmInfoRequest, opts ...grpc.CallOption) (*BaseResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BaseResponse)
+	err := c.cc.Invoke(ctx, Api_ReceiveAlarm_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *apiClient) OpenRTPServer(ctx context.Context, in *OpenRTPServerRequest, opts ...grpc.CallOption) (*OpenRTPServerResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(OpenRTPServerResponse)
@@ -1029,6 +1042,8 @@ type ApiServer interface {
 	GetGroupChannels(context.Context, *GetGroupChannelsRequest) (*GroupChannelsResponse, error)
 	// 删除设备
 	RemoveDevice(context.Context, *RemoveDeviceRequest) (*BaseResponse, error)
+	// 接收报警信息
+	ReceiveAlarm(context.Context, *AlarmInfoRequest) (*BaseResponse, error)
 	OpenRTPServer(context.Context, *OpenRTPServerRequest) (*OpenRTPServerResponse, error)
 	mustEmbedUnimplementedApiServer()
 }
@@ -1234,6 +1249,9 @@ func (UnimplementedApiServer) GetGroupChannels(context.Context, *GetGroupChannel
 }
 func (UnimplementedApiServer) RemoveDevice(context.Context, *RemoveDeviceRequest) (*BaseResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RemoveDevice not implemented")
+}
+func (UnimplementedApiServer) ReceiveAlarm(context.Context, *AlarmInfoRequest) (*BaseResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReceiveAlarm not implemented")
 }
 func (UnimplementedApiServer) OpenRTPServer(context.Context, *OpenRTPServerRequest) (*OpenRTPServerResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method OpenRTPServer not implemented")
@@ -2429,6 +2447,24 @@ func _Api_RemoveDevice_Handler(srv interface{}, ctx context.Context, dec func(in
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Api_ReceiveAlarm_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AlarmInfoRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).ReceiveAlarm(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_ReceiveAlarm_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).ReceiveAlarm(ctx, req.(*AlarmInfoRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Api_OpenRTPServer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(OpenRTPServerRequest)
 	if err := dec(in); err != nil {
@@ -2713,6 +2749,10 @@ var Api_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RemoveDevice",
 			Handler:    _Api_RemoveDevice_Handler,
+		},
+		{
+			MethodName: "ReceiveAlarm",
+			Handler:    _Api_ReceiveAlarm_Handler,
 		},
 		{
 			MethodName: "OpenRTPServer",

@@ -105,7 +105,7 @@ func (p *TransformJob) Init(transformer ITransformer, plugin *Plugin, pub *Publi
 		"conf":       conf,
 	})
 	transformer.SetRetry(-1, time.Second*2)
-	if sender := plugin.getHookSender(config.HookOnTransformStart); sender != nil {
+	if sender, webhook := plugin.getHookSender(config.HookOnTransformStart); sender != nil {
 		transformer.OnStart(func() {
 			webhookData := map[string]interface{}{
 				"event":      config.HookOnTransformStart,
@@ -113,10 +113,10 @@ func (p *TransformJob) Init(transformer ITransformer, plugin *Plugin, pub *Publi
 				"pluginName": plugin.Meta.Name,
 				"timestamp":  time.Now().Unix(),
 			}
-			sender(config.HookOnTransformStart, webhookData)
+			sender(webhook, webhookData)
 		})
 	}
-	if sender := plugin.getHookSender(config.HookOnTransformEnd); sender != nil {
+	if sender, webhook := plugin.getHookSender(config.HookOnTransformEnd); sender != nil {
 		transformer.OnDispose(func() {
 			webhookData := map[string]interface{}{
 				"event":      config.HookOnTransformEnd,
@@ -124,7 +124,7 @@ func (p *TransformJob) Init(transformer ITransformer, plugin *Plugin, pub *Publi
 				"reason":     transformer.StopReason().Error(),
 				"timestamp":  time.Now().Unix(),
 			}
-			sender(config.HookOnTransformEnd, webhookData)
+			sender(webhook, webhookData)
 		})
 	}
 	plugin.Server.Transforms.AddTask(p, plugin.Logger.With("streamPath", pub.StreamPath))

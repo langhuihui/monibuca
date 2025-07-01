@@ -32,9 +32,18 @@ const (
 	HookOnRecordEnd       HookType = "record_end"
 	HookOnTransformStart  HookType = "transform_start"
 	HookOnTransformEnd    HookType = "transform_end"
+	HookOnSystemStart     HookType = "system_start"
+	HookDefault           HookType = "default"
 
 	EventLevelLow  EventLevel = "low"
 	EventLevelHigh EventLevel = "high"
+
+	AlarmStorageException        = 0x10010 // 存储异常
+	AlarmStorageExceptionRecover = 0x10011 // 存储异常恢复
+	AlarmPullOffline             = 0x10012 // 拉流异常，触发一次报警。
+	AlarmPullRecover             = 0x10013 // 拉流恢复
+	AlarmDiskSpaceFull           = 0x10014 // 磁盘空间满,磁盘占有率，超出最大磁盘空间使用率，触发报警。
+	AlarmStartupRunning          = 0x10015 // 启动运行
 )
 
 type (
@@ -131,10 +140,11 @@ type (
 		URL            string            // Webhook 地址
 		Method         string            `default:"POST"` // HTTP 方法
 		Headers        map[string]string // 自定义请求头
-		TimeoutSeconds int               `default:"5"`  // 超时时间(秒)
-		RetryTimes     int               `default:"3"`  // 重试次数
-		RetryInterval  time.Duration     `default:"1s"` // 重试间隔
-		Interval       int               `default:"60"` // 保活间隔(秒)
+		TimeoutSeconds int               `default:"5"`     // 超时时间(秒)
+		RetryTimes     int               `default:"3"`     // 重试次数
+		RetryInterval  time.Duration     `default:"1s"`    // 重试间隔
+		Interval       int               `default:"60"`    // 保活间隔(秒)
+		SaveAlarm      bool              `default:"false"` // 是否保存告警到数据库
 	}
 	Common struct {
 		PublicIP   string

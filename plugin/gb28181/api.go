@@ -2,7 +2,9 @@ package plugin_gb28181pro
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"m7s.live/v5/pkg/config"
 	"net/http"
 	"net/url"
 	"os"
@@ -19,7 +21,6 @@ import (
 
 	"github.com/rs/zerolog"
 	"google.golang.org/protobuf/types/known/timestamppb"
-	"m7s.live/v5/pkg/config"
 	"m7s.live/v5/plugin/gb28181/pb"
 	gb28181 "m7s.live/v5/plugin/gb28181/pkg"
 )
@@ -88,8 +89,7 @@ func (gb *GB28181Plugin) List(ctx context.Context, req *pb.GetDevicesRequest) (*
 		for _, c := range channels {
 			pbChannels = append(pbChannels, &pb.Channel{
 				DeviceId:     c.ChannelID,
-				ParentId:     c.DeviceID,
-				ChannelId:    c.ChannelID,
+				ParentId:     c.ParentID,
 				Name:         c.Name,
 				Manufacturer: c.Manufacturer,
 				Model:        c.Model,
@@ -2929,5 +2929,41 @@ func (gb *GB28181Plugin) OpenRTPServer(ctx context.Context, req *pb.OpenRTPServe
 	resp.Code = 0
 	resp.Data = int32(mediaPort)
 	resp.Message = "success"
+	return resp, nil
+}
+
+// ReceiveAlarm 实现接收告警信息接口
+func (gb *GB28181Plugin) ReceiveAlarm(ctx context.Context, req *pb.AlarmInfoRequest) (*pb.BaseResponse, error) {
+	resp := &pb.BaseResponse{}
+
+	// 如果CreateAt为空，则使用当前时间
+	if req.CreateAt == nil {
+		req.CreateAt = timestamppb.Now()
+	}
+
+	// 打印接收到的告警信息
+	gb.Info("收到告警信息",
+		"创建时间", req.CreateAt,
+		"服务器信息", req.ServerInfo,
+		"流名称", req.StreamName,
+		"流路径", req.StreamPath,
+		"告警描述", req.AlarmDesc,
+		"告警类型", req.AlarmType,
+	)
+
+	// 转换为JSON格式并打印
+	jsonData, err := json.MarshalIndent(req, "", "  ")
+	if err != nil {
+		gb.Error("告警信息转JSON失败", "error", err)
+		resp.Code = 500
+		resp.Message = "告警信息处理失败: " + err.Error()
+		return resp, nil
+	}
+
+	gb.Info("告警信息JSON格式", "data", string(jsonData))
+
+	// 返回成功响应
+	resp.Code = 0
+	resp.Message = "告警信息接收成功"
 	return resp, nil
 }

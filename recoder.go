@@ -140,7 +140,7 @@ func (p *RecordJob) Init(recorder IRecorder, plugin *Plugin, streamPath string, 
 		"fragment":   conf.Fragment,
 	})
 	recorder.SetRetry(-1, time.Second)
-	if sender := plugin.getHookSender(config.HookOnRecordStart); sender != nil {
+	if sender, webhook := plugin.getHookSender(config.HookOnRecordStart); sender != nil {
 		recorder.OnStart(func() {
 			webhookData := map[string]interface{}{
 				"event":      config.HookOnRecordStart,
@@ -149,11 +149,11 @@ func (p *RecordJob) Init(recorder IRecorder, plugin *Plugin, streamPath string, 
 				"pluginName": plugin.Meta.Name,
 				"timestamp":  time.Now().Unix(),
 			}
-			sender(config.HookOnRecordStart, webhookData)
+			sender(webhook, webhookData)
 		})
 	}
 
-	if sender := plugin.getHookSender(config.HookOnRecordEnd); sender != nil {
+	if sender, webhook := plugin.getHookSender(config.HookOnRecordEnd); sender != nil {
 		recorder.OnDispose(func() {
 			webhookData := map[string]interface{}{
 				"event":      config.HookOnRecordEnd,
@@ -162,7 +162,7 @@ func (p *RecordJob) Init(recorder IRecorder, plugin *Plugin, streamPath string, 
 				"reason":     recorder.StopReason().Error(),
 				"timestamp":  time.Now().Unix(),
 			}
-			sender(config.HookOnRecordEnd, webhookData)
+			sender(webhook, webhookData)
 		})
 	}
 
