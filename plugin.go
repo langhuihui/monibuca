@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"gopkg.in/yaml.v3"
 	"net"
 	"net/http"
 	"net/url"
@@ -25,7 +26,6 @@ import (
 	gatewayRuntime "github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	myip "github.com/husanpao/ip"
 	"google.golang.org/grpc"
-	"gopkg.in/yaml.v3"
 	"gorm.io/gorm"
 
 	. "m7s.live/v5/pkg"
@@ -395,16 +395,8 @@ func (t *WebHookTask) Start() error {
 		return task.ErrTaskComplete
 	}
 
-	// 将t.data转换为AlarmInfo格式的JSON
-	var alarmInfo AlarmInfo
-
+	// 处理AlarmInfo数据
 	if t.data != nil {
-		// 先转成JSON，再转成AlarmInfo结构体
-		jsonData, err := json.Marshal(t.data)
-		if err != nil {
-			return fmt.Errorf("marshal data to json: %w", err)
-		}
-
 		// 获取主机名和IP地址
 		hostname, err := os.Hostname()
 		if err != nil {
@@ -428,26 +420,32 @@ func (t *WebHookTask) Start() error {
 			ipAddr = "unknown"
 		}
 
-		// 将jsonData反序列化为map，添加ServerInfo字段，然后重新序列化
-		var dataMap map[string]interface{}
-		if err := json.Unmarshal(jsonData, &dataMap); err == nil {
-			dataMap["server_info"] = fmt.Sprintf("%s (%s)", hostname, ipAddr)
-			// 添加ISO格式的createAt字段
-			dataMap["createAt"] = time.Now().UTC().Format(time.RFC3339)
-			if newJsonData, err := json.Marshal(dataMap); err == nil {
-				jsonData = newJsonData
-			}
+		// 直接使用t.data作为AlarmInfo
+		alarmInfo, ok := t.data.(AlarmInfo)
+		if !ok {
+			return fmt.Errorf("data is not of type AlarmInfo")
+		}
+
+		// 更新服务器信息
+		if alarmInfo.ServerInfo == "" {
+			alarmInfo.ServerInfo = fmt.Sprintf("%s (%s)", hostname, ipAddr)
+		}
+
+		// 确保时间戳已设置
+		if alarmInfo.CreatedAt.IsZero() {
+			alarmInfo.CreatedAt = time.Now()
+		}
+		if alarmInfo.UpdatedAt.IsZero() {
+			alarmInfo.UpdatedAt = time.Now()
+		}
+
+		// 将AlarmInfo序列化为JSON
+		jsonData, err := json.Marshal(alarmInfo)
+		if err != nil {
+			return fmt.Errorf("marshal AlarmInfo to json: %w", err)
 		}
 
 		t.jsonData = jsonData
-
-		err = json.Unmarshal(jsonData, &alarmInfo)
-		if err != nil {
-			return fmt.Errorf("unmarshal json to AlarmInfo: %w", err)
-		}
-		alarmInfo.CreatedAt = time.Now()
-		alarmInfo.UpdatedAt = time.Now()
-
 		t.alarm = alarmInfo
 	}
 
@@ -635,27 +633,22 @@ func (p *Plugin) PublishWithConfig(ctx context.Context, streamPath string, conf 
 	if err == nil {
 		if sender, webhook := p.getHookSender(config.HookOnPublishEnd); sender != nil {
 			publisher.OnDispose(func() {
-				webhookData := map[string]interface{}{
-					"alarmType":  config.AlarmPullOffline,
-					"streamPath": publisher.StreamPath,
-					"publishId":  publisher.ID,
-					"alarmDesc":  publisher.StopReason().Error(),
+				alarmInfo := AlarmInfo{
+					AlarmName:  string(config.HookOnPublishEnd),
+					AlarmDesc:  publisher.StopReason().Error(),
+					AlarmType:  config.AlarmPublishOffline,
+					StreamPath: publisher.StreamPath,
 				}
-				sender(webhook, webhookData)
+				sender(webhook, alarmInfo)
 			})
 		}
 		if sender, webhook := p.getHookSender(config.HookOnPublishStart); sender != nil {
-			webhookData := map[string]interface{}{
-				"alarmType":  config.AlarmPullRecover,
-				"alarmDesc":  config.HookOnPublishStart,
-				"streamPath": publisher.StreamPath,
-				"args":       publisher.Args,
-				"publishId":  publisher.ID,
-				"remoteAddr": publisher.RemoteAddr,
-				"type":       publisher.Type,
-				"pluginName": p.Meta.Name,
+			alarmInfo := AlarmInfo{
+				AlarmName:  string(config.HookOnPublishStart),
+				AlarmType:  config.AlarmPublishRecover,
+				StreamPath: publisher.StreamPath,
 			}
-			sender(webhook, webhookData)
+			sender(webhook, alarmInfo)
 		}
 	}
 	return
@@ -698,31 +691,22 @@ func (p *Plugin) SubscribeWithConfig(ctx context.Context, streamPath string, con
 	if err == nil {
 		if sender, webhook := p.getHookSender(config.HookOnSubscribeEnd); sender != nil {
 			subscriber.OnDispose(func() {
-				webhookData := map[string]interface{}{
-					"event":        config.HookOnSubscribeEnd,
-					"streamPath":   subscriber.StreamPath,
-					"subscriberId": subscriber.ID,
-					"reason":       subscriber.StopReason().Error(),
-					"timestamp":    time.Now().Unix(),
+				alarmInfo := AlarmInfo{
+					AlarmName:  string(config.HookOnSubscribeEnd),
+					AlarmDesc:  subscriber.StopReason().Error(),
+					AlarmType:  config.AlarmSubscribeOffline,
+					StreamPath: subscriber.StreamPath,
 				}
-				if subscriber.Publisher != nil {
-					webhookData["publishId"] = subscriber.Publisher.ID
-				}
-				sender(webhook, webhookData)
+				sender(webhook, alarmInfo)
 			})
 		}
 		if sender, webhook := p.getHookSender(config.HookOnSubscribeStart); sender != nil {
-			webhookData := map[string]interface{}{
-				"event":        config.HookOnSubscribeStart,
-				"streamPath":   subscriber.StreamPath,
-				"publishId":    subscriber.Publisher.ID,
-				"subscriberId": subscriber.ID,
-				"remoteAddr":   subscriber.RemoteAddr,
-				"type":         subscriber.Type,
-				"args":         subscriber.Args,
-				"timestamp":    time.Now().Unix(),
+			alarmInfo := AlarmInfo{
+				AlarmName:  string(config.HookOnSubscribeStart),
+				AlarmType:  config.AlarmSubscribeRecover,
+				StreamPath: subscriber.StreamPath,
 			}
-			sender(webhook, webhookData)
+			sender(webhook, alarmInfo)
 		}
 	}
 	return
@@ -870,15 +854,21 @@ func (t *ServerKeepAliveTask) Tick(now any) {
 	if sender == nil {
 		return
 	}
-	s := t.plugin.Server
-	webhookData := map[string]interface{}{
-		"event":           config.HookOnServerKeepAlive,
-		"timestamp":       time.Now().Unix(),
-		"streams":         s.Streams.Length,
-		"subscribers":     s.Subscribers.Length,
-		"publisherCount":  s.Streams.Length,
-		"subscriberCount": s.Subscribers.Length,
-		"uptime":          time.Since(s.StartTime).Seconds(),
+	//s := t.plugin.Server
+	alarmInfo := AlarmInfo{
+		AlarmName:  string(config.HookOnServerKeepAlive),
+		AlarmType:  config.AlarmKeepAliveOnline,
+		StreamPath: "",
 	}
-	sender(webhook, webhookData)
+	sender(webhook, alarmInfo)
+	//webhookData := map[string]interface{}{
+	//	"event":           config.HookOnServerKeepAlive,
+	//	"timestamp":       time.Now().Unix(),
+	//	"streams":         s.Streams.Length,
+	//	"subscribers":     s.Subscribers.Length,
+	//	"publisherCount":  s.Streams.Length,
+	//	"subscriberCount": s.Subscribers.Length,
+	//	"uptime":          time.Since(s.StartTime).Seconds(),
+	//}
+	//sender(webhook, webhookData)
 }

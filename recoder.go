@@ -142,27 +142,26 @@ func (p *RecordJob) Init(recorder IRecorder, plugin *Plugin, streamPath string, 
 	recorder.SetRetry(-1, time.Second)
 	if sender, webhook := plugin.getHookSender(config.HookOnRecordStart); sender != nil {
 		recorder.OnStart(func() {
-			webhookData := map[string]interface{}{
-				"event":      config.HookOnRecordStart,
-				"streamPath": streamPath,
-				"filePath":   conf.FilePath,
-				"pluginName": plugin.Meta.Name,
-				"timestamp":  time.Now().Unix(),
+			alarmInfo := AlarmInfo{
+				AlarmName:  string(config.HookOnRecordStart),
+				AlarmType:  config.AlarmStorageExceptionRecover,
+				StreamPath: streamPath,
+				FilePath:   conf.FilePath,
 			}
-			sender(webhook, webhookData)
+			sender(webhook, alarmInfo)
 		})
 	}
 
 	if sender, webhook := plugin.getHookSender(config.HookOnRecordEnd); sender != nil {
 		recorder.OnDispose(func() {
-			webhookData := map[string]interface{}{
-				"event":      config.HookOnRecordEnd,
-				"streamPath": streamPath,
-				"filePath":   conf.FilePath,
-				"reason":     recorder.StopReason().Error(),
-				"timestamp":  time.Now().Unix(),
+			alarmInfo := AlarmInfo{
+				AlarmType:  config.AlarmStorageException,
+				AlarmDesc:  recorder.StopReason().Error(),
+				AlarmName:  string(config.HookOnRecordEnd),
+				StreamPath: streamPath,
+				FilePath:   conf.FilePath,
 			}
-			sender(webhook, webhookData)
+			sender(webhook, alarmInfo)
 		})
 	}
 

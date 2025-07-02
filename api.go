@@ -942,3 +942,116 @@ func (s *Server) GetTransformList(ctx context.Context, req *emptypb.Empty) (res 
 	})
 	return
 }
+
+func (s *Server) GetAlarmList(ctx context.Context, req *pb.AlarmListRequest) (res *pb.AlarmListResponse, err error) {
+	// 初始化响应对象
+	res = &pb.AlarmListResponse{
+		Code:     0,
+		Message:  "success",
+		PageNum:  req.PageNum,
+		PageSize: req.PageSize,
+	}
+
+	// 检查数据库连接是否可用
+	if s.DB == nil {
+		res.Code = 500
+		res.Message = "数据库连接不可用"
+		return res, nil
+	}
+
+	// 构建查询条件
+	query := s.DB.Model(&AlarmInfo{})
+
+	// 添加时间范围过滤
+	startTime, endTime, err := util.TimeRangeQueryParse(url.Values{
+		"range": []string{req.Range},
+		"start": []string{req.Start},
+		"end":   []string{req.End},
+	})
+	if err == nil {
+		if !startTime.IsZero() {
+			query = query.Where("created_at >= ?", startTime)
+		}
+		if !endTime.IsZero() {
+			query = query.Where("created_at <= ?", endTime)
+		}
+	}
+
+	// 添加告警类型过滤
+	if req.AlarmType != 0 {
+		query = query.Where("alarm_type = ?", req.AlarmType)
+	}
+
+	// 添加 StreamPath 过滤
+	if req.StreamPath != "" {
+		if strings.Contains(req.StreamPath, "*") {
+			// 支持通配符搜索
+			query = query.Where("stream_path LIKE ?", strings.ReplaceAll(req.StreamPath, "*", "%"))
+		} else {
+			query = query.Where("stream_path = ?", req.StreamPath)
+		}
+	}
+
+	// 添加 StreamName 过滤
+	if req.StreamName != "" {
+		if strings.Contains(req.StreamName, "*") {
+			// 支持通配符搜索
+			query = query.Where("stream_name LIKE ?", strings.ReplaceAll(req.StreamName, "*", "%"))
+		} else {
+			query = query.Where("stream_name = ?", req.StreamName)
+		}
+	}
+
+	// 计算总记录数
+	var total int64
+	if err = query.Count(&total).Error; err != nil {
+		res.Code = 500
+		res.Message = "查询告警信息总数失败: " + err.Error()
+		return res, nil
+	}
+	res.Total = int32(total)
+
+	// 如果没有记录，直接返回
+	if total == 0 {
+		return res, nil
+	}
+
+	// 处理分页参数
+	if req.PageNum <= 0 {
+		req.PageNum = 1
+	}
+	if req.PageSize <= 0 {
+		req.PageSize = 10
+	}
+
+	// 查询分页数据
+	var alarmInfoList []AlarmInfo
+	offset := (req.PageNum - 1) * req.PageSize
+	if err = query.Order("created_at DESC").
+		Offset(int(offset)).
+		Limit(int(req.PageSize)).
+		Find(&alarmInfoList).Error; err != nil {
+		res.Code = 500
+		res.Message = "查询告警信息失败: " + err.Error()
+		return res, nil
+	}
+
+	// 转换为 protobuf 格式
+	res.Data = make([]*pb.AlarmInfo, len(alarmInfoList))
+	for i, alarm := range alarmInfoList {
+		res.Data[i] = &pb.AlarmInfo{
+			Id:         uint32(alarm.ID),
+			ServerInfo: alarm.ServerInfo,
+			StreamName: alarm.StreamName,
+			StreamPath: alarm.StreamPath,
+			AlarmDesc:  alarm.AlarmDesc,
+			AlarmType:  int32(alarm.AlarmType),
+			IsSent:     alarm.IsSent,
+			CreatedAt:  timestamppb.New(alarm.CreatedAt),
+			UpdatedAt:  timestamppb.New(alarm.UpdatedAt),
+			FilePath:   alarm.FilePath,
+		}
+	}
+
+	return res, nil
+}

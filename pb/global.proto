@@ -245,6 +245,11 @@ service api {
       body: "*"
     };
   }
+  rpc GetAlarmList (AlarmListRequest) returns (AlarmListResponse) {
+    option (google.api.http) = {
+      get: "/api/alarm/list"
+    };
+  }
 }
 
 message DisabledPluginsResponse {
@@ -741,4 +746,37 @@ message ResponseDelete {
 
 message ReqRecordCatalog {
   string type = 1;
+}
+
+message AlarmInfo {
+  uint32 id = 1;
+  string serverInfo = 2;
+  string streamName = 3;
+  string streamPath = 4;
+  string alarmDesc = 5;
+  int32 alarmType = 6;
+  bool isSent = 7;
+  string filePath = 8;
+  google.protobuf.Timestamp createdAt = 9;
+  google.protobuf.Timestamp updatedAt = 10;
+}
+
+message AlarmListRequest {
+  int32 pageNum = 1;
+  int32 pageSize = 2;
+  string range = 3;
+  string start = 4;
+  string end = 5;
+  int32 alarmType = 6;
+  string streamPath = 7;
+  string streamName = 8;
+}
+
+message AlarmListResponse {
+  int32 code = 1;
+  string message = 2;
+  int32 total = 3;
+  int32 pageNum = 4;
+  int32 pageSize = 5;
+  repeated AlarmInfo data = 6;
 }

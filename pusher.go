@@ -1,8 +1,6 @@
 package m7s
 
 import (
-	"time"
-
 	"m7s.live/v5/pkg"
 	"m7s.live/v5/pkg/task"
 
@@ -45,26 +43,25 @@ func (p *PushJob) Init(pusher IPusher, plugin *Plugin, streamPath string, conf c
 	pusher.SetRetry(conf.MaxRetry, conf.RetryInterval)
 	if sender, webhook := plugin.getHookSender(config.HookOnPushStart); sender != nil {
 		pusher.OnStart(func() {
-			webhookData := map[string]interface{}{
-				"event":      config.HookOnPushStart,
-				"streamPath": streamPath,
-				"url":        conf.URL,
-				"pluginName": plugin.Meta.Name,
-				"timestamp":  time.Now().Unix(),
+			alarmInfo := AlarmInfo{
+				AlarmName:  string(config.HookOnPushStart),
+				AlarmDesc:  "start push",
+				AlarmType:  config.AlarmPushRecover,
+				StreamPath: streamPath,
 			}
-			sender(webhook, webhookData)
+			sender(webhook, alarmInfo)
 		})
 	}
 
 	if sender, webhook := plugin.getHookSender(config.HookOnPushEnd); sender != nil {
 		pusher.OnDispose(func() {
-			webhookData := map[string]interface{}{
-				"event":      config.HookOnPullEnd,
-				"streamPath": streamPath,
-				"reason":     pusher.StopReason().Error(),
-				"timestamp":  time.Now().Unix(),
+			alarmInfo := AlarmInfo{
+				AlarmName:  string(config.HookOnPushEnd),
+				AlarmDesc:  pusher.StopReason().Error(),
+				AlarmType:  config.AlarmPushOffline,
+				StreamPath: streamPath,
 			}
-			sender(webhook, webhookData)
+			sender(webhook, alarmInfo)
 		})
 	}
 	plugin.Server.Pushs.Add(p, plugin.Logger.With("pushURL", conf.URL, "streamPath", streamPath))

@@ -439,12 +439,11 @@ func (s *Server) Start() (err error) {
 		return nil
 	}, "serverStart")
 	if sender, webhook := s.getHookSender(config.HookOnSystemStart); sender != nil {
-		webhookData := map[string]interface{}{
-			"alarmDesc":  config.HookOnSystemStart,
-			"streamPath": "",
-			"alarmType":  config.AlarmStartupRunning,
+		alarmInfo := AlarmInfo{
+			AlarmName: string(config.HookOnSystemStart),
+			AlarmType: config.AlarmStartupRunning,
 		}
-		sender(webhook, webhookData)
+		sender(webhook, alarmInfo)
 	}
 	return
 }

@@ -61,6 +61,7 @@ const (
 	Api_GetEventRecordList_FullMethodName = "/global.api/GetEventRecordList"
 	Api_GetRecordCatalog_FullMethodName   = "/global.api/GetRecordCatalog"
 	Api_DeleteRecord_FullMethodName       = "/global.api/DeleteRecord"
+	Api_GetAlarmList_FullMethodName       = "/global.api/GetAlarmList"
 )
 
 // ApiClient is the client API for Api service.
@@ -108,6 +109,7 @@ type ApiClient interface {
 	GetEventRecordList(ctx context.Context, in *ReqRecordList, opts ...grpc.CallOption) (*EventRecordResponseList, error)
 	GetRecordCatalog(ctx context.Context, in *ReqRecordCatalog, opts ...grpc.CallOption) (*ResponseCatalog, error)
 	DeleteRecord(ctx context.Context, in *ReqRecordDelete, opts ...grpc.CallOption) (*ResponseDelete, error)
+	GetAlarmList(ctx context.Context, in *AlarmListRequest, opts ...grpc.CallOption) (*AlarmListResponse, error)
 }
 
 type apiClient struct {
@@ -528,6 +530,16 @@ func (c *apiClient) DeleteRecord(ctx context.Context, in *ReqRecordDelete, opts 
 	return out, nil
 }
 
+func (c *apiClient) GetAlarmList(ctx context.Context, in *AlarmListRequest, opts ...grpc.CallOption) (*AlarmListResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AlarmListResponse)
+	err := c.cc.Invoke(ctx, Api_GetAlarmList_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ApiServer is the server API for Api service.
 // All implementations must embed UnimplementedApiServer
 // for forward compatibility.
@@ -573,6 +585,7 @@ type ApiServer interface {
 	GetEventRecordList(context.Context, *ReqRecordList) (*EventRecordResponseList, error)
 	GetRecordCatalog(context.Context, *ReqRecordCatalog) (*ResponseCatalog, error)
 	DeleteRecord(context.Context, *ReqRecordDelete) (*ResponseDelete, error)
+	GetAlarmList(context.Context, *AlarmListRequest) (*AlarmListResponse, error)
 	mustEmbedUnimplementedApiServer()
 }
 
@@ -705,6 +718,9 @@ func (UnimplementedApiServer) GetRecordCatalog(context.Context, *ReqRecordCatalo
 }
 func (UnimplementedApiServer) DeleteRecord(context.Context, *ReqRecordDelete) (*ResponseDelete, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteRecord not implemented")
+}
+func (UnimplementedApiServer) GetAlarmList(context.Context, *AlarmListRequest) (*AlarmListResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetAlarmList not implemented")
 }
 func (UnimplementedApiServer) mustEmbedUnimplementedApiServer() {}
 func (UnimplementedApiServer) testEmbeddedByValue()             {}
@@ -1465,6 +1481,24 @@ func _Api_DeleteRecord_Handler(srv interface{}, ctx context.Context, dec func(in
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Api_GetAlarmList_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AlarmListRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).GetAlarmList(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_GetAlarmList_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).GetAlarmList(ctx, req.(*AlarmListRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Api_ServiceDesc is the grpc.ServiceDesc for Api service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1635,6 +1669,10 @@ var Api_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeleteRecord",
 			Handler:    _Api_DeleteRecord_Handler,
+		},
+		{
+			MethodName: "GetAlarmList",
+			Handler:    _Api_GetAlarmList_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -107,24 +107,23 @@ func (p *TransformJob) Init(transformer ITransformer, plugin *Plugin, pub *Publi
 	transformer.SetRetry(-1, time.Second*2)
 	if sender, webhook := plugin.getHookSender(config.HookOnTransformStart); sender != nil {
 		transformer.OnStart(func() {
-			webhookData := map[string]interface{}{
-				"event":      config.HookOnTransformStart,
-				"streamPath": pub.StreamPath,
-				"pluginName": plugin.Meta.Name,
-				"timestamp":  time.Now().Unix(),
+			alarmInfo := AlarmInfo{
+				AlarmName:  string(config.HookOnTransformStart),
+				AlarmType:  config.AlarmTransformRecover,
+				StreamPath: pub.StreamPath,
 			}
-			sender(webhook, webhookData)
+			sender(webhook, alarmInfo)
 		})
 	}
 	if sender, webhook := plugin.getHookSender(config.HookOnTransformEnd); sender != nil {
 		transformer.OnDispose(func() {
-			webhookData := map[string]interface{}{
-				"event":      config.HookOnTransformEnd,
-				"streamPath": pub.StreamPath,
-				"reason":     transformer.StopReason().Error(),
-				"timestamp":  time.Now().Unix(),
+			alarmInfo := AlarmInfo{
+				AlarmName:  string(config.HookOnTransformEnd),
+				AlarmType:  config.AlarmTransformOffline,
+				StreamPath: pub.StreamPath,
+				AlarmDesc:  transformer.StopReason().Error(),
 			}
-			sender(webhook, webhookData)
+			sender(webhook, alarmInfo)
 		})
 	}
 	plugin.Server.Transforms.AddTask(p, plugin.Logger.With("streamPath", pub.StreamPath))

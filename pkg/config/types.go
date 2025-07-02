@@ -44,6 +44,15 @@ const (
 	AlarmPullRecover             = 0x10013 // 拉流恢复
 	AlarmDiskSpaceFull           = 0x10014 // 磁盘空间满,磁盘占有率，超出最大磁盘空间使用率，触发报警。
 	AlarmStartupRunning          = 0x10015 // 启动运行
+	AlarmPublishOffline          = 0x10016 // 发布者异常，触发一次报警。
+	AlarmPublishRecover          = 0x10017 // 发布者恢复
+	AlarmSubscribeOffline        = 0x10018 // 订阅者异常，触发一次报警。
+	AlarmSubscribeRecover        = 0x10019 // 订阅者恢复
+	AlarmPushOffline             = 0x10020 // 推流异常，触发一次报警。
+	AlarmPushRecover             = 0x10021 // 推流恢复
+	AlarmTransformOffline        = 0x10022 // 转换异常，触发一次报警。
+	AlarmTransformRecover        = 0x10023 // 转换恢复
+	AlarmKeepAliveOnline         = 0x10024 // 保活正常，触发一次报警。
 )
 
 type (

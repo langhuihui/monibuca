@@ -123,31 +123,24 @@ func (p *PullJob) Init(puller IPuller, plugin *Plugin, streamPath string, conf c
 
 	if sender, webhook := plugin.getHookSender(config.HookOnPullStart); sender != nil {
 		puller.OnStart(func() {
-			webhookData := map[string]interface{}{
-				"alarmDesc":  config.HookOnPullStart,
-				"event":      config.HookOnPullStart,
-				"streamPath": streamPath,
-				"url":        conf.URL,
-				"args":       conf.Args,
-				"pluginName": plugin.Meta.Name,
-				"timestamp":  time.Now().Unix(),
-				"alarmType":  config.AlarmPullRecover,
+			alarmInfo := AlarmInfo{
+				AlarmName:  string(config.HookOnPullStart),
+				StreamPath: streamPath,
+				AlarmType:  config.AlarmPullRecover,
 			}
-			sender(webhook, webhookData)
+			sender(webhook, alarmInfo)
 		})
 	}
 
 	if sender, webhook := plugin.getHookSender(config.HookOnPullEnd); sender != nil {
 		puller.OnDispose(func() {
-			webhookData := map[string]interface{}{
-				"alarmDesc":  puller.StopReason().Error(),
-				"event":      config.HookOnPullEnd,
-				"streamPath": streamPath,
-				"reason":     puller.StopReason().Error(),
-				"timestamp":  time.Now().Unix(),
-				"alarmType":  config.AlarmPullOffline,
+			alarmInfo := AlarmInfo{
+				AlarmName:  string(config.HookOnPullEnd),
+				AlarmDesc:  puller.StopReason().Error(),
+				StreamPath: streamPath,
+				AlarmType:  config.AlarmPullOffline,
 			}
-			sender(webhook, webhookData)
+			sender(webhook, alarmInfo)
 		})
 	}
 
