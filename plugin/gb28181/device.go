@@ -460,7 +460,7 @@ func (d *Device) Go() (err error) {
 					channel.Status = "OFF"
 					return true
 				})
-				d.Stop(fmt.Errorf("device keepalive timeout after %v,deviceid is %s", timeDiff, d.DeviceId))
+				//d.Stop(fmt.Errorf("device keepalive timeout after %v,deviceid is %s", timeDiff, d.DeviceId))
 				return
 			}
 		case <-catalogTick.C:

@@ -40,29 +40,29 @@ type PositionConfig struct {
 type GB28181Plugin struct {
 	pb.UnimplementedApiServer
 	m7s.Plugin
-	Serial         string `default:"34020000002000000001" desc:"sip 服务 id"` //sip 服务器 id, 默认 34020000002000000001
-	Realm          string `default:"3402000000" desc:"sip 服务域"`            //sip 服务器域，默认 3402000000
-	Password       string
-	Sip            SipConfig
-	MediaPort      util.Range[uint16] `default:"10001-20000" desc:"媒体端口范围"` //媒体端口范围
-	Position       PositionConfig
-	Parent         string `desc:"父级设备"`
-	AutoMigrate    bool   `default:"true" desc:"自动迁移数据库结构并初始化根组织"`
-	ua             *sipgo.UserAgent
-	server         *sipgo.Server
-	devices        util.Collection[string, *Device]
-	dialogs        util.Collection[uint32, *Dialog]
-	forwardDialogs util.Collection[uint32, *ForwardDialog]
-	platforms      util.Collection[string, *Platform]
-	tcpPorts       chan uint16
-	tcpPort        uint16
-	sipPorts       []int
-	SipIP          string `desc:"sip发送命令的IP，一般是本地IP，多网卡时需要配置正确的IP"`
-	MediaIP        string `desc:"流媒体IP，用于接收流"`
-	deviceManager  task.Manager[string, *DeviceRegisterQueueTask]
-	Platforms      []*gb28181.PlatformModel
-	channels       util.Collection[string, *gb28181.DeviceChannel]
-	netListener    net.Listener
+	Serial                string `default:"34020000002000000001" desc:"sip 服务 id"` //sip 服务器 id, 默认 34020000002000000001
+	Realm                 string `default:"3402000000" desc:"sip 服务域"`             //sip 服务器域，默认 3402000000
+	Password              string
+	Sip                   SipConfig
+	MediaPort             util.Range[uint16] `default:"10001-20000" desc:"媒体端口范围"` //媒体端口范围
+	Position              PositionConfig
+	Parent                string `desc:"父级设备"`
+	AutoMigrate           bool   `default:"true" desc:"自动迁移数据库结构并初始化根组织"`
+	ua                    *sipgo.UserAgent
+	server                *sipgo.Server
+	devices               task.Manager[string, *Device]
+	dialogs               task.Manager[uint32, *Dialog]
+	forwardDialogs        task.Manager[uint32, *ForwardDialog]
+	platforms             task.Manager[string, *Platform]
+	tcpPorts              chan uint16
+	tcpPort               uint16
+	sipPorts              []int
+	SipIP                 string `desc:"sip发送命令的IP，一般是本地IP，多网卡时需要配置正确的IP"`
+	MediaIP               string `desc:"流媒体IP，用于接收流"`
+	deviceRegisterManager task.Manager[string, *DeviceRegisterQueueTask]
+	Platforms             []*gb28181.PlatformModel
+	channels              util.Collection[string, *gb28181.DeviceChannel]
+	netListener           net.Listener
 }
 
 var _ = m7s.InstallPlugin[GB28181Plugin](m7s.PluginMeta{
@@ -150,7 +150,7 @@ func (gb *GB28181Plugin) OnInit() (err error) {
 		return pkg.ErrNoDB
 	}
 	gb.Info("GB28181 initing", gb.Platforms)
-	gb.AddTask(&gb.deviceManager)
+	gb.AddTask(&gb.deviceRegisterManager)
 	logger := zerolog.New(os.Stdout)
 	gb.ua, err = sipgo.NewUA(sipgo.WithUserAgent("M7S/" + m7s.Version)) // Build user agent
 	// Creating client handle for ua
@@ -223,6 +223,41 @@ func (gb *GB28181Plugin) OnInit() (err error) {
 		gb.Error("GB28181 init failed,please set Sip.ListenAddr in GB28181 configuration like this   \nsip:\n  listenaddr:\n    - udp::5060\n")
 	}
 	return
+}
+
+func (gb *GB28181Plugin) deleteDevice(device *Device, reason string) bool {
+	gb.Info(fmt.Sprintf("准备删除设备: %s", reason), "deviceId", device.DeviceId)
+
+	// 开启数据库事务
+	tx := gb.DB.Begin()
+	if tx.Error != nil {
+		gb.Error("开启事务失败", "error", tx.Error)
+		return false
+	}
+
+	// 删除设备
+	if err := tx.Delete(&Device{DeviceId: device.DeviceId}).Error; err != nil {
+		tx.Rollback()
+		gb.Error(fmt.Sprintf("删除设备失败: %s", reason), "error", err, "deviceId", device.DeviceId)
+		return false
+	}
+
+	// 删除设备关联的通道
+	if err := tx.Where("device_id = ?", device.DeviceId).Delete(&gb28181.DeviceChannel{}).Error; err != nil {
+		tx.Rollback()
+		gb.Error(fmt.Sprintf("删除设备通道失败: %s", reason), "error", err, "deviceId", device.DeviceId)
+		return false
+	}
+
+	// 提交事务
+	if err := tx.Commit().Error; err != nil {
+		tx.Rollback()
+		gb.Error("提交事务失败", "error", err, "deviceId", device.DeviceId)
+		return false
+	}
+
+	gb.Info(fmt.Sprintf("已删除设备: %s", reason), "deviceId", device.DeviceId)
+	return true
 }
 
 func (gb *GB28181Plugin) checkDeviceExpire() (err error) {
@@ -314,9 +349,11 @@ func (gb *GB28181Plugin) checkDeviceExpire() (err error) {
 				}
 			})
 			device.OnDispose(func() {
+				device.Online = false
 				device.Status = DeviceOfflineStatus
 				if gb.devices.RemoveByKey(device.DeviceId) {
 					for c := range device.channels.Range {
+						c.DeviceChannel.Status = "OFF"
 						if c.PullProxyTask != nil {
 							c.PullProxyTask.ChangeStatus(m7s.PullProxyStatusOffline)
 						}
@@ -363,19 +400,14 @@ func (gb *GB28181Plugin) checkDeviceExpire() (err error) {
 			// 添加设备任务
 			if !isExpired {
 				gb.AddTask(device)
-			} else {
-				//gb.devices.Set(device)
-				//_, err := device.queryDeviceInfo()
-				//if err != nil {
-				//	device.Error("queryDeviceInfo when checkDeviceExpire", "err", err)
-				//}
-			}
-
-			if isExpired {
-				gb.Info("设备已过期", "deviceId", device.DeviceId, "registerTime", device.RegisterTime, "expireTime", expireTime)
-			} else {
 				gb.Info("设备有效", "deviceId", device.DeviceId, "registerTime", device.RegisterTime, "expireTime", expireTime)
+			} else {
+				gb.Info("设备已过期", "deviceId", device.DeviceId, "registerTime", device.RegisterTime, "expireTime", expireTime)
+				gb.deleteDevice(device, "设备已过期")
 			}
+		} else {
+			// 不在线的设备，进行数据库删除
+			gb.deleteDevice(device, "设备不在线")
 		}
 	}
 	return nil
@@ -470,17 +502,17 @@ func (gb *GB28181Plugin) OnRegister(req *sip.Request, tx sip.ServerTransaction) 
 	}
 	gb.Debug("onregister start", "deviceId", deviceId)
 
-	gb.Debug("get gb.deviceManager.length", "length", gb.deviceManager.Length)
-	if deviceRegisterQueueTask, ok := gb.deviceManager.SafeGet(deviceId); ok {
-		gb.Debug("gb.deviceManager.SafeGet", "deviceId", deviceId)
-		gb.Debug("gb.deviceManager.SafeGet", "deviceRegisterQueueTask", deviceRegisterQueueTask)
+	gb.Debug("get gb.deviceRegisterManager.length", "length", gb.deviceRegisterManager.Length)
+	if deviceRegisterQueueTask, ok := gb.deviceRegisterManager.SafeGet(deviceId); ok {
+		gb.Debug("gb.deviceRegisterManager.SafeGet", "deviceId", deviceId)
+		gb.Debug("gb.deviceRegisterManager.SafeGet", "deviceRegisterQueueTask", deviceRegisterQueueTask)
 		deviceRegisterQueueTask.AddTask(&registerHandlerTask)
 	} else {
 		deviceRegisterQueueTask := &DeviceRegisterQueueTask{
 			deviceId: deviceId,
 		}
 		gb.Debug("do not safeget deviceRegisterQueueTask", "deviceId", deviceId)
-		gb.deviceManager.Add(deviceRegisterQueueTask)
+		gb.deviceRegisterManager.Add(deviceRegisterQueueTask)
 		deviceRegisterQueueTask.AddTask(&registerHandlerTask)
 	}
 }
@@ -526,7 +558,7 @@ func (gb *GB28181Plugin) OnMessage(req *sip.Request, tx sip.ServerTransaction) {
 	}
 
 	// 如果设备和平台都存在，通过源地址判断真实来源
-	if d != nil && d.Online && p != nil {
+	if d != nil && p != nil {
 		source := req.Source()
 		if d.HostAddress == source {
 			// 如果源地址匹配设备地址，则确认是设备消息

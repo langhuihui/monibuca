@@ -28,85 +28,84 @@ import (
 func (gb *GB28181Plugin) List(ctx context.Context, req *pb.GetDevicesRequest) (*pb.DevicesPageInfo, error) {
 	resp := &pb.DevicesPageInfo{}
 
-	if gb.DB == nil {
-		resp.Code = 500
-		resp.Message = "数据库未初始化"
-		return resp, nil
-	}
+	// 从内存中读取设备信息，而不是从数据库查询
+	var pbDevices []*pb.Device
+	var filteredDevices []*Device
 
-	var devices []Device
-	var total int64
+	// 遍历内存中的设备集合
+	gb.devices.Range(func(device *Device) bool {
+		// 应用筛选条件
+		if req.Query != "" {
+			// 检查设备ID或名称是否包含查询字符串
+			if !strings.Contains(device.DeviceId, req.Query) && !strings.Contains(device.Name, req.Query) {
+				return true // 继续遍历
+			}
+		}
 
-	// 构建查询条件
-	query := gb.DB.Model(&Device{})
-	if req.Query != "" {
-		query = query.Where("device_id LIKE ? OR name LIKE ?",
-			"%"+req.Query+"%", "%"+req.Query+"%")
-	}
-	if req.Status {
-		query = query.Where("online = ?", true)
-	}
+		// 如果需要筛选在线设备
+		if req.Status && !device.Online {
+			return true // 继续遍历
+		}
 
-	// 获取总数
-	if err := query.Count(&total).Error; err != nil {
-		resp.Code = 500
-		resp.Message = fmt.Sprintf("查询总数失败: %v", err)
-		return resp, nil
-	}
+		// 添加到过滤后的设备列表
+		filteredDevices = append(filteredDevices, device)
+		return true
+	})
 
-	// 查询设备列表
-	// 当Page和Count都为0时，不做分页，返回所有数据
-	if req.Page == 0 && req.Count == 0 {
-		// 不分页，查询所有数据
-		if err := query.Find(&devices).Error; err != nil {
-			resp.Code = 500
-			resp.Message = fmt.Sprintf("查询设备列表失败: %v", err)
+	// 计算总数
+	total := len(filteredDevices)
+	resp.Total = int32(total)
+
+	// 处理分页
+	if req.Page > 0 && req.Count > 0 {
+		// 计算起始和结束索引
+		start := int(req.Page-1) * int(req.Count)
+		end := start + int(req.Count)
+
+		// 边界检查
+		if start >= total {
+			// 超出范围，返回空列表
+			resp.Code = 0
+			resp.Message = "success"
+			resp.Data = pbDevices
 			return resp, nil
 		}
-	} else {
-		// 分页查询设备列表
-		if err := query.
-			Offset(int(req.Page-1) * int(req.Count)).
-			Limit(int(req.Count)).
-			Find(&devices).Error; err != nil {
-			resp.Code = 500
-			resp.Message = fmt.Sprintf("查询设备列表失败: %v", err)
-			return resp, nil
+
+		if end > total {
+			end = total
 		}
+
+		// 应用分页
+		filteredDevices = filteredDevices[start:end]
 	}
 
 	// 转换为proto消息
-	var pbDevices []*pb.Device
-	for _, d := range devices {
-		// 查询设备对应的通道
-		var channels []gb28181.DeviceChannel
-		if err := gb.DB.Where(&gb28181.DeviceChannel{DeviceID: d.DeviceId}).Find(&channels).Error; err != nil {
-			gb.Error("查询通道失败", "error", err)
-			continue
-		}
-
+	for _, d := range filteredDevices {
 		var pbChannels []*pb.Channel
-		for _, c := range channels {
+
+		// 从设备的内存通道集合中获取通道信息
+		d.channels.Range(func(channel *Channel) bool {
 			pbChannels = append(pbChannels, &pb.Channel{
-				DeviceId:     c.ChannelID,
-				ParentId:     c.ParentID,
-				Name:         c.Name,
-				Manufacturer: c.Manufacturer,
-				Model:        c.Model,
-				Owner:        c.Owner,
-				CivilCode:    c.CivilCode,
-				Address:      c.Address,
-				Port:         int32(c.Port),
-				Parental:     int32(c.Parental),
-				SafetyWay:    int32(c.SafetyWay),
-				RegisterWay:  int32(c.RegisterWay),
-				Secrecy:      int32(c.Secrecy),
-				Status:       string(c.Status),
-				Longitude:    fmt.Sprintf("%f", c.GbLongitude),
-				Latitude:     fmt.Sprintf("%f", c.GbLatitude),
+				DeviceId:     channel.ChannelID,
+				ParentId:     channel.ParentID,
+				Name:         channel.Name,
+				Manufacturer: channel.Manufacturer,
+				Model:        channel.Model,
+				Owner:        channel.Owner,
+				CivilCode:    channel.CivilCode,
+				Address:      channel.Address,
+				Port:         int32(channel.Port),
+				Parental:     int32(channel.Parental),
+				SafetyWay:    int32(channel.SafetyWay),
+				RegisterWay:  int32(channel.RegisterWay),
+				Secrecy:      int32(channel.Secrecy),
+				Status:       string(channel.Status),
+				Longitude:    fmt.Sprintf("%f", channel.GbLongitude),
+				Latitude:     fmt.Sprintf("%f", channel.GbLatitude),
 				GpsTime:      timestamppb.New(time.Now()),
 			})
-		}
+			return true
+		})
 
 		pbDevices = append(pbDevices, &pb.Device{
 			DeviceId:      d.DeviceId,
@@ -131,7 +130,6 @@ func (gb *GB28181Plugin) List(ctx context.Context, req *pb.GetDevicesRequest) (*
 
 	resp.Code = 0
 	resp.Message = "success"
-	resp.Total = int32(total)
 	resp.Data = pbDevices
 
 	return resp, nil
@@ -2841,9 +2839,11 @@ func (gb *GB28181Plugin) RemoveDevice(ctx context.Context, req *pb.RemoveDeviceR
 			channel.DeletedAt = gorm.DeletedAt{Time: time.Now(), Valid: true}
 			return true
 		})
-		// 停止设备相关任务
-		device.Stop(fmt.Errorf("device removed"))
-		device.WaitStopped()
+		if device.Online {
+			// 停止设备相关任务
+			device.Stop(fmt.Errorf("device removed"))
+			device.WaitStopped()
+		}
 		// device.Stop() 会调用 Dispose()，其中已包含从 gb.devices 中移除设备的逻辑
 
 		// 开启数据库事务

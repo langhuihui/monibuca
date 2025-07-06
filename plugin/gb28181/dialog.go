@@ -98,7 +98,6 @@ func (d *Dialog) Start() (err error) {
 		return fmt.Errorf("device %s not found", deviceId)
 	}
 
-	d.gb.dialogs.Set(d)
 	//defer d.gb.dialogs.Remove(d)
 	if d.gb.tcpPort > 0 {
 		d.MediaPort = d.gb.tcpPort
@@ -251,6 +250,8 @@ func (d *Dialog) Start() (err error) {
 	if err != nil {
 		return errors.New("dialog invite error" + err.Error())
 	}
+	d.gb.dialogs.Set(d)
+
 	return
 }
 
@@ -329,8 +330,8 @@ func (d *Dialog) Run() (err error) {
 	return
 }
 
-func (d *Dialog) GetKey() uint32 {
-	return d.SSRC
+func (d *Dialog) GetKey() string {
+	return d.GetCallID()
 }
 
 func (d *Dialog) Dispose() {
