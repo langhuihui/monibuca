@@ -754,11 +754,12 @@ message AlarmInfo {
   string streamName = 3;
   string streamPath = 4;
   string alarmDesc = 5;
-  int32 alarmType = 6;
-  bool isSent = 7;
-  string filePath = 8;
-  google.protobuf.Timestamp createdAt = 9;
-  google.protobuf.Timestamp updatedAt = 10;
+  string alarmName = 6;
+  int32 alarmType = 7;
+  bool isSent = 8;
+  string filePath = 9;
+  google.protobuf.Timestamp createdAt = 10;
+  google.protobuf.Timestamp updatedAt = 11;
 }
 
 message AlarmListRequest {

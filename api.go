@@ -1045,6 +1045,7 @@ func (s *Server) GetAlarmList(ctx context.Context, req *pb.AlarmListRequest) (re
 			StreamName: alarm.StreamName,
 			StreamPath: alarm.StreamPath,
 			AlarmDesc:  alarm.AlarmDesc,
+			AlarmName:  alarm.AlarmName,
 			AlarmType:  int32(alarm.AlarmType),
 			IsSent:     alarm.IsSent,
 			CreatedAt:  timestamppb.New(alarm.CreatedAt),

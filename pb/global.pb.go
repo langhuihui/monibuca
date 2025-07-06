@@ -4777,11 +4777,12 @@ type AlarmInfo struct {
 	StreamName    string                 `protobuf:"bytes,3,opt,name=streamName,proto3" json:"streamName,omitempty"`
 	StreamPath    string                 `protobuf:"bytes,4,opt,name=streamPath,proto3" json:"streamPath,omitempty"`
 	AlarmDesc     string                 `protobuf:"bytes,5,opt,name=alarmDesc,proto3" json:"alarmDesc,omitempty"`
-	AlarmType     int32                  `protobuf:"varint,6,opt,name=alarmType,proto3" json:"alarmType,omitempty"`
-	IsSent        bool                   `protobuf:"varint,7,opt,name=isSent,proto3" json:"isSent,omitempty"`
-	FilePath      string                 `protobuf:"bytes,8,opt,name=filePath,proto3" json:"filePath,omitempty"`
-	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=createdAt,proto3" json:"createdAt,omitempty"`
-	UpdatedAt     *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=updatedAt,proto3" json:"updatedAt,omitempty"`
+	AlarmName     string                 `protobuf:"bytes,6,opt,name=alarmName,proto3" json:"alarmName,omitempty"`
+	AlarmType     int32                  `protobuf:"varint,7,opt,name=alarmType,proto3" json:"alarmType,omitempty"`
+	IsSent        bool                   `protobuf:"varint,8,opt,name=isSent,proto3" json:"isSent,omitempty"`
+	FilePath      string                 `protobuf:"bytes,9,opt,name=filePath,proto3" json:"filePath,omitempty"`
+	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=createdAt,proto3" json:"createdAt,omitempty"`
+	UpdatedAt     *timestamppb.Timestamp `protobuf:"bytes,11,opt,name=updatedAt,proto3" json:"updatedAt,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4847,6 +4848,13 @@ func (x *AlarmInfo) GetStreamPath() string {
 func (x *AlarmInfo) GetAlarmDesc() string {
 	if x != nil {
 		return x.AlarmDesc
+	}
+	return ""
+}
+
+func (x *AlarmInfo) GetAlarmName() string {
+	if x != nil {
+		return x.AlarmName
 	}
 	return ""
 }
@@ -5551,7 +5559,7 @@ const file_global_proto_rawDesc = "" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12&\n" +
 	"\x04data\x18\x03 \x03(\v2\x12.global.RecordFileR\x04data\"&\n" +
 	"\x10ReqRecordCatalog\x12\x12\n" +
-	"\x04type\x18\x01 \x01(\tR\x04type\"\xdf\x02\n" +
+	"\x04type\x18\x01 \x01(\tR\x04type\"\xfd\x02\n" +
 	"\tAlarmInfo\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12\x1e\n" +
 	"\n" +
@@ -5564,12 +5572,13 @@ const file_global_proto_rawDesc = "" +
 	"streamPath\x18\x04 \x01(\tR\n" +
 	"streamPath\x12\x1c\n" +
 	"\talarmDesc\x18\x05 \x01(\tR\talarmDesc\x12\x1c\n" +
-	"\talarmType\x18\x06 \x01(\x05R\talarmType\x12\x16\n" +
-	"\x06isSent\x18\a \x01(\bR\x06isSent\x12\x1a\n" +
-	"\bfilePath\x18\b \x01(\tR\bfilePath\x128\n" +
-	"\tcreatedAt\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x128\n" +
-	"\tupdatedAt\x18\n" +
-	" \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\xe4\x01\n" +
+	"\talarmName\x18\x06 \x01(\tR\talarmName\x12\x1c\n" +
+	"\talarmType\x18\a \x01(\x05R\talarmType\x12\x16\n" +
+	"\x06isSent\x18\b \x01(\bR\x06isSent\x12\x1a\n" +
+	"\bfilePath\x18\t \x01(\tR\bfilePath\x128\n" +
+	"\tcreatedAt\x18\n" +
+	" \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x128\n" +
+	"\tupdatedAt\x18\v \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\xe4\x01\n" +
 	"\x10AlarmListRequest\x12\x18\n" +
 	"\apageNum\x18\x01 \x01(\x05R\apageNum\x12\x1a\n" +
 	"\bpageSize\x18\x02 \x01(\x05R\bpageSize\x12\x14\n" +
