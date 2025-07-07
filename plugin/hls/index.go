@@ -223,7 +223,7 @@ func (config *HLSPlugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if !startTime.IsZero() {
 			if config.DB != nil {
 				var records []m7s.RecordStream
-				query := `stream_path = ? AND type = 'hls' AND start_time IS NOT NULL AND end_time IS NOT NULL AND ? <= end_time AND ? >= start_time`
+				query := `stream_path = ? AND type = 'ts' AND start_time IS NOT NULL AND end_time IS NOT NULL AND ? <= end_time AND ? >= start_time`
 				config.DB.Where(query, streamPath, startTime, endTime).Find(&records)
 
 				if len(records) > 0 {
