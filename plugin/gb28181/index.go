@@ -51,7 +51,7 @@ type GB28181Plugin struct {
 	ua                    *sipgo.UserAgent
 	server                *sipgo.Server
 	devices               task.Manager[string, *Device]
-	dialogs               task.Manager[uint32, *Dialog]
+	dialogs               task.Manager[string, *Dialog]
 	forwardDialogs        task.Manager[uint32, *ForwardDialog]
 	platforms             task.Manager[string, *Platform]
 	tcpPorts              chan uint16
