@@ -282,6 +282,7 @@ func (p *Plugin) disable(reason string) {
 
 func (p *Plugin) Start() (err error) {
 	s := p.Server
+	s.AddTask(&webHookQueueTask)
 
 	if err = p.listen(); err != nil {
 		return
@@ -380,6 +381,12 @@ func (p *Plugin) OnStop() {
 
 }
 
+type WebHookQueueTask struct {
+	task.Work
+}
+
+var webHookQueueTask WebHookQueueTask
+
 type WebHookTask struct {
 	task.Task
 	plugin   *Plugin
@@ -463,7 +470,8 @@ func (t *WebHookTask) Go() error {
 			t.plugin.Error("保存告警到数据库失败", "error", err)
 		} else {
 			dbID = t.alarm.ID
-			t.plugin.Info("告警已保存到数据库", "id", dbID)
+			t.plugin.Info(""+
+				"", "id", dbID)
 		}
 	}
 
@@ -514,7 +522,7 @@ func (p *Plugin) SendWebhook(conf config.Webhook, data any) *task.Task {
 		conf:   conf,
 		data:   data,
 	}
-	return p.AddTask(webhookTask)
+	return webHookQueueTask.AddTask(webhookTask)
 }
 
 // TODO: use alias stream
