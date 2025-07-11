@@ -61,7 +61,7 @@ type GB28181Plugin struct {
 	MediaIP               string `desc:"流媒体IP，用于接收流"`
 	deviceRegisterManager task.Manager[string, *DeviceRegisterQueueTask]
 	Platforms             []*gb28181.PlatformModel
-	channels              util.Collection[string, *gb28181.DeviceChannel]
+	channels              util.Collection[string, *Channel]
 	netListener           net.Listener
 }
 
@@ -160,6 +160,10 @@ func (gb *GB28181Plugin) OnInit() (err error) {
 		gb.server.OnRegister(gb.OnRegister)
 		gb.server.OnBye(gb.OnBye)
 		gb.devices.L = new(sync.RWMutex)
+		gb.channels.L = new(sync.RWMutex)
+		gb.dialogs.L = new(sync.RWMutex)
+		gb.deviceRegisterManager.L = new(sync.RWMutex)
+		gb.forwardDialogs.L = new(sync.RWMutex)
 		gb.server.OnInvite(gb.OnInvite)
 		gb.server.OnAck(gb.OnAck)
 		gb.server.OnNotify(gb.OnNotify)
@@ -827,9 +831,9 @@ func (gb *GB28181Plugin) OnInvite(req *sip.Request, tx sip.ServerTransaction) {
 	//}
 
 	// 找到了通道
-	var channel *gb28181.DeviceChannel
+	var channel *Channel
 
-	platform.channels.Range(func(channelTmp *gb28181.DeviceChannel) bool {
+	platform.channels.Range(func(channelTmp *Channel) bool {
 		if channelTmp.ChannelID == inviteInfo.TargetChannelId {
 			channel = channelTmp
 		}
@@ -888,8 +892,8 @@ func (gb *GB28181Plugin) OnInvite(req *sip.Request, tx sip.ServerTransaction) {
 	// 使用平台和通道的信息构建响应
 	sdpIP := platform.PlatformModel.DeviceIP
 	// 如果平台配置了SendStreamIP，则使用此IP
-	if platform.PlatformModel.SendStreamIP != "" {
-		sdpIP = platform.PlatformModel.SendStreamIP
+	if platform.PlatformModel.SendStreamIp != "" {
+		sdpIP = platform.PlatformModel.SendStreamIp
 	}
 
 	// 构建SDP内容，参考Java代码createSendSdp方法

@@ -1114,7 +1114,12 @@ message GroupChannelsResponse {
   int32 code = 1;
   string message = 2;
   int32 total = 3;
-  repeated GroupChannel data = 4;
+  GroupChannelsData data = 4;
+}
+
+message GroupChannelsData {
+  repeated GroupChannel list = 1;     // 分页后的通道列表
+  repeated GroupChannel channels = 2;  // 当前组下的所有通道列表
 }
 
 // 回放暂停请求
@@ -1164,3 +1169,4 @@ message AlarmInfoRequest {
   int32 alarm_type = 5;             // 报警类型（对应之前定义的常量）
   google.protobuf.Timestamp createAt=6;//创建时间
 }
+

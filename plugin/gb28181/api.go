@@ -13,8 +13,6 @@ import (
 	"sync"
 	"time"
 
-	"gorm.io/gorm"
-
 	"github.com/emiago/sipgo"
 	"github.com/emiago/sipgo/sip"
 	"m7s.live/v5/pkg/util"
@@ -87,7 +85,7 @@ func (gb *GB28181Plugin) List(ctx context.Context, req *pb.GetDevicesRequest) (*
 		d.channels.Range(func(channel *Channel) bool {
 			pbChannels = append(pbChannels, &pb.Channel{
 				DeviceId:     channel.ChannelID,
-				ParentId:     channel.ParentID,
+				ParentId:     d.DeviceId,
 				Name:         channel.Name,
 				Manufacturer: channel.Manufacturer,
 				Model:        channel.Model,
@@ -830,7 +828,7 @@ func (gb *GB28181Plugin) AddPlatform(ctx context.Context, req *pb.Platform) (*pb
 		UpdateTime:              req.UpdateTime,
 		CreateTime:              req.CreateTime,
 		AsMessageChannel:        req.AsMessageChannel,
-		SendStreamIP:            req.SendStreamIp,
+		SendStreamIp:            req.SendStreamIp,
 		AutoPushChannel:         req.AutoPushChannel,
 		CatalogWithPlatform:     int(req.CatalogWithPlatform),
 		CatalogWithGroup:        int(req.CatalogWithGroup),
@@ -908,7 +906,7 @@ func (gb *GB28181Plugin) GetPlatform(ctx context.Context, req *pb.GetPlatformReq
 		UpdateTime:              platform.UpdateTime,
 		CreateTime:              platform.CreateTime,
 		AsMessageChannel:        platform.AsMessageChannel,
-		SendStreamIp:            platform.SendStreamIP,
+		SendStreamIp:            platform.SendStreamIp,
 		AutoPushChannel:         platform.AutoPushChannel,
 		CatalogWithPlatform:     int32(platform.CatalogWithPlatform),
 		CatalogWithGroup:        int32(platform.CatalogWithGroup),
@@ -971,7 +969,7 @@ func (gb *GB28181Plugin) UpdatePlatform(ctx context.Context, req *pb.Platform) (
 		CatalogGroup:            int(req.CatalogGroup),
 		UpdateTime:              req.UpdateTime,
 		AsMessageChannel:        req.AsMessageChannel,
-		SendStreamIP:            req.SendStreamIp,
+		SendStreamIp:            req.SendStreamIp,
 		AutoPushChannel:         req.AutoPushChannel,
 		CatalogWithPlatform:     int(req.CatalogWithPlatform),
 		CatalogWithGroup:        int(req.CatalogWithGroup),
@@ -1119,7 +1117,7 @@ func (gb *GB28181Plugin) ListPlatforms(ctx context.Context, req *pb.ListPlatform
 			UpdateTime:              p.UpdateTime,
 			CreateTime:              p.CreateTime,
 			AsMessageChannel:        p.AsMessageChannel,
-			SendStreamIp:            p.SendStreamIP,
+			SendStreamIp:            p.SendStreamIp,
 			AutoPushChannel:         p.AutoPushChannel,
 			CatalogWithPlatform:     int32(p.CatalogWithPlatform),
 			CatalogWithGroup:        int32(p.CatalogWithGroup),
@@ -1823,7 +1821,7 @@ func (gb *GB28181Plugin) GetSnap(ctx context.Context, req *pb.GetSnapRequest) (*
 // GetGroupChannels 获取分组下的通道列表
 func (gb *GB28181Plugin) GetGroupChannels(ctx context.Context, req *pb.GetGroupChannelsRequest) (*pb.GroupChannelsResponse, error) {
 	resp := &pb.GroupChannelsResponse{}
-
+	groupChannelsData := &pb.GroupChannelsData{}
 	// 检查数据库连接
 	if gb.DB == nil {
 		resp.Code = 500
@@ -1846,102 +1844,105 @@ func (gb *GB28181Plugin) GetGroupChannels(ctx context.Context, req *pb.GetGroupC
 		return resp, nil
 	}
 
-	// 定义结果结构体，用于接收联查结果
-	type ChannelWithInfo struct {
-		ID          int64  // 关联ID
-		ChannelID   string // 通道ID
-		ChannelName string // 通道名称
-		DeviceID    string // 设备ID
-		DeviceName  string // 设备名称
-		Status      string // 通道状态
-		InGroup     bool   // 是否在分组中
-	}
-
-	// 正确获取模型对应的表名
-	deviceChannel := &gb28181.DeviceChannel{}
-	device := &Device{}
-	groupsChannel := &gb28181.GroupsChannelModel{}
-
-	deviceChannelTable := deviceChannel.TableName()
-	deviceTable := device.TableName()
-	groupsChannelTable := groupsChannel.TableName()
-
-	// 构建基础查询
-	baseQuery := gb.DB.Table(deviceChannelTable+" AS dc").
-		Select(`
-			IFNULL(gc.id, 0) AS id,
-			dc.channel_id,
-			dc.device_id,
-			dc.name AS channel_name,
-			d.name AS device_name,
-			dc.status AS status,
-			CASE
-				WHEN gc.id IS NULL THEN false
-				ELSE true
-			END AS in_group
-		`).
-		Joins("LEFT JOIN "+deviceTable+" AS d ON dc.device_id = d.device_id").
-		Joins("LEFT JOIN "+groupsChannelTable+" AS gc ON dc.channel_id = gc.channel_id AND dc.device_id = gc.device_id AND gc.group_id = ?", req.GroupId)
-
-	// 如果有设备ID过滤条件
-	if req.DeviceId != "" {
-		baseQuery = baseQuery.Where("dc.device_id = ?", req.DeviceId)
-	}
-
-	// 统计符合条件的通道总数
-	var total int64
-	if err := baseQuery.Count(&total).Error; err != nil {
+	// 从数据库获取当前分组下的通道关联信息
+	var groupChannels []gb28181.GroupsChannelModel
+	if err := gb.DB.Where("group_id = ?", req.GroupId).Find(&groupChannels).Error; err != nil {
 		resp.Code = 500
-		resp.Message = fmt.Sprintf("查询通道总数失败: %v", err)
+		resp.Message = fmt.Sprintf("查询分组通道关联失败: %v", err)
 		return resp, nil
 	}
+
+	// 创建一个映射，用于快速查找通道是否在分组中
+	inGroupMap := make(map[string]int64) // key: deviceId+channelId, value: 关联ID
+	for _, gc := range groupChannels {
+		key := gc.DeviceID + ":" + gc.ChannelID
+		inGroupMap[key] = int64(gc.ID)
+	}
+
+	// 准备结果集
+	var results []*pb.GroupChannel
+	var filteredChannels []*Channel
+
+	// 从内存中获取所有通道
+	for channel := range gb.channels.Range {
+		// 如果有设备ID过滤条件，则只处理匹配的设备
+		if req.DeviceId != "" && channel.DeviceID != req.DeviceId {
+			continue
+		}
+		filteredChannels = append(filteredChannels, channel)
+	}
+
+	// 计算总数
+	total := int64(len(filteredChannels))
+
+	// 应用排序（按设备ID和通道ID排序）
+	sort.Slice(filteredChannels, func(i, j int) bool {
+		if filteredChannels[i].DeviceID == filteredChannels[j].DeviceID {
+			return filteredChannels[i].ChannelID < filteredChannels[j].ChannelID
+		}
+		return filteredChannels[i].DeviceID < filteredChannels[j].DeviceID
+	})
 
 	// 应用分页
-	var results []ChannelWithInfo
-	query := baseQuery
-
-	// 添加排序
-	query = query.Order("dc.device_id ASC, dc.channel_id ASC")
-
-	// 如果指定了分页参数，则应用分页
+	start, end := 0, len(filteredChannels)
 	if req.Page > 0 && req.Count > 0 {
-		offset := (req.Page - 1) * req.Count
-		query = query.Offset(int(offset)).Limit(int(req.Count))
+		start = int((req.Page - 1) * req.Count)
+		end = int(req.Page * req.Count)
+		if start >= len(filteredChannels) {
+			start = len(filteredChannels)
+		}
+		if end > len(filteredChannels) {
+			end = len(filteredChannels)
+		}
 	}
 
-	// 执行查询
-	if err := query.Scan(&results).Error; err != nil {
-		resp.Code = 500
-		resp.Message = fmt.Sprintf("查询通道列表失败: %v", err)
-		return resp, nil
-	}
+	// 处理分页后的通道数据
+	for _, channel := range filteredChannels[start:end] {
+		key := channel.DeviceID + ":" + channel.ChannelID
+		id, inGroup := inGroupMap[key]
 
-	// 转换结果为响应格式
-	var pbGroupChannels []*pb.GroupChannel
-	for _, result := range results {
+		// 获取设备名称
+		deviceName := ""
+		if device, ok := gb.devices.Get(channel.DeviceID); ok {
+			deviceName = device.Name
+		}
+
 		channelInfo := &pb.GroupChannel{
-			Id:          int32(result.ID),
+			Id:          int32(id),
 			GroupId:     req.GroupId,
-			ChannelId:   result.ChannelID,
-			DeviceId:    result.DeviceID,
-			ChannelName: result.ChannelName,
-			DeviceName:  result.DeviceName,
-			Status:      result.Status,
-			InGroup:     result.InGroup,
+			ChannelId:   channel.ChannelID,
+			DeviceId:    channel.DeviceID,
+			ChannelName: channel.Name,
+			DeviceName:  deviceName,
+			Status:      string(channel.Status),
+			InGroup:     inGroup,
 		}
 
 		// 从内存中获取设备信息以获取传输协议
-		if device, ok := gb.devices.Get(result.DeviceID); ok {
+		if device, ok := gb.devices.Get(channel.DeviceID); ok {
 			channelInfo.StreamMode = device.StreamMode
 		}
 
-		pbGroupChannels = append(pbGroupChannels, channelInfo)
+		results = append(results, channelInfo)
+	}
+
+	// 添加该分组下的所有通道列表（只包含channelId和deviceId）
+	var allGroupChannels []*pb.GroupChannel
+	for _, gc := range groupChannels {
+		// 只添加确实在分组中的通道
+		allGroupChannels = append(allGroupChannels, &pb.GroupChannel{
+			ChannelId: gc.ChannelID,
+			DeviceId:  gc.DeviceID,
+			InGroup:   true,
+		})
 	}
 
 	resp.Code = 0
 	resp.Message = "获取通道列表成功"
 	resp.Total = int32(total)
-	resp.Data = pbGroupChannels
+	groupChannelsData.List = results
+	groupChannelsData.Channels = allGroupChannels
+	resp.Data = groupChannelsData
 	return resp, nil
 }
 
@@ -2834,9 +2835,10 @@ func (gb *GB28181Plugin) RemoveDevice(ctx context.Context, req *pb.RemoveDeviceR
 
 	// 使用数据库中的 DeviceId 从内存中查找设备
 	if device, ok := gb.devices.Get(req.Id); ok {
-		device.DeletedAt = gorm.DeletedAt{Time: time.Now(), Valid: true}
 		device.channels.Range(func(channel *Channel) bool {
-			channel.DeletedAt = gorm.DeletedAt{Time: time.Now(), Valid: true}
+			if err := device.plugin.DB.Where("device_id = ?", device.DeviceId).Delete(&gb28181.DeviceChannel{}).Error; err != nil {
+				device.Error("删除设备通道记录失败", "error", err)
+			}
 			return true
 		})
 		if device.Online {
@@ -2847,36 +2849,36 @@ func (gb *GB28181Plugin) RemoveDevice(ctx context.Context, req *pb.RemoveDeviceR
 		// device.Stop() 会调用 Dispose()，其中已包含从 gb.devices 中移除设备的逻辑
 
 		// 开启数据库事务
-		tx := gb.DB.Begin()
-		if tx.Error != nil {
-			resp.Code = 500
-			resp.Message = "开启事务失败"
-			return resp, tx.Error
-		}
-
-		// 删除设备
-		if err := tx.Delete(&Device{DeviceId: req.Id}).Error; err != nil {
-			tx.Rollback()
-			resp.Code = 500
-			resp.Message = "删除设备失败"
-			return resp, err
-		}
-
-		// 删除设备关联的通道
-		if err := tx.Where("device_id = ?", req.Id).Delete(&gb28181.DeviceChannel{}).Error; err != nil {
-			tx.Rollback()
-			resp.Code = 500
-			resp.Message = "删除设备通道失败"
-			return resp, err
-		}
-
-		// 提交事务
-		if err := tx.Commit().Error; err != nil {
-			tx.Rollback()
-			resp.Code = 500
-			resp.Message = "提交事务失败"
-			return resp, err
-		}
+		//tx := gb.DB.Begin()
+		//if tx.Error != nil {
+		//	resp.Code = 500
+		//	resp.Message = "开启事务失败"
+		//	return resp, tx.Error
+		//}
+		//
+		//// 删除设备
+		//if err := tx.Delete(&Device{DeviceId: req.Id}).Error; err != nil {
+		//	tx.Rollback()
+		//	resp.Code = 500
+		//	resp.Message = "删除设备失败"
+		//	return resp, err
+		//}
+		//
+		//// 删除设备关联的通道
+		//if err := tx.Where("device_id = ?", req.Id).Delete(&gb28181.DeviceChannel{}).Error; err != nil {
+		//	tx.Rollback()
+		//	resp.Code = 500
+		//	resp.Message = "删除设备通道失败"
+		//	return resp, err
+		//}
+		//
+		//// 提交事务
+		//if err := tx.Commit().Error; err != nil {
+		//	tx.Rollback()
+		//	resp.Code = 500
+		//	resp.Message = "提交事务失败"
+		//	return resp, err
+		//}
 
 		resp.Code = 200
 		resp.Message = "设备删除成功"

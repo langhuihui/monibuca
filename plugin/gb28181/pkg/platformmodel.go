@@ -35,7 +35,7 @@ type PlatformModel struct {
 	UpdateTime              string             `gorm:"column:update_time;omitempty" json:"updateTime"`                    // UpdateTime表示最后更新时间
 	CreateTime              string             `gorm:"column:create_time;omitempty" json:"createTime"`                    // CreateTime表示创建时间
 	AsMessageChannel        bool               `gorm:"column:as_message_channel" json:"asMessageChannel"`                 // AsMessageChannel表示是否作为消息通道使用
-	SendStreamIP            string             `gorm:"column:send_stream_ip;omitempty" json:"sendStreamIp"`               // SendStreamIP表示点播回复200OK时使用的IP地址
+	SendStreamIp            string             `gorm:"column:send_stream_ip;omitempty" json:"sendStreamIp"`               // SendStreamIP表示点播回复200OK时使用的IP地址
 	AutoPushChannel         bool               `gorm:"column:auto_push_channel" json:"autoPushChannel"`                   // AutoPushChannel表示是否自动推送通道变化
 	CatalogWithPlatform     int                `gorm:"column:catalog_with_platform;omitempty" json:"catalogWithPlatform"` // CatalogWithPlatform表示目录信息是否包含平台信息(0:关闭,1:打开)
 	CatalogWithGroup        int                `gorm:"column:catalog_with_group;omitempty" json:"catalogWithGroup"`       // CatalogWithGroup表示目录信息是否包含分组信息(0:关闭,1:打开)

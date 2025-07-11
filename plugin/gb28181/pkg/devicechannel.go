@@ -1,7 +1,6 @@
 package gb28181
 
 import (
-	"gorm.io/gorm"
 	"strconv"
 	"time"
 )
@@ -57,7 +56,6 @@ type DeviceChannel struct {
 	Status             ChannelStatus `json:"status" xml:"Status"`                               // 设备状态
 	Longitude          float64
 	Latitude           float64
-	DeletedAt          gorm.DeletedAt `yaml:"-"`
 
 	PTZTypeText string  `json:"ptzTypeText"` // 云台类型描述字符串
 	GbLongitude float64 `json:"gbLongitude"`
@@ -85,13 +83,6 @@ func (d *DeviceChannel) SetPTZType(ptzType int) {
 	case 7:
 		d.PTZTypeText = "多目设备的分割通道"
 	}
-}
-
-// DecodeFromXML 从 XML 元素解码设备通道信息
-func DecodeFromXML(element interface{}) (*DeviceChannel, error) {
-	// TODO: 实现 XML 解码逻辑
-	// 这部分需要参考 Java 版本的 decode 方法实现
-	return nil, nil
 }
 
 // DecodeWithOnlyDeviceID 仅解码设备ID

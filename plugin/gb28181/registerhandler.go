@@ -213,17 +213,10 @@ func (task *registerHandlerTask) Run() (err error) {
 		if d, ok := task.gb.devices.Get(deviceid); ok {
 			d.Online = false
 			d.Status = DeviceOfflineStatus
-			if task.gb.DB != nil {
-				// 更新设备状态
-				var dbDevice Device
-				if err := task.gb.DB.First(&dbDevice, Device{DeviceId: deviceid}).Error; err == nil {
-					d.ID = dbDevice.ID
-				}
-				d.channels.Range(func(channel *Channel) bool {
-					channel.Status = "OFF"
-					return true
-				})
-			}
+			d.channels.Range(func(channel *Channel) bool {
+				channel.Status = "OFF"
+				return true
+			})
 			d.Stop(errors.New("unregister"))
 		}
 	} else {

@@ -92,13 +92,22 @@ func (d *Device) TableName() string {
 
 func (d *Device) Dispose() {
 	if d.plugin.DB != nil {
+		// 先删除该设备关联的所有channels
+		if err := d.plugin.DB.Where("device_id = ?", d.DeviceId).Delete(&gb28181.DeviceChannel{}).Error; err != nil {
+			d.Error("删除设备通道记录失败", "error", err)
+		}
+
+		// 保存当前内存中的channels
 		if d.channels.Length > 0 {
 			d.channels.Range(func(channel *Channel) bool {
-				d.plugin.DB.Save(channel.DeviceChannel)
-				//d.plugin.DB.Model(&gb28181.DeviceChannel{}).Where("device_id = ? AND device_db_id = ?", channel.DeviceId, d.ID).Updates(channel.DeviceChannel)
+				if err := d.plugin.DB.Create(channel.DeviceChannel).Error; err != nil {
+					d.Error("保存设备通道记录失败", "error", err)
+				}
+				d.plugin.channels.RemoveByKey(channel.ID)
 				return true
 			})
 		}
+		// 保存设备信息
 		d.plugin.DB.Save(d)
 	}
 	d.plugin.devices.RemoveByKey(d.DeviceId)
@@ -190,9 +199,6 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 			// 如果是第一个响应，先清空现有通道
 			if isFirst {
 				d.Trace("清空现有通道", "deviceId", d.DeviceId)
-				if err := d.plugin.DB.Where("device_id = ?", d.DeviceId).Delete(&gb28181.DeviceChannel{}).Error; err != nil {
-					d.Error("删除通道失败", "error", err, "deviceId", d.DeviceId)
-				}
 				// 清空内存中的通道缓存
 				d.channels.Clear()
 			}
@@ -204,22 +210,13 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 				c.DeviceID = d.DeviceId
 				c.ID = d.DeviceId + "_" + c.ChannelID
 				// 使用 Save 进行 upsert 操作
-				if err := d.plugin.DB.Save(&c).Error; err != nil {
-					d.Error("save channel failed", "error", err)
-				}
 				d.addOrUpdateChannel(c)
 			}
 
 			// 更新当前设备的通道数
 			d.ChannelCount = msg.SumNum
 			d.UpdateTime = time.Now()
-			d.Trace("save channel", "deviceid", d.DeviceId, "channels count", d.channels.Length)
-			if err := d.plugin.DB.Model(d).Updates(map[string]interface{}{
-				"channel_count": d.ChannelCount,
-				"update_time":   d.UpdateTime,
-			}).Error; err != nil {
-				d.Error("save device failed", "error", err)
-			}
+			d.Debug("save channel", "deviceid", d.DeviceId, " d.channels.Length", d.channels.Length, "d.ChannelCount", d.ChannelCount, "d.UpdateTime", d.UpdateTime)
 		}
 
 		// 在所有通道都添加完成后，检查是否完成接收
@@ -311,16 +308,7 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 			}
 		}
 	case "DeviceStatus":
-		if d.plugin.DB != nil {
-			d.UpdateTime = time.Now()
-			if err := d.plugin.DB.Model(d).Updates(map[string]interface{}{
-				"update_time": d.UpdateTime,
-				"longitude":   msg.Longitude,
-				"latitude":    msg.Latitude,
-			}).Error; err != nil {
-				d.Error("save device status failed", "error", err)
-			}
-		}
+		d.UpdateTime = time.Now()
 	case "DeviceInfo":
 		// 主设备信息
 		d.Info("DeviceInfo message", "body", req.Body(), "d.Name", d.Name, "d.DeviceId", d.DeviceId, "msg.DeviceName", msg.DeviceName)
@@ -333,20 +321,6 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 		d.UpdateTime = time.Now()
 		d.Latitude = msg.Latitude
 		d.Longitude = msg.Longitude
-		// 更新设备信息到数据库
-		if d.plugin.DB != nil {
-			if err := d.plugin.DB.Model(d).Updates(map[string]interface{}{
-				"name":         d.Name,
-				"manufacturer": d.Manufacturer,
-				"model":        d.Model,
-				"firmware":     d.Firmware,
-				"update_time":  d.UpdateTime,
-				"longitude":    d.Longitude,
-				"latitude":     d.Latitude,
-			}).Error; err != nil {
-				d.Error("save device info failed", "error", err)
-			}
-		}
 	case "Alarm":
 		// 创建报警记录
 		alarm := &gb28181.DeviceAlarm{
@@ -626,7 +600,7 @@ func (d *Device) addOrUpdateChannel(c gb28181.DeviceChannel) {
 			DeviceChannel: &c,
 		}
 		d.channels.Set(channel)
-		d.plugin.channels.Set(channel.DeviceChannel)
+		d.plugin.channels.Set(channel)
 	}
 }
 
@@ -826,7 +800,7 @@ func (d *Device) onNotify(req *sip.Request, tx sip.ServerTransaction, msg *gb281
 
 	// 如果不是 Notify 消息，尝试按 Response 消息处理
 	if strings.Contains(string(notifyBody), "<Response>") {
-		// 重新解析为 Response 消息
+		// 重新解析为 Response 消消息
 		response := &gb28181.Message{}
 		if err := gb28181.DecodeXML(response, notifyBody); err != nil {
 			return fmt.Errorf("decode response xml error: %v", err)

@@ -28,7 +28,7 @@ type Platform struct {
 	DialogClient   *sipgo.DialogClientCache `gorm:"-" json:"-"` // SIP对话客户端
 	Recipient      sip.Uri                  `gorm:"-" json:"-"` // 接收者地址
 	ContactHDR     *sip.ContactHeader       `gorm:"-" json:"-"` // 联系人头部
-	UserAgentHDR   sip.Header               `gorm:"-" json:"-"`
+	UserAgentHDR   sip.Header               `gorm:"-" json:"-"` // 
 	MaxForwardsHDR sip.MaxForwardsHeader    `gorm:"-" json:"-"`
 
 	// 运行时字段
@@ -41,7 +41,7 @@ type Platform struct {
 	plugin     *GB28181Plugin
 	ctx        context.Context
 	unRegister bool
-	channels   util.Collection[string, *gb28181.DeviceChannel] `gorm:"-:all"`
+	channels   util.Collection[string, *Channel] `gorm:"-:all"`
 }
 
 func NewPlatform(pm *gb28181.PlatformModel, plugin *GB28181Plugin, unRegister bool) *Platform {
@@ -168,6 +168,18 @@ func (p *Platform) Keepalive() (*sipgo.DialogClientSession, error) {
 	//viaHeader.Params.Add("branch", sip.GenerateBranchN(16)).Add("rport", "")
 	//req.AppendHeader(&viaHeader)
 
+	req.AppendHeader(&p.MaxForwardsHDR)
+
+	// 添加Contact头部
+	req.AppendHeader(p.ContactHDR)
+
+	req.AppendHeader(p.UserAgentHDR)
+
+	// 添加Expires头部，根据是否注销设置不同值
+	req.AppendHeader(sip.NewHeader("Expires", fmt.Sprintf("%d", p.PlatformModel.Expires)))
+
+	contentLengthHeader := sip.ContentLengthHeader(0)
+	req.AppendHeader(&contentLengthHeader)
 	req.SetBody(gb28181.BuildKeepAliveXML(p.SN, p.PlatformModel.DeviceGBID))
 	p.SN++
 	tx, err := p.Client.TransactionRequest(p.ctx, req)
@@ -471,7 +483,7 @@ func (p *Platform) handleCatalog(req *sip.Request, tx sip.ServerTransaction, msg
 	//	}
 	//}
 	for channel := range p.channels.Range {
-		channels = append(channels, *channel)
+		channels = append(channels, *channel.DeviceChannel)
 	}
 
 	// 发送目录响应，无论是否有通道
@@ -571,7 +583,7 @@ func (p *Platform) sendCatalogResponse(req *sip.Request, sn string, fromTag stri
 				return err
 			}
 
-			p.Debug("received auth challenge",
+			p.plugin.Debug("received auth challenge",
 				"realm", chal.Realm,
 				"nonce", chal.Nonce,
 				"algorithm", chal.Algorithm,
@@ -593,7 +605,7 @@ func (p *Platform) sendCatalogResponse(req *sip.Request, sn string, fromTag stri
 				return err
 			}
 
-			p.Debug("calculated response info",
+			p.plugin.Debug("calculated response info",
 				"username", opts.Username,
 				"uri", opts.URI,
 				"cnonce", opts.Cnonce,
@@ -716,7 +728,7 @@ func (p *Platform) sendCatalogResponse(req *sip.Request, sn string, fromTag stri
 				return err
 			}
 
-			p.Debug("received auth challenge",
+			p.plugin.Debug("received auth challenge",
 				"realm", chal.Realm,
 				"nonce", chal.Nonce,
 				"algorithm", chal.Algorithm,
@@ -739,7 +751,7 @@ func (p *Platform) sendCatalogResponse(req *sip.Request, sn string, fromTag stri
 				return err
 			}
 
-			p.Debug("calculated response info",
+			p.plugin.Debug("calculated response info",
 				"username", opts.Username,
 				"uri", opts.URI,
 				"cnonce", opts.Cnonce,
@@ -1348,12 +1360,12 @@ func (p *Platform) handlePresetQuery(req *sip.Request, tx sip.ServerTransaction,
 
 	// 添加Via头部
 	//viaHeader := sip.ViaHeader{
-	//	ProtocolName:    "SIP",
-	//	ProtocolVersion: "2.0",
-	//	Transport:       device.Transport,
-	//	Host:            device.SipIp,
-	//	Port:            device.LocalPort,
-	//	Params:          sip.NewParams(),
+	//	 ProtocolName:    "SIP",
+	//	 ProtocolVersion: "2.0",
+	//	 Transport:       device.Transport,
+	//	 Host:            device.SipIp,
+	//	 Port:            device.LocalPort,
+	//	 Params:          sip.NewParams(),
 	//}
 	//viaHeader.Params.Add("branch", sip.GenerateBranchN(16)).Add("rport", "")
 	//request.AppendHeader(&viaHeader)
