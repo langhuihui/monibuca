@@ -66,13 +66,13 @@ func NewRegionFromChannel(channel *DeviceChannel) *Region {
 	now := time.Now().Format("2006-01-02 15:04:05")
 	region := &Region{
 		Name:       channel.Name,
-		DeviceID:   channel.DeviceID,
+		DeviceID:   channel.DeviceId,
 		CreateTime: now,
 		UpdateTime: now,
 	}
 
 	// 获取父级编码
-	parentCode := GetInstance().GetParentCode(channel.DeviceID)
+	parentCode := GetInstance().GetParentCode(channel.DeviceId)
 	if parentCode != nil {
 		region.ParentDeviceID = parentCode.Code
 	}

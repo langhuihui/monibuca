@@ -28,7 +28,7 @@ type Platform struct {
 	DialogClient   *sipgo.DialogClientCache `gorm:"-" json:"-"` // SIP对话客户端
 	Recipient      sip.Uri                  `gorm:"-" json:"-"` // 接收者地址
 	ContactHDR     *sip.ContactHeader       `gorm:"-" json:"-"` // 联系人头部
-	UserAgentHDR   sip.Header               `gorm:"-" json:"-"` // 
+	UserAgentHDR   sip.Header               `gorm:"-" json:"-"` //
 	MaxForwardsHDR sip.MaxForwardsHeader    `gorm:"-" json:"-"`
 
 	// 运行时字段
@@ -796,7 +796,7 @@ func (p *Platform) sendCatalogResponse(req *sip.Request, sn string, fromTag stri
 // buildChannelItem 构建单个通道的XML项
 func (p *Platform) buildChannelItem(channel gb28181.DeviceChannel) string {
 	// 确保字符串字段不为空
-	deviceID := channel.ChannelID
+	deviceID := channel.ChannelId
 	if deviceID == "" {
 		deviceID = "unknown_device" // 如果没有设备ID，使用默认值
 	}
@@ -820,7 +820,7 @@ func (p *Platform) buildChannelItem(channel gb28181.DeviceChannel) string {
 	if address == "" {
 		address = "未知地址"
 	}
-	parentID := channel.ParentID
+	parentID := channel.ParentId
 	if parentID == "" {
 		parentID = p.PlatformModel.DeviceGBID // 使用平台ID作为父ID
 	}
@@ -845,7 +845,7 @@ func (p *Platform) buildChannelItem(channel gb28181.DeviceChannel) string {
 		channel.RegisterWay, // 直接使用整数值
 		channel.Secrecy,     // 直接使用整数值
 		parentID,
-		channel.Parental,  // 直接使用整数值
+		channel.Parental, // 直接使用整数值
 		channel.SafetyWay) // 直接使用整数值
 }
 
@@ -1113,7 +1113,7 @@ func (p *Platform) handleDeviceInfo(req *sip.Request, tx sip.ServerTransaction, 
 	}
 
 	// 3. 判断通道类型
-	if channel.DeviceID == "" {
+	if channel.DeviceId == "" {
 		// 非国标通道不支持设备信息查询
 		response := sip.NewResponseFromRequest(req, sip.StatusForbidden, "non-gb channel not supported", nil)
 		return tx.Respond(response)
@@ -1122,7 +1122,7 @@ func (p *Platform) handleDeviceInfo(req *sip.Request, tx sip.ServerTransaction, 
 	// 4. 查询设备信息
 	var device Device
 	if p.plugin.DB != nil {
-		if err := p.plugin.DB.First(&device, channel.DeviceID).Error; err != nil {
+		if err := p.plugin.DB.First(&device, channel.DeviceId).Error; err != nil {
 			// 设备不存在，返回404
 			response := sip.NewResponseFromRequest(req, sip.StatusNotFound, "device not found", nil)
 			return tx.Respond(response)

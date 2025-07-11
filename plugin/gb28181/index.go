@@ -346,7 +346,7 @@ func (gb *GB28181Plugin) checkDeviceExpire() (err error) {
 			device.channels.OnAdd(func(c *Channel) {
 				if absDevice, ok := gb.Server.PullProxies.SafeFind(func(absDevice m7s.IPullProxy) bool {
 					conf := absDevice.GetConfig()
-					return conf.Type == "gb28181" && conf.URL == fmt.Sprintf("%s/%s", device.DeviceId, c.ChannelID)
+					return conf.Type == "gb28181" && conf.URL == fmt.Sprintf("%s/%s", device.DeviceId, c.ChannelId)
 				}); ok {
 					c.PullProxyTask = absDevice.(*PullProxy)
 					absDevice.ChangeStatus(m7s.PullProxyStatusOnline)
@@ -367,7 +367,7 @@ func (gb *GB28181Plugin) checkDeviceExpire() (err error) {
 
 			// 加载设备的通道
 			var channels []gb28181.DeviceChannel
-			if err := gb.DB.Where(&gb28181.DeviceChannel{DeviceID: device.DeviceId}).Find(&channels).Error; err != nil {
+			if err := gb.DB.Where(&gb28181.DeviceChannel{DeviceId: device.DeviceId}).Find(&channels).Error; err != nil {
 				gb.Error("加载通道失败", "error", err, "deviceId", device.DeviceId)
 				continue
 			}
@@ -396,7 +396,7 @@ func (gb *GB28181Plugin) checkDeviceExpire() (err error) {
 				}
 				// 更新通道状态到数据库
 				if err := gb.DB.Model(&gb28181.DeviceChannel{}).Where(&gb28181.DeviceChannel{ID: channel.ID}).Update("status", channel.Status).Error; err != nil {
-					gb.Error("更新通道状态到数据库失败", "error", err, "channelId", channel.ChannelID)
+					gb.Error("更新通道状态到数据库失败", "error", err, "channelId", channel.ChannelId)
 				}
 				device.addOrUpdateChannel(channel)
 			}
@@ -718,7 +718,7 @@ func (gb *GB28181Plugin) GetPullableList() []string {
 		for d := range gb.devices.Range {
 			for c := range d.channels.Range {
 				if c.Status == gb28181.ChannelOnStatus {
-					yield(fmt.Sprintf("%s/%s", d.DeviceId, c.ChannelID))
+					yield(fmt.Sprintf("%s/%s", d.DeviceId, c.ChannelId))
 				}
 			}
 		}
@@ -834,25 +834,25 @@ func (gb *GB28181Plugin) OnInvite(req *sip.Request, tx sip.ServerTransaction) {
 	var channel *Channel
 
 	platform.channels.Range(func(channelTmp *Channel) bool {
-		if channelTmp.ChannelID == inviteInfo.TargetChannelId {
+		if channelTmp.ChannelId == inviteInfo.TargetChannelId {
 			channel = channelTmp
 		}
 		return true
 	})
 
-	gb.Info("OnInvite", "action", "channel found", "channelId", channel.ChannelID, "channelName", channel.Name)
+	gb.Info("OnInvite", "action", "channel found", "channelId", channel.ChannelId, "channelName", channel.Name)
 
 	var channelTmp *Channel
-	if deviceFound, ok := gb.devices.Get(channel.DeviceID); ok {
+	if deviceFound, ok := gb.devices.Get(channel.DeviceId); ok {
 		if channelFound, ok := deviceFound.channels.Get(channel.ID); ok {
 			channelTmp = channelFound
 		} else {
-			gb.Error("OnInvite", "channel not found memory,ChannelID is ", channel.ChannelID)
+			gb.Error("OnInvite", "channel not found memory,ChannelId is ", channel.ChannelId)
 			_ = tx.Respond(sip.NewResponseFromRequest(req, sip.StatusBadRequest, "SSRC Not Found", nil))
 			return
 		}
 	} else {
-		gb.Error("OnInvite", "device not found memory,deviceID is ", channel.DeviceID)
+		gb.Error("OnInvite", "device not found memory,deviceID is ", channel.DeviceId)
 		_ = tx.Respond(sip.NewResponseFromRequest(req, sip.StatusBadRequest, "SSRC Not Found", nil))
 		return
 	}
@@ -899,7 +899,7 @@ func (gb *GB28181Plugin) OnInvite(req *sip.Request, tx sip.ServerTransaction) {
 	// 构建SDP内容，参考Java代码createSendSdp方法
 	content := []string{
 		"v=0",
-		fmt.Sprintf("o=%s 0 0 IN IP4 %s", channel.ChannelID, sdpIP),
+		fmt.Sprintf("o=%s 0 0 IN IP4 %s", channel.ChannelId, sdpIP),
 		fmt.Sprintf("s=%s", inviteInfo.SessionName),
 		fmt.Sprintf("c=IN IP4 %s", sdpIP),
 	}
@@ -999,7 +999,7 @@ func (gb *GB28181Plugin) OnInvite(req *sip.Request, tx sip.ServerTransaction) {
 		return
 	}
 
-	gb.Info("OnInvite", "action", "complete", "platformId", inviteInfo.RequesterId, "channelId", channel.ChannelID,
+	gb.Info("OnInvite", "action", "complete", "platformId", inviteInfo.RequesterId, "channelId", channel.ChannelId,
 		"ip", inviteInfo.IP, "port", inviteInfo.Port, "tcp", inviteInfo.TCP, "tcpActive", inviteInfo.TCPActive)
 	return
 	//} else {
@@ -1026,8 +1026,8 @@ func (gb *GB28181Plugin) OnAck(req *sip.Request, tx sip.ServerTransaction) {
 	if forwardDialog, ok := gb.forwardDialogs.Find(func(dialog *ForwardDialog) bool {
 		return dialog.platformCallId == callID
 	}); ok {
-		pullUrl := fmt.Sprintf("%s/%s", forwardDialog.channel.DeviceID, forwardDialog.channel.ChannelID)
-		streamPath := fmt.Sprintf("platform_%d/%s/%s", time.Now().UnixMilli(), forwardDialog.channel.DeviceID, forwardDialog.channel.ChannelID)
+		pullUrl := fmt.Sprintf("%s/%s", forwardDialog.channel.DeviceId, forwardDialog.channel.ChannelId)
+		streamPath := fmt.Sprintf("platform_%d/%s/%s", time.Now().UnixMilli(), forwardDialog.channel.DeviceId, forwardDialog.channel.ChannelId)
 
 		// 创建配置
 		pullConf := config.Pull{

@@ -339,7 +339,7 @@ func (d *Dialog) Dispose() {
 		// 如果没有设置tcp端口，则将MediaPort设置为0，表示不再使用
 		d.gb.tcpPorts <- d.MediaPort
 	}
-	d.Info("dialog dispose", "ssrc", d.SSRC, "mediaPort", d.MediaPort, "streamMode", d.StreamMode, "deviceId", d.Channel.DeviceID, "channelId", d.Channel.ChannelID)
+	d.Info("dialog dispose", "ssrc", d.SSRC, "mediaPort", d.MediaPort, "streamMode", d.StreamMode, "deviceId", d.Channel.DeviceId, "channelId", d.Channel.ChannelId)
 	if d.session != nil {
 		err := d.session.Bye(d)
 		if err != nil {

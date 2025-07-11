@@ -18,9 +18,9 @@ type DeviceChannel struct {
 	//CommonGBChannel // 通过组合继承 CommonGBChannel 的字段
 
 	ID                 string        `gorm:"primaryKey" json:"ID"` // 数据库自增长ID
-	ChannelID          string        `json:"channelID" xml:"ChannelID"`
-	DeviceID           string        `json:"deviceID" xml:"DeviceID"`                           // 设备国标编号
-	ParentID           string        `json:"parentId" xml:"ParentID"`                           // 父节点ID
+	ChannelId          string        `json:"channelID" xml:"ChannelID"`
+	DeviceId           string        `json:"deviceID" xml:"DeviceID"`                           // 设备国标编号
+	ParentId           string        `json:"parentId" xml:"ParentID"`                           // 父节点ID
 	Name               string        `json:"name" xml:"Name"`                                   // 通道名称
 	Manufacturer       string        `json:"manufacturer" xml:"Manufacturer"`                   // 设备厂商
 	Model              string        `json:"model" xml:"Model"`                                 // 设备型号
@@ -114,12 +114,12 @@ func (d *DeviceChannel) Encode(event string, serverDeviceID string) string {
 	switch event {
 	case "DEL", "DEFECT", "VLOST":
 		return "<Item>\n" +
-			"<DeviceId>" + d.DeviceID + "</DeviceId>\n" +
+			"<DeviceID>" + d.DeviceId + "</DeviceID>\n" +
 			"<Event>" + event + "</Event>\n" +
 			"</Item>\n"
 	case "ON", "OFF":
 		return "<Item>\n" +
-			"<DeviceId>" + d.DeviceID + "</DeviceId>\n" +
+			"<DeviceID>" + d.DeviceId + "</DeviceID>\n" +
 			"<Event>" + event + "</Event>\n" +
 			"</Item>\n"
 	case "ADD", "UPDATE":
@@ -132,11 +132,11 @@ func (d *DeviceChannel) Encode(event string, serverDeviceID string) string {
 // getFullContent 生成完整的通道信息XML内容
 func (d *DeviceChannel) getFullContent(event string, serverDeviceID string) string {
 	content := "<Item>\n" +
-		"<DeviceId>" + d.DeviceID + "</DeviceId>\n" +
+		"<DeviceID>" + d.DeviceId + "</DeviceID>\n" +
 		"<Name>" + d.Name + "</Name>\n"
 
-	if len(d.DeviceID) > 8 {
-		typeCode := d.DeviceID[10:13]
+	if len(d.DeviceId) > 8 {
+		typeCode := d.DeviceId[10:13]
 		switch typeCode {
 		case "200":
 			// 业务分组目录项
@@ -172,8 +172,8 @@ func (d *DeviceChannel) getFullContent(event string, serverDeviceID string) stri
 			if d.CivilCode != "" {
 				content += "<CivilCode>" + d.CivilCode + "</CivilCode>\n"
 			}
-			if d.ParentID != "" {
-				content += "<ParentID>" + d.ParentID + "</ParentID>\n"
+			if d.ParentId != "" {
+				content += "<ParentID>" + d.ParentId + "</ParentID>\n"
 			}
 			content += "<BusinessGroupID>" + d.BusinessGroupID + "</BusinessGroupID>\n"
 		default:
@@ -209,8 +209,8 @@ func (d *DeviceChannel) appendCommonInfo(content *string) {
 	if d.Address != "" {
 		*content += "<Address>" + d.Address + "</Address>\n"
 	}
-	if d.ParentID != "" {
-		*content += "<ParentID>" + d.ParentID + "</ParentID>\n"
+	if d.ParentId != "" {
+		*content += "<ParentID>" + d.ParentId + "</ParentID>\n"
 	}
 	if d.SafetyWay != 0 {
 		*content += "<SafetyWay>" + strconv.Itoa(d.SafetyWay) + "</SafetyWay>\n"

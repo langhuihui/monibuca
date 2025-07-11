@@ -84,7 +84,8 @@ func (gb *GB28181Plugin) List(ctx context.Context, req *pb.GetDevicesRequest) (*
 		// 从设备的内存通道集合中获取通道信息
 		d.channels.Range(func(channel *Channel) bool {
 			pbChannels = append(pbChannels, &pb.Channel{
-				DeviceId:     channel.ChannelID,
+				DeviceId:     channel.ChannelId,
+				ChannelId:    channel.ChannelId,
 				ParentId:     d.DeviceId,
 				Name:         channel.Name,
 				Manufacturer: channel.Manufacturer,
@@ -158,20 +159,18 @@ func (gb *GB28181Plugin) GetDevice(ctx context.Context, req *pb.GetDeviceRequest
 
 	// 先从内存中获取
 	d, ok := gb.devices.Get(req.DeviceId)
-	if !ok && gb.DB != nil {
-		// 如果内存中没有且数据库存在，则从数据库查询
-		var device Device
-		if err := gb.DB.Where("id = ?", req.DeviceId).First(&device).Error; err == nil {
-			d = &device
-		}
+	if !ok {
+		resp.Code = 404
+		resp.Message = "设备不存在"
 	}
 
 	if d != nil {
 		var channels []*pb.Channel
 		for c := range d.channels.Range {
 			channels = append(channels, &pb.Channel{
-				DeviceId:     c.DeviceID,
-				ParentId:     c.ParentID,
+				DeviceId:     c.ChannelId,
+				ChannelId:    c.ChannelId,
+				ParentId:     d.DeviceId,
 				Name:         c.Name,
 				Manufacturer: c.Manufacturer,
 				Model:        c.Model,
@@ -219,68 +218,50 @@ func (gb *GB28181Plugin) GetDevice(ctx context.Context, req *pb.GetDeviceRequest
 func (gb *GB28181Plugin) GetDevices(ctx context.Context, req *pb.GetDevicesRequest) (*pb.DevicesPageInfo, error) {
 	resp := &pb.DevicesPageInfo{}
 
-	if gb.DB == nil {
-		resp.Code = 500
-		resp.Message = "数据库未初始化"
-		return resp, nil
-	}
-
-	var devices []Device
-	var total int64
-
-	// 构建查询条件
-	query := gb.DB.Model(&Device{})
-	if req.Query != "" {
-		query = query.Where("device_id LIKE ? OR name LIKE ?",
-			"%"+req.Query+"%", "%"+req.Query+"%")
-	}
-	if req.Status {
-		query = query.Where("online = ?", true)
-	}
-
-	// 获取总数
-	if err := query.Count(&total).Error; err != nil {
-		resp.Code = 500
-		resp.Message = fmt.Sprintf("查询总数失败: %v", err)
-		return resp, nil
-	}
-
-	// 查询设备列表
-	// 当Page和Count都为0时，不做分页，返回所有数据
-	if req.Page == 0 && req.Count == 0 {
-		// 不分页，查询所有数据
-		if err := query.Find(&devices).Error; err != nil {
-			resp.Code = 500
-			resp.Message = fmt.Sprintf("查询设备列表失败: %v", err)
-			return resp, nil
-		}
-	} else {
-		// 分页查询设备，并预加载通道数据
-		if err := query.
-			Offset(int(req.Page-1) * int(req.Count)).
-			Limit(int(req.Count)).
-			Find(&devices).Error; err != nil {
-			resp.Code = 500
-			resp.Message = fmt.Sprintf("查询设备列表失败: %v", err)
-			return resp, nil
-		}
-	}
-
-	// 转换为proto消息
+	// 从内存中获取设备列表
 	var pbDevices []*pb.Device
-	for _, d := range devices {
-		// 查询设备对应的通道
-		var channels []gb28181.DeviceChannel
-		if err := gb.DB.Where(&gb28181.DeviceChannel{DeviceID: d.DeviceId}).Find(&channels).Error; err != nil {
-			gb.Error("查询通道失败", "error", err)
+	var total int64
+	var filteredDevices []*Device
+
+	// 遍历内存中的设备
+	for d := range gb.devices.Range {
+		// 应用查询条件过滤
+		if req.Query != "" && !strings.Contains(d.DeviceId, req.Query) && !strings.Contains(d.Name, req.Query) {
+			continue
+		}
+		if req.Status && !d.Online {
 			continue
 		}
 
+		filteredDevices = append(filteredDevices, d)
+		total++
+	}
+
+	// 处理分页
+	startIdx := 0
+	endIdx := len(filteredDevices)
+
+	// 当Page和Count都不为0时，进行分页处理
+	if req.Page > 0 && req.Count > 0 {
+		startIdx = int((req.Page - 1) * req.Count)
+		endIdx = int(req.Page * req.Count)
+		if startIdx >= len(filteredDevices) {
+			startIdx = len(filteredDevices)
+		}
+		if endIdx > len(filteredDevices) {
+			endIdx = len(filteredDevices)
+		}
+	}
+
+	// 处理分页后的设备列表
+	for _, d := range filteredDevices[startIdx:endIdx] {
+		// 从内存中获取通道
 		var pbChannels []*pb.Channel
-		for _, c := range channels {
+		for c := range d.channels.Range {
 			pbChannels = append(pbChannels, &pb.Channel{
-				DeviceId:     c.ChannelID,
-				ParentId:     c.ParentID,
+				ChannelId:    c.ChannelId,
+				DeviceId:     c.ChannelId,
+				ParentId:     d.DeviceId,
 				Name:         c.Name,
 				Manufacturer: c.Manufacturer,
 				Model:        c.Model,
@@ -331,28 +312,27 @@ func (gb *GB28181Plugin) GetDevices(ctx context.Context, req *pb.GetDevicesReque
 func (gb *GB28181Plugin) GetChannels(ctx context.Context, req *pb.GetChannelsRequest) (*pb.ChannelsPageInfo, error) {
 	resp := &pb.ChannelsPageInfo{}
 
-	// 先从内存中获取
+	// 直接从内存中获取设备
 	d, ok := gb.devices.Get(req.DeviceId)
-	if !ok && gb.DB != nil {
-		// 如果内存中没有且数据库存在，则从数据库查询
-		var device Device
-		if err := gb.DB.Where(Device{DeviceId: req.DeviceId}).First(&device).Error; err == nil {
-			d = &device
-		}
+	if !ok {
+		// 如果内存中没有设备，返回设备未找到的错误
+		resp.Code = 404
+		resp.Message = "设备未找到"
+		return resp, nil
 	}
 
 	if d != nil {
 		var channels []*pb.Channel
 		total := 0
 		for c := range d.channels.Range {
-			// TODO: 实现查询条件过滤
-			if req.Query != "" && !strings.Contains(c.DeviceID, req.Query) && !strings.Contains(c.Name, req.Query) {
+			// 实现查询条件过滤
+			if req.Query != "" && !strings.Contains(c.DeviceId, req.Query) && !strings.Contains(c.Name, req.Query) {
 				continue
 			}
 			if req.Online && string(c.Status) != "ON" {
 				continue
 			}
-			if req.ChannelType && c.ParentID == "" {
+			if req.ChannelType && c.ParentId == "" {
 				continue
 			}
 			total++
@@ -361,8 +341,9 @@ func (gb *GB28181Plugin) GetChannels(ctx context.Context, req *pb.GetChannelsReq
 			if req.Page == 0 && req.Count == 0 {
 				// 不分页，添加所有符合条件的通道
 				channels = append(channels, &pb.Channel{
-					DeviceId:     c.DeviceID,
-					ParentId:     c.ParentID,
+					DeviceId:     c.ChannelId,
+					ChannelId:    c.ChannelId,
+					ParentId:     c.ParentId,
 					Name:         c.Name,
 					Manufacturer: c.Manufacturer,
 					Model:        c.Model,
@@ -388,8 +369,9 @@ func (gb *GB28181Plugin) GetChannels(ctx context.Context, req *pb.GetChannelsReq
 					continue
 				}
 				channels = append(channels, &pb.Channel{
-					DeviceId:     c.DeviceID,
-					ParentId:     c.ParentID,
+					DeviceId:     c.ChannelId,
+					ChannelId:    c.ChannelId,
+					ParentId:     c.ParentId,
 					Name:         c.Name,
 					Manufacturer: c.Manufacturer,
 					Model:        c.Model,
@@ -414,7 +396,7 @@ func (gb *GB28181Plugin) GetChannels(ctx context.Context, req *pb.GetChannelsReq
 		resp.Message = "success"
 	} else {
 		resp.Code = 404
-		resp.Message = "device not found"
+		resp.Message = "设备未找到"
 	}
 	return resp, nil
 }
@@ -1866,7 +1848,7 @@ func (gb *GB28181Plugin) GetGroupChannels(ctx context.Context, req *pb.GetGroupC
 	// 从内存中获取所有通道
 	for channel := range gb.channels.Range {
 		// 如果有设备ID过滤条件，则只处理匹配的设备
-		if req.DeviceId != "" && channel.DeviceID != req.DeviceId {
+		if req.DeviceId != "" && channel.DeviceId != req.DeviceId {
 			continue
 		}
 		filteredChannels = append(filteredChannels, channel)
@@ -1877,10 +1859,10 @@ func (gb *GB28181Plugin) GetGroupChannels(ctx context.Context, req *pb.GetGroupC
 
 	// 应用排序（按设备ID和通道ID排序）
 	sort.Slice(filteredChannels, func(i, j int) bool {
-		if filteredChannels[i].DeviceID == filteredChannels[j].DeviceID {
-			return filteredChannels[i].ChannelID < filteredChannels[j].ChannelID
+		if filteredChannels[i].DeviceId == filteredChannels[j].DeviceId {
+			return filteredChannels[i].ChannelId < filteredChannels[j].ChannelId
 		}
-		return filteredChannels[i].DeviceID < filteredChannels[j].DeviceID
+		return filteredChannels[i].DeviceId < filteredChannels[j].DeviceId
 	})
 
 	// 应用分页
@@ -1898,20 +1880,20 @@ func (gb *GB28181Plugin) GetGroupChannels(ctx context.Context, req *pb.GetGroupC
 
 	// 处理分页后的通道数据
 	for _, channel := range filteredChannels[start:end] {
-		key := channel.DeviceID + ":" + channel.ChannelID
+		key := channel.DeviceId + ":" + channel.ChannelId
 		id, inGroup := inGroupMap[key]
 
 		// 获取设备名称
 		deviceName := ""
-		if device, ok := gb.devices.Get(channel.DeviceID); ok {
+		if device, ok := gb.devices.Get(channel.DeviceId); ok {
 			deviceName = device.Name
 		}
 
 		channelInfo := &pb.GroupChannel{
 			Id:          int32(id),
 			GroupId:     req.GroupId,
-			ChannelId:   channel.ChannelID,
-			DeviceId:    channel.DeviceID,
+			ChannelId:   channel.ChannelId,
+			DeviceId:    channel.DeviceId,
 			ChannelName: channel.Name,
 			DeviceName:  deviceName,
 			Status:      string(channel.Status),
@@ -1919,7 +1901,7 @@ func (gb *GB28181Plugin) GetGroupChannels(ctx context.Context, req *pb.GetGroupC
 		}
 
 		// 从内存中获取设备信息以获取传输协议
-		if device, ok := gb.devices.Get(channel.DeviceID); ok {
+		if device, ok := gb.devices.Get(channel.DeviceId); ok {
 			channelInfo.StreamMode = device.StreamMode
 		}
 

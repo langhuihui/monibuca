@@ -446,7 +446,7 @@ func (task *registerHandlerTask) StoreDevice(deviceid string, req *sip.Request, 
 		d.channels.OnAdd(func(c *Channel) {
 			if absDevice, ok := task.gb.Server.PullProxies.SafeFind(func(absDevice m7s.IPullProxy) bool {
 				conf := absDevice.GetConfig()
-				return conf.Type == "gb28181" && conf.URL == fmt.Sprintf("%s/%s", d.DeviceId, c.ChannelID)
+				return conf.Type == "gb28181" && conf.URL == fmt.Sprintf("%s/%s", d.DeviceId, c.ChannelId)
 			}); ok {
 				c.PullProxyTask = absDevice.(*PullProxy)
 				absDevice.ChangeStatus(m7s.PullProxyStatusOnline)

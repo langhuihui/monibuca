@@ -25,7 +25,7 @@ func (g *Group) TableName() string {
 
 // NewGroupFromChannel 从 DeviceChannel 创建 Group 实例
 func NewGroupFromChannel(channel *DeviceChannel) *Group {
-	gbCode := DecodeGBCode(channel.DeviceID)
+	gbCode := DecodeGBCode(channel.DeviceId)
 	if gbCode == nil || (gbCode.TypeCode != "215" && gbCode.TypeCode != "216") {
 		return nil
 	}
@@ -33,17 +33,17 @@ func NewGroupFromChannel(channel *DeviceChannel) *Group {
 	now := time.Now().Format("2006-01-02 15:04:05")
 	group := &Group{
 		Name:       channel.Name,
-		DeviceID:   channel.DeviceID,
+		DeviceID:   channel.DeviceId,
 		CreateTime: now,
 		UpdateTime: now,
 	}
 
 	switch gbCode.TypeCode {
 	case "215":
-		group.BusinessGroup = channel.DeviceID
+		group.BusinessGroup = channel.DeviceId
 	case "216":
 		group.BusinessGroup = channel.BusinessGroupID // 注意：需要在 DeviceChannel 中添加 BusinessGroupID 字段
-		group.ParentDeviceID = channel.ParentID
+		group.ParentDeviceID = channel.ParentId
 	}
 
 	if group.BusinessGroup == "" {

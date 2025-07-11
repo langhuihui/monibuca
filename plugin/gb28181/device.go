@@ -206,9 +206,9 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 			// 更新通道信息
 			for _, c := range msg.DeviceChannelList {
 				// 设置关联的设备数据库ID
-				c.ChannelID = c.DeviceID
-				c.DeviceID = d.DeviceId
-				c.ID = d.DeviceId + "_" + c.ChannelID
+				c.ChannelId = c.DeviceId
+				c.DeviceId = d.DeviceId
+				c.ID = d.DeviceId + "_" + c.ChannelId
 				// 使用 Save 进行 upsert 操作
 				d.addOrUpdateChannel(c)
 			}
@@ -454,8 +454,8 @@ func (d *Device) Go() (err error) {
 			//	case []gb28181.DeviceChannel:
 			//		for _, c := range v {
 			//			//当父设备非空且存在时、父设备节点增加通道
-			//			if c.ParentID != "" {
-			//				path := strings.Split(c.ParentID, "/")
+			//			if c.ParentId != "" {
+			//				path := strings.Split(c.ParentId, "/")
 			//				parentId := path[len(path)-1]
 			//				//如果父ID并非本身所属设备，一般情况下这是因为下级设备上传了目录信息，该信息通常不需要处理。
 			//				// 暂时不考虑级联目录的实现
@@ -825,7 +825,7 @@ func (d *Device) handleCatalog(msg *gb28181.Message) error {
 	// 遍历并更新设备列表
 	for _, item := range msg.DeviceChannelList {
 		channel := &gb28181.DeviceChannel{
-			DeviceID:     item.DeviceID,
+			DeviceId:     item.DeviceId,
 			Name:         item.Name,
 			Manufacturer: item.Manufacturer,
 			Model:        item.Model,
@@ -833,7 +833,7 @@ func (d *Device) handleCatalog(msg *gb28181.Message) error {
 			CivilCode:    item.CivilCode,
 			Address:      item.Address,
 			Parental:     item.Parental,
-			ParentID:     item.ParentID,
+			ParentId:     item.ParentId,
 			SafetyWay:    item.SafetyWay,
 			RegisterWay:  item.RegisterWay,
 			Secrecy:      item.Secrecy,
@@ -846,10 +846,10 @@ func (d *Device) handleCatalog(msg *gb28181.Message) error {
 		// 如果需要，保存到数据库
 		if d.plugin.DB != nil {
 			var existingChannel gb28181.DeviceChannel
-			result := d.plugin.DB.Where("channel_id = ?", channel.DeviceID).First(&existingChannel)
+			result := d.plugin.DB.Where("channel_id = ?", channel.DeviceId).First(&existingChannel)
 			if result.Error != nil {
 				// 通道不存在，创建新通道
-				channel.DeviceID = d.DeviceId // 设置设备ID
+				channel.DeviceId = d.DeviceId // 设置设备ID
 				if err := d.plugin.DB.Create(channel).Error; err != nil {
 					d.Error("create channel error", "err", err)
 				}
