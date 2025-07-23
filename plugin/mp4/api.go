@@ -564,10 +564,22 @@ func (p *MP4Plugin) EventStart(ctx context.Context, req *mp4pb.ReqEventRecord) (
 				AfterDuration:  uint32(afterDuration / time.Millisecond),
 			}
 			if p.DB != nil {
+				// Calculate total duration as the sum of BeforeDuration and AfterDuration
+				totalDuration := newEvent.BeforeDuration + newEvent.AfterDuration
+
+				// Calculate StartTime and EndTime based on current time and durations
+				now := time.Now()
+				startTime := now.Add(-time.Duration(newEvent.BeforeDuration) * time.Millisecond)
+				endTime := now.Add(time.Duration(newEvent.AfterDuration) * time.Millisecond)
+
 				p.DB.Save(&m7s.EventRecordStream{
 					RecordEvent: newEvent,
 					RecordStream: m7s.RecordStream{
 						StreamPath: req.StreamPath,
+						Duration:   totalDuration,
+						StartTime:  startTime,
+						EndTime:    endTime,
+						Type:       "mp4",
 					},
 				})
 			}

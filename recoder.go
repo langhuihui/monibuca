@@ -42,18 +42,19 @@ type (
 		Event     EventRecordStream
 	}
 	RecordStream struct {
-		ID         uint      `gorm:"primarykey"`
-		StartTime  time.Time `gorm:"default:NULL"`
-		EndTime    time.Time `gorm:"default:NULL"`
-		Duration   uint32    `gorm:"comment:录像时长;default:0"`
-		Filename   string    `json:"fileName" desc:"文件名" gorm:"type:varchar(255);comment:文件名"`
-		Type       string    `json:"type" desc:"录像文件类型" gorm:"type:varchar(255);comment:录像文件类型,flv,mp4,raw,fmp4,hls"`
-		FilePath   string
-		StreamPath string
-		AudioCodec string
-		VideoCodec string
-		CreatedAt  time.Time
-		DeletedAt  gorm.DeletedAt `gorm:"index" yaml:"-"`
+		ID          uint      `gorm:"primarykey"`
+		StartTime   time.Time `gorm:"default:NULL"`
+		EndTime     time.Time `gorm:"default:NULL"`
+		Duration    uint32    `gorm:"comment:录像时长;default:0"`
+		Filename    string    `json:"fileName" desc:"文件名" gorm:"type:varchar(255);comment:文件名"`
+		Type        string    `json:"type" desc:"录像文件类型" gorm:"type:varchar(255);comment:录像文件类型,flv,mp4,raw,fmp4,hls"`
+		FilePath    string
+		StreamPath  string
+		AudioCodec  string
+		VideoCodec  string
+		CreatedAt   time.Time
+		DeletedAt   gorm.DeletedAt    `gorm:"index" yaml:"-"`
+		RecordLevel config.EventLevel `json:"eventLevel" desc:"事件级别" gorm:"type:varchar(255);comment:事件级别,high表示重要事件，无法删除且表示无需自动删除,low表示非重要事件,达到自动删除时间后，自动删除;default:'low'"`
 	}
 )
 
@@ -87,6 +88,8 @@ func (r *DefaultRecorder) CreateStream(start time.Time, customFileName func(*Rec
 	if recordJob.Plugin.DB != nil {
 		if recordJob.Event != nil {
 			r.Event.RecordEvent = recordJob.Event
+			r.Event.RecordLevel = recordJob.Event.EventLevel
+			recordJob.Plugin.DB.Save(&r.Event.RecordStream)
 			recordJob.Plugin.DB.Save(&r.Event)
 		} else {
 			recordJob.Plugin.DB.Save(&r.Event.RecordStream)
@@ -101,6 +104,7 @@ func (r *DefaultRecorder) WriteTail(end time.Time, tailJob task.IJob) {
 		// 将事件和录像记录关联
 		if r.RecordJob.Event != nil {
 			r.RecordJob.Plugin.DB.Save(&r.Event)
+			r.RecordJob.Plugin.DB.Save(&r.Event.RecordStream)
 		} else {
 			r.RecordJob.Plugin.DB.Save(&r.Event.RecordStream)
 		}
@@ -124,6 +128,7 @@ func (p *RecordJob) Subscribe() (err error) {
 func (p *RecordJob) Init(recorder IRecorder, plugin *Plugin, streamPath string, conf config.Record, subConf *config.Subscribe) *RecordJob {
 	p.Plugin = plugin
 	p.RecConf = &conf
+	p.Event = conf.Event
 	p.StreamPath = streamPath
 	if subConf == nil {
 		conf := p.Plugin.config.Subscribe
@@ -203,9 +208,28 @@ type eventRecordCheck struct {
 
 func (t *eventRecordCheck) Run() (err error) {
 	var eventRecordStreams []EventRecordStream
-	t.DB.Find(&eventRecordStreams, `type=? AND event_level='high' AND stream_path=?`, t.Type, t.streamPath) //搜索事件录像，且为重要事件（无法自动删除）
-	for _, recordStream := range eventRecordStreams {
-		t.DB.Model(&EventRecordStream{}).Where(`event_level='low' AND start_time <= ? and end_time >= ?`, recordStream.EndTime, recordStream.StartTime).Update("event_level", config.EventLevelHigh)
+	queryRecord := EventRecordStream{
+		RecordEvent: &config.RecordEvent{
+			EventLevel: config.EventLevelHigh,
+		},
+		RecordStream: RecordStream{
+			StreamPath: t.streamPath,
+			Type:       t.Type,
+		},
+	}
+	t.DB.Where(&queryRecord).Find(&eventRecordStreams) //搜索事件录像，且为重要事件（无法自动删除）
+	if len(eventRecordStreams) > 0 {
+		for _, recordStream := range eventRecordStreams {
+			var unimportantEventRecordStreams []RecordStream
+			query := `start_time <= ? and end_time >= ? and stream_path=? and type=?`
+			t.DB.Where(query, recordStream.EndTime, recordStream.StartTime, t.streamPath, t.Type).Find(&unimportantEventRecordStreams)
+			if len(unimportantEventRecordStreams) > 0 {
+				for _, unimportantEventRecordStream := range unimportantEventRecordStreams {
+					unimportantEventRecordStream.RecordLevel = config.EventLevelHigh
+					t.DB.Save(&unimportantEventRecordStream)
+				}
+			}
+		}
 	}
 	return
 }

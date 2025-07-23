@@ -84,14 +84,16 @@ func (p *DeleteRecordTask) deleteOldestFile() {
 			filePaths = append(filePaths, dirPath)
 		}
 	}
+	p.Debug("deleteOldestFile", "after get onpub.record,filePaths.length", len(filePaths))
 	if p.plugin.EventRecordFilePath != "" {
 		// 同样处理EventRecordFilePath
 		dirPath := filepath.Dir(p.plugin.EventRecordFilePath)
 		filePaths = append(filePaths, dirPath)
 	}
+	p.Debug("deleteOldestFile", "after get eventrecordfilepath,filePaths.length", len(filePaths))
 	for _, filePath := range filePaths {
 		for p.getDiskOutOfSpace(filePath) {
-			var eventRecords []m7s.EventRecordStream
+			var recordStreams []m7s.RecordStream
 			// 使用不同的方法进行路径匹配，避免ESCAPE语法问题
 			// 解决方案：用MySQL能理解的简单方式匹配路径前缀
 			basePath := filePath
@@ -100,13 +102,13 @@ func (p *DeleteRecordTask) deleteOldestFile() {
 			searchPattern := basePath + "%"
 			p.Info("deleteOldestFile", "searching with path pattern", searchPattern)
 
-			err := p.DB.Where("event_id=0 AND end_time IS NOT NULL").
+			err := p.DB.Where(" record_level!='high' AND end_time IS NOT NULL").
 				Where("file_path LIKE ?", searchPattern).
-				Order("end_time ASC").Find(&eventRecords).Error
+				Order("end_time ASC").Limit(1).Find(&recordStreams).Error
 			if err == nil {
-				if len(eventRecords) > 0 {
-					p.Info("deleteOldestFile", "found %d records", len(eventRecords))
-					for _, record := range eventRecords {
+				if len(recordStreams) > 0 {
+					p.Info("deleteOldestFile", "found %d records", len(recordStreams))
+					for _, record := range recordStreams {
 						p.Info("deleteOldestFile", "ready to delete oldestfile,ID", record.ID, "create time", record.EndTime, "filepath", record.FilePath)
 						err = os.Remove(record.FilePath)
 						if err != nil {
