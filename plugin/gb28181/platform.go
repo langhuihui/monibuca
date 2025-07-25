@@ -1,15 +1,19 @@
 package plugin_gb28181pro
 
 import (
+	"bytes"
 	"context"
 	"fmt"
-	"m7s.live/v5/pkg/util"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
+	"golang.org/x/text/encoding/simplifiedchinese"
+	"golang.org/x/text/transform"
 	"m7s.live/v5"
+	"m7s.live/v5/pkg/util"
 
 	"github.com/emiago/sipgo"
 	"github.com/emiago/sipgo/sip"
@@ -42,6 +46,17 @@ type Platform struct {
 	ctx        context.Context
 	unRegister bool
 	channels   util.Collection[string, *Channel] `gorm:"-:all"`
+	register   *Register
+}
+
+// UTF8ToGB2312 将UTF-8编码的字符串转换为GB2312编码
+func UTF8ToGB2312(s string) (string, error) {
+	reader := transform.NewReader(bytes.NewReader([]byte(s)), simplifiedchinese.GB18030.NewEncoder())
+	d, err := io.ReadAll(reader)
+	if err != nil {
+		return "", err
+	}
+	return string(d), nil
 }
 
 func NewPlatform(pm *gb28181.PlatformModel, plugin *GB28181Plugin, unRegister bool) *Platform {
@@ -51,7 +66,7 @@ func NewPlatform(pm *gb28181.PlatformModel, plugin *GB28181Plugin, unRegister bo
 		unRegister:    unRegister,
 	}
 	p.ctx = context.Background()
-	client, err := sipgo.NewClient(p.plugin.ua, sipgo.WithClientHostname(p.PlatformModel.DeviceIP))
+	client, err := sipgo.NewClient(p.plugin.ua, sipgo.WithClientHostname(p.PlatformModel.DeviceIP), sipgo.WithClientPort(p.PlatformModel.DevicePort))
 	if err != nil {
 		p.Error("failed to create sip client: %v", err)
 	}
@@ -107,6 +122,7 @@ func (p *Platform) Start() error {
 	register.OnStart(func() {
 		register.Tick(nil)
 	})
+	p.register = register
 	p.AddTask(register)
 	return nil
 }
@@ -408,9 +424,14 @@ func (k *PlatformKeepAliveTask) Tick(any) {
 		k.Error("keepalive", "error", err.Error())
 		if k.platform.KeepAliveReply >= 3 {
 			k.platform.PlatformModel.Status = false
-			k.Stop(fmt.Errorf("max keepalive retries reached"))
 			// 重新启动注册任务
 			//k.platform.Start()
+			platform := k.platform
+			platform.KeepAliveReply = 0
+			k.Stop(fmt.Errorf("max keepalive retries reached"))
+			platform.register.registerType = "firstRegister"
+			platform.register.Ticker.Reset(time.Second * time.Duration(platform.PlatformModel.Expires))
+			platform.register.Tick(nil)
 		}
 	} else {
 		k.platform.KeepAliveReply = 0
@@ -858,31 +879,23 @@ func (p *Platform) handleDeviceControl(req *sip.Request, tx sip.ServerTransactio
 	}
 
 	// 获取通道ID
-	channelID := msg.DeviceID
+	channelId := msg.DeviceID
+	var deviceId string
 
-	// 查询通道和设备信息
-	type Result struct {
-		DeviceID string `gorm:"column:device_id"`
-	}
-	var result Result
-
-	if p.plugin.DB != nil {
-		// 多表联查: channel_gb28181pro -> device_gb28181pro -> devices
-		if err := p.plugin.DB.Table("gb28181_channel gc").
-			Select("gd.device_id").
-			Joins("LEFT JOIN gb28181_device gd ON gc.device_id = gd.device_id").
-			Where("gc.channel_id = ?", channelID).
-			First(&result).Error; err != nil {
-			p.Error("查询通道和设备信息失败", "error", err.Error())
-			return fmt.Errorf("channel or device not found: %v", err)
-		}
+	if tmpChannel, ok := p.plugin.channels.Find(func(c *Channel) bool {
+		return c.ChannelId == channelId
+	}); ok {
+		deviceId = tmpChannel.DeviceId
+	} else {
+		p.Error("设备不存在或未注册", "device_id", msg.DeviceID)
+		return fmt.Errorf("device not found or not registered: %v", msg.DeviceID)
 	}
 
 	// 从devices集合中获取设备实例
-	device, ok := p.plugin.devices.Get(result.DeviceID)
+	device, ok := p.plugin.devices.Get(deviceId)
 	if !ok {
-		p.Error("设备不存在或未注册", "device_id", result.DeviceID)
-		return fmt.Errorf("device not found or not registered: %v", result.DeviceID)
+		p.Error("设备不存在或未注册", "device_id", deviceId)
+		return fmt.Errorf("device not found or not registered: %v", deviceId)
 	}
 
 	// 创建转发请求
@@ -1172,7 +1185,7 @@ func (p *Platform) sendDeviceInfoResponse(req *sip.Request, device *Device, sn s
 	var xmlContent string
 	if device == nil {
 		// 返回平台信息
-		xmlContent = fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
+		xmlContent = fmt.Sprintf(`<?xml version="1.0" encoding="GB2312"?>
 <Response>
 <CmdType>DeviceInfo</CmdType>
 <SN>%s</SN>
@@ -1186,7 +1199,7 @@ func (p *Platform) sendDeviceInfoResponse(req *sip.Request, device *Device, sn s
 </Response>`, sn, p.PlatformModel.DeviceGBID, p.PlatformModel.Name, p.PlatformModel.Manufacturer, p.PlatformModel.Model, "", p.PlatformModel.ChannelCount)
 	} else {
 		// 返回设备信息
-		xmlContent = fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
+		xmlContent = fmt.Sprintf(`<?xml version="1.0" encoding="GB2312"?>
 <Response>
 <CmdType>DeviceInfo</CmdType>
 <SN>%s</SN>
@@ -1200,7 +1213,16 @@ func (p *Platform) sendDeviceInfoResponse(req *sip.Request, device *Device, sn s
 </Response>`, sn, device.DeviceId, device.Name, device.Manufacturer, device.Model, device.Firmware, device.ChannelCount)
 	}
 
-	request.SetBody([]byte(xmlContent))
+	// 将UTF-8编码的XML内容转换为GB2312编码
+	gb2312Content, err := UTF8ToGB2312(xmlContent)
+	if err != nil {
+		p.Error("sendDeviceInfoResponse", "encoding error", err.Error())
+		// 如果转换失败，仍然使用原始内容，避免完全失败
+		request.SetBody([]byte(xmlContent))
+	} else {
+		// 使用转换后的GB2312编码内容
+		request.SetBody([]byte(gb2312Content))
+	}
 
 	// 修正：使用正确的上下文参数
 	tx, err := p.Client.TransactionRequest(p.ctx, request)

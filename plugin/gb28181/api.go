@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"m7s.live/v5/pkg/config"
 	"net/http"
 	"net/url"
 	"os"
@@ -12,6 +11,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"m7s.live/v5/pkg/config"
 
 	"github.com/emiago/sipgo"
 	"github.com/emiago/sipgo/sip"
@@ -2038,66 +2039,57 @@ func (gb *GB28181Plugin) GetGroups(ctx context.Context, req *pb.GetGroupsRequest
 
 // getGroupChannels 获取指定组ID关联的通道列表
 func (gb *GB28181Plugin) getGroupChannels(groupId int32) ([]*pb.GroupChannel, error) {
-	// 正确获取模型对应的表名
-	deviceChannel := &gb28181.DeviceChannel{}
-	device := &Device{}
+	// 从数据库中获取组-通道关联关系
 	groupsChannel := &gb28181.GroupsChannelModel{}
-
-	deviceChannelTable := deviceChannel.TableName()
-	deviceTable := device.TableName()
 	groupsChannelTable := groupsChannel.TableName()
 
-	// 查询结果结构
-	type Result struct {
-		ID          int    `gorm:"column:id"`
-		ChannelID   string `gorm:"column:channel_id"`
-		DeviceID    string `gorm:"column:device_id"`
-		ChannelName string `gorm:"column:channel_name"`
-		DeviceName  string `gorm:"column:device_name"`
-		Status      string `gorm:"column:status"`
-		InGroup     bool   `gorm:"column:in_group"`
+	// 查询结果结构，只获取必要的ID信息
+	type GroupChannelRelation struct {
+		ID        int    `gorm:"column:id"`
+		ChannelID string `gorm:"column:channel_id"`
+		DeviceID  string `gorm:"column:device_id"`
 	}
 
-	// 构建优化后的查询
-	query := gb.DB.Table(groupsChannelTable+" AS gc").
-		Select(`
-			gc.id AS id,
-			gc.channel_id AS channel_id,
-			gc.device_id AS device_id,
-			ch.name AS channel_name,
-			dev.name AS device_name,
-			ch.status AS status,
-			true AS in_group
-		`).
-		Joins("LEFT JOIN "+deviceChannelTable+" AS ch ON gc.device_id = ch.device_id AND gc.channel_id = ch.channel_id").
-		Joins("LEFT JOIN "+deviceTable+" AS dev ON ch.device_id = dev.device_id").
-		Where("gc.group_id = ?", groupId)
+	// 从数据库中只查询关联关系
+	query := gb.DB.Table(groupsChannelTable).
+		Select("id, channel_id, device_id").
+		Where("group_id = ?", groupId)
 
-	var results []Result
-	if err := query.Find(&results).Error; err != nil {
+	var relations []GroupChannelRelation
+	if err := query.Find(&relations).Error; err != nil {
 		return nil, err
 	}
 
 	// 转换结果为响应格式
 	var pbGroupChannels []*pb.GroupChannel
-	for _, result := range results {
-		channelInfo := &pb.GroupChannel{
-			Id:          int32(result.ID),
-			GroupId:     groupId, // 使用函数参数 groupId
-			ChannelId:   result.ChannelID,
-			DeviceId:    result.DeviceID,
-			ChannelName: result.ChannelName,
-			DeviceName:  result.DeviceName,
-			Status:      result.Status,
-			InGroup:     result.InGroup,
-		}
+	for _, relation := range relations {
+		// 构造通道ID
+		channelId := relation.DeviceID + "_" + relation.ChannelID
 
-		// 从内存中获取设备信息以获取传输协议
-		if device, ok := gb.devices.Get(result.DeviceID); ok {
-			channelInfo.StreamMode = device.StreamMode
-		}
+		// 从内存中获取通道信息
+		if channel, ok := gb.channels.Get(channelId); ok {
+			// 从内存中的通道信息构建响应
+			channelInfo := &pb.GroupChannel{
+				Id:          int32(relation.ID),
+				GroupId:     groupId,
+				ChannelId:   relation.ChannelID,
+				DeviceId:    relation.DeviceID,
+				ChannelName: channel.Name,
+				Status:      string(channel.Status),
+				InGroup:     true,
+			}
 
-		pbGroupChannels = append(pbGroupChannels, channelInfo)
+			// 从内存中获取设备信息
+			if device, ok := gb.devices.Get(relation.DeviceID); ok {
+				channelInfo.DeviceName = device.Name
+				channelInfo.StreamMode = device.StreamMode
+			}
+
+			pbGroupChannels = append(pbGroupChannels, channelInfo)
+		} else {
+			// 如果内存中没有找到，记录日志
+			gb.Debug("通道在内存中未找到", "channelId", channelId, "groupId", groupId)
+		}
 	}
 
 	return pbGroupChannels, nil
@@ -2108,6 +2100,7 @@ func (gb *GB28181Plugin) getChildGroupsWithChannels(parentId int32) ([]*pb.Group
 	var children []*pb.Group
 	var dbGroups []gb28181.GroupsModel
 
+	// 从数据库中获取子组织结构
 	if err := gb.DB.Where("pid = ?", parentId).Find(&dbGroups).Error; err != nil {
 		return nil, err
 	}
@@ -2122,7 +2115,7 @@ func (gb *GB28181Plugin) getChildGroupsWithChannels(parentId int32) ([]*pb.Group
 			UpdateTime: timestamppb.New(dbGroup.UpdateTime),
 		}
 
-		// 获取该组关联的通道
+		// 获取该组关联的通道（使用修改后的getGroupChannels函数，从内存中获取通道信息）
 		channels, err := gb.getGroupChannels(int32(dbGroup.ID))
 		if err != nil {
 			gb.Error("获取组关联通道失败", "error", err, "groupId", dbGroup.ID)

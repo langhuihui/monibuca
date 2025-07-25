@@ -952,7 +952,7 @@ func (gb *GB28181Plugin) OnInvite(req *sip.Request, tx sip.ServerTransaction) {
 		start:          inviteInfo.StartTime,
 		end:            inviteInfo.StopTime,
 		channel:        channelTmp,
-		upIP:           sdpIP,
+		upIP:           inviteInfo.IP,
 		upPort:         mediaPort,
 	}
 	forwardDialog.forwarder = gb28181.NewRTPForwarder()

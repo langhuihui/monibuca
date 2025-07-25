@@ -493,13 +493,13 @@ func (r *Receiver) Receive() (err error) {
 			if r.lastAudioPacketTS == 0 {
 				r.lastAudioPacketTS = packet.Timestamp
 				r.audioTSCheckStart = now
-				r.Stream.Debug("check audio timestamp start firsttime", "timestamp", packet.Timestamp)
+				r.Stream.Trace("check audio timestamp start firsttime", "timestamp", packet.Timestamp)
 			} else if !r.useVideoTS {
-				r.Stream.Debug("debug audio timestamp", "current", packet.Timestamp, "last", r.lastAudioPacketTS, "duration", now.Sub(r.audioTSCheckStart))
+				r.Stream.Trace("debug audio timestamp", "current", packet.Timestamp, "last", r.lastAudioPacketTS, "duration", now.Sub(r.audioTSCheckStart))
 				// 如果3秒内时间戳没有变化，切换到使用视频时间戳
 				if packet.Timestamp == r.lastAudioPacketTS && now.Sub(r.audioTSCheckStart) > 3*time.Second {
 					r.useVideoTS = true
-					r.Stream.Debug("switch to video timestamp due to unchanging audio timestamp")
+					r.Stream.Trace("switch to video timestamp due to unchanging audio timestamp")
 					packet.Timestamp = uint32(float64(r.lastVideoTimestamp) * 8000 / 90000)
 					audioFrame = &mrtp.Audio{}
 					audioFrame.AddRecycleBytes(buf)
@@ -511,7 +511,7 @@ func (r *Receiver) Receive() (err error) {
 					// 时间戳有变化，重置检查
 					r.lastAudioPacketTS = packet.Timestamp
 					r.audioTSCheckStart = now
-					r.Stream.Debug("reset audioTSCheckStart", "lastAudioPacketTS", r.lastAudioPacketTS)
+					r.Stream.Trace("reset audioTSCheckStart", "lastAudioPacketTS", r.lastAudioPacketTS)
 				}
 			}
 
