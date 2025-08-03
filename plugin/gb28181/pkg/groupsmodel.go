@@ -96,16 +96,16 @@ func AutoMigrateAll(db interface{}) error {
 	return nil
 }
 
-// BeforeCreate GORM钩子，在创建记录前设置创建时间和更新时间
-func (g *GroupsModel) BeforeCreate() error {
-	now := time.Now()
-	g.CreateTime = now
-	g.UpdateTime = now
-	return nil
-}
-
-// BeforeUpdate GORM钩子，在更新记录前设置更新时间
-func (g *GroupsModel) BeforeUpdate() error {
-	g.UpdateTime = time.Now()
-	return nil
-}
+//// BeforeCreate GORM钩子，在创建记录前设置创建时间和更新时间
+//func (g *GroupsModel) BeforeCreate() error {
+//	now := time.Now()
+//	g.CreateTime = now
+//	g.UpdateTime = now
+//	return nil
+//}
+//
+//// BeforeUpdate GORM钩子，在更新记录前设置更新时间
+//func (g *GroupsModel) BeforeUpdate() error {
+//	g.UpdateTime = time.Now()
+//	return nil
+//}

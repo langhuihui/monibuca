@@ -31,6 +31,33 @@ const (
 	DeviceAlarmedStatus  DeviceStatus = "ALARMED"
 )
 
+type DeviceKeepaliveTickTask struct {
+	task.TickTask
+	device  *Device
+	seconds time.Duration
+}
+
+func (d *DeviceKeepaliveTickTask) GetTickInterval() time.Duration {
+	return d.seconds
+}
+
+func (d *DeviceKeepaliveTickTask) Tick(any) {
+	keepaliveSeconds := 60
+	if d.device.KeepaliveInterval >= 5 {
+		keepaliveSeconds = d.device.KeepaliveInterval
+	}
+	d.Debug("keepLiveTick,deviceid is", d.device.DeviceId, "d.KeepaliveTime is ", d.device.KeepaliveTime, "d.KeepaliveInterval is ", d.device.KeepaliveInterval, "d.KeepaliveCount is ", d.device.KeepaliveCount)
+	if timeDiff := time.Since(d.device.KeepaliveTime); timeDiff > time.Duration(d.device.KeepaliveCount*keepaliveSeconds)*time.Second {
+		d.device.Online = false
+		d.device.Status = DeviceOfflineStatus
+		// 设置所有通道状态为off
+		d.device.channels.Range(func(channel *Channel) bool {
+			channel.Status = "OFF"
+			return true
+		})
+	}
+}
+
 type Device struct {
 	task.Job              `gorm:"-:all"`
 	DeviceId              string         `gorm:"primaryKey"` // 设备国标编号
@@ -46,7 +73,8 @@ type Device struct {
 	Online                bool           // 是否在线，true为在线，false为离线
 	RegisterTime          time.Time      // 注册时间
 	KeepaliveTime         time.Time      // 心跳时间
-	KeepaliveInterval     int            `gorm:"default:60"` // 心跳间隔
+	KeepaliveInterval     int            `gorm:"default:60" default:"60"` // 心跳间隔
+	KeepaliveCount        int            `gorm:"default:3" default:"3"`   // 心跳次数
 	ChannelCount          int            // 通道个数
 	Expires               int            // 注册有效期
 	CreateTime            time.Time      // 创建时间
@@ -91,6 +119,8 @@ func (d *Device) TableName() string {
 }
 
 func (d *Device) Dispose() {
+	//d.Online = false
+	//d.Status = DeviceOfflineStatus
 	if d.plugin.DB != nil {
 		// 先删除该设备关联的所有channels
 		if err := d.plugin.DB.Where("device_id = ?", d.DeviceId).Delete(&gb28181.DeviceChannel{}).Error; err != nil {
@@ -103,6 +133,9 @@ func (d *Device) Dispose() {
 				if err := d.plugin.DB.Create(channel.DeviceChannel).Error; err != nil {
 					d.Error("保存设备通道记录失败", "error", err)
 				}
+				if channel.PullProxyTask != nil {
+					channel.PullProxyTask.ChangeStatus(m7s.PullProxyStatusOffline)
+				}
 				d.plugin.channels.RemoveByKey(channel.ID)
 				return true
 			})
@@ -110,7 +143,6 @@ func (d *Device) Dispose() {
 		// 保存设备信息
 		d.plugin.DB.Save(d)
 	}
-	d.plugin.devices.RemoveByKey(d.DeviceId)
 }
 
 func (d *Device) GetKey() string {
@@ -168,7 +200,7 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 	case "Keepalive":
 		d.KeepaliveInterval = int(time.Since(d.KeepaliveTime).Seconds())
 		d.KeepaliveTime = time.Now()
-		d.Trace("into keeplive,deviceid is ", d.DeviceId, "d.KeepaliveTime is", d.KeepaliveTime)
+		d.Debug("into keeplive,deviceid is ", d.DeviceId, "d.KeepaliveTime is", d.KeepaliveTime, "d.KeepaliveInterval is", d.KeepaliveInterval)
 		if d.plugin.DB != nil {
 			if err := d.plugin.DB.Model(d).Updates(map[string]interface{}{
 				"keepalive_interval": d.KeepaliveInterval,
@@ -405,75 +437,21 @@ func (d *Device) Go() (err error) {
 	if d.SubscribeCatalog > 0 {
 		catalogSubTask := NewCatalogSubscribeTask(d)
 		d.AddTask(catalogSubTask)
+		catalogSubTask.Depend(d)
 	}
 
 	// 创建并启动位置订阅任务
 	if d.SubscribePosition > 0 {
 		positionSubTask := NewPositionSubscribeTask(d)
 		d.AddTask(positionSubTask)
+		positionSubTask.Depend(d)
 	}
-
-	catalogTick := time.NewTicker(time.Minute * 1000)
-	keepaliveSeconds := 60
-	if d.KeepaliveInterval >= 5 {
-		keepaliveSeconds = d.KeepaliveInterval
+	deviceKeepaliveTickTask := &DeviceKeepaliveTickTask{
+		seconds: time.Second * 30,
+		device:  d,
 	}
-	keepLiveTick := time.NewTicker(time.Second * 10)
-	defer keepLiveTick.Stop()
-	defer catalogTick.Stop()
-	for {
-		select {
-		case <-d.Done():
-		case <-keepLiveTick.C:
-			d.Trace("keepLiveTick,deviceid is", d.DeviceId, "d.KeepaliveTime is ", d.KeepaliveTime)
-			if timeDiff := time.Since(d.KeepaliveTime); timeDiff > time.Duration(3*keepaliveSeconds)*time.Second {
-				d.Online = false
-				d.Status = DeviceOfflineStatus
-				// 设置所有通道状态为off
-				d.channels.Range(func(channel *Channel) bool {
-					channel.Status = "OFF"
-					return true
-				})
-				//d.Stop(fmt.Errorf("device keepalive timeout after %v,deviceid is %s", timeDiff, d.DeviceId))
-				return
-			}
-		case <-catalogTick.C:
-			if time.Since(d.KeepaliveTime) > time.Second*time.Duration(d.Expires) {
-				d.Error("keepalive timeout", "keepaliveTime", d.KeepaliveTime)
-				return
-			}
-			response, err = d.catalog()
-			if err != nil {
-				d.Error("catalog", "err", err)
-			} else {
-				d.Trace("catalogTick", "response", response.String())
-			}
-			//case event := <-d.eventChan:
-			//	d.Debug("eventChan", "event", event)
-			//	switch v := event.(type) {
-			//	case []gb28181.DeviceChannel:
-			//		for _, c := range v {
-			//			//当父设备非空且存在时、父设备节点增加通道
-			//			if c.ParentId != "" {
-			//				path := strings.Split(c.ParentId, "/")
-			//				parentId := path[len(path)-1]
-			//				//如果父ID并非本身所属设备，一般情况下这是因为下级设备上传了目录信息，该信息通常不需要处理。
-			//				// 暂时不考虑级联目录的实现
-			//				if d.DeviceId != parentId {
-			//					if parent, ok := d.plugin.devices.Get(parentId); ok {
-			//						parent.addOrUpdateChannel(c)
-			//						continue
-			//					} else {
-			//						c.Model = "Directory " + c.Model
-			//						c.Status = "NoParent"
-			//					}
-			//				}
-			//			}
-			//			d.addOrUpdateChannel(c)
-			//		}
-			//	}
-		}
-	}
+	d.AddTask(deviceKeepaliveTickTask)
+	return deviceKeepaliveTickTask.WaitStopped()
 }
 
 func (d *Device) CreateRequest(Method sip.RequestMethod, Recipient any) *sip.Request {

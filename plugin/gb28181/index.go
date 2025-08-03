@@ -150,11 +150,15 @@ func (gb *GB28181Plugin) OnInit() (err error) {
 		return pkg.ErrNoDB
 	}
 	gb.Info("GB28181 initing", gb.Platforms)
-	gb.AddTask(&gb.deviceRegisterManager)
 	logger := zerolog.New(os.Stdout)
 	gb.ua, err = sipgo.NewUA(sipgo.WithUserAgent("M7S/" + m7s.Version)) // Build user agent
 	// Creating client handle for ua
 	if len(gb.Sip.ListenAddr) > 0 {
+		gb.AddTask(&gb.devices)
+		gb.AddTask(&gb.platforms)
+		gb.AddTask(&gb.dialogs)
+		gb.AddTask(&gb.forwardDialogs)
+		gb.AddTask(&gb.deviceRegisterManager)
 		gb.server, _ = sipgo.NewServer(gb.ua, sipgo.WithServerLogger(logger)) // Creating server handle for ua
 		gb.server.OnMessage(gb.OnMessage)
 		gb.server.OnRegister(gb.OnRegister)
@@ -274,145 +278,132 @@ func (gb *GB28181Plugin) checkDeviceExpire() (err error) {
 
 	now := time.Now()
 	for _, device := range devices {
-		if device.Online {
-			// 检查设备是否过期
-			expireTime := device.RegisterTime.Add(time.Duration(device.Expires) * time.Second)
-			isExpired := now.After(expireTime)
+		// 检查设备是否过期
+		expireTime := device.RegisterTime.Add(time.Duration(device.Expires) * time.Second)
+		isExpired := now.After(expireTime)
 
-			// 设置设备基本属性
-			device.Status = DeviceOfflineStatus
-			if !isExpired {
-				device.Status = DeviceOnlineStatus
-			}
-			device.Online = !isExpired
-
-			// 设置事件通道
-			device.eventChan = make(chan any, 10)
-
-			// 设置Logger
-			device.Logger = gb.Logger.With("deviceid", device.DeviceId)
-
-			// 初始化通道集合
-			device.channels.L = new(sync.RWMutex)
-
-			// 初始化目录请求集合
-			device.catalogReqs.L = new(sync.RWMutex)
-
-			// 设置plugin引用
-			device.plugin = gb
-
-			// 设置联系人头信息
-			device.contactHDR = sip.ContactHeader{
-				Address: sip.Uri{
-					User: gb.Serial,
-					Host: device.SipIp,
-					Port: device.LocalPort,
-				},
-			}
-
-			// 设置来源头信息
-			device.fromHDR = sip.FromHeader{
-				Address: sip.Uri{
-					User: gb.Serial,
-					Host: device.SipIp,
-					Port: device.LocalPort,
-				},
-				Params: sip.NewParams(),
-			}
-			device.fromHDR.Params.Add("tag", sip.GenerateTagN(16))
-
-			// 设置接收者
-			device.Recipient = sip.Uri{
-				Host: device.IP,
-				Port: device.Port,
-				User: device.DeviceId,
-			}
-
-			// 创建SIP客户端
-			device.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(device.SipIp))
-			device.Info("checkDeviceExpire", "d.SipIp", device.SipIp, "d.LocalPort", device.LocalPort, "d.contactHDR", device.contactHDR)
-
-			// 设置设备ID的hash值作为任务ID
-			var hash uint32
-			for i := 0; i < len(device.DeviceId); i++ {
-				ch := device.DeviceId[i]
-				hash = hash*31 + uint32(ch)
-			}
-			device.Task.ID = hash
-			// 设置启动和销毁回调
-			device.OnStart(func() {
-				gb.devices.Set(device)
-			})
-			device.channels.OnAdd(func(c *Channel) {
-				if absDevice, ok := gb.Server.PullProxies.SafeFind(func(absDevice m7s.IPullProxy) bool {
-					conf := absDevice.GetConfig()
-					return conf.Type == "gb28181" && conf.URL == fmt.Sprintf("%s/%s", device.DeviceId, c.ChannelId)
-				}); ok {
-					c.PullProxyTask = absDevice.(*PullProxy)
-					absDevice.ChangeStatus(m7s.PullProxyStatusOnline)
-				}
-			})
-			device.OnDispose(func() {
-				device.Online = false
-				device.Status = DeviceOfflineStatus
-				if gb.devices.RemoveByKey(device.DeviceId) {
-					for c := range device.channels.Range {
-						c.DeviceChannel.Status = "OFF"
-						if c.PullProxyTask != nil {
-							c.PullProxyTask.ChangeStatus(m7s.PullProxyStatusOffline)
-						}
-					}
-				}
-			})
-
-			// 加载设备的通道
-			var channels []gb28181.DeviceChannel
-			if err := gb.DB.Where(&gb28181.DeviceChannel{DeviceId: device.DeviceId}).Find(&channels).Error; err != nil {
-				gb.Error("加载通道失败", "error", err, "deviceId", device.DeviceId)
-				continue
-			}
-
-			if gb.SipIP != "" {
-				device.SipIp = gb.SipIP
-			}
-			if gb.MediaIP != "" {
-				device.MediaIp = gb.MediaIP
-			}
-
-			// 更新设备状态到数据库
-			if err := gb.DB.Model(&Device{}).Where(&Device{DeviceId: device.DeviceId}).Updates(map[string]interface{}{
-				"online": device.Online,
-				"status": device.Status,
-			}).Error; err != nil {
-				gb.Error("更新设备状态到数据库失败", "error", err, "deviceId", device.DeviceId)
-			}
-
-			// 初始化设备通道并更新到数据库
-			for _, channel := range channels {
-				if isExpired {
-					channel.Status = "OFF"
-				} else {
-					channel.Status = "ON"
-				}
-				// 更新通道状态到数据库
-				if err := gb.DB.Model(&gb28181.DeviceChannel{}).Where(&gb28181.DeviceChannel{ID: channel.ID}).Update("status", channel.Status).Error; err != nil {
-					gb.Error("更新通道状态到数据库失败", "error", err, "channelId", channel.ChannelId)
-				}
-				device.addOrUpdateChannel(channel)
-			}
-
-			// 添加设备任务
-			if !isExpired {
-				gb.AddTask(device)
-				gb.Info("设备有效", "deviceId", device.DeviceId, "registerTime", device.RegisterTime, "expireTime", expireTime)
-			} else {
-				gb.Info("设备已过期", "deviceId", device.DeviceId, "registerTime", device.RegisterTime, "expireTime", expireTime)
-				gb.deleteDevice(device, "设备已过期")
-			}
-		} else {
-			// 不在线的设备，进行数据库删除
-			gb.deleteDevice(device, "设备不在线")
+		// 设置设备基本属性
+		device.Status = DeviceOfflineStatus
+		if !isExpired {
+			device.Status = DeviceOnlineStatus
 		}
+		device.Online = !isExpired
+
+		// 设置事件通道
+		device.eventChan = make(chan any, 10)
+
+		// 设置Logger
+		device.Logger = gb.Logger.With("deviceid", device.DeviceId)
+
+		// 初始化通道集合
+		device.channels.L = new(sync.RWMutex)
+
+		// 初始化目录请求集合
+		device.catalogReqs.L = new(sync.RWMutex)
+
+		// 设置plugin引用
+		device.plugin = gb
+
+		// 设置联系人头信息
+		device.contactHDR = sip.ContactHeader{
+			Address: sip.Uri{
+				User: gb.Serial,
+				Host: device.SipIp,
+				Port: device.LocalPort,
+			},
+		}
+
+		// 设置来源头信息
+		device.fromHDR = sip.FromHeader{
+			Address: sip.Uri{
+				User: gb.Serial,
+				Host: device.SipIp,
+				Port: device.LocalPort,
+			},
+			Params: sip.NewParams(),
+		}
+		device.fromHDR.Params.Add("tag", sip.GenerateTagN(16))
+
+		// 设置接收者
+		device.Recipient = sip.Uri{
+			Host: device.IP,
+			Port: device.Port,
+			User: device.DeviceId,
+		}
+
+		// 创建SIP客户端
+		device.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(device.SipIp))
+		device.Info("checkDeviceExpire", "d.SipIp", device.SipIp, "d.LocalPort", device.LocalPort, "d.contactHDR", device.contactHDR)
+
+		// 设置设备ID的hash值作为任务ID
+		var hash uint32
+		for i := 0; i < len(device.DeviceId); i++ {
+			ch := device.DeviceId[i]
+			hash = hash*31 + uint32(ch)
+		}
+		device.Task.ID = hash
+		device.channels.OnAdd(func(c *Channel) {
+			if absDevice, ok := gb.Server.PullProxies.SafeFind(func(absDevice m7s.IPullProxy) bool {
+				conf := absDevice.GetConfig()
+				return conf.Type == "gb28181" && conf.URL == fmt.Sprintf("%s/%s", device.DeviceId, c.ChannelId)
+			}); ok {
+				c.PullProxyTask = absDevice.(*PullProxy)
+				absDevice.ChangeStatus(m7s.PullProxyStatusOnline)
+			}
+		})
+		//device.OnDispose(func() {
+		//	device.Online = false
+		//	device.Status = DeviceOfflineStatus
+		//	if gb.devices.RemoveByKey(device.DeviceId) {
+		//		for c := range device.channels.Range {
+		//			c.DeviceChannel.Status = "OFF"
+		//			if c.PullProxyTask != nil {
+		//				c.PullProxyTask.ChangeStatus(m7s.PullProxyStatusOffline)
+		//			}
+		//		}
+		//	}
+		//})
+
+		// 加载设备的通道
+		var channels []gb28181.DeviceChannel
+		if err := gb.DB.Where(&gb28181.DeviceChannel{DeviceId: device.DeviceId}).Find(&channels).Error; err != nil {
+			gb.Error("加载通道失败", "error", err, "deviceId", device.DeviceId)
+			continue
+		}
+
+		if gb.SipIP != "" {
+			device.SipIp = gb.SipIP
+		}
+		if gb.MediaIP != "" {
+			device.MediaIp = gb.MediaIP
+		}
+
+		// 更新设备状态到数据库
+		if err := gb.DB.Model(&Device{}).Where(&Device{DeviceId: device.DeviceId}).Updates(map[string]interface{}{
+			"online": device.Online,
+			"status": device.Status,
+		}).Error; err != nil {
+			gb.Error("更新设备状态到数据库失败", "error", err, "deviceId", device.DeviceId)
+		}
+
+		// 初始化设备通道并更新到数据库
+		for _, channel := range channels {
+			if isExpired {
+				channel.Status = "OFF"
+			} else {
+				channel.Status = "ON"
+			}
+			// 更新通道状态到数据库
+			if err := gb.DB.Model(&gb28181.DeviceChannel{}).Where(&gb28181.DeviceChannel{ID: channel.ID}).Update("status", channel.Status).Error; err != nil {
+				gb.Error("更新通道状态到数据库失败", "error", err, "channelId", channel.ChannelId)
+			}
+			device.addOrUpdateChannel(channel)
+		}
+
+		// 添加设备任务
+		gb.devices.Add(device)
+		gb.Info("设备有效", "deviceId", device.DeviceId, "registerTime", device.RegisterTime, "expireTime", expireTime)
+
 	}
 	return nil
 }
@@ -480,7 +471,7 @@ func (gb *GB28181Plugin) checkPlatform() {
 			//	 gb.Error("unregister err ", err)
 			//}
 			// 添加到任务系统
-			gb.AddTask(platform)
+			gb.platforms.Add(platform)
 			gb.Info("平台初始化完成", "ID", platformModel.ServerGBID, "Name", platformModel.Name)
 		}
 	}

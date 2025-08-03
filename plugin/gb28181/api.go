@@ -836,7 +836,7 @@ func (gb *GB28181Plugin) AddPlatform(ctx context.Context, req *pb.Platform) (*pb
 		// 创建Platform实例
 		platform := NewPlatform(platformModel, gb, false)
 		// 添加到任务系统
-		gb.AddTask(platform)
+		gb.platforms.Add(platform)
 	}
 
 	resp.Code = 0
@@ -983,7 +983,7 @@ func (gb *GB28181Plugin) UpdatePlatform(ctx context.Context, req *pb.Platform) (
 		// 创建新的Platform实例
 		platformInstance := NewPlatform(&platform, gb, false)
 		// 添加到任务系统
-		gb.AddTask(platformInstance)
+		gb.platforms.Add(platformInstance)
 	} else {
 		// 如果平台被禁用，停止并移除旧的platform实例
 		if oldPlatform, ok := gb.platforms.Get(platform.ServerGBID); ok {

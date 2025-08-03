@@ -256,7 +256,7 @@ func (task *registerHandlerTask) RecoverDevice(d *Device, req *sip.Request) {
 	myLanIP := myip.InternalIPv4()
 	myWanIP := myip.ExternalIPv4()
 
-	task.gb.Info("Start RecoverDevice", "source", source, "desc", desc, "myLanIP", myLanIP, "myWanIP", myWanIP)
+	task.gb.Info("Start RecoverDevice", "source", source, "desc", desc, "myLanIP", myLanIP, "myWanIP", myWanIP, "deviceid", d.DeviceId)
 
 	// 处理目标地址和源地址的IP映射关系
 	if sourceIPParse != nil { // 源IP有效时才进行处理
@@ -264,7 +264,7 @@ func (task *registerHandlerTask) RecoverDevice(d *Device, req *sip.Request) {
 			if sourceIPParse.IsPrivate() { // 源IP是内网IP
 				myWanIP = myLanIP // 使用内网IP作为外网IP
 			}
-		} else { // 目标地址是IP
+		} else {                           // 目标地址是IP
 			if sourceIPParse.IsPrivate() { // 源IP是内网IP
 				myLanIP, myWanIP = myIP, myIP // 使用目标IP作为内外网IP
 			}
@@ -299,13 +299,14 @@ func (task *registerHandlerTask) RecoverDevice(d *Device, req *sip.Request) {
 	d.HostAddress = d.IP + ":" + sourcePortStr
 	d.Status = DeviceOnlineStatus
 	d.UpdateTime = time.Now()
+	d.KeepaliveTime = time.Now()
 	d.RegisterTime = time.Now()
 	d.Online = true
 	d.client, _ = sipgo.NewClient(task.gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(d.SipIp))
 	d.channels.L = new(sync.RWMutex)
 	d.catalogReqs.L = new(sync.RWMutex)
 	d.plugin = task.gb
-	d.plugin.Info("RecoverDevice", "source", source, "desc", desc, "device.SipIp", myLanIP, "device.WanIP", myWanIP, "recipient", req.Recipient, "myPort", myPort)
+	d.plugin.Info("RecoverDevice", "source", source, "desc", desc, "device.SipIp", myLanIP, "device.WanIP", myWanIP, "recipient", req.Recipient, "myPort", myPort, "deviceid", d.DeviceId)
 
 	if task.gb.DB != nil {
 		//var existing Device
@@ -371,7 +372,7 @@ func (task *registerHandlerTask) StoreDevice(deviceid string, req *sip.Request, 
 			if sourceIPParse.IsPrivate() { // 源IP是内网IP
 				myWanIP = myLanIP // 使用内网IP作为外网IP
 			}
-		} else { // 目标地址是IP
+		} else {                           // 目标地址是IP
 			if sourceIPParse.IsPrivate() { // 源IP是内网IP
 				myLanIP, myWanIP = myIP, myIP // 使用目标IP作为内外网IP
 			}
@@ -441,29 +442,16 @@ func (task *registerHandlerTask) StoreDevice(deviceid string, req *sip.Request, 
 	}
 	d.Task.ID = hash
 
-	d.OnStart(func() {
-		task.gb.devices.Set(d)
-		d.channels.OnAdd(func(c *Channel) {
-			if absDevice, ok := task.gb.Server.PullProxies.SafeFind(func(absDevice m7s.IPullProxy) bool {
-				conf := absDevice.GetConfig()
-				return conf.Type == "gb28181" && conf.URL == fmt.Sprintf("%s/%s", d.DeviceId, c.ChannelId)
-			}); ok {
-				c.PullProxyTask = absDevice.(*PullProxy)
-				absDevice.ChangeStatus(m7s.PullProxyStatusOnline)
-			}
-		})
-	})
-	d.OnDispose(func() {
-		d.Status = DeviceOfflineStatus
-		if task.gb.devices.RemoveByKey(d.DeviceId) {
-			for c := range d.channels.Range {
-				if c.PullProxyTask != nil {
-					c.PullProxyTask.ChangeStatus(m7s.PullProxyStatusOffline)
-				}
-			}
+	d.channels.OnAdd(func(c *Channel) {
+		if absDevice, ok := task.gb.Server.PullProxies.SafeFind(func(absDevice m7s.IPullProxy) bool {
+			conf := absDevice.GetConfig()
+			return conf.Type == "gb28181" && conf.URL == fmt.Sprintf("%s/%s", d.DeviceId, c.ChannelId)
+		}); ok {
+			c.PullProxyTask = absDevice.(*PullProxy)
+			absDevice.ChangeStatus(m7s.PullProxyStatusOnline)
 		}
 	})
-	task.gb.AddTask(d).WaitStarted()
+	task.gb.devices.Add(d).WaitStarted()
 
 	if task.gb.DB != nil {
 		var existing Device
