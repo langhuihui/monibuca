@@ -32,6 +32,9 @@ func (ct *CrontabPlugin) OnInit() (err error) {
 		}
 		ct.Info("init database success")
 
+		// 初始化默认录制计划（工作日和周末计划）
+		ct.InitDefaultPlans()
+
 		// 查询所有录制计划
 		var plans []pkg.RecordPlan
 		if err = ct.DB.Find(&plans).Error; err != nil {
