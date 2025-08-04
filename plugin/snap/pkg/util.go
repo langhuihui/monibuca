@@ -7,10 +7,11 @@ import (
 
 	m7s "m7s.live/v5"
 	"m7s.live/v5/pkg"
+	"m7s.live/v5/pkg/format"
 )
 
 // GetVideoFrame 获取视频帧数据
-func GetVideoFrame(publisher *m7s.Publisher, server *m7s.Server) ([]*pkg.AnnexB, error) {
+func GetVideoFrame(publisher *m7s.Publisher, server *m7s.Server) ([]*format.AnnexB, error) {
 	if publisher.VideoTrack.AVTrack == nil {
 		return nil, pkg.ErrNotFound
 	}
@@ -26,22 +27,23 @@ func GetVideoFrame(publisher *m7s.Publisher, server *m7s.Server) ([]*pkg.AnnexB,
 		return nil, err
 	}
 	defer reader.StopRead()
-	var converter = pkg.NewAVFrameConvert[*pkg.AnnexB](publisher.VideoTrack.AVTrack, nil)
 
-	var annexbList []*pkg.AnnexB
+	var annexbList []*format.AnnexB
 
 	for lastFrameSequence := publisher.VideoTrack.AVTrack.LastValue.Sequence; reader.Value.Sequence <= lastFrameSequence; reader.ReadNext() {
-		annexb, err := converter.ConvertFromAVFrame(&reader.Value)
+		var annexb format.AnnexB
+		annexb.ICodecCtx = reader.Value.GetBase()
+		err := pkg.ConvertFrameType(reader.Value.Wraps[0], &annexb)
 		if err != nil {
 			return nil, err
 		}
-		annexbList = append(annexbList, annexb)
+		annexbList = append(annexbList, &annexb)
 	}
 	return annexbList, nil
 }
 
 // ProcessWithFFmpeg 使用 FFmpeg 处理视频帧并生成截图
-func ProcessWithFFmpeg(annexb []*pkg.AnnexB, output io.Writer) error {
+func ProcessWithFFmpeg(annexb []*format.AnnexB, output io.Writer) error {
 	// 创建ffmpeg命令，使用select过滤器选择最后一帧
 	cmd := exec.Command("ffmpeg", "-hide_banner", "-i", "pipe:0", "-vf", fmt.Sprintf("select='eq(n,%d)'", len(annexb)-1), "-vframes", "1", "-f", "mjpeg", "pipe:1")
 

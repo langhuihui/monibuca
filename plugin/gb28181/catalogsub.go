@@ -14,10 +14,9 @@ type CatalogSubscribeTask struct {
 
 // NewCatalogSubscribeTask 创建新的目录订阅任务
 func NewCatalogSubscribeTask(device *Device) *CatalogSubscribeTask {
-	device.CatalogSubscribeTask = &CatalogSubscribeTask{
+	return &CatalogSubscribeTask{
 		device: device,
 	}
-	return device.CatalogSubscribeTask
 }
 
 // GetTickInterval 获取定时间隔

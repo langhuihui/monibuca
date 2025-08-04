@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"maps"
 	"reflect"
@@ -21,13 +22,16 @@ const TraceLevel = slog.Level(-8)
 const OwnerTypeKey = "ownerType"
 
 var (
-	ErrAutoStop     = errors.New("auto stop")
-	ErrRetryRunOut  = errors.New("retry out")
-	ErrStopByUser   = errors.New("stop by user")
-	ErrRestart      = errors.New("restart")
-	ErrTaskComplete = errors.New("complete")
-	ErrExit         = errors.New("exit")
-	ErrPanic        = errors.New("panic")
+	ErrAutoStop        = errors.New("auto stop")
+	ErrRetryRunOut     = errors.New("retry out")
+	ErrStopByUser      = errors.New("stop by user")
+	ErrRestart         = errors.New("restart")
+	ErrTaskComplete    = errors.New("complete")
+	ErrTimeout         = errors.New("timeout")
+	ErrExit            = errors.New("exit")
+	ErrPanic           = errors.New("panic")
+	ErrTooManyChildren = errors.New("too many children in job")
+	ErrDisposed        = errors.New("disposed")
 )
 
 const (
@@ -45,7 +49,6 @@ const (
 	TASK_TYPE_JOB
 	TASK_TYPE_Work
 	TASK_TYPE_CHANNEL
-	TASK_TYPE_CALL
 )
 
 type (
@@ -71,14 +74,15 @@ type (
 		SetDescription(key string, value any)
 		SetDescriptions(value Description)
 		SetRetry(maxRetry int, retryInterval time.Duration)
-		Depend(ITask)
+		Using(resource ...any)
+		OnStop(any)
 		OnStart(func())
-		OnBeforeDispose(func())
 		OnDispose(func())
 		GetState() TaskState
 		GetLevel() byte
 		WaitStopped() error
 		WaitStarted() error
+		getKey() any
 	}
 	IJob interface {
 		ITask
@@ -88,8 +92,8 @@ type (
 		OnDescendantsDispose(func(ITask))
 		OnDescendantsStart(func(ITask))
 		Blocked() ITask
-		Call(func() error, ...any)
-		Post(func() error, ...any) *Task
+		EventLoopRunning() bool
+		Call(func())
 	}
 	IChannelTask interface {
 		ITask
@@ -121,15 +125,18 @@ type (
 		Logger      *slog.Logger
 		context.Context
 		context.CancelCauseFunc
-		handler                                                            ITask
-		retry                                                              RetryConfig
-		afterStartListeners, beforeDisposeListeners, afterDisposeListeners []func()
-		description                                                        sync.Map
-		startup, shutdown                                                  *util.Promise
-		parent                                                             *Job
-		parentCtx                                                          context.Context
-		state                                                              TaskState
-		level                                                              byte
+		handler                                    ITask
+		retry                                      RetryConfig
+		afterStartListeners, afterDisposeListeners []func()
+		closeOnStop                                []any
+		resources                                  []any
+		stopOnce                                   sync.Once
+		description                                sync.Map
+		startup, shutdown                          *util.Promise
+		parent                                     *Job
+		parentCtx                                  context.Context
+		state                                      TaskState
+		level                                      byte
 	}
 )
 
@@ -183,12 +190,19 @@ func (task *Task) GetKey() uint32 {
 	return task.ID
 }
 
+func (task *Task) getKey() any {
+	return reflect.ValueOf(task.handler).MethodByName("GetKey").Call(nil)[0].Interface()
+}
+
 func (task *Task) WaitStarted() error {
+	if task.startup == nil {
+		return nil
+	}
 	return task.startup.Await()
 }
 
 func (task *Task) WaitStopped() (err error) {
-	err = task.startup.Await()
+	err = task.WaitStarted()
 	if err != nil {
 		return err
 	}
@@ -229,31 +243,48 @@ func (task *Task) Stop(err error) {
 		task.Error("task stop with nil error", "taskId", task.ID, "taskType", task.GetTaskType(), "ownerType", task.GetOwnerType(), "parent", task.GetParent().GetOwnerType())
 		panic("task stop with nil error")
 	}
-	if task.CancelCauseFunc != nil {
-		if tt := task.handler.GetTaskType(); tt != TASK_TYPE_CALL {
-			_, file, line, _ := runtime.Caller(1)
-			task.Debug("task stop", "caller", fmt.Sprintf("%s:%d", strings.TrimPrefix(file, sourceFilePathPrefix), line), "reason", err, "elapsed", time.Since(task.StartTime), "taskId", task.ID, "taskType", tt, "ownerType", task.GetOwnerType())
+	_, file, line, _ := runtime.Caller(1)
+	task.stopOnce.Do(func() {
+		if task.CancelCauseFunc != nil {
+			msg := "task stop"
+			if task.startup.IsRejected() {
+				msg = "task start failed"
+			}
+			task.Debug(msg, "caller", fmt.Sprintf("%s:%d", strings.TrimPrefix(file, sourceFilePathPrefix), line), "reason", err, "elapsed", time.Since(task.StartTime), "taskId", task.ID, "taskType", task.GetTaskType(), "ownerType", task.GetOwnerType())
+			task.CancelCauseFunc(err)
 		}
-		task.CancelCauseFunc(err)
-	}
+		task.stop()
+	})
 }
 
-func (task *Task) Depend(t ITask) {
-	t.OnDispose(func() {
-		task.Stop(t.StopReason())
-	})
+func (task *Task) stop() {
+	for _, resource := range task.closeOnStop {
+		switch v := resource.(type) {
+		case func():
+			v()
+		case func() error:
+			v()
+		case ITask:
+			v.Stop(task.StopReason())
+		}
+	}
+	task.closeOnStop = task.closeOnStop[:0]
 }
 
 func (task *Task) OnStart(listener func()) {
 	task.afterStartListeners = append(task.afterStartListeners, listener)
 }
 
-func (task *Task) OnBeforeDispose(listener func()) {
-	task.beforeDisposeListeners = append(task.beforeDisposeListeners, listener)
-}
-
 func (task *Task) OnDispose(listener func()) {
 	task.afterDisposeListeners = append(task.afterDisposeListeners, listener)
+}
+
+func (task *Task) Using(resource ...any) {
+	task.resources = append(task.resources, resource...)
+}
+
+func (task *Task) OnStop(resource any) {
+	task.closeOnStop = append(task.closeOnStop, resource)
 }
 
 func (task *Task) GetSignal() any {
@@ -300,9 +331,7 @@ func (task *Task) start() bool {
 	}
 	for {
 		task.StartTime = time.Now()
-		if tt := task.handler.GetTaskType(); tt != TASK_TYPE_CALL {
-			task.Debug("task start", "taskId", task.ID, "taskType", tt, "ownerType", task.GetOwnerType(), "reason", task.StartReason)
-		}
+		task.Debug("task start", "taskId", task.ID, "taskType", task.GetTaskType(), "ownerType", task.GetOwnerType(), "reason", task.StartReason)
 		task.state = TASK_STATE_STARTING
 		if v, ok := task.handler.(TaskStarter); ok {
 			err = v.Start()
@@ -350,6 +379,7 @@ func (task *Task) start() bool {
 }
 
 func (task *Task) reset() {
+	task.stopOnce = sync.Once{}
 	task.Context, task.CancelCauseFunc = context.WithCancelCause(task.parentCtx)
 	task.shutdown = util.NewPromise(context.Background())
 	task.startup = util.NewPromise(task.Context)
@@ -361,6 +391,10 @@ func (task *Task) GetDescriptions() map[string]string {
 			return yield(key.(string), fmt.Sprintf("%+v", value))
 		})
 	})
+}
+
+func (task *Task) GetDescription(key string) (any, bool) {
+	return task.description.Load(key)
 }
 
 func (task *Task) SetDescription(key string, value any) {
@@ -380,41 +414,41 @@ func (task *Task) SetDescriptions(value Description) {
 func (task *Task) dispose() {
 	taskType, ownerType := task.handler.GetTaskType(), task.GetOwnerType()
 	if task.state < TASK_STATE_STARTED {
-		if taskType != TASK_TYPE_CALL {
-			task.Debug("task dispose canceled", "taskId", task.ID, "taskType", taskType, "ownerType", ownerType, "state", task.state)
-		}
+		task.Debug("task dispose canceled", "taskId", task.ID, "taskType", taskType, "ownerType", ownerType, "state", task.state)
 		return
 	}
 	reason := task.StopReason()
 	task.state = TASK_STATE_DISPOSING
-	if taskType != TASK_TYPE_CALL {
-		yargs := []any{"reason", reason, "taskId", task.ID, "taskType", taskType, "ownerType", ownerType}
-		task.Debug("task dispose", yargs...)
-		defer task.Debug("task disposed", yargs...)
-	}
-	befores := len(task.beforeDisposeListeners)
-	for i, listener := range task.beforeDisposeListeners {
-		task.SetDescription("disposeProcess", fmt.Sprintf("b:%d/%d", i, befores))
-		listener()
-	}
+	yargs := []any{"reason", reason, "taskId", task.ID, "taskType", taskType, "ownerType", ownerType}
+	task.Debug("task dispose", yargs...)
+	defer task.Debug("task disposed", yargs...)
 	if job, ok := task.handler.(IJob); ok {
 		mt := job.getJob()
 		task.SetDescription("disposeProcess", "wait children")
-		mt.eventLoopLock.Lock()
-		if mt.addSub != nil {
-			mt.waitChildrenDispose()
-			mt.lazyRun = sync.Once{}
-		}
-		mt.eventLoopLock.Unlock()
+		mt.waitChildrenDispose(reason)
 	}
 	task.SetDescription("disposeProcess", "self")
 	if v, ok := task.handler.(TaskDisposal); ok {
 		v.Dispose()
 	}
 	task.shutdown.Fulfill(reason)
-	afters := len(task.afterDisposeListeners)
+	task.SetDescription("disposeProcess", "resources")
+	task.stopOnce.Do(task.stop)
+	for _, resource := range task.resources {
+		switch v := resource.(type) {
+		case func():
+			v()
+		case ITask:
+			v.Stop(task.StopReason())
+		case util.Recyclable:
+			v.Recycle()
+		case io.Closer:
+			v.Close()
+		}
+	}
+	task.resources = task.resources[:0]
 	for i, listener := range task.afterDisposeListeners {
-		task.SetDescription("disposeProcess", fmt.Sprintf("a:%d/%d", i, afters))
+		task.SetDescription("disposeProcess", fmt.Sprintf("a:%d/%d", i, len(task.afterDisposeListeners)))
 		listener()
 	}
 	task.SetDescription("disposeProcess", "done")
@@ -481,4 +515,26 @@ func (task *Task) Error(msg string, args ...any) {
 
 func (task *Task) TraceEnabled() bool {
 	return task.Logger.Enabled(task.Context, TraceLevel)
+}
+
+func (task *Task) RunTask(t ITask, opt ...any) (err error) {
+	tt := t.GetTask()
+	tt.handler = t
+	mt := task.parent
+	if job, ok := task.handler.(IJob); ok {
+		mt = job.getJob()
+	}
+	mt.initContext(tt, opt...)
+	if mt.IsStopped() {
+		err = mt.StopReason()
+		task.startup.Reject(err)
+		return
+	}
+	task.OnStop(t)
+	started := tt.start()
+	<-tt.Done()
+	if started {
+		tt.dispose()
+	}
+	return tt.StopReason()
 }

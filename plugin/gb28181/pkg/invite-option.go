@@ -52,7 +52,7 @@ func (o *InviteOptions) Validate(start, end string) error {
 }
 
 func (o InviteOptions) String() string {
-	return fmt.Sprintf("t=%d %d", o.Start, o.End)
+	return fmt.Sprintf("t=%s %s", o.Start, o.End)
 }
 
 func (o *InviteOptions) CreateSSRC(serial string) string {

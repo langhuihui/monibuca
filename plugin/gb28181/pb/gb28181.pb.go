@@ -6119,126 +6119,6 @@ func (x *RemoveDeviceRequest) GetId() string {
 	return ""
 }
 
-type OpenRTPServerRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	StreamPath    string                 `protobuf:"bytes,1,opt,name=streamPath,proto3" json:"streamPath,omitempty"`
-	Port          int32                  `protobuf:"varint,2,opt,name=port,proto3" json:"port,omitempty"`
-	Udp           bool                   `protobuf:"varint,3,opt,name=udp,proto3" json:"udp,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *OpenRTPServerRequest) Reset() {
-	*x = OpenRTPServerRequest{}
-	mi := &file_gb28181_proto_msgTypes[87]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *OpenRTPServerRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*OpenRTPServerRequest) ProtoMessage() {}
-
-func (x *OpenRTPServerRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[87]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use OpenRTPServerRequest.ProtoReflect.Descriptor instead.
-func (*OpenRTPServerRequest) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{87}
-}
-
-func (x *OpenRTPServerRequest) GetStreamPath() string {
-	if x != nil {
-		return x.StreamPath
-	}
-	return ""
-}
-
-func (x *OpenRTPServerRequest) GetPort() int32 {
-	if x != nil {
-		return x.Port
-	}
-	return 0
-}
-
-func (x *OpenRTPServerRequest) GetUdp() bool {
-	if x != nil {
-		return x.Udp
-	}
-	return false
-}
-
-type OpenRTPServerResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Code          int32                  `protobuf:"varint,1,opt,name=code,proto3" json:"code,omitempty"`
-	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
-	Data          int32                  `protobuf:"varint,3,opt,name=data,proto3" json:"data,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *OpenRTPServerResponse) Reset() {
-	*x = OpenRTPServerResponse{}
-	mi := &file_gb28181_proto_msgTypes[88]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *OpenRTPServerResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*OpenRTPServerResponse) ProtoMessage() {}
-
-func (x *OpenRTPServerResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[88]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use OpenRTPServerResponse.ProtoReflect.Descriptor instead.
-func (*OpenRTPServerResponse) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{88}
-}
-
-func (x *OpenRTPServerResponse) GetCode() int32 {
-	if x != nil {
-		return x.Code
-	}
-	return 0
-}
-
-func (x *OpenRTPServerResponse) GetMessage() string {
-	if x != nil {
-		return x.Message
-	}
-	return ""
-}
-
-func (x *OpenRTPServerResponse) GetData() int32 {
-	if x != nil {
-		return x.Data
-	}
-	return 0
-}
-
 // AlarmInfoRequest 接收报警信息的请求
 type AlarmInfoRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -6254,7 +6134,7 @@ type AlarmInfoRequest struct {
 
 func (x *AlarmInfoRequest) Reset() {
 	*x = AlarmInfoRequest{}
-	mi := &file_gb28181_proto_msgTypes[89]
+	mi := &file_gb28181_proto_msgTypes[87]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6266,7 +6146,7 @@ func (x *AlarmInfoRequest) String() string {
 func (*AlarmInfoRequest) ProtoMessage() {}
 
 func (x *AlarmInfoRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[89]
+	mi := &file_gb28181_proto_msgTypes[87]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6279,7 +6159,7 @@ func (x *AlarmInfoRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AlarmInfoRequest.ProtoReflect.Descriptor instead.
 func (*AlarmInfoRequest) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{89}
+	return file_gb28181_proto_rawDescGZIP(), []int{87}
 }
 
 func (x *AlarmInfoRequest) GetServerInfo() string {
@@ -6334,7 +6214,7 @@ type AddGroupChannelRequest_Channel struct {
 
 func (x *AddGroupChannelRequest_Channel) Reset() {
 	*x = AddGroupChannelRequest_Channel{}
-	mi := &file_gb28181_proto_msgTypes[91]
+	mi := &file_gb28181_proto_msgTypes[89]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6346,7 +6226,7 @@ func (x *AddGroupChannelRequest_Channel) String() string {
 func (*AddGroupChannelRequest_Channel) ProtoMessage() {}
 
 func (x *AddGroupChannelRequest_Channel) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[91]
+	mi := &file_gb28181_proto_msgTypes[89]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6897,17 +6777,7 @@ const file_gb28181_proto_rawDesc = "" +
 	"streamPath\x12\x14\n" +
 	"\x05speed\x18\x02 \x01(\x01R\x05speed\"%\n" +
 	"\x13RemoveDeviceRequest\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\"\\\n" +
-	"\x14OpenRTPServerRequest\x12\x1e\n" +
-	"\n" +
-	"streamPath\x18\x01 \x01(\tR\n" +
-	"streamPath\x12\x12\n" +
-	"\x04port\x18\x02 \x01(\x05R\x04port\x12\x10\n" +
-	"\x03udp\x18\x03 \x01(\bR\x03udp\"Y\n" +
-	"\x15OpenRTPServerResponse\x12\x12\n" +
-	"\x04code\x18\x01 \x01(\x05R\x04code\x12\x18\n" +
-	"\amessage\x18\x02 \x01(\tR\amessage\x12\x12\n" +
-	"\x04data\x18\x03 \x01(\x05R\x04data\"\xeb\x01\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"\xeb\x01\n" +
 	"\x10AlarmInfoRequest\x12\x1f\n" +
 	"\vserver_info\x18\x01 \x01(\tR\n" +
 	"serverInfo\x12\x1f\n" +
@@ -6919,7 +6789,7 @@ const file_gb28181_proto_rawDesc = "" +
 	"alarm_desc\x18\x04 \x01(\tR\talarmDesc\x12\x1d\n" +
 	"\n" +
 	"alarm_type\x18\x05 \x01(\x05R\talarmType\x126\n" +
-	"\bcreateAt\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\bcreateAt2\xe9@\n" +
+	"\bcreateAt\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\bcreateAt2\xf4?\n" +
 	"\x03api\x12]\n" +
 	"\x04List\x12\x1d.gb28181pro.GetDevicesRequest\x1a\x1b.gb28181pro.DevicesPageInfo\"\x19\x82\xd3\xe4\x93\x02\x13\x12\x11/gb28181/api/list\x12n\n" +
 	"\tGetDevice\x12\x1c.gb28181pro.GetDeviceRequest\x1a\x1a.gb28181pro.DeviceResponse\"'\x82\xd3\xe4\x93\x02!\x12\x1f/gb28181/api/devices/{deviceId}\x12f\n" +
@@ -6994,8 +6864,7 @@ const file_gb28181_proto_rawDesc = "" +
 	"\x12DeleteGroupChannel\x12%.gb28181pro.DeleteGroupChannelRequest\x1a\x18.gb28181pro.BaseResponse\"7\x82\xd3\xe4\x93\x021:\x01*\",/gb28181/api/groups/channel/delete/{groupId}\x12\x8a\x01\n" +
 	"\x10GetGroupChannels\x12#.gb28181pro.GetGroupChannelsRequest\x1a!.gb28181pro.GroupChannelsResponse\".\x82\xd3\xe4\x93\x02(\x12&/gb28181/api/groups/{groupId}/channels\x12r\n" +
 	"\fRemoveDevice\x12\x1f.gb28181pro.RemoveDeviceRequest\x1a\x18.gb28181pro.BaseResponse\"'\x82\xd3\xe4\x93\x02!\"\x1f/gb28181/api/device/remove/{id}\x12m\n" +
-	"\fReceiveAlarm\x12\x1c.gb28181pro.AlarmInfoRequest\x1a\x18.gb28181pro.BaseResponse\"%\x82\xd3\xe4\x93\x02\x1f:\x01*\"\x1a/gb28181/api/alarm/receive\x12s\n" +
-	"\rOpenRTPServer\x12 .gb28181pro.OpenRTPServerRequest\x1a!.gb28181pro.OpenRTPServerResponse\"\x1d\x82\xd3\xe4\x93\x02\x17\"\x15/gb28181/api/rtp/openB\x1fZ\x1dm7s.live/v5/plugin/gb28181/pbb\x06proto3"
+	"\fReceiveAlarm\x12\x1c.gb28181pro.AlarmInfoRequest\x1a\x18.gb28181pro.BaseResponse\"%\x82\xd3\xe4\x93\x02\x1f:\x01*\"\x1a/gb28181/api/alarm/receiveB\x1fZ\x1dm7s.live/v5/plugin/gb28181/pbb\x06proto3"
 
 var (
 	file_gb28181_proto_rawDescOnce sync.Once
@@ -7009,7 +6878,7 @@ func file_gb28181_proto_rawDescGZIP() []byte {
 	return file_gb28181_proto_rawDescData
 }
 
-var file_gb28181_proto_msgTypes = make([]protoimpl.MessageInfo, 92)
+var file_gb28181_proto_msgTypes = make([]protoimpl.MessageInfo, 90)
 var file_gb28181_proto_goTypes = []any{
 	(*BaseResponse)(nil),                   // 0: gb28181pro.BaseResponse
 	(*GetDeviceRequest)(nil),               // 1: gb28181pro.GetDeviceRequest
@@ -7098,26 +6967,24 @@ var file_gb28181_proto_goTypes = []any{
 	(*PlaybackSeekRequest)(nil),            // 84: gb28181pro.PlaybackSeekRequest
 	(*PlaybackSpeedRequest)(nil),           // 85: gb28181pro.PlaybackSpeedRequest
 	(*RemoveDeviceRequest)(nil),            // 86: gb28181pro.RemoveDeviceRequest
-	(*OpenRTPServerRequest)(nil),           // 87: gb28181pro.OpenRTPServerRequest
-	(*OpenRTPServerResponse)(nil),          // 88: gb28181pro.OpenRTPServerResponse
-	(*AlarmInfoRequest)(nil),               // 89: gb28181pro.AlarmInfoRequest
-	nil,                                    // 90: gb28181pro.SubscribeInfoResponse.DialogStateEntry
-	(*AddGroupChannelRequest_Channel)(nil), // 91: gb28181pro.AddGroupChannelRequest.Channel
-	(*timestamppb.Timestamp)(nil),          // 92: google.protobuf.Timestamp
-	(*emptypb.Empty)(nil),                  // 93: google.protobuf.Empty
+	(*AlarmInfoRequest)(nil),               // 87: gb28181pro.AlarmInfoRequest
+	nil,                                    // 88: gb28181pro.SubscribeInfoResponse.DialogStateEntry
+	(*AddGroupChannelRequest_Channel)(nil), // 89: gb28181pro.AddGroupChannelRequest.Channel
+	(*timestamppb.Timestamp)(nil),          // 90: google.protobuf.Timestamp
+	(*emptypb.Empty)(nil),                  // 91: google.protobuf.Empty
 }
 var file_gb28181_proto_depIdxs = []int32{
 	12,  // 0: gb28181pro.DevicesPageInfo.data:type_name -> gb28181pro.Device
 	11,  // 1: gb28181pro.ChannelsPageInfo.list:type_name -> gb28181pro.Channel
-	92,  // 2: gb28181pro.Channel.gpsTime:type_name -> google.protobuf.Timestamp
-	92,  // 3: gb28181pro.Device.registerTime:type_name -> google.protobuf.Timestamp
-	92,  // 4: gb28181pro.Device.updateTime:type_name -> google.protobuf.Timestamp
-	92,  // 5: gb28181pro.Device.keepAliveTime:type_name -> google.protobuf.Timestamp
+	90,  // 2: gb28181pro.Channel.gpsTime:type_name -> google.protobuf.Timestamp
+	90,  // 3: gb28181pro.Device.registerTime:type_name -> google.protobuf.Timestamp
+	90,  // 4: gb28181pro.Device.updateTime:type_name -> google.protobuf.Timestamp
+	90,  // 5: gb28181pro.Device.keepAliveTime:type_name -> google.protobuf.Timestamp
 	11,  // 6: gb28181pro.Device.channels:type_name -> gb28181pro.Channel
 	12,  // 7: gb28181pro.ResponseList.data:type_name -> gb28181pro.Device
 	20,  // 8: gb28181pro.DeviceAlarmResponse.data:type_name -> gb28181pro.AlarmInfo
 	11,  // 9: gb28181pro.UpdateChannelRequest.channel:type_name -> gb28181pro.Channel
-	90,  // 10: gb28181pro.SubscribeInfoResponse.dialogState:type_name -> gb28181pro.SubscribeInfoResponse.DialogStateEntry
+	88,  // 10: gb28181pro.SubscribeInfoResponse.dialogState:type_name -> gb28181pro.SubscribeInfoResponse.DialogStateEntry
 	12,  // 11: gb28181pro.DeviceResponse.data:type_name -> gb28181pro.Device
 	11,  // 12: gb28181pro.ChannelResponse.data:type_name -> gb28181pro.Channel
 	33,  // 13: gb28181pro.PlayResponse.stream_info:type_name -> gb28181pro.StreamInfo
@@ -7125,22 +6992,22 @@ var file_gb28181_proto_depIdxs = []int32{
 	39,  // 15: gb28181pro.PlatformResponse.data:type_name -> gb28181pro.Platform
 	39,  // 16: gb28181pro.PlatformsPageInfo.list:type_name -> gb28181pro.Platform
 	47,  // 17: gb28181pro.QueryRecordResponse.data:type_name -> gb28181pro.RecordItem
-	92,  // 18: gb28181pro.QueryRecordResponse.last_time:type_name -> google.protobuf.Timestamp
+	90,  // 18: gb28181pro.QueryRecordResponse.last_time:type_name -> google.protobuf.Timestamp
 	65,  // 19: gb28181pro.SearchAlarmsResponse.data:type_name -> gb28181pro.AlarmRecord
-	92,  // 20: gb28181pro.AlarmRecord.alarmTime:type_name -> google.protobuf.Timestamp
-	92,  // 21: gb28181pro.AlarmRecord.createTime:type_name -> google.protobuf.Timestamp
-	92,  // 22: gb28181pro.Group.createTime:type_name -> google.protobuf.Timestamp
-	92,  // 23: gb28181pro.Group.updateTime:type_name -> google.protobuf.Timestamp
+	90,  // 20: gb28181pro.AlarmRecord.alarmTime:type_name -> google.protobuf.Timestamp
+	90,  // 21: gb28181pro.AlarmRecord.createTime:type_name -> google.protobuf.Timestamp
+	90,  // 22: gb28181pro.Group.createTime:type_name -> google.protobuf.Timestamp
+	90,  // 23: gb28181pro.Group.updateTime:type_name -> google.protobuf.Timestamp
 	69,  // 24: gb28181pro.Group.children:type_name -> gb28181pro.Group
 	79,  // 25: gb28181pro.Group.channels:type_name -> gb28181pro.GroupChannel
 	69,  // 26: gb28181pro.GroupResponse.data:type_name -> gb28181pro.Group
 	69,  // 27: gb28181pro.GroupsListResponse.data:type_name -> gb28181pro.Group
 	69,  // 28: gb28181pro.GroupsPageInfo.data:type_name -> gb28181pro.Group
-	91,  // 29: gb28181pro.AddGroupChannelRequest.channels:type_name -> gb28181pro.AddGroupChannelRequest.Channel
+	89,  // 29: gb28181pro.AddGroupChannelRequest.channels:type_name -> gb28181pro.AddGroupChannelRequest.Channel
 	81,  // 30: gb28181pro.GroupChannelsResponse.data:type_name -> gb28181pro.GroupChannelsData
 	79,  // 31: gb28181pro.GroupChannelsData.list:type_name -> gb28181pro.GroupChannel
 	79,  // 32: gb28181pro.GroupChannelsData.channels:type_name -> gb28181pro.GroupChannel
-	92,  // 33: gb28181pro.AlarmInfoRequest.createAt:type_name -> google.protobuf.Timestamp
+	90,  // 33: gb28181pro.AlarmInfoRequest.createAt:type_name -> google.protobuf.Timestamp
 	2,   // 34: gb28181pro.api.List:input_type -> gb28181pro.GetDevicesRequest
 	1,   // 35: gb28181pro.api.GetDevice:input_type -> gb28181pro.GetDeviceRequest
 	2,   // 36: gb28181pro.api.GetDevices:input_type -> gb28181pro.GetDevicesRequest
@@ -7161,7 +7028,7 @@ var file_gb28181_proto_depIdxs = []int32{
 	34,  // 51: gb28181pro.api.StopConvert:input_type -> gb28181pro.ConvertStopRequest
 	35,  // 52: gb28181pro.api.StartBroadcast:input_type -> gb28181pro.BroadcastRequest
 	35,  // 53: gb28181pro.api.StopBroadcast:input_type -> gb28181pro.BroadcastRequest
-	93,  // 54: gb28181pro.api.GetAllSSRC:input_type -> google.protobuf.Empty
+	91,  // 54: gb28181pro.api.GetAllSSRC:input_type -> google.protobuf.Empty
 	27,  // 55: gb28181pro.api.GetRawChannel:input_type -> gb28181pro.GetRawChannelRequest
 	39,  // 56: gb28181pro.api.AddPlatform:input_type -> gb28181pro.Platform
 	40,  // 57: gb28181pro.api.GetPlatform:input_type -> gb28181pro.GetPlatformRequest
@@ -7207,78 +7074,76 @@ var file_gb28181_proto_depIdxs = []int32{
 	77,  // 97: gb28181pro.api.DeleteGroupChannel:input_type -> gb28181pro.DeleteGroupChannelRequest
 	78,  // 98: gb28181pro.api.GetGroupChannels:input_type -> gb28181pro.GetGroupChannelsRequest
 	86,  // 99: gb28181pro.api.RemoveDevice:input_type -> gb28181pro.RemoveDeviceRequest
-	89,  // 100: gb28181pro.api.ReceiveAlarm:input_type -> gb28181pro.AlarmInfoRequest
-	87,  // 101: gb28181pro.api.OpenRTPServer:input_type -> gb28181pro.OpenRTPServerRequest
-	3,   // 102: gb28181pro.api.List:output_type -> gb28181pro.DevicesPageInfo
-	28,  // 103: gb28181pro.api.GetDevice:output_type -> gb28181pro.DeviceResponse
-	3,   // 104: gb28181pro.api.GetDevices:output_type -> gb28181pro.DevicesPageInfo
-	5,   // 105: gb28181pro.api.GetChannels:output_type -> gb28181pro.ChannelsPageInfo
-	7,   // 106: gb28181pro.api.SyncDevice:output_type -> gb28181pro.SyncStatus
-	9,   // 107: gb28181pro.api.DeleteDevice:output_type -> gb28181pro.DeleteDeviceResponse
-	5,   // 108: gb28181pro.api.GetSubChannels:output_type -> gb28181pro.ChannelsPageInfo
-	0,   // 109: gb28181pro.api.ChangeAudio:output_type -> gb28181pro.BaseResponse
-	0,   // 110: gb28181pro.api.UpdateChannelStreamIdentification:output_type -> gb28181pro.BaseResponse
-	0,   // 111: gb28181pro.api.UpdateTransport:output_type -> gb28181pro.BaseResponse
-	0,   // 112: gb28181pro.api.AddDevice:output_type -> gb28181pro.BaseResponse
-	0,   // 113: gb28181pro.api.UpdateDevice:output_type -> gb28181pro.BaseResponse
-	17,  // 114: gb28181pro.api.GetDeviceStatus:output_type -> gb28181pro.DeviceStatusResponse
-	19,  // 115: gb28181pro.api.GetDeviceAlarm:output_type -> gb28181pro.DeviceAlarmResponse
-	7,   // 116: gb28181pro.api.GetSyncStatus:output_type -> gb28181pro.SyncStatus
-	24,  // 117: gb28181pro.api.GetSubscribeInfo:output_type -> gb28181pro.SubscribeInfoResponse
-	26,  // 118: gb28181pro.api.GetSnap:output_type -> gb28181pro.SnapResponse
-	0,   // 119: gb28181pro.api.StopConvert:output_type -> gb28181pro.BaseResponse
-	36,  // 120: gb28181pro.api.StartBroadcast:output_type -> gb28181pro.BroadcastResponse
-	0,   // 121: gb28181pro.api.StopBroadcast:output_type -> gb28181pro.BaseResponse
-	38,  // 122: gb28181pro.api.GetAllSSRC:output_type -> gb28181pro.SSRCListResponse
-	11,  // 123: gb28181pro.api.GetRawChannel:output_type -> gb28181pro.Channel
-	0,   // 124: gb28181pro.api.AddPlatform:output_type -> gb28181pro.BaseResponse
-	43,  // 125: gb28181pro.api.GetPlatform:output_type -> gb28181pro.PlatformResponse
-	0,   // 126: gb28181pro.api.UpdatePlatform:output_type -> gb28181pro.BaseResponse
-	0,   // 127: gb28181pro.api.DeletePlatform:output_type -> gb28181pro.BaseResponse
-	44,  // 128: gb28181pro.api.ListPlatforms:output_type -> gb28181pro.PlatformsPageInfo
-	46,  // 129: gb28181pro.api.QueryRecord:output_type -> gb28181pro.QueryRecordResponse
-	0,   // 130: gb28181pro.api.PtzControl:output_type -> gb28181pro.BaseResponse
-	0,   // 131: gb28181pro.api.IrisControl:output_type -> gb28181pro.BaseResponse
-	0,   // 132: gb28181pro.api.FocusControl:output_type -> gb28181pro.BaseResponse
-	52,  // 133: gb28181pro.api.QueryPreset:output_type -> gb28181pro.PresetResponse
-	0,   // 134: gb28181pro.api.AddPreset:output_type -> gb28181pro.BaseResponse
-	0,   // 135: gb28181pro.api.CallPreset:output_type -> gb28181pro.BaseResponse
-	0,   // 136: gb28181pro.api.DeletePreset:output_type -> gb28181pro.BaseResponse
-	0,   // 137: gb28181pro.api.AddCruisePoint:output_type -> gb28181pro.BaseResponse
-	0,   // 138: gb28181pro.api.DeleteCruisePoint:output_type -> gb28181pro.BaseResponse
-	0,   // 139: gb28181pro.api.SetCruiseSpeed:output_type -> gb28181pro.BaseResponse
-	0,   // 140: gb28181pro.api.SetCruiseTime:output_type -> gb28181pro.BaseResponse
-	0,   // 141: gb28181pro.api.StartCruise:output_type -> gb28181pro.BaseResponse
-	0,   // 142: gb28181pro.api.StopCruise:output_type -> gb28181pro.BaseResponse
-	0,   // 143: gb28181pro.api.StartScan:output_type -> gb28181pro.BaseResponse
-	0,   // 144: gb28181pro.api.StopScan:output_type -> gb28181pro.BaseResponse
-	0,   // 145: gb28181pro.api.SetScanLeft:output_type -> gb28181pro.BaseResponse
-	0,   // 146: gb28181pro.api.SetScanRight:output_type -> gb28181pro.BaseResponse
-	0,   // 147: gb28181pro.api.SetScanSpeed:output_type -> gb28181pro.BaseResponse
-	0,   // 148: gb28181pro.api.WiperControl:output_type -> gb28181pro.BaseResponse
-	0,   // 149: gb28181pro.api.AuxiliaryControl:output_type -> gb28181pro.BaseResponse
-	62,  // 150: gb28181pro.api.TestSip:output_type -> gb28181pro.TestSipResponse
-	64,  // 151: gb28181pro.api.SearchAlarms:output_type -> gb28181pro.SearchAlarmsResponse
-	0,   // 152: gb28181pro.api.AddPlatformChannel:output_type -> gb28181pro.BaseResponse
-	0,   // 153: gb28181pro.api.Recording:output_type -> gb28181pro.BaseResponse
-	0,   // 154: gb28181pro.api.UploadJpeg:output_type -> gb28181pro.BaseResponse
-	0,   // 155: gb28181pro.api.UpdateChannel:output_type -> gb28181pro.BaseResponse
-	0,   // 156: gb28181pro.api.PlaybackPause:output_type -> gb28181pro.BaseResponse
-	0,   // 157: gb28181pro.api.PlaybackResume:output_type -> gb28181pro.BaseResponse
-	0,   // 158: gb28181pro.api.PlaybackSeek:output_type -> gb28181pro.BaseResponse
-	0,   // 159: gb28181pro.api.PlaybackSpeed:output_type -> gb28181pro.BaseResponse
-	73,  // 160: gb28181pro.api.GetGroups:output_type -> gb28181pro.GroupsListResponse
-	0,   // 161: gb28181pro.api.AddGroup:output_type -> gb28181pro.BaseResponse
-	0,   // 162: gb28181pro.api.UpdateGroup:output_type -> gb28181pro.BaseResponse
-	0,   // 163: gb28181pro.api.DeleteGroup:output_type -> gb28181pro.BaseResponse
-	0,   // 164: gb28181pro.api.AddGroupChannel:output_type -> gb28181pro.BaseResponse
-	0,   // 165: gb28181pro.api.DeleteGroupChannel:output_type -> gb28181pro.BaseResponse
-	80,  // 166: gb28181pro.api.GetGroupChannels:output_type -> gb28181pro.GroupChannelsResponse
-	0,   // 167: gb28181pro.api.RemoveDevice:output_type -> gb28181pro.BaseResponse
-	0,   // 168: gb28181pro.api.ReceiveAlarm:output_type -> gb28181pro.BaseResponse
-	88,  // 169: gb28181pro.api.OpenRTPServer:output_type -> gb28181pro.OpenRTPServerResponse
-	102, // [102:170] is the sub-list for method output_type
-	34,  // [34:102] is the sub-list for method input_type
+	87,  // 100: gb28181pro.api.ReceiveAlarm:input_type -> gb28181pro.AlarmInfoRequest
+	3,   // 101: gb28181pro.api.List:output_type -> gb28181pro.DevicesPageInfo
+	28,  // 102: gb28181pro.api.GetDevice:output_type -> gb28181pro.DeviceResponse
+	3,   // 103: gb28181pro.api.GetDevices:output_type -> gb28181pro.DevicesPageInfo
+	5,   // 104: gb28181pro.api.GetChannels:output_type -> gb28181pro.ChannelsPageInfo
+	7,   // 105: gb28181pro.api.SyncDevice:output_type -> gb28181pro.SyncStatus
+	9,   // 106: gb28181pro.api.DeleteDevice:output_type -> gb28181pro.DeleteDeviceResponse
+	5,   // 107: gb28181pro.api.GetSubChannels:output_type -> gb28181pro.ChannelsPageInfo
+	0,   // 108: gb28181pro.api.ChangeAudio:output_type -> gb28181pro.BaseResponse
+	0,   // 109: gb28181pro.api.UpdateChannelStreamIdentification:output_type -> gb28181pro.BaseResponse
+	0,   // 110: gb28181pro.api.UpdateTransport:output_type -> gb28181pro.BaseResponse
+	0,   // 111: gb28181pro.api.AddDevice:output_type -> gb28181pro.BaseResponse
+	0,   // 112: gb28181pro.api.UpdateDevice:output_type -> gb28181pro.BaseResponse
+	17,  // 113: gb28181pro.api.GetDeviceStatus:output_type -> gb28181pro.DeviceStatusResponse
+	19,  // 114: gb28181pro.api.GetDeviceAlarm:output_type -> gb28181pro.DeviceAlarmResponse
+	7,   // 115: gb28181pro.api.GetSyncStatus:output_type -> gb28181pro.SyncStatus
+	24,  // 116: gb28181pro.api.GetSubscribeInfo:output_type -> gb28181pro.SubscribeInfoResponse
+	26,  // 117: gb28181pro.api.GetSnap:output_type -> gb28181pro.SnapResponse
+	0,   // 118: gb28181pro.api.StopConvert:output_type -> gb28181pro.BaseResponse
+	36,  // 119: gb28181pro.api.StartBroadcast:output_type -> gb28181pro.BroadcastResponse
+	0,   // 120: gb28181pro.api.StopBroadcast:output_type -> gb28181pro.BaseResponse
+	38,  // 121: gb28181pro.api.GetAllSSRC:output_type -> gb28181pro.SSRCListResponse
+	11,  // 122: gb28181pro.api.GetRawChannel:output_type -> gb28181pro.Channel
+	0,   // 123: gb28181pro.api.AddPlatform:output_type -> gb28181pro.BaseResponse
+	43,  // 124: gb28181pro.api.GetPlatform:output_type -> gb28181pro.PlatformResponse
+	0,   // 125: gb28181pro.api.UpdatePlatform:output_type -> gb28181pro.BaseResponse
+	0,   // 126: gb28181pro.api.DeletePlatform:output_type -> gb28181pro.BaseResponse
+	44,  // 127: gb28181pro.api.ListPlatforms:output_type -> gb28181pro.PlatformsPageInfo
+	46,  // 128: gb28181pro.api.QueryRecord:output_type -> gb28181pro.QueryRecordResponse
+	0,   // 129: gb28181pro.api.PtzControl:output_type -> gb28181pro.BaseResponse
+	0,   // 130: gb28181pro.api.IrisControl:output_type -> gb28181pro.BaseResponse
+	0,   // 131: gb28181pro.api.FocusControl:output_type -> gb28181pro.BaseResponse
+	52,  // 132: gb28181pro.api.QueryPreset:output_type -> gb28181pro.PresetResponse
+	0,   // 133: gb28181pro.api.AddPreset:output_type -> gb28181pro.BaseResponse
+	0,   // 134: gb28181pro.api.CallPreset:output_type -> gb28181pro.BaseResponse
+	0,   // 135: gb28181pro.api.DeletePreset:output_type -> gb28181pro.BaseResponse
+	0,   // 136: gb28181pro.api.AddCruisePoint:output_type -> gb28181pro.BaseResponse
+	0,   // 137: gb28181pro.api.DeleteCruisePoint:output_type -> gb28181pro.BaseResponse
+	0,   // 138: gb28181pro.api.SetCruiseSpeed:output_type -> gb28181pro.BaseResponse
+	0,   // 139: gb28181pro.api.SetCruiseTime:output_type -> gb28181pro.BaseResponse
+	0,   // 140: gb28181pro.api.StartCruise:output_type -> gb28181pro.BaseResponse
+	0,   // 141: gb28181pro.api.StopCruise:output_type -> gb28181pro.BaseResponse
+	0,   // 142: gb28181pro.api.StartScan:output_type -> gb28181pro.BaseResponse
+	0,   // 143: gb28181pro.api.StopScan:output_type -> gb28181pro.BaseResponse
+	0,   // 144: gb28181pro.api.SetScanLeft:output_type -> gb28181pro.BaseResponse
+	0,   // 145: gb28181pro.api.SetScanRight:output_type -> gb28181pro.BaseResponse
+	0,   // 146: gb28181pro.api.SetScanSpeed:output_type -> gb28181pro.BaseResponse
+	0,   // 147: gb28181pro.api.WiperControl:output_type -> gb28181pro.BaseResponse
+	0,   // 148: gb28181pro.api.AuxiliaryControl:output_type -> gb28181pro.BaseResponse
+	62,  // 149: gb28181pro.api.TestSip:output_type -> gb28181pro.TestSipResponse
+	64,  // 150: gb28181pro.api.SearchAlarms:output_type -> gb28181pro.SearchAlarmsResponse
+	0,   // 151: gb28181pro.api.AddPlatformChannel:output_type -> gb28181pro.BaseResponse
+	0,   // 152: gb28181pro.api.Recording:output_type -> gb28181pro.BaseResponse
+	0,   // 153: gb28181pro.api.UploadJpeg:output_type -> gb28181pro.BaseResponse
+	0,   // 154: gb28181pro.api.UpdateChannel:output_type -> gb28181pro.BaseResponse
+	0,   // 155: gb28181pro.api.PlaybackPause:output_type -> gb28181pro.BaseResponse
+	0,   // 156: gb28181pro.api.PlaybackResume:output_type -> gb28181pro.BaseResponse
+	0,   // 157: gb28181pro.api.PlaybackSeek:output_type -> gb28181pro.BaseResponse
+	0,   // 158: gb28181pro.api.PlaybackSpeed:output_type -> gb28181pro.BaseResponse
+	73,  // 159: gb28181pro.api.GetGroups:output_type -> gb28181pro.GroupsListResponse
+	0,   // 160: gb28181pro.api.AddGroup:output_type -> gb28181pro.BaseResponse
+	0,   // 161: gb28181pro.api.UpdateGroup:output_type -> gb28181pro.BaseResponse
+	0,   // 162: gb28181pro.api.DeleteGroup:output_type -> gb28181pro.BaseResponse
+	0,   // 163: gb28181pro.api.AddGroupChannel:output_type -> gb28181pro.BaseResponse
+	0,   // 164: gb28181pro.api.DeleteGroupChannel:output_type -> gb28181pro.BaseResponse
+	80,  // 165: gb28181pro.api.GetGroupChannels:output_type -> gb28181pro.GroupChannelsResponse
+	0,   // 166: gb28181pro.api.RemoveDevice:output_type -> gb28181pro.BaseResponse
+	0,   // 167: gb28181pro.api.ReceiveAlarm:output_type -> gb28181pro.BaseResponse
+	101, // [101:168] is the sub-list for method output_type
+	34,  // [34:101] is the sub-list for method input_type
 	34,  // [34:34] is the sub-list for extension type_name
 	34,  // [34:34] is the sub-list for extension extendee
 	0,   // [0:34] is the sub-list for field type_name
@@ -7295,7 +7160,7 @@ func file_gb28181_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_gb28181_proto_rawDesc), len(file_gb28181_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   92,
+			NumMessages:   90,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -13,8 +13,11 @@ type StressPlugin struct {
 	pullers util.Collection[string, *m7s.PullJob]
 }
 
-var _ = m7s.InstallPlugin[StressPlugin](&pb.Api_ServiceDesc, pb.RegisterApiHandler)
+var _ = m7s.InstallPlugin[StressPlugin](m7s.PluginMeta{
+	ServiceDesc:         &pb.Api_ServiceDesc,
+	RegisterGRPCHandler: pb.RegisterApiHandler,
+})
 
-func (r *StressPlugin) OnInit() error {
+func (r *StressPlugin) Start() error {
 	return nil
 }

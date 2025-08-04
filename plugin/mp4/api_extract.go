@@ -12,6 +12,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"strconv"
@@ -20,6 +21,7 @@ import (
 
 	m7s "m7s.live/v5"
 	"m7s.live/v5/pkg"
+	"m7s.live/v5/pkg/codec"
 	"m7s.live/v5/pkg/util"
 	mp4 "m7s.live/v5/plugin/mp4/pkg"
 	"m7s.live/v5/plugin/mp4/pkg/box"
@@ -136,13 +138,12 @@ func (p *MP4Plugin) extractCompressedVideo(streamPath string, startTime, endTime
 			if track.Cid.IsVideo() {
 				hasVideo = true
 				// 只在第一个片段或关键帧变化时更新extraData
-				if extraData == nil || !bytes.Equal(extraData, track.ExtraData) {
-					extraData = track.ExtraData
+				trackExtraData := track.GetRecord()
+				if extraData == nil || !bytes.Equal(extraData, trackExtraData) {
+					extraData = trackExtraData
 					if videoTrack == nil {
 						videoTrack = muxer.AddTrack(track.Cid)
-						videoTrack.ExtraData = extraData
-						videoTrack.Width = track.Width
-						videoTrack.Height = track.Height
+						videoTrack.ICodecCtx = track.ICodecCtx
 					}
 				}
 				break
@@ -229,13 +230,11 @@ func (p *MP4Plugin) extractCompressedVideo(streamPath string, startTime, endTime
 			// 创建新的样本
 			newSample := box.Sample{
 				KeyFrame:  sample.KeyFrame,
-				Data:      data,
 				Timestamp: adjustedTimestamp,
 				Offset:    sampleOffset,
-				Size:      sample.Size,
 				Duration:  sample.Duration,
 			}
-
+			newSample.PushOne(data)
 			// p.Info("Compressed", "KeyFrame", newSample.KeyFrame,
 			// 	"CTS", newSample.CTS,
 			// 	"Timestamp", newSample.Timestamp,
@@ -298,7 +297,7 @@ func (p *MP4Plugin) extractCompressedVideo(streamPath string, startTime, endTime
 		for _, track := range muxer.Tracks {
 			for i := range track.Samplelist {
 				track.Samplelist[i].Offset += int64(moovSize)
-				if _, err := outputFile.Write(track.Samplelist[i].Data); err != nil {
+				if _, err := outputFile.Write(track.Samplelist[i].Buffers[0]); err != nil {
 					return err
 				}
 			}
@@ -406,13 +405,12 @@ func (p *MP4Plugin) extractGopVideo(streamPath string, targetTime time.Time, wri
 			if track.Cid.IsVideo() {
 				hasVideo = true
 				// 只在第一个片段或关键帧变化时更新extraData
-				if extraData == nil || !bytes.Equal(extraData, track.ExtraData) {
-					extraData = track.ExtraData
+				trackExtraData := track.GetRecord()
+				if extraData == nil || !bytes.Equal(extraData, trackExtraData) {
+					extraData = trackExtraData
 					if videoTrack == nil {
 						videoTrack = muxer.AddTrack(track.Cid)
-						videoTrack.ExtraData = extraData
-						videoTrack.Width = track.Width
-						videoTrack.Height = track.Height
+						videoTrack.ICodecCtx = track.ICodecCtx
 					}
 				}
 				break
@@ -498,12 +496,11 @@ func (p *MP4Plugin) extractGopVideo(streamPath string, targetTime time.Time, wri
 			// 创建新的样本
 			newSample := box.Sample{
 				KeyFrame:  sample.KeyFrame,
-				Data:      data,
 				Timestamp: adjustedTimestamp,
 				Offset:    sampleOffset,
-				Size:      sample.Size,
 				Duration:  sample.Duration,
 			}
+			newSample.PushOne(data)
 
 			// p.Info("extractGop", "KeyFrame", newSample.KeyFrame,
 			// 	"CTS", newSample.CTS,
@@ -567,7 +564,7 @@ func (p *MP4Plugin) extractGopVideo(streamPath string, targetTime time.Time, wri
 		for _, track := range muxer.Tracks {
 			for i := range track.Samplelist {
 				track.Samplelist[i].Offset += int64(moovSize)
-				if _, err := outputFile.Write(track.Samplelist[i].Data); err != nil {
+				if _, err := outputFile.Write(track.Samplelist[i].Buffers[0]); err != nil {
 					return 0, err
 				}
 			}
@@ -725,7 +722,7 @@ func (p *MP4Plugin) snapToWriter(streamPath string, targetTime time.Time, writer
 
 	// 压缩相关变量
 	findGOP := false
-	var filteredSamples []box.Sample
+	var filteredSamples net.Buffers
 	var sampleIdx = 0
 	// 仅处理视频轨道
 	for _, stream := range streams {
@@ -749,13 +746,12 @@ func (p *MP4Plugin) snapToWriter(streamPath string, targetTime time.Time, writer
 			if track.Cid.IsVideo() {
 				hasVideo = true
 				// 只在第一个片段或关键帧变化时更新extraData
-				if extraData == nil || !bytes.Equal(extraData, track.ExtraData) {
-					extraData = track.ExtraData
+				trackExtraData := track.GetRecord()
+				if extraData == nil || !bytes.Equal(extraData, trackExtraData) {
+					extraData = trackExtraData
 					if videoTrack == nil {
 						videoTrack = muxer.AddTrack(track.Cid)
-						videoTrack.ExtraData = extraData
-						videoTrack.Width = track.Width
-						videoTrack.Height = track.Height
+						videoTrack.ICodecCtx = track.ICodecCtx
 					}
 				}
 				break
@@ -767,9 +763,6 @@ func (p *MP4Plugin) snapToWriter(streamPath string, targetTime time.Time, writer
 			continue
 		}
 
-		// 处理起始时间边界
-		var tsOffset int64
-
 		startTimestamp := targetTime.Sub(stream.StartTime).Milliseconds()
 
 		if startTimestamp < 0 {
@@ -778,7 +771,6 @@ func (p *MP4Plugin) snapToWriter(streamPath string, targetTime time.Time, writer
 		//通过时间戳定位到最近的‌关键帧‌（如视频IDR帧），返回的startSample是该关键帧对应的样本
 		startSample, err := demuxer.SeekTime(uint64(startTimestamp))
 		if err == nil {
-			tsOffset = -int64(startSample.Timestamp)
 		}
 
 		// 处理样本
@@ -795,8 +787,6 @@ func (p *MP4Plugin) snapToWriter(streamPath string, targetTime time.Time, writer
 			if sample.Timestamp < uint32(startTimestamp) {
 				sampleIdx++
 			}
-
-			adjustedTimestamp := sample.Timestamp + uint32(tsOffset)
 
 			// 处理GOP逻辑,已经处理完上一个gop
 			if sample.KeyFrame && findGOP {
@@ -829,19 +819,13 @@ func (p *MP4Plugin) snapToWriter(streamPath string, targetTime time.Time, writer
 				p.Warn("read sample error", "error", err, "size", sample.Size)
 				continue
 			}
-
-			// 创建新的样本
-			newSample := box.Sample{
-				KeyFrame:  sample.KeyFrame,
-				Data:      data,
-				Timestamp: adjustedTimestamp,
-				Offset:    sampleOffset,
-				Size:      sample.Size,
-				Duration:  sample.Duration,
+			for offset := 0; offset < sample.Size; {
+				nalusSize := util.BigEndian.Uint32(data[offset:])
+				filteredSamples = append(filteredSamples, codec.NALU_Delimiter2[:], data[offset+4:offset+4+int(nalusSize)])
+				offset += int(nalusSize) + 4
 			}
 
-			sampleOffset += int64(newSample.Size)
-			filteredSamples = append(filteredSamples, newSample)
+			sampleOffset += int64(sample.Size)
 		}
 	}
 
@@ -849,19 +833,7 @@ func (p *MP4Plugin) snapToWriter(streamPath string, targetTime time.Time, writer
 		return fmt.Errorf("no valid video samples found")
 	}
 
-	// 按25fps重新计算时间戳
-	targetFrameInterval := 40 // 25fps对应的毫秒间隔 (1000/25=40ms)
-	for i := range filteredSamples {
-		filteredSamples[i].Timestamp = uint32(i * targetFrameInterval)
-	}
-
-	p.Info("extract gop and snap",
-		"targetTime", targetTime,
-		"frist", filteredSamples[0].Timestamp,
-		"sampleIdx", sampleIdx,
-		"frameCount", len(filteredSamples))
-
-	err := ProcessWithFFmpeg(filteredSamples, sampleIdx, videoTrack, writer)
+	err := ProcessWithFFmpeg(filteredSamples, sampleIdx, writer)
 	if err != nil {
 		return err
 	}

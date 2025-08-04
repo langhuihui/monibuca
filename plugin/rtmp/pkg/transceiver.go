@@ -2,8 +2,9 @@ package rtmp
 
 import (
 	"errors"
-	"m7s.live/v5/pkg"
 	"runtime"
+
+	"m7s.live/v5/pkg"
 
 	"m7s.live/v5"
 )
@@ -15,12 +16,12 @@ type Sender struct {
 	lastAbs     uint32
 }
 
-func (av *Sender) HandleAudio(frame *RTMPAudio) (err error) {
-	return av.SendFrame(&frame.RTMPData)
+func (av *Sender) HandleAudio(frame *AudioFrame) (err error) {
+	return av.SendFrame((*RTMPData)(frame))
 }
 
-func (av *Sender) HandleVideo(frame *RTMPVideo) (err error) {
-	return av.SendFrame(&frame.RTMPData)
+func (av *Sender) HandleVideo(frame *VideoFrame) (err error) {
+	return av.SendFrame((*RTMPData)(frame))
 }
 
 func (av *Sender) SendFrame(frame *RTMPData) (err error) {
@@ -54,12 +55,12 @@ func (av *Sender) SendFrame(frame *RTMPData) (err error) {
 	// 当Chunk Type为0时(即Chunk12),
 	if av.lastAbs == 0 {
 		av.SetTimestamp(1)
-		err = av.sendChunk(frame.Memory.Buffers, &av.ChunkHeader, RTMP_CHUNK_HEAD_12)
+		err = av.sendChunk(frame.Memory, &av.ChunkHeader, RTMP_CHUNK_HEAD_12)
 	} else {
-		av.SetTimestamp(frame.Timestamp - av.lastAbs)
-		err = av.sendChunk(frame.Memory.Buffers, &av.ChunkHeader, RTMP_CHUNK_HEAD_8)
+		av.SetTimestamp(frame.GetTS32() - av.lastAbs)
+		err = av.sendChunk(frame.Memory, &av.ChunkHeader, RTMP_CHUNK_HEAD_8)
 	}
-	av.lastAbs = frame.Timestamp
+	av.lastAbs = frame.GetTS32()
 	// //数据被覆盖导致序号变了
 	// if seq != frame.Sequence {
 	// 	return errors.New("sequence is not equal")

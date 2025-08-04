@@ -24,6 +24,7 @@ import (
 	"m7s.live/v5/pkg/util"
 	"m7s.live/v5/plugin/gb28181/pb"
 	gb28181 "m7s.live/v5/plugin/gb28181/pkg"
+	mrtp "m7s.live/v5/plugin/rtp/pkg"
 )
 
 type SipConfig struct {
@@ -51,16 +52,16 @@ type GB28181Plugin struct {
 	AutoMigrate           bool   `default:"true" desc:"自动迁移数据库结构并初始化根组织"`
 	ua                    *sipgo.UserAgent
 	server                *sipgo.Server
-	devices               task.Manager[string, *Device]
-	dialogs               task.Manager[string, *Dialog]
-	forwardDialogs        task.Manager[uint32, *ForwardDialog]
-	platforms             task.Manager[string, *Platform]
+	devices               task.WorkCollection[string, *Device]
+	dialogs               task.WorkCollection[string, *Dialog]
+	forwardDialogs        util.Collection[uint32, *ForwardDialog]
+	platforms             task.WorkCollection[string, *Platform]
 	tcpPorts              chan uint16
 	tcpPort               uint16
 	sipPorts              []int
 	SipIP                 string `desc:"sip发送命令的IP，一般是本地IP，多网卡时需要配置正确的IP"`
 	MediaIP               string `desc:"流媒体IP，用于接收流"`
-	deviceRegisterManager task.Manager[string, *DeviceRegisterQueueTask]
+	deviceRegisterManager task.WorkCollection[string, *DeviceRegisterQueueTask]
 	Platforms             []*gb28181.PlatformModel
 	channels              util.Collection[string, *Channel]
 	netListener           net.Listener
@@ -71,7 +72,7 @@ var _ = m7s.InstallPlugin[GB28181Plugin](m7s.PluginMeta{
 	ServiceDesc:         &pb.Api_ServiceDesc,
 	NewPuller: func(conf config.Pull) m7s.IPuller {
 		if util.Exist(conf.URL) {
-			return &gb28181.DumpPuller{}
+			return &mrtp.DumpPuller{}
 		}
 		return new(Dialog)
 	},
@@ -146,7 +147,7 @@ func (gb *GB28181Plugin) initDatabase() error {
 	return nil
 }
 
-func (gb *GB28181Plugin) OnInit() (err error) {
+func (gb *GB28181Plugin) Start() (err error) {
 	if gb.DB == nil {
 		return pkg.ErrNoDB
 	}
@@ -159,17 +160,12 @@ func (gb *GB28181Plugin) OnInit() (err error) {
 		gb.AddTask(&gb.devices)
 		gb.AddTask(&gb.platforms)
 		gb.AddTask(&gb.dialogs)
-		gb.AddTask(&gb.forwardDialogs)
 		gb.AddTask(&gb.deviceRegisterManager)
+		gb.forwardDialogs.L = new(sync.RWMutex)
 		gb.server, _ = sipgo.NewServer(gb.ua, sipgo.WithServerLogger(logger)) // Creating server handle for ua
 		gb.server.OnMessage(gb.OnMessage)
 		gb.server.OnRegister(gb.OnRegister)
 		gb.server.OnBye(gb.OnBye)
-		gb.devices.L = new(sync.RWMutex)
-		gb.channels.L = new(sync.RWMutex)
-		gb.dialogs.L = new(sync.RWMutex)
-		gb.deviceRegisterManager.L = new(sync.RWMutex)
-		gb.forwardDialogs.L = new(sync.RWMutex)
 		gb.server.OnInvite(gb.OnInvite)
 		gb.server.OnAck(gb.OnAck)
 		gb.server.OnNotify(gb.OnNotify)
@@ -349,7 +345,7 @@ func (gb *GB28181Plugin) checkDeviceExpire() (err error) {
 		}
 		device.Task.ID = hash
 		device.channels.OnAdd(func(c *Channel) {
-			if absDevice, ok := gb.Server.PullProxies.SafeFind(func(absDevice m7s.IPullProxy) bool {
+			if absDevice, ok := gb.Server.PullProxies.Find(func(absDevice m7s.IPullProxy) bool {
 				conf := absDevice.GetConfig()
 				return conf.Type == "gb28181" && conf.URL == fmt.Sprintf("%s/%s", device.DeviceId, c.ChannelId)
 			}); ok {
@@ -413,8 +409,8 @@ func (gb *GB28181Plugin) checkDeviceExpire() (err error) {
 		}
 
 		// 添加设备任务
-		gb.devices.Add(device)
-		gb.Info("设备有效", "deviceId", device.DeviceId, "registerTime", device.RegisterTime, "expireTime", expireTime, "isExpired", isExpired, "device.Name", device.Name)
+		gb.devices.AddTask(device)
+		gb.Info("设备有效", "deviceId", device.DeviceId, "registerTime", device.RegisterTime, "expireTime", expireTime)
 
 	}
 	return nil
@@ -480,15 +476,9 @@ func (gb *GB28181Plugin) checkPlatform() {
 			//	 gb.Error("unregister err ", err)
 			//}
 			// 添加到任务系统
-			gb.platforms.Add(platform)
+			gb.platforms.AddTask(platform)
 			gb.Info("平台初始化完成", "ID", platformModel.ServerGBID, "Name", platformModel.Name)
 		}
-	}
-}
-
-func (gb *GB28181Plugin) RegisterHandler() map[string]http.HandlerFunc {
-	return map[string]http.HandlerFunc{
-		"/api/ps/replay/{streamPath...}": gb.api_ps_replay,
 	}
 }
 
@@ -512,17 +502,17 @@ func (gb *GB28181Plugin) OnRegister(req *sip.Request, tx sip.ServerTransaction) 
 	}
 	gb.Debug("onregister start", "deviceId", deviceId)
 
-	gb.Debug("get gb.deviceRegisterManager.length", "length", gb.deviceRegisterManager.Length)
-	if deviceRegisterQueueTask, ok := gb.deviceRegisterManager.SafeGet(deviceId); ok {
-		gb.Debug("gb.deviceRegisterManager.SafeGet", "deviceId", deviceId)
-		gb.Debug("gb.deviceRegisterManager.SafeGet", "deviceRegisterQueueTask", deviceRegisterQueueTask)
+	gb.Debug("get gb.deviceRegisterManager.length", "length", gb.deviceRegisterManager.Length())
+	if deviceRegisterQueueTask, ok := gb.deviceRegisterManager.Get(deviceId); ok {
+		gb.Debug("gb.deviceRegisterManager.Get", "deviceId", deviceId)
+		gb.Debug("gb.deviceRegisterManager.Get", "deviceRegisterQueueTask", deviceRegisterQueueTask)
 		deviceRegisterQueueTask.AddTask(&registerHandlerTask)
 	} else {
 		deviceRegisterQueueTask := &DeviceRegisterQueueTask{
 			deviceId: deviceId,
 		}
 		gb.Debug("do not safeget deviceRegisterQueueTask", "deviceId", deviceId)
-		gb.deviceRegisterManager.Add(deviceRegisterQueueTask)
+		gb.deviceRegisterManager.AddTask(deviceRegisterQueueTask)
 		deviceRegisterQueueTask.AddTask(&registerHandlerTask)
 	}
 }
@@ -598,14 +588,10 @@ func (gb *GB28181Plugin) OnMessage(req *sip.Request, tx sip.ServerTransaction) {
 			gb.Error("onMessage", "error", err.Error(), "type", "device,deviceid is", d.DeviceId)
 		}
 	} else {
-		var platform *Platform
-		if platformtmp, ok := gb.platforms.Get(p.ServerGBID); !ok {
-			// 创建 Platform 实例
-			platform = NewPlatform(p, gb, false)
-		} else {
-			platform = platformtmp
-		}
-		if err = platform.OnMessage(req, tx, temp); err != nil {
+		if platform, ok := gb.platforms.Get(p.ServerGBID); !ok {
+			gb.Error("OnMessage", "error", "platform not found", "id", p.ServerGBID)
+			return
+		} else if err = platform.OnMessage(req, tx, temp); err != nil {
 			gb.Error("onMessage", "error", err.Error(), "type", "platform")
 		}
 	}
@@ -700,7 +686,7 @@ func (gb *GB28181Plugin) OnNotify(req *sip.Request, tx sip.ServerTransaction) {
 
 func (gb *GB28181Plugin) Pull(streamPath string, conf config.Pull, pubConf *config.Publish) (job *m7s.PullJob, err error) {
 	if util.Exist(conf.URL) {
-		var puller gb28181.DumpPuller
+		var puller mrtp.DumpPuller
 		job = puller.GetPullJob()
 		job.Init(&puller, &gb.Plugin, streamPath, conf, pubConf)
 		return
@@ -952,54 +938,28 @@ func (gb *GB28181Plugin) OnInvite(req *sip.Request, tx sip.ServerTransaction) {
 	// 创建并保存SendRtpInfo，以供OnAck方法使用
 	forwardDialog := &ForwardDialog{
 		gb:             gb,
-		platformIP:     inviteInfo.IP,
-		platformPort:   inviteInfo.Port,
-		platformSSRC:   inviteInfo.SSRC,
-		TCP:            inviteInfo.TCP,
-		TCPActive:      inviteInfo.TCPActive,
 		platformCallId: req.CallID().Value(),
+		platformSSRC:   inviteInfo.SSRC,
 		start:          inviteInfo.StartTime,
 		end:            inviteInfo.StopTime,
 		channel:        channelTmp,
-		upIP:           inviteInfo.IP,
-		upPort:         mediaPort,
+		// 初始化 ForwardConfig
+		ForwardConfig: mrtp.ForwardConfig{
+			Source: mrtp.ConnectionConfig{
+				IP:   "",                 // 将在 Run 方法中从 SDP 响应中获取
+				Port: 0,                  // 将在 Run 方法中从 SDP 响应中获取
+				Mode: mrtp.StreamModeUDP, // 默认值，将在 Run 方法中根据 StreamMode 更新
+				SSRC: 0,                  // 将在 Start 方法中设置
+			},
+			Target: mrtp.ConnectionConfig{
+				IP:   inviteInfo.IP,
+				Port: uint32(inviteInfo.Port),
+				Mode: mrtp.StreamModeUDP, // 默认值，将在 Run 方法中根据 StreamMode 更新
+				SSRC: 0,                  // 将在 Run 方法中从 platformSSRC 解析
+			},
+			Relay: false,
+		},
 	}
-	forwardDialog.forwarder = gb28181.NewRTPForwarder()
-	forwardDialog.forwarder.TCP = forwardDialog.TCP
-	forwardDialog.forwarder.TCPActive = forwardDialog.TCPActive
-	forwardDialog.forwarder.StreamMode = forwardDialog.channel.Device.StreamMode
-
-	if forwardDialog.TCPActive {
-		forwardDialog.forwarder.UpListenAddr = fmt.Sprintf(":%d", forwardDialog.upPort)
-	} else {
-		forwardDialog.forwarder.UpListenAddr = fmt.Sprintf("%s:%d", forwardDialog.upIP, forwardDialog.platformPort)
-	}
-
-	// 设置监听地址和端口
-	if strings.ToUpper(forwardDialog.channel.Device.StreamMode) == "TCP-ACTIVE" {
-		forwardDialog.forwarder.DownListenAddr = fmt.Sprintf("%s:%d", forwardDialog.downIP, forwardDialog.downPort)
-	} else {
-		forwardDialog.forwarder.DownListenAddr = fmt.Sprintf(":%d", forwardDialog.MediaPort)
-	}
-
-	// 设置转发目标
-	if inviteInfo.IP != "" && forwardDialog.platformPort > 0 {
-		err = forwardDialog.forwarder.SetTarget(forwardDialog.platformIP, forwardDialog.platformPort)
-		if err != nil {
-			gb.Error("set target error", "err", err)
-			return
-		}
-	} else {
-		gb.Error("no target set, will only receive but not forward")
-		return
-	}
-
-	// 设置目标SSRC
-	if forwardDialog.platformSSRC != "" {
-		forwardDialog.forwarder.TargetSSRC = forwardDialog.platformSSRC
-		gb.Info("set target ssrc", "ssrc", forwardDialog.platformSSRC)
-	}
-	// 保存到集合中
 	gb.forwardDialogs.Set(forwardDialog)
 	gb.Info("OnInvite", "action", "sendRtpInfo created", "callId", req.CallID().Value())
 

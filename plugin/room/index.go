@@ -13,6 +13,7 @@ import (
 	"github.com/gobwas/ws"
 	"github.com/gobwas/ws/wsutil"
 	"github.com/google/uuid"
+	"m7s.live/v5"
 	. "m7s.live/v5"
 	"m7s.live/v5/pkg"
 	"m7s.live/v5/pkg/task"
@@ -71,7 +72,7 @@ func (u *User) Send(event string, data any) {
 type Room struct {
 	*Publisher
 	ID    string
-	Users task.Manager[string, *User]
+	Users task.WorkCollection[string, *User]
 }
 
 //go:embed default.yaml
@@ -93,7 +94,9 @@ type RoomPlugin struct {
 	rooms util.Collection[string, *Room]
 }
 
-var _ = InstallPlugin[RoomPlugin](defaultYaml)
+var _ = InstallPlugin[RoomPlugin](m7s.PluginMeta{
+	DefaultYaml: defaultYaml,
+})
 
 func (rc *RoomPlugin) OnPublish(p *Publisher) {
 	args := p.Args
@@ -174,11 +177,11 @@ func (rc *RoomPlugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	user := &User{Room: room, Conn: conn, Token: token, ID: userId}
 	data, _ := json.Marshal(map[string]any{"event": "userjoin", "data": user})
 	room.WriteData(data)
-	room.Users.Add(user)
-	user.Send("joined", map[string]any{"token": token, "userList": room.Users.Items})
+	room.Users.AddTask(user)
+	user.Send("joined", map[string]any{"token": token, "userList": room.Users.ToList()})
 	defer func() {
 		user.Stop(err)
-		if room.Users.Length == 0 {
+		if room.Users.Length() == 0 {
 			room.Stop(err)
 			rc.rooms.RemoveByKey(roomId)
 		}

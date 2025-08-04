@@ -57,7 +57,7 @@ type (
 	}
 	PullProxyFactory = func() IPullProxy
 	PullProxyManager struct {
-		task.Manager[uint, IPullProxy]
+		task.WorkCollection[uint, IPullProxy]
 	}
 	BasePullProxy struct {
 		*PullProxyConfig
@@ -105,9 +105,6 @@ func (d *BasePullProxy) ChangeStatus(status byte) {
 	from := d.Status
 	d.Plugin.Info("device status changed", "from", from, "to", status)
 	d.Status = status
-	if d.Plugin.Server.DB != nil {
-		d.Plugin.Server.DB.Omit("deleted_at").Save(d.PullProxyConfig)
-	}
 	switch status {
 	case PullProxyStatusOnline:
 		if d.PullOnStart && (from == PullProxyStatusOffline) {
@@ -204,7 +201,7 @@ func (d *TCPPullProxy) Tick(any) {
 
 func (p *Publisher) processPullProxyOnStart() {
 	s := p.Plugin.Server
-	if pullProxy, ok := s.PullProxies.SafeFind(func(pullProxy IPullProxy) bool {
+	if pullProxy, ok := s.PullProxies.Find(func(pullProxy IPullProxy) bool {
 		return pullProxy.GetStreamPath() == p.StreamPath
 	}); ok {
 		p.PullProxyConfig = pullProxy.GetConfig()
@@ -220,31 +217,55 @@ func (p *Publisher) processPullProxyOnStart() {
 func (p *Publisher) processPullProxyOnDispose() {
 	s := p.Plugin.Server
 	if p.PullProxyConfig != nil && p.PullProxyConfig.Status == PullProxyStatusPulling {
-		if pullproxy, ok := s.PullProxies.SafeGet(p.PullProxyConfig.GetKey()); ok {
+		if pullproxy, ok := s.PullProxies.Get(p.PullProxyConfig.GetKey()); ok {
 			pullproxy.ChangeStatus(PullProxyStatusOnline)
 		}
 	}
 }
 
 func (s *Server) createPullProxy(conf *PullProxyConfig) (pullProxy IPullProxy, err error) {
-	for plugin := range s.Plugins.Range {
-		if plugin.Meta.NewPullProxy != nil && strings.EqualFold(conf.Type, plugin.Meta.Name) {
-			pullProxy = plugin.Meta.NewPullProxy()
-			base := pullProxy.GetBase()
-			base.PullProxyConfig = conf
-			base.Plugin = plugin
-			s.PullProxies.Add(pullProxy, plugin.Logger.With("pullProxyId", conf.ID, "pullProxyType", conf.Type, "pullProxyName", conf.Name))
-			return
+	var plugin *Plugin
+	switch conf.Type {
+	case "h265", "h264":
+		if s.Meta.NewPullProxy != nil {
+			plugin = &s.Plugin
+		}
+	default:
+		for p := range s.Plugins.Range {
+			if p.Meta.NewPullProxy != nil && strings.EqualFold(conf.Type, p.Meta.Name) {
+				plugin = p
+				break
+			}
 		}
 	}
+	if plugin == nil {
+		return
+	}
+	pullProxy = plugin.Meta.NewPullProxy()
+	base := pullProxy.GetBase()
+	base.PullProxyConfig = conf
+	base.Plugin = plugin
+	s.PullProxies.AddTask(pullProxy, plugin.Logger.With("pullProxyId", conf.ID, "pullProxyType", conf.Type, "pullProxyName", conf.Name))
 	return
 }
 
 func (s *Server) GetPullProxyList(ctx context.Context, req *emptypb.Empty) (res *pb.PullProxyListResponse, err error) {
 	res = &pb.PullProxyListResponse{}
-	for device := range s.PullProxies.SafeRange {
-		conf := device.GetConfig()
-		res.Data = append(res.Data, &pb.PullProxyInfo{
+
+	if s.DB == nil {
+		err = pkg.ErrNoDB
+		return
+	}
+
+	var pullProxyConfigs []PullProxyConfig
+	err = s.DB.Find(&pullProxyConfigs).Error
+	if err != nil {
+		return
+	}
+
+	for _, conf := range pullProxyConfigs {
+		// 获取运行时状态信息（如果需要的话）
+		info := &pb.PullProxyInfo{
 			Name:           conf.Name,
 			CreateTime:     timestamppb.New(conf.CreatedAt),
 			UpdateTime:     timestamppb.New(conf.UpdatedAt),
@@ -259,9 +280,16 @@ func (s *Server) GetPullProxyList(ctx context.Context, req *emptypb.Empty) (res 
 			RecordPath:     conf.Record.FilePath,
 			RecordFragment: durationpb.New(conf.Record.Fragment),
 			Description:    conf.Description,
-			Rtt:            uint32(conf.RTT.Milliseconds()),
-			StreamPath:     device.GetStreamPath(),
-		})
+			StreamPath:     conf.GetStreamPath(),
+		}
+		// 如果内存中有对应的设备，获取实时状态
+		if device, ok := s.PullProxies.Get(conf.ID); ok {
+			runtimeConf := device.GetConfig()
+			info.Rtt = uint32(runtimeConf.RTT.Milliseconds())
+			info.Status = uint32(runtimeConf.Status)
+		}
+
+		res.Data = append(res.Data, info)
 	}
 	return
 }
@@ -305,6 +333,9 @@ func (s *Server) AddPullProxy(ctx context.Context, req *pb.PullProxyInfo) (res *
 	}
 	defaults.SetDefaults(&pullProxyConfig.Pull)
 	defaults.SetDefaults(&pullProxyConfig.Record)
+	if pullProxyConfig.PullOnStart {
+		pullProxyConfig.Pull.MaxRetry = -1
+	}
 	pullProxyConfig.URL = req.PullURL
 	pullProxyConfig.Audio = req.Audio
 	pullProxyConfig.StopOnIdle = req.StopOnIdle
@@ -348,9 +379,6 @@ func (s *Server) UpdatePullProxy(ctx context.Context, req *pb.UpdatePullProxyReq
 	if err != nil {
 		return
 	}
-
-	// 记录原始状态，用于后续判断状态变化
-	originalStatus := target.Status
 
 	// 只有当字段有值时才进行赋值
 	if req.Name != nil {
@@ -402,6 +430,11 @@ func (s *Server) UpdatePullProxy(ctx context.Context, req *pb.UpdatePullProxyReq
 	if req.PullOnStart != nil {
 		target.PullOnStart = *req.PullOnStart
 	}
+	if target.PullOnStart {
+		target.Pull.MaxRetry = -1
+	} else {
+		target.Pull.MaxRetry = 0
+	}
 	if req.StopOnIdle != nil {
 		target.StopOnIdle = *req.StopOnIdle
 	}
@@ -442,27 +475,25 @@ func (s *Server) UpdatePullProxy(ctx context.Context, req *pb.UpdatePullProxyReq
 	s.DB.Save(target)
 
 	// 检查是否从 disable 状态变为非 disable 状态
-	wasDisabled := originalStatus == PullProxyStatusDisabled
-	isNowEnabled := target.Status != PullProxyStatusDisabled
 	isNowDisabled := target.Status == PullProxyStatusDisabled
-	wasEnabled := originalStatus != PullProxyStatusDisabled
 
-	if device, ok := s.PullProxies.SafeGet(uint(req.ID)); ok {
+	if device, ok := s.PullProxies.Get(uint(req.ID)); ok {
+		conf := device.GetConfig()
+		originalStatus := conf.Status
+		wasEnabled := originalStatus != PullProxyStatusDisabled
 		// 如果现在变为 disable 状态，需要停止并移除代理
 		if wasEnabled && isNowDisabled {
 			device.Stop(task.ErrStopByUser)
 			return
 		}
 
-		conf := device.GetConfig()
 		if target.URL != conf.URL || conf.Audio != target.Audio || conf.StreamPath != target.StreamPath || conf.Record.FilePath != target.Record.FilePath || conf.Record.Fragment != target.Record.Fragment {
 			device.Stop(task.ErrStopByUser)
+			device.WaitStopped()
 			device, err = s.createPullProxy(target)
-			if target.Status == PullProxyStatusPulling {
-				if pullJob := device.GetPullJob(); pullJob != nil {
-					pullJob.WaitStopped()
-					device.Pull()
-				}
+			device.WaitStarted()
+			if originalStatus == PullProxyStatusPulling {
+				device.Pull()
 			}
 		} else {
 			conf.Name = target.Name
@@ -471,7 +502,7 @@ func (s *Server) UpdatePullProxy(ctx context.Context, req *pb.UpdatePullProxyReq
 			conf.Description = target.Description
 			if conf.PullOnStart && conf.Status == PullProxyStatusOnline {
 				device.Pull()
-			} else if target.Status == PullProxyStatusPulling {
+			} else if originalStatus == PullProxyStatusPulling {
 				if pullJob := device.GetPullJob(); pullJob != nil {
 					pullJob.PublishConfig.DelayCloseTimeout = util.Conditional(target.StopOnIdle, time.Second*5, 0)
 					if pullJob.Publisher != nil {
@@ -480,8 +511,8 @@ func (s *Server) UpdatePullProxy(ctx context.Context, req *pb.UpdatePullProxyReq
 				}
 			}
 		}
-	} else if wasDisabled && isNowEnabled {
-		// 如果原来是 disable 现在不是了，需要创建 PullProxy 并添加到集合中
+	} else if !isNowDisabled {
+		// 尝试再次激活
 		_, err = s.createPullProxy(target)
 		if err != nil {
 			s.Error("create pull proxy failed", "error", err)
@@ -502,7 +533,7 @@ func (s *Server) RemovePullProxy(ctx context.Context, req *pb.RequestWithId) (re
 			ID: uint(req.Id),
 		})
 		err = tx.Error
-		if device, ok := s.PullProxies.SafeGet(uint(req.Id)); ok {
+		if device, ok := s.PullProxies.Get(uint(req.Id)); ok {
 			device.Stop(task.ErrStopByUser)
 		}
 		return
@@ -513,7 +544,7 @@ func (s *Server) RemovePullProxy(ctx context.Context, req *pb.RequestWithId) (re
 			for _, device := range deviceList {
 				tx := s.DB.Delete(&PullProxyConfig{}, device.ID)
 				err = tx.Error
-				if device, ok := s.PullProxies.SafeGet(uint(device.ID)); ok {
+				if device, ok := s.PullProxies.Get(uint(device.ID)); ok {
 					device.Stop(task.ErrStopByUser)
 				}
 			}
@@ -522,14 +553,5 @@ func (s *Server) RemovePullProxy(ctx context.Context, req *pb.RequestWithId) (re
 	} else {
 		res.Message = "parameter wrong"
 		return
-	}
-}
-
-func (p *PullProxyManager) CheckToPull(streamPath string) {
-	for pullProxy := range p.SafeRange {
-		conf := pullProxy.GetConfig()
-		if conf.Status == PullProxyStatusOnline && pullProxy.GetStreamPath() == streamPath {
-			pullProxy.Pull()
-		}
 	}
 }

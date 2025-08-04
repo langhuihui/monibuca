@@ -60,7 +60,7 @@ var (
 )
 
 type IAMF interface {
-	util.IBuffer
+	GetBuffer() *util.Buffer
 	Unmarshal() (any, error)
 	Marshal(any) []byte
 	Marshals(...any) []byte
@@ -68,9 +68,7 @@ type IAMF interface {
 
 type EcmaArray map[string]any
 
-type AMF struct {
-	util.Buffer
-}
+type AMF util.Buffer
 
 func ReadAMF[T string | float64 | bool | map[string]any](amf *AMF) (result T) {
 	value, err := amf.Unmarshal()
@@ -79,6 +77,10 @@ func ReadAMF[T string | float64 | bool | map[string]any](amf *AMF) (result T) {
 	}
 	result, _ = value.(T)
 	return
+}
+
+func (amf *AMF) GetBuffer() *util.Buffer {
+	return (*util.Buffer)(amf)
 }
 
 func (amf *AMF) ReadShortString() (result string) {
@@ -98,14 +100,15 @@ func (amf *AMF) ReadBool() (result bool) {
 }
 
 func (amf *AMF) readKey() (string, error) {
-	if !amf.CanReadN(2) {
+	buf := (*util.Buffer)(amf)
+	if !buf.CanReadN(2) {
 		return "", io.ErrUnexpectedEOF
 	}
-	l := int(amf.ReadUint16())
-	if !amf.CanReadN(l) {
+	l := int(buf.ReadUint16())
+	if !buf.CanReadN(l) {
 		return "", io.ErrUnexpectedEOF
 	}
-	return string(amf.ReadN(l)), nil
+	return string(buf.ReadN(l)), nil
 }
 
 func (amf *AMF) readProperty(m map[string]any) (obj map[string]any, err error) {
@@ -122,25 +125,26 @@ func (amf *AMF) readProperty(m map[string]any) (obj map[string]any, err error) {
 }
 
 func (amf *AMF) Unmarshal() (obj any, err error) {
-	if !amf.CanRead() {
+	buf := (*util.Buffer)(amf)
+	if !buf.CanRead() {
 		return nil, io.ErrUnexpectedEOF
 	}
-	defer func(b util.Buffer) {
+	defer func(b AMF) {
 		if err != nil {
-			amf.Buffer = b
+			*amf = b
 		}
-	}(amf.Buffer)
-	switch t := amf.ReadByte(); t {
+	}(*amf)
+	switch t := buf.ReadByte(); t {
 	case AMF0_NUMBER:
-		if !amf.CanReadN(8) {
+		if !buf.CanReadN(8) {
 			return 0, io.ErrUnexpectedEOF
 		}
-		obj = amf.ReadFloat64()
+		obj = buf.ReadFloat64()
 	case AMF0_BOOLEAN:
-		if !amf.CanRead() {
+		if !buf.CanRead() {
 			return false, io.ErrUnexpectedEOF
 		}
-		obj = amf.ReadByte() == 1
+		obj = buf.ReadByte() == 1
 	case AMF0_STRING:
 		obj, err = amf.readKey()
 	case AMF0_OBJECT:
@@ -153,7 +157,7 @@ func (amf *AMF) Unmarshal() (obj any, err error) {
 	case AMF0_UNDEFINED:
 		return Undefined, nil
 	case AMF0_ECMA_ARRAY:
-		_ = amf.ReadUint32() // size
+		_ = buf.ReadUint32() // size
 		var result map[string]any
 		for m := make(map[string]any); err == nil && result == nil; result, err = amf.readProperty(m) {
 		}
@@ -161,7 +165,7 @@ func (amf *AMF) Unmarshal() (obj any, err error) {
 	case AMF0_END_OBJECT:
 		return ObjectEnd, nil
 	case AMF0_STRICT_ARRAY:
-		size := amf.ReadUint32()
+		size := buf.ReadUint32()
 		var list []any
 		for i := uint32(0); i < size; i++ {
 			v, err := amf.Unmarshal()
@@ -172,21 +176,21 @@ func (amf *AMF) Unmarshal() (obj any, err error) {
 		}
 		obj = list
 	case AMF0_DATE:
-		if !amf.CanReadN(10) {
+		if !buf.CanReadN(10) {
 			return 0, io.ErrUnexpectedEOF
 		}
-		obj = amf.ReadFloat64()
-		amf.ReadN(2)
+		obj = buf.ReadFloat64()
+		buf.ReadN(2)
 	case AMF0_LONG_STRING,
 		AMF0_XML_DOCUMENT:
-		if !amf.CanReadN(4) {
+		if !buf.CanReadN(4) {
 			return "", io.ErrUnexpectedEOF
 		}
-		l := int(amf.ReadUint32())
-		if !amf.CanReadN(l) {
+		l := int(buf.ReadUint32())
+		if !buf.CanReadN(l) {
 			return "", io.ErrUnexpectedEOF
 		}
-		obj = string(amf.ReadN(l))
+		obj = string(buf.ReadN(l))
 	default:
 		err = fmt.Errorf("unsupported type:%d", t)
 	}
@@ -194,8 +198,9 @@ func (amf *AMF) Unmarshal() (obj any, err error) {
 }
 
 func (amf *AMF) writeProperty(key string, v any) {
-	amf.WriteUint16(uint16(len(key)))
-	amf.WriteString(key)
+	buf := (*util.Buffer)(amf)
+	buf.WriteUint16(uint16(len(key)))
+	buf.WriteString(key)
 	amf.Marshal(v)
 }
 
@@ -208,83 +213,84 @@ func (amf *AMF) Marshals(v ...any) []byte {
 	for _, vv := range v {
 		amf.Marshal(vv)
 	}
-	return amf.Buffer
+	return *amf
 }
 
 func (amf *AMF) Marshal(v any) []byte {
+	buf := (*util.Buffer)(amf)
 	if v == nil {
-		amf.WriteByte(AMF0_NULL)
-		return amf.Buffer
+		buf.WriteByte(AMF0_NULL)
+		return *amf
 	}
 	switch vv := v.(type) {
 	case string:
 		if l := len(vv); l > 0xFFFF {
-			amf.WriteByte(AMF0_LONG_STRING)
-			amf.WriteUint32(uint32(l))
+			buf.WriteByte(AMF0_LONG_STRING)
+			buf.WriteUint32(uint32(l))
 		} else {
-			amf.WriteByte(AMF0_STRING)
-			amf.WriteUint16(uint16(l))
+			buf.WriteByte(AMF0_STRING)
+			buf.WriteUint16(uint16(l))
 		}
-		amf.WriteString(vv)
+		buf.WriteString(vv)
 	case float64, uint, float32, int, int16, int32, int64, uint16, uint32, uint64, uint8, int8:
-		amf.WriteByte(AMF0_NUMBER)
-		amf.WriteFloat64(ToFloat64(vv))
+		buf.WriteByte(AMF0_NUMBER)
+		buf.WriteFloat64(ToFloat64(vv))
 	case bool:
-		amf.WriteByte(AMF0_BOOLEAN)
+		buf.WriteByte(AMF0_BOOLEAN)
 		if vv {
-			amf.WriteByte(1)
+			buf.WriteByte(1)
 		} else {
-			amf.WriteByte(0)
+			buf.WriteByte(0)
 		}
 	case EcmaArray:
 		if vv == nil {
-			amf.WriteByte(AMF0_NULL)
-			return amf.Buffer
+			buf.WriteByte(AMF0_NULL)
+			return *amf
 		}
-		amf.WriteByte(AMF0_ECMA_ARRAY)
-		amf.WriteUint32(uint32(len(vv)))
+		buf.WriteByte(AMF0_ECMA_ARRAY)
+		buf.WriteUint32(uint32(len(vv)))
 		for k, v := range vv {
 			amf.writeProperty(k, v)
 		}
-		amf.Write(END_OBJ)
+		buf.Write(END_OBJ)
 	case map[string]any:
 		if vv == nil {
-			amf.WriteByte(AMF0_NULL)
-			return amf.Buffer
+			buf.WriteByte(AMF0_NULL)
+			return *amf
 		}
-		amf.WriteByte(AMF0_OBJECT)
+		buf.WriteByte(AMF0_OBJECT)
 		for k, v := range vv {
 			amf.writeProperty(k, v)
 		}
-		amf.Write(END_OBJ)
+		buf.Write(END_OBJ)
 	default:
 		v := reflect.ValueOf(vv)
 		if !v.IsValid() {
-			amf.WriteByte(AMF0_NULL)
-			return amf.Buffer
+			buf.WriteByte(AMF0_NULL)
+			return *amf
 		}
 		switch v.Kind() {
 		case reflect.Slice, reflect.Array:
-			amf.WriteByte(AMF0_STRICT_ARRAY)
+			buf.WriteByte(AMF0_STRICT_ARRAY)
 			size := v.Len()
-			amf.WriteUint32(uint32(size))
+			buf.WriteUint32(uint32(size))
 			for i := 0; i < size; i++ {
 				amf.Marshal(v.Index(i).Interface())
 			}
 		case reflect.Ptr:
 			vv := reflect.Indirect(v)
 			if vv.Kind() == reflect.Struct {
-				amf.WriteByte(AMF0_OBJECT)
+				buf.WriteByte(AMF0_OBJECT)
 				for i := 0; i < vv.NumField(); i++ {
 					amf.writeProperty(vv.Type().Field(i).Name, vv.Field(i).Interface())
 				}
-				amf.Write(END_OBJ)
+				buf.Write(END_OBJ)
 			}
 		default:
 			panic("amf Marshal faild")
 		}
 	}
-	return amf.Buffer
+	return *amf
 }
 
 func ToFloat64(num any) float64 {

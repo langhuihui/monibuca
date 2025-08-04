@@ -49,6 +49,7 @@ func (task *ListenQuicWork) Start() (err error) {
 		task.Error("listen quic error", err)
 		return
 	}
+	task.OnStop(task.Listener.Close)
 	task.Info("listen quic on", task.ListenAddr)
 	return
 }
@@ -62,8 +63,4 @@ func (task *ListenQuicWork) Go() error {
 		subTask := task.handler(conn)
 		task.AddTask(subTask)
 	}
-}
-
-func (task *ListenQuicWork) Dispose() {
-	_ = task.Listener.Close()
 }

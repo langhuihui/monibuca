@@ -42,6 +42,9 @@ func (t *TickTask) GetTickInterval() time.Duration {
 func (t *TickTask) Start() (err error) {
 	t.Ticker = time.NewTicker(t.handler.(ITickTask).GetTickInterval())
 	t.SignalChan = t.Ticker.C
+	t.OnStop(func() {
+		t.Ticker.Reset(time.Millisecond)
+	})
 	return
 }
 

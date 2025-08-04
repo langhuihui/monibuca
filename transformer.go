@@ -36,29 +36,11 @@ type (
 		Target       string
 		TransformJob *TransformJob
 	}
-	Transforms struct {
+	TransformManager struct {
 		task.Work
 		util.Collection[string, *TransformedMap]
-		//PublishEvent chan *Publisher
 	}
-	// TransformsPublishEvent struct {
-	// 	task.ChannelTask
-	// 	Transforms *Transforms
-	// }
 )
-
-//func (t *TransformsPublishEvent) GetSignal() any {
-//	return t.Transforms.PublishEvent
-//}
-//
-//func (t *TransformsPublishEvent) Tick(pub any) {
-//	incomingPublisher := pub.(*Publisher)
-//	for job := range t.Transforms.Search(func(m *TransformedMap) bool {
-//		return m.StreamPath == incomingPublisher.StreamPath
-//	}) {
-//		job.TransformJob.TransformPublished(incomingPublisher)
-//	}
-//}
 
 func (t *TransformedMap) GetKey() string {
 	return t.Target
@@ -73,7 +55,7 @@ func (p *TransformJob) Subscribe() (err error) {
 	subConfig.SubType = SubscribeTypeTransform
 	p.Subscriber, err = p.Plugin.SubscribeWithConfig(p.Transformer, p.StreamPath, subConfig)
 	if err == nil {
-		p.Transformer.Depend(p.Subscriber)
+		p.Subscriber.Using(p.Transformer)
 	}
 	return
 }

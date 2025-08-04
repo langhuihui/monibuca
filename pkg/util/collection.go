@@ -101,23 +101,6 @@ func (c *Collection[K, T]) RemoveByKey(key K) bool {
 	return false
 }
 
-//	func (c *Collection[K, T]) GetOrCreate(key K) (item T, find bool) {
-//		if c.L != nil {
-//			c.L.Lock()
-//			defer c.L.Unlock()
-//		}
-//		if c.m != nil {
-//			item, find = c.m[key]
-//			return item, find
-//		}
-//		for _, item = range c.Items {
-//			if item.GetKey() == key {
-//				return item, true
-//			}
-//		}
-//		item = reflect.New(reflect.TypeOf(item).Elem()).Interface().(T)
-//		return
-//	}
 func (c *Collection[K, T]) Has(key K) bool {
 	_, ok := c.Get(key)
 	return ok
@@ -167,10 +150,6 @@ func (c *Collection[K, T]) Search(f func(T) bool) func(yield func(item T) bool) 
 			}
 		}
 	}
-}
-
-func (c *Collection[K, T]) GetKey() K {
-	return c.Items[0].GetKey()
 }
 
 func (c *Collection[K, T]) Clear() {

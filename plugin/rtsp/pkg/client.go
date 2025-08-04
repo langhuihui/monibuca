@@ -5,7 +5,25 @@ import (
 	"m7s.live/v5/pkg/task"
 
 	"m7s.live/v5"
+	pkg "m7s.live/v5/pkg"
 )
+
+// Plugin-specific progress step names for RTSP
+const (
+	StepDescribe pkg.StepName = "describe"
+	StepSetup    pkg.StepName = "setup"
+	StepPlay     pkg.StepName = "play"
+)
+
+// Fixed steps for RTSP pull workflow
+var rtspPullSteps = []pkg.StepDef{
+	{Name: pkg.StepPublish, Description: "Publishing stream"},
+	{Name: pkg.StepConnection, Description: "Connecting to RTSP server"},
+	{Name: StepDescribe, Description: "Sending DESCRIBE request"},
+	{Name: StepSetup, Description: "Setting up media tracks"},
+	{Name: StepPlay, Description: "Starting media playback"},
+	{Name: pkg.StepStreaming, Description: "Receiving and processing media data"},
+}
 
 const (
 	DIRECTION_PULL = "pull"
@@ -20,8 +38,16 @@ type Client struct {
 }
 
 func (c *Client) Start() (err error) {
-	if c.direction == DIRECTION_PULL {
-		err = c.NetConnection.Connect(c.pullCtx.RemoteURL)
+	if c.direction == DIRECTION_PULL { // no progress tracking
+		c.pullCtx.SetProgressStepsDefs(rtspPullSteps)
+		if err = c.pullCtx.Publish(); err != nil {
+			c.pullCtx.Fail(err.Error())
+			return
+		}
+		if err = c.NetConnection.Connect(c.pullCtx.RemoteURL); err != nil {
+			c.pullCtx.Fail(err.Error())
+			return
+		}
 	} else {
 		err = c.NetConnection.Connect(c.pushCtx.RemoteURL)
 	}
@@ -59,10 +85,6 @@ func (c *Client) Run() (err error) {
 		return
 	}
 	if c.direction == DIRECTION_PULL {
-		err = c.pullCtx.Publish()
-		if err != nil {
-			return
-		}
 		var medias []*Media
 		if medias, err = c.Describe(); err != nil {
 			return

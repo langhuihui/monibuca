@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"time"
-	"bytes"
 
 	m7s "m7s.live/v5"
 	"m7s.live/v5/pkg"
@@ -191,7 +190,7 @@ func (r *Recorder) Run() (err error) {
 		return
 	}
 
-	return m7s.PlayBlock(sub, func(audio *Audio) error {
+	return m7s.PlayBlock(sub, func(audio *AudioFrame) error {
 		if r.Event.StartTime.IsZero() {
 			err = r.createStream(sub.AudioReader.Value.WriteTime)
 			if err != nil {
@@ -201,13 +200,13 @@ func (r *Recorder) Run() (err error) {
 		r.Event.Duration = sub.AudioReader.AbsTime
 		if sub.VideoReader == nil {
 			if recordJob.Event != nil {
-				err := checkEventRecordStop(sub.VideoReader.AbsTime)
+				err = checkEventRecordStop(sub.VideoReader.AbsTime)
 				if err != nil {
 					return err
 				}
 			}
 			if recordJob.RecConf.Fragment != 0 {
-				err := checkFragment(sub.AudioReader)
+				err = checkFragment(sub.AudioReader)
 				if err != nil {
 					return err
 				}
@@ -215,32 +214,27 @@ func (r *Recorder) Run() (err error) {
 		}
 		if at == nil {
 			at = sub.AudioReader.Track
-			switch ctx := at.ICodecCtx.GetBase().(type) {
+			switch at.ICodecCtx.GetBase().(type) {
 			case *codec.AACCtx:
 				track := r.muxer.AddTrack(box.MP4_CODEC_AAC)
 				audioTrack = track
-				track.SampleSize = uint16(16)
-				track.SampleRate = uint32(ctx.SampleRate())
-				track.ChannelCount = uint8(ctx.ChannelLayout().Count())
-				track.ExtraData = ctx.ConfigBytes
+				track.ICodecCtx = at.ICodecCtx
 			case *codec.PCMACtx:
 				track := r.muxer.AddTrack(box.MP4_CODEC_G711A)
 				audioTrack = track
-				track.SampleSize = uint16(ctx.SampleSize)
-				track.SampleRate = uint32(ctx.SampleRate)
-				track.ChannelCount = uint8(ctx.Channels)
+				track.ICodecCtx = at.ICodecCtx
 			case *codec.PCMUCtx:
 				track := r.muxer.AddTrack(box.MP4_CODEC_G711U)
 				audioTrack = track
-				track.SampleSize = uint16(ctx.SampleSize)
-				track.SampleRate = uint32(ctx.SampleRate)
-				track.ChannelCount = uint8(ctx.Channels)
+				track.ICodecCtx = at.ICodecCtx
 			}
 		}
-		sample := audio.Sample
-		sample.Timestamp = uint32(sub.AudioReader.AbsTime)
+		sample := box.Sample{
+			Timestamp: sub.AudioReader.AbsTime,
+			Memory:    audio.Memory,
+		}
 		return r.muxer.WriteSample(r.file, audioTrack, sample)
-	}, func(video *Video) error {
+	}, func(video *VideoFrame) error {
 		if r.Event.StartTime.IsZero() {
 			err = r.createStream(sub.VideoReader.Value.WriteTime)
 			if err != nil {
@@ -250,13 +244,13 @@ func (r *Recorder) Run() (err error) {
 		r.Event.Duration = sub.VideoReader.AbsTime
 		if sub.VideoReader.Value.IDR {
 			if recordJob.Event != nil {
-				err := checkEventRecordStop(sub.VideoReader.AbsTime)
+				err = checkEventRecordStop(sub.VideoReader.AbsTime)
 				if err != nil {
 					return err
 				}
 			}
 			if recordJob.RecConf.Fragment != 0 {
-				err := checkFragment(sub.VideoReader)
+				err = checkFragment(sub.VideoReader)
 				if err != nil {
 					return err
 				}
@@ -265,28 +259,23 @@ func (r *Recorder) Run() (err error) {
 
 		if vt == nil {
 			vt = sub.VideoReader.Track
-			ctx := vt.ICodecCtx.(pkg.IVideoCodecCtx)
-			width, height := uint32(ctx.Width()), uint32(ctx.Height())
-			switch ctx := vt.ICodecCtx.GetBase().(type) {
+			switch vt.ICodecCtx.GetBase().(type) {
 			case *codec.H264Ctx:
 				track := r.muxer.AddTrack(box.MP4_CODEC_H264)
 				videoTrack = track
-				track.ExtraData = ctx.Record
-				track.Width = width
-				track.Height = height
+				track.ICodecCtx = vt.ICodecCtx
 			case *codec.H265Ctx:
 				track := r.muxer.AddTrack(box.MP4_CODEC_H265)
 				videoTrack = track
-				track.ExtraData = ctx.Record
-				track.Width = width
-				track.Height = height
+				track.ICodecCtx = vt.ICodecCtx
 			}
 		}
 		ctx := vt.ICodecCtx.(pkg.IVideoCodecCtx)
-		width, height := uint32(ctx.Width()), uint32(ctx.Height())
-		if !bytes.Equal(ctx.GetRecord(), videoTrack.ExtraData) {
-			r.Info("avcc changed, restarting recording",
-				"old", fmt.Sprintf("%dx%d", videoTrack.Width, videoTrack.Height),
+		if videoTrackCtx, ok := videoTrack.ICodecCtx.(pkg.IVideoCodecCtx); ok && videoTrackCtx != ctx {
+			width, height := uint32(ctx.Width()), uint32(ctx.Height())
+			oldWidth, oldHeight := uint32(videoTrackCtx.Width()), uint32(videoTrackCtx.Height())
+			r.Info("ctx  changed, restarting recording",
+				"old", fmt.Sprintf("%dx%d", oldWidth, oldHeight),
 				"new", fmt.Sprintf("%dx%d", width, height))
 			r.writeTailer(sub.VideoReader.Value.WriteTime)
 			err = r.createStream(sub.VideoReader.Value.WriteTime)
@@ -301,8 +290,12 @@ func (r *Recorder) Run() (err error) {
 				ar.ResetAbsTime()
 			}
 		}
-		sample := video.Sample
-		sample.Timestamp = uint32(sub.VideoReader.AbsTime)
+		sample := box.Sample{
+			Timestamp: sub.VideoReader.AbsTime,
+			KeyFrame:  video.IDR,
+			CTS:       video.GetCTS32(),
+			Memory:    video.Memory,
+		}
 		return r.muxer.WriteSample(r.file, videoTrack, sample)
 	})
 }

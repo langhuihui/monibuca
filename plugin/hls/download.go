@@ -11,11 +11,11 @@ import (
 	"time"
 
 	m7s "m7s.live/v5"
-	"m7s.live/v5/pkg"
 	"m7s.live/v5/pkg/codec"
+	"m7s.live/v5/pkg/format"
+	mpegts "m7s.live/v5/pkg/format/ts"
 	"m7s.live/v5/pkg/util"
 	hls "m7s.live/v5/plugin/hls/pkg"
-	mpegts "m7s.live/v5/plugin/hls/pkg/ts"
 	mp4 "m7s.live/v5/plugin/mp4/pkg"
 )
 
@@ -199,7 +199,7 @@ func (plugin *HLSPlugin) processMp4ToTs(w http.ResponseWriter, r *http.Request, 
 	}
 
 	// 创建DemuxerConverterRange进行MP4解复用和转换
-	demuxer := &mp4.DemuxerConverterRange[*pkg.ADTS, *pkg.AnnexB]{
+	demuxer := &mp4.DemuxerConverterRange[*format.Mpeg2Audio, *format.AnnexB]{
 		DemuxerRange: mp4.DemuxerRange{
 			StartTime: params.startTime,
 			EndTime:   params.endTime,
@@ -207,50 +207,35 @@ func (plugin *HLSPlugin) processMp4ToTs(w http.ResponseWriter, r *http.Request, 
 			Logger:    plugin.Logger.With("demuxer", "mp4_Ts"),
 		},
 	}
-
 	// 创建TS编码器状态
 	tsWriter := &hls.TsInMemory{}
-	hasWritten := false
-	// 写入PMT头的辅助函数
-	writePMTHeader := func() {
-		if !hasWritten {
-			var audio, video codec.FourCC
-			if demuxer.AudioTrack != nil && demuxer.AudioTrack.ICodecCtx != nil {
-				audio = demuxer.AudioTrack.ICodecCtx.FourCC()
-			}
-			if demuxer.VideoTrack != nil && demuxer.VideoTrack.ICodecCtx != nil {
-				video = demuxer.VideoTrack.ICodecCtx.FourCC()
-			}
-			tsWriter.WritePMTPacket(audio, video)
-			hasWritten = true
+
+	pesAudio, pesVideo := mpegts.CreatePESWriters()
+	demuxer.OnCodec = func(a, v codec.ICodecCtx) {
+		var audio, video codec.FourCC
+		if a != nil {
+			audio = a.FourCC()
 		}
+		if v != nil {
+			video = v.FourCC()
+		}
+		tsWriter.WritePMTPacket(audio, video)
 	}
-	// 创建音频帧结构
-	audioFrame := mpegts.MpegtsPESFrame{
-		Pid: mpegts.PID_AUDIO,
+	demuxer.OnAudio = func(audio *format.Mpeg2Audio) error {
+		pesAudio.Pts = uint64(audio.GetPTS())
+		return pesAudio.WritePESPacket(audio.Memory, &tsWriter.RecyclableMemory)
 	}
-	// 创建视频帧结构
-	videoFrame := mpegts.MpegtsPESFrame{
-		Pid: mpegts.PID_VIDEO,
+	demuxer.OnVideo = func(video *format.AnnexB) error {
+		pesVideo.IsKeyFrame = video.IDR
+		pesVideo.Pts = uint64(video.GetPTS())
+		pesVideo.Dts = uint64(video.GetDTS())
+		return pesVideo.WritePESPacket(video.Memory, &tsWriter.RecyclableMemory)
 	}
 	// 执行解复用和转换
-	err := demuxer.Demux(r.Context(),
-		func(audio *pkg.ADTS) error {
-			writePMTHeader()
-			// 写入音频帧
-			return tsWriter.WriteAudioFrame(audio, &audioFrame)
-		}, func(video *pkg.AnnexB) error {
-			writePMTHeader()
-			videoFrame.IsKeyFrame = demuxer.VideoTrack.Value.IDR
-			// 写入视频帧
-			return tsWriter.WriteVideoFrame(video, &videoFrame)
-		})
+	err := demuxer.Demux(r.Context())
 
 	if err != nil {
 		plugin.Error("MP4 to TS conversion failed", "err", err)
-		if !hasWritten {
-			http.Error(w, "Conversion failed", http.StatusInternalServerError)
-		}
 		return
 	}
 

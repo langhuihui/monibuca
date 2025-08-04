@@ -10,10 +10,10 @@ import (
 	"time"
 
 	"m7s.live/v5"
-	"m7s.live/v5/pkg"
 	"m7s.live/v5/pkg/codec"
+	"m7s.live/v5/pkg/format"
+	mpegts "m7s.live/v5/pkg/format/ts"
 	"m7s.live/v5/pkg/util"
-	mpegts "m7s.live/v5/plugin/hls/pkg/ts"
 )
 
 func NewTransform() m7s.ITransformer {
@@ -30,7 +30,6 @@ type HLSWriter struct {
 	Fragment           time.Duration
 	M3u8               util.Buffer
 	ts                 *TsInMemory
-	pesAudio, pesVideo *mpegts.MpegtsPESFrame
 	write_time         time.Duration
 	memoryTs           sync.Map
 	hls_segment_count  uint32 // hls segment count
@@ -83,27 +82,23 @@ func (w *HLSWriter) Run() (err error) {
 		videoCodec = subscriber.Publisher.VideoTrack.FourCC()
 	}
 	w.ts = &TsInMemory{}
-	w.pesAudio = &mpegts.MpegtsPESFrame{
-		Pid: mpegts.PID_AUDIO,
-	}
-	w.pesVideo = &mpegts.MpegtsPESFrame{
-		Pid: mpegts.PID_VIDEO,
-	}
+	pesAudio, pesVideo := mpegts.CreatePESWriters()
 	w.ts.WritePMTPacket(audioCodec, videoCodec)
-	return m7s.PlayBlock(subscriber, w.ProcessADTS, w.ProcessAnnexB)
-}
-
-func (w *HLSWriter) ProcessADTS(audio *pkg.ADTS) (err error) {
-	return w.ts.WriteAudioFrame(audio, w.pesAudio)
-}
-
-func (w *HLSWriter) ProcessAnnexB(video *pkg.AnnexB) (err error) {
-	if w.TransformJob.Subscriber.VideoReader.Value.IDR {
-		if err = w.checkFragment(video.GetTimestamp()); err != nil {
-			return
+	return m7s.PlayBlock(subscriber, func(audio *format.Mpeg2Audio) error {
+		pesAudio.Pts = uint64(subscriber.AudioReader.AbsTime) * 90
+		return pesAudio.WritePESPacket(audio.Memory, &w.ts.RecyclableMemory)
+	}, func(video *mpegts.VideoFrame) (err error) {
+		vr := w.TransformJob.Subscriber.VideoReader
+		if vr.Value.IDR {
+			if err = w.checkFragment(video.Timestamp); err != nil {
+				return
+			}
 		}
-	}
-	return w.ts.WriteVideoFrame(video, w.pesVideo)
+		pesVideo.IsKeyFrame = video.IDR
+		pesVideo.Pts = uint64(vr.AbsTime+video.GetCTS32()) * 90
+		pesVideo.Dts = uint64(vr.AbsTime) * 90
+		return pesVideo.WritePESPacket(video.Memory, &w.ts.RecyclableMemory)
+	})
 }
 
 func (w *HLSWriter) checkFragment(ts time.Duration) (err error) {

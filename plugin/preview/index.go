@@ -20,19 +20,18 @@ type PreviewPlugin struct {
 	m7s.Plugin
 }
 
-var _ = m7s.InstallPlugin[PreviewPlugin]()
+var _ = m7s.InstallPlugin[PreviewPlugin](m7s.PluginMeta{})
 
 func (p *PreviewPlugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path == "/" {
 		s := "<h1><h1><h2>Live Streams 引擎中正在发布的流</h2>"
-		p.Server.CallOnStreamTask(func() error {
+		p.Server.CallOnStreamTask(func() {
 			for publisher := range p.Server.Streams.Range {
 				s += fmt.Sprintf("<a href='%s'>%s</a> [ %s ]<br>", publisher.StreamPath, publisher.StreamPath, publisher.Plugin.Meta.Name)
 			}
 			s += "<h2>pull stream on subscribe 订阅时才会触发拉流的流</h2>"
-			return nil
 		})
-		p.Server.Call(func() error {
+		p.Server.Call(func() {
 			for plugin := range p.Server.Plugins.Range {
 				if pullPlugin, ok := plugin.GetHandler().(m7s.IPullerPlugin); ok {
 					s += fmt.Sprintf("<h3>%s</h3>", plugin.Meta.Name)
@@ -46,7 +45,6 @@ func (p *PreviewPlugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					}
 				}
 			}
-			return nil
 		})
 		w.Write([]byte(s))
 		return

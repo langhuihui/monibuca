@@ -5,6 +5,7 @@ import (
 	"m7s.live/v5"
 	"m7s.live/v5/pkg"
 	"m7s.live/v5/pkg/codec"
+	"m7s.live/v5/pkg/format"
 	"m7s.live/v5/pkg/util"
 )
 
@@ -46,22 +47,20 @@ func (t *Transformer) Run() (err error) {
 	if err != nil {
 		return
 	}
-	return m7s.PlayBlock(t.TransformJob.Subscriber, func(audio *pkg.RawAudio) (err error) {
-		copyAudio := &pkg.RawAudio{
-			FourCC:    audio.FourCC,
-			Timestamp: audio.Timestamp,
-		}
-		audio.Memory.Range(func(b []byte) {
-			copy(copyAudio.NextN(len(b)), b)
-		})
-		return t.TransformJob.Publisher.WriteAudio(copyAudio)
-	}, func(video *pkg.H26xFrame) (err error) {
-		copyVideo := &pkg.H26xFrame{
-			FourCC:    video.FourCC,
-			CTS:       video.CTS,
-			Timestamp: video.Timestamp,
-		}
-
+	pub := t.TransformJob.Publisher
+	allocator := util.NewScalableMemoryAllocator(1 << util.MinPowerOf2)
+	defer allocator.Recycle()
+	writer := m7s.NewPublisherWriter[*format.RawAudio, *format.H26xFrame](pub, allocator)
+	return m7s.PlayBlock(t.TransformJob.Subscriber, func(audio *format.RawAudio) (err error) {
+		writer.AudioFrame.ICodecCtx = audio.ICodecCtx
+		*writer.AudioFrame.BaseSample = *audio.BaseSample
+		audio.CopyTo(writer.AudioFrame.NextN(audio.Size))
+		err = writer.NextAudio()
+		return
+	}, func(video *format.H26xFrame) (err error) {
+		writer.VideoFrame.ICodecCtx = video.ICodecCtx
+		*writer.VideoFrame.BaseSample = *video.BaseSample
+		nalus := writer.VideoFrame.GetNalus()
 		var seis [][]byte
 		continueLoop := true
 		for continueLoop {
@@ -73,32 +72,35 @@ func (t *Transformer) Run() (err error) {
 			}
 		}
 		seiCount := len(seis)
-		for _, nalu := range video.Nalus {
-			mem := copyVideo.NextN(nalu.Size)
-			copy(mem, nalu.ToBytes())
+		writer.VideoFrame.InitRecycleIndexes(video.Raw.Count())
+		for nalu := range video.Raw.(*pkg.Nalus).RangePoint {
+			p := nalus.GetNextPointer()
+			mem := writer.VideoFrame.NextN(nalu.Size)
+			nalu.CopyTo(mem)
 			if seiCount > 0 {
-				switch video.FourCC {
+				switch video.ICodecCtx.FourCC() {
 				case codec.FourCC_H264:
 					switch codec.ParseH264NALUType(mem[0]) {
 					case codec.NALU_IDR_Picture, codec.NALU_Non_IDR_Picture:
 						for _, sei := range seis {
-							copyVideo.Nalus.Append(append([]byte{byte(codec.NALU_SEI)}, sei...))
+							p.Push(append([]byte{byte(codec.NALU_SEI)}, sei...))
 						}
 					}
 				case codec.FourCC_H265:
 					if naluType := codec.ParseH265NALUType(mem[0]); naluType < 21 {
 						for _, sei := range seis {
-							copyVideo.Nalus.Append(append([]byte{byte(0b10000000 | byte(h265parser.NAL_UNIT_PREFIX_SEI<<1))}, sei...))
+							p.Push(append([]byte{byte(0b10000000 | byte(h265parser.NAL_UNIT_PREFIX_SEI<<1))}, sei...))
 						}
 					}
 				}
 			}
-			copyVideo.Nalus.Append(mem)
+			p.PushOne(mem)
 		}
 		if seiCount > 0 {
 			t.Info("insert sei", "count", seiCount)
 		}
-		return t.TransformJob.Publisher.WriteVideo(copyVideo)
+		err = writer.NextVideo()
+		return
 	})
 }
 

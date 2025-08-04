@@ -495,12 +495,6 @@ service api {
       body: "*"
     };
   }
-
-  rpc OpenRTPServer(OpenRTPServerRequest) returns (OpenRTPServerResponse) {
-    option (google.api.http) = {
-      post: "/gb28181/api/rtp/open"
-    };
-  }
 }
 
 // 请求和响应消息定义
@@ -1159,18 +1153,6 @@ message PlaybackSpeedRequest {
 
 message RemoveDeviceRequest {
   string id = 1;  // 设备ID
-}
-
-message OpenRTPServerRequest {
-  string streamPath = 1;
-  int32 port = 2;
-  bool udp = 3;
-}
-
-message OpenRTPServerResponse {
-  int32 code = 1;
-  string message = 2;
-  int32 data = 3;
 }
 
 // AlarmInfoRequest 接收报警信息的请求

@@ -24,9 +24,12 @@ type LogRotatePlugin struct {
 	handler   slog.Handler
 }
 
-var _ = m7s.InstallPlugin[LogRotatePlugin](&pb.Api_ServiceDesc, pb.RegisterApiHandler)
+var _ = m7s.InstallPlugin[LogRotatePlugin](m7s.PluginMeta{
+	RegisterGRPCHandler: pb.RegisterApiHandler,
+	ServiceDesc:         &pb.Api_ServiceDesc,
+})
 
-func (config *LogRotatePlugin) OnInit() (err error) {
+func (config *LogRotatePlugin) Start() (err error) {
 	builder := func(w io.Writer, opts *slog.HandlerOptions) slog.Handler {
 		return console.NewHandler(w, &console.HandlerOptions{NoColor: true, Level: pkg.ParseLevel(config.Level), TimeFormat: "2006-01-02 15:04:05.000"})
 	}

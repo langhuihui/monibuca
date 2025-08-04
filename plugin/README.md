@@ -53,14 +53,16 @@ Example:
 const defaultConfig = m7s.DefaultYaml(`tcp:
   listenaddr: :5554`)
 
-var _ = m7s.InstallPlugin[MyPlugin](defaultConfig)
+var _ = m7s.InstallPlugin[MyPlugin](m7s.PluginMeta{
+    DefaultYaml: defaultConfig,
+})
 ```
 
 ## 3. Implement Event Callbacks (Optional)
 
 ### Initialization Callback
 ```go
-func (config *MyPlugin) OnInit() (err error) {
+func (config *MyPlugin) Start() (err error) {
     // Initialize things
     return
 }
@@ -121,22 +123,25 @@ func (config *MyPlugin) test1(rw http.ResponseWriter, r *http.Request) {
 Push client needs to implement IPusher interface and pass the creation method to InstallPlugin.
 ```go
 type Pusher struct {
-    pullCtx m7s.PullJob
+    task.Task
+    pushJob m7s.PushJob
 }
 
-func (c *Pusher) GetPullJob() *m7s.PullJob {
-    return &c.pullCtx
+func (c *Pusher) GetPushJob() *m7s.PushJob {
+    return &c.pushJob
 }
 
 func NewPusher(_ config.Push) m7s.IPusher {
     return &Pusher{}
 }
-var _ = m7s.InstallPlugin[MyPlugin](NewPusher)
+var _ = m7s.InstallPlugin[MyPlugin](m7s.PluginMeta{
+    NewPusher: NewPusher,
+})
 ```
 
 ### Implement Pull Client
 Pull client needs to implement IPuller interface and pass the creation method to InstallPlugin.
-The following Puller inherits from m7s.HTTPFilePuller for basic file and HTTP pulling:
+The following Puller inherits from m7s.HTTPFilePuller for basic file and HTTP pulling. You need to override the Start method for specific pulling logic:
 ```go
 type Puller struct {
     m7s.HTTPFilePuller
@@ -145,7 +150,9 @@ type Puller struct {
 func NewPuller(_ config.Pull) m7s.IPuller {
     return &Puller{}
 }
-var _ = m7s.InstallPlugin[MyPlugin](NewPuller)
+var _ = m7s.InstallPlugin[MyPlugin](m7s.PluginMeta{
+    NewPuller: NewPuller,
+})
 ```
 
 ## 6. Implement gRPC Service
@@ -226,7 +233,10 @@ import (
     "m7s.live/v5/plugin/myplugin/pb"
 )
 
-var _ = m7s.InstallPlugin[MyPlugin](&pb.Api_ServiceDesc, pb.RegisterApiHandler)
+var _ = m7s.InstallPlugin[MyPlugin](m7s.PluginMeta{
+	ServiceDesc:         &pb.Api_ServiceDesc,
+	RegisterGRPCHandler: pb.RegisterApiHandler,
+})
 
 type MyPlugin struct {
     pb.UnimplementedApiServer
@@ -257,33 +267,25 @@ After obtaining the `publisher`, you can publish audio/video data using `publish
 If existing audio/video data formats don't meet your needs, you can define custom formats by implementing this interface:
 ```go
 IAVFrame interface {
-    GetAllocator() *util.ScalableMemoryAllocator
-    SetAllocator(*util.ScalableMemoryAllocator)
-    Parse(*AVTrack) error
-    ConvertCtx(codec.ICodecCtx) (codec.ICodecCtx, IAVFrame, error)
-    Demux(codec.ICodecCtx) (any, error)
-    Mux(codec.ICodecCtx, *AVFrame)
-    GetTimestamp() time.Duration
-    GetCTS() time.Duration
+    GetSample() *Sample
     GetSize() int
+    CheckCodecChange() error
+    Demux() error      // demux to raw format
+    Mux(*Sample) error // mux from origin format
     Recycle()
     String() string
-    Dump(byte, io.Writer)
 }
 ```
 > Define separate types for audio and video
 
-- GetAllocator/SetAllocator: Automatically implemented when embedding RecyclableMemory
-- Parse: Identifies key frames, sequence frames, and other important information
-- ConvertCtx: Called when protocol conversion is needed
-- Demux: Called when audio/video data needs to be demuxed
-- Mux: Called when audio/video data needs to be muxed
-- Recycle: Automatically implemented when embedding RecyclableMemory
-- String: Prints audio/video data information
+The methods serve the following purposes:
+- GetSample: Gets the Sample object containing codec context and raw data
 - GetSize: Gets the size of audio/video data
-- GetTimestamp: Gets the timestamp in nanoseconds
-- GetCTS: Gets the Composition Time Stamp in nanoseconds (PTS = DTS+CTS)
-- Dump: Prints binary audio/video data
+- CheckCodecChange: Checks if the codec has changed
+- Demux: Demuxes audio/video data to raw format for use by other formats
+- Mux: Muxes from original format to custom audio/video data format
+- Recycle: Recycles resources, automatically implemented when embedding RecyclableMemory
+- String: Prints audio/video data information
 
 ## 8. Subscribing to Streams
 ```go

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+
 	"m7s.live/v5/pkg/util"
 	rtmp "m7s.live/v5/plugin/rtmp/pkg"
 )
@@ -17,7 +18,8 @@ func Echo(r io.Reader) (err error) {
 	if err == nil {
 		var flvHead [3]byte
 		var version, flag byte
-		err = head.NewReader().ReadByteTo(&flvHead[0], &flvHead[1], &flvHead[2], &version, &flag)
+		r := head.NewReader()
+		err = r.ReadByteTo(&flvHead[0], &flvHead[1], &flvHead[2], &version, &flag)
 		if flvHead != [...]byte{'F', 'L', 'V'} {
 			err = errors.New("not flv file")
 		} else {
@@ -62,7 +64,7 @@ func Echo(r io.Reader) (err error) {
 			return err
 		}
 		absTS = offsetTs + (timestamp - startTs)
-		frame.Timestamp = absTS
+		frame.SetTS32(absTS)
 		fmt.Println(t, offsetTs, timestamp, startTs, absTS)
 		switch t {
 		case FLV_TAG_TYPE_AUDIO:
@@ -71,9 +73,7 @@ func Echo(r io.Reader) (err error) {
 			frame.Recycle()
 		case FLV_TAG_TYPE_SCRIPT:
 			r := frame.NewReader()
-			amf := &rtmp.AMF{
-				Buffer: util.Buffer(r.ToBytes()),
-			}
+			amf := rtmp.AMF(r.ToBytes())
 			var obj any
 			obj, err = amf.Unmarshal()
 			name := obj

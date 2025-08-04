@@ -26,7 +26,10 @@ import (
 	"m7s.live/v5/plugin/debug/pkg/profile"
 )
 
-var _ = m7s.InstallPlugin[DebugPlugin](&pb.Api_ServiceDesc, pb.RegisterApiHandler)
+var _ = m7s.InstallPlugin[DebugPlugin](m7s.PluginMeta{
+	ServiceDesc:         &pb.Api_ServiceDesc,
+	RegisterGRPCHandler: pb.RegisterApiHandler,
+})
 var conf, _ = config.LoadConfig()
 
 type DebugPlugin struct {
@@ -54,7 +57,7 @@ func (w *WriteToFile) Header() http.Header {
 
 func (w *WriteToFile) WriteHeader(statusCode int) {}
 
-func (p *DebugPlugin) OnInit() error {
+func (p *DebugPlugin) Start() error {
 	// 启用阻塞分析
 	runtime.SetBlockProfileRate(1) // 设置采样率为1纳秒
 
@@ -452,7 +455,7 @@ func (p *DebugPlugin) GetHeapGraph(ctx context.Context, empty *emptypb.Empty) (*
 
 func (p *DebugPlugin) API_TcpDump(rw http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
-	args := []string{"-W", "1"}
+	args := []string{"-S", "tcpdump", "-w", "dump.cap"}
 	if query.Get("interface") != "" {
 		args = append(args, "-i", query.Get("interface"))
 	}
@@ -466,25 +469,34 @@ func (p *DebugPlugin) API_TcpDump(rw http.ResponseWriter, r *http.Request) {
 		http.Error(rw, "duration is required", http.StatusBadRequest)
 		return
 	}
-	rw.Header().Set("Content-Type", "text/plain")
-	rw.Header().Set("Cache-Control", "no-cache")
-	rw.Header().Set("Content-Disposition", "attachment; filename=tcpdump.txt")
-	cmd := exec.CommandContext(p, "tcpdump", args...)
-	p.Info("starting tcpdump", "args", strings.Join(cmd.Args, " "))
-	cmd.Stdout = rw
-	cmd.Stderr = os.Stderr // 将错误输出重定向到标准错误
-	err := cmd.Start()
-	if err != nil {
-		http.Error(rw, fmt.Sprintf("failed to start tcpdump: %v", err), http.StatusInternalServerError)
-		return
-	}
+	// rw.Header().Set("Content-Type", "text/plain")
+	// rw.Header().Set("Cache-Control", "no-cache")
+	// rw.Header().Set("Content-Disposition", "attachment; filename=tcpdump.txt")
 	duration, err := strconv.Atoi(query.Get("duration"))
 	if err != nil {
 		http.Error(rw, "invalid duration", http.StatusBadRequest)
 		return
 	}
-	<-time.After(time.Duration(duration) * time.Second)
-	if err := cmd.Process.Kill(); err != nil {
-		p.Error("failed to kill tcpdump process", "error", err)
+	ctx, _ := context.WithTimeout(p, time.Duration(duration)*time.Second)
+	cmd := exec.CommandContext(ctx, "sudo", args...)
+	p.Info("starting tcpdump", "args", strings.Join(cmd.Args, " "))
+	cmd.Stdin = strings.NewReader(query.Get("password"))
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr // 将错误输出重定向到标准错误
+	err = cmd.Start()
+	if err != nil {
+		http.Error(rw, fmt.Sprintf("failed to start tcpdump: %v", err), http.StatusInternalServerError)
+		return
 	}
+	<-ctx.Done()
+	killcmd := exec.Command("sudo", "-S", "pkill", "-9", "tcpdump")
+	p.Info("killing tcpdump", "args", strings.Join(killcmd.Args, " "))
+	killcmd.Stdin = strings.NewReader(query.Get("password"))
+	killcmd.Stderr = os.Stderr
+	killcmd.Stdout = os.Stdout
+	killcmd.Run()
+	p.Info("kill done")
+	cmd.Wait()
+	p.Info("dump done")
+	http.ServeFile(rw, r, "dump.cap")
 }

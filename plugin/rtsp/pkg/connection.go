@@ -359,6 +359,7 @@ func (c *NetConnection) Receive(sendMode bool, onReceive func(byte, []byte) erro
 							return
 						} else if onReceive != nil {
 							if err := onReceive(channelID, buf); err != nil {
+								c.Error("onReceive", "error", err)
 								c.MemoryAllocator.Free(buf)
 							}
 						} else {

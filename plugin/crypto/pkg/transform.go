@@ -4,16 +4,16 @@ import (
 	"github.com/deepch/vdk/codec/h265parser"
 	"m7s.live/v5/pkg"
 	"m7s.live/v5/pkg/codec"
+	"m7s.live/v5/pkg/config"
+	"m7s.live/v5/pkg/format"
 	"m7s.live/v5/pkg/task"
+	"m7s.live/v5/pkg/util"
 
 	"fmt"
 
 	m7s "m7s.live/v5"
 	"m7s.live/v5/plugin/crypto/pkg/method"
 )
-
-// GlobalConfig 全局加密配置
-var GlobalConfig Config
 
 type Config struct {
 	IsStatic   bool   `desc:"是否静态密钥" default:"false"`
@@ -27,6 +27,7 @@ type Config struct {
 
 type Transform struct {
 	m7s.DefaultTransformer
+	Writer  *m7s.PublishWriter[*format.RawAudio, *format.H26xFrame]
 	cryptor method.ICryptor
 }
 
@@ -77,15 +78,20 @@ func ValidateAndCreateKey(isStatic bool, algo string, secretKey, secretIv, strea
 }
 
 func (t *Transform) Start() error {
-	// 在 Start 时获取并保存配置
-	t.Info("transform job started")
-
-	keyConf, err := ValidateAndCreateKey(GlobalConfig.IsStatic, GlobalConfig.Algo, GlobalConfig.Secret.Key, GlobalConfig.Secret.Iv, t.TransformJob.StreamPath)
+	if len(t.TransformJob.Config.Output) == 0 {
+		return fmt.Errorf("output is empty")
+	}
+	output := t.TransformJob.Config.Output[0] // TODO: multiple output
+	var cryptoConfig Config
+	var conf config.Config
+	conf.Parse(&cryptoConfig)
+	conf.ParseModifyFile(output.Conf.(map[string]any))
+	keyConf, err := ValidateAndCreateKey(cryptoConfig.IsStatic, cryptoConfig.Algo, cryptoConfig.Secret.Key, cryptoConfig.Secret.Iv, t.TransformJob.StreamPath)
 	if err != nil {
 		return err
 	}
 
-	t.cryptor, err = method.GetCryptor(GlobalConfig.Algo, keyConf)
+	t.cryptor, err = method.GetCryptor(cryptoConfig.Algo, keyConf)
 	if err != nil {
 		t.Error("failed to create cryptor", "error", err)
 		return err
@@ -96,58 +102,51 @@ func (t *Transform) Start() error {
 		t.Error("failed to subscribe stream", "error", err)
 		return err
 	}
+	t.SetDescription("algo", cryptoConfig.Algo)
+	t.SetDescription("isStatic", cryptoConfig.IsStatic)
 
-	t.Info("crypto transform started",
-		"stream", t.TransformJob.StreamPath,
-		"algo", GlobalConfig.Algo,
-		"isStatic", GlobalConfig.IsStatic,
-	)
-
+	// 创建发布者
+	if err := t.TransformJob.Publish(output.StreamPath); err != nil {
+		t.Error("failed to create publisher", "error", err)
+		return err
+	}
+	t.TransformJob.Publisher.SetDescription("key", keyConf.Key)
+	t.TransformJob.Publisher.SetDescription("iv", keyConf.Iv)
 	return nil
 }
 
 func (t *Transform) Go() error {
-	// 创建发布者
-	if err := t.TransformJob.Publish(t.TransformJob.StreamPath + "/crypto"); err != nil {
-		t.Error("failed to create publisher", "error", err)
-		return err
-	}
-
+	allocator := util.NewScalableMemoryAllocator(1 << util.MinPowerOf2)
+	defer allocator.Recycle()
+	writer := m7s.NewPublisherWriter[*format.RawAudio, *format.H26xFrame](t.TransformJob.Publisher, allocator)
 	// 处理音视频流
 	return m7s.PlayBlock(t.TransformJob.Subscriber,
-		func(audio *pkg.RawAudio) (err error) {
-			copyAudio := &pkg.RawAudio{
-				FourCC:    audio.FourCC,
-				Timestamp: audio.Timestamp,
-			}
-			audio.Memory.Range(func(b []byte) {
-				copy(copyAudio.NextN(len(b)), b)
-			})
-			return t.TransformJob.Publisher.WriteAudio(copyAudio)
+		func(audio *format.RawAudio) (err error) {
+			copyAudio := writer.AudioFrame
+			copyAudio.ICodecCtx = audio.ICodecCtx
+			*writer.AudioFrame.BaseSample = *audio.BaseSample
+			audio.CopyTo(copyAudio.NextN(audio.Size))
+			return writer.NextAudio()
 		},
-		func(video *pkg.H26xFrame) error {
-			// 处理视频帧
-			if video.GetSize() == 0 {
-				return nil
-			}
-			copyVideo := &pkg.H26xFrame{
-				FourCC:    video.FourCC,
-				CTS:       video.CTS,
-				Timestamp: video.Timestamp,
-			}
-
-			for _, nalu := range video.Nalus {
+		func(video *format.H26xFrame) error {
+			copyVideo := writer.VideoFrame
+			copyVideo.ICodecCtx = video.ICodecCtx
+			*copyVideo.BaseSample = *video.BaseSample
+			nalus := copyVideo.GetNalus()
+			for nalu := range video.Raw.(*pkg.Nalus).RangePoint {
+				p := nalus.GetNextPointer()
 				mem := copyVideo.NextN(nalu.Size)
-				copy(mem, nalu.ToBytes())
+				nalu.CopyTo(mem)
 				needEncrypt := false
-				if video.FourCC == codec.FourCC_H264 {
+				if video.FourCC() == codec.FourCC_H264 {
 					switch codec.ParseH264NALUType(mem[0]) {
 					case codec.NALU_Non_IDR_Picture, codec.NALU_IDR_Picture:
 						needEncrypt = true
 					}
-				} else if video.FourCC == codec.FourCC_H265 {
+				} else if video.FourCC() == codec.FourCC_H265 {
 					switch codec.ParseH265NALUType(mem[0]) {
-					case h265parser.NAL_UNIT_CODED_SLICE_BLA_W_LP,
+					case 0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
+						h265parser.NAL_UNIT_CODED_SLICE_BLA_W_LP,
 						h265parser.NAL_UNIT_CODED_SLICE_BLA_W_RADL,
 						h265parser.NAL_UNIT_CODED_SLICE_BLA_N_LP,
 						h265parser.NAL_UNIT_CODED_SLICE_IDR_W_RADL,
@@ -159,15 +158,15 @@ func (t *Transform) Go() error {
 				if needEncrypt {
 					encBytes, err := t.cryptor.Encrypt(mem[2:])
 					if err == nil {
-						copyVideo.Nalus.Append(append([]byte{mem[0], mem[1]}, encBytes...))
+						p.Push(mem[:2], encBytes)
 					} else {
-						copyVideo.Nalus.Append(mem)
+						p.PushOne(mem)
 					}
 				} else {
-					copyVideo.Nalus.Append(mem)
+					p.PushOne(mem)
 				}
 			}
-			return t.TransformJob.Publisher.WriteVideo(copyVideo)
+			return writer.NextVideo()
 		})
 }
 

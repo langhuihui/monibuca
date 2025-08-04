@@ -12,6 +12,7 @@ import (
 
 	"m7s.live/v5/pkg"
 	"m7s.live/v5/pkg/config"
+	"m7s.live/v5/pkg/format"
 
 	m7s "m7s.live/v5"
 	"m7s.live/v5/pkg/task"
@@ -61,7 +62,7 @@ func parseRGBA(rgbaStr string) (color.RGBA, error) {
 }
 
 // 保存截图到文件
-func saveSnapshot(annexb []*pkg.AnnexB, savePath string, plugin *m7s.Plugin, streamPath string, snapMode int, watermarkConfig *WatermarkConfig) error {
+func saveSnapshot(annexb []*format.AnnexB, savePath string, plugin *m7s.Plugin, streamPath string, snapMode int, watermarkConfig *WatermarkConfig) error {
 	var buf bytes.Buffer
 	if err := ProcessWithFFmpeg(annexb, &buf); err != nil {
 		return fmt.Errorf("process with ffmpeg error: %w", err)
@@ -124,7 +125,7 @@ type SnapTask struct {
 }
 
 // saveSnap 保存截图
-func (t *SnapTask) saveSnap(annexb []*pkg.AnnexB, snapMode int) error {
+func (t *SnapTask) saveSnap(annexb []*format.AnnexB, snapMode int) error {
 	// 生成文件名
 	now := time.Now()
 	filename := fmt.Sprintf("%s_%s.jpg", t.job.StreamPath, now.Format("20060102150405.000"))
@@ -211,10 +212,10 @@ func (t *IFrameSnapTask) Start() (err error) {
 
 func (t *IFrameSnapTask) Go() (err error) {
 	iframeCount := 0
-	err = m7s.PlayBlock(t.subscriber, (func(audio *pkg.RawAudio) error)(nil), func(video *pkg.AnnexB) error {
+	err = m7s.PlayBlock(t.subscriber, (func(audio *pkg.AVFrame) error)(nil), func(video *format.AnnexB) error {
 		iframeCount++
 		if iframeCount%t.config.IFrameInterval == 0 {
-			if err := t.saveSnap([]*pkg.AnnexB{video}, SnapModeIFrameInterval); err != nil {
+			if err := t.saveSnap([]*format.AnnexB{video}, SnapModeIFrameInterval); err != nil {
 				t.Error("save snapshot failed", "error", err.Error())
 			}
 		}

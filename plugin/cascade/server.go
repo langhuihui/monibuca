@@ -29,7 +29,7 @@ type CascadeServerPlugin struct {
 	clients      util.Collection[uint, *cascade.Instance]
 }
 
-func (c *CascadeServerPlugin) OnInit() (err error) {
+func (c *CascadeServerPlugin) Start() (err error) {
 	if c.GetCommonConf().Quic.ListenAddr == "" {
 		return pkg.ErrNotListen
 	}
@@ -50,8 +50,12 @@ func (c *CascadeServerPlugin) OnInit() (err error) {
 	return
 }
 
-var _ = m7s.InstallPlugin[CascadeServerPlugin](m7s.DefaultYaml(`quic:
-  listenaddr: :44944`), &pb.Server_ServiceDesc, pb.RegisterServerHandler)
+var _ = m7s.InstallPlugin[CascadeServerPlugin](m7s.PluginMeta{
+	DefaultYaml: `quic:
+  listenaddr: :44944`,
+	ServiceDesc:         &pb.Server_ServiceDesc,
+	RegisterGRPCHandler: pb.RegisterServerHandler,
+})
 
 type CascadeServer struct {
 	task.Work

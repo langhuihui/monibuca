@@ -3,16 +3,14 @@ package mp4
 import (
 	"context"
 	"log/slog"
+	"net"
 	"os"
+	"reflect"
 	"time"
 
-	"github.com/deepch/vdk/codec/aacparser"
-	"github.com/deepch/vdk/codec/h264parser"
-	"github.com/deepch/vdk/codec/h265parser"
 	"m7s.live/v5"
 	"m7s.live/v5/pkg"
 	"m7s.live/v5/pkg/codec"
-	"m7s.live/v5/pkg/util"
 	"m7s.live/v5/plugin/mp4/pkg/box"
 )
 
@@ -20,13 +18,13 @@ type DemuxerRange struct {
 	*slog.Logger
 	StartTime, EndTime     time.Time
 	Streams                []m7s.RecordStream
-	AudioTrack, VideoTrack *pkg.AVTrack
+	AudioCodec, VideoCodec codec.ICodecCtx
+	OnAudio, OnVideo       func(box.Sample) error
+	OnCodec                func(codec.ICodecCtx, codec.ICodecCtx)
 }
 
-func (d *DemuxerRange) Demux(ctx context.Context, onAudio func(*Audio) error, onVideo func(*Video) error) error {
+func (d *DemuxerRange) Demux(ctx context.Context) error {
 	var ts, tsOffset int64
-	allocator := util.NewScalableMemoryAllocator(1 << 10)
-	defer allocator.Recycle()
 	for _, stream := range d.Streams {
 		// 检查流的时间范围是否在指定范围内
 		if stream.EndTime.Before(d.StartTime) || stream.StartTime.After(d.EndTime) {
@@ -47,86 +45,14 @@ func (d *DemuxerRange) Demux(ctx context.Context, onAudio func(*Audio) error, on
 
 		// 处理每个轨道的额外数据 (序列头)
 		for _, track := range demuxer.Tracks {
-			switch track.Cid {
-			case box.MP4_CODEC_H264:
-				var h264Ctx codec.H264Ctx
-				h264Ctx.CodecData, err = h264parser.NewCodecDataFromAVCDecoderConfRecord(track.ExtraData)
-				if err == nil {
-					if d.VideoTrack == nil {
-						d.VideoTrack = &pkg.AVTrack{
-							ICodecCtx: &h264Ctx,
-							RingWriter: &pkg.RingWriter{
-								Ring: util.NewRing[pkg.AVFrame](1),
-							}}
-						d.VideoTrack.Logger = d.With("track", "video")
-					} else {
-						// 如果已经有视频轨道，使用现有的轨道
-						d.VideoTrack.ICodecCtx = &h264Ctx
-					}
-				}
-			case box.MP4_CODEC_H265:
-				var h265Ctx codec.H265Ctx
-				h265Ctx.CodecData, err = h265parser.NewCodecDataFromAVCDecoderConfRecord(track.ExtraData)
-				if err == nil {
-					if d.VideoTrack == nil {
-						d.VideoTrack = &pkg.AVTrack{
-							ICodecCtx: &h265Ctx,
-							RingWriter: &pkg.RingWriter{
-								Ring: util.NewRing[pkg.AVFrame](1),
-							}}
-						d.VideoTrack.Logger = d.With("track", "video")
-					} else {
-						// 如果已经有视频轨道，使用现有的轨道
-						d.VideoTrack.ICodecCtx = &h265Ctx
-					}
-				}
-			case box.MP4_CODEC_AAC:
-				var aacCtx codec.AACCtx
-				aacCtx.CodecData, err = aacparser.NewCodecDataFromMPEG4AudioConfigBytes(track.ExtraData)
-				if err == nil {
-					if d.AudioTrack == nil {
-						d.AudioTrack = &pkg.AVTrack{
-							ICodecCtx: &aacCtx,
-							RingWriter: &pkg.RingWriter{
-								Ring: util.NewRing[pkg.AVFrame](1),
-							}}
-						d.AudioTrack.Logger = d.With("track", "audio")
-					} else {
-						// 如果已经有音频轨道，使用现有的轨道
-						d.AudioTrack.ICodecCtx = &aacCtx
-					}
-				}
-			case box.MP4_CODEC_G711A:
-				if d.AudioTrack == nil {
-					d.AudioTrack = &pkg.AVTrack{
-						ICodecCtx: &codec.PCMACtx{
-							AudioCtx: codec.AudioCtx{
-								SampleRate: 8000,
-								Channels:   1,
-								SampleSize: 16,
-							},
-						},
-						RingWriter: &pkg.RingWriter{
-							Ring: util.NewRing[pkg.AVFrame](1),
-						}}
-					d.AudioTrack.Logger = d.With("track", "audio")
-				}
-			case box.MP4_CODEC_G711U:
-				if d.AudioTrack == nil {
-					d.AudioTrack = &pkg.AVTrack{
-						ICodecCtx: &codec.PCMUCtx{
-							AudioCtx: codec.AudioCtx{
-								SampleRate: 8000,
-								Channels:   1,
-								SampleSize: 16,
-							},
-						},
-						RingWriter: &pkg.RingWriter{
-							Ring: util.NewRing[pkg.AVFrame](1),
-						}}
-					d.AudioTrack.Logger = d.With("track", "audio")
-				}
+			if track.Cid.IsAudio() {
+				d.AudioCodec = track.ICodecCtx
+			} else {
+				d.VideoCodec = track.ICodecCtx
 			}
+		}
+		if d.OnCodec != nil {
+			d.OnCodec(d.AudioCodec, d.VideoCodec)
 		}
 
 		// 计算起始时间戳偏移
@@ -158,7 +84,8 @@ func (d *DemuxerRange) Demux(ctx context.Context, onAudio func(*Audio) error, on
 			if sampleOffset < 0 || sampleOffset+sample.Size > len(demuxer.mdat.Data) {
 				continue
 			}
-			sample.Data = demuxer.mdat.Data[sampleOffset : sampleOffset+sample.Size]
+			data := demuxer.mdat.Data[sampleOffset : sampleOffset+sample.Size]
+			sample.Buffers = net.Buffers{data}
 
 			// 计算时间戳
 			if int64(sample.Timestamp)+tsOffset < 0 {
@@ -167,21 +94,12 @@ func (d *DemuxerRange) Demux(ctx context.Context, onAudio func(*Audio) error, on
 				ts = int64(sample.Timestamp + uint32(tsOffset))
 			}
 			sample.Timestamp = uint32(ts)
-
-			// 根据轨道类型调用相应的回调函数
-			switch track.Cid {
-			case box.MP4_CODEC_H264, box.MP4_CODEC_H265:
-				if err := onVideo(&Video{
-					Sample:    sample,
-					allocator: allocator,
-				}); err != nil {
+			if track.Cid.IsAudio() {
+				if err := d.OnAudio(sample); err != nil {
 					return err
 				}
-			case box.MP4_CODEC_AAC, box.MP4_CODEC_G711A, box.MP4_CODEC_G711U:
-				if err := onAudio(&Audio{
-					Sample:    sample,
-					allocator: allocator,
-				}); err != nil {
+			} else {
+				if err := d.OnVideo(sample); err != nil {
 					return err
 				}
 			}
@@ -192,29 +110,41 @@ func (d *DemuxerRange) Demux(ctx context.Context, onAudio func(*Audio) error, on
 
 type DemuxerConverterRange[TA pkg.IAVFrame, TV pkg.IAVFrame] struct {
 	DemuxerRange
-	audioConverter *pkg.AVFrameConvert[TA]
-	videoConverter *pkg.AVFrameConvert[TV]
+	OnAudio func(TA) error
+	OnVideo func(TV) error
 }
 
-func (d *DemuxerConverterRange[TA, TV]) Demux(ctx context.Context, onAudio func(TA) error, onVideo func(TV) error) error {
-	d.DemuxerRange.Demux(ctx, func(audio *Audio) error {
-		if d.audioConverter == nil {
-			d.audioConverter = pkg.NewAVFrameConvert[TA](d.AudioTrack, nil)
-		}
-		target, err := d.audioConverter.Convert(audio)
+func (d *DemuxerConverterRange[TA, TV]) Demux(ctx context.Context) error {
+	var targetAudio TA
+	var targetVideo TV
+
+	targetAudioType, targetVideoType := reflect.TypeOf(targetAudio).Elem(), reflect.TypeOf(targetVideo).Elem()
+	d.DemuxerRange.OnAudio = func(audio box.Sample) error {
+		targetAudio = reflect.New(targetAudioType).Interface().(TA) // TODO: reuse
+		var audioFrame AudioFrame
+		audioFrame.ICodecCtx = d.AudioCodec
+		audioFrame.BaseSample = &pkg.BaseSample{}
+		audioFrame.Raw = &audio.Memory
+		audioFrame.SetTS32(audio.Timestamp)
+		err := pkg.ConvertFrameType(&audioFrame, targetAudio)
 		if err == nil {
-			err = onAudio(target)
+			err = d.OnAudio(targetAudio)
 		}
 		return err
-	}, func(video *Video) error {
-		if d.videoConverter == nil {
-			d.videoConverter = pkg.NewAVFrameConvert[TV](d.VideoTrack, nil)
-		}
-		target, err := d.videoConverter.Convert(video)
+	}
+	d.DemuxerRange.OnVideo = func(video box.Sample) error {
+		targetVideo = reflect.New(targetVideoType).Interface().(TV) // TODO: reuse
+		var videoFrame VideoFrame
+		videoFrame.ICodecCtx = d.VideoCodec
+		videoFrame.BaseSample = &pkg.BaseSample{}
+		videoFrame.Raw = &video.Memory
+		videoFrame.SetTS32(video.Timestamp)
+		videoFrame.CTS = time.Duration(video.CTS) / time.Millisecond
+		err := pkg.ConvertFrameType(&videoFrame, targetVideo)
 		if err == nil {
-			err = onVideo(target)
+			err = d.OnVideo(targetVideo)
 		}
 		return err
-	})
-	return nil
+	}
+	return d.DemuxerRange.Demux(ctx)
 }

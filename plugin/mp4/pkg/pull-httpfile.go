@@ -6,13 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/deepch/vdk/codec/aacparser"
-	"github.com/deepch/vdk/codec/h264parser"
-	"github.com/deepch/vdk/codec/h265parser"
 	m7s "m7s.live/v5"
-	"m7s.live/v5/pkg/codec"
+	pkg "m7s.live/v5/pkg"
 	"m7s.live/v5/pkg/util"
-	"m7s.live/v5/plugin/mp4/pkg/box"
 )
 
 type HTTPReader struct {
@@ -21,12 +17,15 @@ type HTTPReader struct {
 
 func (p *HTTPReader) Run() (err error) {
 	pullJob := &p.PullJob
+
+	// Move to parsing step
+	pullJob.GoToStepConst(pkg.StepParsing)
 	publisher := pullJob.Publisher
 	if publisher == nil {
 		io.Copy(io.Discard, p.ReadCloser)
 		return
 	}
-	allocator := util.NewScalableMemoryAllocator(1 << 10)
+	allocator := util.NewScalableMemoryAllocator(1 << util.MinPowerOf2)
 	var demuxer *Demuxer
 	defer allocator.Recycle()
 	switch v := p.ReadCloser.(type) {
@@ -50,32 +49,20 @@ func (p *HTTPReader) Run() (err error) {
 		seekTime, _ := time.Parse(util.LocalTimeFormat, pullJob.Connection.Args.Get(util.StartKey))
 		demuxer.SeekTime(uint64(seekTime.UnixMilli()))
 	}
+	var writer m7s.PublishWriter[*AudioFrame, *VideoFrame]
+
 	for _, track := range demuxer.Tracks {
-		switch track.Cid {
-		case box.MP4_CODEC_H264:
-			var h264Ctx codec.H264Ctx
-			h264Ctx.CodecData, err = h264parser.NewCodecDataFromAVCDecoderConfRecord(track.ExtraData)
-			if err == nil {
-				publisher.SetCodecCtx(&h264Ctx, &Video{})
-			}
-		case box.MP4_CODEC_H265:
-			var h265Ctx codec.H265Ctx
-			h265Ctx.CodecData, err = h265parser.NewCodecDataFromAVCDecoderConfRecord(track.ExtraData)
-			if err == nil {
-				publisher.SetCodecCtx(&h265Ctx, &Video{
-					allocator: allocator,
-				})
-			}
-		case box.MP4_CODEC_AAC:
-			var aacCtx codec.AACCtx
-			aacCtx.CodecData, err = aacparser.NewCodecDataFromMPEG4AudioConfigBytes(track.ExtraData)
-			if err == nil {
-				publisher.SetCodecCtx(&aacCtx, &Audio{
-					allocator: allocator,
-				})
-			}
+		if track.Cid.IsAudio() {
+			writer.PublishAudioWriter = m7s.NewPublishAudioWriter[*AudioFrame](publisher, allocator)
+			writer.AudioFrame.ICodecCtx = track.ICodecCtx
+		} else {
+			writer.PublishVideoWriter = m7s.NewPublishVideoWriter[*VideoFrame](publisher, allocator)
+			writer.VideoFrame.ICodecCtx = track.ICodecCtx
 		}
 	}
+
+	// Move to streaming step
+	pullJob.GoToStepConst(pkg.StepStreaming)
 
 	// 计算最大时间戳用于累计偏移
 	var maxTimestamp uint64
@@ -94,52 +81,38 @@ func (p *HTTPReader) Run() (err error) {
 				return
 			}
 			if _, err = demuxer.reader.Seek(sample.Offset, io.SeekStart); err != nil {
-				return
-			}
-			sample.Data = allocator.Malloc(sample.Size)
-			if _, err = io.ReadFull(demuxer.reader, sample.Data); err != nil {
-				allocator.Free(sample.Data)
+				pullJob.Fail(err.Error())
 				return
 			}
 			fixTimestamp := uint32(uint64(sample.Timestamp)*1000/uint64(track.Timescale) + timestampOffset)
-			switch track.Cid {
-			case box.MP4_CODEC_H264:
-				var videoFrame = Video{
-					Sample:    sample,
-					allocator: allocator,
+			if track.Cid.IsAudio() {
+				if _, err = io.ReadFull(demuxer.reader, writer.AudioFrame.NextN(sample.Size)); err != nil {
+					writer.AudioFrame.Recycle()
+					pullJob.Fail(err.Error())
+					return
 				}
-				videoFrame.Timestamp = fixTimestamp
-				err = publisher.WriteVideo(&videoFrame)
-			case box.MP4_CODEC_H265:
-				var videoFrame = Video{
-					Sample:    sample,
-					allocator: allocator,
+				writer.AudioFrame.ICodecCtx = track.ICodecCtx
+				writer.AudioFrame.SetTS32(fixTimestamp)
+				err = writer.NextAudio()
+				if err != nil {
+					pullJob.Fail(err.Error())
+					return
 				}
-				videoFrame.Timestamp = fixTimestamp
-				err = publisher.WriteVideo(&videoFrame)
-			case box.MP4_CODEC_AAC:
-				var audioFrame = Audio{
-					Sample:    sample,
-					allocator: allocator,
+			} else {
+				if _, err = io.ReadFull(demuxer.reader, writer.VideoFrame.NextN(sample.Size)); err != nil {
+					writer.VideoFrame.Recycle()
+					pullJob.Fail(err.Error())
+					return
 				}
-				audioFrame.Timestamp = fixTimestamp
-				err = publisher.WriteAudio(&audioFrame)
-			case box.MP4_CODEC_G711A:
-				var audioFrame = Audio{
-					Sample:    sample,
-					allocator: allocator,
+				writer.VideoFrame.ICodecCtx = track.ICodecCtx
+				writer.VideoFrame.SetTS32(fixTimestamp)
+				writer.VideoFrame.CTS = time.Duration(sample.CTS) * time.Millisecond
+				writer.VideoFrame.IDR = sample.KeyFrame
+				err = writer.NextVideo()
+				if err != nil {
+					pullJob.Fail(err.Error())
+					return
 				}
-				audioFrame.Timestamp = fixTimestamp
-				err = publisher.WriteAudio(&audioFrame)
-			case box.MP4_CODEC_G711U:
-				var audioFrame = Audio{
-					Sample:    sample,
-					allocator: allocator,
-				}
-				audioFrame.Sample = sample
-				audioFrame.SetAllocator(allocator)
-				audioFrame.Timestamp = fixTimestamp
-				err = publisher.WriteAudio(&audioFrame)
 			}
 		}
 		if loop >= 0 {

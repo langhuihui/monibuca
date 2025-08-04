@@ -2,9 +2,10 @@ package plugin_rtsp
 
 import (
 	"fmt"
-	"m7s.live/v5/pkg/util"
 	"net"
 	"strings"
+
+	"m7s.live/v5/pkg/util"
 
 	"m7s.live/v5/pkg/task"
 
@@ -33,7 +34,7 @@ func (p *RTSPPlugin) OnTCPConnect(conn *net.TCPConn) task.ITask {
 	return ret
 }
 
-func (p *RTSPPlugin) OnInit() (err error) {
+func (p *RTSPPlugin) Start() (err error) {
 	if tcpAddr := p.GetCommonConf().TCP.ListenAddr; tcpAddr != "" {
 		_, port, _ := strings.Cut(tcpAddr, ":")
 		if port == "554" {

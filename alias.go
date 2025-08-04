@@ -48,7 +48,7 @@ func (s *Server) initStreamAlias() {
 
 func (s *Server) GetStreamAlias(ctx context.Context, req *emptypb.Empty) (res *pb.StreamAliasListResponse, err error) {
 	res = &pb.StreamAliasListResponse{}
-	s.Streams.Call(func() error {
+	s.CallOnStreamTask(func() {
 		for alias := range s.AliasStreams.Range {
 			info := &pb.StreamAlias{
 				StreamPath: alias.StreamPath,
@@ -62,18 +62,17 @@ func (s *Server) GetStreamAlias(ctx context.Context, req *emptypb.Empty) (res *p
 			}
 			res.Data = append(res.Data, info)
 		}
-		return nil
 	})
 	return
 }
 
 func (s *Server) SetStreamAlias(ctx context.Context, req *pb.SetStreamAliasRequest) (res *pb.SuccessResponse, err error) {
 	res = &pb.SuccessResponse{}
-	s.Streams.Call(func() error {
+	s.CallOnStreamTask(func() {
 		if req.StreamPath != "" {
 			u, err := url.Parse(req.StreamPath)
 			if err != nil {
-				return err
+				return
 			}
 			req.StreamPath = strings.TrimPrefix(u.Path, "/")
 			publisher, canReplace := s.Streams.Get(req.StreamPath)
@@ -159,7 +158,6 @@ func (s *Server) SetStreamAlias(ctx context.Context, req *pb.SetStreamAliasReque
 				}
 			}
 		}
-		return nil
 	})
 	return
 }

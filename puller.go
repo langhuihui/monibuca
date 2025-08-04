@@ -1,6 +1,7 @@
 package m7s
 
 import (
+	"crypto/tls"
 	"io"
 	"math"
 	"net/http"
@@ -11,8 +12,9 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	"m7s.live/v5/pkg"
+	pkg "m7s.live/v5/pkg"
 	"m7s.live/v5/pkg/config"
+	"m7s.live/v5/pkg/format"
 	"m7s.live/v5/pkg/task"
 	"m7s.live/v5/pkg/util"
 )
@@ -40,6 +42,7 @@ type (
 		Publisher     *Publisher
 		PublishConfig config.Publish
 		puller        IPuller
+		Progress      *SubscriptionProgress
 	}
 
 	HTTPFilePuller struct {
@@ -65,19 +68,31 @@ type (
 	}
 )
 
+// Fixed progress steps for HTTP file pull workflow
+var httpFilePullSteps = []pkg.StepDef{
+	{Name: pkg.StepPublish, Description: "Publishing file stream"},
+	{Name: pkg.StepURLParsing, Description: "Determining file source type"},
+	{Name: pkg.StepConnection, Description: "Establishing file connection"},
+	{Name: pkg.StepParsing, Description: "Parsing file format"},
+	{Name: pkg.StepStreaming, Description: "Reading and publishing stream data"},
+}
+
 func (conn *Connection) Init(plugin *Plugin, streamPath string, href string, proxyConf string) {
 	conn.RemoteURL = href
 	conn.StreamPath = streamPath
 	conn.Plugin = plugin
-	conn.HTTPClient = http.DefaultClient
+	// Create a custom HTTP client that ignores HTTPS certificate validation
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
 	if proxyConf != "" {
 		proxy, err := url.Parse(proxyConf)
 		if err != nil {
 			return
 		}
-		transport := &http.Transport{Proxy: http.ProxyURL(proxy)}
-		conn.HTTPClient = &http.Client{Transport: transport}
+		tr.Proxy = http.ProxyURL(proxy)
 	}
+	conn.HTTPClient = &http.Client{Transport: tr}
 }
 
 func (p *PullJob) GetPullJob() *PullJob {
@@ -134,6 +149,7 @@ func (p *PullJob) Init(puller IPuller, plugin *Plugin, streamPath string, conf c
 
 	if sender, webhook := plugin.getHookSender(config.HookOnPullEnd); sender != nil {
 		puller.OnDispose(func() {
+			p.Fail(puller.StopReason().Error())
 			alarmInfo := AlarmInfo{
 				AlarmName:  string(config.HookOnPullEnd),
 				AlarmDesc:  puller.StopReason().Error(),
@@ -144,12 +160,75 @@ func (p *PullJob) Init(puller IPuller, plugin *Plugin, streamPath string, conf c
 		})
 	}
 
-	plugin.Server.Pulls.Add(p, plugin.Logger.With("pullURL", conf.URL, "streamPath", streamPath))
+	plugin.Server.Pulls.AddTask(p, plugin.Logger.With("pullURL", conf.URL, "streamPath", streamPath))
 	return p
 }
 
 func (p *PullJob) GetKey() string {
 	return p.StreamPath
+}
+
+// Strongly typed helper.
+func (p *PullJob) GoToStepConst(name pkg.StepName) {
+	if p.Progress == nil {
+		return
+	}
+	// Find step index by name
+	stepIndex := -1
+	for i, step := range p.Progress.Steps {
+		if step.Name == string(name) {
+			stepIndex = i
+			break
+		}
+	}
+	if stepIndex >= 0 {
+		// complete current step if moving forward
+		cur := p.Progress.CurrentStep
+		if cur != stepIndex {
+			cs := &p.Progress.Steps[cur]
+			if cs.StartedAt.IsZero() {
+				cs.StartedAt = time.Now()
+			}
+			if cs.CompletedAt.IsZero() {
+				cs.CompletedAt = time.Now()
+			}
+		}
+		p.Progress.CurrentStep = stepIndex
+		ns := &p.Progress.Steps[stepIndex]
+		ns.Error = ""
+		if ns.StartedAt.IsZero() {
+			ns.StartedAt = time.Now()
+		}
+	}
+}
+
+// Fail marks the current step as failed with an error message
+func (p *PullJob) Fail(errorMsg string) {
+	if p.Progress == nil {
+		return
+	}
+	idx := p.Progress.CurrentStep
+	if idx >= 0 && idx < len(p.Progress.Steps) {
+		s := &p.Progress.Steps[idx]
+		s.Error = errorMsg
+		if s.StartedAt.IsZero() {
+			s.StartedAt = time.Now()
+		}
+		if s.CompletedAt.IsZero() { // mark failed completion time
+			s.CompletedAt = time.Now()
+		}
+	}
+}
+
+// SetProgressSteps sets multiple steps from a string array where every two elements represent a step (name, description)
+func (p *PullJob) SetProgressStepsDefs(defs []pkg.StepDef) {
+	if p.Progress == nil {
+		return
+	}
+	p.Progress.Steps = p.Progress.Steps[:0]
+	for _, d := range defs {
+		p.Progress.Steps = append(p.Progress.Steps, Step{Name: string(d.Name), Description: d.Description})
+	}
 }
 
 func (p *PullJob) Publish() (err error) {
@@ -160,7 +239,7 @@ func (p *PullJob) Publish() (err error) {
 	if len(p.Connection.Args) > 0 {
 		streamPath += "?" + p.Connection.Args.Encode()
 	}
-	p.Publisher, err = p.Plugin.PublishWithConfig(p.puller.GetTask().Context, streamPath, p.PublishConfig)
+	p.Publisher, err = p.Plugin.PublishWithConfig(p.puller, streamPath, p.PublishConfig)
 	if err == nil {
 		p.Publisher.OnDispose(func() {
 			if p.Publisher.StopReasonIs(pkg.ErrPublishDelayCloseTimeout, task.ErrStopByUser) || p.MaxRetry == 0 {
@@ -174,26 +253,34 @@ func (p *PullJob) Publish() (err error) {
 }
 
 func (p *PullJob) Start() (err error) {
-	s := p.Plugin.Server
-	if _, ok := s.Pulls.Get(p.GetKey()); ok {
-		return pkg.ErrStreamExist
-	}
 	p.AddTask(p.puller, p.Logger)
 	return
 }
 
 func (p *HTTPFilePuller) Start() (err error) {
+	p.PullJob.SetProgressStepsDefs(httpFilePullSteps)
+
+	if p.PullJob.PublishConfig.Speed == 0 {
+		p.PullJob.PublishConfig.Speed = 1 // 对于文件流需要控制速度
+	}
 	if err = p.PullJob.Publish(); err != nil {
+		p.PullJob.Fail(err.Error())
 		return
 	}
+	// move to url_parsing step
+	p.PullJob.GoToStepConst(pkg.StepURLParsing)
 	if p.ReadCloser != nil {
 		return
 	}
+
+	p.PullJob.GoToStepConst(pkg.StepConnection)
 	remoteURL := p.PullJob.RemoteURL
+	p.Info("pull", "remoteurl", remoteURL)
 	if strings.HasPrefix(remoteURL, "http") {
 		var res *http.Response
 		if res, err = p.PullJob.HTTPClient.Get(remoteURL); err == nil {
 			if res.StatusCode != http.StatusOK {
+				p.PullJob.Fail("HTTP status not OK")
 				return io.EOF
 			}
 			p.ReadCloser = res.Body
@@ -214,6 +301,10 @@ func (p *HTTPFilePuller) Start() (err error) {
 		}
 		//p.PullJob.Publisher.Publish.Speed = 1
 	}
+	if err != nil {
+		p.PullJob.Fail(err.Error())
+	}
+	p.OnStop(p.ReadCloser.Close)
 	return
 }
 
@@ -222,7 +313,6 @@ func (p *HTTPFilePuller) GetPullJob() *PullJob {
 }
 
 func (p *HTTPFilePuller) Dispose() {
-	p.ReadCloser.Close()
 	p.ReadCloser = nil
 }
 
@@ -323,6 +413,63 @@ func (p *RecordFilePuller) CheckSeek() (needSeek bool, err error) {
 		}
 		needSeek = true
 	default:
+	}
+	return
+}
+
+func NewAnnexBPuller(conf config.Pull) IPuller {
+	return &AnnexBPuller{}
+}
+
+type AnnexBPuller struct {
+	HTTPFilePuller
+}
+
+func (p *AnnexBPuller) Run() (err error) {
+	allocator := util.NewScalableMemoryAllocator(1 << util.MinPowerOf2)
+	defer allocator.Recycle()
+	writer := NewPublishVideoWriter[*format.AnnexB](p.PullJob.Publisher, allocator)
+	frame := writer.VideoFrame
+
+	p.PullJob.GoToStepConst(pkg.StepParsing) // 解析文件格式
+
+	// 创建 AnnexB 专用读取器
+	var annexbReader pkg.AnnexBReader
+	var hasFrame bool
+	p.PullJob.GoToStepConst(pkg.StepStreaming) // 进入流数据读取阶段
+	for !p.IsStopped() {
+		// 读取一块数据
+		chunkData := allocator.Malloc(8192)
+		n, readErr := p.ReadCloser.Read(chunkData)
+		if n != 8192 {
+			allocator.Free(chunkData[n:])
+			chunkData = chunkData[:n]
+		}
+		if readErr != nil && readErr != io.EOF {
+			p.PullJob.Fail(readErr.Error())
+			p.Error("读取数据失败", "error", readErr)
+			return readErr
+		}
+
+		// 将新数据追加到 AnnexB 读取器
+		annexbReader.AppendBuffer(chunkData)
+
+		hasFrame, err = frame.Parse(&annexbReader)
+		if err != nil {
+			p.PullJob.Fail(err.Error())
+			return
+		}
+		if hasFrame {
+			frame.SetTS32(uint32(time.Now().UnixMilli()))
+			if err = writer.NextVideo(); err != nil {
+				p.PullJob.Fail(err.Error())
+				return
+			}
+			frame = writer.VideoFrame
+		}
+		if readErr == io.EOF {
+			return
+		}
 	}
 	return
 }

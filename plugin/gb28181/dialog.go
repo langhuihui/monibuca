@@ -10,17 +10,37 @@ import (
 	"strings"
 	"time"
 
-	"m7s.live/v5/pkg/util"
-
 	sipgo "github.com/emiago/sipgo"
 	"github.com/emiago/sipgo/sip"
 	m7s "m7s.live/v5"
+	pkg "m7s.live/v5/pkg"
 	"m7s.live/v5/pkg/task"
+	"m7s.live/v5/pkg/util"
 	gb28181 "m7s.live/v5/plugin/gb28181/pkg"
+	mrtp "m7s.live/v5/plugin/rtp/pkg"
 )
 
+// Plugin-specific progress steps for GB28181
+const (
+	StepDeviceLookup pkg.StepName = "device_lookup"
+	StepSIPPrepare   pkg.StepName = "sip_prepare"
+	StepSDPBuild     pkg.StepName = "sdp_build"
+	StepInviteSend   pkg.StepName = "invite_send"
+	StepResponseWait pkg.StepName = "response_wait"
+)
+
+var gbPullSteps = []pkg.StepDef{
+	{Name: pkg.StepPublish, Description: "Publishing stream"},
+	{Name: StepDeviceLookup, Description: "Looking up device and channel"},
+	{Name: StepSIPPrepare, Description: "Preparing SIP invitation"},
+	{Name: StepSDPBuild, Description: "Building SDP content"},
+	{Name: StepInviteSend, Description: "Sending SIP INVITE"},
+	{Name: StepResponseWait, Description: "Waiting for response"},
+	{Name: pkg.StepStreaming, Description: "Receiving media stream"},
+}
+
 type Dialog struct {
-	task.Job
+	task.Task
 	Channel *Channel
 	gb28181.InviteOptions
 	gb         *GB28181Plugin
@@ -28,9 +48,9 @@ type Dialog struct {
 	pullCtx    m7s.PullJob
 	start      string
 	end        string
-	StreamMode string // 数据流传输模式（UDP:udp传输/TCP-ACTIVE：tcp主动模式/TCP-PASSIVE：tcp被动模式）
-	targetIP   string // 目标设备的IP地址
-	targetPort int    // 目标设备的端口
+	StreamMode mrtp.StreamMode // 数据流传输模式（UDP:udp传输/TCP-ACTIVE：tcp主动模式/TCP-PASSIVE：tcp被动模式）
+	targetIP   string          // 目标设备的IP地址
+	targetPort int             // 目标设备的端口
 	/**
 	子码流的配置,默认格式为:
 	stream=stream:0;stream=stream:1
@@ -69,6 +89,9 @@ func GenerateCallID(length int) string {
 }
 
 func (d *Dialog) Start() (err error) {
+	// Initialize progress tracking for pull operations
+	d.pullCtx.SetProgressStepsDefs(gbPullSteps)
+
 	// 处理时间范围
 	d.InviteOptions.Start = d.start
 	d.InviteOptions.End = d.End
@@ -77,11 +100,16 @@ func (d *Dialog) Start() (err error) {
 	}
 	err = d.pullCtx.Publish()
 	if err != nil {
+		d.pullCtx.Fail(err.Error())
 		return
 	}
+
+	d.pullCtx.GoToStepConst(StepDeviceLookup)
+
 	sss := strings.Split(d.pullCtx.RemoteURL, "/")
 	if len(sss) < 2 {
 		d.Info("remote url is invalid", d.pullCtx.RemoteURL)
+		d.pullCtx.Fail("remote url is invalid")
 		return
 	}
 	deviceId, channelId := sss[len(sss)-2], sss[len(sss)-1]
@@ -97,11 +125,15 @@ func (d *Dialog) Start() (err error) {
 			channelId = channel.ChannelId
 			d.Channel = channel
 		} else {
+			d.pullCtx.Fail(fmt.Sprintf("channel %s not found", channelId))
 			return fmt.Errorf("channel %s not found", channelId)
 		}
 	} else {
+		d.pullCtx.Fail(fmt.Sprintf("device %s not found", deviceId))
 		return fmt.Errorf("device %s not found", deviceId)
 	}
+
+	d.pullCtx.GoToStepConst(StepSIPPrepare)
 
 	//defer d.gb.dialogs.Remove(d)
 	if d.gb.tcpPort > 0 {
@@ -111,12 +143,15 @@ func (d *Dialog) Start() (err error) {
 			select {
 			case d.MediaPort = <-d.gb.tcpPorts:
 			default:
+				d.pullCtx.Fail("no available tcp port")
 				return fmt.Errorf("no available tcp port")
 			}
 		} else {
 			d.MediaPort = d.gb.MediaPort[0]
 		}
 	}
+
+	d.pullCtx.GoToStepConst(StepSDPBuild)
 
 	ssrc := d.CreateSSRC(d.gb.Serial)
 	d.Info("MediaIp is ", device.MediaIp)
@@ -149,10 +184,10 @@ func (d *Dialog) Start() (err error) {
 
 	// 添加媒体行和相关属性
 	var mediaLine string
-	switch strings.ToUpper(device.StreamMode) {
-	case "TCP-PASSIVE", "TCP-ACTIVE":
+	switch device.StreamMode {
+	case mrtp.StreamModeTCPPassive, mrtp.StreamModeTCPActive:
 		mediaLine = fmt.Sprintf("m=video %d TCP/RTP/AVP 96", d.MediaPort)
-	case "UDP":
+	case mrtp.StreamModeUDP:
 		mediaLine = fmt.Sprintf("m=video %d RTP/AVP 96", d.MediaPort)
 	default:
 		mediaLine = fmt.Sprintf("m=video %d TCP/RTP/AVP 96", d.MediaPort)
@@ -167,18 +202,18 @@ func (d *Dialog) Start() (err error) {
 	sdpInfo = append(sdpInfo, "a=rtpmap:96 PS/90000")
 
 	//根据传输模式添加 setup 和 connection 属性
-	switch strings.ToUpper(device.StreamMode) {
-	case "TCP-PASSIVE":
+	switch device.StreamMode {
+	case mrtp.StreamModeTCPPassive:
 		sdpInfo = append(sdpInfo,
 			"a=setup:passive",
 			"a=connection:new",
 		)
-	case "TCP-ACTIVE":
+	case mrtp.StreamModeTCPActive:
 		sdpInfo = append(sdpInfo,
 			"a=setup:active",
 			"a=connection:new",
 		)
-	case "UDP":
+	case mrtp.StreamModeUDP:
 		return errors.New("do not support udp mode")
 	default:
 		sdpInfo = append(sdpInfo,
@@ -245,6 +280,9 @@ func (d *Dialog) Start() (err error) {
 	dialogClientCache := sipgo.NewDialogClientCache(device.client, contactHDR)
 	// 创建会话
 	d.gb.Info("start to invite,recipient:", recipient, " viaHeader:", viaHeader, " fromHDR:", fromHDR, " toHeader:", toHeader, " device.contactHDR:", device.contactHDR, "contactHDR:", contactHDR)
+
+	d.pullCtx.GoToStepConst(StepInviteSend)
+
 	// 判断当前系统类型
 	//if runtime.GOOS == "windows" {
 	//	d.session, err = dialogClientCache.Invite(d.gb, recipient, []byte(strings.Join(sdpInfo, "\r\n")+"\r\n"), &callID, &csqHeader, &fromHDR, &toHeader, &maxforward, userAgentHeader, subjectHeader, &contentTypeHeader)
@@ -253,10 +291,11 @@ func (d *Dialog) Start() (err error) {
 	//}
 	// 最后添加Content-Length头部
 	if err != nil {
+		d.pullCtx.Fail("dialog invite error: " + err.Error())
 		return errors.New("dialog invite error" + err.Error())
 	}
-	d.gb.dialogs.Set(d)
 
+	d.pullCtx.GoToStepConst(StepResponseWait)
 	return
 }
 
@@ -265,6 +304,7 @@ func (d *Dialog) Run() (err error) {
 	err = d.session.WaitAnswer(d.gb, sipgo.AnswerOptions{})
 	d.gb.Info("after WaitAnswer")
 	if err != nil {
+		d.pullCtx.Fail("wait answer error: " + err.Error())
 		return errors.New("wait answer error" + err.Error())
 	}
 	inviteResponseBody := string(d.session.InviteResponse.Body())
@@ -278,6 +318,7 @@ func (d *Dialog) Run() (err error) {
 					if _ssrc, err := strconv.ParseInt(ls[1], 10, 0); err == nil {
 						d.SSRC = uint32(_ssrc)
 					} else {
+						d.pullCtx.Fail("read invite response y error: " + err.Error())
 						return errors.New("read invite respose y error" + err.Error())
 					}
 				}
@@ -307,32 +348,30 @@ func (d *Dialog) Run() (err error) {
 	if err != nil {
 		d.gb.Error("ack session err", err)
 	}
-	pub := gb28181.NewPSPublisher(d.pullCtx.Publisher)
-	if d.StreamMode == "TCP-ACTIVE" {
-		pub.Receiver.ListenAddr = fmt.Sprintf("%s:%d", d.targetIP, d.targetPort)
+
+	d.pullCtx.GoToStepConst(pkg.StepStreaming)
+
+	var pub mrtp.PSReceiver
+	pub.Publisher = d.pullCtx.Publisher
+	if d.StreamMode == mrtp.StreamModeTCPActive {
+		pub.ListenAddr = fmt.Sprintf("%s:%d", d.targetIP, d.targetPort)
 	} else {
 		if d.gb.tcpPort > 0 {
 			d.Info("into single port mode,use gb.tcpPort", d.gb.tcpPort)
 			if d.gb.netListener != nil {
 				d.Info("use gb.netListener", d.gb.netListener.Addr())
-				pub.Receiver.Listener = d.gb.netListener
+				pub.Listener = d.gb.netListener
 			} else {
 				d.Info("listen tcp4", fmt.Sprintf(":%d", d.gb.tcpPort))
-				pub.Receiver.Listener, _ = net.Listen("tcp4", fmt.Sprintf(":%d", d.gb.tcpPort))
-				d.gb.netListener = pub.Receiver.Listener
+				pub.Listener, _ = net.Listen("tcp4", fmt.Sprintf(":%d", d.gb.tcpPort))
+				d.gb.netListener = pub.Listener
 			}
-			pub.Receiver.SSRC = d.SSRC
+			pub.SSRC = d.SSRC
 		}
-		pub.Receiver.ListenAddr = fmt.Sprintf(":%d", d.MediaPort)
+		pub.ListenAddr = fmt.Sprintf(":%d", d.MediaPort)
 	}
-	pub.Receiver.StreamMode = d.StreamMode
-	d.AddTask(&pub.Receiver)
-	startResult := pub.Receiver.WaitStarted()
-	if startResult != nil {
-		return fmt.Errorf("pub.Receiver.WaitStarted %s", startResult)
-	}
-	pub.Demux()
-	return
+	pub.StreamMode = d.StreamMode
+	return d.RunTask(&pub)
 }
 
 func (d *Dialog) GetKey() string {
@@ -355,5 +394,4 @@ func (d *Dialog) Dispose() {
 			d.Error("dialog close session err", err)
 		}
 	}
-	d.gb.dialogs.Remove(d)
 }

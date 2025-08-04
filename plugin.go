@@ -6,6 +6,7 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -65,8 +66,6 @@ type (
 
 	IPlugin interface {
 		task.IJob
-		OnInit() error
-		OnStop()
 		Pull(string, config.Pull, *config.Publish) (*PullJob, error)
 		Push(string, config.Push, *config.Subscribe)
 		Transform(*Publisher, config.Transform)
@@ -163,27 +162,46 @@ func (plugin *PluginMeta) Init(s *Server, userConfig map[string]any) (p *Plugin)
 			return
 		}
 	}
-	if err := s.AddTask(instance).WaitStarted(); err != nil {
+	if err = s.AddTask(instance).WaitStarted(); err != nil {
 		p.disable(instance.StopReason().Error())
 		return
+	}
+	if err = p.listen(); err != nil {
+		p.Stop(err)
+		p.disable(err.Error())
+		return
+	}
+	if p.Meta.ServiceDesc != nil && s.grpcServer != nil {
+		s.grpcServer.RegisterService(p.Meta.ServiceDesc, p.handler)
+		if p.Meta.RegisterGRPCHandler != nil {
+			if err = p.Meta.RegisterGRPCHandler(p.Context, s.config.HTTP.GetGRPCMux(), s.grpcClientConn); err != nil {
+				p.Stop(err)
+				p.disable(fmt.Sprintf("grpc %v", err))
+				return
+			} else {
+				p.Info("grpc handler registered")
+			}
+		}
+	}
+	if p.config.Hook != nil {
+		if hook, ok := p.config.Hook[config.HookOnServerKeepAlive]; ok && hook.Interval > 0 {
+			p.AddTask(&ServerKeepAliveTask{plugin: p})
+		}
 	}
 	var handlers map[string]http.HandlerFunc
 	if v, ok := instance.(IRegisterHandler); ok {
 		handlers = v.RegisterHandler()
 	}
 	p.registerHandler(handlers)
+	p.OnDispose(func() {
+		s.Plugins.Remove(p)
+	})
 	s.Plugins.Add(p)
 	return
 }
 
 // InstallPlugin 安装插件
-func InstallPlugin[C iPlugin](options ...any) error {
-	var meta PluginMeta
-	for _, option := range options {
-		if m, ok := option.(PluginMeta); ok {
-			meta = m
-		}
-	}
+func InstallPlugin[C iPlugin](meta PluginMeta) error {
 	var c *C
 	meta.Type = reflect.TypeOf(c).Elem()
 	if meta.Name == "" {
@@ -196,30 +214,6 @@ func InstallPlugin[C iPlugin](options ...any) error {
 			meta.Version = after
 		} else {
 			meta.Version = "dev"
-		}
-	}
-	for _, option := range options {
-		switch v := option.(type) {
-		case OnExitHandler:
-			meta.OnExit = v
-		case DefaultYaml:
-			meta.DefaultYaml = v
-		case PullerFactory:
-			meta.NewPuller = v
-		case PusherFactory:
-			meta.NewPusher = v
-		case RecorderFactory:
-			meta.NewRecorder = v
-		case TransformerFactory:
-			meta.NewTransformer = v
-		case AuthPublisher:
-			meta.OnAuthPub = v
-		case AuthSubscriber:
-			meta.OnAuthSub = v
-		case *grpc.ServiceDesc:
-			meta.ServiceDesc = v
-		case func(context.Context, *gatewayRuntime.ServeMux, *grpc.ClientConn) error:
-			meta.RegisterGRPCHandler = v
 		}
 	}
 	plugins = append(plugins, meta)
@@ -281,40 +275,6 @@ func (p *Plugin) disable(reason string) {
 	p.Server.disabledPlugins = append(p.Server.disabledPlugins, p)
 }
 
-func (p *Plugin) Start() (err error) {
-	s := p.Server
-	s.AddTask(&webHookQueueTask)
-
-	if err = p.listen(); err != nil {
-		return
-	}
-	if err = p.handler.OnInit(); err != nil {
-		return
-	}
-	if p.Meta.ServiceDesc != nil && s.grpcServer != nil {
-		s.grpcServer.RegisterService(p.Meta.ServiceDesc, p.handler)
-		if p.Meta.RegisterGRPCHandler != nil {
-			if err = p.Meta.RegisterGRPCHandler(p.Context, s.config.HTTP.GetGRPCMux(), s.grpcClientConn); err != nil {
-				p.disable(fmt.Sprintf("grpc %v", err))
-				return
-			} else {
-				p.Info("grpc handler registered")
-			}
-		}
-	}
-	if p.config.Hook != nil {
-		if hook, ok := p.config.Hook[config.HookOnServerKeepAlive]; ok && hook.Interval > 0 {
-			p.AddTask(&ServerKeepAliveTask{plugin: p})
-		}
-	}
-	return
-}
-
-func (p *Plugin) Dispose() {
-	p.handler.OnStop()
-	p.Server.Plugins.Remove(p)
-}
-
 func (p *Plugin) listen() (err error) {
 	httpConf := &p.config.HTTP
 
@@ -372,14 +332,6 @@ func (p *Plugin) listen() (err error) {
 		}
 	}
 	return
-}
-
-func (p *Plugin) OnInit() error {
-	return nil
-}
-
-func (p *Plugin) OnStop() {
-
 }
 
 type WebHookQueueTask struct {
@@ -596,7 +548,11 @@ func (p *Plugin) OnSubscribe(streamPath string, args url.Values) {
 		if p.Meta.NewPuller != nil && reg.MatchString(streamPath) {
 			conf.Args = config.HTTPValues(args)
 			conf.URL = reg.Replace(streamPath, conf.URL)
-			p.handler.Pull(streamPath, conf, nil)
+			if job, err := p.handler.Pull(streamPath, conf, nil); err == nil {
+				if w, ok := p.Server.Waiting.Get(streamPath); ok {
+					job.Progress = &w.Progress
+				}
+			}
 		}
 	}
 
@@ -620,7 +576,17 @@ func (p *Plugin) OnSubscribe(streamPath string, args url.Values) {
 }
 
 func (p *Plugin) PublishWithConfig(ctx context.Context, streamPath string, conf config.Publish) (publisher *Publisher, err error) {
-	publisher = createPublisher(p, streamPath, conf)
+	publisher = &Publisher{Publish: conf}
+	publisher.Type = conf.PubType
+	publisher.ID = task.GetNextTaskID()
+	publisher.Plugin = p
+	if conf.PublishTimeout > 0 {
+		publisher.TimeoutTimer = time.NewTimer(conf.PublishTimeout)
+	} else {
+		publisher.TimeoutTimer = time.NewTimer(time.Hour * 24 * 365)
+	}
+	publisher.Logger = p.Logger.With("streamPath", streamPath, "pId", publisher.ID)
+	publisher.Init(streamPath, &publisher.Publish)
 	if p.config.EnableAuth && publisher.Type == PublishTypeServer {
 		onAuthPub := p.Meta.OnAuthPub
 		if onAuthPub == nil {
@@ -638,29 +604,40 @@ func (p *Plugin) PublishWithConfig(ctx context.Context, streamPath string, conf 
 			}
 		}
 	}
-	err = p.Server.Streams.AddTask(publisher, ctx).WaitStarted()
-	if err == nil {
-		if sender, webhook := p.getHookSender(config.HookOnPublishEnd); sender != nil {
-			publisher.OnDispose(func() {
+	for {
+		err = p.Server.Streams.Add(publisher, ctx).WaitStarted()
+		if err == nil {
+			if sender, webhook := p.getHookSender(config.HookOnPublishEnd); sender != nil {
+				publisher.OnDispose(func() {
+					alarmInfo := AlarmInfo{
+						AlarmName:  string(config.HookOnPublishEnd),
+						AlarmDesc:  publisher.StopReason().Error(),
+						AlarmType:  config.AlarmPublishOffline,
+						StreamPath: publisher.StreamPath,
+					}
+					sender(webhook, alarmInfo)
+				})
+			}
+			if sender, webhook := p.getHookSender(config.HookOnPublishStart); sender != nil {
 				alarmInfo := AlarmInfo{
-					AlarmName:  string(config.HookOnPublishEnd),
-					AlarmDesc:  publisher.StopReason().Error(),
-					AlarmType:  config.AlarmPublishOffline,
+					AlarmName:  string(config.HookOnPublishStart),
+					AlarmType:  config.AlarmPublishRecover,
 					StreamPath: publisher.StreamPath,
 				}
 				sender(webhook, alarmInfo)
-			})
-		}
-		if sender, webhook := p.getHookSender(config.HookOnPublishStart); sender != nil {
-			alarmInfo := AlarmInfo{
-				AlarmName:  string(config.HookOnPublishStart),
-				AlarmType:  config.AlarmPublishRecover,
-				StreamPath: publisher.StreamPath,
 			}
-			sender(webhook, alarmInfo)
+			return
+		} else if oldStream := new(task.ExistTaskError); errors.As(err, oldStream) {
+			if conf.KickExist {
+				publisher.takeOver(oldStream.Task.(*Publisher))
+				oldStream.Task.WaitStopped()
+			} else {
+				return nil, ErrStreamExist
+			}
+		} else {
+			return
 		}
 	}
-	return
 }
 
 func (p *Plugin) Publish(ctx context.Context, streamPath string) (publisher *Publisher, err error) {
@@ -743,14 +720,13 @@ func (p *Plugin) Push(streamPath string, conf config.Push, subConf *config.Subsc
 func (p *Plugin) Record(pub *Publisher, conf config.Record, subConf *config.Subscribe) *RecordJob {
 	recorder := p.Meta.NewRecorder(conf)
 	job := recorder.GetRecordJob().Init(recorder, p, pub.StreamPath, conf, subConf)
-	job.Depend(pub)
+	pub.Using(job)
 	return job
 }
 
 func (p *Plugin) Transform(pub *Publisher, conf config.Transform) {
 	transformer := p.Meta.NewTransformer()
-	job := transformer.GetTransformJob().Init(transformer, p, pub, conf)
-	job.Depend(pub)
+	pub.Using(transformer.GetTransformJob().Init(transformer, p, pub, conf))
 }
 
 func (p *Plugin) registerHandler(handlers map[string]http.HandlerFunc) {

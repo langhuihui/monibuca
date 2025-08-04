@@ -52,7 +52,7 @@ type (
 	}
 	PushProxyFactory = func() IPushProxy
 	PushProxyManager struct {
-		task.Manager[uint, IPushProxy]
+		task.WorkCollection[uint, IPushProxy]
 	}
 	BasePushProxy struct {
 		*PushProxyConfig
@@ -91,7 +91,7 @@ func (s *Server) createPushProxy(conf *PushProxyConfig) (pushProxy IPushProxy, e
 			base := pushProxy.GetBase()
 			base.PushProxyConfig = conf
 			base.Plugin = plugin
-			s.PushProxies.Add(pushProxy, plugin.Logger.With("pushProxyId", conf.ID, "pushProxyType", conf.Type, "pushProxyName", conf.Name))
+			s.PushProxies.AddTask(pushProxy, plugin.Logger.With("pushProxyId", conf.ID, "pushProxyType", conf.Type, "pushProxyName", conf.Name))
 			return
 		}
 	}
@@ -113,20 +113,16 @@ func (d *BasePushProxy) ChangeStatus(status byte) {
 	from := d.Status
 	d.Plugin.Info("device status changed", "from", from, "to", status)
 	d.Status = status
-	if d.Plugin.Server.DB != nil {
-		d.Plugin.Server.DB.Omit("deleted_at").Save(d.PushProxyConfig)
-	}
 	switch status {
 	case PushProxyStatusOnline:
 		if from == PushProxyStatusOffline {
 			if d.PushOnStart {
 				d.Push()
 			} else {
-				d.Plugin.Server.Streams.Call(func() error {
+				d.Plugin.Server.CallOnStreamTask(func() {
 					if d.Plugin.Server.Streams.Has(d.GetStreamPath()) {
 						d.Push()
 					}
-					return nil
 				})
 			}
 		}
@@ -135,8 +131,11 @@ func (d *BasePushProxy) ChangeStatus(status byte) {
 
 func (d *BasePushProxy) Dispose() {
 	d.ChangeStatus(PushProxyStatusOffline)
-	if stream, ok := d.Plugin.Server.Streams.SafeGet(d.GetStreamPath()); ok {
-		stream.Stop(task.ErrStopByUser)
+	pushJob, ok := d.Plugin.Server.Pushs.Find(func(job *PushJob) bool {
+		return job.StreamPath == d.GetStreamPath()
+	})
+	if ok {
+		pushJob.Stop(task.ErrStopByUser)
 	}
 }
 
@@ -215,27 +214,43 @@ func (d *PushProxyConfig) InitializeWithServer(s *Server) {
 
 func (s *Server) GetPushProxyList(ctx context.Context, req *emptypb.Empty) (res *pb.PushProxyListResponse, err error) {
 	res = &pb.PushProxyListResponse{}
-	s.PushProxies.Call(func() error {
-		for device := range s.PushProxies.Range {
-			conf := device.GetConfig()
-			res.Data = append(res.Data, &pb.PushProxyInfo{
-				Name:        conf.Name,
-				CreateTime:  timestamppb.New(conf.CreatedAt),
-				UpdateTime:  timestamppb.New(conf.UpdatedAt),
-				Type:        conf.Type,
-				PushURL:     conf.URL,
-				ParentID:    uint32(conf.ParentID),
-				Status:      uint32(conf.Status),
-				ID:          uint32(conf.ID),
-				PushOnStart: conf.PushOnStart,
-				Audio:       conf.Audio,
-				Description: conf.Description,
-				Rtt:         uint32(conf.RTT.Milliseconds()),
-				StreamPath:  device.GetStreamPath(),
-			})
+
+	if s.DB == nil {
+		err = pkg.ErrNoDB
+		return
+	}
+
+	var pushProxyConfigs []PushProxyConfig
+	err = s.DB.Find(&pushProxyConfigs).Error
+	if err != nil {
+		return
+	}
+
+	for _, conf := range pushProxyConfigs {
+		// 获取运行时状态信息（如果需要的话）
+		info := &pb.PushProxyInfo{
+			Name:        conf.Name,
+			CreateTime:  timestamppb.New(conf.CreatedAt),
+			UpdateTime:  timestamppb.New(conf.UpdatedAt),
+			Type:        conf.Type,
+			PushURL:     conf.URL,
+			ParentID:    uint32(conf.ParentID),
+			Status:      uint32(conf.Status),
+			ID:          uint32(conf.ID),
+			PushOnStart: conf.PushOnStart,
+			Audio:       conf.Audio,
+			Description: conf.Description,
+			StreamPath:  conf.GetStreamPath(),
 		}
-		return nil
-	})
+		// 如果内存中有对应的设备，获取实时状态
+		if device, ok := s.PushProxies.Get(conf.ID); ok {
+			runtimeConf := device.GetConfig()
+			info.Rtt = uint32(runtimeConf.RTT.Milliseconds())
+			info.Status = uint32(runtimeConf.Status)
+		}
+
+		res.Data = append(res.Data, info)
+	}
 	return
 }
 
@@ -273,6 +288,9 @@ func (s *Server) AddPushProxy(ctx context.Context, req *pb.PushProxyInfo) (res *
 	}
 
 	defaults.SetDefaults(&device.Push)
+	if device.PushOnStart {
+		device.Push.MaxRetry = -1
+	}
 	device.URL = req.PushURL
 	device.Audio = req.Audio
 	if s.DB == nil {
@@ -345,19 +363,74 @@ func (s *Server) UpdatePushProxy(ctx context.Context, req *pb.UpdatePushProxyReq
 	if req.StreamPath != nil {
 		target.StreamPath = *req.StreamPath
 	}
+	// 如果设置状态为非 disable，需要检查是否有相同 streamPath 的其他非 disable 代理
+	if req.Status != nil && *req.Status != uint32(PushProxyStatusDisabled) {
+		var existingCount int64
+		streamPath := target.StreamPath
+		if streamPath == "" {
+			streamPath = target.GetStreamPath()
+		}
+		s.DB.Model(&PushProxyConfig{}).Where("stream_path = ? AND id != ? AND status != ?", streamPath, req.ID, PushProxyStatusDisabled).Count(&existingCount)
+
+		// 如果存在相同 streamPath 且状态不是 disabled 的其他记录，更新失败
+		if existingCount > 0 {
+			err = fmt.Errorf("已存在相同 streamPath [%s] 的非禁用代理，更新失败", streamPath)
+			return
+		}
+		target.Status = byte(*req.Status)
+	} else if req.Status != nil {
+		target.Status = PushProxyStatusDisabled
+	}
+
 	s.DB.Save(target)
 
-	// Stop the old proxy if needed
-	s.PushProxies.Call(func() error {
-		if device, ok := s.PushProxies.Get(uint(req.ID)); ok {
-			device.Stop(task.ErrStopByUser)
-		}
-		return nil
-	})
+	// 检查是否从 disable 状态变为非 disable 状态
+	isNowDisabled := target.Status == PushProxyStatusDisabled
 
-	// Create a new proxy with the updated config
-	_, err = s.createPushProxy(target)
-	res = &pb.SuccessResponse{}
+	// 检查是否需要停止和重新创建代理
+
+	if device, ok := s.PushProxies.Get(uint(req.ID)); ok {
+		conf := device.GetConfig()
+		originalStatus := conf.Status
+		wasEnabled := originalStatus != PushProxyStatusDisabled
+
+		// 如果现在变为 disable 状态，需要停止并移除代理
+		if wasEnabled && isNowDisabled {
+			device.Stop(task.ErrStopByUser)
+			return
+		}
+
+		// 如果URL或音频设置或流路径发生变化，需要重新创建代理
+		if target.URL != conf.URL || conf.Audio != target.Audio || conf.StreamPath != target.StreamPath {
+			device.Stop(task.ErrStopByUser)
+			device, err = s.createPushProxy(target)
+			if err != nil {
+				s.Error("create push proxy failed", "error", err)
+				return
+			}
+			// 如果原来状态是推送中，并且PushOnStart为true，则重新开始推送
+			if originalStatus == PushProxyStatusPushing && target.PushOnStart {
+				device.Push()
+			}
+		} else {
+			// 只更新配置，不重新创建代理
+			conf.Name = target.Name
+			conf.PushOnStart = target.PushOnStart
+			conf.Description = target.Description
+
+			// 如果PushOnStart为true且当前状态为在线，则开始推送
+			if conf.PushOnStart && conf.Status == PushProxyStatusOnline {
+				device.Push()
+			}
+		}
+	} else {
+		// 如果代理不存在，则创建新代理
+		_, err = s.createPushProxy(target)
+		if err != nil {
+			s.Error("create push proxy failed", "error", err)
+		}
+	}
+
 	res = &pb.SuccessResponse{}
 	return
 }
@@ -373,12 +446,9 @@ func (s *Server) RemovePushProxy(ctx context.Context, req *pb.RequestWithId) (re
 			ID: uint(req.Id),
 		})
 		err = tx.Error
-		s.PushProxies.Call(func() error {
-			if device, ok := s.PushProxies.Get(uint(req.Id)); ok {
-				device.Stop(task.ErrStopByUser)
-			}
-			return nil
-		})
+		if device, ok := s.PushProxies.Get(uint(req.Id)); ok {
+			device.Stop(task.ErrStopByUser)
+		}
 		return
 	} else if req.StreamPath != "" {
 		var deviceList []*PushProxyConfig
@@ -387,11 +457,10 @@ func (s *Server) RemovePushProxy(ctx context.Context, req *pb.RequestWithId) (re
 			for _, device := range deviceList {
 				tx := s.DB.Delete(device)
 				err = tx.Error
-				s.PushProxies.Call(func() error {
+				s.PushProxies.Call(func() {
 					if device, ok := s.PushProxies.Get(uint(device.ID)); ok {
 						device.Stop(task.ErrStopByUser)
 					}
-					return nil
 				})
 			}
 		}

@@ -26,13 +26,13 @@ type VmLogPlugin struct {
 	handler slog.Handler
 }
 
-var _ = m7s.InstallPlugin[VmLogPlugin]()
+var _ = m7s.InstallPlugin[VmLogPlugin](m7s.PluginMeta{})
 
 func init() {
 	logger.Init()
 }
 
-func (config *VmLogPlugin) OnInit() (err error) {
+func (config *VmLogPlugin) Start() (err error) {
 	vlstorage.Init()
 	vlselect.Init()
 	vlinsert.Init()
@@ -43,7 +43,7 @@ func (config *VmLogPlugin) OnInit() (err error) {
 	return
 }
 
-func (config *VmLogPlugin) OnStop() {
+func (config *VmLogPlugin) Dispose() {
 	vlinsert.Stop()
 	vlselect.Stop()
 	vlstorage.Stop()

@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -52,16 +53,8 @@ func (p *MP4Plugin) downloadSingleFile(stream *m7s.RecordStream, flag mp4.Flag, 
 		muxer := mp4.NewMuxer(mp4.FLAG_FRAGMENT)
 		for _, track := range demuxer.Tracks {
 			t := muxer.AddTrack(track.Cid)
-			t.ExtraData = track.ExtraData
+			t.ICodecCtx = track.ICodecCtx
 			trackMap[track.Cid] = t
-			if track.Cid.IsAudio() {
-				t.SampleSize = track.SampleSize
-				t.SampleRate = track.SampleRate
-				t.ChannelCount = track.ChannelCount
-			} else if track.Cid.IsVideo() {
-				t.Width = track.Width
-				t.Height = track.Height
-			}
 		}
 		moov := muxer.MakeMoov()
 		var parts []*ContentPart
@@ -76,8 +69,8 @@ func (p *MP4Plugin) downloadSingleFile(stream *m7s.RecordStream, flag mp4.Flag, 
 			}
 			fixSample := *sample
 			part.Seek(sample.Offset, io.SeekStart)
-			fixSample.Data = make([]byte, sample.Size)
-			part.Read(fixSample.Data)
+			fixSample.Buffers = net.Buffers{make([]byte, sample.Size)}
+			part.Read(fixSample.Buffers[0])
 			moof, mdat := muxer.CreateFlagment(trackMap[track.Cid], fixSample)
 			if moof != nil {
 				part.boxies = append(part.boxies, moof, mdat)
@@ -196,30 +189,25 @@ func (p *MP4Plugin) download(w http.ResponseWriter, r *http.Request) {
 	// 添加音频轨道的函数
 	addAudioTrack := func(track *mp4.Track) {
 		t := muxer.AddTrack(track.Cid)
-		t.ExtraData = track.ExtraData
-		t.SampleSize = track.SampleSize
-		t.SampleRate = track.SampleRate
-		t.ChannelCount = track.ChannelCount
+		t.ICodecCtx = track.ICodecCtx
 		// 如果之前有音频轨道，继承其样本列表
 		if len(audioHistory) > 0 {
 			t.Samplelist = audioHistory[len(audioHistory)-1].Track.Samplelist
 		}
 		audioTrack = t
-		audioHistory = append(audioHistory, TrackHistory{Track: t, ExtraData: track.ExtraData})
+		audioHistory = append(audioHistory, TrackHistory{Track: t, ExtraData: track.GetRecord()})
 	}
 
 	// 添加视频轨道的函数
 	addVideoTrack := func(track *mp4.Track) {
 		t := muxer.AddTrack(track.Cid)
-		t.ExtraData = track.ExtraData
-		t.Width = track.Width
-		t.Height = track.Height
+		t.ICodecCtx = track.ICodecCtx
 		// 如果之前有视频轨道，继承其样本列表
 		if len(videoHistory) > 0 {
 			t.Samplelist = videoHistory[len(videoHistory)-1].Track.Samplelist
 		}
 		videoTrack = t
-		videoHistory = append(videoHistory, TrackHistory{Track: t, ExtraData: track.ExtraData})
+		videoHistory = append(videoHistory, TrackHistory{Track: t, ExtraData: track.GetRecord()})
 	}
 
 	// 智能添加轨道的函数，处理编码参数变化
@@ -232,14 +220,15 @@ func (p *MP4Plugin) download(w http.ResponseWriter, r *http.Request) {
 			lastVideoTrack = &videoHistory[len(videoHistory)-1]
 		}
 
+		trackExtraData := track.GetRecord()
 		if track.Cid.IsAudio() {
 			if lastAudioTrack == nil {
 				// 首次添加音频轨道
 				addAudioTrack(track)
-			} else if !bytes.Equal(lastAudioTrack.ExtraData, track.ExtraData) {
+			} else if !bytes.Equal(lastAudioTrack.ExtraData, trackExtraData) {
 				// 音频编码参数发生变化，检查是否已存在相同参数的轨道
 				for _, history := range audioHistory {
-					if bytes.Equal(history.ExtraData, track.ExtraData) {
+					if bytes.Equal(history.ExtraData, trackExtraData) {
 						// 找到相同参数的轨道，重用它
 						audioTrack = history.Track
 						audioTrack.Samplelist = audioHistory[len(audioHistory)-1].Track.Samplelist
@@ -253,10 +242,10 @@ func (p *MP4Plugin) download(w http.ResponseWriter, r *http.Request) {
 			if lastVideoTrack == nil {
 				// 首次添加视频轨道
 				addVideoTrack(track)
-			} else if !bytes.Equal(lastVideoTrack.ExtraData, track.ExtraData) {
+			} else if !bytes.Equal(lastVideoTrack.ExtraData, trackExtraData) {
 				// 视频编码参数发生变化，检查是否已存在相同参数的轨道
 				for _, history := range videoHistory {
-					if bytes.Equal(history.ExtraData, track.ExtraData) {
+					if bytes.Equal(history.ExtraData, trackExtraData) {
 						// 找到相同参数的轨道，重用它
 						videoTrack = history.Track
 						videoTrack.Samplelist = videoHistory[len(videoHistory)-1].Track.Samplelist
@@ -355,8 +344,8 @@ func (p *MP4Plugin) download(w http.ResponseWriter, r *http.Request) {
 				// 分片 MP4 模式
 				// 读取样本数据
 				part.Seek(sample.Offset, io.SeekStart)
-				fixSample.Data = make([]byte, sample.Size)
-				part.Read(fixSample.Data)
+				fixSample.Buffers = net.Buffers{make([]byte, sample.Size)}
+				part.Read(fixSample.Buffers[0])
 
 				// 创建分片
 				var moof, mdat box.IBox
@@ -457,7 +446,7 @@ func (p *MP4Plugin) StartRecord(ctx context.Context, req *mp4pb.ReqStartRecord) 
 		filePath = req.FilePath
 	}
 	res = &mp4pb.ResponseStartRecord{}
-	_, recordExists = p.Server.Records.SafeFind(func(job *m7s.RecordJob) bool {
+	_, recordExists = p.Server.Records.Find(func(job *m7s.RecordJob) bool {
 		return job.StreamPath == req.StreamPath && job.RecConf.FilePath == req.FilePath
 	})
 	if recordExists {
@@ -492,7 +481,7 @@ func (p *MP4Plugin) StartRecord(ctx context.Context, req *mp4pb.ReqStartRecord) 
 func (p *MP4Plugin) StopRecord(ctx context.Context, req *mp4pb.ReqStopRecord) (res *mp4pb.ResponseStopRecord, err error) {
 	res = &mp4pb.ResponseStopRecord{}
 	var recordJob *m7s.RecordJob
-	recordJob, _ = p.Server.Records.SafeFind(func(job *m7s.RecordJob) bool {
+	recordJob, _ = p.Server.Records.Find(func(job *m7s.RecordJob) bool {
 		return job.StreamPath == req.StreamPath
 	})
 	if recordJob != nil {
@@ -523,7 +512,7 @@ func (p *MP4Plugin) EventStart(ctx context.Context, req *mp4pb.ReqEventRecord) (
 	}
 	//recorder := p.Meta.Recorder(config.Record{})
 	var tmpJob *m7s.RecordJob
-	tmpJob, _ = p.Server.Records.SafeFind(func(job *m7s.RecordJob) bool {
+	tmpJob, _ = p.Server.Records.Find(func(job *m7s.RecordJob) bool {
 		return job.StreamPath == req.StreamPath
 	})
 	if tmpJob == nil { //为空表示没有正在进行的录制，也就是没有自动录像，则进行正常的事件录像

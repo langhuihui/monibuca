@@ -29,9 +29,12 @@ type S3Plugin struct {
 	s3Client        *s3.S3
 }
 
-var _ = m7s.InstallPlugin[S3Plugin](&pb.Api_ServiceDesc, pb.RegisterApiHandler)
+var _ = m7s.InstallPlugin[S3Plugin](m7s.PluginMeta{
+	ServiceDesc:         &pb.Api_ServiceDesc,
+	RegisterGRPCHandler: pb.RegisterApiHandler,
+})
 
-func (p *S3Plugin) OnInit() error {
+func (p *S3Plugin) Start() error {
 	// Set default configuration
 	if p.Region == "" {
 		p.Region = "us-east-1"

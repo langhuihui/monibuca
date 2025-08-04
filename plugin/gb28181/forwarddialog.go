@@ -3,14 +3,16 @@ package plugin_gb28181pro
 import (
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
+
 	sipgo "github.com/emiago/sipgo"
 	"github.com/emiago/sipgo/sip"
 	m7s "m7s.live/v5"
 	"m7s.live/v5/pkg/task"
 	"m7s.live/v5/pkg/util"
 	gb28181 "m7s.live/v5/plugin/gb28181/pkg"
-	"strconv"
-	"strings"
+	mrtp "m7s.live/v5/plugin/rtp/pkg"
 )
 
 // ForwardDialog 是用于转发RTP流的会话结构体
@@ -18,28 +20,21 @@ type ForwardDialog struct {
 	task.Job
 	channel *Channel
 	gb28181.InviteOptions
-	gb             *GB28181Plugin
-	session        *sipgo.DialogClientSession
-	pullCtx        m7s.PullJob
-	forwarder      *gb28181.RTPForwarder
-	upIP           string //上级平台主动模式时接收数据的IP
-	upPort         uint16 //上级平台主动模式时接收数据的端口
-	platformIP     string //上级平台被动模式时发送数据的IP
-	platformPort   int    //上级平台被动模式时发送数据的端口
-	platformSSRC   string // 上级平台的SSRC
+	gb        *GB28181Plugin
+	session   *sipgo.DialogClientSession
+	pullCtx   m7s.PullJob
+	forwarder *mrtp.Forwarder
+	// 嵌入 ForwardConfig 来管理转发配置
+	ForwardConfig  mrtp.ForwardConfig
 	platformCallId string //上级平台发起invite的callid
-	// 是否为TCP传输
-	TCP bool
-	// 是否为TCP主动模式
-	TCPActive bool
-	start     int64
-	end       int64
-	downIP    string
-	downPort  int
+	platformSSRC   string // 上级平台的SSRC
+	start          int64
+	end            int64
 }
 
 // GetCallID 获取会话的CallID
 func (d *ForwardDialog) GetCallID() string {
+
 	return d.session.InviteRequest.CallID().Value()
 }
 
@@ -80,8 +75,6 @@ func (d *ForwardDialog) Start() (err error) {
 	}
 
 	// 注册对话到集合，使用类型转换
-	d.gb.forwardDialogs.Set(d)
-	//defer d.gb.forwardDialogs.Remove(d)
 
 	if d.gb.MediaPort.Valid() {
 		select {
@@ -144,18 +137,18 @@ func (d *ForwardDialog) Start() (err error) {
 	//sdpInfo = append(sdpInfo, "a=rtpmap:97 MPEG4/90000")
 
 	//根据传输模式添加 setup 和 connection 属性
-	switch strings.ToUpper(device.StreamMode) {
-	case "TCP-PASSIVE":
+	switch device.StreamMode {
+	case mrtp.StreamModeTCPPassive:
 		sdpInfo = append(sdpInfo,
 			"a=setup:passive",
 			"a=connection:new",
 		)
-	case "TCP-ACTIVE":
+	case mrtp.StreamModeTCPActive:
 		sdpInfo = append(sdpInfo,
 			"a=setup:active",
 			"a=connection:new",
 		)
-	case "UDP":
+	case mrtp.StreamModeUDP:
 		d.Stop(errors.New("do not support udp mode"))
 	default:
 		sdpInfo = append(sdpInfo,
@@ -240,14 +233,14 @@ func (d *ForwardDialog) Run() (err error) {
 				// 解析 c=IN IP4 xxx.xxx.xxx.xxx 格式
 				parts := strings.Split(ls[1], " ")
 				if len(parts) >= 3 {
-					d.downIP = parts[len(parts)-1]
+					d.ForwardConfig.Source.IP = parts[len(parts)-1]
 				}
 			case "m":
 				// 解析 m=video port xxx 格式
 				parts := strings.Split(ls[1], " ")
 				if len(parts) >= 2 {
 					if port, err := strconv.Atoi(parts[1]); err == nil {
-						d.downPort = port
+						d.ForwardConfig.Source.Port = uint32(port)
 					}
 				}
 			}
@@ -263,58 +256,41 @@ func (d *ForwardDialog) Run() (err error) {
 		d.gb.Error("ack session err", err)
 		d.Stop(errors.New("ack session err" + err.Error()))
 	}
-	// 创建并初始化RTPForwarder
-	//d.forwarder = gb28181.NewRTPForwarder()
-	//d.forwarder.TCP = d.TCP
-	//d.forwarder.TCPActive = d.TCPActive
-	//d.forwarder.StreamMode = d.channel.Device.StreamMode
-	//
-	//if d.TCPActive {
-	//	d.forwarder.UpListenAddr = fmt.Sprintf(":%d", d.upPort)
-	//} else {
-	//	d.forwarder.UpListenAddr = fmt.Sprintf("%s:%d", d.upIP, d.platformPort)
-	//}
-	//
-	// 设置监听地址和端口
-	if strings.ToUpper(d.channel.Device.StreamMode) == "TCP-ACTIVE" {
-		d.forwarder.DownListenAddr = fmt.Sprintf("%s:%d", d.downIP, d.downPort)
-	} else {
-		d.forwarder.DownListenAddr = fmt.Sprintf(":%d", d.MediaPort)
-	}
-	//
-	//// 设置转发目标
-	//if d.platformIP != "" && d.platformPort > 0 {
-	//	err = d.forwarder.SetTarget(d.platformIP, d.platformPort)
-	//	if err != nil {
-	//		d.Error("set target error", "err", err)
-	//		return err
-	//	}
-	//} else {
-	//	d.Error("no target set, will only receive but not forward")
-	//	return
-	//}
-	//
-	//// 设置目标SSRC
-	//if d.platformSSRC != "" {
-	//	d.forwarder.TargetSSRC = d.platformSSRC
-	//	d.Info("set target ssrc", "ssrc", d.platformSSRC)
-	//}
 
-	// 将forwarder添加到任务中
-	d.AddTask(d.forwarder)
+	// 更新 ForwardConfig 中的 SSRC
+	d.ForwardConfig.Source.SSRC = d.SSRC
+
+	// 设置源和目标配置
+	// Source 模式由设备决定
+	d.ForwardConfig.Source.Mode = d.channel.Device.StreamMode
+
+	// Target 模式应该根据平台配置或默认设置
+	// 这里可以根据实际需求设置，比如从平台配置中获取
+	// 暂时使用默认的 TCP-PASSIVE 模式
+	d.ForwardConfig.Target.Mode = mrtp.StreamModeTCPPassive
+
+	// 解析目标SSRC
+	if d.ForwardConfig.Target.SSRC == 0 && d.platformSSRC != "" {
+		if ssrcInt, err := strconv.ParseUint(d.platformSSRC, 10, 32); err == nil {
+			d.ForwardConfig.Target.SSRC = uint32(ssrcInt)
+		} else {
+			d.gb.Error("parse platform ssrc error", "err", err)
+		}
+	}
+
+	// 创建新的 Forwarder
+	d.forwarder = mrtp.NewForwarder(&d.ForwardConfig)
 
 	d.Info("forwarder started successfully",
-		"d.forwarder.UpListenAddr", d.forwarder.UpListenAddr,
-		"TCP", d.forwarder.TCP,
-		"TCPActive", d.forwarder.TCPActive,
-		"listen", d.forwarder.DownListenAddr,
-		"target", fmt.Sprintf("%s:%d", d.platformIP, d.platformPort),
-		"ssrc", d.platformSSRC)
+		"source", fmt.Sprintf("%s:%d", d.ForwardConfig.Source.IP, d.ForwardConfig.Source.Port),
+		"target", fmt.Sprintf("%s:%d", d.ForwardConfig.Target.IP, d.ForwardConfig.Target.Port),
+		"sourceMode", d.ForwardConfig.Source.Mode,
+		"targetMode", d.ForwardConfig.Target.Mode,
+		"sourceSSRC", d.ForwardConfig.Source.SSRC,
+		"targetSSRC", d.ForwardConfig.Target.SSRC)
 
-	// 使用goroutine启动Demux，避免阻塞
-	d.forwarder.Demux()
-
-	return
+	// 启动转发
+	return d.forwarder.Forward(d)
 }
 
 // Dispose 释放会话资源

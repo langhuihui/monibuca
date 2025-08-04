@@ -81,12 +81,12 @@ func GetHandlerType(cid MP4_CODEC_TYPE) HandlerType {
 
 func MakeHdlrBox(hdt HandlerType) *HandlerBox {
 	var hdlr *HandlerBox = nil
-	if hdt == TypeVIDE {
+	switch hdt {
+	case TypeVIDE:
 		hdlr = NewHandlerBox(hdt, "VideoHandler")
-
-	} else if hdt == TypeSOUN {
+	case TypeSOUN:
 		hdlr = NewHandlerBox(hdt, "SoundHandler")
-	} else {
+	default:
 		hdlr = NewHandlerBox(hdt, "")
 	}
 	return hdlr

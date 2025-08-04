@@ -16,7 +16,7 @@ import (
 var (
 	//go:embed web
 	web embed.FS
-	_   = m7s.InstallPlugin[WebTransportPlugin]()
+	_   = m7s.InstallPlugin[WebTransportPlugin](m7s.PluginMeta{})
 )
 
 type WebTransportPlugin struct {
@@ -33,7 +33,7 @@ func (p *WebTransportPlugin) RegisterHandler() map[string]http.HandlerFunc {
 	}
 }
 
-func (p *WebTransportPlugin) OnInit() (err error) {
+func (p *WebTransportPlugin) Start() (err error) {
 	// Create a new HTTP mux for WebTransport
 	mux := http.NewServeMux()
 

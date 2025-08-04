@@ -93,7 +93,7 @@ func (p *YourPlugin) RegisterHandler() {
 
 示例代码：
 ```go
-func (p *YourPlugin) OnInit() {
+func (p *YourPlugin) Start() {
     // 添加认证中间件
     p.GetCommonConf().AddMiddleware(func(next http.HandlerFunc) http.HandlerFunc {
         return func(w http.ResponseWriter, r *http.Request) {

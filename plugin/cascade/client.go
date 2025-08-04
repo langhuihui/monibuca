@@ -19,10 +19,12 @@ type CascadeClientPlugin struct {
 	AutoPush bool                   `desc:"自动推流到上级"` //自动推流到上级
 	Server   string                 `desc:"上级服务器"`   // TODO: support multiple servers
 	Secret   string                 `desc:"连接秘钥"`
-	conn     quic.Connection
+	client   *CascadeClient
 }
 
-var _ = m7s.InstallPlugin[CascadeClientPlugin]()
+var _ = m7s.InstallPlugin[CascadeClientPlugin](m7s.PluginMeta{
+	NewPuller: cascade.NewCascadePuller,
+})
 
 type CascadeClient struct {
 	task.Work
@@ -79,7 +81,7 @@ func (task *CascadeClient) Run() (err error) {
 	return
 }
 
-func (c *CascadeClientPlugin) OnInit() (err error) {
+func (c *CascadeClientPlugin) Start() (err error) {
 	if c.Secret == "" && c.Server == "" {
 		return nil
 	}
@@ -88,12 +90,13 @@ func (c *CascadeClientPlugin) OnInit() (err error) {
 	}
 	connectTask.SetRetry(-1, time.Second)
 	c.AddTask(&connectTask)
+	c.client = &connectTask
 	return
 }
 
 func (c *CascadeClientPlugin) Pull(streamPath string, conf config.Pull, pub *config.Publish) (job *m7s.PullJob, err error) {
 	puller := &cascade.Puller{
-		Connection: c.conn,
+		Connection: c.client.Connection,
 	}
 	job = puller.GetPullJob()
 	job.Init(puller, &c.Plugin, streamPath, conf, pub)

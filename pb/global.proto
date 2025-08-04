@@ -250,6 +250,11 @@ service api {
       get: "/api/alarm/list"
     };
   }
+  rpc GetSubscriptionProgress (StreamSnapRequest) returns (SubscriptionProgressResponse) {
+    option (google.api.http) = {
+      get: "/api/stream/progress/{streamPath=**}"
+    };
+  }
 }
 
 message DisabledPluginsResponse {
@@ -366,6 +371,8 @@ message TaskTreeData {
   TaskTreeData blocked = 8;
   uint64 pointer = 9;
   string startReason = 10;
+  bool eventLoopRunning = 11;
+  uint32 level = 12;
 }
 
 message TaskTreeResponse {
@@ -810,4 +817,23 @@ message AlarmListResponse {
   int32 pageNum = 4;
   int32 pageSize = 5;
   repeated AlarmInfo data = 6;
+}
+
+message Step {
+  string name = 1;
+  string description = 2;
+  string error = 3;
+  google.protobuf.Timestamp startedAt = 4;
+  google.protobuf.Timestamp completedAt = 5;
+}
+
+message SubscriptionProgressData {
+  repeated Step steps = 1;
+  int32 currentStep = 2;
+}
+
+message SubscriptionProgressResponse {
+  int32 code = 1;
+  string message = 2;
+  SubscriptionProgressData data = 3;
 }

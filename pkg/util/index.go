@@ -16,6 +16,10 @@ type ReadWriteSeekCloser interface {
 	io.Closer
 }
 
+type Recyclable interface {
+	Recycle()
+}
+
 type Object = map[string]any
 
 func Conditional[T any](cond bool, t, f T) T {
@@ -69,4 +73,60 @@ func InitFatalLog(fatal_log_dir string) *os.File {
 func Exist(filename string) bool {
 	_, err := os.Stat(filename)
 	return err == nil || os.IsExist(err)
+}
+
+type ReuseArray[T any] []T
+
+func (s *ReuseArray[T]) GetNextPointer() (r *T) {
+	ss := *s
+	l := len(ss)
+	if cap(ss) > l {
+		ss = ss[:l+1]
+	} else {
+		var new T
+		ss = append(ss, new)
+	}
+	*s = ss
+	r = &((ss)[l])
+	if resetter, ok := any(r).(Resetter); ok {
+		resetter.Reset()
+	}
+	return r
+}
+
+func (s ReuseArray[T]) RangePoint(f func(yield *T) bool) {
+	for i := range len(s) {
+		if !f(&s[i]) {
+			return
+		}
+	}
+}
+
+func (s *ReuseArray[T]) Reset() {
+	*s = (*s)[:0]
+}
+
+func (s *ReuseArray[T]) Reduce() ReuseArray[T] {
+	ss := *s
+	ss = ss[:len(ss)-1]
+	*s = ss
+	return ss
+}
+
+func (s *ReuseArray[T]) Remove(item *T) bool {
+	for i := range *s {
+		if &(*s)[i] == item {
+			*s = append((*s)[:i], (*s)[i+1:]...)
+			return true
+		}
+	}
+	return false
+}
+
+func (s *ReuseArray[T]) Count() int {
+	return len(*s)
+}
+
+type Resetter interface {
+	Reset()
 }

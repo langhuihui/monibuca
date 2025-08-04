@@ -40,7 +40,7 @@ func init() {
 	zipReader, _ = zip.NewReader(bytes.NewReader(hls_js), int64(len(hls_js)))
 }
 
-func (p *HLSPlugin) OnInit() (err error) {
+func (p *HLSPlugin) Start() (err error) {
 	_, port, _ := strings.Cut(p.GetCommonConf().HTTP.ListenAddr, ":")
 	if port == "80" {
 		p.PlayAddr = append(p.PlayAddr, "http://{hostName}/hls/{streamPath}.m3u8")
@@ -319,7 +319,7 @@ func (conf *HLSPlugin) API_record_start(w http.ResponseWriter, r *http.Request) 
 	if query.Get("filePath") != "" {
 		filePath = query.Get("filePath")
 	}
-	_, recordExists = conf.Server.Records.SafeFind(func(job *m7s.RecordJob) bool {
+	_, recordExists = conf.Server.Records.Find(func(job *m7s.RecordJob) bool {
 		return job.StreamPath == streamPath && job.RecConf.FilePath == filePath
 	})
 	if recordExists {

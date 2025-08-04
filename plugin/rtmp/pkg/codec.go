@@ -12,14 +12,25 @@ import (
 type (
 	AudioCodecID byte
 	VideoCodecID byte
-
-	H265Ctx struct {
-		codec.H265Ctx
-		Enhanced bool
+	H264Ctx      struct {
+		*codec.H264Ctx
+		SequenceFrame VideoFrame
 	}
-
+	H265Ctx struct {
+		*codec.H265Ctx
+		SequenceFrame VideoFrame
+		Enhanced      bool
+	}
+	AACCtx struct {
+		*codec.AACCtx
+		SequenceFrame AudioFrame
+	}
+	OPUSCtx struct {
+		codec.OPUSCtx
+	}
 	AV1Ctx struct {
-		codec.AV1Ctx
+		*codec.AV1Ctx
+		SequenceFrame                    VideoFrame
 		Version                          byte
 		SeqProfile                       byte
 		SeqLevelIdx0                     byte
@@ -110,6 +121,18 @@ var (
 	ErrInvalidVersion      = errors.New("unsupported AV1CodecConfigurationRecord version")
 	ErrNonZeroReservedBits = errors.New("non-zero reserved bits found in AV1CodecConfigurationRecord")
 )
+
+func (ctx *AACCtx) GetSequenceFrame() *AudioFrame {
+	return &ctx.SequenceFrame
+}
+
+func (ctx *H264Ctx) GetSequenceFrame() *VideoFrame {
+	return &ctx.SequenceFrame
+}
+
+func (ctx *H265Ctx) GetSequenceFrame() *VideoFrame {
+	return &ctx.SequenceFrame
+}
 
 func (p *AV1Ctx) GetInfo() string {
 	return fmt.Sprintf("% 02X", p.ConfigOBUs)

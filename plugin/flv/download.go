@@ -12,6 +12,7 @@ import (
 	"time"
 
 	m7s "m7s.live/v5"
+	"m7s.live/v5/pkg/codec"
 	"m7s.live/v5/pkg/util"
 	flv "m7s.live/v5/plugin/flv/pkg"
 	mp4 "m7s.live/v5/plugin/mp4/pkg"
@@ -197,7 +198,7 @@ func (plugin *FLVPlugin) processMp4ToFlv(w http.ResponseWriter, r *http.Request,
 	}
 
 	// 创建DemuxerConverterRange进行MP4解复用和转换
-	demuxer := &mp4.DemuxerConverterRange[*rtmp.RTMPAudio, *rtmp.RTMPVideo]{
+	demuxer := &mp4.DemuxerConverterRange[*rtmp.AudioFrame, *rtmp.VideoFrame]{
 		DemuxerRange: mp4.DemuxerRange{
 			StartTime: params.startTime,
 			EndTime:   params.endTime,
@@ -208,41 +209,29 @@ func (plugin *FLVPlugin) processMp4ToFlv(w http.ResponseWriter, r *http.Request,
 
 	// 创建FLV编码器状态
 	flvWriter := flv.NewFlvWriter(w)
-	hasWritten := false
 	ts := int64(0)       // 初始化时间戳
 	tsOffset := int64(0) // 偏移时间戳
+	demuxer.OnCodec = func(a, v codec.ICodecCtx) {
+		flvWriter.WriteHeader(a != nil, v != nil)
+	}
+	demuxer.OnAudio = func(audio *rtmp.AudioFrame) error {
+		// 计算调整后的时间戳
+		ts = int64(audio.Timestamp) + tsOffset
+		timestamp := uint32(ts)
+		// 写入音频数据帧
+		return flvWriter.WriteTag(flv.FLV_TAG_TYPE_AUDIO, timestamp, uint32(audio.Size), audio.Buffers...)
+	}
+	demuxer.OnVideo = func(frame *rtmp.VideoFrame) error {
+		// 计算调整后的时间戳
+		ts = int64(frame.Timestamp) + tsOffset
+		timestamp := uint32(ts)
+		// 写入视频数据帧
+		return flvWriter.WriteTag(flv.FLV_TAG_TYPE_VIDEO, timestamp, uint32(frame.Size), frame.Buffers...)
+	}
 	// 执行解复用和转换
-	err := demuxer.Demux(r.Context(),
-		func(audio *rtmp.RTMPAudio) error {
-			if !hasWritten {
-				if err := flvWriter.WriteHeader(demuxer.AudioTrack != nil, demuxer.VideoTrack != nil); err != nil {
-					return err
-				}
-			}
-
-			// 计算调整后的时间戳
-			ts = int64(audio.Timestamp) + tsOffset
-			timestamp := uint32(ts)
-
-			// 写入音频数据帧
-			return flvWriter.WriteTag(flv.FLV_TAG_TYPE_AUDIO, timestamp, uint32(audio.Size), audio.Buffers...)
-		}, func(frame *rtmp.RTMPVideo) error {
-			if !hasWritten {
-				if err := flvWriter.WriteHeader(demuxer.AudioTrack != nil, demuxer.VideoTrack != nil); err != nil {
-					return err
-				}
-			}
-			// 计算调整后的时间戳
-			ts = int64(frame.Timestamp) + tsOffset
-			timestamp := uint32(ts)
-			// 写入视频数据帧
-			return flvWriter.WriteTag(flv.FLV_TAG_TYPE_VIDEO, timestamp, uint32(frame.Size), frame.Buffers...)
-		})
+	err := demuxer.Demux(r.Context())
 	if err != nil {
 		plugin.Error("MP4 to FLV conversion failed", "err", err)
-		if !hasWritten {
-			http.Error(w, "Conversion failed", http.StatusInternalServerError)
-		}
 		return
 	}
 
@@ -268,7 +257,7 @@ func (plugin *FLVPlugin) processFlvFiles(w http.ResponseWriter, r *http.Request,
 		startOffsetTime = fileInfoList[0].startOffsetTime
 	}
 
-	var amf *rtmp.AMF
+	var amf rtmp.AMF
 	var metaData rtmp.EcmaArray
 	initMetaData := func(reader io.Reader, dataLen uint32) {
 		data := make([]byte, dataLen+4)
@@ -276,9 +265,7 @@ func (plugin *FLVPlugin) processFlvFiles(w http.ResponseWriter, r *http.Request,
 		if err != nil {
 			return
 		}
-		amf = &rtmp.AMF{
-			Buffer: util.Buffer(data[1+2+len("onMetaData") : len(data)-4]),
-		}
+		amf = rtmp.AMF(data[1+2+len("onMetaData") : len(data)-4])
 		var obj any
 		obj, err = amf.Unmarshal()
 		if err == nil {
@@ -302,7 +289,7 @@ func (plugin *FLVPlugin) processFlvFiles(w http.ResponseWriter, r *http.Request,
 				"times":         times,
 			}
 			amf.Marshals("onMetaData", metaData)
-			offsetDelta := amf.Len() + 15
+			offsetDelta := amf.GetBuffer().Len() + 15
 			offset := offsetDelta + len(flvHead)
 			contentLength += uint64(offset)
 			metaData["duration"] = params.timeRange.Seconds()
@@ -314,7 +301,7 @@ func (plugin *FLVPlugin) processFlvFiles(w http.ResponseWriter, r *http.Request,
 				"filepositions": filepositions,
 				"times":         times,
 			}
-			amf.Reset()
+			amf.GetBuffer().Reset()
 			amf.Marshals("onMetaData", metaData)
 			plugin.Info("start download", "metaData", metaData)
 			w.Header().Set("Content-Length", strconv.FormatInt(int64(contentLength), 10))
@@ -361,13 +348,13 @@ func (plugin *FLVPlugin) processFlvFiles(w http.ResponseWriter, r *http.Request,
 						return
 					}
 					tagHead[0] = flv.FLV_TAG_TYPE_SCRIPT
-					l := amf.Len()
+					l := amf.GetBuffer().Len()
 					tagHead[1] = byte(l >> 16)
 					tagHead[2] = byte(l >> 8)
 					tagHead[3] = byte(l)
 					flv.PutFlvTimestamp(tagHead, 0)
 					writer.Write(tagHead)
-					writer.Write(amf.Buffer)
+					writer.Write([]byte(amf))
 					l += 11
 					binary.BigEndian.PutUint32(tagHead[:4], uint32(l))
 					writer.Write(tagHead[:4])

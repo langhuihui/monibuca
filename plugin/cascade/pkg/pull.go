@@ -5,6 +5,7 @@ import (
 
 	"github.com/quic-go/quic-go"
 	"m7s.live/v5"
+	"m7s.live/v5/pkg/config"
 	flv "m7s.live/v5/plugin/flv/pkg"
 )
 
@@ -17,7 +18,7 @@ func (p *Puller) GetPullJob() *m7s.PullJob {
 	return &p.PullJob
 }
 
-func NewCascadePuller() m7s.IPuller {
+func NewCascadePuller(config.Pull) m7s.IPuller {
 	return &Puller{}
 }
 

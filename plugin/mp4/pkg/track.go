@@ -3,28 +3,24 @@ package mp4
 import (
 	"slices"
 
+	"m7s.live/v5/pkg"
+	"m7s.live/v5/pkg/codec"
 	. "m7s.live/v5/plugin/mp4/pkg/box"
 )
 
 type (
 	Track struct {
+		codec.ICodecCtx
 		Cid     MP4_CODEC_TYPE
 		TrackId uint32
 		SampleTable
-		Duration     uint32
-		Height       uint32
-		Width        uint32
-		SampleRate   uint32
-		SampleSize   uint16
-		SampleCount  uint32
-		ChannelCount uint8
-		Timescale    uint32
+		Duration  uint32
+		Timescale uint32
 		// StartDts        uint64
 		// EndDts          uint64
 		// StartPts        uint64
 		// EndPts          uint64
 		Samplelist      []Sample
-		ExtraData       []byte
 		isFragment      bool
 		fragments       []Fragment
 		defaultSize     uint32
@@ -121,13 +117,13 @@ func (track *Track) AddSampleEntry(entry Sample) {
 
 func (track *Track) makeTkhdBox() *TrackHeaderBox {
 	duration := uint64(track.Duration)
-	tkhd := CreateTrackHeaderBox(track.TrackId, duration, track.Width, track.Height)
-
-	if track.Cid == MP4_CODEC_AAC || track.Cid == MP4_CODEC_G711A || track.Cid == MP4_CODEC_G711U || track.Cid == MP4_CODEC_OPUS {
+	tkhd := CreateTrackHeaderBox(track.TrackId, duration)
+	switch ctx := track.ICodecCtx.(type) {
+	case pkg.IVideoCodecCtx:
+		tkhd.Width = uint32(ctx.Width()) << 16
+		tkhd.Height = uint32(ctx.Height()) << 16
+	case pkg.IAudioCodecCtx:
 		tkhd.Volume = 0x0100
-	} else {
-		tkhd.Width = track.Width << 16
-		tkhd.Height = track.Height << 16
 	}
 	return tkhd
 }
@@ -161,7 +157,7 @@ func (track *Track) makeMdiaBox() *ContainerBox {
 }
 
 func (track *Track) makeStblBox() IBox {
-	track.STSD = track.makeStsd(GetHandlerType(track.Cid))
+	track.STSD = track.makeStsd()
 	if !track.isFragment {
 		if track.Cid == MP4_CODEC_H264 || track.Cid == MP4_CODEC_H265 {
 			track.STSS = track.makeStssBox()
@@ -175,22 +171,25 @@ func (track *Track) makeStblBox() IBox {
 	return CreateContainerBox(TypeSTBL, track.STSD, track.STSS, track.STSZ, track.STSC, track.STTS, track.CTTS, track.STCO)
 }
 
-func (track *Track) makeStsd(handler_type HandlerType) *STSDBox {
+func (track *Track) makeStsd() *STSDBox {
 	var avbox IBox
-	if track.Cid == MP4_CODEC_H264 {
-		avbox = CreateDataBox(TypeAVCC, track.ExtraData)
-	} else if track.Cid == MP4_CODEC_H265 {
-		avbox = CreateDataBox(TypeHVCC, track.ExtraData)
-	} else if track.Cid == MP4_CODEC_AAC || track.Cid == MP4_CODEC_MP2 || track.Cid == MP4_CODEC_MP3 {
-		avbox = CreateESDSBox(uint16(track.TrackId), track.Cid, track.ExtraData)
-	} else if track.Cid == MP4_CODEC_OPUS {
-		avbox = CreateOpusSpecificBox(track.ExtraData)
-	}
 	var entry IBox
-	if handler_type == TypeVIDE {
-		entry = CreateVisualSampleEntry(GetCodecNameWithCodecId(track.Cid), uint16(track.Width), uint16(track.Height), avbox)
-	} else if handler_type == TypeSOUN {
-		entry = CreateAudioSampleEntry(GetCodecNameWithCodecId(track.Cid), uint16(track.ChannelCount), uint16(track.SampleSize), track.SampleRate, avbox)
+	switch ctx := track.ICodecCtx.(type) {
+	case pkg.IVideoCodecCtx:
+		switch track.Cid {
+		case MP4_CODEC_H264:
+			avbox = CreateDataBox(TypeAVCC, track.GetRecord())
+		case MP4_CODEC_H265:
+			avbox = CreateDataBox(TypeHVCC, track.GetRecord())
+		}
+		entry = CreateVisualSampleEntry(GetCodecNameWithCodecId(track.Cid), uint16(ctx.Width()), uint16(ctx.Height()), avbox)
+	case pkg.IAudioCodecCtx:
+		if track.Cid == MP4_CODEC_OPUS {
+			avbox = CreateOpusSpecificBox(track.GetRecord())
+		} else {
+			avbox = CreateESDSBox(uint16(track.TrackId), track.Cid, track.GetRecord())
+		}
+		entry = CreateAudioSampleEntry(GetCodecNameWithCodecId(track.Cid), uint16(ctx.GetChannels()), uint16(ctx.GetSampleSize()), uint32(ctx.GetSampleRate()), avbox)
 	}
 	return CreateSTSDBox(entry)
 }

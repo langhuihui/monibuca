@@ -4,6 +4,7 @@ import "errors"
 
 var (
 	ErrNotFound                 = errors.New("not found")
+	ErrDisposed                 = errors.New("disposed")
 	ErrDisabled                 = errors.New("disabled")
 	ErrStreamExist              = errors.New("stream exist")
 	ErrRecordExists             = errors.New("record exists")

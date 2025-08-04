@@ -112,6 +112,12 @@ type (
 	}
 )
 
+func NewH264CtxFromRecord(record []byte) (ret *H264Ctx, err error) {
+	ret = &H264Ctx{}
+	ret.CodecData, err = h264parser.NewCodecDataFromAVCDecoderConfRecord(record)
+	return
+}
+
 func (*H264Ctx) FourCC() FourCC {
 	return FourCC_H264
 }

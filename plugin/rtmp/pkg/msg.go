@@ -2,10 +2,6 @@ package rtmp
 
 import (
 	"encoding/binary"
-	"errors"
-	"strings"
-
-	"m7s.live/v5/pkg/util"
 )
 
 // https://zhuanlan.zhihu.com/p/196743129
@@ -85,249 +81,6 @@ type HaveStreamID interface {
 	GetStreamID() uint32
 }
 
-func GetRtmpMessage(chunk *Chunk, body util.Buffer) error {
-	switch chunk.MessageTypeID {
-	case RTMP_MSG_CHUNK_SIZE, RTMP_MSG_ABORT, RTMP_MSG_ACK, RTMP_MSG_ACK_SIZE:
-		if body.Len() < 4 {
-			return errors.New("chunk.Body < 4")
-		}
-		chunk.MsgData = Uint32Message(body.ReadUint32())
-	case RTMP_MSG_USER_CONTROL: // RTMP消息类型ID=4, 用户控制消息.客户端或服务端发送本消息通知对方用户的控制事件.
-		{
-			if body.Len() < 2 {
-				return errors.New("UserControlMessage.Body < 2")
-			}
-			base := UserControlMessage{
-				EventType: body.ReadUint16(),
-				EventData: body,
-			}
-			switch base.EventType {
-			case RTMP_USER_STREAM_BEGIN: // 服务端向客户端发送本事件通知对方一个流开始起作用可以用于通讯.在默认情况下,服务端在成功地从客户端接收连接命令之后发送本事件,事件ID为0.事件数据是表示开始起作用的流的ID.
-				m := &StreamIDMessage{
-					UserControlMessage: base,
-					StreamID:           0,
-				}
-				if len(base.EventData) >= 4 {
-					//服务端在成功地从客户端接收连接命令之后发送本事件,事件ID为0.事件数据是表示开始起作用的流的ID.
-					m.StreamID = body.ReadUint32()
-				}
-				chunk.MsgData = m
-			case RTMP_USER_STREAM_EOF, RTMP_USER_STREAM_DRY, RTMP_USER_STREAM_IS_RECORDED: // 服务端向客户端发送本事件通知客户端,数据回放完成.果没有发行额外的命令,就不再发送数据.客户端丢弃从流中接收的消息.4字节的事件数据表示,回放结束的流的ID.
-				chunk.MsgData = &StreamIDMessage{
-					UserControlMessage: base,
-					StreamID:           body.ReadUint32(),
-				}
-			case RTMP_USER_SET_BUFFLEN: // 客户端向服务端发送本事件,告知对方自己存储一个流的数据的缓存的长度(毫秒单位).当服务端开始处理一个流得时候发送本事件.事件数据的头四个字节表示流ID,后4个字节表示缓存长度(毫秒单位).
-				chunk.MsgData = &SetBufferMessage{
-					StreamIDMessage: StreamIDMessage{
-						UserControlMessage: base,
-						StreamID:           body.ReadUint32(),
-					},
-					Millisecond: body.ReadUint32(),
-				}
-			case RTMP_USER_PING_REQUEST: // 服务端通过本事件测试客户端是否可达.事件数据是4个字节的事件戳.代表服务调用本命令的本地时间.客户端在接收到kMsgPingRequest之后返回kMsgPingResponse事件
-				chunk.MsgData = &PingRequestMessage{
-					UserControlMessage: base,
-					Timestamp:          body.ReadUint32(),
-				}
-			case RTMP_USER_PING_RESPONSE, RTMP_USER_EMPTY: // 客户端向服务端发送本消息响应ping请求.事件数据是接kMsgPingRequest请求的时间.
-				chunk.MsgData = &base
-			default:
-				chunk.MsgData = &base
-			}
-		}
-	case RTMP_MSG_BANDWIDTH: // RTMP消息类型ID=6, 置对等端带宽.客户端或服务端发送本消息更新对等端的输出带宽.
-		if body.Len() < 4 {
-			return errors.New("chunk.Body < 4")
-		}
-		m := &SetPeerBandwidthMessage{
-			AcknowledgementWindowsize: body.ReadUint32(),
-		}
-		if body.Len() > 0 {
-			m.LimitType = body[0]
-		}
-		chunk.MsgData = m
-	case RTMP_MSG_EDGE: // RTMP消息类型ID=7, 用于边缘服务与源服务器.
-	case RTMP_MSG_AUDIO: // RTMP消息类型ID=8, 音频数据.客户端或服务端发送本消息用于发送音频数据.
-	case RTMP_MSG_VIDEO: // RTMP消息类型ID=9, 视频数据.客户端或服务端发送本消息用于发送视频数据.
-	case RTMP_MSG_AMF3_METADATA: // RTMP消息类型ID=15, 数据消息.用AMF3编码.
-	case RTMP_MSG_AMF3_SHARED: // RTMP消息类型ID=16, 共享对象消息.用AMF3编码.
-	case RTMP_MSG_AMF3_COMMAND: // RTMP消息类型ID=17, 命令消息.用AMF3编码.
-		decodeCommandAMF0(chunk, body[1:])
-	case RTMP_MSG_AMF0_METADATA: // RTMP消息类型ID=18, 数据消息.用AMF0编码.
-	case RTMP_MSG_AMF0_SHARED: // RTMP消息类型ID=19, 共享对象消息.用AMF0编码.
-	case RTMP_MSG_AMF0_COMMAND: // RTMP消息类型ID=20, 命令消息.用AMF0编码.
-		decodeCommandAMF0(chunk, body) // 解析具体的命令消息
-	case RTMP_MSG_AGGREGATE:
-	default:
-	}
-	return nil
-}
-
-// 03 00 00 00 00 01 02 14 00 00 00 00 02 00 07 63 6F 6E 6E 65 63 74 00 3F F0 00 00 00 00 00 00 08
-//
-// 这个函数解析的是从02(第13个字节)开始,前面12个字节是Header,后面的是Payload,即解析Payload.
-//
-// 解析用AMF0编码的命令消息.(Payload)
-// 第一个字节(Byte)为此数据的类型.例如:string,int,bool...
-
-// string就是字符类型,一个byte的amf类型,两个bytes的字符长度,和N个bytes的数据.
-// 比如: 02 00 02 33 22,第一个byte为amf类型,其后两个bytes为长度,注意这里的00 02是大端模式,33 22是字符数据
-
-// umber类型其实就是double,占8bytes.
-// 比如: 00 00 00 00 00 00 00 00,第一个byte为amf类型,其后8bytes为double值0.0
-
-// boolean就是布尔类型,占用1byte.
-// 比如:01 00,第一个byte为amf类型,其后1byte是值,false.
-
-// object类型要复杂点.
-// 第一个byte是03表示object,其后跟的是N个(key+value).最后以00 00 09表示object结束
-func decodeCommandAMF0(chunk *Chunk, body []byte) {
-	amf := AMF{body}             // rtmp_amf.go, amf 是 bytes类型, 将rtmp body(payload)放到bytes.Buffer(amf)中去.
-	cmd := amf.ReadShortString() // rtmp_amf.go, 将payload的bytes类型转换成string类型.
-	cmdMsg := CommandMessage{
-		cmd,
-		uint64(amf.ReadNumber()),
-	}
-	switch cmd {
-	case "connect", "call":
-		chunk.MsgData = &CallMessage{
-			cmdMsg,
-			amf.ReadObject(),
-			amf.ReadObject(),
-		}
-	case "createStream":
-		amf.Unmarshal()
-		chunk.MsgData = &cmdMsg
-	case "play":
-		amf.Unmarshal()
-		m := &PlayMessage{
-			CURDStreamMessage{
-				cmdMsg,
-				chunk.MessageStreamID,
-			},
-			amf.ReadShortString(),
-			float64(-2),
-			float64(-1),
-			true,
-		}
-		for i := 0; i < 3; i++ {
-			if v, _ := amf.Unmarshal(); v != nil {
-				switch vv := v.(type) {
-				case float64:
-					if i == 0 {
-						m.Start = vv
-					} else {
-						m.Duration = vv
-					}
-				case bool:
-					m.Reset = vv
-					i = 2
-				}
-			} else {
-				break
-			}
-		}
-		chunk.MsgData = m
-	case "play2":
-		amf.Unmarshal()
-		chunk.MsgData = &Play2Message{
-			cmdMsg,
-			uint64(amf.ReadNumber()),
-			amf.ReadShortString(),
-			amf.ReadShortString(),
-			uint64(amf.ReadNumber()),
-			amf.ReadShortString(),
-		}
-	case "publish":
-		amf.Unmarshal()
-		chunk.MsgData = &PublishMessage{
-			CURDStreamMessage{
-				cmdMsg,
-				chunk.MessageStreamID,
-			},
-			amf.ReadShortString(),
-			amf.ReadShortString(),
-		}
-	case "pause":
-		amf.Unmarshal()
-		chunk.MsgData = &PauseMessage{
-			cmdMsg,
-			amf.ReadBool(),
-			uint64(amf.ReadNumber()),
-		}
-	case "seek":
-		amf.Unmarshal()
-		chunk.MsgData = &SeekMessage{
-			cmdMsg,
-			uint64(amf.ReadNumber()),
-		}
-	case "deleteStream", "closeStream":
-		amf.Unmarshal()
-		chunk.MsgData = &CURDStreamMessage{
-			cmdMsg,
-			uint32(amf.ReadNumber()),
-		}
-	case "releaseStream":
-		amf.Unmarshal()
-		chunk.MsgData = &ReleaseStreamMessage{
-			cmdMsg,
-			amf.ReadShortString(),
-		}
-	case "receiveAudio", "receiveVideo":
-		amf.Unmarshal()
-		chunk.MsgData = &ReceiveAVMessage{
-			cmdMsg,
-			amf.ReadBool(),
-		}
-	case Response_Result, Response_Error, Response_OnStatus:
-		if cmdMsg.TransactionId == 2 {
-			chunk.MsgData = &ResponseCreateStreamMessage{
-				cmdMsg, amf.ReadObject(), uint32(amf.ReadNumber()),
-			}
-			return
-		}
-		response := &ResponseMessage{
-			cmdMsg,
-			amf.ReadObject(),
-			amf.ReadObject(), "",
-		}
-		if response.Infomation == nil && response.Properties != nil {
-			response.Infomation = response.Properties
-		}
-		// codef := zap.String("code", response.Infomation["code"].(string))
-		switch response.Infomation["level"] {
-		case Level_Status:
-			// RTMPPlugin.Info("_result :", codef)
-		case Level_Warning:
-			// RTMPPlugin.Warn("_result :", codef)
-		case Level_Error:
-			// RTMPPlugin.Error("_result :", codef)
-		}
-		if strings.HasPrefix(response.Infomation["code"].(string), "NetStream.Publish") {
-			chunk.MsgData = &ResponsePublishMessage{
-				cmdMsg,
-				response.Properties,
-				response.Infomation,
-				chunk.MessageStreamID,
-			}
-		} else if strings.HasPrefix(response.Infomation["code"].(string), "NetStream.Play") {
-			chunk.MsgData = &ResponsePlayMessage{
-				cmdMsg,
-				response.Infomation,
-				chunk.MessageStreamID,
-			}
-		} else {
-			chunk.MsgData = response
-		}
-	case "FCPublish", "FCUnpublish":
-		fallthrough
-	default:
-		chunk.MsgData = &struct{ CommandMessage }{cmdMsg}
-		// RTMPPlugin.Info("decode command amf0 ", zap.String("cmd", cmd))
-	}
-}
-
 /* Command Message */
 type CommandMessage struct {
 	CommandName   string // 命令名. 字符串. 命令名.设置为"connect"
@@ -352,7 +105,7 @@ func (msg *CommandMessage) Encode(buf IAMF) {
 type Uint32Message uint32
 
 func (msg Uint32Message) Encode(buf IAMF) {
-	binary.BigEndian.PutUint32(buf.Malloc(4), uint32(msg))
+	binary.BigEndian.PutUint32(buf.GetBuffer().Malloc(4), uint32(msg))
 }
 
 // Protocol control message 4, User Control Messages.
@@ -361,10 +114,7 @@ func (msg Uint32Message) Encode(buf IAMF) {
 
 // Event Type (16 bits) : The first 2 bytes of the message data are used to identify the Event type. Event type is followed by Event data.
 // Event Data
-type UserControlMessage struct {
-	EventType uint16
-	EventData []byte
-}
+type UserControlMessage uint16
 
 // Protocol control message 6, Set Peer Bandwidth Message.
 // The client or the server sends this message to limit the output bandwidth of its peer.
@@ -377,8 +127,8 @@ type SetPeerBandwidthMessage struct {
 }
 
 func (msg *SetPeerBandwidthMessage) Encode(buf IAMF) {
-	buf.WriteUint32(msg.AcknowledgementWindowsize)
-	buf.WriteByte(msg.LimitType)
+	buf.GetBuffer().WriteUint32(msg.AcknowledgementWindowsize)
+	buf.GetBuffer().WriteByte(msg.LimitType)
 }
 
 // Message 15, 18. Data Message. The client or the server sends this message to send Metadata or any
@@ -746,10 +496,9 @@ type StreamIDMessage struct {
 	StreamID uint32
 }
 
-func (msg *StreamIDMessage) Encode(buffer IAMF) {
-	buffer.WriteUint16(msg.EventType)
-	msg.EventData = buffer.Malloc(4)
-	binary.BigEndian.PutUint32(msg.EventData, msg.StreamID)
+func (msg StreamIDMessage) Encode(buf IAMF) {
+	msg.UserControlMessage.Encode(buf)
+	binary.BigEndian.PutUint32(buf.GetBuffer().Malloc(4), msg.StreamID)
 }
 
 // SetBuffer Length (=3)
@@ -763,10 +512,10 @@ type SetBufferMessage struct {
 }
 
 func (msg *SetBufferMessage) Encode(buf IAMF) {
-	buf.WriteUint16(msg.EventType)
-	msg.EventData = buf.Malloc(8)
-	binary.BigEndian.PutUint32(msg.EventData, msg.StreamID)
-	binary.BigEndian.PutUint32(msg.EventData[4:], msg.Millisecond)
+	msg.UserControlMessage.Encode(buf)
+	buffer := buf.GetBuffer().Malloc(8)
+	binary.BigEndian.PutUint32(buffer, msg.StreamID)
+	binary.BigEndian.PutUint32(buffer[4:], msg.Millisecond)
 }
 
 // PingRequest (=6)
@@ -778,12 +527,11 @@ type PingRequestMessage struct {
 	Timestamp uint32
 }
 
-func (msg *PingRequestMessage) Encode(buf IAMF) {
-	buf.WriteUint16(msg.EventType)
-	msg.EventData = buf.Malloc(4)
-	binary.BigEndian.PutUint32(msg.EventData, msg.Timestamp)
+func (msg PingRequestMessage) Encode(buf IAMF) {
+	msg.UserControlMessage.Encode(buf)
+	binary.BigEndian.PutUint32(buf.GetBuffer().Malloc(4), msg.Timestamp)
 }
 
-func (msg *UserControlMessage) Encode(buf IAMF) {
-	buf.WriteUint16(msg.EventType)
+func (msg UserControlMessage) Encode(buf IAMF) {
+	buf.GetBuffer().WriteUint16(uint16(msg))
 }

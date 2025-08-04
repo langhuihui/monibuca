@@ -13,13 +13,17 @@ import (
 	"github.com/bluenviron/gohlslib/pkg/codecs"
 	"github.com/bluenviron/mediacommon/pkg/codecs/mpeg4audio"
 	"golang.org/x/exp/slices"
+	"m7s.live/v5"
 	. "m7s.live/v5"
 	"m7s.live/v5/pkg"
 	"m7s.live/v5/pkg/codec"
+	"m7s.live/v5/pkg/format"
 	"m7s.live/v5/pkg/util"
 )
 
-var _ = InstallPlugin[LLHLSPlugin](NewLLHLSTransform)
+var _ = InstallPlugin[LLHLSPlugin](m7s.PluginMeta{
+	NewTransformer: NewLLHLSTransform,
+})
 var llwriting util.Collection[string, *LLMuxer]
 
 func init() {
@@ -35,7 +39,7 @@ type LLHLSPlugin struct {
 	Plugin
 }
 
-func (c *LLHLSPlugin) OnInit() (err error) {
+func (c *LLHLSPlugin) Start() (err error) {
 	_, port, _ := strings.Cut(c.GetCommonConf().HTTP.ListenAddr, ":")
 	if port == "80" {
 		c.PlayAddr = append(c.PlayAddr, "http://{hostName}/llhls/{streamPath}/index.m3u8")
@@ -107,7 +111,7 @@ func (ll *LLMuxer) Run() (err error) {
 		}
 	}
 
-	var videoFunc = func(v *pkg.H26xFrame) (err error) {
+	var videoFunc = func(v *pkg.AVFrame) (err error) {
 		return nil
 	}
 	if ctx := subscriber.Publisher.GetVideoCodecCtx(); ctx != nil {
@@ -118,16 +122,16 @@ func (ll *LLMuxer) Run() (err error) {
 				SPS: ctx.SPS(),
 				PPS: ctx.PPS(),
 			}
-			videoFunc = func(v *pkg.H26xFrame) (err error) {
+			videoFunc = func(v *pkg.AVFrame) (err error) {
 				ts := v.Timestamp
 				var au [][]byte
 				if subscriber.VideoReader.Value.IDR {
 					au = append(au, ctx.SPS(), ctx.PPS())
 				}
-				for _, buffer := range v.Nalus {
+				for buffer := range v.Raw.(*pkg.Nalus).RangePoint {
 					au = append(au, buffer.Buffers...)
 				}
-				return ll.Muxer.WriteH264(time.Now().Add(ts-ll.Muxer.SegmentMinDuration), ts*90/time.Millisecond, au)
+				return ll.Muxer.WriteH264(time.Now().Add(ts-ll.Muxer.SegmentMinDuration), v.GetPTS(), au)
 			}
 		case *codec.H265Ctx:
 			ll.Muxer.VideoTrack.Codec = &codecs.H265{
@@ -135,16 +139,15 @@ func (ll *LLMuxer) Run() (err error) {
 				PPS: ctx.PPS(),
 				VPS: ctx.VPS(),
 			}
-			videoFunc = func(v *pkg.H26xFrame) (err error) {
-				ts := v.Timestamp
+			videoFunc = func(v *pkg.AVFrame) (err error) {
 				var au [][]byte
 				if subscriber.VideoReader.Value.IDR {
 					au = append(au, ctx.VPS(), ctx.SPS(), ctx.PPS())
 				}
-				for _, buffer := range v.Nalus {
+				for buffer := range v.Raw.(*pkg.Nalus).RangePoint {
 					au = append(au, buffer.Buffers...)
 				}
-				return ll.Muxer.WriteH265(time.Now().Add(ts-ll.Muxer.SegmentMinDuration), ts*90/time.Millisecond, au)
+				return ll.Muxer.WriteH265(time.Now().Add(v.Timestamp-ll.Muxer.SegmentMinDuration), v.GetPTS(), au)
 			}
 		}
 	}
@@ -165,10 +168,10 @@ func (ll *LLMuxer) Run() (err error) {
 		return
 	}
 
-	return PlayBlock(ll.TransformJob.Subscriber, func(audio *pkg.RawAudio) (err error) {
+	return PlayBlock(ll.TransformJob.Subscriber, func(audio *format.RawAudio) (err error) {
 		now := time.Now()
 		ts := audio.Timestamp
-		return ll.Muxer.WriteMPEG4Audio(now.Add(ts-ll.Muxer.SegmentMinDuration), ts*90/time.Millisecond, slices.Clone(audio.Buffers))
+		return ll.Muxer.WriteMPEG4Audio(now.Add(ts-ll.Muxer.SegmentMinDuration), audio.GetDTS(), slices.Clone(audio.Buffers))
 	}, videoFunc)
 }
 

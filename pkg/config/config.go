@@ -36,6 +36,22 @@ type Config struct {
 var (
 	durationType = reflect.TypeOf(time.Duration(0))
 	regexpType   = reflect.TypeOf(Regexp{})
+	basicTypes   = []reflect.Kind{
+		reflect.Bool,
+		reflect.Int,
+		reflect.Int8,
+		reflect.Int16,
+		reflect.Int32,
+		reflect.Int64,
+		reflect.Uint,
+		reflect.Uint8,
+		reflect.Uint16,
+		reflect.Uint32,
+		reflect.Uint64,
+		reflect.Float32,
+		reflect.Float64,
+		reflect.String,
+	}
 )
 
 func (config *Config) Range(f func(key string, value Config)) {
@@ -99,29 +115,29 @@ func (config *Config) Parse(s any, prefix ...string) {
 	if t.Kind() == reflect.Pointer {
 		t, v = t.Elem(), v.Elem()
 	}
-
+	isStruct := t.Kind() == reflect.Struct && t != regexpType
+	if isStruct {
+		defaults.SetDefaults(v.Addr().Interface())
+	}
 	config.Ptr = v
-
 	if !v.IsValid() {
 		fmt.Println("parse to ", prefix, config.name, s, "is not valid")
 		return
 	}
-
-	config.Default = v.Interface()
-
 	if l := len(prefix); l > 0 { // 读取环境变量
 		name := strings.ToLower(prefix[l-1])
-		if tag := config.tag.Get("default"); tag != "" {
+		_, isUnmarshaler := v.Addr().Interface().(yaml.Unmarshaler)
+		tag := config.tag.Get("default")
+		if tag != "" && isUnmarshaler {
 			v.Set(config.assign(name, tag))
-			config.Default = v.Interface()
 		}
 		if envValue := os.Getenv(strings.Join(prefix, "_")); envValue != "" {
 			v.Set(config.assign(name, envValue))
 			config.Env = v.Interface()
 		}
 	}
-
-	if t.Kind() == reflect.Struct && t != regexpType {
+	config.Default = v.Interface()
+	if isStruct {
 		for i, j := 0, t.NumField(); i < j; i++ {
 			ft, fv := t.Field(i), v.Field(i)
 
@@ -315,16 +331,18 @@ func (config *Config) GetMap() map[string]any {
 
 var regexPureNumber = regexp.MustCompile(`^\d+$`)
 
-func (config *Config) assign(k string, v any) (target reflect.Value) {
-	ft := config.Ptr.Type()
-
+func unmarshal(ft reflect.Type, v any) (target reflect.Value) {
 	source := reflect.ValueOf(v)
-
+	for _, t := range basicTypes {
+		if source.Kind() == t && ft.Kind() == t {
+			return source
+		}
+	}
 	switch ft {
 	case durationType:
 		target = reflect.New(ft).Elem()
 		if source.Type() == durationType {
-			target.Set(source)
+			return source
 		} else if source.IsZero() || !source.IsValid() {
 			target.SetInt(0)
 		} else {
@@ -332,7 +350,7 @@ func (config *Config) assign(k string, v any) (target reflect.Value) {
 			if d, err := time.ParseDuration(timeStr); err == nil && !regexPureNumber.MatchString(timeStr) {
 				target.SetInt(int64(d))
 			} else {
-				slog.Error("invalid duration value please add unit (s,m,h,d)，eg: 100ms, 10s, 4m, 1h", "key", k, "value", source)
+				slog.Error("invalid duration value please add unit (s,m,h,d)，eg: 100ms, 10s, 4m, 1h", "value", timeStr)
 				os.Exit(1)
 			}
 		}
@@ -341,56 +359,67 @@ func (config *Config) assign(k string, v any) (target reflect.Value) {
 		regexpStr := source.String()
 		target.Set(reflect.ValueOf(Regexp{regexp.MustCompile(regexpStr)}))
 	default:
-		if ft.Kind() == reflect.Map {
-			target = reflect.MakeMap(ft)
-			if v != nil {
-				tmpStruct := reflect.StructOf([]reflect.StructField{
-					{
-						Name: "Key",
-						Type: ft.Key(),
-					},
-				})
-				tmpValue := reflect.New(tmpStruct)
-				for k, v := range v.(map[string]any) {
-					_ = yaml.Unmarshal([]byte(fmt.Sprintf("key: %s", k)), tmpValue.Interface())
-					var value reflect.Value
-					if ft.Elem().Kind() == reflect.Struct {
-						value = reflect.New(ft.Elem())
-						defaults.SetDefaults(value.Interface())
-						if reflect.TypeOf(v).Kind() != reflect.Map {
-							value.Elem().Field(0).Set(reflect.ValueOf(v))
-						} else {
-							out, _ := yaml.Marshal(v)
-							_ = yaml.Unmarshal(out, value.Interface())
-						}
-						value = value.Elem()
-					} else {
-						value = reflect.ValueOf(v)
+		switch ft.Kind() {
+		case reflect.Struct:
+			newStruct := reflect.New(ft)
+			defaults.SetDefaults(newStruct.Interface())
+			if value, ok := v.(map[string]any); ok {
+				for i := 0; i < ft.NumField(); i++ {
+					key := strings.ToLower(ft.Field(i).Name)
+					if vv, ok := value[key]; ok {
+						newStruct.Elem().Field(i).Set(unmarshal(ft.Field(i).Type, vv))
 					}
-					target.SetMapIndex(tmpValue.Elem().Field(0), value)
+				}
+			} else {
+				newStruct.Elem().Field(0).Set(unmarshal(ft.Field(0).Type, v))
+			}
+			return newStruct.Elem()
+		case reflect.Map:
+			if v != nil {
+				target = reflect.MakeMap(ft)
+				for k, v := range v.(map[string]any) {
+					target.SetMapIndex(unmarshal(ft.Key(), k), unmarshal(ft.Elem(), v))
 				}
 			}
-		} else {
-			tmpStruct := reflect.StructOf([]reflect.StructField{
-				{
-					Name: strings.ToUpper(k),
-					Type: ft,
-				},
-			})
-			tmpValue := reflect.New(tmpStruct)
+		case reflect.Slice:
+			if v != nil {
+				s := v.([]any)
+				target = reflect.MakeSlice(ft, len(s), len(s))
+				for i, v := range s {
+					target.Index(i).Set(unmarshal(ft.Elem(), v))
+				}
+			}
+		default:
 			if v != nil {
 				var out []byte
+				var err error
 				if vv, ok := v.(string); ok {
-					out = []byte(fmt.Sprintf("%s: %s", k, vv))
+					out = []byte(fmt.Sprintf("%s: %s", "value", vv))
 				} else {
-					out, _ = yaml.Marshal(map[string]any{k: v})
+					out, err = yaml.Marshal(map[string]any{"value": v})
+					if err != nil {
+						panic(err)
+					}
 				}
-				_ = yaml.Unmarshal(out, tmpValue.Interface())
+				tmpValue := reflect.New(reflect.StructOf([]reflect.StructField{
+					{
+						Name: "Value",
+						Type: ft,
+					},
+				}))
+				err = yaml.Unmarshal(out, tmpValue.Interface())
+				if err != nil {
+					panic(err)
+				}
+				return tmpValue.Elem().Field(0)
 			}
-			target = tmpValue.Elem().Field(0)
 		}
 	}
 	return
+}
+
+func (config *Config) assign(k string, v any) reflect.Value {
+	return unmarshal(config.Ptr.Type(), v)
 }
 
 func Parse(target any, conf map[string]any) {

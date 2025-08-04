@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"m7s.live/v5/pkg/config"
 	"m7s.live/v5/pkg/task"
 
 	myip "github.com/husanpao/ip"
@@ -25,7 +26,7 @@ import (
 	"gopkg.in/yaml.v3"
 	"m7s.live/v5/pb"
 	"m7s.live/v5/pkg"
-	"m7s.live/v5/pkg/config"
+	"m7s.live/v5/pkg/format"
 	"m7s.live/v5/pkg/util"
 )
 
@@ -96,9 +97,8 @@ func (s *Server) api_Stream_AnnexB_(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer reader.StopRead()
-	var annexb *pkg.AnnexB
-	var converter = pkg.NewAVFrameConvert[*pkg.AnnexB](publisher.VideoTrack.AVTrack, nil)
-	annexb, err = converter.ConvertFromAVFrame(&reader.Value)
+	var annexb format.AnnexB
+	err = pkg.ConvertFrameType(reader.Value.Wraps[0], &annexb)
 	if err != nil {
 		http.Error(rw, err.Error(), http.StatusInternalServerError)
 		return
@@ -150,6 +150,9 @@ func (s *Server) getStreamInfo(pub *Publisher) (res *pb.StreamInfoResponse, err 
 			}
 			res.Data.AudioTrack.SampleRate = uint32(t.ICodecCtx.(pkg.IAudioCodecCtx).GetSampleRate())
 			res.Data.AudioTrack.Channels = uint32(t.ICodecCtx.(pkg.IAudioCodecCtx).GetChannels())
+			if pub.State == PublisherStateInit {
+				res.Data.State = int32(PublisherStateTrackAdded)
+			}
 		}
 	}
 	if t := pub.VideoTrack.AVTrack; t != nil {
@@ -165,6 +168,9 @@ func (s *Server) getStreamInfo(pub *Publisher) (res *pb.StreamInfoResponse, err 
 			}
 			res.Data.VideoTrack.Width = uint32(t.ICodecCtx.(pkg.IVideoCodecCtx).Width())
 			res.Data.VideoTrack.Height = uint32(t.ICodecCtx.(pkg.IVideoCodecCtx).Height())
+			if pub.State == PublisherStateInit {
+				res.Data.State = int32(PublisherStateTrackAdded)
+			}
 		}
 	}
 	return
@@ -172,7 +178,7 @@ func (s *Server) getStreamInfo(pub *Publisher) (res *pb.StreamInfoResponse, err 
 
 func (s *Server) StreamInfo(ctx context.Context, req *pb.StreamSnapRequest) (res *pb.StreamInfoResponse, err error) {
 	var recordings []*pb.RecordingDetail
-	s.Records.SafeRange(func(record *RecordJob) bool {
+	s.Records.Range(func(record *RecordJob) bool {
 		if record.StreamPath == req.StreamPath {
 			recordings = append(recordings, &pb.RecordingDetail{
 				FilePath:   record.RecConf.FilePath,
@@ -212,11 +218,13 @@ func (s *Server) TaskTree(context.Context, *emptypb.Empty) (res *pb.TaskTreeResp
 			StartTime:   timestamppb.New(t.StartTime),
 			Description: m.GetDescriptions(),
 			StartReason: t.StartReason,
+			Level:       uint32(t.GetLevel()),
 		}
 		if job, ok := m.(task.IJob); ok {
 			if blockedTask := job.Blocked(); blockedTask != nil {
 				res.Blocked = fillData(blockedTask)
 			}
+			res.EventLoopRunning = job.EventLoopRunning()
 			for t := range job.RangeSubTask {
 				child := fillData(t)
 				if child == nil {
@@ -251,7 +259,7 @@ func (s *Server) RestartTask(ctx context.Context, req *pb.RequestWithId64) (resp
 
 func (s *Server) GetRecording(ctx context.Context, req *emptypb.Empty) (resp *pb.RecordingListResponse, err error) {
 	resp = &pb.RecordingListResponse{}
-	s.Records.SafeRange(func(record *RecordJob) bool {
+	s.Records.Range(func(record *RecordJob) bool {
 		resp.Data = append(resp.Data, &pb.Recording{
 			StreamPath: record.StreamPath,
 			StartTime:  timestamppb.New(record.StartTime),
@@ -264,7 +272,7 @@ func (s *Server) GetRecording(ctx context.Context, req *emptypb.Empty) (resp *pb
 }
 
 func (s *Server) GetSubscribers(context.Context, *pb.SubscribersRequest) (res *pb.SubscribersResponse, err error) {
-	s.Streams.Call(func() error {
+	s.CallOnStreamTask(func() {
 		var subscribers []*pb.SubscriberSnapShot
 		for subscriber := range s.Subscribers.Range {
 			meta, _ := json.Marshal(subscriber.GetDescriptions())
@@ -303,7 +311,6 @@ func (s *Server) GetSubscribers(context.Context, *pb.SubscribersRequest) (res *p
 			Data:  subscribers,
 			Total: int32(s.Subscribers.Length),
 		}
-		return nil
 	})
 	return
 }
@@ -323,7 +330,8 @@ func (s *Server) AudioTrackSnap(_ context.Context, req *pb.StreamSnapRequest) (r
 			}
 		}
 		pub.AudioTrack.Ring.Do(func(v *pkg.AVFrame) {
-			if len(v.Wraps) > 0 {
+			if len(v.Wraps) > 0 && v.TryRLock() {
+				defer v.RUnlock()
 				var snap pb.TrackSnapShot
 				snap.Sequence = v.Sequence
 				snap.Timestamp = uint32(v.Timestamp / time.Millisecond)
@@ -333,7 +341,7 @@ func (s *Server) AudioTrackSnap(_ context.Context, req *pb.StreamSnapRequest) (r
 				data.RingDataSize += uint32(v.Wraps[0].GetSize())
 				for i, wrap := range v.Wraps {
 					snap.Wrap[i] = &pb.Wrap{
-						Timestamp: uint32(wrap.GetTimestamp() / time.Millisecond),
+						Timestamp: uint32(wrap.GetSample().Timestamp / time.Millisecond),
 						Size:      uint32(wrap.GetSize()),
 						Data:      wrap.String(),
 					}
@@ -374,7 +382,7 @@ func (s *Server) api_VideoTrack_SSE(rw http.ResponseWriter, r *http.Request) {
 			snap.KeyFrame = frame.IDR
 			for i, wrap := range frame.Wraps {
 				snap.Wrap[i] = &pb.Wrap{
-					Timestamp: uint32(wrap.GetTimestamp() / time.Millisecond),
+					Timestamp: uint32(wrap.GetSample().Timestamp / time.Millisecond),
 					Size:      uint32(wrap.GetSize()),
 					Data:      wrap.String(),
 				}
@@ -407,7 +415,7 @@ func (s *Server) api_AudioTrack_SSE(rw http.ResponseWriter, r *http.Request) {
 			snap.KeyFrame = frame.IDR
 			for i, wrap := range frame.Wraps {
 				snap.Wrap[i] = &pb.Wrap{
-					Timestamp: uint32(wrap.GetTimestamp() / time.Millisecond),
+					Timestamp: uint32(wrap.GetSample().Timestamp / time.Millisecond),
 					Size:      uint32(wrap.GetSize()),
 					Data:      wrap.String(),
 				}
@@ -433,7 +441,8 @@ func (s *Server) VideoTrackSnap(ctx context.Context, req *pb.StreamSnapRequest) 
 			}
 		}
 		pub.VideoTrack.Ring.Do(func(v *pkg.AVFrame) {
-			if len(v.Wraps) > 0 {
+			if len(v.Wraps) > 0 && v.TryRLock() {
+				defer v.RUnlock()
 				var snap pb.TrackSnapShot
 				snap.Sequence = v.Sequence
 				snap.Timestamp = uint32(v.Timestamp / time.Millisecond)
@@ -443,7 +452,7 @@ func (s *Server) VideoTrackSnap(ctx context.Context, req *pb.StreamSnapRequest) 
 				data.RingDataSize += uint32(v.Wraps[0].GetSize())
 				for i, wrap := range v.Wraps {
 					snap.Wrap[i] = &pb.Wrap{
-						Timestamp: uint32(wrap.GetTimestamp() / time.Millisecond),
+						Timestamp: uint32(wrap.GetSample().Timestamp / time.Millisecond),
 						Size:      uint32(wrap.GetSize()),
 						Data:      wrap.String(),
 					}
@@ -476,29 +485,27 @@ func (s *Server) Shutdown(ctx context.Context, req *pb.RequestWithId) (res *pb.S
 }
 
 func (s *Server) ChangeSubscribe(ctx context.Context, req *pb.ChangeSubscribeRequest) (res *pb.SuccessResponse, err error) {
-	s.Streams.Call(func() error {
+	s.CallOnStreamTask(func() {
 		if subscriber, ok := s.Subscribers.Get(req.Id); ok {
 			if pub, ok := s.Streams.Get(req.StreamPath); ok {
 				subscriber.Publisher.RemoveSubscriber(subscriber)
 				subscriber.StreamPath = req.StreamPath
 				pub.AddSubscriber(subscriber)
-				return nil
+				return
 			}
 		}
 		err = pkg.ErrNotFound
-		return nil
 	})
 	return &pb.SuccessResponse{}, err
 }
 
 func (s *Server) StopSubscribe(ctx context.Context, req *pb.RequestWithId) (res *pb.SuccessResponse, err error) {
-	s.Streams.Call(func() error {
+	s.CallOnStreamTask(func() {
 		if subscriber, ok := s.Subscribers.Get(req.Id); ok {
 			subscriber.Stop(errors.New("stop by api"))
 		} else {
 			err = pkg.ErrNotFound
 		}
-		return nil
 	})
 	return &pb.SuccessResponse{}, err
 }
@@ -543,7 +550,7 @@ func (s *Server) StopPublish(ctx context.Context, req *pb.StreamSnapRequest) (re
 // /api/stream/list
 func (s *Server) StreamList(_ context.Context, req *pb.StreamListRequest) (res *pb.StreamListResponse, err error) {
 	recordingMap := make(map[string][]*pb.RecordingDetail)
-	for record := range s.Records.SafeRange {
+	for record := range s.Records.Range {
 		recordingMap[record.StreamPath] = append(recordingMap[record.StreamPath], &pb.RecordingDetail{
 			FilePath:   record.RecConf.FilePath,
 			Mode:       record.RecConf.Mode,
@@ -567,14 +574,46 @@ func (s *Server) StreamList(_ context.Context, req *pb.StreamListRequest) (res *
 }
 
 func (s *Server) WaitList(context.Context, *emptypb.Empty) (res *pb.StreamWaitListResponse, err error) {
-	s.Streams.Call(func() error {
+	s.CallOnStreamTask(func() {
 		res = &pb.StreamWaitListResponse{
 			List: make(map[string]int32),
 		}
 		for subs := range s.Waiting.Range {
 			res.List[subs.StreamPath] = int32(subs.Length)
 		}
-		return nil
+	})
+	return
+}
+
+func (s *Server) GetSubscriptionProgress(ctx context.Context, req *pb.StreamSnapRequest) (res *pb.SubscriptionProgressResponse, err error) {
+	s.CallOnStreamTask(func() {
+		if waitStream, ok := s.Waiting.Get(req.StreamPath); ok {
+			progress := waitStream.Progress
+			res = &pb.SubscriptionProgressResponse{
+				Code:    0,
+				Message: "success",
+				Data: &pb.SubscriptionProgressData{
+					CurrentStep: int32(progress.CurrentStep),
+				},
+			}
+			// Convert steps
+			for _, step := range progress.Steps {
+				pbStep := &pb.Step{
+					Name:        step.Name,
+					Description: step.Description,
+					Error:       step.Error,
+				}
+				if !step.StartedAt.IsZero() {
+					pbStep.StartedAt = timestamppb.New(step.StartedAt)
+				}
+				if !step.CompletedAt.IsZero() {
+					pbStep.CompletedAt = timestamppb.New(step.CompletedAt)
+				}
+				res.Data.Steps = append(res.Data.Steps, pbStep)
+			}
+		} else {
+			err = pkg.ErrNotFound
+		}
 	})
 	return
 }
@@ -643,10 +682,10 @@ func (s *Server) Summary(context.Context, *emptypb.Empty) (res *pb.SummaryRespon
 		netWorks = append(netWorks, info)
 	}
 	res.StreamCount = int32(s.Streams.Length)
-	res.PullCount = int32(s.Pulls.Length)
-	res.PushCount = int32(s.Pushs.Length)
+	res.PullCount = int32(s.Pulls.Length())
+	res.PushCount = int32(s.Pushs.Length())
 	res.SubscribeCount = int32(s.Subscribers.Length)
-	res.RecordCount = int32(s.Records.Length)
+	res.RecordCount = int32(s.Records.Length())
 	res.TransformCount = int32(s.Transforms.Length)
 	res.NetWork = netWorks
 	s.lastSummary = res
@@ -920,7 +959,7 @@ func (s *Server) DeleteRecord(ctx context.Context, req *pb.ReqRecordDelete) (res
 
 func (s *Server) GetTransformList(ctx context.Context, req *emptypb.Empty) (res *pb.TransformListResponse, err error) {
 	res = &pb.TransformListResponse{}
-	s.Transforms.Call(func() error {
+	s.Transforms.Call(func() {
 		for transform := range s.Transforms.Range {
 			info := &pb.Transform{
 				StreamPath: transform.StreamPath,
@@ -932,13 +971,12 @@ func (s *Server) GetTransformList(ctx context.Context, req *emptypb.Empty) (res 
 				result, err = yaml.Marshal(transform.TransformJob.Config)
 				if err != nil {
 					s.Error("marshal transform config failed", "error", err)
-					return err
+					return
 				}
 				info.Config = string(result)
 			}
 			res.Data = append(res.Data, info)
 		}
-		return nil
 	})
 	return
 }

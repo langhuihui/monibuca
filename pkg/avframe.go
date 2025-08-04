@@ -1,8 +1,6 @@
 package pkg
 
 import (
-	"io"
-	"net"
 	"sync"
 	"time"
 
@@ -27,21 +25,28 @@ type (
 	}
 	// Source -> Parse -> Demux -> (ConvertCtx) -> Mux(GetAllocator) -> Recycle
 	IAVFrame interface {
-		GetAllocator() *util.ScalableMemoryAllocator
-		SetAllocator(*util.ScalableMemoryAllocator)
-		Parse(*AVTrack) error                                          // get codec info, idr
-		ConvertCtx(codec.ICodecCtx) (codec.ICodecCtx, IAVFrame, error) // convert codec from source stream
-		Demux(codec.ICodecCtx) (any, error)                            // demux to raw format
-		Mux(codec.ICodecCtx, *AVFrame)                                 // mux from raw format
-		GetTimestamp() time.Duration
-		GetCTS() time.Duration
+		GetSample() *Sample
 		GetSize() int
+		CheckCodecChange() error
+		Demux() error      // demux to raw format
+		Mux(*Sample) error // mux from origin format
 		Recycle()
 		String() string
-		Dump(byte, io.Writer)
 	}
-
-	Nalus []util.Memory
+	ISequenceCodecCtx[T any] interface {
+		GetSequenceFrame() T
+	}
+	BaseSample struct {
+		Raw                 IRaw // 裸格式用于转换的中间格式
+		IDR                 bool
+		TS0, Timestamp, CTS time.Duration // 原始 TS、修正 TS、Composition Time Stamp
+	}
+	Sample struct {
+		codec.ICodecCtx
+		util.RecyclableMemory
+		*BaseSample
+	}
+	Nalus = util.ReuseArray[util.Memory]
 
 	AudioData = util.Memory
 
@@ -49,47 +54,136 @@ type (
 
 	AVFrame struct {
 		DataFrame
-		IDR       bool
-		Timestamp time.Duration // 绝对时间戳
-		CTS       time.Duration // composition time stamp
-		Wraps     []IAVFrame    // 封装格式
+		*Sample
+		Wraps []IAVFrame // 封装格式
 	}
-
+	IRaw interface {
+		util.Resetter
+		Count() int
+	}
 	AVRing    = util.Ring[AVFrame]
 	DataFrame struct {
 		sync.RWMutex
 		discard   bool
 		Sequence  uint32    // 在一个Track中的序号
 		WriteTime time.Time // 写入时间,可用于比较两个帧的先后
-		Raw       any       // 裸格式
 	}
 )
 
-func (frame *AVFrame) Clone() {
+func (sample *Sample) GetSize() int {
+	return sample.Size
+}
 
+func (sample *Sample) GetSample() *Sample {
+	return sample
+}
+
+func (sample *Sample) CheckCodecChange() (err error) {
+	return
+}
+
+func (sample *Sample) Demux() error {
+	return nil
+}
+
+func (sample *Sample) Mux(from *Sample) error {
+	sample.ICodecCtx = from.GetBase()
+	return nil
+}
+
+func ConvertFrameType(from, to IAVFrame) (err error) {
+	fromSampe, toSample := from.GetSample(), to.GetSample()
+	if !fromSampe.HasRaw() {
+		if err = from.Demux(); err != nil {
+			return
+		}
+	}
+	toSample.SetAllocator(fromSampe.GetAllocator())
+	toSample.BaseSample = fromSampe.BaseSample
+	return to.Mux(fromSampe)
+}
+
+func (b *BaseSample) HasRaw() bool {
+	return b.Raw != nil && b.Raw.Count() > 0
+}
+
+// 90Hz
+func (b *BaseSample) GetDTS() time.Duration {
+	return b.Timestamp * 90 / time.Millisecond
+}
+
+func (b *BaseSample) GetPTS() time.Duration {
+	return (b.Timestamp + b.CTS) * 90 / time.Millisecond
+}
+
+func (b *BaseSample) SetDTS(dts time.Duration) {
+	b.Timestamp = dts * time.Millisecond / 90
+}
+
+func (b *BaseSample) SetPTS(pts time.Duration) {
+	b.CTS = pts*time.Millisecond/90 - b.Timestamp
+}
+
+func (b *BaseSample) SetTS32(ts uint32) {
+	b.Timestamp = time.Duration(ts) * time.Millisecond
+}
+
+func (b *BaseSample) GetTS32() uint32 {
+	return uint32(b.Timestamp / time.Millisecond)
+}
+
+func (b *BaseSample) SetCTS32(ts uint32) {
+	b.CTS = time.Duration(ts) * time.Millisecond
+}
+
+func (b *BaseSample) GetCTS32() uint32 {
+	return uint32(b.CTS / time.Millisecond)
+}
+
+func (b *BaseSample) GetNalus() *util.ReuseArray[util.Memory] {
+	if b.Raw == nil {
+		b.Raw = &Nalus{}
+	}
+	return b.Raw.(*util.ReuseArray[util.Memory])
+}
+
+func (b *BaseSample) GetAudioData() *AudioData {
+	if b.Raw == nil {
+		b.Raw = &AudioData{}
+	}
+	return b.Raw.(*AudioData)
+}
+
+func (b *BaseSample) ParseAVCC(reader *util.MemoryReader, naluSizeLen int) error {
+	array := b.GetNalus()
+	for reader.Length > 0 {
+		l, err := reader.ReadBE(naluSizeLen)
+		if err != nil {
+			return err
+		}
+		reader.RangeN(int(l), array.GetNextPointer().PushOne)
+	}
+	return nil
 }
 
 func (frame *AVFrame) Reset() {
-	frame.Timestamp = 0
-	frame.IDR = false
-	frame.CTS = 0
-	frame.Raw = nil
 	if len(frame.Wraps) > 0 {
 		for _, wrap := range frame.Wraps {
 			wrap.Recycle()
 		}
-		frame.Wraps = frame.Wraps[:0]
+		frame.BaseSample.IDR = false
+		frame.BaseSample.TS0 = 0
+		frame.BaseSample.Timestamp = 0
+		frame.BaseSample.CTS = 0
+		if frame.Raw != nil {
+			frame.Raw.Reset()
+		}
 	}
 }
 
 func (frame *AVFrame) Discard() {
 	frame.discard = true
 	frame.Reset()
-}
-
-func (frame *AVFrame) Demux(codecCtx codec.ICodecCtx) (err error) {
-	frame.Raw, err = frame.Wraps[0].Demux(codecCtx)
-	return
 }
 
 func (df *DataFrame) StartWrite() (success bool) {
@@ -106,31 +200,6 @@ func (df *DataFrame) StartWrite() (success bool) {
 func (df *DataFrame) Ready() {
 	df.WriteTime = time.Now()
 	df.Unlock()
-}
-
-func (nalus *Nalus) H264Type() codec.H264NALUType {
-	return codec.ParseH264NALUType((*nalus)[0].Buffers[0][0])
-}
-
-func (nalus *Nalus) H265Type() codec.H265NALUType {
-	return codec.ParseH265NALUType((*nalus)[0].Buffers[0][0])
-}
-
-func (nalus *Nalus) Append(bytes []byte) {
-	*nalus = append(*nalus, util.Memory{Buffers: net.Buffers{bytes}, Size: len(bytes)})
-}
-
-func (nalus *Nalus) ParseAVCC(reader *util.MemoryReader, naluSizeLen int) error {
-	for reader.Length > 0 {
-		l, err := reader.ReadBE(naluSizeLen)
-		if err != nil {
-			return err
-		}
-		var mem util.Memory
-		reader.RangeN(int(l), mem.AppendOne)
-		*nalus = append(*nalus, mem)
-	}
-	return nil
 }
 
 func (obus *OBUs) ParseAVCC(reader *util.MemoryReader) error {
@@ -157,7 +226,15 @@ func (obus *OBUs) ParseAVCC(reader *util.MemoryReader) error {
 		if err != nil {
 			return err
 		}
-		(*AudioData)(obus).AppendOne(obu)
+		(*AudioData)(obus).PushOne(obu)
 	}
 	return nil
+}
+
+func (obus *OBUs) Reset() {
+	((*util.Memory)(obus)).Reset()
+}
+
+func (obus *OBUs) Count() int {
+	return (*util.Memory)(obus).Count()
 }

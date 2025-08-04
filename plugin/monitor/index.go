@@ -12,7 +12,10 @@ import (
 	monitor "m7s.live/v5/plugin/monitor/pkg"
 )
 
-var _ = m7s.InstallPlugin[MonitorPlugin](&pb.Api_ServiceDesc, pb.RegisterApiHandler)
+var _ = m7s.InstallPlugin[MonitorPlugin](m7s.PluginMeta{
+	ServiceDesc:         &pb.Api_ServiceDesc,
+	RegisterGRPCHandler: pb.RegisterApiHandler,
+})
 
 type MonitorPlugin struct {
 	pb.UnimplementedApiServer
@@ -21,7 +24,7 @@ type MonitorPlugin struct {
 	//columnstore *frostdb.ColumnStore
 }
 
-func (cfg *MonitorPlugin) OnStop() {
+func (cfg *MonitorPlugin) Dispose() {
 	if cfg.DB != nil {
 		//cfg.saveUnDisposeTask(cfg.Plugin.Server)
 		cfg.DB.Model(cfg.session).Update("end_time", time.Now())
@@ -44,7 +47,7 @@ func (cfg *MonitorPlugin) saveTask(task task.ITask) {
 	cfg.DB.Create(&th)
 }
 
-func (cfg *MonitorPlugin) OnInit() (err error) {
+func (cfg *MonitorPlugin) Start() (err error) {
 	//cfg.columnstore, err = frostdb.New()
 	//database, _ := cfg.columnstore.DB(cfg, "monitor")
 	if cfg.DB != nil {
@@ -63,7 +66,7 @@ func (cfg *MonitorPlugin) OnInit() (err error) {
 		if err != nil {
 			return err
 		}
-		cfg.Plugin.Server.OnBeforeDispose(func() {
+		cfg.Plugin.Server.Using(func() {
 			cfg.saveTask(cfg.Plugin.Server)
 		})
 		cfg.Plugin.Server.OnDescendantsDispose(cfg.saveTask)

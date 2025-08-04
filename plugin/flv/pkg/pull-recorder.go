@@ -52,6 +52,7 @@ func (p *RecordReader) Run() (err error) {
 		return pkg.ErrDisabled
 	}
 	allocator := util.NewScalableMemoryAllocator(1 << 10)
+	writer := m7s.NewPublisherWriter[*rtmp.AudioFrame, *rtmp.VideoFrame](publisher, allocator)
 	var tagHeader [11]byte
 	var ts int64
 	var realTime time.Time
@@ -87,7 +88,8 @@ func (p *RecordReader) Run() (err error) {
 			}
 			var flvHead [3]byte
 			var version, flag byte
-			err = head.NewReader().ReadByteTo(&flvHead[0], &flvHead[1], &flvHead[2], &version, &flag)
+			r := head.NewReader()
+			err = r.ReadByteTo(&flvHead[0], &flvHead[1], &flvHead[2], &version, &flag)
 			hasAudio := (flag & 0x04) != 0
 			hasVideo := (flag & 0x01) != 0
 			if err != nil {
@@ -136,26 +138,38 @@ func (p *RecordReader) Run() (err error) {
 				dataSize := int(tagHeader[1])<<16 | int(tagHeader[2])<<8 | int(tagHeader[3]) // data size (3 bytes)
 				timestamp := uint32(tagHeader[4])<<16 | uint32(tagHeader[5])<<8 | uint32(tagHeader[6]) | uint32(tagHeader[7])<<24
 				// stream id is tagHeader[8:11] (3 bytes), always 0
-				var frame rtmp.RTMPData
-				frame.SetAllocator(allocator)
 
-				if err = p.reader.ReadNto(dataSize, frame.NextN(dataSize)); err != nil {
-					break
-				}
 				ts = int64(timestamp)
 				if i != 0 || seekPosition == 0 {
 					ts += seekTsOffset
 				}
 				realTime = stream.StartTime.Add(time.Duration(timestamp) * time.Millisecond)
-				frame.Timestamp = uint32(ts)
 				switch t {
 				case FLV_TAG_TYPE_AUDIO:
 					if publisher.PubAudio {
-						err = publisher.WriteAudio(frame.WrapAudio())
+						frame := writer.AudioFrame
+						err = p.reader.ReadNto(dataSize, frame.NextN(dataSize))
+						if err != nil {
+							return err
+						}
+						frame.SetTS32(uint32(ts))
+						if err = writer.NextAudio(); err != nil {
+							return err
+						}
+					} else {
+						p.reader.Skip(dataSize)
 					}
 				case FLV_TAG_TYPE_VIDEO:
 					if publisher.PubVideo {
-						err = publisher.WriteVideo(frame.WrapVideo())
+						frame := writer.VideoFrame
+						err = p.reader.ReadNto(dataSize, frame.NextN(dataSize))
+						if err != nil {
+							return err
+						}
+						frame.SetTS32(uint32(ts))
+						if err = writer.NextVideo(); err != nil {
+							return err
+						}
 						// After processing the first video frame, check if we need to seek
 						if i == 0 && seekPosition > 0 {
 							_, err = p.File.Seek(seekPosition, io.SeekStart)
@@ -168,11 +182,8 @@ func (p *RecordReader) Run() (err error) {
 						}
 					}
 				case FLV_TAG_TYPE_SCRIPT:
-					r := frame.NewReader()
-					amf := &rtmp.AMF{
-						Buffer: util.Buffer(r.ToBytes()),
-					}
-					frame.Recycle()
+					buf := allocator.Borrow(dataSize)
+					amf := rtmp.AMF(buf)
 					var obj any
 					if obj, err = amf.Unmarshal(); err != nil {
 						return

@@ -1,0 +1,5 @@
+---
+description: build pb
+alwaysApply: false
+---
+如果修改了 proto 文件需要编译，请使用 scripts 目录下的脚本来编译

@@ -30,7 +30,7 @@ const (
 )
 
 type (
-	TransMode    string
+	TransMode    = string
 	DecodeConfig struct {
 		Mode   TransMode `default:"pipe" json:"mode" desc:"转码模式"` //转码模式
 		Codec  string    `json:"codec" desc:"解码器"`
@@ -169,14 +169,13 @@ func (t *Transformer) Start() (err error) {
 		t.ffmpeg.Stderr = os.Stderr
 	}
 	t.Info("start exec", "cmd", t.ffmpeg.String())
-	return t.ffmpeg.Start()
+	return
 }
 
 func (t *Transformer) Go() error {
-	t.SetDescription("pid", t.ffmpeg.Process.Pid)
 	if t.From.Mode == "pipe" {
-		rBuf := make(chan []byte, 100)
-		t.ffmpeg.Stdin = util.NewBufReaderChan(rBuf)
+		bufReader := util.NewBufReaderChan(100)
+		t.ffmpeg.Stdin = bufReader
 		var live flv.Live
 		live.Subscriber = t.TransformJob.Subscriber
 		var bufferFull time.Time
@@ -185,10 +184,9 @@ func (t *Transformer) Go() error {
 			for _, b := range flv {
 				buffer = append(buffer, b...)
 			}
-			select {
-			case rBuf <- buffer:
+			if bufReader.Feed(buffer) {
 				bufferFull = time.Now()
-			default:
+			} else {
 				t.Warn("pipe input buffer full")
 				if time.Since(bufferFull) > time.Second*5 {
 					t.Stop(bufio.ErrBufferFull)
@@ -196,9 +194,19 @@ func (t *Transformer) Go() error {
 			}
 			return
 		}
-		defer close(rBuf)
+		defer bufReader.Recycle()
+		err := t.ffmpeg.Start()
+		if err != nil {
+			return err
+		}
+		t.SetDescription("pid", t.ffmpeg.Process.Pid)
 		return live.Run()
 	} else {
+		err := t.ffmpeg.Start()
+		if err != nil {
+			return err
+		}
+		t.SetDescription("pid", t.ffmpeg.Process.Pid)
 		if err := t.ffmpeg.Wait(); err != nil {
 			return err
 		}

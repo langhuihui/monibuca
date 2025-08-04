@@ -2,51 +2,18 @@ package plugin_mp4
 
 import (
 	"fmt"
-	"io"
-	"net"
 	"net/http"
 	"strings"
 	"time"
 
-	"github.com/gobwas/ws/wsutil"
 	"m7s.live/v5"
-	v5 "m7s.live/v5/pkg"
 	"m7s.live/v5/pkg/codec"
+	"m7s.live/v5/pkg/util"
 	"m7s.live/v5/plugin/mp4/pb"
+	mp4 "m7s.live/v5/plugin/mp4/pkg"
 	pkg "m7s.live/v5/plugin/mp4/pkg"
 	"m7s.live/v5/plugin/mp4/pkg/box"
-	rtmp "m7s.live/v5/plugin/rtmp/pkg"
 )
-
-type MediaContext struct {
-	io.Writer
-	conn   net.Conn
-	wto    time.Duration
-	ws     bool
-	buffer []byte
-}
-
-func (m *MediaContext) Write(p []byte) (n int, err error) {
-	if m.ws {
-		m.buffer = append(m.buffer, p...)
-		return len(p), nil
-	}
-	if m.conn != nil && m.wto > 0 {
-		m.conn.SetWriteDeadline(time.Now().Add(m.wto))
-	}
-	return m.Writer.Write(p)
-}
-
-func (m *MediaContext) Flush() (err error) {
-	if m.ws {
-		if m.wto > 0 {
-			m.conn.SetWriteDeadline(time.Now().Add(m.wto))
-		}
-		err = wsutil.WriteServerBinary(m.conn, m.buffer)
-		m.buffer = m.buffer[:0]
-	}
-	return
-}
 
 type MP4Plugin struct {
 	pb.UnimplementedApiServer
@@ -83,7 +50,7 @@ func (p *MP4Plugin) RegisterHandler() map[string]http.HandlerFunc {
 	}
 }
 
-func (p *MP4Plugin) OnInit() (err error) {
+func (p *MP4Plugin) Start() (err error) {
 	if p.DB != nil {
 		err = p.DB.AutoMigrate(&Exception{})
 		if err != nil {
@@ -136,28 +103,14 @@ func (p *MP4Plugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	sub.RemoteAddr = r.RemoteAddr
-	var ctx MediaContext
-	ctx.conn, err = sub.CheckWebSocket(w, r)
+	var ctx util.HTTP_WS_Writer
+	ctx.Conn, err = sub.CheckWebSocket(w, r)
 	if err != nil {
 		return
 	}
-	ctx.wto = p.GetCommonConf().WriteTimeout
-	if ctx.conn == nil {
-		w.Header().Set("Transfer-Encoding", "chunked")
-		w.Header().Set("Content-Type", "video/mp4")
-		w.WriteHeader(http.StatusOK)
-		if hijacker, ok := w.(http.Hijacker); ok && ctx.wto > 0 {
-			ctx.conn, _, _ = hijacker.Hijack()
-			ctx.conn.SetWriteDeadline(time.Now().Add(ctx.wto))
-			ctx.Writer = ctx.conn
-		} else {
-			ctx.Writer = w
-			w.(http.Flusher).Flush()
-		}
-	} else {
-		ctx.ws = true
-		ctx.Writer = ctx.conn
-	}
+	ctx.WriteTimeout = p.GetCommonConf().WriteTimeout
+	ctx.ContentType = "video/mp4"
+	ctx.ServeHTTP(w, r)
 
 	muxer := pkg.NewMuxer(pkg.FLAG_FRAGMENT)
 	err = muxer.WriteInitSegment(&ctx)
@@ -165,7 +118,6 @@ func (p *MP4Plugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	var offsetAudio, offsetVideo = 1, 5
 	var audio, video *pkg.Track
 	var nextFragmentId uint32
 	if sub.Publisher.HasVideoTrack() && sub.SubVideo {
@@ -185,26 +137,10 @@ func (p *MP4Plugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		video.Timescale = 1000
 		video.Samplelist = []box.Sample{
 			{
-				Offset:    0,
-				Data:      nil,
-				Size:      0,
-				Timestamp: 0,
-				Duration:  0,
-				KeyFrame:  true,
+				KeyFrame: true,
 			},
 		}
-		switch v.ICodecCtx.FourCC() {
-		case codec.FourCC_H264:
-			h264Ctx := v.ICodecCtx.GetBase().(*codec.H264Ctx)
-			video.ExtraData = h264Ctx.Record
-			video.Width = uint32(h264Ctx.Width())
-			video.Height = uint32(h264Ctx.Height())
-		case codec.FourCC_H265:
-			h265Ctx := v.ICodecCtx.GetBase().(*codec.H265Ctx)
-			video.ExtraData = h265Ctx.Record
-			video.Width = uint32(h265Ctx.Width())
-			video.Height = uint32(h265Ctx.Height())
-		}
+		video.ICodecCtx = v.ICodecCtx
 	}
 
 	if sub.Publisher.HasAudioTrack() && sub.SubAudio {
@@ -226,26 +162,11 @@ func (p *MP4Plugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		audio = muxer.AddTrack(codecID)
 		audio.Timescale = 1000
-		audioCtx := a.ICodecCtx.(v5.IAudioCodecCtx)
-		audio.SampleRate = uint32(audioCtx.GetSampleRate())
-		audio.ChannelCount = uint8(audioCtx.GetChannels())
-		audio.SampleSize = uint16(audioCtx.GetSampleSize())
+		audio.ICodecCtx = a.ICodecCtx
 		audio.Samplelist = []box.Sample{
 			{
-				Offset:    0,
-				Data:      nil,
-				Size:      0,
-				Timestamp: 0,
-				Duration:  0,
-				KeyFrame:  true,
+				KeyFrame: true,
 			},
-		}
-		switch a.ICodecCtx.FourCC() {
-		case codec.FourCC_MP4A:
-			offsetAudio = 2
-			audio.ExtraData = a.ICodecCtx.GetBase().(*codec.AACCtx).ConfigBytes
-		default:
-			offsetAudio = 1
 		}
 	}
 	err = muxer.WriteMoov(&ctx)
@@ -253,61 +174,35 @@ func (p *MP4Plugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if ctx.ws {
-		ctx.Flush()
-	}
-	m7s.PlayBlock(sub, func(frame *rtmp.RTMPAudio) (err error) {
-		bs := frame.Memory.ToBytes()
-		if offsetAudio == 2 && bs[1] == 0 {
-			return nil
-		}
-		if audio.Samplelist[0].Data != nil {
+	ctx.Flush()
+	m7s.PlayBlock(sub, func(frame *mp4.AudioFrame) (err error) {
+		if audio.Samplelist[0].Buffers != nil {
 			audio.Samplelist[0].Duration = sub.AudioReader.AbsTime - audio.Samplelist[0].Timestamp
 			nextFragmentId++
 			// Create moof box for this track
 			moof := audio.MakeMoof(nextFragmentId)
 			// Create mdat box for this track
-			mdat := box.CreateDataBox(box.TypeMDAT, audio.Samplelist[0].Data)
+			mdat := box.CreateMemoryBox(box.TypeMDAT, audio.Samplelist[0].Memory)
 			box.WriteTo(&ctx, moof, mdat)
-			if ctx.ws {
-				err = ctx.Flush()
-			}
+			err = ctx.Flush()
 		}
 		audio.Samplelist[0].Timestamp = sub.AudioReader.AbsTime
-		audio.Samplelist[0].Data = bs[offsetAudio:]
-		audio.Samplelist[0].Size = len(audio.Samplelist[0].Data)
+		audio.Samplelist[0].Memory = frame.Memory
 		return
-	}, func(frame *rtmp.RTMPVideo) (err error) {
-		bs := frame.Memory.ToBytes()
-		if ctx, ok := sub.VideoReader.Track.ICodecCtx.(*rtmp.H265Ctx); ok && ctx.Enhanced {
-			switch bs[0] & 0b1111 {
-			case rtmp.PacketTypeCodedFrames:
-				offsetVideo = 8
-			case rtmp.PacketTypeSequenceStart:
-				return nil
-			}
-		} else {
-			if bs[1] == 0 {
-				return nil
-			}
-			offsetVideo = 5
-		}
-		if video.Samplelist[0].Data != nil {
+	}, func(frame *mp4.VideoFrame) (err error) {
+		if video.Samplelist[0].Buffers != nil {
 			video.Samplelist[0].Duration = sub.VideoReader.AbsTime - video.Samplelist[0].Timestamp
 			nextFragmentId++
 			// Create moof box for this track
 			moof := video.MakeMoof(nextFragmentId)
 			// Create mdat box for this track
-			mdat := box.CreateDataBox(box.TypeMDAT, video.Samplelist[0].Data)
+			mdat := box.CreateMemoryBox(box.TypeMDAT, video.Samplelist[0].Memory)
 			box.WriteTo(&ctx, moof, mdat)
-			if ctx.ws {
-				err = ctx.Flush()
-			}
+			err = ctx.Flush()
 		}
-		video.Samplelist[0].Data = bs[offsetVideo:]
-		video.Samplelist[0].Size = len(bs) - offsetVideo
+		video.Samplelist[0].Memory = frame.Memory
 		video.Samplelist[0].Timestamp = sub.VideoReader.AbsTime
-		video.Samplelist[0].CTS = frame.CTS
+		video.Samplelist[0].CTS = uint32(frame.CTS / time.Millisecond)
 		video.Samplelist[0].KeyFrame = sub.VideoReader.Value.IDR
 		return
 	})

@@ -314,7 +314,7 @@ func (t *TranscodePlugin) Close(ctx context.Context, closeReq *pb.TransTwin) (re
 
 func (t *TranscodePlugin) List(context.Context, *emptypb.Empty) (*pb.TransListResponse, error) {
 	data := make([]*pb.TransTwin, 0)
-	t.Server.Transforms.Call(func() error {
+	t.Server.Transforms.Call(func() {
 		for transformedMap := range t.Server.Transforms.Range {
 			if _, ok := transformedMap.TransformJob.Transformer.(*transcode.Transformer); ok {
 				data = append(data, &pb.TransTwin{
@@ -323,7 +323,6 @@ func (t *TranscodePlugin) List(context.Context, *emptypb.Empty) (*pb.TransListRe
 				})
 			}
 		}
-		return nil
 	})
 	return &pb.TransListResponse{
 		Code:    0,

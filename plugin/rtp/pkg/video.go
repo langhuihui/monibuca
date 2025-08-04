@@ -1,12 +1,13 @@
 package rtp
 
 import (
+	"bytes"
 	"encoding/base64"
 	"fmt"
 	"io"
 	"slices"
-	"strings"
 	"time"
+	"unsafe"
 
 	"github.com/deepch/vdk/codec/h264parser"
 	"github.com/deepch/vdk/codec/h265parser"
@@ -26,29 +27,27 @@ type (
 	}
 	H264Ctx struct {
 		H26xCtx
-		codec.H264Ctx
+		*codec.H264Ctx
 	}
 	H265Ctx struct {
 		H26xCtx
-		codec.H265Ctx
+		*codec.H265Ctx
 		DONL bool
 	}
 	AV1Ctx struct {
 		RTPCtx
-		codec.AV1Ctx
+		*codec.AV1Ctx
 	}
 	VP9Ctx struct {
 		RTPCtx
 	}
-	Video struct {
+	VideoFrame struct {
 		RTPData
-		CTS time.Duration
-		DTS time.Duration
 	}
 )
 
 var (
-	_ IAVFrame       = (*Video)(nil)
+	_ IAVFrame       = (*VideoFrame)(nil)
 	_ IVideoCodecCtx = (*H264Ctx)(nil)
 	_ IVideoCodecCtx = (*H265Ctx)(nil)
 	_ IVideoCodecCtx = (*AV1Ctx)(nil)
@@ -62,207 +61,188 @@ const (
 	MTUSize      = 1460
 )
 
-func (r *Video) Parse(t *AVTrack) (err error) {
-	switch r.MimeType {
-	case webrtc.MimeTypeH264:
-		var ctx *H264Ctx
-		if t.ICodecCtx != nil {
-			ctx = t.ICodecCtx.(*H264Ctx)
-		} else {
-			ctx = &H264Ctx{}
-			ctx.parseFmtpLine(r.RTPCodecParameters)
-			var sps, pps []byte
-			//packetization-mode=1; sprop-parameter-sets=J2QAKaxWgHgCJ+WagICAgQ==,KO48sA==; profile-level-id=640029
-			if sprop, ok := ctx.Fmtp["sprop-parameter-sets"]; ok {
-				if sprops := strings.Split(sprop, ","); len(sprops) == 2 {
-					if sps, err = base64.StdEncoding.DecodeString(sprops[0]); err != nil {
-						return
-					}
-					if pps, err = base64.StdEncoding.DecodeString(sprops[1]); err != nil {
-						return
-					}
-				}
-				if ctx.CodecData, err = h264parser.NewCodecDataFromSPSAndPPS(sps, pps); err != nil {
-					return
-				}
-			}
-			t.ICodecCtx = ctx
-		}
-		if t.Value.Raw, err = r.Demux(ctx); err != nil {
-			return
-		}
-		pts := r.Packets[0].Timestamp
-		var hasSPSPPS bool
+func (r *VideoFrame) Parse(data IAVFrame) (err error) {
+	input := data.(*VideoFrame)
+	r.Packets = append(r.Packets[:0], input.Packets...)
+	return
+}
+
+func (r *VideoFrame) Recycle() {
+	r.RecyclableMemory.Recycle()
+	r.Packets.Reset()
+}
+
+func (r *VideoFrame) CheckCodecChange() (err error) {
+	if len(r.Packets) == 0 {
+		return ErrSkip
+	}
+	old := r.ICodecCtx
+	// 解复用数据
+	if err = r.Demux(); err != nil {
+		return
+	}
+	// 处理时间戳和序列号
+	pts := r.Packets[0].Timestamp
+	nalus := r.Raw.(*Nalus)
+	switch ctx := old.(type) {
+	case *H264Ctx:
 		dts := ctx.dtsEst.Feed(pts)
-		r.DTS = time.Duration(dts) * time.Millisecond / 90
-		r.CTS = time.Duration(pts-dts) * time.Millisecond / 90
-		for _, nalu := range t.Value.Raw.(Nalus) {
-			switch codec.ParseH264NALUType(nalu.Buffers[0][0]) {
+		r.SetDTS(time.Duration(dts))
+		r.SetPTS(time.Duration(pts))
+
+		// 检查 SPS、PPS 和 IDR 帧
+		var sps, pps []byte
+		var hasSPSPPS bool
+		for nalu := range nalus.RangePoint {
+			nalType := codec.ParseH264NALUType(nalu.Buffers[0][0])
+			switch nalType {
 			case h264parser.NALU_SPS:
-				ctx.RecordInfo.SPS = [][]byte{nalu.ToBytes()}
-				if ctx.SPSInfo, err = h264parser.ParseSPS(ctx.SPS()); err != nil {
-					return
-				}
+				sps = nalu.ToBytes()
+				defer nalus.Remove(nalu)
 			case h264parser.NALU_PPS:
-				hasSPSPPS = true
-				ctx.RecordInfo.PPS = [][]byte{nalu.ToBytes()}
-				if ctx.CodecData, err = h264parser.NewCodecDataFromSPSAndPPS(ctx.RecordInfo.SPS[0], ctx.RecordInfo.PPS[0]); err != nil {
-					return
-				}
+				pps = nalu.ToBytes()
+				defer nalus.Remove(nalu)
 			case codec.NALU_IDR_Picture:
-				t.Value.IDR = true
+				r.IDR = true
 			}
 		}
-		if len(ctx.CodecData.Record) == 0 {
-			return ErrSkip
-		}
-		if t.Value.IDR && !hasSPSPPS {
-			spsRTP := &rtp.Packet{
-				Header: rtp.Header{
-					Version:        2,
-					SequenceNumber: ctx.SequenceNumber,
-					Timestamp:      pts,
-					SSRC:           ctx.SSRC,
-					PayloadType:    uint8(ctx.PayloadType),
+
+		// 如果发现新的 SPS/PPS，更新编解码器上下文
+		if hasSPSPPS = sps != nil && pps != nil; hasSPSPPS && (len(ctx.Record) == 0 || !bytes.Equal(sps, ctx.SPS()) || !bytes.Equal(pps, ctx.PPS())) {
+			var newCodecData h264parser.CodecData
+			if newCodecData, err = h264parser.NewCodecDataFromSPSAndPPS(sps, pps); err != nil {
+				return
+			}
+			newCtx := &H264Ctx{
+				H26xCtx: ctx.H26xCtx,
+				H264Ctx: &codec.H264Ctx{
+					CodecData: newCodecData,
 				},
-				Payload: ctx.SPS(),
 			}
-			ppsRTP := &rtp.Packet{
-				Header: rtp.Header{
-					Version:        2,
-					SequenceNumber: ctx.SequenceNumber,
-					Timestamp:      pts,
-					SSRC:           ctx.SSRC,
-					PayloadType:    uint8(ctx.PayloadType),
-				},
-				Payload: ctx.PPS(),
+			// 保持原有的 RTP 参数
+			if oldCtx, ok := old.(*H264Ctx); ok {
+				newCtx.RTPCtx = oldCtx.RTPCtx
 			}
-			r.Packets = slices.Insert(r.Packets, 0, spsRTP, ppsRTP)
+			r.ICodecCtx = newCtx
+		} else {
+			// 如果是 IDR 帧但没有 SPS/PPS，需要插入
+			if r.IDR && len(ctx.SPS()) > 0 && len(ctx.PPS()) > 0 {
+				spsRTP := rtp.Packet{
+					Header: rtp.Header{
+						Version:        2,
+						SequenceNumber: ctx.SequenceNumber,
+						Timestamp:      pts,
+						SSRC:           ctx.SSRC,
+						PayloadType:    uint8(ctx.PayloadType),
+					},
+					Payload: ctx.SPS(),
+				}
+				ppsRTP := rtp.Packet{
+					Header: rtp.Header{
+						Version:        2,
+						SequenceNumber: ctx.SequenceNumber,
+						Timestamp:      pts,
+						SSRC:           ctx.SSRC,
+						PayloadType:    uint8(ctx.PayloadType),
+					},
+					Payload: ctx.PPS(),
+				}
+				r.Packets = slices.Insert(r.Packets, 0, spsRTP, ppsRTP)
+			}
 		}
-		for _, p := range r.Packets {
+
+		// 更新序列号
+		for p := range r.Packets.RangePoint {
 			p.SequenceNumber = ctx.seq
 			ctx.seq++
 		}
-	case webrtc.MimeTypeH265:
-		var ctx *H265Ctx
-		if t.ICodecCtx != nil {
-			ctx = t.ICodecCtx.(*H265Ctx)
-		} else {
-			ctx = &H265Ctx{}
-			ctx.parseFmtpLine(r.RTPCodecParameters)
-			var vps, sps, pps []byte
-			if sprop_sps, ok := ctx.Fmtp["sprop-sps"]; ok {
-				if sps, err = base64.StdEncoding.DecodeString(sprop_sps); err != nil {
-					return
-				}
-			}
-			if sprop_pps, ok := ctx.Fmtp["sprop-pps"]; ok {
-				if pps, err = base64.StdEncoding.DecodeString(sprop_pps); err != nil {
-					return
-				}
-			}
-			if sprop_vps, ok := ctx.Fmtp["sprop-vps"]; ok {
-				if vps, err = base64.StdEncoding.DecodeString(sprop_vps); err != nil {
-					return
-				}
-			}
-			if len(vps) > 0 && len(sps) > 0 && len(pps) > 0 {
-				if ctx.CodecData, err = h265parser.NewCodecDataFromVPSAndSPSAndPPS(vps, sps, pps); err != nil {
-					return
-				}
-			}
-			if sprop_donl, ok := ctx.Fmtp["sprop-max-don-diff"]; ok {
-				if sprop_donl != "0" {
-					ctx.DONL = true
-				}
-			}
-			t.ICodecCtx = ctx
-		}
-		if t.Value.Raw, err = r.Demux(ctx); err != nil {
-			return
-		}
-		pts := r.Packets[0].Timestamp
+	case *H265Ctx:
 		dts := ctx.dtsEst.Feed(pts)
-		r.DTS = time.Duration(dts) * time.Millisecond / 90
-		r.CTS = time.Duration(pts-dts) * time.Millisecond / 90
+		r.SetDTS(time.Duration(dts))
+		r.SetPTS(time.Duration(pts))
+		// 检查 VPS、SPS、PPS 和 IDR 帧
+		var vps, sps, pps []byte
 		var hasVPSSPSPPS bool
-		for _, nalu := range t.Value.Raw.(Nalus) {
+		for nalu := range nalus.RangePoint {
 			switch codec.ParseH265NALUType(nalu.Buffers[0][0]) {
 			case h265parser.NAL_UNIT_VPS:
-				ctx = &H265Ctx{}
-				ctx.RecordInfo.VPS = [][]byte{nalu.ToBytes()}
-				ctx.RTPCodecParameters = *r.RTPCodecParameters
-				t.ICodecCtx = ctx
+				vps = nalu.ToBytes()
+				defer nalus.Remove(nalu)
 			case h265parser.NAL_UNIT_SPS:
-				ctx.RecordInfo.SPS = [][]byte{nalu.ToBytes()}
-				if ctx.SPSInfo, err = h265parser.ParseSPS(ctx.SPS()); err != nil {
-					return
-				}
+				sps = nalu.ToBytes()
+				defer nalus.Remove(nalu)
 			case h265parser.NAL_UNIT_PPS:
-				hasVPSSPSPPS = true
-				ctx.RecordInfo.PPS = [][]byte{nalu.ToBytes()}
-				if ctx.CodecData, err = h265parser.NewCodecDataFromVPSAndSPSAndPPS(ctx.RecordInfo.VPS[0], ctx.RecordInfo.SPS[0], ctx.RecordInfo.PPS[0]); err != nil {
-					return
-				}
+				pps = nalu.ToBytes()
+				defer nalus.Remove(nalu)
 			case h265parser.NAL_UNIT_CODED_SLICE_BLA_W_LP,
 				h265parser.NAL_UNIT_CODED_SLICE_BLA_W_RADL,
 				h265parser.NAL_UNIT_CODED_SLICE_BLA_N_LP,
 				h265parser.NAL_UNIT_CODED_SLICE_IDR_W_RADL,
 				h265parser.NAL_UNIT_CODED_SLICE_IDR_N_LP,
 				h265parser.NAL_UNIT_CODED_SLICE_CRA:
-				t.Value.IDR = true
+				r.IDR = true
 			}
 		}
-		if len(ctx.CodecData.Record) == 0 {
-			return ErrSkip
+
+		// 如果发现新的 VPS/SPS/PPS，更新编解码器上下文
+		if hasVPSSPSPPS = vps != nil && sps != nil && pps != nil; hasVPSSPSPPS && (len(ctx.Record) == 0 || !bytes.Equal(vps, ctx.VPS()) || !bytes.Equal(sps, ctx.SPS()) || !bytes.Equal(pps, ctx.PPS())) {
+			var newCodecData h265parser.CodecData
+			if newCodecData, err = h265parser.NewCodecDataFromVPSAndSPSAndPPS(vps, sps, pps); err != nil {
+				return
+			}
+			newCtx := &H265Ctx{
+				H26xCtx: ctx.H26xCtx,
+				H265Ctx: &codec.H265Ctx{
+					CodecData: newCodecData,
+				},
+			}
+			// 保持原有的 RTP 参数
+			if oldCtx, ok := old.(*H265Ctx); ok {
+				newCtx.RTPCtx = oldCtx.RTPCtx
+			}
+			r.ICodecCtx = newCtx
+		} else {
+			// 如果是 IDR 帧但没有 VPS/SPS/PPS，需要插入
+			if r.IDR && len(ctx.VPS()) > 0 && len(ctx.SPS()) > 0 && len(ctx.PPS()) > 0 {
+				vpsRTP := rtp.Packet{
+					Header: rtp.Header{
+						Version:        2,
+						SequenceNumber: ctx.SequenceNumber,
+						Timestamp:      pts,
+						SSRC:           ctx.SSRC,
+						PayloadType:    uint8(ctx.PayloadType),
+					},
+					Payload: ctx.VPS(),
+				}
+				spsRTP := rtp.Packet{
+					Header: rtp.Header{
+						Version:        2,
+						SequenceNumber: ctx.SequenceNumber,
+						Timestamp:      pts,
+						SSRC:           ctx.SSRC,
+						PayloadType:    uint8(ctx.PayloadType),
+					},
+					Payload: ctx.SPS(),
+				}
+				ppsRTP := rtp.Packet{
+					Header: rtp.Header{
+						Version:        2,
+						SequenceNumber: ctx.SequenceNumber,
+						Timestamp:      pts,
+						SSRC:           ctx.SSRC,
+						PayloadType:    uint8(ctx.PayloadType),
+					},
+					Payload: ctx.PPS(),
+				}
+				r.Packets = slices.Insert(r.Packets, 0, vpsRTP, spsRTP, ppsRTP)
+			}
 		}
-		if t.Value.IDR && !hasVPSSPSPPS {
-			vpsRTP := &rtp.Packet{
-				Header: rtp.Header{
-					Version:        2,
-					SequenceNumber: ctx.SequenceNumber,
-					Timestamp:      pts,
-					SSRC:           ctx.SSRC,
-					PayloadType:    uint8(ctx.PayloadType),
-				},
-				Payload: ctx.VPS(),
-			}
-			spsRTP := &rtp.Packet{
-				Header: rtp.Header{
-					Version:        2,
-					SequenceNumber: ctx.SequenceNumber,
-					Timestamp:      pts,
-					SSRC:           ctx.SSRC,
-					PayloadType:    uint8(ctx.PayloadType),
-				},
-				Payload: ctx.SPS(),
-			}
-			ppsRTP := &rtp.Packet{
-				Header: rtp.Header{
-					Version:        2,
-					SequenceNumber: ctx.SequenceNumber,
-					Timestamp:      pts,
-					SSRC:           ctx.SSRC,
-					PayloadType:    uint8(ctx.PayloadType),
-				},
-				Payload: ctx.PPS(),
-			}
-			r.Packets = slices.Insert(r.Packets, 0, vpsRTP, spsRTP, ppsRTP)
-		}
-		for _, p := range r.Packets {
+
+		// 更新序列号
+		for p := range r.Packets.RangePoint {
 			p.SequenceNumber = ctx.seq
 			ctx.seq++
 		}
-	case webrtc.MimeTypeVP9:
-		// var ctx RTPVP9Ctx
-		// ctx.RTPCodecParameters = *r.RTPCodecParameters
-		// codecCtx = &ctx
-	case webrtc.MimeTypeAV1:
-		var ctx AV1Ctx
-		ctx.RTPCodecParameters = *r.RTPCodecParameters
-		t.ICodecCtx = &ctx
-	default:
-		err = ErrUnsupportCodec
 	}
 	return
 }
@@ -279,26 +259,45 @@ func (av1 *AV1Ctx) GetInfo() string {
 	return av1.SDPFmtpLine
 }
 
-func (r *Video) GetTimestamp() time.Duration {
-	return r.DTS
-}
+func (r *VideoFrame) Mux(baseFrame *Sample) error {
+	// 获取编解码器上下文
+	codecCtx := r.ICodecCtx
+	if codecCtx == nil {
+		switch base := baseFrame.GetBase().(type) {
+		case *codec.H264Ctx:
+			var ctx H264Ctx
+			ctx.H264Ctx = base
+			ctx.PayloadType = 96
+			ctx.MimeType = webrtc.MimeTypeH264
+			ctx.ClockRate = 90000
+			spsInfo := ctx.SPSInfo
+			ctx.SDPFmtpLine = fmt.Sprintf("sprop-parameter-sets=%s,%s;profile-level-id=%02x%02x%02x;level-asymmetry-allowed=1;packetization-mode=1", base64.StdEncoding.EncodeToString(ctx.SPS()), base64.StdEncoding.EncodeToString(ctx.PPS()), spsInfo.ProfileIdc, spsInfo.ConstraintSetFlag, spsInfo.LevelIdc)
+			ctx.SSRC = uint32(uintptr(unsafe.Pointer(&ctx)))
+			codecCtx = &ctx
+		case *codec.H265Ctx:
+			var ctx H265Ctx
+			ctx.H265Ctx = base
+			ctx.PayloadType = 98
+			ctx.MimeType = webrtc.MimeTypeH265
+			ctx.SDPFmtpLine = fmt.Sprintf("profile-id=1;sprop-sps=%s;sprop-pps=%s;sprop-vps=%s", base64.StdEncoding.EncodeToString(ctx.SPS()), base64.StdEncoding.EncodeToString(ctx.PPS()), base64.StdEncoding.EncodeToString(ctx.VPS()))
+			ctx.ClockRate = 90000
+			ctx.SSRC = uint32(uintptr(unsafe.Pointer(&ctx)))
+			codecCtx = &ctx
+		}
+		r.ICodecCtx = codecCtx
+	}
+	// 获取时间戳信息
+	pts := uint32(baseFrame.GetPTS())
 
-func (r *Video) GetCTS() time.Duration {
-	return r.CTS
-}
-
-func (r *Video) Mux(codecCtx codec.ICodecCtx, from *AVFrame) {
-	pts := uint32((from.Timestamp + from.CTS) * 90 / time.Millisecond)
 	switch c := codecCtx.(type) {
 	case *H264Ctx:
 		ctx := &c.RTPCtx
-		r.RTPCodecParameters = &ctx.RTPCodecParameters
 		var lastPacket *rtp.Packet
-		if from.IDR && len(c.RecordInfo.SPS) > 0 && len(c.RecordInfo.PPS) > 0 {
+		if baseFrame.IDR && len(c.RecordInfo.SPS) > 0 && len(c.RecordInfo.PPS) > 0 {
 			r.Append(ctx, pts, c.SPS())
 			r.Append(ctx, pts, c.PPS())
 		}
-		for _, nalu := range from.Raw.(Nalus) {
+		for nalu := range baseFrame.Raw.(*Nalus).RangePoint {
 			if reader := nalu.NewReader(); reader.Length > MTUSize {
 				payloadLen := MTUSize
 				if reader.Length+1 < payloadLen {
@@ -306,7 +305,7 @@ func (r *Video) Mux(codecCtx codec.ICodecCtx, from *AVFrame) {
 				}
 				//fu-a
 				mem := r.NextN(payloadLen)
-				reader.ReadBytesTo(mem[1:])
+				reader.Read(mem[1:])
 				fuaHead, naluType := codec.NALU_FUA.Or(mem[1]&0x60), mem[1]&0x1f
 				mem[0], mem[1] = fuaHead, naluType|startBit
 				lastPacket = r.Append(ctx, pts, mem)
@@ -315,27 +314,26 @@ func (r *Video) Mux(codecCtx codec.ICodecCtx, from *AVFrame) {
 						payloadLen = reader.Length + 2
 					}
 					mem = r.NextN(payloadLen)
-					reader.ReadBytesTo(mem[2:])
+					reader.Read(mem[2:])
 					mem[0], mem[1] = fuaHead, naluType
 				}
 				lastPacket.Payload[1] |= endBit
 			} else {
 				mem := r.NextN(reader.Length)
-				reader.ReadBytesTo(mem)
+				reader.Read(mem)
 				lastPacket = r.Append(ctx, pts, mem)
 			}
 		}
 		lastPacket.Header.Marker = true
 	case *H265Ctx:
 		ctx := &c.RTPCtx
-		r.RTPCodecParameters = &ctx.RTPCodecParameters
 		var lastPacket *rtp.Packet
-		if from.IDR && len(c.RecordInfo.SPS) > 0 && len(c.RecordInfo.PPS) > 0 && len(c.RecordInfo.VPS) > 0 {
+		if baseFrame.IDR && len(c.RecordInfo.SPS) > 0 && len(c.RecordInfo.PPS) > 0 && len(c.RecordInfo.VPS) > 0 {
 			r.Append(ctx, pts, c.VPS())
 			r.Append(ctx, pts, c.SPS())
 			r.Append(ctx, pts, c.PPS())
 		}
-		for _, nalu := range from.Raw.(Nalus) {
+		for nalu := range baseFrame.Raw.(*Nalus).RangePoint {
 			if reader := nalu.NewReader(); reader.Length > MTUSize {
 				var b0, b1 byte
 				_ = reader.ReadByteTo(&b0, &b1)
@@ -348,7 +346,7 @@ func (r *Video) Mux(codecCtx codec.ICodecCtx, from *AVFrame) {
 					payloadLen = reader.Length + 3
 				}
 				mem := r.NextN(payloadLen)
-				reader.ReadBytesTo(mem[3:])
+				reader.Read(mem[3:])
 				mem[0], mem[1], mem[2] = b0, b1, naluType|startBit
 				lastPacket = r.Append(ctx, pts, mem)
 
@@ -357,37 +355,37 @@ func (r *Video) Mux(codecCtx codec.ICodecCtx, from *AVFrame) {
 						payloadLen = reader.Length + 3
 					}
 					mem = r.NextN(payloadLen)
-					reader.ReadBytesTo(mem[3:])
+					reader.Read(mem[3:])
 					mem[0], mem[1], mem[2] = b0, b1, naluType
 				}
 				lastPacket.Payload[2] |= endBit
 			} else {
 				mem := r.NextN(reader.Length)
-				reader.ReadBytesTo(mem)
+				reader.Read(mem)
 				lastPacket = r.Append(ctx, pts, mem)
 			}
 		}
 		lastPacket.Header.Marker = true
 	}
+	return nil
 }
 
-func (r *Video) Demux(ictx codec.ICodecCtx) (any, error) {
+func (r *VideoFrame) Demux() (err error) {
 	if len(r.Packets) == 0 {
-		return nil, ErrSkip
+		return ErrSkip
 	}
-	switch c := ictx.(type) {
+	switch c := r.ICodecCtx.(type) {
 	case *H264Ctx:
-		var nalus Nalus
-		var nalu util.Memory
+		nalus := r.GetNalus()
+		nalu := nalus.GetNextPointer()
 		var naluType codec.H264NALUType
 		gotNalu := func() {
 			if nalu.Size > 0 {
-				nalus = append(nalus, nalu)
-				nalu = util.Memory{}
+				nalu = nalus.GetNextPointer()
 			}
 		}
-		for _, packet := range r.Packets {
-			if len(packet.Payload) == 0 {
+		for packet := range r.Packets.RangePoint {
+			if len(packet.Payload) < 2 {
 				continue
 			}
 			if packet.Padding {
@@ -395,31 +393,31 @@ func (r *Video) Demux(ictx codec.ICodecCtx) (any, error) {
 			}
 			b0 := packet.Payload[0]
 			if t := codec.ParseH264NALUType(b0); t < 24 {
-				nalu.AppendOne(packet.Payload)
+				nalu.PushOne(packet.Payload)
 				gotNalu()
 			} else {
 				offset := t.Offset()
 				switch t {
 				case codec.NALU_STAPA, codec.NALU_STAPB:
 					if len(packet.Payload) <= offset {
-						return nil, fmt.Errorf("invalid nalu size %d", len(packet.Payload))
+						return fmt.Errorf("invalid nalu size %d", len(packet.Payload))
 					}
 					for buffer := util.Buffer(packet.Payload[offset:]); buffer.CanRead(); {
 						if nextSize := int(buffer.ReadUint16()); buffer.Len() >= nextSize {
-							nalu.AppendOne(buffer.ReadN(nextSize))
+							nalu.PushOne(buffer.ReadN(nextSize))
 							gotNalu()
 						} else {
-							return nil, fmt.Errorf("invalid nalu size %d", nextSize)
+							return fmt.Errorf("invalid nalu size %d", nextSize)
 						}
 					}
 				case codec.NALU_FUA, codec.NALU_FUB:
 					b1 := packet.Payload[1]
 					if util.Bit1(b1, 0) {
 						naluType.Parse(b1)
-						nalu.AppendOne([]byte{naluType.Or(b0 & 0x60)})
+						nalu.PushOne([]byte{naluType.Or(b0 & 0x60)})
 					}
 					if nalu.Size > 0 {
-						nalu.AppendOne(packet.Payload[offset:])
+						nalu.PushOne(packet.Payload[offset:])
 					} else {
 						continue
 					}
@@ -427,18 +425,18 @@ func (r *Video) Demux(ictx codec.ICodecCtx) (any, error) {
 						gotNalu()
 					}
 				default:
-					return nil, fmt.Errorf("unsupported nalu type %d", t)
+					return fmt.Errorf("unsupported nalu type %d", t)
 				}
 			}
 		}
-		return nalus, nil
+		nalus.Reduce()
+		return nil
 	case *H265Ctx:
-		var nalus Nalus
-		var nalu util.Memory
+		nalus := r.GetNalus()
+		nalu := nalus.GetNextPointer()
 		gotNalu := func() {
 			if nalu.Size > 0 {
-				nalus = append(nalus, nalu)
-				nalu = util.Memory{}
+				nalu = nalus.GetNextPointer()
 			}
 		}
 		for _, packet := range r.Packets {
@@ -447,7 +445,7 @@ func (r *Video) Demux(ictx codec.ICodecCtx) (any, error) {
 			}
 			b0 := packet.Payload[0]
 			if t := codec.ParseH265NALUType(b0); t < H265_NALU_AP {
-				nalu.AppendOne(packet.Payload)
+				nalu.PushOne(packet.Payload)
 				gotNalu()
 			} else {
 				var buffer = util.Buffer(packet.Payload)
@@ -458,7 +456,7 @@ func (r *Video) Demux(ictx codec.ICodecCtx) (any, error) {
 						buffer.ReadUint16()
 					}
 					for buffer.CanRead() {
-						nalu.AppendOne(buffer.ReadN(int(buffer.ReadUint16())))
+						nalu.PushOne(buffer.ReadN(int(buffer.ReadUint16())))
 						gotNalu()
 					}
 					if c.DONL {
@@ -466,7 +464,7 @@ func (r *Video) Demux(ictx codec.ICodecCtx) (any, error) {
 					}
 				case H265_NALU_FU:
 					if buffer.Len() < 3 {
-						return nil, io.ErrShortBuffer
+						return io.ErrShortBuffer
 					}
 					first3 := buffer.ReadN(3)
 					fuHeader := first3[2]
@@ -474,18 +472,19 @@ func (r *Video) Demux(ictx codec.ICodecCtx) (any, error) {
 						buffer.ReadUint16()
 					}
 					if naluType := fuHeader & 0b00111111; util.Bit1(fuHeader, 0) {
-						nalu.AppendOne([]byte{first3[0]&0b10000001 | (naluType << 1), first3[1]})
+						nalu.PushOne([]byte{first3[0]&0b10000001 | (naluType << 1), first3[1]})
 					}
-					nalu.AppendOne(buffer)
+					nalu.PushOne(buffer)
 					if util.Bit1(fuHeader, 1) {
 						gotNalu()
 					}
 				default:
-					return nil, fmt.Errorf("unsupported nalu type %d", t)
+					return fmt.Errorf("unsupported nalu type %d", t)
 				}
 			}
 		}
-		return nalus, nil
+		nalus.Reduce()
+		return nil
 	}
-	return nil, nil
+	return ErrUnsupportCodec
 }

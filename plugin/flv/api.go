@@ -2,11 +2,19 @@ package plugin_flv
 
 import (
 	"context"
+	"encoding/binary"
+	"errors"
+	"net"
 	"net/http"
+	"time"
 
+	"github.com/gobwas/ws"
 	"google.golang.org/protobuf/types/known/emptypb"
+	m7s "m7s.live/v5"
 	"m7s.live/v5/pb"
+	"m7s.live/v5/pkg/util"
 	flvpb "m7s.live/v5/plugin/flv/pb"
+	rtmp "m7s.live/v5/plugin/rtmp/pkg"
 )
 
 func (p *FLVPlugin) List(ctx context.Context, req *flvpb.ReqRecordList) (resp *pb.RecordResponseList, err error) {
@@ -84,4 +92,60 @@ func (plugin *FLVPlugin) Download_(w http.ResponseWriter, r *http.Request) {
 		}
 		plugin.processFlvFiles(w, r, flvFileList, params)
 	}
+}
+
+func (plugin *FLVPlugin) RegisterHandler() map[string]http.HandlerFunc {
+	return map[string]http.HandlerFunc{
+		"/jessica/{streamPath}": plugin.jessica,
+	}
+}
+
+// /jessica/{streamPath}
+func (plugin *FLVPlugin) jessica(rw http.ResponseWriter, r *http.Request) {
+	subscriber, err := plugin.Subscribe(r.Context(), r.PathValue("streamPath"))
+	defer func() {
+		if err != nil {
+			http.Error(rw, err.Error(), http.StatusInternalServerError)
+		}
+	}()
+	if err != nil {
+		return
+	}
+	var conn net.Conn
+	conn, err = subscriber.CheckWebSocket(rw, r)
+	if err != nil {
+		return
+	}
+	if conn == nil {
+		err = errors.New("no websocket connection.")
+		return
+	}
+	var _sendBuffer = net.Buffers{}
+	sendBuffer := _sendBuffer
+	var head [5]byte
+	write := func(typ byte, ts uint32, mem util.Memory) (err error) {
+		head[0] = typ
+		binary.BigEndian.PutUint32(head[1:], ts)
+		err = ws.WriteHeader(conn, ws.Header{
+			Fin:    true,
+			OpCode: ws.OpBinary,
+			Length: int64(mem.Size + 5),
+		})
+		if err != nil {
+			return
+		}
+		sendBuffer = append(_sendBuffer, head[:])
+		sendBuffer = append(sendBuffer, mem.Buffers...)
+		if plugin.GetCommonConf().WriteTimeout > 0 {
+			conn.SetWriteDeadline(time.Now().Add(plugin.GetCommonConf().WriteTimeout))
+		}
+		_, err = sendBuffer.WriteTo(conn)
+		return
+	}
+
+	m7s.PlayBlock(subscriber, func(audio *rtmp.AudioFrame) (err error) {
+		return write(1, audio.GetTS32(), audio.Memory)
+	}, func(video *rtmp.VideoFrame) (err error) {
+		return write(2, video.GetTS32(), video.Memory)
+	})
 }

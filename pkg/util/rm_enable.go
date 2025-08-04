@@ -15,8 +15,14 @@ type RecyclableMemory struct {
 	recycleIndexes []int
 }
 
+func NewRecyclableMemory(allocator *ScalableMemoryAllocator) RecyclableMemory {
+	return RecyclableMemory{allocator: allocator}
+}
+
 func (r *RecyclableMemory) InitRecycleIndexes(max int) {
-	r.recycleIndexes = make([]int, 0, max)
+	if r.recycleIndexes == nil {
+		r.recycleIndexes = make([]int, 0, max)
+	}
 }
 
 func (r *RecyclableMemory) GetAllocator() *ScalableMemoryAllocator {
@@ -28,7 +34,7 @@ func (r *RecyclableMemory) NextN(size int) (memory []byte) {
 	if r.recycleIndexes != nil {
 		r.recycleIndexes = append(r.recycleIndexes, r.Count())
 	}
-	r.AppendOne(memory)
+	r.PushOne(memory)
 	return
 }
 
@@ -36,7 +42,7 @@ func (r *RecyclableMemory) AddRecycleBytes(b []byte) {
 	if r.recycleIndexes != nil {
 		r.recycleIndexes = append(r.recycleIndexes, r.Count())
 	}
-	r.AppendOne(b)
+	r.PushOne(b)
 }
 
 func (r *RecyclableMemory) SetAllocator(allocator *ScalableMemoryAllocator) {
@@ -54,6 +60,7 @@ func (r *RecyclableMemory) Recycle() {
 			r.allocator.Free(buf)
 		}
 	}
+	r.Reset()
 }
 
 type MemoryAllocator struct {
@@ -61,54 +68,14 @@ type MemoryAllocator struct {
 	start     int64
 	memory    []byte
 	Size      int
-	buddy     *Buddy
-}
-
-// createMemoryAllocator 创建并初始化 MemoryAllocator
-func createMemoryAllocator(size int, buddy *Buddy, offset int) *MemoryAllocator {
-	ret := &MemoryAllocator{
-		allocator: NewAllocator(size),
-		buddy:     buddy,
-		Size:      size,
-		memory:    buddy.memoryPool[offset : offset+size],
-		start:     buddy.poolStart + int64(offset),
-	}
-	ret.allocator.Init(size)
-	return ret
-}
-
-func GetMemoryAllocator(size int) (ret *MemoryAllocator) {
-	if size < BuddySize {
-		requiredSize := size >> MinPowerOf2
-		// 循环尝试从池中获取可用的 buddy
-		for {
-			buddy := GetBuddy()
-			offset, err := buddy.Alloc(requiredSize)
-			PutBuddy(buddy)
-			if err == nil {
-				// 分配成功，使用这个 buddy
-				return createMemoryAllocator(size, buddy, offset<<MinPowerOf2)
-			}
-		}
-	}
-	// 池中的 buddy 都无法分配或大小不够，使用系统内存
-	memory := make([]byte, size)
-	start := int64(uintptr(unsafe.Pointer(&memory[0])))
-	return &MemoryAllocator{
-		allocator: NewAllocator(size),
-		Size:      size,
-		memory:    memory,
-		start:     start,
-	}
+	recycle   func()
 }
 
 func (ma *MemoryAllocator) Recycle() {
 	ma.allocator.Recycle()
-	if ma.buddy != nil {
-		_ = ma.buddy.Free(int((ma.buddy.poolStart - ma.start) >> MinPowerOf2))
-		ma.buddy = nil
+	if ma.recycle != nil {
+		ma.recycle()
 	}
-	ma.memory = nil
 }
 
 func (ma *MemoryAllocator) Find(size int) (memory []byte) {

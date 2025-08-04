@@ -22,15 +22,20 @@ func (o *OSSignal) Start() error {
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	o.SignalChan = signalChan
+	o.OnStop(func() {
+		signal.Stop(signalChan)
+		close(signalChan)
+	})
 	return nil
 }
 
 func (o *OSSignal) Tick(any) {
+	println("OSSignal Tick")
 	go o.root.Shutdown()
 }
 
 type RootManager[K comparable, T ManagerItem[K]] struct {
-	Manager[K, T]
+	WorkCollection[K, T]
 }
 
 func (m *RootManager[K, T]) Init() {

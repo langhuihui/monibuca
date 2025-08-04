@@ -3,6 +3,7 @@ package pkg
 import (
 	"log/slog"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"m7s.live/v5/pkg/task"
@@ -21,6 +22,7 @@ type RingWriter struct {
 	Size        int
 	LastValue   *AVFrame
 	SLogger     *slog.Logger
+	status      atomic.Int32 // 0: init, 1: writing, 2: disposed
 }
 
 func NewRingWriter(sizeRange util.Range[int]) (rb *RingWriter) {
@@ -90,7 +92,9 @@ func (rb *RingWriter) reduce(size int) {
 
 func (rb *RingWriter) Dispose() {
 	rb.SLogger.Debug("dispose")
-	rb.Value.Ready()
+	if rb.status.Add(-1) == -1 { // normal dispose
+		rb.Value.Unlock()
+	}
 }
 
 func (rb *RingWriter) GetIDR() *util.Ring[AVFrame] {
@@ -185,18 +189,70 @@ func (rb *RingWriter) Step() (normal bool) {
 
 	rb.LastValue = &rb.Value
 	nextSeq := rb.LastValue.Sequence + 1
-	if normal = next.Value.StartWrite(); normal {
-		next.Value.Reset()
-		rb.Ring = next
-	} else {
-		rb.reduce(1)                   //抛弃还有订阅者的节点
-		rb.Ring = rb.glow(1, "refill") //补充一个新节点
-		normal = rb.Value.StartWrite()
-		if !normal {
-			panic("RingWriter.Step")
+
+	/*
+
+		sequenceDiagram
+		autonumber
+		participant Caller as Caller
+		participant RW as RingWriter
+		participant Val as AVFrame.Value
+
+		Note over RW: status initial = 0 (idle)
+
+		Caller->>RW: Step()
+		activate RW
+		RW->>RW: status.Add(1) (0→1)
+		alt entered writing (result == 1)
+		    Note over RW: writing
+		    RW->>Val: StartWrite()
+		    RW->>Val: Reset()
+		    opt Dispose during write
+		        Caller->>RW: Dispose()
+		        RW->>RW: status.Add(-1) (1→0)
+		    end
+		    RW->>RW: status.Add(-1) at end of Step
+		    alt returns 0 (write completed)
+		        RW->>Val: Ready()
+		    else returns -1 (disposed during write)
+		        RW->>Val: Unlock()
+		    end
+		else not entered
+		    Note over RW: Step aborted (already disposed/busy)
+		end
+		deactivate RW
+
+		Caller->>RW: Dispose()
+		activate RW
+		RW->>RW: status.Add(-1)
+		alt returns -1 (idle dispose)
+		    RW->>Val: Unlock()
+		else returns 0 (dispose during write)
+		    Note over RW: Unlock will occur at Step end (no Ready)
+		end
+		deactivate RW
+
+		Note over RW: States: -1 (disposed), 0 (idle), 1 (writing)
+
+	*/
+	if rb.status.Add(1) == 1 {
+		if normal = next.Value.StartWrite(); normal {
+			next.Value.Reset()
+			rb.Ring = next
+		} else {
+			rb.reduce(1)                   //抛弃还有订阅者的节点
+			rb.Ring = rb.glow(1, "refill") //补充一个新节点
+			normal = rb.Value.StartWrite()
+			if !normal {
+				panic("RingWriter.Step")
+			}
+		}
+		rb.Value.Sequence = nextSeq
+		if rb.status.Add(-1) == 0 {
+			rb.LastValue.Ready()
+		} else {
+			rb.Value.Unlock()
 		}
 	}
-	rb.Value.Sequence = nextSeq
-	rb.LastValue.Ready()
 	return
 }

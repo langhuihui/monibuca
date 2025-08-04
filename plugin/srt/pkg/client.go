@@ -5,50 +5,55 @@ import (
 
 	srt "github.com/datarhei/gosrt"
 	"m7s.live/v5"
+	pkg "m7s.live/v5/pkg"
 	"m7s.live/v5/pkg/config"
 	"m7s.live/v5/pkg/task"
 )
 
-type Client struct {
+// Fixed steps for SRT pull workflow
+var srtPullSteps = []pkg.StepDef{
+	{Name: pkg.StepPublish, Description: "Publishing stream"},
+	{Name: pkg.StepConnection, Description: "Connecting to SRT server"},
+	{Name: pkg.StepHandshake, Description: "Completing SRT handshake"},
+	{Name: pkg.StepStreaming, Description: "Receiving SRT stream"},
+}
+
+// srt客户端
+type srtClient struct {
 	task.Task
 	srt.Conn
-	srt.ConnType
+}
+
+// srt拉流客户端
+type srtPuller struct {
+	srtClient
 	pullCtx m7s.PullJob
+}
+
+// srt推流客户端
+type srtPusher struct {
+	srtClient
 	pushCtx m7s.PushJob
 }
 
-func (c *Client) GetPullJob() *m7s.PullJob {
+func (c *srtPuller) GetPullJob() *m7s.PullJob {
 	return &c.pullCtx
 }
 
-func (c *Client) GetPushJob() *m7s.PushJob {
+func (c *srtPusher) GetPushJob() *m7s.PushJob {
 	return &c.pushCtx
 }
 
 func NewPuller(_ config.Pull) m7s.IPuller {
-	ret := &Client{
-		ConnType: srt.SUBSCRIBE,
-	}
-	return ret
+	return &srtPuller{}
 }
 
 func NewPusher() m7s.IPusher {
-	ret := &Client{
-		ConnType: srt.PUBLISH,
-	}
-	return ret
+	return &srtPusher{}
 }
 
-func (c *Client) Start() (err error) {
-	var u *url.URL
-	if c.ConnType == srt.SUBSCRIBE {
-		if err = c.pullCtx.Publish(); err != nil {
-			return
-		}
-		u, err = url.Parse(c.pullCtx.RemoteURL)
-	} else {
-		u, err = url.Parse(c.pushCtx.RemoteURL)
-	}
+func (c *srtClient) dial(remoteURL string) (err error) {
+	u, err := url.Parse(remoteURL)
 	if err != nil {
 		return
 	}
@@ -59,17 +64,41 @@ func (c *Client) Start() (err error) {
 	return
 }
 
-func (c *Client) Run() (err error) {
-	if c.ConnType == srt.SUBSCRIBE {
-		var receiver Receiver
-		receiver.Conn = c.Conn
-		receiver.Publisher = c.pullCtx.Publisher
-		c.pullCtx.AddTask(&receiver)
-	} else {
-		var sender Sender
-		sender.Conn = c.Conn
-		sender.Subscriber = c.pushCtx.Subscriber
-		c.pushCtx.AddTask(&sender)
+func (c *srtPuller) Start() (err error) {
+	c.pullCtx.SetProgressStepsDefs(srtPullSteps)
+
+	if err = c.pullCtx.Publish(); err != nil {
+		c.pullCtx.Fail(err.Error())
+		return
 	}
+
+	c.pullCtx.GoToStepConst(pkg.StepConnection)
+
+	err = c.dial(c.pullCtx.RemoteURL)
+	if err != nil {
+		c.pullCtx.Fail(err.Error())
+		return
+	}
+
+	c.pullCtx.GoToStepConst(pkg.StepStreaming)
+
 	return
+}
+
+func (c *srtPusher) Start() (err error) {
+	return c.dial(c.pushCtx.RemoteURL)
+}
+
+func (c *srtPuller) Run() (err error) {
+	var receiver Receiver
+	receiver.Conn = c.Conn
+	receiver.Publisher = c.pullCtx.Publisher
+	return c.RunTask(&receiver)
+}
+
+func (c *srtPusher) Run() (err error) {
+	var sender Sender
+	sender.Conn = c.Conn
+	sender.Subscriber = c.pushCtx.Subscriber
+	return c.RunTask(&sender)
 }

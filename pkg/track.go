@@ -51,14 +51,12 @@ type (
 		LastDropLevelChange time.Time
 		DropFrameLevel      int // 0: no drop, 1: drop P-frame, 2: drop all
 	}
-
 	AVTrack struct {
 		Track
 		*RingWriter
 		codec.ICodecCtx
-		Allocator     *util.ScalableMemoryAllocator
-		SequenceFrame IAVFrame
-		WrapIndex     int
+		Allocator *util.ScalableMemoryAllocator
+		WrapIndex int
 		TsTamer
 		SpeedController
 		DropController
@@ -71,11 +69,13 @@ func NewAVTrack(args ...any) (t *AVTrack) {
 		switch v := arg.(type) {
 		case IAVFrame:
 			t.FrameType = reflect.TypeOf(v)
-			t.Allocator = v.GetAllocator()
+			sample := v.GetSample()
+			t.Allocator = sample.GetAllocator()
+			t.ICodecCtx = sample.ICodecCtx
 		case reflect.Type:
 			t.FrameType = v
 		case *slog.Logger:
-			t.Logger = v
+			t.Logger = v.With("frameType", t.FrameType.String())
 		case *AVTrack:
 			t.Logger = v.Logger.With("subtrack", t.FrameType.String())
 			t.RingWriter = v.RingWriter
@@ -118,9 +118,25 @@ func (t *AVTrack) AddBytesIn(n int) {
 	}
 }
 
-func (t *AVTrack) AcceptFrame(data IAVFrame) {
+func (t *AVTrack) FixTimestamp(data *Sample, scale float64) {
+	t.AddBytesIn(data.Size)
+	data.Timestamp = t.Tame(data.Timestamp, t.FPS, scale)
+}
+
+func (t *AVTrack) NewFrame(avFrame *AVFrame) (frame IAVFrame) {
+	frame = reflect.New(t.FrameType.Elem()).Interface().(IAVFrame)
+	if avFrame.Sample == nil {
+		avFrame.Sample = frame.GetSample()
+	}
+	if avFrame.BaseSample == nil {
+		avFrame.BaseSample = &BaseSample{}
+	}
+	frame.GetSample().BaseSample = avFrame.BaseSample
+	return
+}
+
+func (t *AVTrack) AcceptFrame() {
 	t.acceptFrameCount++
-	t.Value.Wraps = append(t.Value.Wraps, data)
 }
 
 func (t *AVTrack) changeDropFrameLevel(newLevel int) {
@@ -230,23 +246,28 @@ func (t *AVTrack) AddPausedTime(d time.Duration) {
 	t.pausedTime += d
 }
 
-func (s *SpeedController) speedControl(speed float64, ts time.Duration) {
-	if speed != s.speed || s.beginTime.IsZero() {
-		s.speed = speed
-		s.beginTime = time.Now()
-		s.beginTimestamp = ts
-		s.pausedTime = 0
+func (t *AVTrack) speedControl(speed float64, ts time.Duration) {
+	if speed != t.speed || t.beginTime.IsZero() {
+		t.speed = speed
+		t.beginTime = time.Now()
+		t.beginTimestamp = ts
+		t.pausedTime = 0
 	} else {
-		elapsed := time.Since(s.beginTime) - s.pausedTime
+		elapsed := time.Since(t.beginTime) - t.pausedTime
 		if speed == 0 {
-			s.Delta = ts - elapsed
+			t.Delta = ts - elapsed
+			if t.Logger.Enabled(t.ready, task.TraceLevel) {
+				t.Trace("speed 0", "ts", ts, "elapsed", elapsed, "delta", t.Delta)
+			}
 			return
 		}
-		should := time.Duration(float64(ts-s.beginTimestamp) / speed)
-		s.Delta = should - elapsed
-		// fmt.Println(speed, elapsed, should, s.Delta)
-		if s.Delta > threshold {
-			time.Sleep(min(s.Delta, time.Millisecond*500))
+		should := time.Duration(float64(ts-t.beginTimestamp) / speed)
+		t.Delta = should - elapsed
+		if t.Delta > threshold {
+			if t.Logger.Enabled(t.ready, task.TraceLevel) {
+				t.Trace("speed control", "speed", speed, "elapsed", elapsed, "should", should, "delta", t.Delta)
+			}
+			time.Sleep(min(t.Delta, time.Millisecond*500))
 		}
 	}
 }

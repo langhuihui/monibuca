@@ -5,6 +5,7 @@ import (
 	"io"
 
 	"m7s.live/v5"
+	pkg "m7s.live/v5/pkg"
 	"m7s.live/v5/pkg/util"
 	rtmp "m7s.live/v5/plugin/rtmp/pkg"
 )
@@ -14,6 +15,10 @@ type Puller struct {
 }
 
 func (p *Puller) Run() (err error) {
+	pullJob := &p.PullJob
+	// Move to parsing step
+	pullJob.GoToStepConst(pkg.StepParsing)
+
 	reader := util.NewBufReader(p.ReadCloser)
 	publisher := p.PullJob.Publisher
 	if publisher == nil {
@@ -27,7 +32,8 @@ func (p *Puller) Run() (err error) {
 	if err == nil {
 		var flvHead [3]byte
 		var version, flag byte
-		err = head.NewReader().ReadByteTo(&flvHead[0], &flvHead[1], &flvHead[2], &version, &flag)
+		r := head.NewReader()
+		err = r.ReadByteTo(&flvHead[0], &flvHead[1], &flvHead[2], &version, &flag)
 		if flvHead != [...]byte{'F', 'L', 'V'} {
 			err = errors.New("not flv file")
 		} else {
@@ -44,6 +50,12 @@ func (p *Puller) Run() (err error) {
 		pubConf.PubVideo = false
 	}
 	allocator := util.NewScalableMemoryAllocator(1 << 10)
+	defer allocator.Recycle()
+	writer := m7s.NewPublisherWriter[*rtmp.AudioFrame, *rtmp.VideoFrame](publisher, allocator)
+
+	// Move to streaming step
+	pullJob.GoToStepConst(pkg.StepStreaming)
+
 	for offsetTs := absTS; err == nil; _, err = reader.ReadBE(4) {
 		if p.IsStopped() {
 			return p.StopReason()
@@ -71,40 +83,50 @@ func (p *Puller) Run() (err error) {
 		if _, err = reader.ReadBE(3); err != nil { // stream id always 0
 			return err
 		}
-		var frame rtmp.RTMPData
 		ds := int(dataSize)
-		frame.SetAllocator(allocator)
-		err = reader.ReadNto(ds, frame.NextN(ds))
-		if err != nil {
-			return err
-		}
 		absTS = offsetTs + (timestamp - startTs)
-		frame.Timestamp = absTS
 		//fmt.Println(t, offsetTs, timestamp, startTs, puller.absTS)
 		switch t {
 		case FLV_TAG_TYPE_AUDIO:
 			if publisher.PubAudio {
-				if err = publisher.WriteAudio(frame.WrapAudio()); err != nil {
+				frame := writer.AudioFrame
+				_, err = reader.Read(frame.NextN(ds))
+				if err != nil {
 					return err
 				}
+				frame.SetTS32(absTS)
+				if err = writer.NextAudio(); err != nil {
+					return err
+				}
+			} else {
+				reader.Skip(ds)
 			}
 		case FLV_TAG_TYPE_VIDEO:
 			if publisher.PubVideo {
-				if err = publisher.WriteVideo(frame.WrapVideo()); err != nil {
+				frame := writer.VideoFrame
+				_, err = reader.Read(frame.NextN(ds))
+				if err != nil {
 					return err
 				}
+				frame.SetTS32(absTS)
+				if err = writer.NextVideo(); err != nil {
+					return err
+				}
+			} else {
+				reader.Skip(ds)
 			}
 		case FLV_TAG_TYPE_SCRIPT:
-			r := frame.NewReader()
-			amf := &rtmp.AMF{
-				Buffer: util.Buffer(r.ToBytes()),
+			var amf rtmp.AMF = allocator.Borrow(ds)
+			_, err = reader.Read(amf)
+			if err != nil {
+				return err
 			}
-			var obj any
-			obj, err = amf.Unmarshal()
-			name := obj
-			obj, err = amf.Unmarshal()
-			metaData := obj
-			frame.Recycle()
+			var name, metaData any
+			name, err = amf.Unmarshal()
+			if err != nil {
+				return err
+			}
+			metaData, err = amf.Unmarshal()
 			if err != nil {
 				return err
 			}

@@ -93,7 +93,7 @@ Plugins start through the `Plugin.Start` method, executing these operations in s
    - Start QUIC services (if implementing IQUICPlugin interface)
 
 4. Plugin Initialization Callback
-   - Call plugin's OnInit method
+   - Call plugin's Start method
    - Handle initialization errors
 
 5. Timer Task Setup
@@ -109,7 +109,7 @@ The startup phase is crucial for plugins to begin providing services, with all p
 
 ### 4. Stop Phase (Stop)
 
-The plugin stop phase is implemented through the `Plugin.OnStop` method and related stop handling logic, including:
+The plugin stop phase is implemented through the `Plugin.OnDispose` method and related stop handling logic, including:
 
 1. Service Shutdown
    - Stop all network services (HTTP/HTTPS/TCP/UDP/QUIC)
@@ -127,7 +127,7 @@ The plugin stop phase is implemented through the `Plugin.OnStop` method and rela
    - Trigger stop event notifications
 
 4. Callback Processing
-   - Call plugin's custom OnStop method
+   - Call plugin's custom OnDispose method
    - Execute registered stop callback functions
    - Handle errors during stop process
 
@@ -143,7 +143,7 @@ The stop phase aims to ensure plugins can safely and cleanly stop running withou
 The plugin destroy phase is implemented through the `Plugin.Dispose` method, the final phase in a plugin's lifecycle, including:
 
 1. Resource Release
-   - Call plugin's OnStop method for stop processing
+   - Call plugin's OnDispose method for stop processing
    - Remove from server's plugin list
    - Release all allocated system resources
 

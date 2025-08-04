@@ -4,7 +4,6 @@ import (
 	"io"
 	"net"
 	"net/textproto"
-	"os"
 	"strings"
 )
 
@@ -15,8 +14,8 @@ type BufReader struct {
 	buf       MemoryReader
 	totalRead int
 	BufLen    int
+	Mouth     chan []byte
 	feedData  func() error
-	Dump      *os.File
 }
 
 func NewBufReaderWithBufLen(reader io.Reader, bufLen int) (r *BufReader) {
@@ -62,8 +61,10 @@ func NewBufReaderBuffersChan(feedChan chan net.Buffers) (r *BufReader) {
 	return
 }
 
-func NewBufReaderChan(feedChan chan []byte) (r *BufReader) {
+func NewBufReaderChan(bufferSize int) (r *BufReader) {
+	feedChan := make(chan []byte, bufferSize)
 	r = &BufReader{
+		Mouth: feedChan,
 		feedData: func() error {
 			data, ok := <-feedChan
 			if !ok {
@@ -81,6 +82,15 @@ func NewBufReaderChan(feedChan chan []byte) (r *BufReader) {
 	return
 }
 
+func (r *BufReader) Feed(data []byte) bool {
+	select {
+	case r.Mouth <- data:
+		return true
+	default:
+		return false
+	}
+}
+
 func NewBufReader(reader io.Reader) (r *BufReader) {
 	return NewBufReaderWithBufLen(reader, defaultBufSize)
 }
@@ -89,6 +99,9 @@ func (r *BufReader) Recycle() {
 	r.buf = MemoryReader{}
 	if r.Allocator != nil {
 		r.Allocator.Recycle()
+	}
+	if r.Mouth != nil {
+		close(r.Mouth)
 	}
 }
 
@@ -176,9 +189,6 @@ func (r *BufReader) ReadRange(n int, yield func([]byte)) (err error) {
 func (r *BufReader) Read(to []byte) (n int, err error) {
 	n = len(to)
 	err = r.ReadNto(n, to)
-	if r.Dump != nil {
-		r.Dump.Write(to)
-	}
 	return
 }
 
@@ -199,7 +209,7 @@ func (r *BufReader) ReadString(n int) (s string, err error) {
 }
 
 func (r *BufReader) ReadBytes(n int) (mem Memory, err error) {
-	err = r.ReadRange(n, mem.AppendOne)
+	err = r.ReadRange(n, mem.PushOne)
 	return
 }
 

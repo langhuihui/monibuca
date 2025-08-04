@@ -18,17 +18,12 @@ type McpPlugin struct {
 	mcpServer *server.SSEServer
 }
 
-var _ = m7s.InstallPlugin[McpPlugin]()
+var _ = m7s.InstallPlugin[McpPlugin](m7s.PluginMeta{})
 
 // 基础 URL 常量
 const (
 	BaseURL = "http://localhost:8080"
 )
-
-func (p *McpPlugin) OnInit() (err error) {
-
-	return nil
-}
 
 func (p *McpPlugin) RegisterHandler() map[string]http.HandlerFunc {
 
@@ -230,7 +225,7 @@ func (p *McpPlugin) RegisterHandler() map[string]http.HandlerFunc {
 	}
 }
 
-func (p *McpPlugin) OnStop() {
+func (p *McpPlugin) Dispose() {
 	// 关闭 MCP 服务器
 	if p.mcpServer != nil {
 		p.mcpServer.Shutdown(context.Background())

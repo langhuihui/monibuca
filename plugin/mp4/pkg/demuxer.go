@@ -6,6 +6,7 @@ import (
 	"slices"
 
 	"m7s.live/v5/pkg"
+	"m7s.live/v5/pkg/codec"
 	"m7s.live/v5/plugin/mp4/pkg/box"
 	. "m7s.live/v5/plugin/mp4/pkg/box"
 )
@@ -133,30 +134,51 @@ func (d *Demuxer) Demux() (err error) {
 						switch entry.Type() {
 						case TypeMP4A:
 							track.Cid = MP4_CODEC_AAC
+							switch extra := entry.ExtraData.(type) {
+							case *ESDSBox:
+								var extraData []byte
+								track.Cid, extraData = DecodeESDescriptor(extra.Data)
+								if aacCtx, err := codec.NewAACCtxFromRecord(extraData); err == nil {
+									track.ICodecCtx = aacCtx
+								}
+							}
 						case TypeALAW:
 							track.Cid = MP4_CODEC_G711A
+							track.ICodecCtx = &codec.PCMACtx{
+								AudioCtx: codec.AudioCtx{
+									SampleRate: int(entry.Samplerate),
+									Channels:   int(entry.ChannelCount),
+									SampleSize: int(entry.SampleSize),
+								},
+							}
 						case TypeULAW:
 							track.Cid = MP4_CODEC_G711U
+							track.ICodecCtx = &codec.PCMUCtx{
+								AudioCtx: codec.AudioCtx{
+									SampleRate: int(entry.Samplerate),
+									Channels:   int(entry.ChannelCount),
+									SampleSize: int(entry.SampleSize),
+								},
+							}
 						case TypeOPUS:
 							track.Cid = MP4_CODEC_OPUS
-						}
-						track.SampleRate = entry.Samplerate
-						track.ChannelCount = uint8(entry.ChannelCount)
-						track.SampleSize = entry.SampleSize
-						switch extra := entry.ExtraData.(type) {
-						case *ESDSBox:
-							track.Cid, track.ExtraData = DecodeESDescriptor(extra.Data)
+							// TODO: 需要实现 OPUS 的 codec context 创建
+							track.ICodecCtx = &codec.OPUSCtx{}
 						}
 					case *VisualSampleEntry:
-						track.ExtraData = entry.ExtraData.(*DataBox).Data
+						extraData := entry.ExtraData.(*DataBox).Data
 						switch entry.Type() {
 						case TypeAVC1:
 							track.Cid = MP4_CODEC_H264
+							if h264Ctx, err := codec.NewH264CtxFromRecord(extraData); err == nil {
+								track.ICodecCtx = h264Ctx
+							}
 						case TypeHVC1, TypeHEV1:
 							track.Cid = MP4_CODEC_H265
+							if h265Ctx, err := codec.NewH265CtxFromRecord(extraData); err == nil {
+								track.ICodecCtx = h265Ctx
+							}
 						}
-						track.Width = uint32(entry.Width)
-						track.Height = uint32(entry.Height)
 					}
 				}
 				d.Tracks = append(d.Tracks, track)

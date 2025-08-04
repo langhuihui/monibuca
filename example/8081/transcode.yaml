@@ -9,7 +9,7 @@ transcode:
     transform:
      ^live.+:
        input:
-         mode: rtsp
+         mode: pipe
        output:
          - target: rtmp://localhost/trans/$0/small
            conf: -loglevel debug -c:a aac -c:v h264 -vf scale=320:240

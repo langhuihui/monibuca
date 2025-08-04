@@ -113,7 +113,7 @@ func writeMetaTag(file *os.File, suber *m7s.Subscriber, filepositions []uint64, 
 		}
 	}
 	amf.Marshals("onMetaData", metaData)
-	offset := amf.Len() + 13 + 15
+	offset := amf.GetBuffer().Len() + 13 + 15
 	if keyframesCount := len(filepositions); keyframesCount > 0 {
 		metaData["filesize"] = uint64(offset) + filepositions[keyframesCount-1]
 		for i := range filepositions {
@@ -124,7 +124,7 @@ func writeMetaTag(file *os.File, suber *m7s.Subscriber, filepositions []uint64, 
 			"times":         times,
 		}
 	}
-	amf.Reset()
+	amf.GetBuffer().Reset()
 	marshals := amf.Marshals("onMetaData", metaData)
 	task := &writeMetaTagTask{
 		file:     file,
@@ -208,14 +208,14 @@ func (r *Recorder) Run() (err error) {
 			}
 			if vr := suber.VideoReader; vr != nil {
 				vr.ResetAbsTime()
-				seq := vr.Track.SequenceFrame.(*rtmp.RTMPVideo)
+				seq := vr.Track.ICodecCtx.(pkg.ISequenceCodecCtx[*rtmp.VideoFrame]).GetSequenceFrame()
 				err = r.writer.WriteTag(FLV_TAG_TYPE_VIDEO, 0, uint32(seq.Size), seq.Buffers...)
 				offset = int64(seq.Size + 15)
 			}
 			if ar := suber.AudioReader; ar != nil {
 				ar.ResetAbsTime()
-				if ar.Track.SequenceFrame != nil {
-					seq := ar.Track.SequenceFrame.(*rtmp.RTMPAudio)
+				if seqCtx, ok := ar.Track.ICodecCtx.(pkg.ISequenceCodecCtx[*rtmp.AudioFrame]); ok {
+					seq := seqCtx.GetSequenceFrame()
 					err = r.writer.WriteTag(FLV_TAG_TYPE_AUDIO, 0, uint32(seq.Size), seq.Buffers...)
 					offset += int64(seq.Size + 15)
 				}
@@ -223,20 +223,14 @@ func (r *Recorder) Run() (err error) {
 		}
 	}
 
-	return m7s.PlayBlock(ctx.Subscriber, func(audio *rtmp.RTMPAudio) (err error) {
-		if r.Event.StartTime.IsZero() {
-			err = r.createStream(suber.AudioReader.Value.WriteTime)
-			if err != nil {
-				return err
-			}
-		}
+	return m7s.PlayBlock(ctx.Subscriber, func(audio *rtmp.AudioFrame) (err error) {
 		if suber.VideoReader == nil && !noFragment {
 			checkFragment(suber.AudioReader.AbsTime, suber.AudioReader.Value.WriteTime)
 		}
 		err = r.writer.WriteTag(FLV_TAG_TYPE_AUDIO, suber.AudioReader.AbsTime, uint32(audio.Size), audio.Buffers...)
 		offset += int64(audio.Size + 15)
 		return
-	}, func(video *rtmp.RTMPVideo) (err error) {
+	}, func(video *rtmp.VideoFrame) (err error) {
 		if r.Event.StartTime.IsZero() {
 			err = r.createStream(suber.VideoReader.Value.WriteTime)
 			if err != nil {

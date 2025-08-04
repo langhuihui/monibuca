@@ -26,7 +26,7 @@ func TestRestart(b *testing.T) {
 	}()
 	for err := pkg.ErrRestart; errors.Is(err, pkg.ErrRestart); {
 		server = m7s.NewServer(conf)
-		err = m7s.Servers.Add(server).WaitStopped()
+		err = m7s.Servers.AddTask(server).WaitStopped()
 	}
 	//if err := util.RootTask.AddTask(server).WaitStopped(); err != pkg.ErrStopFromAPI {
 	//	b.Error("server.Run should return ErrStopFromAPI", err)

@@ -6,11 +6,10 @@ import (
 	"time"
 
 	"m7s.live/v5"
-	"m7s.live/v5/pkg"
 	"m7s.live/v5/pkg/codec"
 	"m7s.live/v5/pkg/config"
-	"m7s.live/v5/pkg/util"
-	mpegts "m7s.live/v5/plugin/hls/pkg/ts"
+	"m7s.live/v5/pkg/format"
+	mpegts "m7s.live/v5/pkg/format/ts"
 )
 
 func NewRecorder(conf config.Record) m7s.IRecorder {
@@ -19,9 +18,7 @@ func NewRecorder(conf config.Record) m7s.IRecorder {
 
 type Recorder struct {
 	m7s.DefaultRecorder
-	ts           *TsInFile
-	pesAudio     *mpegts.MpegtsPESFrame
-	pesVideo     *mpegts.MpegtsPESFrame
+	ts           TsInFile
 	segmentCount uint32
 	lastTs       time.Duration
 	firstSegment bool
@@ -40,32 +37,29 @@ func (r *Recorder) createStream(start time.Time) (err error) {
 }
 
 func (r *Recorder) writeTailer(end time.Time) {
+	if !r.RecordJob.RecConf.RealTime {
+		if r.ts.file != nil {
+			r.ts.WriteTo(r.ts.file)
+			r.ts.Recycle()
+		}
+	}
+	r.ts.Close()
 	r.WriteTail(end, nil)
 }
 
 func (r *Recorder) Dispose() {
-	// 如果当前有未完成的片段，先保存
-	if r.ts != nil {
-		r.ts.Close()
-	}
 	r.writeTailer(time.Now())
 }
 
-func (r *Recorder) createNewTs() {
-	var oldPMT util.Buffer
-	if r.ts != nil {
-		oldPMT = r.ts.PMT
-		r.ts.Close()
+func (r *Recorder) createNewTs() (err error) {
+	if r.RecordJob.RecConf.RealTime {
+		if err = r.ts.Open(r.Event.FilePath); err != nil {
+			r.Error("create ts file failed", "err", err, "path", r.Event.FilePath)
+		}
+	} else {
+		r.ts.path = r.Event.FilePath
 	}
-	var err error
-	r.ts, err = NewTsInFile(r.Event.FilePath)
-	if err != nil {
-		r.Error("create ts file failed", "err", err, "path", r.Event.FilePath)
-		return
-	}
-	if oldPMT.Len() > 0 {
-		r.ts.PMT = oldPMT
-	}
+	return
 }
 
 func (r *Recorder) writeSegment(ts time.Duration, writeTime time.Time) (err error) {
@@ -91,7 +85,13 @@ func (r *Recorder) writeSegment(ts time.Duration, writeTime time.Time) (err erro
 		}
 
 		// 创建新的ts文件
-		r.createNewTs()
+		if err = r.createNewTs(); err != nil {
+			return
+		}
+		if r.RecordJob.RecConf.RealTime {
+			r.ts.file.Write(mpegts.DefaultPATPacket)
+			r.ts.file.Write(r.ts.PMT)
+		}
 		r.segmentCount++
 		r.lastTs = ts
 	}
@@ -108,13 +108,10 @@ func (r *Recorder) Run() (err error) {
 	}
 
 	// 初始化HLS相关结构
-	r.createNewTs()
-	r.pesAudio = &mpegts.MpegtsPESFrame{
-		Pid: mpegts.PID_AUDIO,
+	if err = r.createNewTs(); err != nil {
+		return
 	}
-	r.pesVideo = &mpegts.MpegtsPESFrame{
-		Pid: mpegts.PID_VIDEO,
-	}
+	pesAudio, pesVideo := mpegts.CreatePESWriters()
 	r.firstSegment = true
 
 	var audioCodec, videoCodec codec.FourCC
@@ -125,20 +122,37 @@ func (r *Recorder) Run() (err error) {
 		videoCodec = suber.Publisher.VideoTrack.FourCC()
 	}
 	r.ts.WritePMTPacket(audioCodec, videoCodec)
-
-	return m7s.PlayBlock(suber, r.ProcessADTS, r.ProcessAnnexB)
-}
-
-func (r *Recorder) ProcessADTS(audio *pkg.ADTS) (err error) {
-	return r.ts.WriteAudioFrame( r.RecordJob.Subscriber.AudioReader.AbsTime, audio, r.pesAudio)
-}
-
-func (r *Recorder) ProcessAnnexB(video *pkg.AnnexB) (err error) {
-	vr := r.RecordJob.Subscriber.VideoReader
-	if vr.Value.IDR {
-		if err = r.writeSegment(time.Duration(vr.AbsTime)*time.Millisecond, vr.Value.WriteTime); err != nil {
-			return
-		}
+	if ctx.RecConf.RealTime {
+		r.ts.file.Write(mpegts.DefaultPATPacket)
+		r.ts.file.Write(r.ts.PMT)
 	}
-	return r.ts.WriteVideoFrame(vr.AbsTime, video, r.pesVideo)
+	return m7s.PlayBlock(suber, func(audio *format.Mpeg2Audio) (err error) {
+		pesAudio.Pts = uint64(suber.AudioReader.AbsTime) * 90
+		err = pesAudio.WritePESPacket(audio.Memory, &r.ts.RecyclableMemory)
+		if err == nil {
+			if ctx.RecConf.RealTime {
+				r.ts.RecyclableMemory.WriteTo(r.ts.file)
+				r.ts.RecyclableMemory.Recycle()
+			}
+		}
+		return
+	}, func(video *mpegts.VideoFrame) (err error) {
+		vr := r.RecordJob.Subscriber.VideoReader
+		if vr.Value.IDR {
+			if err = r.writeSegment(video.Timestamp, vr.Value.WriteTime); err != nil {
+				return
+			}
+		}
+		pesVideo.IsKeyFrame = video.IDR
+		pesVideo.Pts = uint64(vr.AbsTime+video.GetCTS32()) * 90
+		pesVideo.Dts = uint64(vr.AbsTime) * 90
+		err = pesVideo.WritePESPacket(video.Memory, &r.ts.RecyclableMemory)
+		if err == nil {
+			if ctx.RecConf.RealTime {
+				r.ts.RecyclableMemory.WriteTo(r.ts.file)
+				r.ts.RecyclableMemory.Recycle()
+			}
+		}
+		return
+	})
 }

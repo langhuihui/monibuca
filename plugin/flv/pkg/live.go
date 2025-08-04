@@ -16,8 +16,8 @@ type Live struct {
 }
 
 func (task *Live) WriteFlvHeader() (err error) {
-	at, vt := &task.Subscriber.Publisher.AudioTrack, &task.Subscriber.Publisher.VideoTrack
-	hasAudio, hasVideo := at.AVTrack != nil && task.Subscriber.SubAudio, vt.AVTrack != nil && task.Subscriber.SubVideo
+	audioCtx, videoCtx := task.Subscriber.Publisher.GetAudioCodecCtx(), task.Subscriber.Publisher.GetVideoCodecCtx()
+	hasAudio, hasVideo := audioCtx != nil && task.Subscriber.SubAudio, videoCtx != nil && task.Subscriber.SubVideo
 	var amf rtmp.AMF
 	amf.Marshal("onMetaData")
 	metaData := rtmp.EcmaArray{
@@ -35,16 +35,16 @@ func (task *Live) WriteFlvHeader() (err error) {
 	var flags byte
 	if hasAudio {
 		flags |= (1 << 2)
-		metaData["audiocodecid"] = int(rtmp.ParseAudioCodec(at.FourCC()))
-		ctx := at.ICodecCtx.(IAudioCodecCtx)
+		metaData["audiocodecid"] = int(rtmp.ParseAudioCodec(audioCtx.FourCC()))
+		ctx := audioCtx.(IAudioCodecCtx)
 		metaData["audiosamplerate"] = ctx.GetSampleRate()
 		metaData["audiosamplesize"] = ctx.GetSampleSize()
 		metaData["stereo"] = ctx.GetChannels() == 2
 	}
 	if hasVideo {
 		flags |= 1
-		metaData["videocodecid"] = int(rtmp.ParseVideoCodec(vt.FourCC()))
-		ctx := vt.ICodecCtx.(IVideoCodecCtx)
+		metaData["videocodecid"] = int(rtmp.ParseVideoCodec(videoCtx.FourCC()))
+		ctx := videoCtx.(IVideoCodecCtx)
 		metaData["width"] = ctx.Width()
 		metaData["height"] = ctx.Height()
 	}
@@ -60,12 +60,12 @@ func (task *Live) rtmpData2FlvTag(t byte, data *rtmp.RTMPData, ts uint32) error 
 	return task.WriteFlvTag(append(net.Buffers{task.b[:]}, data.Memory.Buffers...))
 }
 
-func (task *Live) WriteAudioTag(data *rtmp.RTMPAudio, ts uint32) error {
-	return task.rtmpData2FlvTag(FLV_TAG_TYPE_AUDIO, &data.RTMPData, ts)
+func (task *Live) WriteAudioTag(data *rtmp.AudioFrame, ts uint32) error {
+	return task.rtmpData2FlvTag(FLV_TAG_TYPE_AUDIO, (*rtmp.RTMPData)(data), ts)
 }
 
-func (task *Live) WriteVideoTag(data *rtmp.RTMPVideo, ts uint32) error {
-	return task.rtmpData2FlvTag(FLV_TAG_TYPE_VIDEO, &data.RTMPData, ts)
+func (task *Live) WriteVideoTag(data *rtmp.VideoFrame, ts uint32) error {
+	return task.rtmpData2FlvTag(FLV_TAG_TYPE_VIDEO, (*rtmp.RTMPData)(data), ts)
 }
 
 func (task *Live) Run() (err error) {
@@ -73,9 +73,9 @@ func (task *Live) Run() (err error) {
 	if err != nil {
 		return
 	}
-	err = m7s.PlayBlock(task.Subscriber, func(audio *rtmp.RTMPAudio) error {
+	err = m7s.PlayBlock(task.Subscriber, func(audio *rtmp.AudioFrame) error {
 		return task.WriteAudioTag(audio, task.Subscriber.AudioReader.AbsTime)
-	}, func(video *rtmp.RTMPVideo) error {
+	}, func(video *rtmp.VideoFrame) error {
 		return task.WriteVideoTag(video, task.Subscriber.VideoReader.AbsTime)
 	})
 	if err != nil {

@@ -27,6 +27,32 @@ type (
 	}
 )
 
+func NewAACCtxFromRecord(record []byte) (ret *AACCtx, err error) {
+	ret = &AACCtx{}
+	ret.CodecData, err = aacparser.NewCodecDataFromMPEG4AudioConfigBytes(record)
+	return
+}
+
+func NewPCMACtx() *PCMACtx {
+	return &PCMACtx{
+		AudioCtx: AudioCtx{
+			SampleRate: 90000,
+			Channels:   1,
+			SampleSize: 16,
+		},
+	}
+}
+
+func NewPCMUCtx() *PCMUCtx {
+	return &PCMUCtx{
+		AudioCtx: AudioCtx{
+			SampleRate: 90000,
+			Channels:   1,
+			SampleSize: 16,
+		},
+	}
+}
+
 func (ctx *AudioCtx) GetRecord() []byte {
 	return []byte{}
 }

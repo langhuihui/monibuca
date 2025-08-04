@@ -114,7 +114,6 @@ func (m *Muxer) AddTrack(cid MP4_CODEC_TYPE) *Track {
 }
 
 func (m *Muxer) CreateFlagment(t *Track, sample Sample) (moof IBox, mdat IBox) {
-	sample.Size = len(sample.Data)
 	if len(t.Samplelist) > 0 {
 		lastSample := &t.Samplelist[0]
 		lastSample.Duration = sample.Timestamp - lastSample.Timestamp
@@ -122,7 +121,7 @@ func (m *Muxer) CreateFlagment(t *Track, sample Sample) (moof IBox, mdat IBox) {
 		// Create moof box for this track
 		moof = t.MakeMoof(m.nextFragmentId)
 		// Create mdat box for this track
-		mdat = CreateDataBox(TypeMDAT, lastSample.Data)
+		mdat = CreateMemoryBox(TypeMDAT, lastSample.Memory)
 
 		moofOffset := m.CurrentOffset
 		m.CurrentOffset += int64(moof.Size() + mdat.Size())
@@ -147,13 +146,12 @@ func (m *Muxer) WriteSample(w io.Writer, t *Track, sample Sample) (err error) {
 	}
 	// For regular MP4, write directly to output
 	sample.Offset = m.CurrentOffset
-	sample.Size, err = w.Write(sample.Data)
+	_, err = sample.WriteTo(w)
 	if err != nil {
 		return
 	}
 	m.CurrentOffset += int64(sample.Size)
 	t.AddSampleEntry(sample)
-	sample.Data = nil
 	return
 }
 

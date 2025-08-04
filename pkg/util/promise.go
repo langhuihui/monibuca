@@ -22,13 +22,13 @@ func NewPromiseWithTimeout(ctx context.Context, timeout time.Duration) *Promise 
 	p := &Promise{}
 	p.Context, p.CancelCauseFunc = context.WithCancelCause(ctx)
 	p.timer = time.AfterFunc(timeout, func() {
-		p.CancelCauseFunc(ErrTimeout)
+		p.CancelCauseFunc(errTimeout)
 	})
 	return p
 }
 
 var ErrResolve = errors.New("promise resolved")
-var ErrTimeout = errors.New("promise timeout")
+var errTimeout = errors.New("promise timeout")
 
 func (p *Promise) Resolve() {
 	p.Fulfill(nil)
@@ -45,6 +45,10 @@ func (p *Promise) Await() (err error) {
 		err = nil
 	}
 	return
+}
+
+func (p *Promise) IsRejected() bool {
+	return context.Cause(p.Context) != ErrResolve
 }
 
 func (p *Promise) Fulfill(err error) {

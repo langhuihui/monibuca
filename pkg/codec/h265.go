@@ -24,6 +24,15 @@ type (
 	}
 )
 
+func NewH265CtxFromRecord(record []byte) (ret *H265Ctx, err error) {
+	ret = &H265Ctx{}
+	ret.CodecData, err = h265parser.NewCodecDataFromAVCDecoderConfRecord(record)
+	if err == nil {
+		ret.RecordInfo.LengthSizeMinusOne = 3
+	}
+	return
+}
+
 func (ctx *H265Ctx) GetInfo() string {
 	return fmt.Sprintf("fps: %d, resolution: %s", ctx.FPS(), ctx.Resolution())
 }

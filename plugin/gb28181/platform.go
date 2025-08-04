@@ -2,7 +2,6 @@ package plugin_gb28181pro
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -40,10 +39,8 @@ type Platform struct {
 	RegisterCallID string `gorm:"-" json:"registerCallID"` // CallID表示SIP会话的标识符
 	SN             int
 
-	eventChan chan any
 	// 插件配置
 	plugin     *GB28181Plugin
-	ctx        context.Context
 	unRegister bool
 	channels   util.Collection[string, *Channel] `gorm:"-:all"`
 	register   *Register
@@ -65,10 +62,9 @@ func NewPlatform(pm *gb28181.PlatformModel, plugin *GB28181Plugin, unRegister bo
 		plugin:        plugin,
 		unRegister:    unRegister,
 	}
-	p.ctx = context.Background()
 	client, err := sipgo.NewClient(p.plugin.ua, sipgo.WithClientHostname(p.PlatformModel.DeviceIP), sipgo.WithClientPort(p.PlatformModel.DevicePort))
 	if err != nil {
-		p.Error("failed to create sip client: %v", err)
+		p.Error("failed to create sip client", "err", err)
 	}
 	p.Client = client
 	userAgentHeader := sip.NewHeader("User-Agent", "M7S/"+m7s.Version)
@@ -97,16 +93,6 @@ func NewPlatform(pm *gb28181.PlatformModel, plugin *GB28181Plugin, unRegister bo
 	p.DialogClient = sipgo.NewDialogClientCache(p.Client, *p.ContactHDR)
 
 	p.MaxForwardsHDR = sip.MaxForwardsHeader(70)
-	//p.plugin.platforms.Set(p)
-	p.OnDispose(func() {
-		if plugin.platforms.RemoveByKey(p.PlatformModel.ServerGBID) {
-			//for c := range d.channels.Range {
-			//	if c.AbstractDevice != nil {
-			//		c.AbstractDevice.ChangeStatus(m7s.PullProxyStatusOffline)
-			//	}
-			//}
-		}
-	})
 	return p
 }
 
@@ -114,7 +100,7 @@ func (p *Platform) Start() error {
 	if p.unRegister {
 		err := p.Unregister()
 		if err != nil {
-			p.Error("failed to unregister: %v", err)
+			p.Error("failed to unregister", "err", err)
 		}
 		p.unRegister = false
 	}
@@ -198,7 +184,7 @@ func (p *Platform) Keepalive() (*sipgo.DialogClientSession, error) {
 	req.AppendHeader(&contentLengthHeader)
 	req.SetBody(gb28181.BuildKeepAliveXML(p.SN, p.PlatformModel.DeviceGBID))
 	p.SN++
-	tx, err := p.Client.TransactionRequest(p.ctx, req)
+	tx, err := p.Client.TransactionRequest(p, req)
 	if err != nil {
 		p.Error("keepalive", "error", err.Error())
 		return nil, fmt.Errorf("创建事务失败: %v", err)
@@ -300,7 +286,7 @@ func (p *Platform) Register(isUnregister bool) error {
 	// 设置传输协议
 	req.SetTransport(strings.ToUpper(p.PlatformModel.Transport))
 
-	tx, err := p.Client.TransactionRequest(p.ctx, req)
+	tx, err := p.Client.TransactionRequest(p, req)
 	if err != nil {
 		p.plugin.Error(logTag, "error", err.Error())
 		return fmt.Errorf("创建事务失败: %v", err)
@@ -367,7 +353,7 @@ func (p *Platform) Register(isUnregister bool) error {
 		p.SN++
 
 		// 发送认证请求
-		tx, err = p.Client.TransactionRequest(p.ctx, newReq, sipgo.ClientRequestAddVia)
+		tx, err = p.Client.TransactionRequest(p, newReq, sipgo.ClientRequestAddVia)
 		if err != nil {
 			p.plugin.Error(logTag, "error", err.Error())
 			return err
@@ -508,7 +494,7 @@ func (p *Platform) handleCatalog(req *sip.Request, tx sip.ServerTransaction, msg
 	}
 
 	// 发送目录响应，无论是否有通道
-	p.plugin.Info("get channels success", channels)
+	p.plugin.Info("get channels success", "channels", channels)
 	return p.sendCatalogResponse(req, sn, fromTag, channels)
 }
 
@@ -574,7 +560,7 @@ func (p *Platform) sendCatalogResponse(req *sip.Request, sn string, fromTag stri
 		request.SetBody([]byte(xmlContent))
 
 		// 修正：使用TransactionRequest替代Do
-		tx, err := p.Client.TransactionRequest(p.ctx, request)
+		tx, err := p.Client.TransactionRequest(p, request)
 		if err != nil {
 			p.Error("sendCatalogResponse", "error", err.Error())
 			return fmt.Errorf("创建事务失败: %v", err)
@@ -639,7 +625,7 @@ func (p *Platform) sendCatalogResponse(req *sip.Request, sn string, fromTag stri
 			newReq.AppendHeader(sip.NewHeader("Authorization", cred.String()))
 
 			// 发送认证请求
-			tx, err = p.Client.TransactionRequest(p.ctx, newReq, sipgo.ClientRequestAddVia)
+			tx, err = p.Client.TransactionRequest(p, newReq, sipgo.ClientRequestAddVia)
 			if err != nil {
 				p.Error("sendCatalogResponse", "error", err.Error())
 				return err
@@ -719,7 +705,7 @@ func (p *Platform) sendCatalogResponse(req *sip.Request, sn string, fromTag stri
 		request.SetBody([]byte(xmlContent))
 
 		// 修正：使用TransactionRequest替代Do
-		tx, err := p.Client.TransactionRequest(p.ctx, request)
+		tx, err := p.Client.TransactionRequest(p, request)
 		if err != nil {
 			p.Error("sendCatalogResponse", "error", err.Error(), "channel_index", i)
 			return fmt.Errorf("创建事务失败: %v", err)
@@ -786,7 +772,7 @@ func (p *Platform) sendCatalogResponse(req *sip.Request, sn string, fromTag stri
 			newReq.AppendHeader(sip.NewHeader("Authorization", cred.String()))
 
 			// 发送认证请求
-			tx, err = p.Client.TransactionRequest(p.ctx, newReq, sipgo.ClientRequestAddVia)
+			tx, err = p.Client.TransactionRequest(p, newReq, sipgo.ClientRequestAddVia)
 			if err != nil {
 				p.Error("sendCatalogResponse", "error", err.Error(), "channel_index", i)
 				return err
@@ -866,7 +852,7 @@ func (p *Platform) buildChannelItem(channel gb28181.DeviceChannel) string {
 		channel.RegisterWay, // 直接使用整数值
 		channel.Secrecy,     // 直接使用整数值
 		parentID,
-		channel.Parental, // 直接使用整数值
+		channel.Parental,  // 直接使用整数值
 		channel.SafetyWay) // 直接使用整数值
 }
 
@@ -936,7 +922,7 @@ func (p *Platform) handleDeviceControl(req *sip.Request, tx sip.ServerTransactio
 	request.SetTransport(strings.ToUpper(device.Transport))
 
 	// 发送请求
-	_, err = device.client.Do(p.ctx, request)
+	_, err = device.client.Do(p, request)
 	if err != nil {
 		p.Error("发送控制命令失败", "error", err.Error())
 		return fmt.Errorf("send control command failed: %v", err)
@@ -1085,7 +1071,7 @@ func (p *Platform) sendDeviceStatusResponse(req *sip.Request, device *Device, sn
 	request.SetTransport(strings.ToUpper(p.PlatformModel.Transport))
 
 	// 发送响应
-	_, err := p.Client.Do(p.ctx, request)
+	_, err := p.Client.Do(p, request)
 	if err != nil {
 		p.Error("发送设备状态响应失败", "error", err.Error())
 		return fmt.Errorf("send device status response failed: %v", err)
@@ -1225,7 +1211,7 @@ func (p *Platform) sendDeviceInfoResponse(req *sip.Request, device *Device, sn s
 	}
 
 	// 修正：使用正确的上下文参数
-	tx, err := p.Client.TransactionRequest(p.ctx, request)
+	tx, err := p.Client.TransactionRequest(p, request)
 	if err != nil {
 		p.Error("sendDeviceInfoResponse", "error", err.Error())
 		return fmt.Errorf("创建事务失败: %v", err)
@@ -1290,7 +1276,7 @@ func (p *Platform) sendDeviceInfoResponse(req *sip.Request, device *Device, sn s
 		newReq.AppendHeader(sip.NewHeader("Authorization", cred.String()))
 
 		// 发送认证请求
-		tx, err = p.Client.TransactionRequest(p.ctx, newReq, sipgo.ClientRequestAddVia)
+		tx, err = p.Client.TransactionRequest(p, newReq, sipgo.ClientRequestAddVia)
 		if err != nil {
 			p.Error("sendDeviceInfoResponse", "error", err.Error())
 			return err
@@ -1403,7 +1389,7 @@ func (p *Platform) handlePresetQuery(req *sip.Request, tx sip.ServerTransaction,
 	request.SetTransport(strings.ToUpper(device.Transport))
 
 	// 发送请求
-	_, err = device.client.Do(p.ctx, request)
+	_, err = device.client.Do(p, request)
 	if err != nil {
 		p.Error("发送预置位查询命令失败", "error", err.Error())
 		return fmt.Errorf("send preset query command failed: %v", err)

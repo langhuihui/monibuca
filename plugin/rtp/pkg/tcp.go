@@ -4,13 +4,14 @@ import (
 	"bufio"
 	"encoding/binary"
 	"io"
-	"m7s.live/v5/pkg/util"
 	"net"
+
+	"m7s.live/v5/pkg/util"
 )
 
 type TCP net.TCPConn
 
-func (t *TCP) Read(onRTP func(util.Buffer) error) (err error) {
+func (t *TCP) ReadRTP(onRTP func(util.Buffer) error) (err error) {
 	reader := bufio.NewReader((*net.TCPConn)(t))
 	rtpLenBuf := make([]byte, 4)
 	buffer := make(util.Buffer, 1024)

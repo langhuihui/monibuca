@@ -5,6 +5,8 @@ import (
 	"log/slog"
 	"testing"
 	"time"
+
+	"m7s.live/v5/pkg/util"
 )
 
 func TestRing(t *testing.T) {
@@ -13,7 +15,7 @@ func TestRing(t *testing.T) {
 	ctx, _ := context.WithTimeout(context.Background(), time.Second*5)
 	go t.Run("writer", func(t *testing.T) {
 		for i := 0; ctx.Err() == nil; i++ {
-			w.Value.Raw = i
+			w.Value.Raw = &util.Memory{}
 			normal := w.Step()
 			t.Log("write", i, normal)
 			time.Sleep(time.Millisecond * 50)
@@ -76,7 +78,7 @@ func BenchmarkRing(b *testing.B) {
 	ctx, _ := context.WithTimeout(context.Background(), time.Second*5)
 	go func() {
 		for i := 0; ctx.Err() == nil; i++ {
-			w.Value.Raw = i
+			w.Value.Raw = &util.Memory{}
 			w.Step()
 			time.Sleep(time.Millisecond * 50)
 		}

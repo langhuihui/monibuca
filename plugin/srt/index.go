@@ -7,7 +7,7 @@ import (
 	srt "github.com/datarhei/gosrt"
 	"m7s.live/v5"
 	"m7s.live/v5/pkg/task"
-	pkg "m7s.live/v5/plugin/srt/pkg"
+	srt_pkg "m7s.live/v5/plugin/srt/pkg"
 )
 
 type SRTServer struct {
@@ -22,11 +22,13 @@ type SRTPlugin struct {
 	Passphrase string
 }
 
-const defaultConfig = m7s.DefaultYaml(`listenaddr: :6000`)
+var _ = m7s.InstallPlugin[SRTPlugin](m7s.PluginMeta{
+	DefaultYaml: `listenaddr: :6000`,
+	NewPuller:   srt_pkg.NewPuller,
+	NewPusher:   srt_pkg.NewPusher,
+})
 
-var _ = m7s.InstallPlugin[SRTPlugin](defaultConfig, pkg.NewPuller, pkg.NewPusher)
-
-func (p *SRTPlugin) OnInit() error {
+func (p *SRTPlugin) Start() error {
 	var t SRTServer
 	t.server.Addr = p.ListenAddr
 	t.plugin = p
@@ -58,10 +60,10 @@ func (t *SRTServer) Start() error {
 			conn.Close()
 			return
 		}
-		var receiver pkg.Receiver
+		var receiver srt_pkg.Receiver
 		receiver.Conn = conn
 		receiver.Publisher = publisher
-		t.AddTask(&receiver)
+		t.RunTask(&receiver)
 	}
 	t.server.HandleSubscribe = func(conn srt.Conn) {
 		_, streamPath, _ := strings.Cut(conn.StreamId(), "/")
@@ -70,15 +72,16 @@ func (t *SRTServer) Start() error {
 			conn.Close()
 			return
 		}
-		var sender pkg.Sender
+		var sender srt_pkg.Sender
 		sender.Conn = conn
 		sender.Subscriber = subscriber
-		t.AddTask(&sender)
+		sender.Using(subscriber)
+		t.RunTask(&sender)
 	}
 	return nil
 }
 
-func (t *SRTServer) OnStop() {
+func (t *SRTServer) Dispose() {
 	t.server.Shutdown()
 }
 

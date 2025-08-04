@@ -7,31 +7,58 @@ import (
 	"net/url"
 	"strings"
 
+	pkg "m7s.live/v5/pkg"
 	"m7s.live/v5/pkg/config"
 	"m7s.live/v5/pkg/task"
 
 	"m7s.live/v5"
 )
 
+// Fixed progress steps for RTMP pull workflow
+var rtmpPullSteps = []pkg.StepDef{
+	{Name: pkg.StepPublish, Description: "Publishing stream"},
+	{Name: pkg.StepURLParsing, Description: "Parsing RTMP URL"},
+	{Name: pkg.StepConnection, Description: "Connecting to RTMP server"},
+	{Name: pkg.StepHandshake, Description: "Performing RTMP handshake"},
+	{Name: pkg.StepStreaming, Description: "Receiving media stream"},
+}
+
 func (c *Client) Start() (err error) {
 	var addr string
 	if c.direction == DIRECTION_PULL {
+		// Initialize progress tracking for pull operations
+		c.pullCtx.SetProgressStepsDefs(rtmpPullSteps)
+
 		addr = c.pullCtx.Connection.RemoteURL
 		err = c.pullCtx.Publish()
 		if err != nil {
+			c.pullCtx.Fail(err.Error())
 			return
 		}
+
+		c.pullCtx.GoToStepConst(pkg.StepURLParsing)
 	} else {
 		addr = c.pushCtx.Connection.RemoteURL
 	}
 	c.u, err = url.Parse(addr)
 	if err != nil {
+		if c.direction == DIRECTION_PULL {
+			c.pullCtx.Fail(err.Error())
+		}
 		return
 	}
 	ps := strings.Split(c.u.Path, "/")
 	if len(ps) < 2 {
+		if c.direction == DIRECTION_PULL {
+			c.pullCtx.Fail("illegal rtmp url")
+		}
 		return errors.New("illegal rtmp url")
 	}
+
+	if c.direction == DIRECTION_PULL {
+		c.pullCtx.GoToStepConst(pkg.StepConnection)
+	}
+
 	isRtmps := c.u.Scheme == "rtmps"
 	if strings.Count(c.u.Host, ":") == 0 {
 		if isRtmps {
@@ -51,13 +78,26 @@ func (c *Client) Start() (err error) {
 		conn, err = net.Dial("tcp", c.u.Host)
 	}
 	if err != nil {
+		if c.direction == DIRECTION_PULL {
+			c.pullCtx.Fail(err.Error())
+		}
 		return err
 	}
+
+	if c.direction == DIRECTION_PULL {
+		c.pullCtx.GoToStepConst(pkg.StepHandshake)
+	}
+
 	c.Init(conn)
 	c.SetDescription("local", conn.LocalAddr().String())
 	c.Info("connect")
 	c.WriteChunkSize = c.chunkSize
 	c.AppName = strings.Join(ps[1:len(ps)-1], "/")
+
+	if c.direction == DIRECTION_PULL {
+		c.pullCtx.GoToStepConst(pkg.StepStreaming)
+	}
+
 	return err
 }
 
@@ -125,82 +165,82 @@ func (c *Client) Run() (err error) {
 		},
 		nil,
 	})
-	var msg *Chunk
+	var commander Commander
 	for err == nil {
-		if msg, err = c.RecvMessage(); err != nil {
+		if commander, err = c.RecvMessage(); err != nil {
 			return err
 		}
-		switch msg.MessageTypeID {
-		case RTMP_MSG_AMF0_COMMAND:
-			cmd := msg.MsgData.(Commander).GetCommand()
-			switch cmd.CommandName {
-			case Response_Result, Response_OnStatus:
-				switch response := msg.MsgData.(type) {
-				case *ResponseMessage:
-					c.SetDescriptions(response.Properties)
-					if response.Infomation["code"] == NetConnection_Connect_Success {
-						err = c.SendMessage(RTMP_MSG_AMF0_COMMAND, &CommandMessage{"createStream", 2})
-						if err == nil {
-							c.Info("connected")
-						}
+		cmd := commander.GetCommand()
+		switch cmd.CommandName {
+		case Response_Result, Response_OnStatus:
+			switch response := commander.(type) {
+			case *ResponseMessage:
+				c.SetDescriptions(response.Properties)
+				if response.Infomation["code"] == NetConnection_Connect_Success {
+					err = c.SendMessage(RTMP_MSG_AMF0_COMMAND, &CommandMessage{"createStream", 2})
+					if err == nil {
+						c.Info("connected")
 					}
-				case *ResponseCreateStreamMessage:
-					c.StreamID = response.StreamId
-					if c.direction == DIRECTION_PULL {
-						m := &PlayMessage{}
-						m.StreamId = response.StreamId
-						m.TransactionId = 4
-						m.CommandMessage.CommandName = "play"
-						URL, _ := url.Parse(c.pullCtx.Connection.RemoteURL)
-						ps := strings.Split(URL.Path, "/")
-						args := URL.Query()
-						m.StreamName = ps[len(ps)-1]
-						if len(args) > 0 {
-							m.StreamName += "?" + args.Encode()
-						}
-						if c.pullCtx.Publisher != nil {
-							c.Receivers[response.StreamId] = c.pullCtx.Publisher
-						}
-						err = c.SendMessage(RTMP_MSG_AMF0_COMMAND, m)
-						// if response, ok := msg.MsgData.(*ResponsePlayMessage); ok {
-						// 	if response.Object["code"] == "NetStream.Play.Start" {
+				}
+			case *ResponseCreateStreamMessage:
+				c.StreamID = response.StreamId
+				if c.direction == DIRECTION_PULL {
+					m := &PlayMessage{}
+					m.StreamId = response.StreamId
+					m.TransactionId = 4
+					m.CommandMessage.CommandName = "play"
+					URL, _ := url.Parse(c.pullCtx.Connection.RemoteURL)
+					ps := strings.Split(URL.Path, "/")
+					args := URL.Query()
+					m.StreamName = ps[len(ps)-1]
+					if len(args) > 0 {
+						m.StreamName += "?" + args.Encode()
+					}
+					if c.pullCtx.Publisher != nil {
+						c.Writers[response.StreamId] = &struct {
+							m7s.PublishWriter[*AudioFrame, *VideoFrame]
+							*m7s.Publisher
+						}{Publisher: c.pullCtx.Publisher}
+					}
+					err = c.SendMessage(RTMP_MSG_AMF0_COMMAND, m)
+					// if response, ok := msg.MsgData.(*ResponsePlayMessage); ok {
+					// 	if response.Object["code"] == "NetStream.Play.Start" {
 
-						// 	} else if response.Object["level"] == Level_Error {
-						// 		return errors.New(response.Object["code"].(string))
-						// 	}
-						// } else {
-						// 	return errors.New("pull faild")
-						// }
-					} else {
-						err = c.pushCtx.Subscribe()
-						if err != nil {
-							return
-						}
-						URL, _ := url.Parse(c.pushCtx.Connection.RemoteURL)
-						_, streamPath, _ := strings.Cut(URL.Path, "/")
-						_, streamPath, _ = strings.Cut(streamPath, "/")
-						args := URL.Query()
-						if len(args) > 0 {
-							streamPath += "?" + args.Encode()
-						}
-						err = c.SendMessage(RTMP_MSG_AMF0_COMMAND, &PublishMessage{
-							CURDStreamMessage{
-								CommandMessage{
-									"publish",
-									1,
-								},
-								response.StreamId,
+					// 	} else if response.Object["level"] == Level_Error {
+					// 		return errors.New(response.Object["code"].(string))
+					// 	}
+					// } else {
+					// 	return errors.New("pull faild")
+					// }
+				} else {
+					err = c.pushCtx.Subscribe()
+					if err != nil {
+						return
+					}
+					URL, _ := url.Parse(c.pushCtx.Connection.RemoteURL)
+					_, streamPath, _ := strings.Cut(URL.Path, "/")
+					_, streamPath, _ = strings.Cut(streamPath, "/")
+					args := URL.Query()
+					if len(args) > 0 {
+						streamPath += "?" + args.Encode()
+					}
+					err = c.SendMessage(RTMP_MSG_AMF0_COMMAND, &PublishMessage{
+						CURDStreamMessage{
+							CommandMessage{
+								"publish",
+								1,
 							},
-							streamPath,
-							"live",
-						})
-					}
-				case *ResponsePublishMessage:
-					if response.Infomation["code"] == NetStream_Publish_Start {
-						c.Subscribe(c.pushCtx.Subscriber)
-					} else {
-						return errors.New(response.Infomation["code"].(string))
-					}
+							response.StreamId,
+						},
+						streamPath,
+						"live",
+					})
+				}
+			case *ResponsePublishMessage:
+				if response.Infomation["code"] == NetStream_Publish_Start {
+					c.Subscribe(c.pushCtx.Subscriber)
+				} else {
+					return errors.New(response.Infomation["code"].(string))
 				}
 			}
 		}

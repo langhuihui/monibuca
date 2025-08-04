@@ -20,3 +20,6 @@ example/default/*
 !example/default/main.go
 !example/default/config.yaml
 shutdown.sh
+!example/test/test.db
+*.mp4
+shutdown.bat

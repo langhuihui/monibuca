@@ -36,7 +36,13 @@ func (w *WaitManager) WakeUp(streamPath string, publisher *Publisher) {
 		for subscriber := range waiting.Range {
 			publisher.AddSubscriber(subscriber)
 		}
-		w.Remove(waiting)
+		waiting.Clear()
+		publisher.OnDispose(func() {
+			if waiting.Length == 0 {
+				w.Remove(waiting)
+			}
+		})
+		// w.Remove(waiting)
 	}
 }
 

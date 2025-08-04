@@ -1,0 +1,70 @@
+
+syntax = "proto3";
+import "google/api/annotations.proto";
+package rtp;
+option go_package="m7s.live/v5/plugin/rtp/pb";
+
+service api {
+  rpc ReceivePS(ReceivePSRequest) returns (ReceivePSResponse) {
+    option (google.api.http) = {
+      post: "/rtp/receive/ps"
+      body: "*"
+    };
+  }
+  rpc SendPS(SendPSRequest) returns (SendPSResponse) {
+    option (google.api.http) = {
+      post: "/rtp/send/ps"
+      body: "*"
+    };
+  }
+  rpc Forward(ForwardRequest) returns (ForwardResponse) {
+    option (google.api.http) = {
+      post: "/rtp/forward"
+      body: "*"
+    };
+  }
+}
+
+message ReceivePSRequest {
+  string streamPath = 1;
+  uint32 port = 2;
+  bool udp = 3;
+}
+
+message ReceivePSResponse {
+  int32 code = 1;
+  string message = 2;
+  int32 data = 3;
+}
+
+message SendPSRequest {
+  string streamPath = 1;
+  string ip = 2;
+  uint32 port = 3;
+  bool udp = 4;
+  uint32 ssrc = 5;
+}
+
+message SendPSResponse {  
+  int32 code = 1;
+  string message = 2;
+  int32 data = 3;
+}
+
+message Peer {
+  string ip = 1;
+  uint32 port = 2;
+  uint32 ssrc = 3;
+  string mode = 4;
+}
+
+message ForwardRequest {
+  Peer source = 1;
+  Peer target = 2;
+}
+
+message ForwardResponse {
+  int32 code = 1;
+  string message = 2;
+  bool success = 3;
+}

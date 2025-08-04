@@ -19,6 +19,7 @@ import (
 	"m7s.live/v5/pkg/task"
 	"m7s.live/v5/pkg/util"
 	gb28181 "m7s.live/v5/plugin/gb28181/pkg"
+	mrtp "m7s.live/v5/plugin/rtp/pkg"
 )
 
 type DeviceStatus string
@@ -46,7 +47,10 @@ func (d *DeviceKeepaliveTickTask) Tick(any) {
 	if d.device.KeepaliveInterval >= 5 {
 		keepaliveSeconds = d.device.KeepaliveInterval
 	}
-	d.Debug("keepLiveTick,deviceid is", d.device.DeviceId, "d.KeepaliveTime is ", d.device.KeepaliveTime, "d.KeepaliveInterval is ", d.device.KeepaliveInterval, "d.KeepaliveCount is ", d.device.KeepaliveCount)
+	d.Debug("keepLiveTick", "deviceID", d.device.DeviceId,
+		"keepaliveTime", d.device.KeepaliveTime,
+		"interval", d.device.KeepaliveInterval,
+		"count", d.device.KeepaliveCount)
 	if timeDiff := time.Since(d.device.KeepaliveTime); timeDiff > time.Duration(d.device.KeepaliveCount*keepaliveSeconds)*time.Second {
 		d.device.Online = false
 		d.device.Status = DeviceOfflineStatus
@@ -60,38 +64,38 @@ func (d *DeviceKeepaliveTickTask) Tick(any) {
 
 type Device struct {
 	task.Job              `gorm:"-:all"`
-	DeviceId              string         `gorm:"primaryKey"` // 设备国标编号
-	Name                  string         // 设备名
-	CustomName            string         // 自定义名称
-	Manufacturer          string         // 生产厂商
-	Model                 string         // 型号
-	Firmware              string         // 固件版本
-	Transport             string         // 传输协议（UDP/TCP）
-	StreamMode            string         // 数据流传输模式（UDP:udp传输/TCP-ACTIVE：tcp主动模式/TCP-PASSIVE：tcp被动模式）
-	IP                    string         // wan地址_ip
-	Port                  int            // wan地址_port
-	HostAddress           string         // wan地址
-	Online                bool           // 是否在线，true为在线，false为离线
-	RegisterTime          time.Time      // 注册时间
-	KeepaliveTime         time.Time      // 心跳时间
-	KeepaliveInterval     int            `gorm:"default:60" default:"60"` // 心跳间隔
-	KeepaliveCount        int            `gorm:"default:3" default:"3"`   // 心跳次数
-	ChannelCount          int            // 通道个数
-	Expires               int            // 注册有效期
-	CreateTime            time.Time      `gorm:"primaryKey"` // 创建时间
-	UpdateTime            time.Time      // 更新时间
-	Charset               string         // 字符集, 支持 UTF-8 与 GB2312
-	SubscribeCatalog      int            `gorm:"default:0"` // 目录订阅周期，0为不订阅
-	SubscribePosition     int            `gorm:"default:0"` // 移动设备位置订阅周期，0为不订阅
-	PositionInterval      int            `gorm:"default:6"` // 移动设备位置信息上报时间间隔,单位:秒,默认值6
-	SubscribeAlarm        int            `gorm:"default:0"` // 报警订阅周期，0为不订阅
-	SSRCCheck             bool           // 是否开启ssrc校验，默认关闭，开启可以防止串流
-	GeoCoordSys           string         // 地理坐标系， 目前支持 WGS84,GCJ02
-	Password              string         // 密码
-	SipIp                 string         // SIP交互IP（设备访问平台的IP）
-	AsMessageChannel      bool           // 是否作为消息通道
-	BroadcastPushAfterAck bool           // 控制语音对讲流程，释放收到ACK后发流
-	DeletedAt             gorm.DeletedAt `yaml:"-"`
+	DeviceId              string          `gorm:"primaryKey"` // 设备国标编号
+	Name                  string          // 设备名
+	CustomName            string          // 自定义名称
+	Manufacturer          string          // 生产厂商
+	Model                 string          // 型号
+	Firmware              string          // 固件版本
+	Transport             string          // 传输协议（UDP/TCP）
+	StreamMode            mrtp.StreamMode // 数据流传输模式（UDP:udp传输/TCP-ACTIVE：tcp主动模式/TCP-PASSIVE：tcp被动模式）
+	IP                    string          // wan地址_ip
+	Port                  int             // wan地址_port
+	HostAddress           string          // wan地址
+	Online                bool            // 是否在线，true为在线，false为离线
+	RegisterTime          time.Time       // 注册时间
+	KeepaliveTime         time.Time       // 心跳时间
+	KeepaliveInterval     int             `gorm:"default:60" default:"60"` // 心跳间隔
+	KeepaliveCount        int             `gorm:"default:3" default:"3"`   // 心跳次数
+	ChannelCount          int             // 通道个数
+	Expires               int             // 注册有效期
+	CreateTime            time.Time       `gorm:"primaryKey"` // 创建时间
+	UpdateTime            time.Time       // 更新时间
+	Charset               string          // 字符集, 支持 UTF-8 与 GB2312
+	SubscribeCatalog      int             `gorm:"default:0"` // 目录订阅周期，0为不订阅
+	SubscribePosition     int             `gorm:"default:0"` // 移动设备位置订阅周期，0为不订阅
+	PositionInterval      int             `gorm:"default:6"` // 移动设备位置信息上报时间间隔,单位:秒,默认值6
+	SubscribeAlarm        int             `gorm:"default:0"` // 报警订阅周期，0为不订阅
+	SSRCCheck             bool            // 是否开启ssrc校验，默认关闭，开启可以防止串流
+	GeoCoordSys           string          // 地理坐标系， 目前支持 WGS84,GCJ02
+	Password              string          // 密码
+	SipIp                 string          // SIP交互IP（设备访问平台的IP）
+	AsMessageChannel      bool            // 是否作为消息通道
+	BroadcastPushAfterAck bool            // 控制语音对讲流程，释放收到ACK后发流
+	DeletedAt             gorm.DeletedAt  `yaml:"-"`
 	// 删除强关联字段
 	// channels              []gb28181.DeviceChannel `gorm:"foreignKey:DeviceDBID;references:ID"` // 设备通道列表
 
@@ -137,7 +141,6 @@ func (d *Device) Dispose() {
 				if channel.PullProxyTask != nil {
 					channel.PullProxyTask.ChangeStatus(m7s.PullProxyStatusOffline)
 				}
-				//d.channels.RemoveByKey(channel.ID)
 				d.plugin.channels.RemoveByKey(channel.ID)
 				return true
 			})
@@ -249,6 +252,16 @@ func (c *catalogHandlerTask) Run() (err error) {
 	d.ChannelCount = msg.SumNum
 	d.UpdateTime = time.Now()
 	d.Debug("save channel", "deviceid", d.DeviceId, " d.channels.Length", d.channels.Length, "d.ChannelCount", d.ChannelCount, "d.UpdateTime", d.UpdateTime)
+
+	// 删除所有状态为OFF的通道
+	// d.channels.Range(func(channel *Channel) bool {
+	// 	if channel.DeviceChannel != nil && channel.DeviceChannel.Status == gb28181.ChannelOffStatus {
+	// 		d.Debug("删除不存在的通道", "channelId", channel.ID)
+	// 		d.channels.RemoveByKey(channel.ID)
+	// 		d.plugin.channels.RemoveByKey(channel.ID)
+	// 	}
+	// 	return true
+	// })
 
 	// 在所有通道都添加完成后，检查是否完成接收
 	if catalogReq.IsComplete() {
@@ -375,7 +388,7 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 				request.SetBody(req.Body())
 
 				// 发送请求
-				_, err = platform.Client.Do(platform.ctx, request)
+				_, err = platform.Client.Do(platform, request)
 				if err != nil {
 					d.Error("发送预置位查询响应失败", "error", err)
 					return err
@@ -481,16 +494,12 @@ func (d *Device) Go() (err error) {
 
 	// 创建并启动目录订阅任务
 	if d.SubscribeCatalog > 0 {
-		catalogSubTask := NewCatalogSubscribeTask(d)
-		d.AddTask(catalogSubTask)
-		catalogSubTask.Depend(d)
+		d.AddTask(NewCatalogSubscribeTask(d))
 	}
 
 	// 创建并启动位置订阅任务
 	if d.SubscribePosition > 0 {
-		positionSubTask := NewPositionSubscribeTask(d)
-		d.AddTask(positionSubTask)
-		positionSubTask.Depend(d)
+		d.AddTask(NewPositionSubscribeTask(d))
 	}
 	deviceKeepaliveTickTask := &DeviceKeepaliveTickTask{
 		seconds: time.Second * 30,
@@ -659,7 +668,7 @@ func (d *Device) GetIP() string {
 	return d.IP
 }
 
-func (d *Device) GetStreamMode() string {
+func (d *Device) GetStreamMode() mrtp.StreamMode {
 	return d.StreamMode
 }
 

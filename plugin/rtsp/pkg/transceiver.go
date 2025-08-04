@@ -1,16 +1,23 @@
 package rtsp
 
 import (
+	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"net"
 	"reflect"
+	"strings"
 	"time"
 
+	"github.com/deepch/vdk/codec/aacparser"
+	"github.com/deepch/vdk/codec/h264parser"
+	"github.com/deepch/vdk/codec/h265parser"
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v4"
 	"m7s.live/v5"
 	"m7s.live/v5/pkg"
+	"m7s.live/v5/pkg/codec"
 	mrtp "m7s.live/v5/plugin/rtp/pkg"
 )
 
@@ -27,16 +34,11 @@ type Receiver struct {
 	Stream
 	AudioCodecParameters *webrtc.RTPCodecParameters
 	VideoCodecParameters *webrtc.RTPCodecParameters
-	audioTimestamp       uint32
-	lastVideoTimestamp   uint32
-	lastAudioPacketTS    uint32    // 上一个音频包的时间戳
-	audioTSCheckStart    time.Time // 开始检查音频时间戳的时间
-	useVideoTS           bool      // 是否使用视频时间戳
 }
 
 func (s *Sender) GetMedia() (medias []*Media, err error) {
 	if s.SubAudio && s.Publisher.PubAudio && s.Publisher.HasAudioTrack() {
-		audioTrack := s.Publisher.GetAudioTrack(reflect.TypeOf((*mrtp.Audio)(nil)))
+		audioTrack := s.Publisher.GetAudioTrack(reflect.TypeOf((*mrtp.AudioFrame)(nil)))
 		if err = audioTrack.WaitReady(); err != nil {
 			return
 		}
@@ -58,7 +60,7 @@ func (s *Sender) GetMedia() (medias []*Media, err error) {
 	}
 
 	if s.SubVideo && s.Publisher.PubVideo && s.Publisher.HasVideoTrack() {
-		videoTrack := s.Publisher.GetVideoTrack(reflect.TypeOf((*mrtp.Video)(nil)))
+		videoTrack := s.Publisher.GetVideoTrack(reflect.TypeOf((*mrtp.VideoFrame)(nil)))
 		if err = videoTrack.WaitReady(); err != nil {
 			return
 		}
@@ -127,12 +129,12 @@ func (s *Sender) sendRTP(pack *mrtp.RTPData, channel int) (err error) {
 			}
 
 			// 发送RTP包
-			for _, packet := range pack.Packets {
-				buf, err := packet.Marshal()
+			for packet := range pack.Packets.RangePoint {
+				buf := s.MemoryAllocator.Borrow(packet.MarshalSize())
+				_, err := packet.MarshalTo(buf)
 				if err != nil {
 					return err
 				}
-
 				_, err = rtpConn.WriteToUDP(buf, clientAddr)
 				if err != nil {
 					s.Stream.Error("UDP send failed", "error", err, "addr", clientAddr.String())
@@ -145,19 +147,33 @@ func (s *Sender) sendRTP(pack *mrtp.RTPData, channel int) (err error) {
 	}
 
 TCP_FALLBACK:
-	// 使用TCP传输（原有逻辑）
+	// 使用TCP传输（优化版本：一次性分配内存并发送）
 	s.StartWrite()
 	defer s.StopWrite()
-	for _, packet := range pack.Packets {
+
+	// 直接使用 pack.GetSize() 获取总大小，并加上TCP头部大小
+	totalSize := pack.GetSize() + 4*len(pack.Packets) // 每个包需要4字节TCP头部
+
+	// 一次性分配内存
+	chunk := s.MemoryAllocator.Borrow(totalSize)
+
+	// 序列化所有包到内存中
+	offset := 0
+	for packet := range pack.Packets.RangePoint {
 		size := packet.MarshalSize()
-		chunk := s.MemoryAllocator.Borrow(size + 4)
-		chunk[0], chunk[1], chunk[2], chunk[3] = '$', byte(channel), byte(size>>8), byte(size)
-		if _, err = packet.MarshalTo(chunk[4:]); err != nil {
+		chunk[offset] = '$'
+		chunk[offset+1] = byte(channel)
+		chunk[offset+2] = byte(size >> 8)
+		chunk[offset+3] = byte(size)
+		if _, err = packet.MarshalTo(chunk[offset+4 : offset+4+size]); err != nil {
 			return
 		}
-		if _, err = s.Write(chunk); err != nil {
-			return
-		}
+		offset += size + 4
+	}
+
+	// 一次性写入
+	if _, err = s.Write(chunk); err != nil {
+		return
 	}
 	return
 }
@@ -298,9 +314,9 @@ func (s *Sender) sendRTCP(packet rtcp.Packet, mediaIndex int) error {
 
 func (s *Sender) Send() (err error) {
 	// 启动音视频发送协程
-	go m7s.PlayBlock(s.Subscriber, func(audio *mrtp.Audio) error {
+	go m7s.PlayBlock(s.Subscriber, func(audio *mrtp.AudioFrame) error {
 		return s.sendRTP(&audio.RTPData, s.AudioChannelID)
-	}, func(video *mrtp.Video) error {
+	}, func(video *mrtp.VideoFrame) error {
 		return s.sendRTP(&video.RTPData, s.VideoChannelID)
 	})
 
@@ -417,11 +433,8 @@ func (r *Receiver) SetMedia(medias []*Media) (err error) {
 }
 
 func (r *Receiver) Receive() (err error) {
-	audioFrame, videoFrame := &mrtp.Audio{}, &mrtp.Video{}
-	audioFrame.SetAllocator(r.MemoryAllocator)
-	audioFrame.RTPCodecParameters = r.AudioCodecParameters
-	videoFrame.SetAllocator(r.MemoryAllocator)
-	videoFrame.RTPCodecParameters = r.VideoCodecParameters
+	var audioPacket, videoPacket *rtp.Packet
+	var audioClockRate uint32
 	var rtcpTS time.Time
 	sdes := &rtcp.SourceDescription{
 		Chunks: []rtcp.SourceDescriptionChunk{
@@ -445,6 +458,124 @@ func (r *Receiver) Receive() (err error) {
 				Delay:              0, // Set delay since last SR
 			},
 		},
+	}
+	var writer m7s.PublishWriter[*mrtp.AudioFrame, *mrtp.VideoFrame]
+	if r.AudioCodecParameters != nil && r.PubAudio {
+		writer.PublishAudioWriter = m7s.NewPublishAudioWriter[*mrtp.AudioFrame](r.Publisher, r.MemoryAllocator)
+		switch r.AudioCodecParameters.MimeType {
+		case webrtc.MimeTypeOpus:
+			var ctx mrtp.OPUSCtx
+			ctx.OPUSCtx = &codec.OPUSCtx{}
+			ctx.ParseFmtpLine(r.AudioCodecParameters)
+			ctx.OPUSCtx.Channels = int(ctx.RTPCodecParameters.Channels)
+			audioClockRate = ctx.RTPCodecParameters.ClockRate
+			writer.AudioFrame.ICodecCtx = &ctx
+		case webrtc.MimeTypePCMA:
+			var ctx mrtp.PCMACtx
+			ctx.PCMACtx = &codec.PCMACtx{}
+			ctx.ParseFmtpLine(r.AudioCodecParameters)
+			ctx.AudioCtx.SampleRate = int(r.AudioCodecParameters.ClockRate)
+			ctx.AudioCtx.Channels = int(ctx.RTPCodecParameters.Channels)
+			audioClockRate = ctx.RTPCodecParameters.ClockRate
+			writer.AudioFrame.ICodecCtx = &ctx
+		case webrtc.MimeTypePCMU:
+			var ctx mrtp.PCMUCtx
+			ctx.PCMUCtx = &codec.PCMUCtx{}
+			ctx.ParseFmtpLine(r.AudioCodecParameters)
+			ctx.AudioCtx.SampleRate = int(r.AudioCodecParameters.ClockRate)
+			ctx.AudioCtx.Channels = int(ctx.RTPCodecParameters.Channels)
+			audioClockRate = ctx.RTPCodecParameters.ClockRate
+			writer.AudioFrame.ICodecCtx = &ctx
+		case "audio/MP4A-LATM":
+			ctx := mrtp.AACCtx{
+				AACCtx: &codec.AACCtx{},
+			}
+			ctx.ParseFmtpLine(r.AudioCodecParameters)
+			if conf, ok := ctx.Fmtp["config"]; ok {
+				if ctx.AACCtx.ConfigBytes, err = hex.DecodeString(conf); err == nil {
+					if ctx.CodecData, err = aacparser.NewCodecDataFromMPEG4AudioConfigBytes(ctx.AACCtx.ConfigBytes); err != nil {
+						return err
+					}
+				}
+			}
+			audioClockRate = ctx.RTPCodecParameters.ClockRate
+			writer.AudioFrame.ICodecCtx = &ctx
+		case "audio/MPEG4-GENERIC":
+			ctx := mrtp.AACCtx{AACCtx: &codec.AACCtx{}}
+			ctx.ParseFmtpLine(r.AudioCodecParameters)
+			ctx.IndexLength = 3
+			ctx.IndexDeltaLength = 3
+			ctx.SizeLength = 13
+			if conf, ok := ctx.Fmtp["config"]; ok {
+				if ctx.AACCtx.ConfigBytes, err = hex.DecodeString(conf); err == nil {
+					if ctx.CodecData, err = aacparser.NewCodecDataFromMPEG4AudioConfigBytes(ctx.AACCtx.ConfigBytes); err != nil {
+						return err
+					}
+				}
+			}
+			audioClockRate = ctx.RTPCodecParameters.ClockRate
+			writer.AudioFrame.ICodecCtx = &ctx
+		}
+		audioPacket = writer.AudioFrame.Packets.GetNextPointer()
+	}
+	if r.VideoCodecParameters != nil && r.PubVideo {
+		writer.PublishVideoWriter = m7s.NewPublishVideoWriter[*mrtp.VideoFrame](r.Publisher, r.MemoryAllocator)
+		switch r.VideoCodecParameters.MimeType {
+		case webrtc.MimeTypeH264:
+			ctx := &mrtp.H264Ctx{
+				H264Ctx: &codec.H264Ctx{},
+			}
+			ctx.ParseFmtpLine(r.VideoCodecParameters)
+			var sps, pps []byte
+			//packetization-mode=1; sprop-parameter-sets=J2QAKaxWgHgCJ+WagICAgQ==,KO48sA==; profile-level-id=640029
+			if sprop, ok := ctx.Fmtp["sprop-parameter-sets"]; ok {
+				if sprops := strings.Split(sprop, ","); len(sprops) == 2 {
+					if sps, err = base64.StdEncoding.DecodeString(sprops[0]); err != nil {
+						return err
+					}
+					if pps, err = base64.StdEncoding.DecodeString(sprops[1]); err != nil {
+						return err
+					}
+				}
+				if ctx.CodecData, err = h264parser.NewCodecDataFromSPSAndPPS(sps, pps); err != nil {
+					return err
+				}
+			}
+			writer.VideoFrame.ICodecCtx = ctx
+		case webrtc.MimeTypeH265:
+			ctx := &mrtp.H265Ctx{
+				H265Ctx: &codec.H265Ctx{},
+			}
+			ctx.ParseFmtpLine(r.VideoCodecParameters)
+			var vps, sps, pps []byte
+			if sprop_sps, ok := ctx.Fmtp["sprop-sps"]; ok {
+				if sps, err = base64.StdEncoding.DecodeString(sprop_sps); err != nil {
+					return err
+				}
+			}
+			if sprop_pps, ok := ctx.Fmtp["sprop-pps"]; ok {
+				if pps, err = base64.StdEncoding.DecodeString(sprop_pps); err != nil {
+					return err
+				}
+			}
+			if sprop_vps, ok := ctx.Fmtp["sprop-vps"]; ok {
+				if vps, err = base64.StdEncoding.DecodeString(sprop_vps); err != nil {
+					return err
+				}
+			}
+			if len(vps) > 0 && len(sps) > 0 && len(pps) > 0 {
+				if ctx.CodecData, err = h265parser.NewCodecDataFromVPSAndSPSAndPPS(vps, sps, pps); err != nil {
+					return err
+				}
+			}
+			if sprop_donl, ok := ctx.Fmtp["sprop-max-don-diff"]; ok {
+				if sprop_donl != "0" {
+					ctx.DONL = true
+				}
+			}
+			writer.VideoFrame.ICodecCtx = ctx
+		}
+		videoPacket = writer.VideoFrame.Packets.GetNextPointer()
 	}
 	return r.NetConnection.Receive(false, func(channelID byte, buf []byte) error {
 		if r.Publisher != nil && r.Publisher.Paused != nil {
@@ -476,92 +607,65 @@ func (r *Receiver) Receive() (err error) {
 		}
 		switch int(channelID) {
 		case r.AudioChannelID:
-			if !r.PubAudio {
+			if !r.PubAudio || writer.PublishAudioWriter == nil {
 				return pkg.ErrMuted
 			}
-			packet := &rtp.Packet{}
-			if err = packet.Unmarshal(buf); err != nil {
+			if err = audioPacket.Unmarshal(buf); err != nil {
 				return err
 			}
-			rr.SSRC = packet.SSRC
-			sdes.Chunks[0].Source = packet.SSRC
-			rr.Reports[0].SSRC = packet.SSRC
-			rr.Reports[0].LastSequenceNumber = uint32(packet.SequenceNumber)
 
-			now := time.Now()
-			// 检查音频时间戳是否变化
-			if r.lastAudioPacketTS == 0 {
-				r.lastAudioPacketTS = packet.Timestamp
-				r.audioTSCheckStart = now
-				r.Stream.Trace("check audio timestamp start firsttime", "timestamp", packet.Timestamp)
-			} else if !r.useVideoTS {
-				r.Stream.Trace("debug audio timestamp", "current", packet.Timestamp, "last", r.lastAudioPacketTS, "duration", now.Sub(r.audioTSCheckStart))
-				// 如果3秒内时间戳没有变化，切换到使用视频时间戳
-				if packet.Timestamp == r.lastAudioPacketTS && now.Sub(r.audioTSCheckStart) > 3*time.Second {
-					r.useVideoTS = true
-					r.Stream.Trace("switch to video timestamp due to unchanging audio timestamp")
-					packet.Timestamp = uint32(float64(r.lastVideoTimestamp) * 8000 / 90000)
-					audioFrame = &mrtp.Audio{}
-					audioFrame.AddRecycleBytes(buf)
-					audioFrame.Packets = []*rtp.Packet{packet}
-					audioFrame.RTPCodecParameters = r.AudioCodecParameters
-					audioFrame.SetAllocator(r.MemoryAllocator)
-					return pkg.ErrDiscard
-				} else if packet.Timestamp != r.lastAudioPacketTS {
-					// 时间戳有变化，重置检查
-					r.lastAudioPacketTS = packet.Timestamp
-					r.audioTSCheckStart = now
-					r.Stream.Trace("reset audioTSCheckStart", "lastAudioPacketTS", r.lastAudioPacketTS)
-				}
-			}
+			rr.SSRC = audioPacket.SSRC
+			sdes.Chunks[0].Source = audioPacket.SSRC
+			rr.Reports[0].SSRC = audioPacket.SSRC
+			rr.Reports[0].LastSequenceNumber = uint32(audioPacket.SequenceNumber)
 
-			// 如果检测到时间戳异常，使用视频时间戳
-			if r.useVideoTS {
-				packet.Timestamp = uint32(float64(r.lastVideoTimestamp) * 8000 / 90000)
-			}
-
-			if len(audioFrame.Packets) == 0 || packet.Timestamp == audioFrame.Packets[0].Timestamp {
-				audioFrame.AddRecycleBytes(buf)
-				audioFrame.Packets = append(audioFrame.Packets, packet)
+			if audioPacket.Timestamp == writer.AudioFrame.Packets[0].Timestamp {
+				writer.AudioFrame.AddRecycleBytes(buf)
+				audioPacket = writer.AudioFrame.Packets.GetNextPointer()
 				return pkg.ErrDiscard
 			} else {
-				if err = r.WriteAudio(audioFrame); err != nil {
+				// if err = r.WriteAudio(audioFrame); err != nil {
+				// 	return err
+				// }
+				writer.AudioFrame.Timestamp = time.Duration(audioPacket.Timestamp) * time.Second / time.Duration(audioClockRate)
+				newFrameFirstPacket := *audioPacket
+				writer.AudioFrame.Packets.Reduce()
+				if err = writer.NextAudio(); err != nil {
 					return err
 				}
-				audioFrame = &mrtp.Audio{}
-				audioFrame.AddRecycleBytes(buf)
-				audioFrame.Packets = []*rtp.Packet{packet}
-				audioFrame.RTPCodecParameters = r.AudioCodecParameters
-				audioFrame.SetAllocator(r.MemoryAllocator)
+				writer.AudioFrame.AddRecycleBytes(buf)
+				*writer.AudioFrame.Packets.GetNextPointer() = newFrameFirstPacket
+				audioPacket = writer.AudioFrame.Packets.GetNextPointer()
 				return pkg.ErrDiscard
 			}
 		case r.VideoChannelID:
-			if !r.PubVideo {
+			if !r.PubVideo || writer.VideoFrame == nil {
 				return pkg.ErrMuted
 			}
-			packet := &rtp.Packet{}
-			if err = packet.Unmarshal(buf); err != nil {
+			if err = videoPacket.Unmarshal(buf); err != nil {
 				return err
 			}
-			rr.Reports[0].SSRC = packet.SSRC
-			sdes.Chunks[0].Source = packet.SSRC
-			rr.Reports[0].LastSequenceNumber = uint32(packet.SequenceNumber)
-			r.lastVideoTimestamp = packet.Timestamp
-			if len(videoFrame.Packets) == 0 || packet.Timestamp == videoFrame.Packets[0].Timestamp {
-				videoFrame.AddRecycleBytes(buf)
-				videoFrame.Packets = append(videoFrame.Packets, packet)
+
+			rr.Reports[0].SSRC = videoPacket.SSRC
+			sdes.Chunks[0].Source = videoPacket.SSRC
+			rr.Reports[0].LastSequenceNumber = uint32(videoPacket.SequenceNumber)
+
+			if videoPacket.Timestamp == writer.VideoFrame.Packets[0].Timestamp {
+				writer.VideoFrame.AddRecycleBytes(buf)
+				videoPacket = writer.VideoFrame.Packets.GetNextPointer()
 				return pkg.ErrDiscard
 			} else {
 				// t := time.Now()
-				if err = r.WriteVideo(videoFrame); err != nil {
+				// fmt.Println("write video1", t)
+				writer.VideoFrame.SetDTS(time.Duration(videoPacket.Timestamp))
+				newFrameFirstPacket := *videoPacket
+				writer.VideoFrame.Packets.Reduce()
+				if err = writer.NextVideo(); err != nil {
 					return err
 				}
-				// fmt.Println("write video", time.Since(t))
-				videoFrame = &mrtp.Video{}
-				videoFrame.AddRecycleBytes(buf)
-				videoFrame.Packets = []*rtp.Packet{packet}
-				videoFrame.RTPCodecParameters = r.VideoCodecParameters
-				videoFrame.SetAllocator(r.MemoryAllocator)
+				writer.VideoFrame.AddRecycleBytes(buf)
+				*writer.VideoFrame.Packets.GetNextPointer() = newFrameFirstPacket
+				videoPacket = writer.VideoFrame.Packets.GetNextPointer()
 				return pkg.ErrDiscard
 			}
 		}

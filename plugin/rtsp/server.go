@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/textproto"
 	"regexp"
 	"strconv"
 	"strings"
@@ -68,7 +69,7 @@ func (task *RTSPServer) Go() (err error) {
 		switch req.Method {
 		case MethodOptions:
 			res := &util.Response{
-				Header: map[string][]string{
+				Header: textproto.MIMEHeader{
 					"Public": {"OPTIONS, SETUP, TEARDOWN, DESCRIBE, PLAY, PAUSE, ANNOUNCE, RECORD"},
 				},
 				Request: req,
@@ -106,7 +107,7 @@ func (task *RTSPServer) Go() (err error) {
 			if err = task.WriteResponse(res); err != nil {
 				return
 			}
-			task.Depend(receiver.Publisher)
+			receiver.Publisher.Using(task)
 		case MethodDescribe:
 			sendMode = true
 			sender = &Sender{}
@@ -128,7 +129,7 @@ func (task *RTSPServer) Go() (err error) {
 			}
 			sender.Subscriber.RemoteAddr = task.Conn.RemoteAddr().String()
 			res := &util.Response{
-				Header: map[string][]string{
+				Header: textproto.MIMEHeader{
 					"Content-Type": {"application/sdp"},
 				},
 				Request: req,
@@ -151,7 +152,7 @@ func (task *RTSPServer) Go() (err error) {
 		case MethodSetup:
 			tr := req.Header.Get("Transport")
 			res := &util.Response{
-				Header:  map[string][]string{},
+				Header:  textproto.MIMEHeader{},
 				Request: req,
 			}
 

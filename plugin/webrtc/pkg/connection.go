@@ -8,10 +8,8 @@ import (
 	"time"
 
 	"github.com/pion/rtcp"
-	"github.com/pion/rtp"
 	. "github.com/pion/webrtc/v4"
 	"m7s.live/v5"
-	. "m7s.live/v5/pkg"
 	"m7s.live/v5/pkg/codec"
 	"m7s.live/v5/pkg/task"
 	"m7s.live/v5/pkg/util"
@@ -63,13 +61,13 @@ type MultipleConnection struct {
 
 func (IO *MultipleConnection) Start() (err error) {
 	if IO.Publisher != nil {
-		IO.Depend(IO.Publisher)
-		IO.Publisher.Depend(IO)
+		IO.Using(IO.Publisher)
+		IO.Publisher.Using(IO)
 		IO.Receive()
 	}
 	if IO.Subscriber != nil {
-		IO.Depend(IO.Subscriber)
-		IO.Subscriber.Depend(IO)
+		IO.Using(IO.Subscriber)
+		IO.Subscriber.Using(IO)
 		IO.Send()
 	}
 	IO.OnICECandidate(func(ice *ICECandidate) {
@@ -100,20 +98,42 @@ func (IO *MultipleConnection) Start() (err error) {
 func (IO *MultipleConnection) Receive() {
 	puber := IO.Publisher
 	IO.OnTrack(func(track *TrackRemote, receiver *RTPReceiver) {
-		IO.Info("OnTrack", "kind", track.Kind().String(), "payloadType", uint8(track.Codec().PayloadType))
+		codecParameters := track.Codec()
+		IO.Info("OnTrack", "kind", track.Kind().String(), "payloadType", uint8(codecParameters.PayloadType))
 		var n int
 		var err error
-		if codecP := track.Codec(); track.Kind() == RTPCodecTypeAudio {
+		if track.Kind() == RTPCodecTypeAudio {
 			if !puber.PubAudio {
 				return
 			}
 			mem := util.NewScalableMemoryAllocator(1 << 12)
 			defer mem.Recycle()
-			frame := &mrtp.Audio{}
-			frame.RTPCodecParameters = &codecP
-			frame.SetAllocator(mem)
+			writer := m7s.NewPublishAudioWriter[*mrtp.AudioFrame](puber, mem)
+			frame := writer.AudioFrame
+			switch codecParameters.MimeType {
+			case MimeTypeOpus:
+				var ctx mrtp.OPUSCtx
+				ctx.OPUSCtx = &codec.OPUSCtx{}
+				ctx.ParseFmtpLine(&codecParameters)
+				ctx.OPUSCtx.Channels = int(codecParameters.Channels)
+				frame.ICodecCtx = &ctx
+			case MimeTypePCMA:
+				var ctx mrtp.PCMACtx
+				ctx.PCMACtx = &codec.PCMACtx{}
+				ctx.ParseFmtpLine(&codecParameters)
+				ctx.AudioCtx.SampleRate = int(codecParameters.ClockRate)
+				ctx.AudioCtx.Channels = int(codecParameters.Channels)
+				frame.ICodecCtx = &ctx
+			case MimeTypePCMU:
+				var ctx mrtp.PCMUCtx
+				ctx.PCMUCtx = &codec.PCMUCtx{}
+				ctx.ParseFmtpLine(&codecParameters)
+				ctx.AudioCtx.SampleRate = int(codecParameters.ClockRate)
+				ctx.AudioCtx.Channels = int(codecParameters.Channels)
+				frame.ICodecCtx = &ctx
+			}
+			packet := frame.Packets.GetNextPointer()
 			for {
-				var packet rtp.Packet
 				buf := mem.Malloc(mrtp.MTUSize)
 				if n, _, err = track.Read(buf); err == nil {
 					mem.FreeRest(&buf, n)
@@ -126,16 +146,19 @@ func (IO *MultipleConnection) Receive() {
 					mem.Free(buf)
 					continue
 				}
-				if len(frame.Packets) == 0 || packet.Timestamp == frame.Packets[0].Timestamp {
+				if packet.Timestamp == frame.Packets[0].Timestamp {
 					frame.AddRecycleBytes(buf)
-					frame.Packets = append(frame.Packets, &packet)
+					packet = frame.Packets.GetNextPointer()
 				} else {
-					err = puber.WriteAudio(frame)
-					frame = &mrtp.Audio{}
+					newFrameFirstPacket := *packet
+					frame.Packets.Reduce()
+					if err = writer.NextAudio(); err != nil {
+						return
+					}
+					frame = writer.AudioFrame
 					frame.AddRecycleBytes(buf)
-					frame.Packets = []*rtp.Packet{&packet}
-					frame.RTPCodecParameters = &codecP
-					frame.SetAllocator(mem)
+					*frame.Packets.GetNextPointer() = newFrameFirstPacket
+					packet = frame.Packets.GetNextPointer()
 				}
 			}
 		} else {
@@ -145,9 +168,26 @@ func (IO *MultipleConnection) Receive() {
 			var lastPLISent time.Time
 			mem := util.NewScalableMemoryAllocator(1 << 12)
 			defer mem.Recycle()
-			frame := &mrtp.Video{}
-			frame.RTPCodecParameters = &codecP
-			frame.SetAllocator(mem)
+			writer := m7s.NewPublishVideoWriter[*mrtp.VideoFrame](puber, mem)
+			// 根据编解码器类型设置上下文
+			switch codecParameters.MimeType {
+			case MimeTypeH264:
+				var ctx mrtp.H264Ctx
+				ctx.H264Ctx = &codec.H264Ctx{}
+				ctx.RTPCodecParameters = codecParameters
+				writer.VideoFrame.ICodecCtx = &ctx
+			case MimeTypeH265:
+				var ctx mrtp.H265Ctx
+				ctx.H265Ctx = &codec.H265Ctx{}
+				ctx.RTPCodecParameters = codecParameters
+				writer.VideoFrame.ICodecCtx = &ctx
+			case MimeTypeAV1:
+				var ctx mrtp.AV1Ctx
+				ctx.AV1Ctx = &codec.AV1Ctx{}
+				ctx.RTPCodecParameters = codecParameters
+				writer.VideoFrame.ICodecCtx = &ctx
+			}
+			packet := writer.VideoFrame.Packets.GetNextPointer()
 			for {
 				if time.Since(lastPLISent) > IO.PLI {
 					if rtcpErr := IO.WriteRTCP([]rtcp.Packet{&rtcp.PictureLossIndication{MediaSSRC: uint32(track.SSRC())}}); rtcpErr != nil {
@@ -156,7 +196,7 @@ func (IO *MultipleConnection) Receive() {
 					}
 					lastPLISent = time.Now()
 				}
-				var packet rtp.Packet
+
 				buf := mem.Malloc(mrtp.MTUSize)
 				if n, _, err = track.Read(buf); err == nil {
 					mem.FreeRest(&buf, n)
@@ -169,16 +209,19 @@ func (IO *MultipleConnection) Receive() {
 					mem.Free(buf)
 					continue
 				}
-				if len(frame.Packets) == 0 || packet.Timestamp == frame.Packets[0].Timestamp {
-					frame.AddRecycleBytes(buf)
-					frame.Packets = append(frame.Packets, &packet)
+				if packet.Timestamp == writer.VideoFrame.Packets[0].Timestamp {
+					writer.VideoFrame.AddRecycleBytes(buf)
+					packet = writer.VideoFrame.Packets.GetNextPointer()
 				} else {
-					err = puber.WriteVideo(frame)
-					frame = &mrtp.Video{}
+					newFrameFirstPacket := *packet
+					writer.VideoFrame.Packets.Reduce()
+					if err = writer.NextVideo(); err != nil {
+						return
+					}
+					frame := writer.VideoFrame
 					frame.AddRecycleBytes(buf)
-					frame.Packets = []*rtp.Packet{&packet}
-					frame.RTPCodecParameters = &codecP
-					frame.SetAllocator(mem)
+					*frame.Packets.GetNextPointer() = newFrameFirstPacket
+					packet = frame.Packets.GetNextPointer()
 				}
 			}
 		}
@@ -232,13 +275,23 @@ func (IO *MultipleConnection) SendSubscriber(subscriber *m7s.Subscriber) (audioS
 		if ctx, ok := vctx.(mrtp.IRTPCtx); ok {
 			rcc = ctx.GetRTPCodecParameter()
 		} else {
-			var rtpCtx mrtp.RTPData
-			var tmpAVTrack AVTrack
-			tmpAVTrack.ICodecCtx, _, err = rtpCtx.ConvertCtx(vctx)
-			if err == nil {
-				rcc = tmpAVTrack.ICodecCtx.(mrtp.IRTPCtx).GetRTPCodecParameter()
-			} else {
-				return
+			switch base := vctx.GetBase().(type) {
+			case *codec.H264Ctx:
+				rcc.PayloadType = 96
+				rcc.MimeType = MimeTypeH264
+				rcc.ClockRate = 90000
+				spsInfo := base.SPSInfo
+				rcc.SDPFmtpLine = fmt.Sprintf("profile-level-id=%02x%02x%02x;level-asymmetry-allowed=1;packetization-mode=1", spsInfo.ProfileIdc, spsInfo.ConstraintSetFlag, spsInfo.LevelIdc)
+			case *codec.H265Ctx:
+				rcc.PayloadType = 98
+				rcc.MimeType = MimeTypeH265
+				rcc.ClockRate = 90000
+				rcc.SDPFmtpLine = "level-id=180;profile-id=1;tier-flag=0;tx-mode=SRST"
+			case *codec.AV1Ctx:
+				rcc.PayloadType = 45
+				rcc.MimeType = MimeTypeAV1
+				rcc.ClockRate = 90000
+				rcc.SDPFmtpLine = "profile=2;level-idx=8;tier=1"
 			}
 		}
 		rcc.RTCPFeedback = videoRTCPFeedback
@@ -275,16 +328,22 @@ func (IO *MultipleConnection) SendSubscriber(subscriber *m7s.Subscriber) (audioS
 		if ctx, ok := actx.(mrtp.IRTPCtx); ok {
 			rcc = ctx.GetRTPCodecParameter()
 		} else {
-			var rtpCtx mrtp.RTPData
-			var tmpAVTrack AVTrack
-			tmpAVTrack.ICodecCtx, _, err = rtpCtx.ConvertCtx(actx)
-			if err == nil {
-				rcc = tmpAVTrack.ICodecCtx.(mrtp.IRTPCtx).GetRTPCodecParameter()
-			} else {
-				return
+			switch vctx.GetBase().(type) {
+			case *codec.PCMACtx:
+				rcc.PayloadType = 8
+				rcc.MimeType = MimeTypePCMA
+				rcc.ClockRate = 8000
+			case *codec.PCMUCtx:
+				rcc.PayloadType = 0
+				rcc.MimeType = MimeTypePCMU
+				rcc.ClockRate = 8000
+			case *codec.OPUSCtx:
+				rcc.PayloadType = 111
+				rcc.MimeType = MimeTypeOpus
+				rcc.ClockRate = 48000
+				rcc.SDPFmtpLine = "minptime=10;useinbandfec=1"
 			}
 		}
-
 		// Transform SDPFmtpLine for WebRTC compatibility (primarily for video codecs, but general logic)
 		mimeTypeLower := strings.ToLower(rcc.RTPCodecCapability.MimeType)
 		if strings.Contains(mimeTypeLower, "h264") || strings.Contains(mimeTypeLower, "h265") { // This condition will likely not match for typical audio codecs
@@ -350,15 +409,15 @@ func (IO *MultipleConnection) SendSubscriber(subscriber *m7s.Subscriber) (audioS
 		if videoSender == nil {
 			subscriber.SubVideo = false
 		}
-		go m7s.PlayBlock(subscriber, func(frame *mrtp.Audio) (err error) {
-			for _, p := range frame.Packets {
+		go m7s.PlayBlock(subscriber, func(frame *mrtp.AudioFrame) (err error) {
+			for p := range frame.Packets.RangePoint {
 				if err = audioTLSRTP.WriteRTP(p); err != nil {
 					return
 				}
 			}
 			return
-		}, func(frame *mrtp.Video) error {
-			for _, p := range frame.Packets {
+		}, func(frame *mrtp.VideoFrame) error {
+			for p := range frame.Packets.RangePoint {
 				if err := videoTLSRTP.WriteRTP(p); err != nil {
 					return err
 				}
@@ -393,19 +452,30 @@ func (r *RemoteStream) GetKey() string {
 }
 
 func (r *RemoteStream) Start() (err error) {
+	r.Using(r.suber)
 	vctx := r.suber.Publisher.GetVideoCodecCtx()
 	videoCodec := vctx.FourCC()
 	var rcc RTPCodecParameters
 	if ctx, ok := vctx.(mrtp.IRTPCtx); ok {
 		rcc = ctx.GetRTPCodecParameter()
 	} else {
-		var rtpCtx mrtp.RTPData
-		var tmpAVTrack AVTrack
-		tmpAVTrack.ICodecCtx, _, err = rtpCtx.ConvertCtx(vctx)
-		if err == nil {
-			rcc = tmpAVTrack.ICodecCtx.(mrtp.IRTPCtx).GetRTPCodecParameter()
-		} else {
-			return
+		switch base := vctx.GetBase().(type) {
+		case *codec.H264Ctx:
+			rcc.PayloadType = 96
+			rcc.MimeType = MimeTypeH264
+			rcc.ClockRate = 90000
+			spsInfo := base.SPSInfo
+			rcc.SDPFmtpLine = fmt.Sprintf("profile-level-id=%02x%02x%02x;level-asymmetry-allowed=1;packetization-mode=1", spsInfo.ProfileIdc, spsInfo.ConstraintSetFlag, spsInfo.LevelIdc)
+		case *codec.H265Ctx:
+			rcc.PayloadType = 98
+			rcc.MimeType = MimeTypeH265
+			rcc.ClockRate = 90000
+			rcc.SDPFmtpLine = "level-id=180;profile-id=1;tier-flag=0;tx-mode=SRST"
+		case *codec.AV1Ctx:
+			rcc.PayloadType = 45
+			rcc.MimeType = MimeTypeAV1
+			rcc.ClockRate = 90000
+			rcc.SDPFmtpLine = "profile=2;level-idx=8;tier=1"
 		}
 	}
 
@@ -436,8 +506,8 @@ func (r *RemoteStream) Go() (err error) {
 			}
 		}
 	}()
-	return m7s.PlayBlock(r.suber, (func(frame *mrtp.Audio) (err error))(nil), func(frame *mrtp.Video) error {
-		for _, p := range frame.Packets {
+	return m7s.PlayBlock(r.suber, (func(frame *mrtp.AudioFrame) (err error))(nil), func(frame *mrtp.VideoFrame) error {
+		for p := range frame.Packets.RangePoint {
 			if err := r.videoTLSRTP.WriteRTP(p); err != nil {
 				return err
 			}
@@ -448,7 +518,7 @@ func (r *RemoteStream) Go() (err error) {
 
 // SingleConnection extends Connection to handle multiple subscribers in a single WebRTC connection
 type SingleConnection struct {
-	task.Manager[string, *RemoteStream]
+	task.WorkCollection[string, *RemoteStream]
 	Connection
 }
 
@@ -461,8 +531,7 @@ func (c *SingleConnection) Receive() {
 // AddSubscriber adds a new subscriber to the connection and starts sending
 func (c *SingleConnection) AddSubscriber(subscriber *m7s.Subscriber) (remoteStream *RemoteStream) {
 	remoteStream = &RemoteStream{suber: subscriber, pc: &c.Connection}
-	subscriber.Depend(remoteStream)
-	c.Add(remoteStream)
+	c.AddTask(remoteStream)
 	return
 }
 

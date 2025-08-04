@@ -8,9 +8,30 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/pion/webrtc/v4"
+	. "github.com/pion/webrtc/v4"
 	"m7s.live/v5"
+	pkg "m7s.live/v5/pkg"
 )
+
+// Plugin-specific progress step names for WebRTC
+const (
+	StepWebRTCInit    pkg.StepName = "webrtc_init"
+	StepOfferCreate   pkg.StepName = "offer_create"
+	StepSessionCreate pkg.StepName = "session_create"
+	StepTrackSetup    pkg.StepName = "track_setup"
+	StepNegotiation   pkg.StepName = "negotiation"
+)
+
+// Fixed steps for WebRTC pull workflow
+var webrtcPullSteps = []pkg.StepDef{
+	{Name: pkg.StepPublish, Description: "Publishing stream"},
+	{Name: StepWebRTCInit, Description: "Initializing WebRTC connection"},
+	{Name: StepOfferCreate, Description: "Creating WebRTC offer"},
+	{Name: StepSessionCreate, Description: "Creating session with server"},
+	{Name: StepTrackSetup, Description: "Setting up media tracks"},
+	{Name: StepNegotiation, Description: "Completing WebRTC negotiation"},
+	{Name: pkg.StepStreaming, Description: "Receiving media stream"},
+}
 
 type (
 	CFClient struct {
@@ -22,8 +43,8 @@ type (
 		sessionId string
 	}
 	SessionCreateResponse struct {
-		SessionId                 string `json:"sessionId"`
-		webrtc.SessionDescription `json:"sessionDescription"`
+		SessionId          string `json:"sessionId"`
+		SessionDescription `json:"sessionDescription"`
 	}
 	TrackInfo struct {
 		Location  string `json:"location"`
@@ -34,7 +55,7 @@ type (
 		Tracks []TrackInfo `json:"tracks"`
 	}
 	NewTrackResponse struct {
-		webrtc.SessionDescription      `json:"sessionDescription"`
+		SessionDescription             `json:"sessionDescription"`
 		Tracks                         []TrackInfo `json:"tracks"`
 		RequiresImmediateRenegotiation bool        `json:"requiresImmediateRenegotiation"`
 	}
@@ -43,39 +64,65 @@ type (
 		ErrorDescription string `json:"errorDescription"`
 	}
 	SDPBody struct {
-		*webrtc.SessionDescription `json:"sessionDescription"`
+		*SessionDescription `json:"sessionDescription"`
 	}
 )
 
 func NewCFClient(direction string) *CFClient {
-	return &CFClient{
+	client := &CFClient{
 		direction: direction,
 	}
+
+	return client
 }
 
 func (c *CFClient) Start() (err error) {
+	var api *API
+	api, err = CreateAPI(nil, SettingEngine{})
+	if err != nil {
+		return errors.Join(err, errors.New("create api failed"))
+	}
+	c.PeerConnection, err = api.NewPeerConnection(Configuration{
+		ICEServers:   ICEServers,
+		BundlePolicy: BundlePolicyMaxBundle,
+	})
+	if err != nil {
+		return errors.Join(err, errors.New("create peer connection failed"))
+	}
 	if c.direction == DIRECTION_PULL {
+		// Initialize progress tracking for pull operations
+		c.pullCtx.SetProgressStepsDefs(webrtcPullSteps)
+
 		err = c.pullCtx.Publish()
 		if err != nil {
 			return
 		}
+
+		c.pullCtx.GoToStepConst(StepWebRTCInit)
+
 		c.Publisher = c.pullCtx.Publisher
 		u, _ := url.Parse(c.pullCtx.RemoteURL)
 		c.ApiBase, _, _ = strings.Cut(c.pullCtx.RemoteURL, "?")
 		c.Receive()
-		var transeiver *webrtc.RTPTransceiver
-		transeiver, err = c.AddTransceiverFromKind(webrtc.RTPCodecTypeVideo, webrtc.RTPTransceiverInit{
-			Direction: webrtc.RTPTransceiverDirectionRecvonly,
+		var transeiver *RTPTransceiver
+		transeiver, err = c.AddTransceiverFromKind(RTPCodecTypeVideo, RTPTransceiverInit{
+			Direction: RTPTransceiverDirectionRecvonly,
 		})
 		if err != nil {
 			return
 		}
 		c.Info("webrtc add transceiver", "transceiver", transeiver.Mid())
+
+		c.pullCtx.GoToStepConst(StepOfferCreate)
+
 		var sdpBody SDPBody
 		sdpBody.SessionDescription, err = c.GetOffer()
 		if err != nil {
 			return
 		}
+
+		c.pullCtx.GoToStepConst(StepSessionCreate)
+
 		var result SessionCreateResponse
 		err = c.request("new", sdpBody, &result)
 		if err != nil {
@@ -86,6 +133,9 @@ func (c *CFClient) Start() (err error) {
 			return
 		}
 		c.sessionId = result.SessionId
+
+		c.pullCtx.GoToStepConst(StepTrackSetup)
+
 		var result2 NewTrackResponse
 		err = c.request("tracks/new", TrackRequest{[]TrackInfo{{
 			Location:  "remote",
@@ -96,23 +146,31 @@ func (c *CFClient) Start() (err error) {
 			return
 		}
 		c.Info("cloudflare pull success", "result", result2)
+
+		c.pullCtx.GoToStepConst(StepNegotiation)
+
 		if result2.RequiresImmediateRenegotiation {
 			err = c.PeerConnection.SetRemoteDescription(result2.SessionDescription)
 			if err != nil {
+				c.pullCtx.Fail(err.Error())
 				return
 			}
 			var renegotiate SDPBody
 			renegotiate.SessionDescription, err = c.GetAnswer()
 			if err != nil {
+				c.pullCtx.Fail(err.Error())
 				return
 			}
 			var result RenegotiateResponse
 			err = c.request("renegotiate", renegotiate, &result)
 			if err != nil {
+				c.pullCtx.Fail(err.Error())
 				return err
 			}
 			c.Info("cloudflare renegotiate", "result", result)
 		}
+
+		c.pullCtx.GoToStepConst(pkg.StepStreaming)
 	}
 	return
 }

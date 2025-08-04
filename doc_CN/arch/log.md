@@ -116,7 +116,7 @@ type MyLogHandler struct {
 }
 
 // 在插件初始化时添加处理器
-func (p *MyPlugin) OnInit() error {
+func (p *MyPlugin) Start() error {
     handler := &MyLogHandler{}
     p.Server.LogHandler.Add(handler)
     return nil

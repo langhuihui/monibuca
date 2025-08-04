@@ -18,6 +18,7 @@ const (
 
 	RecordModeAuto  RecordMode = "auto"
 	RecordModeEvent RecordMode = "event"
+	RecordModeTest  RecordMode = "test"
 
 	HookOnServerKeepAlive HookType = "server_keep_alive"
 	HookOnPublishStart    HookType = "publish_start"
@@ -70,7 +71,7 @@ type (
 		IdleTimeout       time.Duration   `desc:"空闲(无订阅)超时"`                                                // 空闲(无订阅)超时
 		PauseTimeout      time.Duration   `default:"30s" desc:"暂停超时时间"`                                     // 暂停超时
 		BufferTime        time.Duration   `desc:"缓冲时长，0代表取最近关键帧"`                                           // 缓冲长度(单位：秒)，0代表取最近关键帧
-		Speed             float64         `default:"1" desc:"发送速率"`                                         // 发送速率，0 为不限速
+		Speed             float64         `desc:"发送速率"`                                                     // 发送速率，0 为不限速
 		Scale             float64         `default:"1" desc:"缩放倍数"`                                         // 缩放倍数
 		MaxFPS            int             `default:"60" desc:"最大FPS"`                                       // 最大FPS
 		Key               string          `desc:"发布鉴权key"`                                                  // 发布鉴权key
@@ -96,10 +97,10 @@ type (
 	HTTPValues map[string][]string
 	Pull       struct {
 		URL           string        `desc:"拉流地址"`
-		Loop          int           `desc:"拉流循环次数,-1:无限循环"`                       // 拉流循环次数，-1 表示无限循环
-		MaxRetry      int           `default:"-1" desc:"断开后自动重试次数,0:不重试,-1:无限重试"` // 断开后自动重拉,0 表示不自动重拉，-1 表示无限重拉，高于0 的数代表最大重拉次数
-		RetryInterval time.Duration `default:"5s" desc:"重试间隔"`                    // 重试间隔
-		Proxy         string        `desc:"代理地址"`                                 // 代理地址
+		Loop          int           `desc:"拉流循环次数,-1:无限循环"`          // 拉流循环次数，-1 表示无限循环
+		MaxRetry      int           `desc:"断开后自动重试次数,0:不重试,-1:无限重试"` // 断开后自动重拉,0 表示不自动重拉，-1 表示无限重拉，高于0 的数代表最大重拉次数
+		RetryInterval time.Duration `default:"5s" desc:"重试间隔"`       // 重试间隔
+		Proxy         string        `desc:"代理地址"`                    // 代理地址
 		Header        HTTPValues
 		Args          HTTPValues `gorm:"-:all"`              // 拉流参数
 		TestMode      int        `desc:"测试模式,0:关闭,1:只拉流不发布"` // 测试模式
@@ -124,6 +125,7 @@ type (
 		Type     string        `desc:"录制类型"`                         // 录制类型 mp4、flv、hls、hlsv7
 		FilePath string        `desc:"录制文件路径"`                       // 录制文件路径
 		Fragment time.Duration `desc:"分片时长"`                         // 分片时长
+		RealTime bool          `desc:"是否实时录制"`                       // 是否实时录制
 		Append   bool          `desc:"是否追加录制"`                       // 是否追加录制
 		Event    *RecordEvent  `json:"event" desc:"事件录像配置" gorm:"-"` // 事件录像配置
 	}

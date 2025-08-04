@@ -18,6 +18,7 @@ import (
 	"m7s.live/v5"
 	"m7s.live/v5/pkg/task"
 	"m7s.live/v5/pkg/util"
+	mrtp "m7s.live/v5/plugin/rtp/pkg"
 )
 
 type DeviceRegisterQueueTask struct {
@@ -322,7 +323,7 @@ func (task *registerHandlerTask) RecoverDevice(d *Device, req *sip.Request) {
 }
 
 func (task *registerHandlerTask) StoreDevice(deviceid string, req *sip.Request, d *Device) {
-	task.gb.Debug("deviceid is ", deviceid, "req.via() is ", req.Via(), "req.Source() is ", req.Source())
+	task.gb.Debug("device info", "deviceid", deviceid, "via", req.Via(), "source", req.Source())
 	source := req.Source()
 	sourceIP, sourcePortStr, _ := net.SplitHostPort(source)
 	sourcePort, _ := strconv.Atoi(sourcePortStr)
@@ -395,10 +396,10 @@ func (task *registerHandlerTask) StoreDevice(deviceid string, req *sip.Request, 
 	d.KeepaliveTime = now
 	d.Status = DeviceOnlineStatus
 	d.Online = true
-	d.StreamMode = "TCP-PASSIVE"  // 默认UDP传输
-	d.Charset = "GB2312"          // 默认GB2312字符集
-	d.GeoCoordSys = "WGS84"       // 默认WGS84坐标系
-	d.Transport = req.Transport() // 传输协议
+	d.StreamMode = mrtp.StreamModeTCPPassive // 默认TCP-PASSIVE传输
+	d.Charset = "GB2312"                     // 默认GB2312字符集
+	d.GeoCoordSys = "WGS84"                  // 默认WGS84坐标系
+	d.Transport = req.Transport()            // 传输协议
 	d.IP = sourceIP
 	d.Port = sourcePort
 	d.HostAddress = sourceIP + ":" + sourcePortStr
@@ -445,7 +446,7 @@ func (task *registerHandlerTask) StoreDevice(deviceid string, req *sip.Request, 
 	d.Task.ID = hash
 
 	d.channels.OnAdd(func(c *Channel) {
-		if absDevice, ok := task.gb.Server.PullProxies.SafeFind(func(absDevice m7s.IPullProxy) bool {
+		if absDevice, ok := task.gb.Server.PullProxies.Find(func(absDevice m7s.IPullProxy) bool {
 			conf := absDevice.GetConfig()
 			return conf.Type == "gb28181" && conf.URL == fmt.Sprintf("%s/%s", d.DeviceId, c.ChannelId)
 		}); ok {
@@ -453,7 +454,7 @@ func (task *registerHandlerTask) StoreDevice(deviceid string, req *sip.Request, 
 			absDevice.ChangeStatus(m7s.PullProxyStatusOnline)
 		}
 	})
-	task.gb.devices.Add(d).WaitStarted()
+	task.gb.devices.AddTask(d).WaitStarted()
 
 	if task.gb.DB != nil {
 		//var existing Device

@@ -22,7 +22,7 @@ var _ = m7s.InstallPlugin[CrontabPlugin](m7s.PluginMeta{
 	RegisterGRPCHandler: pb.RegisterApiHandler,
 })
 
-func (ct *CrontabPlugin) OnInit() (err error) {
+func (ct *CrontabPlugin) Start() (err error) {
 	if ct.DB == nil {
 		ct.Error("DB is nil")
 	} else {

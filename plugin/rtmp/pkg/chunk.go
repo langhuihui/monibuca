@@ -27,7 +27,7 @@ const (
 
 type Chunk struct {
 	ChunkHeader
-	AVData  RTMPData
+	buf     []byte
 	MsgData RtmpMessage
 	bufLen  int
 }

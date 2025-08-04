@@ -10,3 +10,5 @@ cascadeclient:
   onsub:
     pull:
       .*: m7s://$0
+flv:
+  enable: true

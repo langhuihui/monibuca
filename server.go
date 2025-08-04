@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -17,12 +16,9 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/gobwas/ws"
-	"github.com/gobwas/ws/wsutil"
 	"github.com/shirou/gopsutil/v4/cpu"
 	"google.golang.org/protobuf/proto"
 
-	"m7s.live/v5/pkg"
 	"m7s.live/v5/pkg/config"
 	"m7s.live/v5/pkg/task"
 
@@ -41,6 +37,7 @@ import (
 	. "m7s.live/v5/pkg"
 	"m7s.live/v5/pkg/auth"
 	"m7s.live/v5/pkg/db"
+	"m7s.live/v5/pkg/format"
 	"m7s.live/v5/pkg/util"
 )
 
@@ -50,8 +47,10 @@ var (
 	ExecPath     = os.Args[0]
 	ExecDir      = filepath.Dir(ExecPath)
 	ServerMeta   = PluginMeta{
-		Name:    "Global",
-		Version: Version,
+		Name:         "Global",
+		Version:      Version,
+		NewPullProxy: NewHTTPPullPorxy,
+		NewPuller:    NewAnnexBPuller,
 	}
 	Servers           task.RootManager[uint32, *Server]
 	defaultLogHandler = console.NewHandler(os.Stdout, &console.HandlerOptions{TimeFormat: "15:04:05.000000"})
@@ -83,6 +82,18 @@ type (
 	WaitStream struct {
 		StreamPath string
 		SubscriberCollection
+		Progress SubscriptionProgress
+	}
+	Step struct {
+		Name        string
+		Description string
+		Error       string
+		StartedAt   time.Time
+		CompletedAt time.Time
+	}
+	SubscriptionProgress struct {
+		Steps       []Step
+		CurrentStep int
 	}
 	Server struct {
 		pb.UnimplementedApiServer
@@ -94,10 +105,10 @@ type (
 		Streams           task.Manager[string, *Publisher]
 		AliasStreams      util.Collection[string, *AliasStream]
 		Waiting           WaitManager
-		Pulls             task.Manager[string, *PullJob]
-		Pushs             task.Manager[string, *PushJob]
-		Records           task.Manager[string, *RecordJob]
-		Transforms        Transforms
+		Pulls             task.WorkCollection[string, *PullJob]
+		Pushs             task.WorkCollection[string, *PushJob]
+		Records           task.WorkCollection[string, *RecordJob]
+		Transforms        TransformManager
 		PullProxies       PullProxyManager
 		PushProxies       PushProxyManager
 		Subscribers       SubscriberCollection
@@ -125,6 +136,13 @@ type (
 	RawConfig = map[string]map[string]any
 )
 
+// context key type & keys
+type ctxKey int
+
+const (
+	ctxKeyClaims ctxKey = iota
+)
+
 func (w *WaitStream) GetKey() string {
 	return w.StreamPath
 }
@@ -149,7 +167,7 @@ func NewServer(conf any) (s *Server) {
 }
 
 func Run(ctx context.Context, conf any) (err error) {
-	for err = ErrRestart; errors.Is(err, ErrRestart); err = Servers.Add(NewServer(conf), ctx).WaitStopped() {
+	for err = ErrRestart; errors.Is(err, ErrRestart); err = Servers.AddTask(NewServer(conf), ctx).WaitStopped() {
 	}
 	return
 }
@@ -170,7 +188,7 @@ var checkInterval = time.Second * 3 // 检查间隔为3秒
 
 func init() {
 	Servers.Init()
-	Servers.OnBeforeDispose(func() {
+	Servers.OnStop(func() {
 		time.AfterFunc(3*time.Second, exit)
 	})
 	Servers.OnDispose(exit)
@@ -344,10 +362,10 @@ func (s *Server) Start() (err error) {
 	}
 
 	if httpConf.ListenAddrTLS != "" {
-		s.AddDependTask(pkg.CreateHTTPSWork(httpConf, s.Logger))
+		s.AddDependTask(CreateHTTPSWork(httpConf, s.Logger))
 	}
 	if httpConf.ListenAddr != "" {
-		s.AddDependTask(pkg.CreateHTTPWork(httpConf, s.Logger))
+		s.AddDependTask(CreateHTTPWork(httpConf, s.Logger))
 	}
 
 	var grpcServer *GRPCServer
@@ -358,12 +376,12 @@ func (s *Server) Start() (err error) {
 		s.grpcServer = grpc.NewServer(opts...)
 		pb.RegisterApiServer(s.grpcServer, s)
 		pb.RegisterAuthServer(s.grpcServer, s)
-
 		s.grpcClientConn, err = grpc.DialContext(s.Context, tcpConf.ListenAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		if err != nil {
 			s.Error("failed to dial", "error", err)
 			return
 		}
+		s.Using(s.grpcClientConn)
 		if err = pb.RegisterApiHandler(s.Context, mux, s.grpcClientConn); err != nil {
 			s.Error("register handler failed", "error", err)
 			return
@@ -386,6 +404,7 @@ func (s *Server) Start() (err error) {
 	s.AddTask(&s.Transforms)
 	s.AddTask(&s.PullProxies)
 	s.AddTask(&s.PushProxies)
+	s.AddTask(&webHookQueueTask)
 	promReg := prometheus.NewPedanticRegistry()
 	promReg.MustRegister(s)
 	for _, plugin := range plugins {
@@ -416,7 +435,10 @@ func (s *Server) Start() (err error) {
 	s.loadAdminZip()
 	// s.Transforms.AddTask(&TransformsPublishEvent{Transforms: &s.Transforms})
 	s.Info("server started")
-	s.Post(func() error {
+	s.OnStart(func() {
+		for streamPath, conf := range s.config.Pull {
+			s.Pull(streamPath, conf, nil)
+		}
 		for plugin := range s.Plugins.Range {
 			if plugin.Meta.NewPuller != nil {
 				for streamPath, conf := range plugin.config.Pull {
@@ -424,7 +446,7 @@ func (s *Server) Start() (err error) {
 				}
 			}
 			if plugin.Meta.NewTransformer != nil {
-				for streamPath, _ := range plugin.config.Transform {
+				for streamPath := range plugin.config.Transform {
 					plugin.OnSubscribe(streamPath, url.Values{}) //按需转换
 					// transformer := plugin.Meta.Transformer()
 					// transformer.GetTransformJob().Init(transformer, plugin, streamPath, conf)
@@ -439,8 +461,7 @@ func (s *Server) Start() (err error) {
 			s.initPullProxiesWithoutDB()
 			s.initPushProxiesWithoutDB()
 		}
-		return nil
-	}, "serverStart")
+	})
 	if sender, webhook := s.getHookSender(config.HookOnSystemStart); sender != nil {
 		alarmInfo := AlarmInfo{
 			AlarmName: string(config.HookOnSystemStart),
@@ -560,7 +581,7 @@ func (c *CheckSubWaitTimeout) Tick(any) {
 	percents, err := cpu.Percent(time.Second, false)
 	if err == nil {
 		for _, cpu := range percents {
-			c.Info("tick", "cpu", cpu, "streams", c.s.Streams.Length, "subscribers", c.s.Subscribers.Length, "waits", c.s.Waiting.Length)
+			c.Info("tick", "cpu", fmt.Sprintf("%.2f%%", cpu), "streams", c.s.Streams.Length, "subscribers", c.s.Subscribers.Length, "waits", c.s.Waiting.Length)
 		}
 	}
 	c.s.Waiting.checkTimeout()
@@ -574,16 +595,17 @@ func (gRPC *GRPCServer) Go() (err error) {
 	return gRPC.s.grpcServer.Serve(gRPC.tcpTask.Listener)
 }
 
-func (s *Server) CallOnStreamTask(callback func() error) {
+func (s *Server) CallOnStreamTask(callback func()) {
 	s.Streams.Call(callback)
 }
 
 func (s *Server) Dispose() {
-	_ = s.grpcClientConn.Close()
 	if s.DB != nil {
 		db, err := s.DB.DB()
 		if err == nil {
-			err = db.Close()
+			if cerr := db.Close(); cerr != nil {
+				s.Error("close db error", "error", cerr)
+			}
 		}
 	}
 }
@@ -592,7 +614,7 @@ func (s *Server) GetPublisher(streamPath string) (publisher *Publisher, err erro
 	var ok bool
 	publisher, ok = s.Streams.SafeGet(streamPath)
 	if !ok {
-		err = pkg.ErrNotFound
+		err = ErrNotFound
 		return
 	}
 	return
@@ -614,7 +636,15 @@ func (s *Server) OnSubscribe(streamPath string, args url.Values) {
 	for plugin := range s.Plugins.Range {
 		plugin.OnSubscribe(streamPath, args)
 	}
-	s.PullProxies.CheckToPull(streamPath)
+	for pullProxy := range s.PullProxies.Range {
+		conf := pullProxy.GetConfig()
+		if conf.Status == PullProxyStatusOnline && pullProxy.GetStreamPath() == streamPath {
+			pullProxy.Pull()
+			if w, ok := s.Waiting.Get(streamPath); ok {
+				pullProxy.GetPullJob().Progress = &w.Progress
+			}
+		}
+	}
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -686,7 +716,7 @@ func (s *Server) Login(ctx context.Context, req *pb.LoginRequest) (res *pb.Login
 		return
 	}
 	if s.DB == nil {
-		err = pkg.ErrNoDB
+		err = ErrNoDB
 		return
 	}
 	var user db.User
@@ -695,7 +725,7 @@ func (s *Server) Login(ctx context.Context, req *pb.LoginRequest) (res *pb.Login
 	}
 
 	if !user.CheckPassword(req.Password) {
-		err = pkg.ErrInvalidCredentials
+		err = ErrInvalidCredentials
 		return
 	}
 
@@ -742,7 +772,7 @@ func (s *Server) GetUserInfo(ctx context.Context, req *pb.UserInfoRequest) (res 
 	res = &pb.UserInfoResponse{}
 	claims, err := s.ValidateToken(req.Token)
 	if err != nil {
-		err = pkg.ErrInvalidCredentials
+		err = ErrInvalidCredentials
 		return
 	}
 
@@ -806,7 +836,7 @@ func (s *Server) AuthInterceptor() grpc.UnaryServerInterceptor {
 		}
 
 		// Add claims to context
-		newCtx := context.WithValue(ctx, "claims", claims)
+		newCtx := context.WithValue(ctx, ctxKeyClaims, claims)
 		return handler(newCtx, req)
 	}
 }
@@ -825,26 +855,23 @@ func (s *Server) annexB(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	var conn net.Conn
-	conn, err = suber.CheckWebSocket(w, r)
+
+	var ctx util.HTTP_WS_Writer
+	ctx.Conn, err = suber.CheckWebSocket(w, r)
 	if err != nil {
 		return
 	}
-	if conn == nil {
-		w.Header().Set("Content-Type", "application/octet-stream")
-		w.Header().Set("Transfer-Encoding", "identity")
-		w.WriteHeader(http.StatusOK)
-	}
+	ctx.WriteTimeout = s.GetCommonConf().WriteTimeout
+	ctx.ContentType = "application/octet-stream"
+	ctx.ServeHTTP(w, r)
 
-	PlayBlock(suber, func(frame *pkg.AVFrame) (err error) {
+	PlayBlock(suber, func(frame *format.RawAudio) (err error) {
 		return nil
-	}, func(frame *pkg.AnnexB) (err error) {
-		if conn != nil {
-			return wsutil.WriteServerMessage(conn, ws.OpBinary, util.ConcatBuffers(frame.Memory.Buffers))
+	}, func(frame *format.AnnexB) (err error) {
+		_, err = frame.WriteTo(&ctx)
+		if err != nil {
+			return
 		}
-		var buf net.Buffers
-		buf = append(buf, frame.Memory.Buffers...)
-		buf.WriteTo(w)
-		return nil
+		return ctx.Flush()
 	})
 }

@@ -51,12 +51,14 @@ type MyPlugin struct {
 const defaultConfig = m7s.DefaultYaml(`tcp:
   listenaddr: :5554`)
 
-var _ = m7s.InstallPlugin[MyPlugin](defaultConfig)
+var _ = m7s.InstallPlugin[MyPlugin](m7s.PluginMeta{
+    DefaultYaml: defaultConfig,
+})
 ```
 ## 3. 实现事件回调（可选）
 ### 初始化回调
 ```go
-func (config *MyPlugin) OnInit() (err error) {
+func (config *MyPlugin) Start() (err error) {
     // 初始化一些东西
     return
 }
@@ -113,26 +115,29 @@ func (config *MyPlugin) test1(rw http.ResponseWriter, r *http.Request) {
 ## 5. 实现推拉流客户端
 
 ### 实现推流客户端
-推流客户端就是想要实现一个 IPusher，然后将创建 IPusher 的方法传入 InstallPlugin 中。
+推流客户端需要实现 IPusher 接口，然后将创建 IPusher 的方法传入 InstallPlugin 中。
 ```go
 type Pusher struct {
-  pullCtx m7s.PullJob
+  task.Task
+  pushJob m7s.PushJob
 }
 
-func (c *Pusher) GetPullJob() *m7s.PullJob {
-	return &c.pullCtx
+func (c *Pusher) GetPushJob() *m7s.PushJob {
+	return &c.pushJob
 }
 
 func NewPusher(_ config.Push) m7s.IPusher {
 	return &Pusher{}
 }
-var _ = m7s.InstallPlugin[MyPlugin](NewPusher)
+var _ = m7s.InstallPlugin[MyPlugin](m7s.PluginMeta{
+    NewPusher: NewPusher,
+})
 
 ```
 
 ### 实现拉流客户端
-拉流客户端就是想要实现一个 IPuller，然后将创建 IPuller 的方法传入 InstallPlugin 中。
-下面这个 Puller 继承了 m7s.HTTPFilePuller，可以实现基本的文件和 HTTP拉流。具体拉流逻辑需要覆盖 Run 方法。
+拉流客户端需要实现 IPuller 接口，然后将创建 IPuller 的方法传入 InstallPlugin 中。
+下面这个 Puller 继承了 m7s.HTTPFilePuller，可以实现基本的文件和 HTTP拉流。具体拉流逻辑需要覆盖 Start 方法。
 ```go
 type Puller struct {
 	m7s.HTTPFilePuller
@@ -141,7 +146,9 @@ type Puller struct {
 func NewPuller(_ config.Pull) m7s.IPuller {
 	return &Puller{}
 }
-var _ = m7s.InstallPlugin[MyPlugin](NewPuller)
+var _ = m7s.InstallPlugin[MyPlugin](m7s.PluginMeta{
+    NewPuller: NewPuller,
+})
 ```
 
 ## 6. 实现gRPC服务
@@ -221,7 +228,10 @@ import (
 	"m7s.live/v5/plugin/myplugin/pb"
 )
 
-var _ = m7s.InstallPlugin[MyPlugin](&pb.Api_ServiceDesc, pb.RegisterApiHandler)
+var _ = m7s.InstallPlugin[MyPlugin](m7s.PluginMeta{
+	ServiceDesc:         &pb.Api_ServiceDesc,
+	RegisterGRPCHandler: pb.RegisterApiHandler,
+})
 
 type MyPlugin struct {
 	pb.UnimplementedApiServer
@@ -253,35 +263,25 @@ publisher, err = p.Publish(streamPath, connectInfo)
 但需要满足转换格式的要求。即需要实现下面这个接口：
 ```go
 IAVFrame interface {
-    GetAllocator() *util.ScalableMemoryAllocator
-    SetAllocator(*util.ScalableMemoryAllocator)
-    Parse(*AVTrack) error                                          // get codec info, idr
-    ConvertCtx(codec.ICodecCtx) (codec.ICodecCtx, IAVFrame, error) // convert codec from source stream
-    Demux(codec.ICodecCtx) (any, error)                            // demux to raw format
-    Mux(codec.ICodecCtx, *AVFrame)                                 // mux from raw format
-    GetTimestamp() time.Duration
-    GetCTS() time.Duration
+    GetSample() *Sample
     GetSize() int
+    CheckCodecChange() error
+    Demux() error      // demux to raw format
+    Mux(*Sample) error // mux from origin format
     Recycle()
     String() string
-    Dump(byte, io.Writer)
 }
 ```
 > 音频和视频需要定义两个不同的类型
 
-其中 `Parse` 方法用于解析音视频数据，`ConvertCtx` 方法用于转换音视频数据格式的上下文，`Demux` 方法用于解封装音视频数据，`Mux` 方法用于封装音视频数据，`Recycle` 方法用于回收资源。
-- GetAllocator 方法用于获取内存分配器。(嵌入 RecyclableMemory 会自动实现)
-- SetAllocator 方法用于设置内存分配器。(嵌入 RecyclableMemory 会自动实现)
-- Parse方法主要从数据中识别关键帧，序列帧等重要信息。
-- ConvertCtx 会在需要转换协议的时候调用，传入原始的协议上下文，返回新的协议上下文（即自定义格式的上下文）。
-- Demux 会在需要解封装音视频数据的时候调用，传入协议上下文，返回解封装后的音视频数据，用于给其他格式封装使用。
-- Mux 会在需要封装音视频数据的时候调用，传入协议上下文和解封装后的音视频数据，用于封装成自定义格式的音视频数据。
-- Recycle 方法会在嵌入 RecyclableMemory 时自动实现，无需手动实现。
-- String 方法用于打印音视频数据的信息。
+其中各方法的作用如下：
+- GetSample 方法用于获取音视频数据的Sample对象，包含编解码上下文和原始数据。
 - GetSize 方法用于获取音视频数据的大小。
-- GetTimestamp 方法用于获取音视频数据的时间戳(单位：纳秒)。
-- GetCTS 方法用于获取音视频数据的Composition Time Stamp(单位：纳秒)。PTS = DTS+CTS
-- Dump 方法用于打印音视频数据的二进制数据。
+- CheckCodecChange 方法用于检查编解码器是否发生变化。
+- Demux 方法用于解封装音视频数据到裸格式，用于给其他格式封装使用。
+- Mux 方法用于从原始格式封装成自定义格式的音视频数据。
+- Recycle 方法用于回收资源，会在嵌入 RecyclableMemory 时自动实现。
+- String 方法用于打印音视频数据的信息。
 
 ### 6. 订阅流
 ```go

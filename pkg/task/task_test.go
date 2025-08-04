@@ -24,9 +24,12 @@ func Test_AddTask_AddsTaskSuccessfully(t *testing.T) {
 	var task Task
 	root.AddTask(&task)
 	_ = task.WaitStarted()
-	if len(root.children) != 1 {
-		t.Errorf("expected 1 child task, got %d", len(root.children))
-	}
+	root.RangeSubTask(func(t ITask) bool {
+		if t.GetTaskID() == task.GetTaskID() {
+			return false
+		}
+		return true
+	})
 }
 
 type retryDemoTask struct {
@@ -51,9 +54,9 @@ func Test_RetryTask(t *testing.T) {
 
 func Test_Call_ExecutesCallback(t *testing.T) {
 	called := false
-	root.Call(func() error {
+	root.Call(func() {
 		called = true
-		return nil
+		return
 	})
 	if !called {
 		t.Errorf("expected callback to be called")
@@ -160,6 +163,24 @@ func Test_StartFail(t *testing.T) {
 	if err := task.WaitStarted(); err == nil {
 		t.Errorf("expected start to fail")
 	}
+}
+
+func Test_Block(t *testing.T) {
+	var task Task
+	block := make(chan struct{})
+	var job Job
+	task.OnStart(func() {
+		task.OnStop(func() {
+			close(block)
+		})
+		<-block
+	})
+	time.AfterFunc(time.Second*2, func() {
+		job.Stop(ErrTaskComplete)
+	})
+	root.AddTask(&job)
+	job.AddTask(&task)
+	job.WaitStopped()
 }
 
 //

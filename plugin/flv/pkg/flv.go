@@ -80,9 +80,7 @@ func ReadMetaData(reader io.Reader) (metaData rtmp.EcmaArray, err error) {
 	if t == FLV_TAG_TYPE_SCRIPT {
 		data := make([]byte, dataLen+4)
 		_, err = io.ReadFull(reader, data)
-		amf := &rtmp.AMF{
-			Buffer: util.Buffer(data[1+2+len("onMetaData") : len(data)-4]),
-		}
+		amf := rtmp.AMF(data[1+2+len("onMetaData") : len(data)-4])
 		var obj any
 		obj, err = amf.Unmarshal()
 		metaData = obj.(rtmp.EcmaArray)

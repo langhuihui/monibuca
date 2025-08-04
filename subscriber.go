@@ -20,7 +20,7 @@ import (
 	"m7s.live/v5/pkg/util"
 )
 
-var AVFrameType = reflect.TypeOf((*AVFrame)(nil))
+var SampleType = reflect.TypeOf((*AVFrame)(nil))
 var Owner task.TaskContextKey = "owner"
 
 const (
@@ -33,7 +33,7 @@ const (
 )
 
 type PubSubBase struct {
-	task.Job
+	task.Task
 	Plugin     *Plugin
 	Type       string
 	StreamPath string
@@ -138,101 +138,82 @@ func (s *Subscriber) Dispose() {
 	}
 }
 
-type PlayController struct {
-	task.Task
-	conn       net.Conn
-	Subscriber *Subscriber
-}
-
-func (pc *PlayController) Go() (err error) {
-	for err == nil {
-		var b []byte
-		b, err = wsutil.ReadClientBinary(pc.conn)
-		if len(b) >= 3 && [3]byte(b[:3]) == [3]byte{'c', 'm', 'd'} {
-			pc.Info("control", "cmd", b[3])
-			switch b[3] {
-			case 1: // pause
-				pc.Subscriber.Publisher.Pause()
-			case 2: // resume
-				pc.Subscriber.Publisher.Resume()
-			case 3: // seek
-				pc.Subscriber.Publisher.Seek(time.Unix(int64(binary.BigEndian.Uint32(b[4:8])), 0))
-			case 4: // speed
-				pc.Subscriber.Publisher.Speed = float64(binary.BigEndian.Uint32(b[4:8])) / 100
-			case 5: // scale
-				pc.Subscriber.Publisher.Scale = float64(binary.BigEndian.Uint32(b[4:8])) / 100
-			}
-		}
-	}
-	return
-}
-
 func (s *Subscriber) CheckWebSocket(w http.ResponseWriter, r *http.Request) (conn net.Conn, err error) {
 	if r.Header.Get("Upgrade") == "websocket" {
 		conn, _, _, err = ws.UpgradeHTTP(r, w)
 		if err != nil {
 			return
 		}
-		var playController = &PlayController{
-			Subscriber: s,
-			conn:       conn,
-		}
-		s.AddTask(playController)
+		go func() {
+			for err == nil {
+				var b []byte
+				b, err = wsutil.ReadClientBinary(conn)
+				if len(b) >= 3 && [3]byte(b[:3]) == [3]byte{'c', 'm', 'd'} {
+					s.Info("control", "cmd", b[3])
+					switch b[3] {
+					case 1: // pause
+						s.Publisher.Pause()
+					case 2: // resume
+						s.Publisher.Resume()
+					case 3: // seek
+						s.Publisher.Seek(time.Unix(int64(binary.BigEndian.Uint32(b[4:8])), 0))
+					case 4: // speed
+						s.Publisher.Speed = float64(binary.BigEndian.Uint32(b[4:8])) / 100
+					case 5: // scale
+						s.Publisher.Scale = float64(binary.BigEndian.Uint32(b[4:8])) / 100
+					}
+				}
+			}
+			s.Stop(err)
+		}()
 	}
 	return
 }
 
-func (s *Subscriber) createAudioReader(dataType reflect.Type, startAudioTs time.Duration) (awi int) {
+// createReader 是一个通用的 Reader 创建方法，消除 createAudioReader 和 createVideoReader 的代码重复
+func (s *Subscriber) createReader(
+	dataType reflect.Type,
+	startTs time.Duration,
+	getTrack func(reflect.Type) *AVTrack,
+) (*AVRingReader, int) {
 	if s.waitingPublish() || dataType == nil {
-		return -1
+		return nil, -1
 	}
-	var at *AVTrack
-	if dataType == AVFrameType {
-		at = s.Publisher.AudioTrack.AVTrack
-		awi = 0
-	} else {
-		at = s.Publisher.GetAudioTrack(dataType)
-		if at != nil {
-			awi = at.WrapIndex + 1
-		}
+	if dataType == SampleType {
+		return nil, 0
 	}
-	if at == nil {
-		return -1
+	track := getTrack(dataType)
+	if track == nil {
+		return nil, -1
+	} else if err := track.WaitReady(); err != nil {
+		return nil, -1
 	}
-	if err := at.WaitReady(); err != nil {
-		return -1
-	}
-	s.AudioReader = NewAVRingReader(at, dataType.String())
-	s.AudioReader.StartTs = startAudioTs
-	return
+	reader := NewAVRingReader(track, dataType.String())
+	reader.StartTs = startTs
+	return reader, track.WrapIndex + 1
 }
 
-func (s *Subscriber) createVideoReader(dataType reflect.Type, startVideoTs time.Duration) (vwi int) {
-	if s.waitingPublish() || dataType == nil {
-		return -1
+func (s *Subscriber) createAudioReader(dataType reflect.Type, startAudioTs time.Duration) int {
+	reader, wrapIndex := s.createReader(dataType, startAudioTs, s.Publisher.GetAudioTrack)
+	if wrapIndex == 0 {
+		reader = NewAVRingReader(s.Publisher.AudioTrack.AVTrack, dataType.String())
+		reader.StartTs = startAudioTs
 	}
-	var vt *AVTrack
-	if dataType == AVFrameType {
-		vt = s.Publisher.VideoTrack.AVTrack
-		vwi = 0
-	} else {
-		vt = s.Publisher.GetVideoTrack(dataType)
-		if vt != nil {
-			vwi = vt.WrapIndex + 1
-		}
-	}
-	if vt == nil {
-		return -1
-	}
-	if err := vt.WaitReady(); err != nil {
-		return -1
-	}
-	s.VideoReader = NewAVRingReader(vt, dataType.String())
-	s.VideoReader.StartTs = startVideoTs
-	return
+	s.AudioReader = reader
+	return wrapIndex
 }
 
-type SubscribeHandler[A any, V any] struct {
+func (s *Subscriber) createVideoReader(dataType reflect.Type, startVideoTs time.Duration) int {
+	reader, wrapIndex := s.createReader(dataType, startVideoTs, s.Publisher.GetVideoTrack)
+	if wrapIndex == 0 {
+		reader = NewAVRingReader(s.Publisher.VideoTrack.AVTrack, dataType.String())
+		reader.StartTs = startVideoTs
+	}
+	s.VideoReader = reader
+	return wrapIndex
+}
+
+type SubscribeHandler[A IAVFrame, V IAVFrame] struct {
 	//task.Task
 	s                            *Subscriber
 	p                            *Publisher
@@ -255,7 +236,7 @@ type SubscribeHandler[A any, V any] struct {
 //	})
 //}
 
-func PlayBlock[A any, V any](s *Subscriber, onAudio func(A) error, onVideo func(V) error) (err error) {
+func PlayBlock[A IAVFrame, V IAVFrame](s *Subscriber, onAudio func(A) error, onVideo func(V) error) (err error) {
 	handler := &SubscribeHandler[A, V]{
 		s:       s,
 		OnAudio: onAudio,
@@ -293,93 +274,70 @@ func (handler *SubscribeHandler[A, V]) checkPublishChanged() {
 	runtime.Gosched()
 }
 
-func (handler *SubscribeHandler[A, V]) sendAudioFrame() (err error) {
-	if handler.awi == 0 {
-		err = handler.OnAudio(any(handler.audioFrame).(A))
-	} else if handler.awi > 0 && len(handler.audioFrame.Wraps) > handler.awi-1 {
-		frame := handler.audioFrame.Wraps[handler.awi-1]
-		frameSize := frame.GetSize()
+// sendFrame 是一个通用的帧发送方法，通过回调函数消除 sendAudioFrame 和 sendVideoFrame 的代码重复
+func (handler *SubscribeHandler[A, V]) sendFrame(
+	wrapIndex int,
+	frame *AVFrame,
+	onSample func(IAVFrame) error,
+	reader *AVRingReader,
+	processChannel chan func(*AVFrame),
+	frameType string,
+) (err error) {
+	if wrapIndex == 0 {
+		err = onSample(frame)
+	} else if wrapIndex > 0 && len(frame.Wraps) > wrapIndex-1 {
+		frameData := frame.Wraps[wrapIndex-1]
+		frameSize := frameData.GetSize()
 		if handler.s.TraceEnabled() {
-			handler.s.Trace("send audio frame", "seq", handler.audioFrame.Sequence, "data", frame.String(), "size", frameSize)
+			handler.s.Trace("send "+frameType+" frame", "seq", frame.Sequence, "data", frameData.String(), "size", frameSize)
 		}
-		if audioFrame, ok := frame.(A); ok {
-			err = handler.OnAudio(audioFrame)
-		} else {
-			if handler.s.AudioReader != nil {
-				handler.s.Error("audio frame type error", "wrapIndex", handler.s.AudioReader.Track.WrapIndex, "awi", handler.awi)
-			} else {
-				handler.s.Error("audio frame type error", "awi", handler.awi)
-			}
-			return errors.New("audio frame type error")
-		}
+		err = onSample(frameData)
 		// Calculate BPS
-		if handler.s.AudioReader != nil {
+		if reader != nil {
 			handler.bytesRead += uint32(frameSize)
 			now := time.Now()
 			if elapsed := now.Sub(handler.lastBPSTime); elapsed >= time.Second {
-				handler.s.AudioReader.BPS = uint32(float64(handler.bytesRead) / elapsed.Seconds())
+				reader.BPS = uint32(float64(handler.bytesRead) / elapsed.Seconds())
 				handler.bytesRead = 0
 				handler.lastBPSTime = now
 			}
 		}
-	} else if handler.s.AudioReader != nil {
-		handler.s.AudioReader.StopRead()
+	} else if reader != nil {
+		reader.StopRead()
 	}
 	if err != nil && !errors.Is(err, ErrInterrupt) {
 		handler.s.Stop(err)
 	}
-	if handler.ProcessAudio != nil {
-		if f, ok := <-handler.ProcessAudio; ok {
-			f(handler.audioFrame)
+	if processChannel != nil {
+		if f, ok := <-processChannel; ok {
+			f(frame)
 		}
 	}
-	handler.audioFrame = nil
 	return
 }
 
+func (handler *SubscribeHandler[A, V]) sendAudioFrame() (err error) {
+	defer func() { handler.audioFrame = nil }()
+	return handler.sendFrame(
+		handler.awi,
+		handler.audioFrame,
+		func(frame IAVFrame) error { return handler.OnAudio(frame.(A)) },
+		handler.s.AudioReader,
+		handler.ProcessAudio,
+		"audio",
+	)
+}
+
 func (handler *SubscribeHandler[A, V]) sendVideoFrame() (err error) {
-	if handler.vwi == 0 {
-		err = handler.OnVideo(any(handler.videoFrame).(V))
-	}
-	if handler.vwi > 0 && len(handler.videoFrame.Wraps) > handler.vwi-1 {
-		frame := handler.videoFrame.Wraps[handler.vwi-1]
-		frameSize := frame.GetSize()
-		if handler.s.TraceEnabled() {
-			handler.s.Trace("send video frame", "seq", handler.videoFrame.Sequence, "data", frame.String(), "size", frameSize)
-		}
-		if videoFrame, ok := frame.(V); ok {
-			err = handler.OnVideo(videoFrame)
-		} else {
-			if handler.s.VideoReader != nil {
-				handler.s.Error("video frame type error", "wrapIndex", handler.s.VideoReader.Track.WrapIndex, "vwi", handler.vwi)
-			} else {
-				handler.s.Error("video frame type error", "vwi", handler.vwi)
-			}
-			return errors.New("video frame type error")
-		}
-		// Calculate BPS
-		if handler.s.VideoReader != nil {
-			handler.bytesRead += uint32(frameSize)
-			now := time.Now()
-			if elapsed := now.Sub(handler.lastBPSTime); elapsed >= time.Second {
-				handler.s.VideoReader.BPS = uint32(float64(handler.bytesRead) / elapsed.Seconds())
-				handler.bytesRead = 0
-				handler.lastBPSTime = now
-			}
-		}
-	} else if handler.s.VideoReader != nil {
-		handler.s.VideoReader.StopRead()
-	}
-	if err != nil && !errors.Is(err, ErrInterrupt) {
-		handler.s.Stop(err)
-	}
-	if handler.ProcessVideo != nil {
-		if f, ok := <-handler.ProcessVideo; ok {
-			f(handler.videoFrame)
-		}
-	}
-	handler.videoFrame = nil
-	return
+	defer func() { handler.videoFrame = nil }()
+	return handler.sendFrame(
+		handler.vwi,
+		handler.videoFrame,
+		func(frame IAVFrame) error { return handler.OnVideo(frame.(V)) },
+		handler.s.VideoReader,
+		handler.ProcessVideo,
+		"video",
+	)
 }
 
 func (handler *SubscribeHandler[A, V]) createReaders() {
@@ -438,9 +396,9 @@ func (handler *SubscribeHandler[A, V]) Run() (err error) {
 				// fmt.Println("video", s.VideoReader.Track.PreFrame().Sequence-frame.Sequence)
 				if handler.videoFrame.IDR && vr.DecConfChanged() {
 					vr.LastCodecCtx = vr.Track.ICodecCtx
-					if seqFrame := vr.Track.SequenceFrame; seqFrame != nil {
+					if sctx, ok := vr.LastCodecCtx.(ISequenceCodecCtx[V]); ok {
 						if handler.vwi > 0 {
-							err = handler.OnVideo(seqFrame.(V))
+							err = handler.OnVideo(sctx.GetSequenceFrame())
 						}
 					}
 				}
@@ -498,9 +456,9 @@ func (handler *SubscribeHandler[A, V]) Run() (err error) {
 				// fmt.Println("audio", s.AudioReader.Track.PreFrame().Sequence-frame.Sequence)
 				if ar.DecConfChanged() {
 					ar.LastCodecCtx = ar.Track.ICodecCtx
-					if seqFrame := ar.Track.SequenceFrame; seqFrame != nil {
+					if sctx, ok := ar.LastCodecCtx.(ISequenceCodecCtx[A]); ok {
 						if handler.awi > 0 {
-							err = handler.OnAudio(seqFrame.(A))
+							err = handler.OnAudio(sctx.GetSequenceFrame())
 						}
 					}
 				}

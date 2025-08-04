@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"strconv"
 	"unicode"
+
+	"m7s.live/v5/pkg/util"
 )
 
 const (
@@ -47,7 +49,7 @@ func (amf *AMF3) readString() (string, error) {
 		ret = amf.scDec[int(index>>1)]
 	} else {
 		index >>= 1
-		ret = string(amf.ReadN(int(index)))
+		ret = string((*util.Buffer)(&amf.AMF).ReadN(int(index)))
 	}
 	if ret != "" {
 		amf.scDec = append(amf.scDec, ret)
@@ -60,7 +62,8 @@ func (amf *AMF3) Unmarshal() (obj any, err error) {
 			err = errors.New("amf3 unmarshal error")
 		}
 	}()
-	switch amf.ReadByte() {
+	buf := (*util.Buffer)(&amf.AMF)
+	switch buf.ReadByte() {
 	case AMF3_NULL:
 		return nil, nil
 	case AMF3_FALSE:
@@ -70,7 +73,7 @@ func (amf *AMF3) Unmarshal() (obj any, err error) {
 	case AMF3_INTEGER:
 		return amf.readU29()
 	case AMF3_DOUBLE:
-		return amf.ReadFloat64(), nil
+		return buf.ReadFloat64(), nil
 	case AMF3_STRING:
 		return amf.readString()
 	case AMF3_OBJECT:
@@ -84,7 +87,7 @@ func (amf *AMF3) Unmarshal() (obj any, err error) {
 		if index != 0x0b {
 			return nil, errors.New("invalid object type")
 		}
-		if amf.ReadByte() != 0x01 {
+		if buf.ReadByte() != 0x01 {
 			return nil, errors.New("type object not allowed")
 		}
 		ret := make(map[string]any)
@@ -122,14 +125,14 @@ func (amf *AMF3) writeString(s string) error {
 	if s != "" {
 		amf.scEnc[s] = len(amf.scEnc)
 	}
-	amf.WriteString(s)
+	(*util.Buffer)(&amf.AMF).WriteString(s)
 	return nil
 }
 
 func (amf *AMF3) readU29() (uint32, error) {
 	var ret uint32 = 0
 	for i := 0; i < 4; i++ {
-		b := amf.ReadByte()
+		b := (*util.Buffer)(&amf.AMF).ReadByte()
 		if i != 3 {
 			ret = (ret << 7) | uint32(b&0x7f)
 			if (b & 0x80) == 0 {
@@ -143,15 +146,16 @@ func (amf *AMF3) readU29() (uint32, error) {
 	return ret, nil
 }
 func (amf *AMF3) writeU29(value uint32) error {
+	buf := (*util.Buffer)(&amf.AMF)
 	switch {
 	case value < 0x80:
-		amf.WriteByte(byte(value))
+		buf.WriteByte(byte(value))
 	case value < 0x4000:
-		amf.Write([]byte{byte((value >> 7) | 0x80), byte(value & 0x7f)})
+		buf.Write([]byte{byte((value >> 7) | 0x80), byte(value & 0x7f)})
 	case value < 0x200000:
-		amf.Write([]byte{byte((value >> 14) | 0x80), byte((value >> 7) | 0x80), byte(value & 0x7f)})
+		buf.Write([]byte{byte((value >> 14) | 0x80), byte((value >> 7) | 0x80), byte(value & 0x7f)})
 	case value < 0x20000000:
-		amf.Write([]byte{byte((value >> 22) | 0x80), byte((value >> 15) | 0x80), byte((value >> 7) | 0x80), byte(value & 0xff)})
+		buf.Write([]byte{byte((value >> 22) | 0x80), byte((value >> 15) | 0x80), byte((value >> 7) | 0x80), byte(value & 0xff)})
 	default:
 		return errors.New("u29 over flow")
 	}
@@ -162,7 +166,7 @@ func (amf *AMF3) Marshals(v ...any) []byte {
 	for _, vv := range v {
 		amf.Marshal(vv)
 	}
-	return amf.Buffer
+	return amf.AMF
 }
 
 func MarshalAMF3s(v ...any) []byte {
@@ -173,19 +177,20 @@ func MarshalAMF3s(v ...any) []byte {
 }
 
 func (amf *AMF3) Marshal(v any) []byte {
+	buf := (*util.Buffer)(&amf.AMF)
 	if v == nil {
-		amf.WriteByte(AMF3_NULL)
-		return amf.Buffer
+		buf.WriteByte(AMF3_NULL)
+		return amf.AMF
 	}
 	switch vv := v.(type) {
 	case string:
-		amf.WriteByte(AMF3_STRING)
+		buf.WriteByte(AMF3_STRING)
 		amf.writeString(vv)
 	case bool:
 		if vv {
-			amf.WriteByte(AMF3_TRUE)
+			buf.WriteByte(AMF3_TRUE)
 		} else {
-			amf.WriteByte(AMF3_FALSE)
+			buf.WriteByte(AMF3_FALSE)
 		}
 	case int, int8, int16, int32, int64:
 		var value int64
@@ -196,7 +201,7 @@ func (amf *AMF3) Marshal(v any) []byte {
 			}
 			return amf.Marshal(strconv.FormatInt(value, 10))
 		}
-		amf.WriteByte(AMF3_INTEGER)
+		buf.WriteByte(AMF3_INTEGER)
 		amf.writeU29(uint32(value))
 	case uint, uint8, uint16, uint32, uint64:
 		var value uint64
@@ -207,22 +212,22 @@ func (amf *AMF3) Marshal(v any) []byte {
 			}
 			return amf.Marshal(strconv.FormatUint(value, 10))
 		}
-		amf.WriteByte(AMF3_INTEGER)
+		buf.WriteByte(AMF3_INTEGER)
 		amf.writeU29(uint32(value))
 	case float32:
 		amf.Marshal(float64(vv))
 	case float64:
-		amf.WriteByte(AMF3_DOUBLE)
-		amf.WriteFloat64(vv)
+		buf.WriteByte(AMF3_DOUBLE)
+		buf.WriteFloat64(vv)
 	case map[string]any:
-		amf.WriteByte(AMF3_OBJECT)
+		buf.WriteByte(AMF3_OBJECT)
 		index, ok := amf.ocEnc[reflect.ValueOf(vv).Pointer()]
 		if ok {
 			index <<= 1
 			amf.writeU29(uint32(index << 1))
 			return nil
 		}
-		amf.WriteByte(0x0b)
+		buf.WriteByte(0x0b)
 		err := amf.writeString("")
 		if err != nil {
 			return nil
@@ -239,25 +244,25 @@ func (amf *AMF3) Marshal(v any) []byte {
 	default:
 		v := reflect.ValueOf(vv)
 		if !v.IsValid() {
-			amf.WriteByte(AMF3_NULL)
-			return amf.Buffer
+			buf.WriteByte(AMF3_NULL)
+			return amf.AMF
 		}
 		switch v.Kind() {
 		case reflect.Ptr:
 			if v.IsNil() {
-				amf.WriteByte(AMF3_NULL)
-				return amf.Buffer
+				buf.WriteByte(AMF3_NULL)
+				return amf.AMF
 			}
 			vv := reflect.Indirect(v)
 			if vv.Kind() == reflect.Struct {
-				amf.WriteByte(AMF3_OBJECT)
+				buf.WriteByte(AMF3_OBJECT)
 				index, ok := amf.ocEnc[v.Pointer()]
 				if ok {
 					index <<= 1
 					amf.writeU29(uint32(index << 1))
 					return nil
 				}
-				amf.WriteByte(0x0b)
+				buf.WriteByte(0x0b)
 				err := amf.writeString("")
 				if err != nil {
 					return nil
@@ -285,7 +290,7 @@ func (amf *AMF3) Marshal(v any) []byte {
 			}
 		}
 	}
-	return amf.Buffer
+	return amf.AMF
 }
 
 func (amf *AMF3) getFieldName(f reflect.StructField) string {

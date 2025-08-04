@@ -13,20 +13,35 @@ import (
 
 	"github.com/quangngotan95/go-m3u8/m3u8"
 	"m7s.live/v5"
-	"m7s.live/v5/pkg"
-	"m7s.live/v5/pkg/codec"
+	pkg "m7s.live/v5/pkg"
 	"m7s.live/v5/pkg/config"
+	mpegts "m7s.live/v5/pkg/format/ts"
 	"m7s.live/v5/pkg/task"
 	"m7s.live/v5/pkg/util"
-	mpegts "m7s.live/v5/plugin/hls/pkg/ts"
 )
+
+// Plugin-specific progress step names for HLS
+const (
+	StepM3U8Fetch  pkg.StepName = "m3u8_fetch"
+	StepM3U8Parse  pkg.StepName = "parse" // hls playlist parse
+	StepTsDownload pkg.StepName = "ts_download"
+)
+
+// Fixed progress steps for HLS pull workflow
+var hlsPullSteps = []pkg.StepDef{
+	{Name: pkg.StepPublish, Description: "Publishing stream"},
+	{Name: StepM3U8Fetch, Description: "Fetching M3U8 playlist"},
+	{Name: StepM3U8Parse, Description: "Parsing M3U8 playlist"},
+	{Name: StepTsDownload, Description: "Downloading TS segments"},
+	{Name: pkg.StepStreaming, Description: "Processing and streaming"},
+}
 
 func NewPuller(conf config.Pull) m7s.IPuller {
 	return &Puller{}
 }
 
 type Puller struct {
-	task.Job
+	task.Task
 	PullJob     m7s.PullJob
 	Video       M3u8Info
 	Audio       M3u8Info
@@ -44,9 +59,16 @@ func (p *Puller) GetTs(key string) (any, bool) {
 }
 
 func (p *Puller) Start() (err error) {
+	// Initialize progress tracking for pull operations
+	p.PullJob.SetProgressStepsDefs(hlsPullSteps)
+
 	if err = p.PullJob.Publish(); err != nil {
+		p.PullJob.Fail(err.Error())
 		return
 	}
+
+	p.PullJob.GoToStepConst(StepM3U8Fetch)
+
 	p.PullJob.Publisher.Speed = 1
 	if p.PullJob.PublishConfig.RelayMode != config.RelayModeRemux {
 		MemoryTs.Store(p.PullJob.StreamPath, p)
@@ -65,71 +87,8 @@ func (p *Puller) Run() (err error) {
 	if err != nil {
 		return
 	}
+	p.Video.Req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36 Edg/138.0.0.0 Monibuca/5.0")
 	return p.pull(&p.Video)
-}
-
-func (p *Puller) writePublisher(t *mpegts.MpegTsStream) {
-	var audioCodec codec.FourCC
-	var audioStreamType, videoStreamType byte
-	for pes := range t.PESChan {
-		if p.Err() != nil {
-			continue
-		}
-		if pes.Header.Dts == 0 {
-			pes.Header.Dts = pes.Header.Pts
-		}
-		switch pes.Header.StreamID & 0xF0 {
-		case mpegts.STREAM_ID_VIDEO:
-			if videoStreamType == 0 {
-				for _, s := range t.PMT.Stream {
-					videoStreamType = s.StreamType
-					break
-				}
-			}
-			switch videoStreamType {
-			case mpegts.STREAM_TYPE_H264:
-				var annexb pkg.AnnexB
-				annexb.PTS = time.Duration(pes.Header.Pts)
-				annexb.DTS = time.Duration(pes.Header.Dts)
-				annexb.AppendOne(pes.Payload)
-				p.PullJob.Publisher.WriteVideo(&annexb)
-			case mpegts.STREAM_TYPE_H265:
-				var annexb pkg.AnnexB
-				annexb.PTS = time.Duration(pes.Header.Pts)
-				annexb.DTS = time.Duration(pes.Header.Dts)
-				annexb.Hevc = true
-				annexb.AppendOne(pes.Payload)
-				p.PullJob.Publisher.WriteVideo(&annexb)
-			default:
-				if audioStreamType == 0 {
-					for _, s := range t.PMT.Stream {
-						audioStreamType = s.StreamType
-						switch s.StreamType {
-						case mpegts.STREAM_TYPE_AAC:
-							audioCodec = codec.FourCC_MP4A
-						case mpegts.STREAM_TYPE_G711A:
-							audioCodec = codec.FourCC_ALAW
-						case mpegts.STREAM_TYPE_G711U:
-							audioCodec = codec.FourCC_ULAW
-						}
-					}
-				}
-				switch audioStreamType {
-				case mpegts.STREAM_TYPE_AAC:
-					var adts pkg.ADTS
-					adts.DTS = time.Duration(pes.Header.Dts)
-					adts.AppendOne(pes.Payload)
-					p.PullJob.Publisher.WriteAudio(&adts)
-				default:
-					var raw pkg.RawAudio
-					raw.FourCC = audioCodec
-					raw.Timestamp = time.Duration(pes.Header.Pts) * time.Millisecond / 90
-					raw.AppendOne(pes.Payload)
-					p.PullJob.Publisher.WriteAudio(&raw)
-				}
-			}
-		}
-	}
 }
 
 func (p *Puller) pull(info *M3u8Info) (err error) {
@@ -138,26 +97,18 @@ func (p *Puller) pull(info *M3u8Info) (err error) {
 	client := p.PullJob.HTTPClient
 	sequence := -1
 	lastTs := make(map[string]bool)
-	tsbuffer := make(chan io.ReadCloser)
 	tsRing := util.NewRing[string](6)
 	var tsReader *mpegts.MpegTsStream
-	var closer io.Closer
-	p.OnDispose(func() {
-		if closer != nil {
-			closer.Close()
-		}
-	})
 	if p.PullJob.PublishConfig.RelayMode != config.RelayModeRelay {
 		tsReader = &mpegts.MpegTsStream{
-			PESChan:   make(chan *mpegts.MpegTsPESPacket, 50),
-			PESBuffer: make(map[uint16]*mpegts.MpegTsPESPacket),
+			Allocator: util.NewScalableMemoryAllocator(1 << util.MinPowerOf2),
 		}
-		go p.writePublisher(tsReader)
-		defer close(tsReader.PESChan)
+		tsReader.Publisher = p.PullJob.Publisher
+		defer tsReader.Allocator.Recycle()
 	}
-	defer close(tsbuffer)
 	var maxResolution *m3u8.PlaylistItem
 	for errcount := 0; err == nil; err = p.Err() {
+		p.Debug("pull m3u8", "url", req.URL.String())
 		resp, err1 := client.Do(req)
 		if err1 != nil {
 			return err1
@@ -211,6 +162,7 @@ func (p *Puller) pull(info *M3u8Info) (err error) {
 						p.Video.Req, _ = http.NewRequest("GET", url.String(), nil)
 						p.Video.Req.Header = req.Header
 						req = p.Video.Req
+						sequence = -1
 						continue
 					}
 				}
@@ -254,7 +206,7 @@ func (p *Puller) pull(info *M3u8Info) (err error) {
 				if v.res != nil {
 					info.TSCount++
 					var reader io.Reader = v.res.Body
-					closer = v.res.Body
+					closer := v.res.Body
 					if p.SaveContext != nil && p.SaveContext.Err() == nil {
 						savePath := p.SaveContext.Value("path").(string)
 						os.MkdirAll(filepath.Join(savePath, p.PullJob.StreamPath), 0766)

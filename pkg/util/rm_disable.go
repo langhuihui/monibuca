@@ -4,10 +4,24 @@ package util
 
 import (
 	"io"
+	"slices"
 )
 
 type RecyclableMemory struct {
 	Memory
+}
+
+func NewRecyclableMemory(allocator *ScalableMemoryAllocator) RecyclableMemory {
+	return RecyclableMemory{}
+}
+
+func (r *RecyclableMemory) Clone() RecyclableMemory {
+	return RecyclableMemory{
+		Memory: Memory{
+			Buffers: slices.Clone(r.Buffers),
+			Size:    r.Size,
+		},
+	}
 }
 
 func (r *RecyclableMemory) InitRecycleIndexes(max int) {

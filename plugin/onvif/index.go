@@ -14,7 +14,7 @@ import (
 const VIRTUAL_IFACE = "virtual"
 
 var (
-	_ = m7s.InstallPlugin[OnvifPlugin](nil)
+	_ = m7s.InstallPlugin[OnvifPlugin](m7s.PluginMeta{})
 )
 
 type OnvifPlugin struct {
@@ -75,7 +75,7 @@ func (t *OnvifTimerTask) Tick(any) {
 //	}
 //}
 
-func (p *OnvifPlugin) OnInit() (err error) {
+func (p *OnvifPlugin) Start() (err error) {
 	// 检查配置参数
 	if p.DiscoverInterval < 0 {
 		p.Error("invalid discover interval",

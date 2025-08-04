@@ -1,0 +1,151 @@
+cases:
+  rtmp2rtmp:
+    description: 推流到RTMP用RTMP播放
+    tasks:
+      - action: push
+        format: rtmp
+      - action: snapshot
+        format: rtmp
+        delay: 5s
+  rtmp2rtsp:
+    description: 推流到RTMP用RTSP播放
+    tasks:
+      - action: push
+        format: rtmp
+      - action: snapshot
+        format: rtsp
+        delay: 5s
+  rtmp2srt:
+    description: 推流到RTMP用SRT播放
+    tasks:
+      - action: push
+        format: rtmp
+      - action: snapshot
+        format: srt
+        serveraddr: localhost:6000
+        delay: 5s
+  rtsp2rtsp:
+    description: 推流到RTSP用RTSP播放
+    tasks:
+      - action: push
+        format: rtsp
+      - action: snapshot
+        format: rtsp
+        delay: 5s
+  rtsp2rtmp:
+    description: 推流到RTSP用RTMP播放
+    tasks:
+      - action: push
+        format: rtsp
+      - action: snapshot
+        format: rtmp
+        delay: 5s
+  srt2rtmp:
+    description: 推流到SRT用RTMP播放
+    tasks:
+      - action: push
+        format: srt
+        serveraddr: localhost:6000
+      - action: snapshot
+        format: rtmp
+        delay: 5s
+  srt2srt:
+    description: 推流到SRT用SRT播放
+    tasks:
+      - action: push
+        format: srt
+        serveraddr: localhost:6000
+      - action: snapshot
+        format: srt
+        delay: 5s
+        serveraddr: localhost:6000
+  readmp4:
+    description: 读取MP4文件
+    tasks:
+      - action: read
+        format: mp4
+      - action: snapshot
+        delay: 5s
+  readflv:
+    description: 读取FLV文件
+    tasks:
+      - action: read
+        format: flv
+      - action: snapshot
+        delay: 5s
+  readhls:
+    description: 读取HLS文件
+    tasks:
+      - action: read
+        input: https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8
+        # input: https://vip.dytt-cinema.com/20250704/26126_d2450555/index.m3u8
+        format: hls
+      - action: snapshot
+        delay: 10s
+  recordmp4:
+    description: 录制MP4
+    tasks:
+      - action: push
+        format: rtmp
+      - action: write
+        format: mp4
+        delay: 5s
+  recordflv:
+    description: 录制FLV
+    tasks:
+      - action: push
+        format: rtmp
+      - action: write
+        format: flv
+        delay: 5s
+  recordhls:
+    description: 录制HLS
+    tasks:
+      - action: push
+        format: rtmp
+      - action: write
+        format: hls
+        delay: 5s
+  muxps:
+    description: 封装PS
+    tasks:
+      - action: push
+        format: rtmp
+      - action: write
+        format: ps
+        delay: 3s
+      - action: push
+        format: ps
+        streampath: "test/ps"
+        delay: 2s
+      - action: snapshot
+        format: rtmp
+        streampath: "test/ps"
+        delay: 5s
+  annexb:
+    description: AnnexB
+    tasks:
+      - action: push
+        format: rtmp
+      - action: read
+        format: annexb
+        input: "test"
+        streampath: "test/annexb"
+        delay: 3s
+      - action: snapshot
+        streampath: "test/annexb"
+        delay: 5s
+  webrtc:
+    description: WebRTC测试
+    videoonly: true
+    tasks:
+      - action: push
+        format: rtmp
+      - action: read
+        format: webrtc
+        input: "test"
+        streampath: "test/webrtc"
+        delay: 3s
+      - action: snapshot
+        streampath: "test/webrtc"
+        delay: 5s

@@ -49,7 +49,7 @@ type TrackHeaderBox struct {
 	Height           uint32
 }
 
-func CreateTrackHeaderBox(trackID uint32, duration uint64, width, height uint32) *TrackHeaderBox {
+func CreateTrackHeaderBox(trackID uint32, duration uint64) *TrackHeaderBox {
 	now := ConvertUnixTimeToISO14496(uint64(time.Now().Unix()))
 	version := util.Conditional[uint8](duration > 0xFFFFFFFF, 1, 0)
 	if duration == 0 {
@@ -71,8 +71,6 @@ func CreateTrackHeaderBox(trackID uint32, duration uint64, width, height uint32)
 		Layer:            0,
 		AlternateGroup:   0,
 		Matrix:           [9]uint32{0x00010000, 0, 0, 0, 0x00010000, 0, 0, 0, 0x40000000},
-		Width:            width,
-		Height:           height,
 	}
 }
 

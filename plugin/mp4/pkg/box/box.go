@@ -6,6 +6,8 @@ import (
 	"net"
 	"reflect"
 	"unsafe"
+
+	"m7s.live/v5/pkg/util"
 )
 
 type (
@@ -33,6 +35,10 @@ type (
 	DataBox struct {
 		BaseBox
 		Data []byte
+	}
+	MemoryBox struct {
+		BaseBox
+		Data util.Memory
 	}
 	BigBox struct {
 		BaseBox
@@ -74,6 +80,16 @@ func CreateDataBox(typ BoxType, data []byte) *DataBox {
 			size: uint32(len(data)) + BasicBoxLen,
 		},
 		Data: data,
+	}
+}
+
+func CreateMemoryBox(typ BoxType, mem util.Memory) *MemoryBox {
+	return &MemoryBox{
+		BaseBox: BaseBox{
+			typ:  typ,
+			size: uint32(mem.Size) + BasicBoxLen,
+		},
+		Data: mem,
 	}
 }
 
@@ -125,6 +141,15 @@ func (b *DataBox) WriteTo(w io.Writer) (n int64, err error) {
 }
 
 func (b *BaseBox) Unmarshal(buf []byte) (IBox, error) {
+	return b, nil
+}
+
+func (b *MemoryBox) WriteTo(w io.Writer) (n int64, err error) {
+	return b.Data.WriteTo(w)
+}
+
+func (b *MemoryBox) Unmarshal(buf []byte) (IBox, error) {
+	b.Data.PushOne(buf)
 	return b, nil
 }
 

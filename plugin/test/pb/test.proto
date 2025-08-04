@@ -1,0 +1,79 @@
+syntax = "proto3";
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/duration.proto";
+import "global.proto";
+package test;
+option go_package="m7s.live/v5/plugin/test/pb";
+
+service api {
+  // 测试用例查询
+  rpc ListTestCases (ListTestCasesRequest) returns (ListTestCasesResponse) {
+    option (google.api.http) = {
+      get: "/test/api/cases"
+    };
+  }
+  
+  rpc ExecuteTestCase (ExecuteTestCaseRequest) returns (global.SuccessResponse) {
+    option (google.api.http) = {
+      post: "/test/api/cases/execute"
+      body: "*"
+    };
+  }
+ 
+}
+
+message ListFilesResponse {
+  uint32 code = 1;
+  string message = 2;
+  repeated string data = 3;
+}
+
+// 测试用例相关消息
+message TestCase {
+  string name = 1;
+  string description = 2;
+  google.protobuf.Duration timeout = 3;
+  repeated TestTask tasks = 4;
+  string status = 5;
+  google.protobuf.Timestamp startTime = 6;
+  google.protobuf.Timestamp endTime = 7;
+  int32 duration = 8;
+  string videoCodec = 9;
+  string audioCodec = 10;
+  bool videoOnly = 11;
+  bool audioOnly = 12;
+  string errorMsg = 13;
+  string logs = 14;
+  repeated string tags = 15;
+}
+
+message TestTask {
+  string action = 1;
+  google.protobuf.Duration delay = 2;
+  string format = 3;
+  string serverAddr = 4;
+  string videoFile = 5;
+}
+
+message TestCaseResponse {
+  uint32 code = 1;
+  string message = 2;
+  TestCase data = 3;
+}
+
+message ListTestCasesRequest {
+  repeated string tags = 1;
+  string status = 2;
+}
+
+message ListTestCasesResponse {
+  uint32 code = 1;
+  string message = 2;
+  repeated TestCase data = 3;
+}
+
+message ExecuteTestCaseRequest {
+  repeated string names = 1;
+}
+

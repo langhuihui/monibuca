@@ -116,7 +116,7 @@ type MyLogHandler struct {
 }
 
 // Add handler during plugin initialization
-func (p *MyPlugin) OnInit() error {
+func (p *MyPlugin) Start() error {
     handler := &MyLogHandler{}
     p.Server.LogHandler.Add(handler)
     return nil
