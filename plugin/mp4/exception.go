@@ -112,12 +112,25 @@ func (p *DeleteRecordTask) deleteOldestFile() {
 						p.Info("deleteOldestFile", "ready to delete oldestfile,ID", record.ID, "create time", record.EndTime, "filepath", record.FilePath)
 						err = os.Remove(record.FilePath)
 						if err != nil {
-							p.Error("deleteOldestFile", "delete file from disk error", err)
-							continue
+							// 检查是否为文件不存在的错误
+							if os.IsNotExist(err) {
+								// 文件不存在，记录日志但视为删除成功
+								p.Warn("deleteOldestFile", "file does not exist, continuing with database deletion", record.FilePath)
+								// 继续删除数据库记录
+								err = p.DB.Delete(&record).Error
+								if err != nil {
+									p.Error("deleteOldestFile", "delete record from db error", err)
+								}
+							} else {
+								// 其他错误，记录并跳过此记录
+								p.Error("deleteOldestFile", "delete file from disk error", err)
+								continue
+							}
 						} else {
+							// 文件删除成功，继续删除数据库记录
 							err = p.DB.Delete(&record).Error
 							if err != nil {
-								p.Error("deleteOldestFile", "delete record from disk error", err)
+								p.Error("deleteOldestFile", "delete record from db error", err)
 							}
 						}
 					}
@@ -158,8 +171,16 @@ func (t *DeleteRecordTask) Tick(any) {
 			t.Info("RecordFileExpireDays is set to auto delete oldestfile", "ID", record.ID, "create time", record.EndTime, "filepath", record.FilePath)
 			err = os.Remove(record.FilePath)
 			if err != nil {
-				t.Error("RecordFileExpireDays set to auto delete oldestfile", "delete file from disk error", err)
+				// 检查是否为文件不存在的错误
+				if os.IsNotExist(err) {
+					// 文件不存在，记录日志但视为删除成功
+					t.Warn("RecordFileExpireDays set to auto delete oldestfile", "file does not exist, continuing with database deletion", record.FilePath)
+				} else {
+					// 其他错误，记录但继续处理
+					t.Error("RecordFileExpireDays set to auto delete oldestfile", "delete file from disk error", err)
+				}
 			}
+			// 无论文件是否存在，都删除数据库记录
 			err = t.DB.Delete(&record).Error
 			if err != nil {
 				t.Error("RecordFileExpireDays set to auto delete oldestfile", "delete record from db error", err)
