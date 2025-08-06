@@ -75,6 +75,7 @@ const (
 	Api_AddPlatformChannel_FullMethodName                = "/gb28181pro.api/AddPlatformChannel"
 	Api_Recording_FullMethodName                         = "/gb28181pro.api/Recording"
 	Api_UploadJpeg_FullMethodName                        = "/gb28181pro.api/UploadJpeg"
+	Api_UpdateChannel_FullMethodName                     = "/gb28181pro.api/UpdateChannel"
 	Api_PlaybackPause_FullMethodName                     = "/gb28181pro.api/PlaybackPause"
 	Api_PlaybackResume_FullMethodName                    = "/gb28181pro.api/PlaybackResume"
 	Api_PlaybackSeek_FullMethodName                      = "/gb28181pro.api/PlaybackSeek"
@@ -201,6 +202,8 @@ type ApiClient interface {
 	Recording(ctx context.Context, in *RecordingRequest, opts ...grpc.CallOption) (*BaseResponse, error)
 	// 接收JPEG文件
 	UploadJpeg(ctx context.Context, in *UploadJpegRequest, opts ...grpc.CallOption) (*BaseResponse, error)
+	// 更新通道信息
+	UpdateChannel(ctx context.Context, in *UpdateChannelRequest, opts ...grpc.CallOption) (*BaseResponse, error)
 	// 回放暂停
 	PlaybackPause(ctx context.Context, in *PlaybackPauseRequest, opts ...grpc.CallOption) (*BaseResponse, error)
 	// 回放恢复
@@ -768,6 +771,16 @@ func (c *apiClient) UploadJpeg(ctx context.Context, in *UploadJpegRequest, opts 
 	return out, nil
 }
 
+func (c *apiClient) UpdateChannel(ctx context.Context, in *UpdateChannelRequest, opts ...grpc.CallOption) (*BaseResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BaseResponse)
+	err := c.cc.Invoke(ctx, Api_UpdateChannel_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *apiClient) PlaybackPause(ctx context.Context, in *PlaybackPauseRequest, opts ...grpc.CallOption) (*BaseResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(BaseResponse)
@@ -1018,6 +1031,8 @@ type ApiServer interface {
 	Recording(context.Context, *RecordingRequest) (*BaseResponse, error)
 	// 接收JPEG文件
 	UploadJpeg(context.Context, *UploadJpegRequest) (*BaseResponse, error)
+	// 更新通道信息
+	UpdateChannel(context.Context, *UpdateChannelRequest) (*BaseResponse, error)
 	// 回放暂停
 	PlaybackPause(context.Context, *PlaybackPauseRequest) (*BaseResponse, error)
 	// 回放恢复
@@ -1213,6 +1228,9 @@ func (UnimplementedApiServer) Recording(context.Context, *RecordingRequest) (*Ba
 }
 func (UnimplementedApiServer) UploadJpeg(context.Context, *UploadJpegRequest) (*BaseResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UploadJpeg not implemented")
+}
+func (UnimplementedApiServer) UpdateChannel(context.Context, *UpdateChannelRequest) (*BaseResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpdateChannel not implemented")
 }
 func (UnimplementedApiServer) PlaybackPause(context.Context, *PlaybackPauseRequest) (*BaseResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PlaybackPause not implemented")
@@ -2231,6 +2249,24 @@ func _Api_UploadJpeg_Handler(srv interface{}, ctx context.Context, dec func(inte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Api_UpdateChannel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateChannelRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).UpdateChannel(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_UpdateChannel_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).UpdateChannel(ctx, req.(*UpdateChannelRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Api_PlaybackPause_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(PlaybackPauseRequest)
 	if err := dec(in); err != nil {
@@ -2701,6 +2737,10 @@ var Api_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UploadJpeg",
 			Handler:    _Api_UploadJpeg_Handler,
+		},
+		{
+			MethodName: "UpdateChannel",
+			Handler:    _Api_UpdateChannel_Handler,
 		},
 		{
 			MethodName: "PlaybackPause",

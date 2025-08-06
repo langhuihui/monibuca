@@ -17,11 +17,13 @@ const (
 type DeviceChannel struct {
 	//CommonGBChannel // 通过组合继承 CommonGBChannel 的字段
 
-	ID                 string        `gorm:"primaryKey" json:"ID"` // 数据库自增长ID
-	ChannelId          string        `json:"channelID" xml:"ChannelID"`
-	DeviceId           string        `json:"deviceID" xml:"DeviceID"`                           // 设备国标编号
+	ID                 string        `gorm:"primaryKey" json:"Id"` // 数据库自增长ID
+	ChannelId          string        `json:"channelId" xml:"ChannelID"`
+	CustomChannelId    string        `json:"customChannelId" xml:"CustomChannelID"`             // 自定义通道ID
+	DeviceId           string        `json:"deviceId" xml:"DeviceID"`                           // 设备国标编号
 	ParentId           string        `json:"parentId" xml:"ParentID"`                           // 父节点ID
 	Name               string        `json:"name" xml:"Name"`                                   // 通道名称
+	CustomName         string        `json:"customName" xml:"CustomName"`                       // 自定义名称
 	Manufacturer       string        `json:"manufacturer" xml:"Manufacturer"`                   // 设备厂商
 	Model              string        `json:"model" xml:"Model"`                                 // 设备型号
 	Owner              string        `json:"owner" xml:"Owner"`                                 // 设备归属

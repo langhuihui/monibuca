@@ -88,9 +88,14 @@ func (d *Dialog) Start() (err error) {
 	var device *Device
 	if deviceTmp, ok := d.gb.devices.Get(deviceId); ok {
 		device = deviceTmp
+		d.StreamMode = device.StreamMode
 		if channel, ok := deviceTmp.channels.Get(deviceId + "_" + channelId); ok {
 			d.Channel = channel
-			d.StreamMode = device.StreamMode
+		} else if channel, ok := deviceTmp.channels.Find(func(c *Channel) bool {
+			return c.CustomChannelId == channelId
+		}); ok {
+			channelId = channel.ChannelId
+			d.Channel = channel
 		} else {
 			return fmt.Errorf("channel %s not found", channelId)
 		}

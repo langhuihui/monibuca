@@ -392,6 +392,14 @@ service api {
     };
   }
 
+  // 更新通道信息
+  rpc UpdateChannel (UpdateChannelRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      post: "/gb28181/api/channel/update/{id}"
+      body: "channel"
+    };
+  }
+
   // 回放暂停
   rpc PlaybackPause (PlaybackPauseRequest) returns (BaseResponse) {
     option (google.api.http) = {
@@ -656,6 +664,11 @@ message AlarmInfo {
   string alarmMethod = 3;
   string alarmTime = 4;
   string alarmDescription = 5;
+}
+
+message UpdateChannelRequest {
+  string id = 1; // 复合ID，格式为 deviceId_channelId
+  Channel channel = 2;
 }
 
 message GetSyncStatusRequest {

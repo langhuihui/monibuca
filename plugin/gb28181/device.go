@@ -62,6 +62,7 @@ type Device struct {
 	task.Job              `gorm:"-:all"`
 	DeviceId              string         `gorm:"primaryKey"` // 设备国标编号
 	Name                  string         // 设备名
+	CustomName            string         // 自定义名称
 	Manufacturer          string         // 生产厂商
 	Model                 string         // 型号
 	Firmware              string         // 固件版本
@@ -136,6 +137,7 @@ func (d *Device) Dispose() {
 				if channel.PullProxyTask != nil {
 					channel.PullProxyTask.ChangeStatus(m7s.PullProxyStatusOffline)
 				}
+				d.channels.RemoveByKey(channel.ID)
 				d.plugin.channels.RemoveByKey(channel.ID)
 				return true
 			})
@@ -199,6 +201,9 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 	switch msg.CmdType {
 	case "Keepalive":
 		d.KeepaliveInterval = int(time.Since(d.KeepaliveTime).Seconds())
+		if d.KeepaliveInterval < 60 {
+			d.KeepaliveInterval = 60
+		}
 		d.KeepaliveTime = time.Now()
 		d.Debug("into keeplive,deviceid is ", d.DeviceId, "d.KeepaliveTime is", d.KeepaliveTime, "d.KeepaliveInterval is", d.KeepaliveInterval)
 		if d.plugin.DB != nil {
@@ -227,29 +232,45 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 		isFirst := catalogReq.AddResponse()
 
 		// 更新设备信息到数据库
-		if d.plugin.DB != nil {
-			// 如果是第一个响应，先清空现有通道
-			if isFirst {
-				d.Trace("清空现有通道", "deviceId", d.DeviceId)
-				// 清空内存中的通道缓存
-				d.channels.Clear()
-			}
-
-			// 更新通道信息
-			for _, c := range msg.DeviceChannelList {
-				// 设置关联的设备数据库ID
-				c.ChannelId = c.DeviceId
-				c.DeviceId = d.DeviceId
-				c.ID = d.DeviceId + "_" + c.ChannelId
-				// 使用 Save 进行 upsert 操作
-				d.addOrUpdateChannel(c)
-			}
-
-			// 更新当前设备的通道数
-			d.ChannelCount = msg.SumNum
-			d.UpdateTime = time.Now()
-			d.Debug("save channel", "deviceid", d.DeviceId, " d.channels.Length", d.channels.Length, "d.ChannelCount", d.ChannelCount, "d.UpdateTime", d.UpdateTime)
+		// 如果是第一个响应，将所有通道状态标记为OFF
+		if isFirst {
+			d.Trace("将所有通道状态标记为OFF", "deviceId", d.DeviceId)
+			// 标记所有通道为OFF状态
+			d.channels.Range(func(channel *Channel) bool {
+				if channel.DeviceChannel != nil {
+					channel.DeviceChannel.Status = gb28181.ChannelOffStatus
+				}
+				return true
+			})
 		}
+
+		// 更新通道信息
+		for _, c := range msg.DeviceChannelList {
+			// 设置关联的设备数据库ID
+			c.ChannelId = c.DeviceId
+			c.DeviceId = d.DeviceId
+			c.ID = d.DeviceId + "_" + c.ChannelId
+			if c.CustomChannelId == "" {
+				c.CustomChannelId = c.ChannelId
+			}
+			// 使用 Save 进行 upsert 操作
+			d.addOrUpdateChannel(c)
+		}
+
+		// 更新当前设备的通道数
+		d.ChannelCount = msg.SumNum
+		d.UpdateTime = time.Now()
+		d.Debug("save channel", "deviceid", d.DeviceId, " d.channels.Length", d.channels.Length, "d.ChannelCount", d.ChannelCount, "d.UpdateTime", d.UpdateTime)
+
+		// 删除所有状态为OFF的通道
+		// d.channels.Range(func(channel *Channel) bool {
+		// 	if channel.DeviceChannel != nil && channel.DeviceChannel.Status == gb28181.ChannelOffStatus {
+		// 		d.Debug("删除不存在的通道", "channelId", channel.ID)
+		// 		d.channels.RemoveByKey(channel.ID)
+		// 		d.plugin.channels.RemoveByKey(channel.ID)
+		// 	}
+		// 	return true
+		// })
 
 		// 在所有通道都添加完成后，检查是否完成接收
 		if catalogReq.IsComplete(d.channels.Length) {
@@ -344,8 +365,11 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 	case "DeviceInfo":
 		// 主设备信息
 		d.Info("DeviceInfo message", "body", req.Body(), "d.Name", d.Name, "d.DeviceId", d.DeviceId, "msg.DeviceName", msg.DeviceName)
-		if d.Name == "" && msg.DeviceName != "" {
+		if msg.DeviceName != "" {
 			d.Name = msg.DeviceName
+			if d.CustomName == "" {
+				d.CustomName = msg.DeviceName
+			}
 		}
 		d.Manufacturer = msg.Manufacturer
 		d.Model = msg.Model
@@ -569,9 +593,28 @@ func (d *Device) frontEndCmdString(cmdCode int32, parameter1 int32, parameter2 i
 }
 
 func (d *Device) addOrUpdateChannel(c gb28181.DeviceChannel) {
+	// 设置通道状态为在线
+	c.Status = gb28181.ChannelOnStatus
+
 	if channel, ok := d.channels.Get(c.ID); ok {
+		// 通道已存在，保留自定义字段
+		if channel.DeviceChannel != nil {
+			// 保存原有的自定义字段
+			customName := channel.DeviceChannel.CustomName
+			customChannelId := channel.DeviceChannel.CustomChannelId
+
+			// 如果原有字段有值，则保留
+			if customName != "" {
+				c.CustomName = customName
+			}
+			if customChannelId != "" {
+				c.CustomChannelId = customChannelId
+			}
+		}
+		// 更新通道信息
 		channel.DeviceChannel = &c
 	} else {
+		// 创建新通道
 		channel = &Channel{
 			Device:        d,
 			Logger:        d.Logger.With("channel", c.ID),

@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -486,7 +487,13 @@ func (gb *GB28181Plugin) RegisterHandler() map[string]http.HandlerFunc {
 func (gb *GB28181Plugin) OnRegister(req *sip.Request, tx sip.ServerTransaction) {
 	from := req.From()
 	if from == nil || from.Address.User == "" {
-		gb.Error("OnRegister", "error", "no user")
+		gb.Error("OnRegister", "invaliad from", from)
+		return
+	}
+	// 验证设备ID是否为20位数字
+	matched, err := regexp.MatchString("^\\d{20}$", from.Address.User)
+	if err != nil || !matched {
+		gb.Error("OnRegister", "invalid deviceId", from.Address.User)
 		return
 	}
 	deviceId := from.Address.User

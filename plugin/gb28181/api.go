@@ -84,11 +84,16 @@ func (gb *GB28181Plugin) List(ctx context.Context, req *pb.GetDevicesRequest) (*
 
 		// 从设备的内存通道集合中获取通道信息
 		d.channels.Range(func(channel *Channel) bool {
+			if channel.ID == "34020000001320000109_34020000001310000109" {
+				gb.Info("channel", "id", channel.ID)
+				d.Info("channel", "id", channel.ID)
+			}
 			pbChannels = append(pbChannels, &pb.Channel{
-				DeviceId:     channel.ChannelId,
-				ChannelId:    channel.ChannelId,
+				Id:           channel.ID,
+				DeviceId:     channel.CustomChannelId,
+				ChannelId:    channel.CustomChannelId,
 				ParentId:     d.DeviceId,
-				Name:         channel.Name,
+				Name:         channel.CustomName,
 				Manufacturer: channel.Manufacturer,
 				Model:        channel.Model,
 				Owner:        channel.Owner,
@@ -109,7 +114,7 @@ func (gb *GB28181Plugin) List(ctx context.Context, req *pb.GetDevicesRequest) (*
 
 		pbDevices = append(pbDevices, &pb.Device{
 			DeviceId:      d.DeviceId,
-			Name:          d.Name,
+			Name:          d.CustomName,
 			Manufacturer:  d.Manufacturer,
 			Model:         d.Model,
 			Status:        string(d.Status),
@@ -499,7 +504,7 @@ func (gb *GB28181Plugin) UpdateDevice(ctx context.Context, req *pb.Device) (*pb.
 
 		// 更新基本字段
 		if req.Name != "" {
-			d.Name = req.Name
+			d.CustomName = req.Name
 		}
 		if req.Manufacturer != "" {
 			d.Manufacturer = req.Manufacturer
@@ -2942,5 +2947,87 @@ func (gb *GB28181Plugin) ReceiveAlarm(ctx context.Context, req *pb.AlarmInfoRequ
 	// 返回成功响应
 	resp.Code = 0
 	resp.Message = "告警信息接收成功"
+	return resp, nil
+}
+
+// UpdateChannel 实现更新通道信息
+func (gb *GB28181Plugin) UpdateChannel(ctx context.Context, req *pb.UpdateChannelRequest) (*pb.BaseResponse, error) {
+	resp := &pb.BaseResponse{}
+
+	// 参数校验
+	if req.Id == "" {
+		resp.Code = 400
+		resp.Message = "通道复合ID不能为空"
+		return resp, nil
+	}
+
+	if req.Channel == nil {
+		resp.Code = 400
+		resp.Message = "通道信息不能为空"
+		return resp, nil
+	}
+
+	// 直接使用 id 查找通道
+	parts := strings.Split(req.Id, "_")
+	if len(parts) != 2 {
+		resp.Code = 400
+		resp.Message = "通道复合ID格式错误，应为 deviceId_channelId"
+		return resp, nil
+	}
+
+	// 查找通道
+	channel, ok := gb.channels.Get(req.Id)
+	if !ok {
+		resp.Code = 404
+		resp.Message = "通道不存在"
+		return resp, nil
+	}
+
+	// 从请求中获取自定义通道ID
+	customChannelId := req.Channel.ChannelId
+	if customChannelId != "" && customChannelId != channel.DeviceChannel.CustomChannelId {
+		// 检查自定义通道ID是否已存在（全局唯一性检查）
+		hasConflict := false
+
+		// 遍历所有通道检查是否有重复的 customChannelId
+		gb.channels.Range(func(ch *Channel) bool {
+			// 跳过当前正在更新的通道
+			if ch.DeviceChannel.ID == req.Id {
+				return true
+			}
+
+			// 检查其他通道是否已使用该自定义ID
+			if ch.DeviceChannel.CustomChannelId == customChannelId {
+				hasConflict = true
+				return false
+			}
+			return true
+		})
+
+		// 如果有冲突，返回错误
+		if hasConflict {
+			resp.Code = 409
+			resp.Message = "自定义通道ID已存在，请使用其他ID"
+			return resp, nil
+		}
+
+		// 更新自定义通道ID
+		channel.DeviceChannel.CustomChannelId = customChannelId
+	}
+
+	// 从请求中获取自定义名称
+	if req.Channel.Name != "" {
+		channel.DeviceChannel.CustomName = req.Channel.Name
+	}
+
+	// 记录日志
+	gb.Info("通道信息已更新",
+		"通道ID", req.Id,
+		"自定义通道ID", channel.DeviceChannel.CustomChannelId,
+		"自定义名称", channel.DeviceChannel.CustomName)
+
+	// 返回成功响应
+	resp.Code = 0
+	resp.Message = "通道信息更新成功"
 	return resp, nil
 }

@@ -1609,6 +1609,58 @@ func (x *AlarmInfo) GetAlarmDescription() string {
 	return ""
 }
 
+type UpdateChannelRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"` // 复合ID，格式为 deviceId_channelId
+	Channel       *Channel               `protobuf:"bytes,2,opt,name=channel,proto3" json:"channel,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateChannelRequest) Reset() {
+	*x = UpdateChannelRequest{}
+	mi := &file_gb28181_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateChannelRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateChannelRequest) ProtoMessage() {}
+
+func (x *UpdateChannelRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_gb28181_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateChannelRequest.ProtoReflect.Descriptor instead.
+func (*UpdateChannelRequest) Descriptor() ([]byte, []int) {
+	return file_gb28181_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *UpdateChannelRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *UpdateChannelRequest) GetChannel() *Channel {
+	if x != nil {
+		return x.Channel
+	}
+	return nil
+}
+
 type GetSyncStatusRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	DeviceId      string                 `protobuf:"bytes,1,opt,name=deviceId,proto3" json:"deviceId,omitempty"`
@@ -1618,7 +1670,7 @@ type GetSyncStatusRequest struct {
 
 func (x *GetSyncStatusRequest) Reset() {
 	*x = GetSyncStatusRequest{}
-	mi := &file_gb28181_proto_msgTypes[21]
+	mi := &file_gb28181_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1630,7 +1682,7 @@ func (x *GetSyncStatusRequest) String() string {
 func (*GetSyncStatusRequest) ProtoMessage() {}
 
 func (x *GetSyncStatusRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[21]
+	mi := &file_gb28181_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1643,7 +1695,7 @@ func (x *GetSyncStatusRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSyncStatusRequest.ProtoReflect.Descriptor instead.
 func (*GetSyncStatusRequest) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{21}
+	return file_gb28181_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *GetSyncStatusRequest) GetDeviceId() string {
@@ -1662,7 +1714,7 @@ type GetSubscribeInfoRequest struct {
 
 func (x *GetSubscribeInfoRequest) Reset() {
 	*x = GetSubscribeInfoRequest{}
-	mi := &file_gb28181_proto_msgTypes[22]
+	mi := &file_gb28181_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1674,7 +1726,7 @@ func (x *GetSubscribeInfoRequest) String() string {
 func (*GetSubscribeInfoRequest) ProtoMessage() {}
 
 func (x *GetSubscribeInfoRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[22]
+	mi := &file_gb28181_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1687,7 +1739,7 @@ func (x *GetSubscribeInfoRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSubscribeInfoRequest.ProtoReflect.Descriptor instead.
 func (*GetSubscribeInfoRequest) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{22}
+	return file_gb28181_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *GetSubscribeInfoRequest) GetDeviceId() string {
@@ -1708,7 +1760,7 @@ type SubscribeInfoResponse struct {
 
 func (x *SubscribeInfoResponse) Reset() {
 	*x = SubscribeInfoResponse{}
-	mi := &file_gb28181_proto_msgTypes[23]
+	mi := &file_gb28181_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1720,7 +1772,7 @@ func (x *SubscribeInfoResponse) String() string {
 func (*SubscribeInfoResponse) ProtoMessage() {}
 
 func (x *SubscribeInfoResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[23]
+	mi := &file_gb28181_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1733,7 +1785,7 @@ func (x *SubscribeInfoResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubscribeInfoResponse.ProtoReflect.Descriptor instead.
 func (*SubscribeInfoResponse) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{23}
+	return file_gb28181_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *SubscribeInfoResponse) GetCode() int32 {
@@ -1768,7 +1820,7 @@ type GetSnapRequest struct {
 
 func (x *GetSnapRequest) Reset() {
 	*x = GetSnapRequest{}
-	mi := &file_gb28181_proto_msgTypes[24]
+	mi := &file_gb28181_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1780,7 +1832,7 @@ func (x *GetSnapRequest) String() string {
 func (*GetSnapRequest) ProtoMessage() {}
 
 func (x *GetSnapRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[24]
+	mi := &file_gb28181_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1793,7 +1845,7 @@ func (x *GetSnapRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSnapRequest.ProtoReflect.Descriptor instead.
 func (*GetSnapRequest) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{24}
+	return file_gb28181_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *GetSnapRequest) GetDeviceId() string {
@@ -1828,7 +1880,7 @@ type SnapResponse struct {
 
 func (x *SnapResponse) Reset() {
 	*x = SnapResponse{}
-	mi := &file_gb28181_proto_msgTypes[25]
+	mi := &file_gb28181_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1840,7 +1892,7 @@ func (x *SnapResponse) String() string {
 func (*SnapResponse) ProtoMessage() {}
 
 func (x *SnapResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[25]
+	mi := &file_gb28181_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1853,7 +1905,7 @@ func (x *SnapResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SnapResponse.ProtoReflect.Descriptor instead.
 func (*SnapResponse) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{25}
+	return file_gb28181_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *SnapResponse) GetCode() int32 {
@@ -1886,7 +1938,7 @@ type GetRawChannelRequest struct {
 
 func (x *GetRawChannelRequest) Reset() {
 	*x = GetRawChannelRequest{}
-	mi := &file_gb28181_proto_msgTypes[26]
+	mi := &file_gb28181_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1898,7 +1950,7 @@ func (x *GetRawChannelRequest) String() string {
 func (*GetRawChannelRequest) ProtoMessage() {}
 
 func (x *GetRawChannelRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[26]
+	mi := &file_gb28181_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1911,7 +1963,7 @@ func (x *GetRawChannelRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRawChannelRequest.ProtoReflect.Descriptor instead.
 func (*GetRawChannelRequest) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{26}
+	return file_gb28181_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *GetRawChannelRequest) GetId() int32 {
@@ -1932,7 +1984,7 @@ type DeviceResponse struct {
 
 func (x *DeviceResponse) Reset() {
 	*x = DeviceResponse{}
-	mi := &file_gb28181_proto_msgTypes[27]
+	mi := &file_gb28181_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1944,7 +1996,7 @@ func (x *DeviceResponse) String() string {
 func (*DeviceResponse) ProtoMessage() {}
 
 func (x *DeviceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[27]
+	mi := &file_gb28181_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1957,7 +2009,7 @@ func (x *DeviceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeviceResponse.ProtoReflect.Descriptor instead.
 func (*DeviceResponse) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{27}
+	return file_gb28181_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *DeviceResponse) GetCode() int32 {
@@ -1992,7 +2044,7 @@ type ChannelResponse struct {
 
 func (x *ChannelResponse) Reset() {
 	*x = ChannelResponse{}
-	mi := &file_gb28181_proto_msgTypes[28]
+	mi := &file_gb28181_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2004,7 +2056,7 @@ func (x *ChannelResponse) String() string {
 func (*ChannelResponse) ProtoMessage() {}
 
 func (x *ChannelResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[28]
+	mi := &file_gb28181_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2017,7 +2069,7 @@ func (x *ChannelResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ChannelResponse.ProtoReflect.Descriptor instead.
 func (*ChannelResponse) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{28}
+	return file_gb28181_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *ChannelResponse) GetCode() int32 {
@@ -2051,7 +2103,7 @@ type PlayRequest struct {
 
 func (x *PlayRequest) Reset() {
 	*x = PlayRequest{}
-	mi := &file_gb28181_proto_msgTypes[29]
+	mi := &file_gb28181_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2063,7 +2115,7 @@ func (x *PlayRequest) String() string {
 func (*PlayRequest) ProtoMessage() {}
 
 func (x *PlayRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[29]
+	mi := &file_gb28181_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2076,7 +2128,7 @@ func (x *PlayRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlayRequest.ProtoReflect.Descriptor instead.
 func (*PlayRequest) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{29}
+	return file_gb28181_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *PlayRequest) GetDeviceId() string {
@@ -2106,7 +2158,7 @@ type PlaybackRequest struct {
 
 func (x *PlaybackRequest) Reset() {
 	*x = PlaybackRequest{}
-	mi := &file_gb28181_proto_msgTypes[30]
+	mi := &file_gb28181_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2118,7 +2170,7 @@ func (x *PlaybackRequest) String() string {
 func (*PlaybackRequest) ProtoMessage() {}
 
 func (x *PlaybackRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[30]
+	mi := &file_gb28181_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2131,7 +2183,7 @@ func (x *PlaybackRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlaybackRequest.ProtoReflect.Descriptor instead.
 func (*PlaybackRequest) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{30}
+	return file_gb28181_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *PlaybackRequest) GetDeviceId() string {
@@ -2180,7 +2232,7 @@ type PlayResponse struct {
 
 func (x *PlayResponse) Reset() {
 	*x = PlayResponse{}
-	mi := &file_gb28181_proto_msgTypes[31]
+	mi := &file_gb28181_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2192,7 +2244,7 @@ func (x *PlayResponse) String() string {
 func (*PlayResponse) ProtoMessage() {}
 
 func (x *PlayResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[31]
+	mi := &file_gb28181_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2205,7 +2257,7 @@ func (x *PlayResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlayResponse.ProtoReflect.Descriptor instead.
 func (*PlayResponse) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{31}
+	return file_gb28181_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *PlayResponse) GetCode() int32 {
@@ -2242,7 +2294,7 @@ type StreamInfo struct {
 
 func (x *StreamInfo) Reset() {
 	*x = StreamInfo{}
-	mi := &file_gb28181_proto_msgTypes[32]
+	mi := &file_gb28181_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2254,7 +2306,7 @@ func (x *StreamInfo) String() string {
 func (*StreamInfo) ProtoMessage() {}
 
 func (x *StreamInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[32]
+	mi := &file_gb28181_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2267,7 +2319,7 @@ func (x *StreamInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StreamInfo.ProtoReflect.Descriptor instead.
 func (*StreamInfo) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{32}
+	return file_gb28181_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *StreamInfo) GetStream() string {
@@ -2315,7 +2367,7 @@ type ConvertStopRequest struct {
 
 func (x *ConvertStopRequest) Reset() {
 	*x = ConvertStopRequest{}
-	mi := &file_gb28181_proto_msgTypes[33]
+	mi := &file_gb28181_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2327,7 +2379,7 @@ func (x *ConvertStopRequest) String() string {
 func (*ConvertStopRequest) ProtoMessage() {}
 
 func (x *ConvertStopRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[33]
+	mi := &file_gb28181_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2340,7 +2392,7 @@ func (x *ConvertStopRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConvertStopRequest.ProtoReflect.Descriptor instead.
 func (*ConvertStopRequest) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{33}
+	return file_gb28181_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *ConvertStopRequest) GetKey() string {
@@ -2369,7 +2421,7 @@ type BroadcastRequest struct {
 
 func (x *BroadcastRequest) Reset() {
 	*x = BroadcastRequest{}
-	mi := &file_gb28181_proto_msgTypes[34]
+	mi := &file_gb28181_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2381,7 +2433,7 @@ func (x *BroadcastRequest) String() string {
 func (*BroadcastRequest) ProtoMessage() {}
 
 func (x *BroadcastRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[34]
+	mi := &file_gb28181_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2394,7 +2446,7 @@ func (x *BroadcastRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BroadcastRequest.ProtoReflect.Descriptor instead.
 func (*BroadcastRequest) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{34}
+	return file_gb28181_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *BroadcastRequest) GetDeviceId() string {
@@ -2437,7 +2489,7 @@ type BroadcastResponse struct {
 
 func (x *BroadcastResponse) Reset() {
 	*x = BroadcastResponse{}
-	mi := &file_gb28181_proto_msgTypes[35]
+	mi := &file_gb28181_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2449,7 +2501,7 @@ func (x *BroadcastResponse) String() string {
 func (*BroadcastResponse) ProtoMessage() {}
 
 func (x *BroadcastResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[35]
+	mi := &file_gb28181_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2462,7 +2514,7 @@ func (x *BroadcastResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BroadcastResponse.ProtoReflect.Descriptor instead.
 func (*BroadcastResponse) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{35}
+	return file_gb28181_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *BroadcastResponse) GetCode() int32 {
@@ -2505,7 +2557,7 @@ type SSRCInfo struct {
 
 func (x *SSRCInfo) Reset() {
 	*x = SSRCInfo{}
-	mi := &file_gb28181_proto_msgTypes[36]
+	mi := &file_gb28181_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2517,7 +2569,7 @@ func (x *SSRCInfo) String() string {
 func (*SSRCInfo) ProtoMessage() {}
 
 func (x *SSRCInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[36]
+	mi := &file_gb28181_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2530,7 +2582,7 @@ func (x *SSRCInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SSRCInfo.ProtoReflect.Descriptor instead.
 func (*SSRCInfo) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{36}
+	return file_gb28181_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *SSRCInfo) GetDeviceId() string {
@@ -2573,7 +2625,7 @@ type SSRCListResponse struct {
 
 func (x *SSRCListResponse) Reset() {
 	*x = SSRCListResponse{}
-	mi := &file_gb28181_proto_msgTypes[37]
+	mi := &file_gb28181_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2585,7 +2637,7 @@ func (x *SSRCListResponse) String() string {
 func (*SSRCListResponse) ProtoMessage() {}
 
 func (x *SSRCListResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[37]
+	mi := &file_gb28181_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2598,7 +2650,7 @@ func (x *SSRCListResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SSRCListResponse.ProtoReflect.Descriptor instead.
 func (*SSRCListResponse) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{37}
+	return file_gb28181_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *SSRCListResponse) GetCode() int32 {
@@ -2676,7 +2728,7 @@ type Platform struct {
 
 func (x *Platform) Reset() {
 	*x = Platform{}
-	mi := &file_gb28181_proto_msgTypes[38]
+	mi := &file_gb28181_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2688,7 +2740,7 @@ func (x *Platform) String() string {
 func (*Platform) ProtoMessage() {}
 
 func (x *Platform) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[38]
+	mi := &file_gb28181_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2701,7 +2753,7 @@ func (x *Platform) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Platform.ProtoReflect.Descriptor instead.
 func (*Platform) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{38}
+	return file_gb28181_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *Platform) GetId() uint32 {
@@ -2980,7 +3032,7 @@ type GetPlatformRequest struct {
 
 func (x *GetPlatformRequest) Reset() {
 	*x = GetPlatformRequest{}
-	mi := &file_gb28181_proto_msgTypes[39]
+	mi := &file_gb28181_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2992,7 +3044,7 @@ func (x *GetPlatformRequest) String() string {
 func (*GetPlatformRequest) ProtoMessage() {}
 
 func (x *GetPlatformRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[39]
+	mi := &file_gb28181_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3005,7 +3057,7 @@ func (x *GetPlatformRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPlatformRequest.ProtoReflect.Descriptor instead.
 func (*GetPlatformRequest) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{39}
+	return file_gb28181_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *GetPlatformRequest) GetId() int32 {
@@ -3025,7 +3077,7 @@ type DeletePlatformRequest struct {
 
 func (x *DeletePlatformRequest) Reset() {
 	*x = DeletePlatformRequest{}
-	mi := &file_gb28181_proto_msgTypes[40]
+	mi := &file_gb28181_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3037,7 +3089,7 @@ func (x *DeletePlatformRequest) String() string {
 func (*DeletePlatformRequest) ProtoMessage() {}
 
 func (x *DeletePlatformRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[40]
+	mi := &file_gb28181_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3050,7 +3102,7 @@ func (x *DeletePlatformRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeletePlatformRequest.ProtoReflect.Descriptor instead.
 func (*DeletePlatformRequest) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{40}
+	return file_gb28181_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *DeletePlatformRequest) GetId() int32 {
@@ -3073,7 +3125,7 @@ type ListPlatformsRequest struct {
 
 func (x *ListPlatformsRequest) Reset() {
 	*x = ListPlatformsRequest{}
-	mi := &file_gb28181_proto_msgTypes[41]
+	mi := &file_gb28181_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3085,7 +3137,7 @@ func (x *ListPlatformsRequest) String() string {
 func (*ListPlatformsRequest) ProtoMessage() {}
 
 func (x *ListPlatformsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[41]
+	mi := &file_gb28181_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3098,7 +3150,7 @@ func (x *ListPlatformsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPlatformsRequest.ProtoReflect.Descriptor instead.
 func (*ListPlatformsRequest) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{41}
+	return file_gb28181_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *ListPlatformsRequest) GetPage() int32 {
@@ -3141,7 +3193,7 @@ type PlatformResponse struct {
 
 func (x *PlatformResponse) Reset() {
 	*x = PlatformResponse{}
-	mi := &file_gb28181_proto_msgTypes[42]
+	mi := &file_gb28181_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3153,7 +3205,7 @@ func (x *PlatformResponse) String() string {
 func (*PlatformResponse) ProtoMessage() {}
 
 func (x *PlatformResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[42]
+	mi := &file_gb28181_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3166,7 +3218,7 @@ func (x *PlatformResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlatformResponse.ProtoReflect.Descriptor instead.
 func (*PlatformResponse) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{42}
+	return file_gb28181_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *PlatformResponse) GetCode() int32 {
@@ -3203,7 +3255,7 @@ type PlatformsPageInfo struct {
 
 func (x *PlatformsPageInfo) Reset() {
 	*x = PlatformsPageInfo{}
-	mi := &file_gb28181_proto_msgTypes[43]
+	mi := &file_gb28181_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3215,7 +3267,7 @@ func (x *PlatformsPageInfo) String() string {
 func (*PlatformsPageInfo) ProtoMessage() {}
 
 func (x *PlatformsPageInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[43]
+	mi := &file_gb28181_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3228,7 +3280,7 @@ func (x *PlatformsPageInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlatformsPageInfo.ProtoReflect.Descriptor instead.
 func (*PlatformsPageInfo) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{43}
+	return file_gb28181_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *PlatformsPageInfo) GetCode() int32 {
@@ -3272,7 +3324,7 @@ type QueryRecordRequest struct {
 
 func (x *QueryRecordRequest) Reset() {
 	*x = QueryRecordRequest{}
-	mi := &file_gb28181_proto_msgTypes[44]
+	mi := &file_gb28181_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3284,7 +3336,7 @@ func (x *QueryRecordRequest) String() string {
 func (*QueryRecordRequest) ProtoMessage() {}
 
 func (x *QueryRecordRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[44]
+	mi := &file_gb28181_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3297,7 +3349,7 @@ func (x *QueryRecordRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QueryRecordRequest.ProtoReflect.Descriptor instead.
 func (*QueryRecordRequest) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{44}
+	return file_gb28181_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *QueryRecordRequest) GetDeviceId() string {
@@ -3353,7 +3405,7 @@ type QueryRecordResponse struct {
 
 func (x *QueryRecordResponse) Reset() {
 	*x = QueryRecordResponse{}
-	mi := &file_gb28181_proto_msgTypes[45]
+	mi := &file_gb28181_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3365,7 +3417,7 @@ func (x *QueryRecordResponse) String() string {
 func (*QueryRecordResponse) ProtoMessage() {}
 
 func (x *QueryRecordResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[45]
+	mi := &file_gb28181_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3378,7 +3430,7 @@ func (x *QueryRecordResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QueryRecordResponse.ProtoReflect.Descriptor instead.
 func (*QueryRecordResponse) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{45}
+	return file_gb28181_proto_rawDescGZIP(), []int{46}
 }
 
 func (x *QueryRecordResponse) GetCode() int32 {
@@ -3468,7 +3520,7 @@ type RecordItem struct {
 
 func (x *RecordItem) Reset() {
 	*x = RecordItem{}
-	mi := &file_gb28181_proto_msgTypes[46]
+	mi := &file_gb28181_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3480,7 +3532,7 @@ func (x *RecordItem) String() string {
 func (*RecordItem) ProtoMessage() {}
 
 func (x *RecordItem) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[46]
+	mi := &file_gb28181_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3493,7 +3545,7 @@ func (x *RecordItem) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RecordItem.ProtoReflect.Descriptor instead.
 func (*RecordItem) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{46}
+	return file_gb28181_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *RecordItem) GetDeviceId() string {
@@ -3570,7 +3622,7 @@ type PtzControlRequest struct {
 
 func (x *PtzControlRequest) Reset() {
 	*x = PtzControlRequest{}
-	mi := &file_gb28181_proto_msgTypes[47]
+	mi := &file_gb28181_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3582,7 +3634,7 @@ func (x *PtzControlRequest) String() string {
 func (*PtzControlRequest) ProtoMessage() {}
 
 func (x *PtzControlRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[47]
+	mi := &file_gb28181_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3595,7 +3647,7 @@ func (x *PtzControlRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PtzControlRequest.ProtoReflect.Descriptor instead.
 func (*PtzControlRequest) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{47}
+	return file_gb28181_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *PtzControlRequest) GetDeviceId() string {
@@ -3631,7 +3683,7 @@ type IrisControlRequest struct {
 
 func (x *IrisControlRequest) Reset() {
 	*x = IrisControlRequest{}
-	mi := &file_gb28181_proto_msgTypes[48]
+	mi := &file_gb28181_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3643,7 +3695,7 @@ func (x *IrisControlRequest) String() string {
 func (*IrisControlRequest) ProtoMessage() {}
 
 func (x *IrisControlRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[48]
+	mi := &file_gb28181_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3656,7 +3708,7 @@ func (x *IrisControlRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IrisControlRequest.ProtoReflect.Descriptor instead.
 func (*IrisControlRequest) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{48}
+	return file_gb28181_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *IrisControlRequest) GetDeviceId() string {
@@ -3699,7 +3751,7 @@ type FocusControlRequest struct {
 
 func (x *FocusControlRequest) Reset() {
 	*x = FocusControlRequest{}
-	mi := &file_gb28181_proto_msgTypes[49]
+	mi := &file_gb28181_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3711,7 +3763,7 @@ func (x *FocusControlRequest) String() string {
 func (*FocusControlRequest) ProtoMessage() {}
 
 func (x *FocusControlRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[49]
+	mi := &file_gb28181_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3724,7 +3776,7 @@ func (x *FocusControlRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FocusControlRequest.ProtoReflect.Descriptor instead.
 func (*FocusControlRequest) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{49}
+	return file_gb28181_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *FocusControlRequest) GetDeviceId() string {
@@ -3766,7 +3818,7 @@ type PresetRequest struct {
 
 func (x *PresetRequest) Reset() {
 	*x = PresetRequest{}
-	mi := &file_gb28181_proto_msgTypes[50]
+	mi := &file_gb28181_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3778,7 +3830,7 @@ func (x *PresetRequest) String() string {
 func (*PresetRequest) ProtoMessage() {}
 
 func (x *PresetRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[50]
+	mi := &file_gb28181_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3791,7 +3843,7 @@ func (x *PresetRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PresetRequest.ProtoReflect.Descriptor instead.
 func (*PresetRequest) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{50}
+	return file_gb28181_proto_rawDescGZIP(), []int{51}
 }
 
 func (x *PresetRequest) GetDeviceId() string {
@@ -3826,7 +3878,7 @@ type PresetResponse struct {
 
 func (x *PresetResponse) Reset() {
 	*x = PresetResponse{}
-	mi := &file_gb28181_proto_msgTypes[51]
+	mi := &file_gb28181_proto_msgTypes[52]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3838,7 +3890,7 @@ func (x *PresetResponse) String() string {
 func (*PresetResponse) ProtoMessage() {}
 
 func (x *PresetResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[51]
+	mi := &file_gb28181_proto_msgTypes[52]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3851,7 +3903,7 @@ func (x *PresetResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PresetResponse.ProtoReflect.Descriptor instead.
 func (*PresetResponse) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{51}
+	return file_gb28181_proto_rawDescGZIP(), []int{52}
 }
 
 func (x *PresetResponse) GetCode() int32 {
@@ -3887,7 +3939,7 @@ type CruisePointRequest struct {
 
 func (x *CruisePointRequest) Reset() {
 	*x = CruisePointRequest{}
-	mi := &file_gb28181_proto_msgTypes[52]
+	mi := &file_gb28181_proto_msgTypes[53]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3899,7 +3951,7 @@ func (x *CruisePointRequest) String() string {
 func (*CruisePointRequest) ProtoMessage() {}
 
 func (x *CruisePointRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[52]
+	mi := &file_gb28181_proto_msgTypes[53]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3912,7 +3964,7 @@ func (x *CruisePointRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CruisePointRequest.ProtoReflect.Descriptor instead.
 func (*CruisePointRequest) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{52}
+	return file_gb28181_proto_rawDescGZIP(), []int{53}
 }
 
 func (x *CruisePointRequest) GetDeviceId() string {
@@ -3955,7 +4007,7 @@ type CruiseSpeedRequest struct {
 
 func (x *CruiseSpeedRequest) Reset() {
 	*x = CruiseSpeedRequest{}
-	mi := &file_gb28181_proto_msgTypes[53]
+	mi := &file_gb28181_proto_msgTypes[54]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3967,7 +4019,7 @@ func (x *CruiseSpeedRequest) String() string {
 func (*CruiseSpeedRequest) ProtoMessage() {}
 
 func (x *CruiseSpeedRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[53]
+	mi := &file_gb28181_proto_msgTypes[54]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3980,7 +4032,7 @@ func (x *CruiseSpeedRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CruiseSpeedRequest.ProtoReflect.Descriptor instead.
 func (*CruiseSpeedRequest) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{53}
+	return file_gb28181_proto_rawDescGZIP(), []int{54}
 }
 
 func (x *CruiseSpeedRequest) GetDeviceId() string {
@@ -4023,7 +4075,7 @@ type CruiseTimeRequest struct {
 
 func (x *CruiseTimeRequest) Reset() {
 	*x = CruiseTimeRequest{}
-	mi := &file_gb28181_proto_msgTypes[54]
+	mi := &file_gb28181_proto_msgTypes[55]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4035,7 +4087,7 @@ func (x *CruiseTimeRequest) String() string {
 func (*CruiseTimeRequest) ProtoMessage() {}
 
 func (x *CruiseTimeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[54]
+	mi := &file_gb28181_proto_msgTypes[55]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4048,7 +4100,7 @@ func (x *CruiseTimeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CruiseTimeRequest.ProtoReflect.Descriptor instead.
 func (*CruiseTimeRequest) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{54}
+	return file_gb28181_proto_rawDescGZIP(), []int{55}
 }
 
 func (x *CruiseTimeRequest) GetDeviceId() string {
@@ -4090,7 +4142,7 @@ type CruiseRequest struct {
 
 func (x *CruiseRequest) Reset() {
 	*x = CruiseRequest{}
-	mi := &file_gb28181_proto_msgTypes[55]
+	mi := &file_gb28181_proto_msgTypes[56]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4102,7 +4154,7 @@ func (x *CruiseRequest) String() string {
 func (*CruiseRequest) ProtoMessage() {}
 
 func (x *CruiseRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[55]
+	mi := &file_gb28181_proto_msgTypes[56]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4115,7 +4167,7 @@ func (x *CruiseRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CruiseRequest.ProtoReflect.Descriptor instead.
 func (*CruiseRequest) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{55}
+	return file_gb28181_proto_rawDescGZIP(), []int{56}
 }
 
 func (x *CruiseRequest) GetDeviceId() string {
@@ -4150,7 +4202,7 @@ type ScanRequest struct {
 
 func (x *ScanRequest) Reset() {
 	*x = ScanRequest{}
-	mi := &file_gb28181_proto_msgTypes[56]
+	mi := &file_gb28181_proto_msgTypes[57]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4162,7 +4214,7 @@ func (x *ScanRequest) String() string {
 func (*ScanRequest) ProtoMessage() {}
 
 func (x *ScanRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[56]
+	mi := &file_gb28181_proto_msgTypes[57]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4175,7 +4227,7 @@ func (x *ScanRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ScanRequest.ProtoReflect.Descriptor instead.
 func (*ScanRequest) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{56}
+	return file_gb28181_proto_rawDescGZIP(), []int{57}
 }
 
 func (x *ScanRequest) GetDeviceId() string {
@@ -4211,7 +4263,7 @@ type ScanSpeedRequest struct {
 
 func (x *ScanSpeedRequest) Reset() {
 	*x = ScanSpeedRequest{}
-	mi := &file_gb28181_proto_msgTypes[57]
+	mi := &file_gb28181_proto_msgTypes[58]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4223,7 +4275,7 @@ func (x *ScanSpeedRequest) String() string {
 func (*ScanSpeedRequest) ProtoMessage() {}
 
 func (x *ScanSpeedRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[57]
+	mi := &file_gb28181_proto_msgTypes[58]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4236,7 +4288,7 @@ func (x *ScanSpeedRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ScanSpeedRequest.ProtoReflect.Descriptor instead.
 func (*ScanSpeedRequest) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{57}
+	return file_gb28181_proto_rawDescGZIP(), []int{58}
 }
 
 func (x *ScanSpeedRequest) GetDeviceId() string {
@@ -4278,7 +4330,7 @@ type WiperControlRequest struct {
 
 func (x *WiperControlRequest) Reset() {
 	*x = WiperControlRequest{}
-	mi := &file_gb28181_proto_msgTypes[58]
+	mi := &file_gb28181_proto_msgTypes[59]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4290,7 +4342,7 @@ func (x *WiperControlRequest) String() string {
 func (*WiperControlRequest) ProtoMessage() {}
 
 func (x *WiperControlRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[58]
+	mi := &file_gb28181_proto_msgTypes[59]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4303,7 +4355,7 @@ func (x *WiperControlRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WiperControlRequest.ProtoReflect.Descriptor instead.
 func (*WiperControlRequest) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{58}
+	return file_gb28181_proto_rawDescGZIP(), []int{59}
 }
 
 func (x *WiperControlRequest) GetDeviceId() string {
@@ -4339,7 +4391,7 @@ type AuxiliaryControlRequest struct {
 
 func (x *AuxiliaryControlRequest) Reset() {
 	*x = AuxiliaryControlRequest{}
-	mi := &file_gb28181_proto_msgTypes[59]
+	mi := &file_gb28181_proto_msgTypes[60]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4351,7 +4403,7 @@ func (x *AuxiliaryControlRequest) String() string {
 func (*AuxiliaryControlRequest) ProtoMessage() {}
 
 func (x *AuxiliaryControlRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[59]
+	mi := &file_gb28181_proto_msgTypes[60]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4364,7 +4416,7 @@ func (x *AuxiliaryControlRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AuxiliaryControlRequest.ProtoReflect.Descriptor instead.
 func (*AuxiliaryControlRequest) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{59}
+	return file_gb28181_proto_rawDescGZIP(), []int{60}
 }
 
 func (x *AuxiliaryControlRequest) GetDeviceId() string {
@@ -4405,7 +4457,7 @@ type TestSipRequest struct {
 
 func (x *TestSipRequest) Reset() {
 	*x = TestSipRequest{}
-	mi := &file_gb28181_proto_msgTypes[60]
+	mi := &file_gb28181_proto_msgTypes[61]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4417,7 +4469,7 @@ func (x *TestSipRequest) String() string {
 func (*TestSipRequest) ProtoMessage() {}
 
 func (x *TestSipRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[60]
+	mi := &file_gb28181_proto_msgTypes[61]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4430,7 +4482,7 @@ func (x *TestSipRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TestSipRequest.ProtoReflect.Descriptor instead.
 func (*TestSipRequest) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{60}
+	return file_gb28181_proto_rawDescGZIP(), []int{61}
 }
 
 func (x *TestSipRequest) GetTestParam() string {
@@ -4451,7 +4503,7 @@ type TestSipResponse struct {
 
 func (x *TestSipResponse) Reset() {
 	*x = TestSipResponse{}
-	mi := &file_gb28181_proto_msgTypes[61]
+	mi := &file_gb28181_proto_msgTypes[62]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4463,7 +4515,7 @@ func (x *TestSipResponse) String() string {
 func (*TestSipResponse) ProtoMessage() {}
 
 func (x *TestSipResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[61]
+	mi := &file_gb28181_proto_msgTypes[62]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4476,7 +4528,7 @@ func (x *TestSipResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TestSipResponse.ProtoReflect.Descriptor instead.
 func (*TestSipResponse) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{61}
+	return file_gb28181_proto_rawDescGZIP(), []int{62}
 }
 
 func (x *TestSipResponse) GetCode() int32 {
@@ -4515,7 +4567,7 @@ type SearchAlarmsRequest struct {
 
 func (x *SearchAlarmsRequest) Reset() {
 	*x = SearchAlarmsRequest{}
-	mi := &file_gb28181_proto_msgTypes[62]
+	mi := &file_gb28181_proto_msgTypes[63]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4527,7 +4579,7 @@ func (x *SearchAlarmsRequest) String() string {
 func (*SearchAlarmsRequest) ProtoMessage() {}
 
 func (x *SearchAlarmsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[62]
+	mi := &file_gb28181_proto_msgTypes[63]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4540,7 +4592,7 @@ func (x *SearchAlarmsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SearchAlarmsRequest.ProtoReflect.Descriptor instead.
 func (*SearchAlarmsRequest) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{62}
+	return file_gb28181_proto_rawDescGZIP(), []int{63}
 }
 
 func (x *SearchAlarmsRequest) GetDeviceId() string {
@@ -4598,7 +4650,7 @@ type SearchAlarmsResponse struct {
 
 func (x *SearchAlarmsResponse) Reset() {
 	*x = SearchAlarmsResponse{}
-	mi := &file_gb28181_proto_msgTypes[63]
+	mi := &file_gb28181_proto_msgTypes[64]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4610,7 +4662,7 @@ func (x *SearchAlarmsResponse) String() string {
 func (*SearchAlarmsResponse) ProtoMessage() {}
 
 func (x *SearchAlarmsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[63]
+	mi := &file_gb28181_proto_msgTypes[64]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4623,7 +4675,7 @@ func (x *SearchAlarmsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SearchAlarmsResponse.ProtoReflect.Descriptor instead.
 func (*SearchAlarmsResponse) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{63}
+	return file_gb28181_proto_rawDescGZIP(), []int{64}
 }
 
 func (x *SearchAlarmsResponse) GetCode() int32 {
@@ -4678,7 +4730,7 @@ type AlarmRecord struct {
 
 func (x *AlarmRecord) Reset() {
 	*x = AlarmRecord{}
-	mi := &file_gb28181_proto_msgTypes[64]
+	mi := &file_gb28181_proto_msgTypes[65]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4690,7 +4742,7 @@ func (x *AlarmRecord) String() string {
 func (*AlarmRecord) ProtoMessage() {}
 
 func (x *AlarmRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[64]
+	mi := &file_gb28181_proto_msgTypes[65]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4703,7 +4755,7 @@ func (x *AlarmRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AlarmRecord.ProtoReflect.Descriptor instead.
 func (*AlarmRecord) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{64}
+	return file_gb28181_proto_rawDescGZIP(), []int{65}
 }
 
 func (x *AlarmRecord) GetId() string {
@@ -4822,7 +4874,7 @@ type AddPlatformChannelRequest struct {
 
 func (x *AddPlatformChannelRequest) Reset() {
 	*x = AddPlatformChannelRequest{}
-	mi := &file_gb28181_proto_msgTypes[65]
+	mi := &file_gb28181_proto_msgTypes[66]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4834,7 +4886,7 @@ func (x *AddPlatformChannelRequest) String() string {
 func (*AddPlatformChannelRequest) ProtoMessage() {}
 
 func (x *AddPlatformChannelRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[65]
+	mi := &file_gb28181_proto_msgTypes[66]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4847,7 +4899,7 @@ func (x *AddPlatformChannelRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddPlatformChannelRequest.ProtoReflect.Descriptor instead.
 func (*AddPlatformChannelRequest) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{65}
+	return file_gb28181_proto_rawDescGZIP(), []int{66}
 }
 
 func (x *AddPlatformChannelRequest) GetPlatformId() string {
@@ -4876,7 +4928,7 @@ type RecordingRequest struct {
 
 func (x *RecordingRequest) Reset() {
 	*x = RecordingRequest{}
-	mi := &file_gb28181_proto_msgTypes[66]
+	mi := &file_gb28181_proto_msgTypes[67]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4888,7 +4940,7 @@ func (x *RecordingRequest) String() string {
 func (*RecordingRequest) ProtoMessage() {}
 
 func (x *RecordingRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[66]
+	mi := &file_gb28181_proto_msgTypes[67]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4901,7 +4953,7 @@ func (x *RecordingRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RecordingRequest.ProtoReflect.Descriptor instead.
 func (*RecordingRequest) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{66}
+	return file_gb28181_proto_rawDescGZIP(), []int{67}
 }
 
 func (x *RecordingRequest) GetCmdType() string {
@@ -4935,7 +4987,7 @@ type UploadJpegRequest struct {
 
 func (x *UploadJpegRequest) Reset() {
 	*x = UploadJpegRequest{}
-	mi := &file_gb28181_proto_msgTypes[67]
+	mi := &file_gb28181_proto_msgTypes[68]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4947,7 +4999,7 @@ func (x *UploadJpegRequest) String() string {
 func (*UploadJpegRequest) ProtoMessage() {}
 
 func (x *UploadJpegRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[67]
+	mi := &file_gb28181_proto_msgTypes[68]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4960,7 +5012,7 @@ func (x *UploadJpegRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UploadJpegRequest.ProtoReflect.Descriptor instead.
 func (*UploadJpegRequest) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{67}
+	return file_gb28181_proto_rawDescGZIP(), []int{68}
 }
 
 func (x *UploadJpegRequest) GetImageData() []byte {
@@ -4987,7 +5039,7 @@ type Group struct {
 
 func (x *Group) Reset() {
 	*x = Group{}
-	mi := &file_gb28181_proto_msgTypes[68]
+	mi := &file_gb28181_proto_msgTypes[69]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4999,7 +5051,7 @@ func (x *Group) String() string {
 func (*Group) ProtoMessage() {}
 
 func (x *Group) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[68]
+	mi := &file_gb28181_proto_msgTypes[69]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5012,7 +5064,7 @@ func (x *Group) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Group.ProtoReflect.Descriptor instead.
 func (*Group) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{68}
+	return file_gb28181_proto_rawDescGZIP(), []int{69}
 }
 
 func (x *Group) GetId() int32 {
@@ -5081,7 +5133,7 @@ type GetGroupsRequest struct {
 
 func (x *GetGroupsRequest) Reset() {
 	*x = GetGroupsRequest{}
-	mi := &file_gb28181_proto_msgTypes[69]
+	mi := &file_gb28181_proto_msgTypes[70]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5093,7 +5145,7 @@ func (x *GetGroupsRequest) String() string {
 func (*GetGroupsRequest) ProtoMessage() {}
 
 func (x *GetGroupsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[69]
+	mi := &file_gb28181_proto_msgTypes[70]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5106,7 +5158,7 @@ func (x *GetGroupsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetGroupsRequest.ProtoReflect.Descriptor instead.
 func (*GetGroupsRequest) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{69}
+	return file_gb28181_proto_rawDescGZIP(), []int{70}
 }
 
 func (x *GetGroupsRequest) GetPid() int32 {
@@ -5126,7 +5178,7 @@ type DeleteGroupRequest struct {
 
 func (x *DeleteGroupRequest) Reset() {
 	*x = DeleteGroupRequest{}
-	mi := &file_gb28181_proto_msgTypes[70]
+	mi := &file_gb28181_proto_msgTypes[71]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5138,7 +5190,7 @@ func (x *DeleteGroupRequest) String() string {
 func (*DeleteGroupRequest) ProtoMessage() {}
 
 func (x *DeleteGroupRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[70]
+	mi := &file_gb28181_proto_msgTypes[71]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5151,7 +5203,7 @@ func (x *DeleteGroupRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteGroupRequest.ProtoReflect.Descriptor instead.
 func (*DeleteGroupRequest) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{70}
+	return file_gb28181_proto_rawDescGZIP(), []int{71}
 }
 
 func (x *DeleteGroupRequest) GetId() int32 {
@@ -5173,7 +5225,7 @@ type GroupResponse struct {
 
 func (x *GroupResponse) Reset() {
 	*x = GroupResponse{}
-	mi := &file_gb28181_proto_msgTypes[71]
+	mi := &file_gb28181_proto_msgTypes[72]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5185,7 +5237,7 @@ func (x *GroupResponse) String() string {
 func (*GroupResponse) ProtoMessage() {}
 
 func (x *GroupResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[71]
+	mi := &file_gb28181_proto_msgTypes[72]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5198,7 +5250,7 @@ func (x *GroupResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GroupResponse.ProtoReflect.Descriptor instead.
 func (*GroupResponse) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{71}
+	return file_gb28181_proto_rawDescGZIP(), []int{72}
 }
 
 func (x *GroupResponse) GetCode() int32 {
@@ -5234,7 +5286,7 @@ type GroupsListResponse struct {
 
 func (x *GroupsListResponse) Reset() {
 	*x = GroupsListResponse{}
-	mi := &file_gb28181_proto_msgTypes[72]
+	mi := &file_gb28181_proto_msgTypes[73]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5246,7 +5298,7 @@ func (x *GroupsListResponse) String() string {
 func (*GroupsListResponse) ProtoMessage() {}
 
 func (x *GroupsListResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[72]
+	mi := &file_gb28181_proto_msgTypes[73]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5259,7 +5311,7 @@ func (x *GroupsListResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GroupsListResponse.ProtoReflect.Descriptor instead.
 func (*GroupsListResponse) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{72}
+	return file_gb28181_proto_rawDescGZIP(), []int{73}
 }
 
 func (x *GroupsListResponse) GetCode() int32 {
@@ -5296,7 +5348,7 @@ type GroupsPageInfo struct {
 
 func (x *GroupsPageInfo) Reset() {
 	*x = GroupsPageInfo{}
-	mi := &file_gb28181_proto_msgTypes[73]
+	mi := &file_gb28181_proto_msgTypes[74]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5308,7 +5360,7 @@ func (x *GroupsPageInfo) String() string {
 func (*GroupsPageInfo) ProtoMessage() {}
 
 func (x *GroupsPageInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[73]
+	mi := &file_gb28181_proto_msgTypes[74]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5321,7 +5373,7 @@ func (x *GroupsPageInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GroupsPageInfo.ProtoReflect.Descriptor instead.
 func (*GroupsPageInfo) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{73}
+	return file_gb28181_proto_rawDescGZIP(), []int{74}
 }
 
 func (x *GroupsPageInfo) GetCode() int32 {
@@ -5364,7 +5416,7 @@ type ChannelInfo struct {
 
 func (x *ChannelInfo) Reset() {
 	*x = ChannelInfo{}
-	mi := &file_gb28181_proto_msgTypes[74]
+	mi := &file_gb28181_proto_msgTypes[75]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5376,7 +5428,7 @@ func (x *ChannelInfo) String() string {
 func (*ChannelInfo) ProtoMessage() {}
 
 func (x *ChannelInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[74]
+	mi := &file_gb28181_proto_msgTypes[75]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5389,7 +5441,7 @@ func (x *ChannelInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ChannelInfo.ProtoReflect.Descriptor instead.
 func (*ChannelInfo) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{74}
+	return file_gb28181_proto_rawDescGZIP(), []int{75}
 }
 
 func (x *ChannelInfo) GetChannelId() string {
@@ -5417,7 +5469,7 @@ type AddGroupChannelRequest struct {
 
 func (x *AddGroupChannelRequest) Reset() {
 	*x = AddGroupChannelRequest{}
-	mi := &file_gb28181_proto_msgTypes[75]
+	mi := &file_gb28181_proto_msgTypes[76]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5429,7 +5481,7 @@ func (x *AddGroupChannelRequest) String() string {
 func (*AddGroupChannelRequest) ProtoMessage() {}
 
 func (x *AddGroupChannelRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[75]
+	mi := &file_gb28181_proto_msgTypes[76]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5442,7 +5494,7 @@ func (x *AddGroupChannelRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddGroupChannelRequest.ProtoReflect.Descriptor instead.
 func (*AddGroupChannelRequest) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{75}
+	return file_gb28181_proto_rawDescGZIP(), []int{76}
 }
 
 func (x *AddGroupChannelRequest) GetGroupId() int32 {
@@ -5472,7 +5524,7 @@ type DeleteGroupChannelRequest struct {
 
 func (x *DeleteGroupChannelRequest) Reset() {
 	*x = DeleteGroupChannelRequest{}
-	mi := &file_gb28181_proto_msgTypes[76]
+	mi := &file_gb28181_proto_msgTypes[77]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5484,7 +5536,7 @@ func (x *DeleteGroupChannelRequest) String() string {
 func (*DeleteGroupChannelRequest) ProtoMessage() {}
 
 func (x *DeleteGroupChannelRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[76]
+	mi := &file_gb28181_proto_msgTypes[77]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5497,7 +5549,7 @@ func (x *DeleteGroupChannelRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteGroupChannelRequest.ProtoReflect.Descriptor instead.
 func (*DeleteGroupChannelRequest) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{76}
+	return file_gb28181_proto_rawDescGZIP(), []int{77}
 }
 
 func (x *DeleteGroupChannelRequest) GetId() int32 {
@@ -5541,7 +5593,7 @@ type GetGroupChannelsRequest struct {
 
 func (x *GetGroupChannelsRequest) Reset() {
 	*x = GetGroupChannelsRequest{}
-	mi := &file_gb28181_proto_msgTypes[77]
+	mi := &file_gb28181_proto_msgTypes[78]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5553,7 +5605,7 @@ func (x *GetGroupChannelsRequest) String() string {
 func (*GetGroupChannelsRequest) ProtoMessage() {}
 
 func (x *GetGroupChannelsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[77]
+	mi := &file_gb28181_proto_msgTypes[78]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5566,7 +5618,7 @@ func (x *GetGroupChannelsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetGroupChannelsRequest.ProtoReflect.Descriptor instead.
 func (*GetGroupChannelsRequest) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{77}
+	return file_gb28181_proto_rawDescGZIP(), []int{78}
 }
 
 func (x *GetGroupChannelsRequest) GetGroupId() int32 {
@@ -5615,7 +5667,7 @@ type GroupChannel struct {
 
 func (x *GroupChannel) Reset() {
 	*x = GroupChannel{}
-	mi := &file_gb28181_proto_msgTypes[78]
+	mi := &file_gb28181_proto_msgTypes[79]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5627,7 +5679,7 @@ func (x *GroupChannel) String() string {
 func (*GroupChannel) ProtoMessage() {}
 
 func (x *GroupChannel) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[78]
+	mi := &file_gb28181_proto_msgTypes[79]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5640,7 +5692,7 @@ func (x *GroupChannel) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GroupChannel.ProtoReflect.Descriptor instead.
 func (*GroupChannel) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{78}
+	return file_gb28181_proto_rawDescGZIP(), []int{79}
 }
 
 func (x *GroupChannel) GetId() int32 {
@@ -5719,7 +5771,7 @@ type GroupChannelsResponse struct {
 
 func (x *GroupChannelsResponse) Reset() {
 	*x = GroupChannelsResponse{}
-	mi := &file_gb28181_proto_msgTypes[79]
+	mi := &file_gb28181_proto_msgTypes[80]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5731,7 +5783,7 @@ func (x *GroupChannelsResponse) String() string {
 func (*GroupChannelsResponse) ProtoMessage() {}
 
 func (x *GroupChannelsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[79]
+	mi := &file_gb28181_proto_msgTypes[80]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5744,7 +5796,7 @@ func (x *GroupChannelsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GroupChannelsResponse.ProtoReflect.Descriptor instead.
 func (*GroupChannelsResponse) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{79}
+	return file_gb28181_proto_rawDescGZIP(), []int{80}
 }
 
 func (x *GroupChannelsResponse) GetCode() int32 {
@@ -5785,7 +5837,7 @@ type GroupChannelsData struct {
 
 func (x *GroupChannelsData) Reset() {
 	*x = GroupChannelsData{}
-	mi := &file_gb28181_proto_msgTypes[80]
+	mi := &file_gb28181_proto_msgTypes[81]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5797,7 +5849,7 @@ func (x *GroupChannelsData) String() string {
 func (*GroupChannelsData) ProtoMessage() {}
 
 func (x *GroupChannelsData) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[80]
+	mi := &file_gb28181_proto_msgTypes[81]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5810,7 +5862,7 @@ func (x *GroupChannelsData) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GroupChannelsData.ProtoReflect.Descriptor instead.
 func (*GroupChannelsData) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{80}
+	return file_gb28181_proto_rawDescGZIP(), []int{81}
 }
 
 func (x *GroupChannelsData) GetList() []*GroupChannel {
@@ -5837,7 +5889,7 @@ type PlaybackPauseRequest struct {
 
 func (x *PlaybackPauseRequest) Reset() {
 	*x = PlaybackPauseRequest{}
-	mi := &file_gb28181_proto_msgTypes[81]
+	mi := &file_gb28181_proto_msgTypes[82]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5849,7 +5901,7 @@ func (x *PlaybackPauseRequest) String() string {
 func (*PlaybackPauseRequest) ProtoMessage() {}
 
 func (x *PlaybackPauseRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[81]
+	mi := &file_gb28181_proto_msgTypes[82]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5862,7 +5914,7 @@ func (x *PlaybackPauseRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlaybackPauseRequest.ProtoReflect.Descriptor instead.
 func (*PlaybackPauseRequest) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{81}
+	return file_gb28181_proto_rawDescGZIP(), []int{82}
 }
 
 func (x *PlaybackPauseRequest) GetStreamPath() string {
@@ -5882,7 +5934,7 @@ type PlaybackResumeRequest struct {
 
 func (x *PlaybackResumeRequest) Reset() {
 	*x = PlaybackResumeRequest{}
-	mi := &file_gb28181_proto_msgTypes[82]
+	mi := &file_gb28181_proto_msgTypes[83]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5894,7 +5946,7 @@ func (x *PlaybackResumeRequest) String() string {
 func (*PlaybackResumeRequest) ProtoMessage() {}
 
 func (x *PlaybackResumeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[82]
+	mi := &file_gb28181_proto_msgTypes[83]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5907,7 +5959,7 @@ func (x *PlaybackResumeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlaybackResumeRequest.ProtoReflect.Descriptor instead.
 func (*PlaybackResumeRequest) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{82}
+	return file_gb28181_proto_rawDescGZIP(), []int{83}
 }
 
 func (x *PlaybackResumeRequest) GetStreamPath() string {
@@ -5928,7 +5980,7 @@ type PlaybackSeekRequest struct {
 
 func (x *PlaybackSeekRequest) Reset() {
 	*x = PlaybackSeekRequest{}
-	mi := &file_gb28181_proto_msgTypes[83]
+	mi := &file_gb28181_proto_msgTypes[84]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5940,7 +5992,7 @@ func (x *PlaybackSeekRequest) String() string {
 func (*PlaybackSeekRequest) ProtoMessage() {}
 
 func (x *PlaybackSeekRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[83]
+	mi := &file_gb28181_proto_msgTypes[84]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5953,7 +6005,7 @@ func (x *PlaybackSeekRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlaybackSeekRequest.ProtoReflect.Descriptor instead.
 func (*PlaybackSeekRequest) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{83}
+	return file_gb28181_proto_rawDescGZIP(), []int{84}
 }
 
 func (x *PlaybackSeekRequest) GetStreamPath() string {
@@ -5981,7 +6033,7 @@ type PlaybackSpeedRequest struct {
 
 func (x *PlaybackSpeedRequest) Reset() {
 	*x = PlaybackSpeedRequest{}
-	mi := &file_gb28181_proto_msgTypes[84]
+	mi := &file_gb28181_proto_msgTypes[85]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5993,7 +6045,7 @@ func (x *PlaybackSpeedRequest) String() string {
 func (*PlaybackSpeedRequest) ProtoMessage() {}
 
 func (x *PlaybackSpeedRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[84]
+	mi := &file_gb28181_proto_msgTypes[85]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6006,7 +6058,7 @@ func (x *PlaybackSpeedRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlaybackSpeedRequest.ProtoReflect.Descriptor instead.
 func (*PlaybackSpeedRequest) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{84}
+	return file_gb28181_proto_rawDescGZIP(), []int{85}
 }
 
 func (x *PlaybackSpeedRequest) GetStreamPath() string {
@@ -6032,7 +6084,7 @@ type RemoveDeviceRequest struct {
 
 func (x *RemoveDeviceRequest) Reset() {
 	*x = RemoveDeviceRequest{}
-	mi := &file_gb28181_proto_msgTypes[85]
+	mi := &file_gb28181_proto_msgTypes[86]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6044,7 +6096,7 @@ func (x *RemoveDeviceRequest) String() string {
 func (*RemoveDeviceRequest) ProtoMessage() {}
 
 func (x *RemoveDeviceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[85]
+	mi := &file_gb28181_proto_msgTypes[86]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6057,7 +6109,7 @@ func (x *RemoveDeviceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveDeviceRequest.ProtoReflect.Descriptor instead.
 func (*RemoveDeviceRequest) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{85}
+	return file_gb28181_proto_rawDescGZIP(), []int{86}
 }
 
 func (x *RemoveDeviceRequest) GetId() string {
@@ -6078,7 +6130,7 @@ type OpenRTPServerRequest struct {
 
 func (x *OpenRTPServerRequest) Reset() {
 	*x = OpenRTPServerRequest{}
-	mi := &file_gb28181_proto_msgTypes[86]
+	mi := &file_gb28181_proto_msgTypes[87]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6090,7 +6142,7 @@ func (x *OpenRTPServerRequest) String() string {
 func (*OpenRTPServerRequest) ProtoMessage() {}
 
 func (x *OpenRTPServerRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[86]
+	mi := &file_gb28181_proto_msgTypes[87]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6103,7 +6155,7 @@ func (x *OpenRTPServerRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OpenRTPServerRequest.ProtoReflect.Descriptor instead.
 func (*OpenRTPServerRequest) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{86}
+	return file_gb28181_proto_rawDescGZIP(), []int{87}
 }
 
 func (x *OpenRTPServerRequest) GetStreamPath() string {
@@ -6138,7 +6190,7 @@ type OpenRTPServerResponse struct {
 
 func (x *OpenRTPServerResponse) Reset() {
 	*x = OpenRTPServerResponse{}
-	mi := &file_gb28181_proto_msgTypes[87]
+	mi := &file_gb28181_proto_msgTypes[88]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6150,7 +6202,7 @@ func (x *OpenRTPServerResponse) String() string {
 func (*OpenRTPServerResponse) ProtoMessage() {}
 
 func (x *OpenRTPServerResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[87]
+	mi := &file_gb28181_proto_msgTypes[88]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6163,7 +6215,7 @@ func (x *OpenRTPServerResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OpenRTPServerResponse.ProtoReflect.Descriptor instead.
 func (*OpenRTPServerResponse) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{87}
+	return file_gb28181_proto_rawDescGZIP(), []int{88}
 }
 
 func (x *OpenRTPServerResponse) GetCode() int32 {
@@ -6202,7 +6254,7 @@ type AlarmInfoRequest struct {
 
 func (x *AlarmInfoRequest) Reset() {
 	*x = AlarmInfoRequest{}
-	mi := &file_gb28181_proto_msgTypes[88]
+	mi := &file_gb28181_proto_msgTypes[89]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6214,7 +6266,7 @@ func (x *AlarmInfoRequest) String() string {
 func (*AlarmInfoRequest) ProtoMessage() {}
 
 func (x *AlarmInfoRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[88]
+	mi := &file_gb28181_proto_msgTypes[89]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6227,7 +6279,7 @@ func (x *AlarmInfoRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AlarmInfoRequest.ProtoReflect.Descriptor instead.
 func (*AlarmInfoRequest) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{88}
+	return file_gb28181_proto_rawDescGZIP(), []int{89}
 }
 
 func (x *AlarmInfoRequest) GetServerInfo() string {
@@ -6282,7 +6334,7 @@ type AddGroupChannelRequest_Channel struct {
 
 func (x *AddGroupChannelRequest_Channel) Reset() {
 	*x = AddGroupChannelRequest_Channel{}
-	mi := &file_gb28181_proto_msgTypes[90]
+	mi := &file_gb28181_proto_msgTypes[91]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6294,7 +6346,7 @@ func (x *AddGroupChannelRequest_Channel) String() string {
 func (*AddGroupChannelRequest_Channel) ProtoMessage() {}
 
 func (x *AddGroupChannelRequest_Channel) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[90]
+	mi := &file_gb28181_proto_msgTypes[91]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6307,7 +6359,7 @@ func (x *AddGroupChannelRequest_Channel) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddGroupChannelRequest_Channel.ProtoReflect.Descriptor instead.
 func (*AddGroupChannelRequest_Channel) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{75, 0}
+	return file_gb28181_proto_rawDescGZIP(), []int{76, 0}
 }
 
 func (x *AddGroupChannelRequest_Channel) GetChannelId() string {
@@ -6462,7 +6514,10 @@ const file_gb28181_proto_rawDesc = "" +
 	"\ralarmPriority\x18\x02 \x01(\tR\ralarmPriority\x12 \n" +
 	"\valarmMethod\x18\x03 \x01(\tR\valarmMethod\x12\x1c\n" +
 	"\talarmTime\x18\x04 \x01(\tR\talarmTime\x12*\n" +
-	"\x10alarmDescription\x18\x05 \x01(\tR\x10alarmDescription\"2\n" +
+	"\x10alarmDescription\x18\x05 \x01(\tR\x10alarmDescription\"U\n" +
+	"\x14UpdateChannelRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12-\n" +
+	"\achannel\x18\x02 \x01(\v2\x13.gb28181pro.ChannelR\achannel\"2\n" +
 	"\x14GetSyncStatusRequest\x12\x1a\n" +
 	"\bdeviceId\x18\x01 \x01(\tR\bdeviceId\"5\n" +
 	"\x17GetSubscribeInfoRequest\x12\x1a\n" +
@@ -6864,7 +6919,7 @@ const file_gb28181_proto_rawDesc = "" +
 	"alarm_desc\x18\x04 \x01(\tR\talarmDesc\x12\x1d\n" +
 	"\n" +
 	"alarm_type\x18\x05 \x01(\x05R\talarmType\x126\n" +
-	"\bcreateAt\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\bcreateAt2\xe9?\n" +
+	"\bcreateAt\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\bcreateAt2\xe9@\n" +
 	"\x03api\x12]\n" +
 	"\x04List\x12\x1d.gb28181pro.GetDevicesRequest\x1a\x1b.gb28181pro.DevicesPageInfo\"\x19\x82\xd3\xe4\x93\x02\x13\x12\x11/gb28181/api/list\x12n\n" +
 	"\tGetDevice\x12\x1c.gb28181pro.GetDeviceRequest\x1a\x1a.gb28181pro.DeviceResponse\"'\x82\xd3\xe4\x93\x02!\x12\x1f/gb28181/api/devices/{deviceId}\x12f\n" +
@@ -6925,7 +6980,8 @@ const file_gb28181_proto_rawDesc = "" +
 	"\x12AddPlatformChannel\x12%.gb28181pro.AddPlatformChannelRequest\x1a\x18.gb28181pro.BaseResponse\",\x82\xd3\xe4\x93\x02&:\x01*\"!/gb28181/api/platform/channel/add\x12\x84\x01\n" +
 	"\tRecording\x12\x1c.gb28181pro.RecordingRequest\x1a\x18.gb28181pro.BaseResponse\"?\x82\xd3\xe4\x93\x029\x127/gb28181/api/recording/{cmdType}/{deviceId}/{channelId}\x12j\n" +
 	"\n" +
-	"UploadJpeg\x12\x1d.gb28181pro.UploadJpegRequest\x1a\x18.gb28181pro.BaseResponse\"#\x82\xd3\xe4\x93\x02\x1d:\x01*\"\x18/gb28181/api/snap/upload\x12p\n" +
+	"UploadJpeg\x12\x1d.gb28181pro.UploadJpegRequest\x1a\x18.gb28181pro.BaseResponse\"#\x82\xd3\xe4\x93\x02\x1d:\x01*\"\x18/gb28181/api/snap/upload\x12~\n" +
+	"\rUpdateChannel\x12 .gb28181pro.UpdateChannelRequest\x1a\x18.gb28181pro.BaseResponse\"1\x82\xd3\xe4\x93\x02+:\achannel\" /gb28181/api/channel/update/{id}\x12p\n" +
 	"\rPlaybackPause\x12 .gb28181pro.PlaybackPauseRequest\x1a\x18.gb28181pro.BaseResponse\"#\x82\xd3\xe4\x93\x02\x1d\x12\x1b/gb28181/api/playback/pause\x12s\n" +
 	"\x0ePlaybackResume\x12!.gb28181pro.PlaybackResumeRequest\x1a\x18.gb28181pro.BaseResponse\"$\x82\xd3\xe4\x93\x02\x1e\x12\x1c/gb28181/api/playback/resume\x12m\n" +
 	"\fPlaybackSeek\x12\x1f.gb28181pro.PlaybackSeekRequest\x1a\x18.gb28181pro.BaseResponse\"\"\x82\xd3\xe4\x93\x02\x1c\x12\x1a/gb28181/api/playback/seek\x12p\n" +
@@ -6953,7 +7009,7 @@ func file_gb28181_proto_rawDescGZIP() []byte {
 	return file_gb28181_proto_rawDescData
 }
 
-var file_gb28181_proto_msgTypes = make([]protoimpl.MessageInfo, 91)
+var file_gb28181_proto_msgTypes = make([]protoimpl.MessageInfo, 92)
 var file_gb28181_proto_goTypes = []any{
 	(*BaseResponse)(nil),                   // 0: gb28181pro.BaseResponse
 	(*GetDeviceRequest)(nil),               // 1: gb28181pro.GetDeviceRequest
@@ -6976,252 +7032,256 @@ var file_gb28181_proto_goTypes = []any{
 	(*GetDeviceAlarmRequest)(nil),          // 18: gb28181pro.GetDeviceAlarmRequest
 	(*DeviceAlarmResponse)(nil),            // 19: gb28181pro.DeviceAlarmResponse
 	(*AlarmInfo)(nil),                      // 20: gb28181pro.AlarmInfo
-	(*GetSyncStatusRequest)(nil),           // 21: gb28181pro.GetSyncStatusRequest
-	(*GetSubscribeInfoRequest)(nil),        // 22: gb28181pro.GetSubscribeInfoRequest
-	(*SubscribeInfoResponse)(nil),          // 23: gb28181pro.SubscribeInfoResponse
-	(*GetSnapRequest)(nil),                 // 24: gb28181pro.GetSnapRequest
-	(*SnapResponse)(nil),                   // 25: gb28181pro.SnapResponse
-	(*GetRawChannelRequest)(nil),           // 26: gb28181pro.GetRawChannelRequest
-	(*DeviceResponse)(nil),                 // 27: gb28181pro.DeviceResponse
-	(*ChannelResponse)(nil),                // 28: gb28181pro.ChannelResponse
-	(*PlayRequest)(nil),                    // 29: gb28181pro.PlayRequest
-	(*PlaybackRequest)(nil),                // 30: gb28181pro.PlaybackRequest
-	(*PlayResponse)(nil),                   // 31: gb28181pro.PlayResponse
-	(*StreamInfo)(nil),                     // 32: gb28181pro.StreamInfo
-	(*ConvertStopRequest)(nil),             // 33: gb28181pro.ConvertStopRequest
-	(*BroadcastRequest)(nil),               // 34: gb28181pro.BroadcastRequest
-	(*BroadcastResponse)(nil),              // 35: gb28181pro.BroadcastResponse
-	(*SSRCInfo)(nil),                       // 36: gb28181pro.SSRCInfo
-	(*SSRCListResponse)(nil),               // 37: gb28181pro.SSRCListResponse
-	(*Platform)(nil),                       // 38: gb28181pro.Platform
-	(*GetPlatformRequest)(nil),             // 39: gb28181pro.GetPlatformRequest
-	(*DeletePlatformRequest)(nil),          // 40: gb28181pro.DeletePlatformRequest
-	(*ListPlatformsRequest)(nil),           // 41: gb28181pro.ListPlatformsRequest
-	(*PlatformResponse)(nil),               // 42: gb28181pro.PlatformResponse
-	(*PlatformsPageInfo)(nil),              // 43: gb28181pro.PlatformsPageInfo
-	(*QueryRecordRequest)(nil),             // 44: gb28181pro.QueryRecordRequest
-	(*QueryRecordResponse)(nil),            // 45: gb28181pro.QueryRecordResponse
-	(*RecordItem)(nil),                     // 46: gb28181pro.RecordItem
-	(*PtzControlRequest)(nil),              // 47: gb28181pro.PtzControlRequest
-	(*IrisControlRequest)(nil),             // 48: gb28181pro.IrisControlRequest
-	(*FocusControlRequest)(nil),            // 49: gb28181pro.FocusControlRequest
-	(*PresetRequest)(nil),                  // 50: gb28181pro.PresetRequest
-	(*PresetResponse)(nil),                 // 51: gb28181pro.PresetResponse
-	(*CruisePointRequest)(nil),             // 52: gb28181pro.CruisePointRequest
-	(*CruiseSpeedRequest)(nil),             // 53: gb28181pro.CruiseSpeedRequest
-	(*CruiseTimeRequest)(nil),              // 54: gb28181pro.CruiseTimeRequest
-	(*CruiseRequest)(nil),                  // 55: gb28181pro.CruiseRequest
-	(*ScanRequest)(nil),                    // 56: gb28181pro.ScanRequest
-	(*ScanSpeedRequest)(nil),               // 57: gb28181pro.ScanSpeedRequest
-	(*WiperControlRequest)(nil),            // 58: gb28181pro.WiperControlRequest
-	(*AuxiliaryControlRequest)(nil),        // 59: gb28181pro.AuxiliaryControlRequest
-	(*TestSipRequest)(nil),                 // 60: gb28181pro.TestSipRequest
-	(*TestSipResponse)(nil),                // 61: gb28181pro.TestSipResponse
-	(*SearchAlarmsRequest)(nil),            // 62: gb28181pro.SearchAlarmsRequest
-	(*SearchAlarmsResponse)(nil),           // 63: gb28181pro.SearchAlarmsResponse
-	(*AlarmRecord)(nil),                    // 64: gb28181pro.AlarmRecord
-	(*AddPlatformChannelRequest)(nil),      // 65: gb28181pro.AddPlatformChannelRequest
-	(*RecordingRequest)(nil),               // 66: gb28181pro.RecordingRequest
-	(*UploadJpegRequest)(nil),              // 67: gb28181pro.UploadJpegRequest
-	(*Group)(nil),                          // 68: gb28181pro.Group
-	(*GetGroupsRequest)(nil),               // 69: gb28181pro.GetGroupsRequest
-	(*DeleteGroupRequest)(nil),             // 70: gb28181pro.DeleteGroupRequest
-	(*GroupResponse)(nil),                  // 71: gb28181pro.GroupResponse
-	(*GroupsListResponse)(nil),             // 72: gb28181pro.GroupsListResponse
-	(*GroupsPageInfo)(nil),                 // 73: gb28181pro.GroupsPageInfo
-	(*ChannelInfo)(nil),                    // 74: gb28181pro.ChannelInfo
-	(*AddGroupChannelRequest)(nil),         // 75: gb28181pro.AddGroupChannelRequest
-	(*DeleteGroupChannelRequest)(nil),      // 76: gb28181pro.DeleteGroupChannelRequest
-	(*GetGroupChannelsRequest)(nil),        // 77: gb28181pro.GetGroupChannelsRequest
-	(*GroupChannel)(nil),                   // 78: gb28181pro.GroupChannel
-	(*GroupChannelsResponse)(nil),          // 79: gb28181pro.GroupChannelsResponse
-	(*GroupChannelsData)(nil),              // 80: gb28181pro.GroupChannelsData
-	(*PlaybackPauseRequest)(nil),           // 81: gb28181pro.PlaybackPauseRequest
-	(*PlaybackResumeRequest)(nil),          // 82: gb28181pro.PlaybackResumeRequest
-	(*PlaybackSeekRequest)(nil),            // 83: gb28181pro.PlaybackSeekRequest
-	(*PlaybackSpeedRequest)(nil),           // 84: gb28181pro.PlaybackSpeedRequest
-	(*RemoveDeviceRequest)(nil),            // 85: gb28181pro.RemoveDeviceRequest
-	(*OpenRTPServerRequest)(nil),           // 86: gb28181pro.OpenRTPServerRequest
-	(*OpenRTPServerResponse)(nil),          // 87: gb28181pro.OpenRTPServerResponse
-	(*AlarmInfoRequest)(nil),               // 88: gb28181pro.AlarmInfoRequest
-	nil,                                    // 89: gb28181pro.SubscribeInfoResponse.DialogStateEntry
-	(*AddGroupChannelRequest_Channel)(nil), // 90: gb28181pro.AddGroupChannelRequest.Channel
-	(*timestamppb.Timestamp)(nil),          // 91: google.protobuf.Timestamp
-	(*emptypb.Empty)(nil),                  // 92: google.protobuf.Empty
+	(*UpdateChannelRequest)(nil),           // 21: gb28181pro.UpdateChannelRequest
+	(*GetSyncStatusRequest)(nil),           // 22: gb28181pro.GetSyncStatusRequest
+	(*GetSubscribeInfoRequest)(nil),        // 23: gb28181pro.GetSubscribeInfoRequest
+	(*SubscribeInfoResponse)(nil),          // 24: gb28181pro.SubscribeInfoResponse
+	(*GetSnapRequest)(nil),                 // 25: gb28181pro.GetSnapRequest
+	(*SnapResponse)(nil),                   // 26: gb28181pro.SnapResponse
+	(*GetRawChannelRequest)(nil),           // 27: gb28181pro.GetRawChannelRequest
+	(*DeviceResponse)(nil),                 // 28: gb28181pro.DeviceResponse
+	(*ChannelResponse)(nil),                // 29: gb28181pro.ChannelResponse
+	(*PlayRequest)(nil),                    // 30: gb28181pro.PlayRequest
+	(*PlaybackRequest)(nil),                // 31: gb28181pro.PlaybackRequest
+	(*PlayResponse)(nil),                   // 32: gb28181pro.PlayResponse
+	(*StreamInfo)(nil),                     // 33: gb28181pro.StreamInfo
+	(*ConvertStopRequest)(nil),             // 34: gb28181pro.ConvertStopRequest
+	(*BroadcastRequest)(nil),               // 35: gb28181pro.BroadcastRequest
+	(*BroadcastResponse)(nil),              // 36: gb28181pro.BroadcastResponse
+	(*SSRCInfo)(nil),                       // 37: gb28181pro.SSRCInfo
+	(*SSRCListResponse)(nil),               // 38: gb28181pro.SSRCListResponse
+	(*Platform)(nil),                       // 39: gb28181pro.Platform
+	(*GetPlatformRequest)(nil),             // 40: gb28181pro.GetPlatformRequest
+	(*DeletePlatformRequest)(nil),          // 41: gb28181pro.DeletePlatformRequest
+	(*ListPlatformsRequest)(nil),           // 42: gb28181pro.ListPlatformsRequest
+	(*PlatformResponse)(nil),               // 43: gb28181pro.PlatformResponse
+	(*PlatformsPageInfo)(nil),              // 44: gb28181pro.PlatformsPageInfo
+	(*QueryRecordRequest)(nil),             // 45: gb28181pro.QueryRecordRequest
+	(*QueryRecordResponse)(nil),            // 46: gb28181pro.QueryRecordResponse
+	(*RecordItem)(nil),                     // 47: gb28181pro.RecordItem
+	(*PtzControlRequest)(nil),              // 48: gb28181pro.PtzControlRequest
+	(*IrisControlRequest)(nil),             // 49: gb28181pro.IrisControlRequest
+	(*FocusControlRequest)(nil),            // 50: gb28181pro.FocusControlRequest
+	(*PresetRequest)(nil),                  // 51: gb28181pro.PresetRequest
+	(*PresetResponse)(nil),                 // 52: gb28181pro.PresetResponse
+	(*CruisePointRequest)(nil),             // 53: gb28181pro.CruisePointRequest
+	(*CruiseSpeedRequest)(nil),             // 54: gb28181pro.CruiseSpeedRequest
+	(*CruiseTimeRequest)(nil),              // 55: gb28181pro.CruiseTimeRequest
+	(*CruiseRequest)(nil),                  // 56: gb28181pro.CruiseRequest
+	(*ScanRequest)(nil),                    // 57: gb28181pro.ScanRequest
+	(*ScanSpeedRequest)(nil),               // 58: gb28181pro.ScanSpeedRequest
+	(*WiperControlRequest)(nil),            // 59: gb28181pro.WiperControlRequest
+	(*AuxiliaryControlRequest)(nil),        // 60: gb28181pro.AuxiliaryControlRequest
+	(*TestSipRequest)(nil),                 // 61: gb28181pro.TestSipRequest
+	(*TestSipResponse)(nil),                // 62: gb28181pro.TestSipResponse
+	(*SearchAlarmsRequest)(nil),            // 63: gb28181pro.SearchAlarmsRequest
+	(*SearchAlarmsResponse)(nil),           // 64: gb28181pro.SearchAlarmsResponse
+	(*AlarmRecord)(nil),                    // 65: gb28181pro.AlarmRecord
+	(*AddPlatformChannelRequest)(nil),      // 66: gb28181pro.AddPlatformChannelRequest
+	(*RecordingRequest)(nil),               // 67: gb28181pro.RecordingRequest
+	(*UploadJpegRequest)(nil),              // 68: gb28181pro.UploadJpegRequest
+	(*Group)(nil),                          // 69: gb28181pro.Group
+	(*GetGroupsRequest)(nil),               // 70: gb28181pro.GetGroupsRequest
+	(*DeleteGroupRequest)(nil),             // 71: gb28181pro.DeleteGroupRequest
+	(*GroupResponse)(nil),                  // 72: gb28181pro.GroupResponse
+	(*GroupsListResponse)(nil),             // 73: gb28181pro.GroupsListResponse
+	(*GroupsPageInfo)(nil),                 // 74: gb28181pro.GroupsPageInfo
+	(*ChannelInfo)(nil),                    // 75: gb28181pro.ChannelInfo
+	(*AddGroupChannelRequest)(nil),         // 76: gb28181pro.AddGroupChannelRequest
+	(*DeleteGroupChannelRequest)(nil),      // 77: gb28181pro.DeleteGroupChannelRequest
+	(*GetGroupChannelsRequest)(nil),        // 78: gb28181pro.GetGroupChannelsRequest
+	(*GroupChannel)(nil),                   // 79: gb28181pro.GroupChannel
+	(*GroupChannelsResponse)(nil),          // 80: gb28181pro.GroupChannelsResponse
+	(*GroupChannelsData)(nil),              // 81: gb28181pro.GroupChannelsData
+	(*PlaybackPauseRequest)(nil),           // 82: gb28181pro.PlaybackPauseRequest
+	(*PlaybackResumeRequest)(nil),          // 83: gb28181pro.PlaybackResumeRequest
+	(*PlaybackSeekRequest)(nil),            // 84: gb28181pro.PlaybackSeekRequest
+	(*PlaybackSpeedRequest)(nil),           // 85: gb28181pro.PlaybackSpeedRequest
+	(*RemoveDeviceRequest)(nil),            // 86: gb28181pro.RemoveDeviceRequest
+	(*OpenRTPServerRequest)(nil),           // 87: gb28181pro.OpenRTPServerRequest
+	(*OpenRTPServerResponse)(nil),          // 88: gb28181pro.OpenRTPServerResponse
+	(*AlarmInfoRequest)(nil),               // 89: gb28181pro.AlarmInfoRequest
+	nil,                                    // 90: gb28181pro.SubscribeInfoResponse.DialogStateEntry
+	(*AddGroupChannelRequest_Channel)(nil), // 91: gb28181pro.AddGroupChannelRequest.Channel
+	(*timestamppb.Timestamp)(nil),          // 92: google.protobuf.Timestamp
+	(*emptypb.Empty)(nil),                  // 93: google.protobuf.Empty
 }
 var file_gb28181_proto_depIdxs = []int32{
 	12,  // 0: gb28181pro.DevicesPageInfo.data:type_name -> gb28181pro.Device
 	11,  // 1: gb28181pro.ChannelsPageInfo.list:type_name -> gb28181pro.Channel
-	91,  // 2: gb28181pro.Channel.gpsTime:type_name -> google.protobuf.Timestamp
-	91,  // 3: gb28181pro.Device.registerTime:type_name -> google.protobuf.Timestamp
-	91,  // 4: gb28181pro.Device.updateTime:type_name -> google.protobuf.Timestamp
-	91,  // 5: gb28181pro.Device.keepAliveTime:type_name -> google.protobuf.Timestamp
+	92,  // 2: gb28181pro.Channel.gpsTime:type_name -> google.protobuf.Timestamp
+	92,  // 3: gb28181pro.Device.registerTime:type_name -> google.protobuf.Timestamp
+	92,  // 4: gb28181pro.Device.updateTime:type_name -> google.protobuf.Timestamp
+	92,  // 5: gb28181pro.Device.keepAliveTime:type_name -> google.protobuf.Timestamp
 	11,  // 6: gb28181pro.Device.channels:type_name -> gb28181pro.Channel
 	12,  // 7: gb28181pro.ResponseList.data:type_name -> gb28181pro.Device
 	20,  // 8: gb28181pro.DeviceAlarmResponse.data:type_name -> gb28181pro.AlarmInfo
-	89,  // 9: gb28181pro.SubscribeInfoResponse.dialogState:type_name -> gb28181pro.SubscribeInfoResponse.DialogStateEntry
-	12,  // 10: gb28181pro.DeviceResponse.data:type_name -> gb28181pro.Device
-	11,  // 11: gb28181pro.ChannelResponse.data:type_name -> gb28181pro.Channel
-	32,  // 12: gb28181pro.PlayResponse.stream_info:type_name -> gb28181pro.StreamInfo
-	36,  // 13: gb28181pro.SSRCListResponse.data:type_name -> gb28181pro.SSRCInfo
-	38,  // 14: gb28181pro.PlatformResponse.data:type_name -> gb28181pro.Platform
-	38,  // 15: gb28181pro.PlatformsPageInfo.list:type_name -> gb28181pro.Platform
-	46,  // 16: gb28181pro.QueryRecordResponse.data:type_name -> gb28181pro.RecordItem
-	91,  // 17: gb28181pro.QueryRecordResponse.last_time:type_name -> google.protobuf.Timestamp
-	64,  // 18: gb28181pro.SearchAlarmsResponse.data:type_name -> gb28181pro.AlarmRecord
-	91,  // 19: gb28181pro.AlarmRecord.alarmTime:type_name -> google.protobuf.Timestamp
-	91,  // 20: gb28181pro.AlarmRecord.createTime:type_name -> google.protobuf.Timestamp
-	91,  // 21: gb28181pro.Group.createTime:type_name -> google.protobuf.Timestamp
-	91,  // 22: gb28181pro.Group.updateTime:type_name -> google.protobuf.Timestamp
-	68,  // 23: gb28181pro.Group.children:type_name -> gb28181pro.Group
-	78,  // 24: gb28181pro.Group.channels:type_name -> gb28181pro.GroupChannel
-	68,  // 25: gb28181pro.GroupResponse.data:type_name -> gb28181pro.Group
-	68,  // 26: gb28181pro.GroupsListResponse.data:type_name -> gb28181pro.Group
-	68,  // 27: gb28181pro.GroupsPageInfo.data:type_name -> gb28181pro.Group
-	90,  // 28: gb28181pro.AddGroupChannelRequest.channels:type_name -> gb28181pro.AddGroupChannelRequest.Channel
-	80,  // 29: gb28181pro.GroupChannelsResponse.data:type_name -> gb28181pro.GroupChannelsData
-	78,  // 30: gb28181pro.GroupChannelsData.list:type_name -> gb28181pro.GroupChannel
-	78,  // 31: gb28181pro.GroupChannelsData.channels:type_name -> gb28181pro.GroupChannel
-	91,  // 32: gb28181pro.AlarmInfoRequest.createAt:type_name -> google.protobuf.Timestamp
-	2,   // 33: gb28181pro.api.List:input_type -> gb28181pro.GetDevicesRequest
-	1,   // 34: gb28181pro.api.GetDevice:input_type -> gb28181pro.GetDeviceRequest
-	2,   // 35: gb28181pro.api.GetDevices:input_type -> gb28181pro.GetDevicesRequest
-	4,   // 36: gb28181pro.api.GetChannels:input_type -> gb28181pro.GetChannelsRequest
-	6,   // 37: gb28181pro.api.SyncDevice:input_type -> gb28181pro.SyncDeviceRequest
-	8,   // 38: gb28181pro.api.DeleteDevice:input_type -> gb28181pro.DeleteDeviceRequest
-	10,  // 39: gb28181pro.api.GetSubChannels:input_type -> gb28181pro.GetSubChannelsRequest
-	14,  // 40: gb28181pro.api.ChangeAudio:input_type -> gb28181pro.ChangeAudioRequest
-	11,  // 41: gb28181pro.api.UpdateChannelStreamIdentification:input_type -> gb28181pro.Channel
-	15,  // 42: gb28181pro.api.UpdateTransport:input_type -> gb28181pro.UpdateTransportRequest
-	12,  // 43: gb28181pro.api.AddDevice:input_type -> gb28181pro.Device
-	12,  // 44: gb28181pro.api.UpdateDevice:input_type -> gb28181pro.Device
-	16,  // 45: gb28181pro.api.GetDeviceStatus:input_type -> gb28181pro.GetDeviceStatusRequest
-	18,  // 46: gb28181pro.api.GetDeviceAlarm:input_type -> gb28181pro.GetDeviceAlarmRequest
-	21,  // 47: gb28181pro.api.GetSyncStatus:input_type -> gb28181pro.GetSyncStatusRequest
-	22,  // 48: gb28181pro.api.GetSubscribeInfo:input_type -> gb28181pro.GetSubscribeInfoRequest
-	24,  // 49: gb28181pro.api.GetSnap:input_type -> gb28181pro.GetSnapRequest
-	33,  // 50: gb28181pro.api.StopConvert:input_type -> gb28181pro.ConvertStopRequest
-	34,  // 51: gb28181pro.api.StartBroadcast:input_type -> gb28181pro.BroadcastRequest
-	34,  // 52: gb28181pro.api.StopBroadcast:input_type -> gb28181pro.BroadcastRequest
-	92,  // 53: gb28181pro.api.GetAllSSRC:input_type -> google.protobuf.Empty
-	26,  // 54: gb28181pro.api.GetRawChannel:input_type -> gb28181pro.GetRawChannelRequest
-	38,  // 55: gb28181pro.api.AddPlatform:input_type -> gb28181pro.Platform
-	39,  // 56: gb28181pro.api.GetPlatform:input_type -> gb28181pro.GetPlatformRequest
-	38,  // 57: gb28181pro.api.UpdatePlatform:input_type -> gb28181pro.Platform
-	40,  // 58: gb28181pro.api.DeletePlatform:input_type -> gb28181pro.DeletePlatformRequest
-	41,  // 59: gb28181pro.api.ListPlatforms:input_type -> gb28181pro.ListPlatformsRequest
-	44,  // 60: gb28181pro.api.QueryRecord:input_type -> gb28181pro.QueryRecordRequest
-	47,  // 61: gb28181pro.api.PtzControl:input_type -> gb28181pro.PtzControlRequest
-	48,  // 62: gb28181pro.api.IrisControl:input_type -> gb28181pro.IrisControlRequest
-	49,  // 63: gb28181pro.api.FocusControl:input_type -> gb28181pro.FocusControlRequest
-	50,  // 64: gb28181pro.api.QueryPreset:input_type -> gb28181pro.PresetRequest
-	50,  // 65: gb28181pro.api.AddPreset:input_type -> gb28181pro.PresetRequest
-	50,  // 66: gb28181pro.api.CallPreset:input_type -> gb28181pro.PresetRequest
-	50,  // 67: gb28181pro.api.DeletePreset:input_type -> gb28181pro.PresetRequest
-	52,  // 68: gb28181pro.api.AddCruisePoint:input_type -> gb28181pro.CruisePointRequest
-	52,  // 69: gb28181pro.api.DeleteCruisePoint:input_type -> gb28181pro.CruisePointRequest
-	53,  // 70: gb28181pro.api.SetCruiseSpeed:input_type -> gb28181pro.CruiseSpeedRequest
-	54,  // 71: gb28181pro.api.SetCruiseTime:input_type -> gb28181pro.CruiseTimeRequest
-	55,  // 72: gb28181pro.api.StartCruise:input_type -> gb28181pro.CruiseRequest
-	55,  // 73: gb28181pro.api.StopCruise:input_type -> gb28181pro.CruiseRequest
-	56,  // 74: gb28181pro.api.StartScan:input_type -> gb28181pro.ScanRequest
-	56,  // 75: gb28181pro.api.StopScan:input_type -> gb28181pro.ScanRequest
-	56,  // 76: gb28181pro.api.SetScanLeft:input_type -> gb28181pro.ScanRequest
-	56,  // 77: gb28181pro.api.SetScanRight:input_type -> gb28181pro.ScanRequest
-	57,  // 78: gb28181pro.api.SetScanSpeed:input_type -> gb28181pro.ScanSpeedRequest
-	58,  // 79: gb28181pro.api.WiperControl:input_type -> gb28181pro.WiperControlRequest
-	59,  // 80: gb28181pro.api.AuxiliaryControl:input_type -> gb28181pro.AuxiliaryControlRequest
-	60,  // 81: gb28181pro.api.TestSip:input_type -> gb28181pro.TestSipRequest
-	62,  // 82: gb28181pro.api.SearchAlarms:input_type -> gb28181pro.SearchAlarmsRequest
-	65,  // 83: gb28181pro.api.AddPlatformChannel:input_type -> gb28181pro.AddPlatformChannelRequest
-	66,  // 84: gb28181pro.api.Recording:input_type -> gb28181pro.RecordingRequest
-	67,  // 85: gb28181pro.api.UploadJpeg:input_type -> gb28181pro.UploadJpegRequest
-	81,  // 86: gb28181pro.api.PlaybackPause:input_type -> gb28181pro.PlaybackPauseRequest
-	82,  // 87: gb28181pro.api.PlaybackResume:input_type -> gb28181pro.PlaybackResumeRequest
-	83,  // 88: gb28181pro.api.PlaybackSeek:input_type -> gb28181pro.PlaybackSeekRequest
-	84,  // 89: gb28181pro.api.PlaybackSpeed:input_type -> gb28181pro.PlaybackSpeedRequest
-	69,  // 90: gb28181pro.api.GetGroups:input_type -> gb28181pro.GetGroupsRequest
-	68,  // 91: gb28181pro.api.AddGroup:input_type -> gb28181pro.Group
-	68,  // 92: gb28181pro.api.UpdateGroup:input_type -> gb28181pro.Group
-	70,  // 93: gb28181pro.api.DeleteGroup:input_type -> gb28181pro.DeleteGroupRequest
-	75,  // 94: gb28181pro.api.AddGroupChannel:input_type -> gb28181pro.AddGroupChannelRequest
-	76,  // 95: gb28181pro.api.DeleteGroupChannel:input_type -> gb28181pro.DeleteGroupChannelRequest
-	77,  // 96: gb28181pro.api.GetGroupChannels:input_type -> gb28181pro.GetGroupChannelsRequest
-	85,  // 97: gb28181pro.api.RemoveDevice:input_type -> gb28181pro.RemoveDeviceRequest
-	88,  // 98: gb28181pro.api.ReceiveAlarm:input_type -> gb28181pro.AlarmInfoRequest
-	86,  // 99: gb28181pro.api.OpenRTPServer:input_type -> gb28181pro.OpenRTPServerRequest
-	3,   // 100: gb28181pro.api.List:output_type -> gb28181pro.DevicesPageInfo
-	27,  // 101: gb28181pro.api.GetDevice:output_type -> gb28181pro.DeviceResponse
-	3,   // 102: gb28181pro.api.GetDevices:output_type -> gb28181pro.DevicesPageInfo
-	5,   // 103: gb28181pro.api.GetChannels:output_type -> gb28181pro.ChannelsPageInfo
-	7,   // 104: gb28181pro.api.SyncDevice:output_type -> gb28181pro.SyncStatus
-	9,   // 105: gb28181pro.api.DeleteDevice:output_type -> gb28181pro.DeleteDeviceResponse
-	5,   // 106: gb28181pro.api.GetSubChannels:output_type -> gb28181pro.ChannelsPageInfo
-	0,   // 107: gb28181pro.api.ChangeAudio:output_type -> gb28181pro.BaseResponse
-	0,   // 108: gb28181pro.api.UpdateChannelStreamIdentification:output_type -> gb28181pro.BaseResponse
-	0,   // 109: gb28181pro.api.UpdateTransport:output_type -> gb28181pro.BaseResponse
-	0,   // 110: gb28181pro.api.AddDevice:output_type -> gb28181pro.BaseResponse
-	0,   // 111: gb28181pro.api.UpdateDevice:output_type -> gb28181pro.BaseResponse
-	17,  // 112: gb28181pro.api.GetDeviceStatus:output_type -> gb28181pro.DeviceStatusResponse
-	19,  // 113: gb28181pro.api.GetDeviceAlarm:output_type -> gb28181pro.DeviceAlarmResponse
-	7,   // 114: gb28181pro.api.GetSyncStatus:output_type -> gb28181pro.SyncStatus
-	23,  // 115: gb28181pro.api.GetSubscribeInfo:output_type -> gb28181pro.SubscribeInfoResponse
-	25,  // 116: gb28181pro.api.GetSnap:output_type -> gb28181pro.SnapResponse
-	0,   // 117: gb28181pro.api.StopConvert:output_type -> gb28181pro.BaseResponse
-	35,  // 118: gb28181pro.api.StartBroadcast:output_type -> gb28181pro.BroadcastResponse
-	0,   // 119: gb28181pro.api.StopBroadcast:output_type -> gb28181pro.BaseResponse
-	37,  // 120: gb28181pro.api.GetAllSSRC:output_type -> gb28181pro.SSRCListResponse
-	11,  // 121: gb28181pro.api.GetRawChannel:output_type -> gb28181pro.Channel
-	0,   // 122: gb28181pro.api.AddPlatform:output_type -> gb28181pro.BaseResponse
-	42,  // 123: gb28181pro.api.GetPlatform:output_type -> gb28181pro.PlatformResponse
-	0,   // 124: gb28181pro.api.UpdatePlatform:output_type -> gb28181pro.BaseResponse
-	0,   // 125: gb28181pro.api.DeletePlatform:output_type -> gb28181pro.BaseResponse
-	43,  // 126: gb28181pro.api.ListPlatforms:output_type -> gb28181pro.PlatformsPageInfo
-	45,  // 127: gb28181pro.api.QueryRecord:output_type -> gb28181pro.QueryRecordResponse
-	0,   // 128: gb28181pro.api.PtzControl:output_type -> gb28181pro.BaseResponse
-	0,   // 129: gb28181pro.api.IrisControl:output_type -> gb28181pro.BaseResponse
-	0,   // 130: gb28181pro.api.FocusControl:output_type -> gb28181pro.BaseResponse
-	51,  // 131: gb28181pro.api.QueryPreset:output_type -> gb28181pro.PresetResponse
-	0,   // 132: gb28181pro.api.AddPreset:output_type -> gb28181pro.BaseResponse
-	0,   // 133: gb28181pro.api.CallPreset:output_type -> gb28181pro.BaseResponse
-	0,   // 134: gb28181pro.api.DeletePreset:output_type -> gb28181pro.BaseResponse
-	0,   // 135: gb28181pro.api.AddCruisePoint:output_type -> gb28181pro.BaseResponse
-	0,   // 136: gb28181pro.api.DeleteCruisePoint:output_type -> gb28181pro.BaseResponse
-	0,   // 137: gb28181pro.api.SetCruiseSpeed:output_type -> gb28181pro.BaseResponse
-	0,   // 138: gb28181pro.api.SetCruiseTime:output_type -> gb28181pro.BaseResponse
-	0,   // 139: gb28181pro.api.StartCruise:output_type -> gb28181pro.BaseResponse
-	0,   // 140: gb28181pro.api.StopCruise:output_type -> gb28181pro.BaseResponse
-	0,   // 141: gb28181pro.api.StartScan:output_type -> gb28181pro.BaseResponse
-	0,   // 142: gb28181pro.api.StopScan:output_type -> gb28181pro.BaseResponse
-	0,   // 143: gb28181pro.api.SetScanLeft:output_type -> gb28181pro.BaseResponse
-	0,   // 144: gb28181pro.api.SetScanRight:output_type -> gb28181pro.BaseResponse
-	0,   // 145: gb28181pro.api.SetScanSpeed:output_type -> gb28181pro.BaseResponse
-	0,   // 146: gb28181pro.api.WiperControl:output_type -> gb28181pro.BaseResponse
-	0,   // 147: gb28181pro.api.AuxiliaryControl:output_type -> gb28181pro.BaseResponse
-	61,  // 148: gb28181pro.api.TestSip:output_type -> gb28181pro.TestSipResponse
-	63,  // 149: gb28181pro.api.SearchAlarms:output_type -> gb28181pro.SearchAlarmsResponse
-	0,   // 150: gb28181pro.api.AddPlatformChannel:output_type -> gb28181pro.BaseResponse
-	0,   // 151: gb28181pro.api.Recording:output_type -> gb28181pro.BaseResponse
-	0,   // 152: gb28181pro.api.UploadJpeg:output_type -> gb28181pro.BaseResponse
-	0,   // 153: gb28181pro.api.PlaybackPause:output_type -> gb28181pro.BaseResponse
-	0,   // 154: gb28181pro.api.PlaybackResume:output_type -> gb28181pro.BaseResponse
-	0,   // 155: gb28181pro.api.PlaybackSeek:output_type -> gb28181pro.BaseResponse
-	0,   // 156: gb28181pro.api.PlaybackSpeed:output_type -> gb28181pro.BaseResponse
-	72,  // 157: gb28181pro.api.GetGroups:output_type -> gb28181pro.GroupsListResponse
-	0,   // 158: gb28181pro.api.AddGroup:output_type -> gb28181pro.BaseResponse
-	0,   // 159: gb28181pro.api.UpdateGroup:output_type -> gb28181pro.BaseResponse
-	0,   // 160: gb28181pro.api.DeleteGroup:output_type -> gb28181pro.BaseResponse
-	0,   // 161: gb28181pro.api.AddGroupChannel:output_type -> gb28181pro.BaseResponse
-	0,   // 162: gb28181pro.api.DeleteGroupChannel:output_type -> gb28181pro.BaseResponse
-	79,  // 163: gb28181pro.api.GetGroupChannels:output_type -> gb28181pro.GroupChannelsResponse
-	0,   // 164: gb28181pro.api.RemoveDevice:output_type -> gb28181pro.BaseResponse
-	0,   // 165: gb28181pro.api.ReceiveAlarm:output_type -> gb28181pro.BaseResponse
-	87,  // 166: gb28181pro.api.OpenRTPServer:output_type -> gb28181pro.OpenRTPServerResponse
-	100, // [100:167] is the sub-list for method output_type
-	33,  // [33:100] is the sub-list for method input_type
-	33,  // [33:33] is the sub-list for extension type_name
-	33,  // [33:33] is the sub-list for extension extendee
-	0,   // [0:33] is the sub-list for field type_name
+	11,  // 9: gb28181pro.UpdateChannelRequest.channel:type_name -> gb28181pro.Channel
+	90,  // 10: gb28181pro.SubscribeInfoResponse.dialogState:type_name -> gb28181pro.SubscribeInfoResponse.DialogStateEntry
+	12,  // 11: gb28181pro.DeviceResponse.data:type_name -> gb28181pro.Device
+	11,  // 12: gb28181pro.ChannelResponse.data:type_name -> gb28181pro.Channel
+	33,  // 13: gb28181pro.PlayResponse.stream_info:type_name -> gb28181pro.StreamInfo
+	37,  // 14: gb28181pro.SSRCListResponse.data:type_name -> gb28181pro.SSRCInfo
+	39,  // 15: gb28181pro.PlatformResponse.data:type_name -> gb28181pro.Platform
+	39,  // 16: gb28181pro.PlatformsPageInfo.list:type_name -> gb28181pro.Platform
+	47,  // 17: gb28181pro.QueryRecordResponse.data:type_name -> gb28181pro.RecordItem
+	92,  // 18: gb28181pro.QueryRecordResponse.last_time:type_name -> google.protobuf.Timestamp
+	65,  // 19: gb28181pro.SearchAlarmsResponse.data:type_name -> gb28181pro.AlarmRecord
+	92,  // 20: gb28181pro.AlarmRecord.alarmTime:type_name -> google.protobuf.Timestamp
+	92,  // 21: gb28181pro.AlarmRecord.createTime:type_name -> google.protobuf.Timestamp
+	92,  // 22: gb28181pro.Group.createTime:type_name -> google.protobuf.Timestamp
+	92,  // 23: gb28181pro.Group.updateTime:type_name -> google.protobuf.Timestamp
+	69,  // 24: gb28181pro.Group.children:type_name -> gb28181pro.Group
+	79,  // 25: gb28181pro.Group.channels:type_name -> gb28181pro.GroupChannel
+	69,  // 26: gb28181pro.GroupResponse.data:type_name -> gb28181pro.Group
+	69,  // 27: gb28181pro.GroupsListResponse.data:type_name -> gb28181pro.Group
+	69,  // 28: gb28181pro.GroupsPageInfo.data:type_name -> gb28181pro.Group
+	91,  // 29: gb28181pro.AddGroupChannelRequest.channels:type_name -> gb28181pro.AddGroupChannelRequest.Channel
+	81,  // 30: gb28181pro.GroupChannelsResponse.data:type_name -> gb28181pro.GroupChannelsData
+	79,  // 31: gb28181pro.GroupChannelsData.list:type_name -> gb28181pro.GroupChannel
+	79,  // 32: gb28181pro.GroupChannelsData.channels:type_name -> gb28181pro.GroupChannel
+	92,  // 33: gb28181pro.AlarmInfoRequest.createAt:type_name -> google.protobuf.Timestamp
+	2,   // 34: gb28181pro.api.List:input_type -> gb28181pro.GetDevicesRequest
+	1,   // 35: gb28181pro.api.GetDevice:input_type -> gb28181pro.GetDeviceRequest
+	2,   // 36: gb28181pro.api.GetDevices:input_type -> gb28181pro.GetDevicesRequest
+	4,   // 37: gb28181pro.api.GetChannels:input_type -> gb28181pro.GetChannelsRequest
+	6,   // 38: gb28181pro.api.SyncDevice:input_type -> gb28181pro.SyncDeviceRequest
+	8,   // 39: gb28181pro.api.DeleteDevice:input_type -> gb28181pro.DeleteDeviceRequest
+	10,  // 40: gb28181pro.api.GetSubChannels:input_type -> gb28181pro.GetSubChannelsRequest
+	14,  // 41: gb28181pro.api.ChangeAudio:input_type -> gb28181pro.ChangeAudioRequest
+	11,  // 42: gb28181pro.api.UpdateChannelStreamIdentification:input_type -> gb28181pro.Channel
+	15,  // 43: gb28181pro.api.UpdateTransport:input_type -> gb28181pro.UpdateTransportRequest
+	12,  // 44: gb28181pro.api.AddDevice:input_type -> gb28181pro.Device
+	12,  // 45: gb28181pro.api.UpdateDevice:input_type -> gb28181pro.Device
+	16,  // 46: gb28181pro.api.GetDeviceStatus:input_type -> gb28181pro.GetDeviceStatusRequest
+	18,  // 47: gb28181pro.api.GetDeviceAlarm:input_type -> gb28181pro.GetDeviceAlarmRequest
+	22,  // 48: gb28181pro.api.GetSyncStatus:input_type -> gb28181pro.GetSyncStatusRequest
+	23,  // 49: gb28181pro.api.GetSubscribeInfo:input_type -> gb28181pro.GetSubscribeInfoRequest
+	25,  // 50: gb28181pro.api.GetSnap:input_type -> gb28181pro.GetSnapRequest
+	34,  // 51: gb28181pro.api.StopConvert:input_type -> gb28181pro.ConvertStopRequest
+	35,  // 52: gb28181pro.api.StartBroadcast:input_type -> gb28181pro.BroadcastRequest
+	35,  // 53: gb28181pro.api.StopBroadcast:input_type -> gb28181pro.BroadcastRequest
+	93,  // 54: gb28181pro.api.GetAllSSRC:input_type -> google.protobuf.Empty
+	27,  // 55: gb28181pro.api.GetRawChannel:input_type -> gb28181pro.GetRawChannelRequest
+	39,  // 56: gb28181pro.api.AddPlatform:input_type -> gb28181pro.Platform
+	40,  // 57: gb28181pro.api.GetPlatform:input_type -> gb28181pro.GetPlatformRequest
+	39,  // 58: gb28181pro.api.UpdatePlatform:input_type -> gb28181pro.Platform
+	41,  // 59: gb28181pro.api.DeletePlatform:input_type -> gb28181pro.DeletePlatformRequest
+	42,  // 60: gb28181pro.api.ListPlatforms:input_type -> gb28181pro.ListPlatformsRequest
+	45,  // 61: gb28181pro.api.QueryRecord:input_type -> gb28181pro.QueryRecordRequest
+	48,  // 62: gb28181pro.api.PtzControl:input_type -> gb28181pro.PtzControlRequest
+	49,  // 63: gb28181pro.api.IrisControl:input_type -> gb28181pro.IrisControlRequest
+	50,  // 64: gb28181pro.api.FocusControl:input_type -> gb28181pro.FocusControlRequest
+	51,  // 65: gb28181pro.api.QueryPreset:input_type -> gb28181pro.PresetRequest
+	51,  // 66: gb28181pro.api.AddPreset:input_type -> gb28181pro.PresetRequest
+	51,  // 67: gb28181pro.api.CallPreset:input_type -> gb28181pro.PresetRequest
+	51,  // 68: gb28181pro.api.DeletePreset:input_type -> gb28181pro.PresetRequest
+	53,  // 69: gb28181pro.api.AddCruisePoint:input_type -> gb28181pro.CruisePointRequest
+	53,  // 70: gb28181pro.api.DeleteCruisePoint:input_type -> gb28181pro.CruisePointRequest
+	54,  // 71: gb28181pro.api.SetCruiseSpeed:input_type -> gb28181pro.CruiseSpeedRequest
+	55,  // 72: gb28181pro.api.SetCruiseTime:input_type -> gb28181pro.CruiseTimeRequest
+	56,  // 73: gb28181pro.api.StartCruise:input_type -> gb28181pro.CruiseRequest
+	56,  // 74: gb28181pro.api.StopCruise:input_type -> gb28181pro.CruiseRequest
+	57,  // 75: gb28181pro.api.StartScan:input_type -> gb28181pro.ScanRequest
+	57,  // 76: gb28181pro.api.StopScan:input_type -> gb28181pro.ScanRequest
+	57,  // 77: gb28181pro.api.SetScanLeft:input_type -> gb28181pro.ScanRequest
+	57,  // 78: gb28181pro.api.SetScanRight:input_type -> gb28181pro.ScanRequest
+	58,  // 79: gb28181pro.api.SetScanSpeed:input_type -> gb28181pro.ScanSpeedRequest
+	59,  // 80: gb28181pro.api.WiperControl:input_type -> gb28181pro.WiperControlRequest
+	60,  // 81: gb28181pro.api.AuxiliaryControl:input_type -> gb28181pro.AuxiliaryControlRequest
+	61,  // 82: gb28181pro.api.TestSip:input_type -> gb28181pro.TestSipRequest
+	63,  // 83: gb28181pro.api.SearchAlarms:input_type -> gb28181pro.SearchAlarmsRequest
+	66,  // 84: gb28181pro.api.AddPlatformChannel:input_type -> gb28181pro.AddPlatformChannelRequest
+	67,  // 85: gb28181pro.api.Recording:input_type -> gb28181pro.RecordingRequest
+	68,  // 86: gb28181pro.api.UploadJpeg:input_type -> gb28181pro.UploadJpegRequest
+	21,  // 87: gb28181pro.api.UpdateChannel:input_type -> gb28181pro.UpdateChannelRequest
+	82,  // 88: gb28181pro.api.PlaybackPause:input_type -> gb28181pro.PlaybackPauseRequest
+	83,  // 89: gb28181pro.api.PlaybackResume:input_type -> gb28181pro.PlaybackResumeRequest
+	84,  // 90: gb28181pro.api.PlaybackSeek:input_type -> gb28181pro.PlaybackSeekRequest
+	85,  // 91: gb28181pro.api.PlaybackSpeed:input_type -> gb28181pro.PlaybackSpeedRequest
+	70,  // 92: gb28181pro.api.GetGroups:input_type -> gb28181pro.GetGroupsRequest
+	69,  // 93: gb28181pro.api.AddGroup:input_type -> gb28181pro.Group
+	69,  // 94: gb28181pro.api.UpdateGroup:input_type -> gb28181pro.Group
+	71,  // 95: gb28181pro.api.DeleteGroup:input_type -> gb28181pro.DeleteGroupRequest
+	76,  // 96: gb28181pro.api.AddGroupChannel:input_type -> gb28181pro.AddGroupChannelRequest
+	77,  // 97: gb28181pro.api.DeleteGroupChannel:input_type -> gb28181pro.DeleteGroupChannelRequest
+	78,  // 98: gb28181pro.api.GetGroupChannels:input_type -> gb28181pro.GetGroupChannelsRequest
+	86,  // 99: gb28181pro.api.RemoveDevice:input_type -> gb28181pro.RemoveDeviceRequest
+	89,  // 100: gb28181pro.api.ReceiveAlarm:input_type -> gb28181pro.AlarmInfoRequest
+	87,  // 101: gb28181pro.api.OpenRTPServer:input_type -> gb28181pro.OpenRTPServerRequest
+	3,   // 102: gb28181pro.api.List:output_type -> gb28181pro.DevicesPageInfo
+	28,  // 103: gb28181pro.api.GetDevice:output_type -> gb28181pro.DeviceResponse
+	3,   // 104: gb28181pro.api.GetDevices:output_type -> gb28181pro.DevicesPageInfo
+	5,   // 105: gb28181pro.api.GetChannels:output_type -> gb28181pro.ChannelsPageInfo
+	7,   // 106: gb28181pro.api.SyncDevice:output_type -> gb28181pro.SyncStatus
+	9,   // 107: gb28181pro.api.DeleteDevice:output_type -> gb28181pro.DeleteDeviceResponse
+	5,   // 108: gb28181pro.api.GetSubChannels:output_type -> gb28181pro.ChannelsPageInfo
+	0,   // 109: gb28181pro.api.ChangeAudio:output_type -> gb28181pro.BaseResponse
+	0,   // 110: gb28181pro.api.UpdateChannelStreamIdentification:output_type -> gb28181pro.BaseResponse
+	0,   // 111: gb28181pro.api.UpdateTransport:output_type -> gb28181pro.BaseResponse
+	0,   // 112: gb28181pro.api.AddDevice:output_type -> gb28181pro.BaseResponse
+	0,   // 113: gb28181pro.api.UpdateDevice:output_type -> gb28181pro.BaseResponse
+	17,  // 114: gb28181pro.api.GetDeviceStatus:output_type -> gb28181pro.DeviceStatusResponse
+	19,  // 115: gb28181pro.api.GetDeviceAlarm:output_type -> gb28181pro.DeviceAlarmResponse
+	7,   // 116: gb28181pro.api.GetSyncStatus:output_type -> gb28181pro.SyncStatus
+	24,  // 117: gb28181pro.api.GetSubscribeInfo:output_type -> gb28181pro.SubscribeInfoResponse
+	26,  // 118: gb28181pro.api.GetSnap:output_type -> gb28181pro.SnapResponse
+	0,   // 119: gb28181pro.api.StopConvert:output_type -> gb28181pro.BaseResponse
+	36,  // 120: gb28181pro.api.StartBroadcast:output_type -> gb28181pro.BroadcastResponse
+	0,   // 121: gb28181pro.api.StopBroadcast:output_type -> gb28181pro.BaseResponse
+	38,  // 122: gb28181pro.api.GetAllSSRC:output_type -> gb28181pro.SSRCListResponse
+	11,  // 123: gb28181pro.api.GetRawChannel:output_type -> gb28181pro.Channel
+	0,   // 124: gb28181pro.api.AddPlatform:output_type -> gb28181pro.BaseResponse
+	43,  // 125: gb28181pro.api.GetPlatform:output_type -> gb28181pro.PlatformResponse
+	0,   // 126: gb28181pro.api.UpdatePlatform:output_type -> gb28181pro.BaseResponse
+	0,   // 127: gb28181pro.api.DeletePlatform:output_type -> gb28181pro.BaseResponse
+	44,  // 128: gb28181pro.api.ListPlatforms:output_type -> gb28181pro.PlatformsPageInfo
+	46,  // 129: gb28181pro.api.QueryRecord:output_type -> gb28181pro.QueryRecordResponse
+	0,   // 130: gb28181pro.api.PtzControl:output_type -> gb28181pro.BaseResponse
+	0,   // 131: gb28181pro.api.IrisControl:output_type -> gb28181pro.BaseResponse
+	0,   // 132: gb28181pro.api.FocusControl:output_type -> gb28181pro.BaseResponse
+	52,  // 133: gb28181pro.api.QueryPreset:output_type -> gb28181pro.PresetResponse
+	0,   // 134: gb28181pro.api.AddPreset:output_type -> gb28181pro.BaseResponse
+	0,   // 135: gb28181pro.api.CallPreset:output_type -> gb28181pro.BaseResponse
+	0,   // 136: gb28181pro.api.DeletePreset:output_type -> gb28181pro.BaseResponse
+	0,   // 137: gb28181pro.api.AddCruisePoint:output_type -> gb28181pro.BaseResponse
+	0,   // 138: gb28181pro.api.DeleteCruisePoint:output_type -> gb28181pro.BaseResponse
+	0,   // 139: gb28181pro.api.SetCruiseSpeed:output_type -> gb28181pro.BaseResponse
+	0,   // 140: gb28181pro.api.SetCruiseTime:output_type -> gb28181pro.BaseResponse
+	0,   // 141: gb28181pro.api.StartCruise:output_type -> gb28181pro.BaseResponse
+	0,   // 142: gb28181pro.api.StopCruise:output_type -> gb28181pro.BaseResponse
+	0,   // 143: gb28181pro.api.StartScan:output_type -> gb28181pro.BaseResponse
+	0,   // 144: gb28181pro.api.StopScan:output_type -> gb28181pro.BaseResponse
+	0,   // 145: gb28181pro.api.SetScanLeft:output_type -> gb28181pro.BaseResponse
+	0,   // 146: gb28181pro.api.SetScanRight:output_type -> gb28181pro.BaseResponse
+	0,   // 147: gb28181pro.api.SetScanSpeed:output_type -> gb28181pro.BaseResponse
+	0,   // 148: gb28181pro.api.WiperControl:output_type -> gb28181pro.BaseResponse
+	0,   // 149: gb28181pro.api.AuxiliaryControl:output_type -> gb28181pro.BaseResponse
+	62,  // 150: gb28181pro.api.TestSip:output_type -> gb28181pro.TestSipResponse
+	64,  // 151: gb28181pro.api.SearchAlarms:output_type -> gb28181pro.SearchAlarmsResponse
+	0,   // 152: gb28181pro.api.AddPlatformChannel:output_type -> gb28181pro.BaseResponse
+	0,   // 153: gb28181pro.api.Recording:output_type -> gb28181pro.BaseResponse
+	0,   // 154: gb28181pro.api.UploadJpeg:output_type -> gb28181pro.BaseResponse
+	0,   // 155: gb28181pro.api.UpdateChannel:output_type -> gb28181pro.BaseResponse
+	0,   // 156: gb28181pro.api.PlaybackPause:output_type -> gb28181pro.BaseResponse
+	0,   // 157: gb28181pro.api.PlaybackResume:output_type -> gb28181pro.BaseResponse
+	0,   // 158: gb28181pro.api.PlaybackSeek:output_type -> gb28181pro.BaseResponse
+	0,   // 159: gb28181pro.api.PlaybackSpeed:output_type -> gb28181pro.BaseResponse
+	73,  // 160: gb28181pro.api.GetGroups:output_type -> gb28181pro.GroupsListResponse
+	0,   // 161: gb28181pro.api.AddGroup:output_type -> gb28181pro.BaseResponse
+	0,   // 162: gb28181pro.api.UpdateGroup:output_type -> gb28181pro.BaseResponse
+	0,   // 163: gb28181pro.api.DeleteGroup:output_type -> gb28181pro.BaseResponse
+	0,   // 164: gb28181pro.api.AddGroupChannel:output_type -> gb28181pro.BaseResponse
+	0,   // 165: gb28181pro.api.DeleteGroupChannel:output_type -> gb28181pro.BaseResponse
+	80,  // 166: gb28181pro.api.GetGroupChannels:output_type -> gb28181pro.GroupChannelsResponse
+	0,   // 167: gb28181pro.api.RemoveDevice:output_type -> gb28181pro.BaseResponse
+	0,   // 168: gb28181pro.api.ReceiveAlarm:output_type -> gb28181pro.BaseResponse
+	88,  // 169: gb28181pro.api.OpenRTPServer:output_type -> gb28181pro.OpenRTPServerResponse
+	102, // [102:170] is the sub-list for method output_type
+	34,  // [34:102] is the sub-list for method input_type
+	34,  // [34:34] is the sub-list for extension type_name
+	34,  // [34:34] is the sub-list for extension extendee
+	0,   // [0:34] is the sub-list for field type_name
 }
 
 func init() { file_gb28181_proto_init() }
@@ -7235,7 +7295,7 @@ func file_gb28181_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_gb28181_proto_rawDesc), len(file_gb28181_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   91,
+			NumMessages:   92,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
