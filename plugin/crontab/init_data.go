@@ -1,6 +1,7 @@
 package plugin_crontab
 
 import (
+	"gorm.io/gorm"
 	"strings"
 
 	"m7s.live/v5/plugin/crontab/pkg"
@@ -9,16 +10,44 @@ import (
 // InitDefaultPlans 初始化默认的录制计划
 // 包括工作日录制计划和周末录制计划
 func (ct *CrontabPlugin) InitDefaultPlans() {
+
+	// 创建全天24小时录制计划（七天全天录制）的计划字符串
+	allDayPlanStr := buildPlanString(true, true, true, true, true, true, true) // 周日到周六
+
+	// 检查是否已存在相同内容的工作日录制计划
+	var count int64
+	if err := ct.DB.Model(&pkg.RecordPlan{}).Where("plan = ?", allDayPlanStr).Count(&count).Error; err != nil {
+		ct.Error("检查24小时录制计划失败: %v", err)
+	} else if count == 0 {
+		// 不存在相同内容的计划，创建新计划
+		workdayPlan := &pkg.RecordPlan{
+			Model:  gorm.Model{ID: 1},
+			Name:   "七天全天录制计划",
+			Plan:   allDayPlanStr,
+			Enable: true,
+		}
+
+		if err := ct.DB.Create(workdayPlan).Error; err != nil {
+			ct.Error("创建七天全天录制计划失败: %v", err)
+		} else {
+			ct.Info("成功创建七天全天录制计划")
+			// 添加到内存中
+			ct.recordPlans.Add(workdayPlan)
+		}
+	} else {
+		ct.Info("已存在相同内容的七天全天录制计划，跳过创建")
+	}
+
 	// 创建工作日录制计划（周一到周五全天录制）的计划字符串
 	workdayPlanStr := buildPlanString(false, true, true, true, true, true, false) // 周一到周五
 
 	// 检查是否已存在相同内容的工作日录制计划
-	var count int64
 	if err := ct.DB.Model(&pkg.RecordPlan{}).Where("plan = ?", workdayPlanStr).Count(&count).Error; err != nil {
 		ct.Error("检查工作日录制计划失败: %v", err)
 	} else if count == 0 {
 		// 不存在相同内容的计划，创建新计划
 		workdayPlan := &pkg.RecordPlan{
+			Model:  gorm.Model{ID: 2},
 			Name:   "工作日录制计划",
 			Plan:   workdayPlanStr,
 			Enable: true,
@@ -44,6 +73,7 @@ func (ct *CrontabPlugin) InitDefaultPlans() {
 	} else if count == 0 {
 		// 不存在相同内容的计划，创建新计划
 		weekendPlan := &pkg.RecordPlan{
+			Model:  gorm.Model{ID: 3},
 			Name:   "周末录制计划",
 			Plan:   weekendPlanStr,
 			Enable: true,
@@ -69,7 +99,7 @@ func buildPlanString(sun, mon, tue, wed, thu, fri, sat bool) string {
 
 	// 按照周日、周一、...、周六的顺序
 	days := []bool{sun, mon, tue, wed, thu, fri, sat}
-	
+
 	for _, record := range days {
 		if record {
 			// 该天录制，24小时都为1

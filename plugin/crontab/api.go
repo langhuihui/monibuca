@@ -2,6 +2,7 @@ package plugin_crontab
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -327,11 +328,9 @@ func (ct *CrontabPlugin) ListRecordPlanStreams(ctx context.Context, req *cronpb.
 }
 
 func (ct *CrontabPlugin) AddRecordPlanStream(ctx context.Context, req *cronpb.PlanStream) (*cronpb.Response, error) {
-	if req.PlanId == 0 {
-		return &cronpb.Response{
-			Code:    400,
-			Message: "record_plan_id is required",
-		}, nil
+	planId := 1
+	if req.PlanId > 0 {
+		planId = int(req.PlanId)
 	}
 
 	if strings.TrimSpace(req.StreamPath) == "" {
@@ -342,7 +341,7 @@ func (ct *CrontabPlugin) AddRecordPlanStream(ctx context.Context, req *cronpb.Pl
 	}
 
 	// 从内存中获取录制计划
-	plan, ok := ct.recordPlans.Get(uint(req.PlanId))
+	plan, ok := ct.recordPlans.Get(uint(planId))
 	if !ok {
 		return &cronpb.Response{
 			Code:    404,
@@ -353,7 +352,7 @@ func (ct *CrontabPlugin) AddRecordPlanStream(ctx context.Context, req *cronpb.Pl
 	// 检查是否已存在相同的记录
 	var count int64
 	searchModel := pkg.RecordPlanStream{
-		PlanID:     uint(req.PlanId),
+		PlanID:     uint(planId),
 		StreamPath: req.StreamPath,
 	}
 	if err := ct.DB.Model(&searchModel).Where(&searchModel).Count(&count).Error; err != nil {
@@ -370,10 +369,16 @@ func (ct *CrontabPlugin) AddRecordPlanStream(ctx context.Context, req *cronpb.Pl
 		}, nil
 	}
 
+	fragment := "60s"
+
+	if req.Fragment != "" {
+		fragment = req.Fragment
+	}
+
 	stream := &pkg.RecordPlanStream{
 		PlanID:     uint(req.PlanId),
 		StreamPath: req.StreamPath,
-		Fragment:   req.Fragment,
+		Fragment:   fragment,
 		FilePath:   req.FilePath,
 		Enable:     req.Enable,
 		RecordType: req.RecordType,
@@ -406,11 +411,9 @@ func (ct *CrontabPlugin) AddRecordPlanStream(ctx context.Context, req *cronpb.Pl
 }
 
 func (ct *CrontabPlugin) UpdateRecordPlanStream(ctx context.Context, req *cronpb.PlanStream) (*cronpb.Response, error) {
-	if req.PlanId == 0 {
-		return &cronpb.Response{
-			Code:    400,
-			Message: "record_plan_id is required",
-		}, nil
+	planId := 1
+	if req.PlanId > 0 {
+		planId = int(req.PlanId)
 	}
 
 	if strings.TrimSpace(req.StreamPath) == "" {
@@ -423,7 +426,7 @@ func (ct *CrontabPlugin) UpdateRecordPlanStream(ctx context.Context, req *cronpb
 	// 检查记录是否存在
 	var existingStream pkg.RecordPlanStream
 	searchModel := pkg.RecordPlanStream{
-		PlanID:     uint(req.PlanId),
+		PlanID:     uint(planId),
 		StreamPath: req.StreamPath,
 	}
 	if err := ct.DB.Where(&searchModel).First(&existingStream).Error; err != nil {
@@ -524,7 +527,7 @@ func (ct *CrontabPlugin) RemoveRecordPlanStream(ctx context.Context, req *cronpb
 	// 停止所有相关的定时任务
 	ct.crontabs.Range(func(crontab *Crontab) bool {
 		if crontab.RecordPlanStream.StreamPath == req.StreamPath && crontab.RecordPlan.ID == uint(req.PlanId) {
-			crontab.Stop(nil)
+			crontab.Stop(errors.New("remove record plan"))
 		}
 		return true
 	})

@@ -8,7 +8,7 @@ import (
 type RecordPlan struct {
 	gorm.Model
 	Name   string `json:"name" gorm:"default:''"`
-	Plan   string `json:"plan" gorm:"type:text"`
+	Plan   string `json:"plan" gorm:"type:varchar(255)"`
 	Enable bool   `json:"enable" gorm:"default:false"` // 是否启用
 }
 

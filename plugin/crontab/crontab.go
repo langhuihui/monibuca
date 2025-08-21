@@ -359,13 +359,16 @@ func (cron *Crontab) startRecording() {
 
 	// 发送开始录制请求
 	resp, err := http.Post(fmt.Sprintf("http://%s/mp4/api/start/%s", addr, cron.StreamPath), "application/json", bytes.NewBuffer(jsonBody))
+	cron.Debug("record request", "url is ", fmt.Sprintf("http://%s/mp4/api/start/%s", addr, cron.StreamPath), "jsonBody is ", string(jsonBody))
 	if err != nil {
+		time.Sleep(time.Second)
 		cron.Error("开始录制失败: %v", err)
 		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		time.Sleep(time.Second)
 		cron.Error("开始录制失败，HTTP状态码: %d", resp.StatusCode)
 		return
 	}

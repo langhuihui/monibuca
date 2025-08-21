@@ -9,8 +9,10 @@ import (
 	_ "image/jpeg"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -158,7 +160,7 @@ func (p *SnapPlugin) doSnap(rw http.ResponseWriter, r *http.Request) {
 
 	// 处理保存逻辑
 	savePath := query.Get("savePath")
-	now := time.Now()
+	now := time.Now().UTC()
 	if savePath != "" {
 		os.Mkdir(savePath, 0755)
 		filename := fmt.Sprintf("%s_%s.jpg", streamPath, now.Format("20060102150405.000"))
@@ -255,7 +257,8 @@ func (p *SnapPlugin) querySnap(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	targetTime := time.Unix(snapTimeUnix+1, 0)
+	// 将时间戳转换为UTC时间，确保与数据库中存储的UTC时间一致
+	targetTime := time.Unix(snapTimeUnix+1, 0).UTC()
 	var record snap_pkg.SnapRecord
 
 	// 查询小于等于目标时间的最近一条记录
@@ -363,17 +366,17 @@ func (p *SnapPlugin) batchSnap(rw http.ResponseWriter, r *http.Request) {
 
 	// 检查截图时间点是否为空
 	if len(snapTimes) == 0 {
-		p.Warn("no valid snapshot times available", 
+		p.Warn("no valid snapshot times available",
 			"streamPath", streamPath,
 			"startTime", startTime.Format(time.RFC3339),
 			"endTime", endTime.Format(time.RFC3339),
 			"granularity", granularity)
-		
+
 		response := BatchSnapResponse{
 			Success: false,
 			Message: "No valid snapshot times available. Please check your time range and try again.",
 		}
-		
+
 		rw.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(rw).Encode(response)
 		return
@@ -408,7 +411,7 @@ func (p *SnapPlugin) calculateSnapTimes(publisher *m7s.Publisher, startTime, end
 	// 检查开始时间是否早于当前时间，如果是，则从当前时间开始
 	now := time.Now()
 	if startTime.Before(now) {
-		p.Info("adjusting start time from past to current time", 
+		p.Info("adjusting start time from past to current time",
 			"originalStartTime", startTime.Format(time.RFC3339),
 			"adjustedStartTime", now.Format(time.RFC3339))
 		startTime = now
@@ -416,7 +419,7 @@ func (p *SnapPlugin) calculateSnapTimes(publisher *m7s.Publisher, startTime, end
 
 	// 检查结束时间是否晚于开始时间
 	if endTime.Before(startTime) || endTime.Equal(startTime) {
-		p.Warn("invalid time range: end time is not after start time", 
+		p.Warn("invalid time range: end time is not after start time",
 			"startTime", startTime.Format(time.RFC3339),
 			"endTime", endTime.Format(time.RFC3339))
 		return nil
@@ -455,17 +458,17 @@ func (p *SnapPlugin) calculateSnapTimes(publisher *m7s.Publisher, startTime, end
 					if idrRing != nil {
 						// 将时间戳转换为time.Time（从纳秒转为秒）
 						keyframeTime := time.Unix(0, int64(idrRing.Value.Timestamp))
-						
+
 						// 检查是否在指定时间范围内
-						if (keyframeTime.Equal(startTime) || keyframeTime.After(startTime)) && 
-						   (keyframeTime.Equal(endTime) || keyframeTime.Before(endTime)) {
+						if (keyframeTime.Equal(startTime) || keyframeTime.After(startTime)) &&
+							(keyframeTime.Equal(endTime) || keyframeTime.Before(endTime)) {
 							snapTimes = append(snapTimes, keyframeTime)
 						}
 					}
 				}
 			}
 			videoTrack.RUnlock()
-			
+
 			// 如果没有找到关键帧，但有GOP信息，则使用估算的GOP间隔生成时间点
 			if len(snapTimes) == 0 && gopDuration > 0 {
 				p.Info("no keyframes found in range, using estimated GOP interval")
@@ -509,12 +512,12 @@ func (p *SnapPlugin) executeBatchSnapTask(publisher *m7s.Publisher, streamPath s
 	now := time.Now()
 	if firstSnapTime.After(now) {
 		waitDuration := firstSnapTime.Sub(now)
-		p.Info("batch snap task scheduled for future", 
-			"streamPath", streamPath, 
-			"totalSnapshots", len(snapTimes), 
+		p.Info("batch snap task scheduled for future",
+			"streamPath", streamPath,
+			"totalSnapshots", len(snapTimes),
 			"startTime", firstSnapTime.Format(time.RFC3339),
 			"waitDuration", waitDuration.String())
-		
+
 		// 等待到开始时间
 		time.Sleep(waitDuration)
 	}
@@ -531,7 +534,7 @@ func (p *SnapPlugin) executeBatchSnapTask(publisher *m7s.Publisher, streamPath s
 	for i, snapTime := range snapTimes {
 		// 打印日志，记录当前截图时间和进度
 		p.Debug("taking snapshot", "progress", fmt.Sprintf("%d/%d", i+1, len(snapTimes)), "time", snapTime.Format(time.RFC3339))
-		
+
 		// 当前实现不支持指定时间截图，所以这里只能截取当前帧
 		// 注意：这里每次都会重新创建一个读取器，确保获取到最新的帧
 		buf, err := p.snap(publisher, nil)
@@ -540,7 +543,7 @@ func (p *SnapPlugin) executeBatchSnapTask(publisher *m7s.Publisher, streamPath s
 			failCount++
 			continue
 		}
-		
+
 		// 如果是按间隔截图，每次截图后等待指定时间
 		if granularity > 0 && i < len(snapTimes)-1 { // 不是最后一帧才需要等待
 			// 等待granularity秒，确保下一次截图与当前截图有足够的时间差
@@ -565,7 +568,7 @@ func (p *SnapPlugin) executeBatchSnapTask(publisher *m7s.Publisher, streamPath s
 			record := snap_pkg.SnapRecord{
 				StreamName: streamPath,
 				SnapMode:   3, // 批量截图模式
-				SnapTime:   snapTime,
+				SnapTime:   snapTime.UTC(),
 				SnapPath:   filePath,
 			}
 			if err := p.DB.Create(&record).Error; err != nil {
@@ -579,20 +582,392 @@ func (p *SnapPlugin) executeBatchSnapTask(publisher *m7s.Publisher, streamPath s
 	// 记录任务完成时间和结果
 	taskEndTime := time.Now()
 	taskDuration := taskEndTime.Sub(taskStartTime)
-	p.Info("batch snap task completed", 
-		"streamPath", streamPath, 
-		"total", len(snapTimes), 
-		"success", successCount, 
-		"failed", failCount, 
+	p.Info("batch snap task completed",
+		"streamPath", streamPath,
+		"total", len(snapTimes),
+		"success", successCount,
+		"failed", failCount,
 		"duration", taskDuration.String())
+}
+
+// batchPlayBack 处理从MP4录像文件中按时间范围和颗粒度进行截图的请求
+func (p *SnapPlugin) batchPlayBack(rw http.ResponseWriter, r *http.Request) {
+	// 只接受GET请求
+	if r.Method != http.MethodGet {
+		http.Error(rw, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// 检查数据库连接
+	if p.DB == nil {
+		responseWithError(rw, "数据库未初始化")
+		return
+	}
+
+	// 获取streamPath
+	streamPath := r.PathValue("streamPath")
+	if streamPath == "" {
+		responseWithError(rw, "streamPath参数必须提供")
+		return
+	}
+
+	// 获取查询参数
+	query := r.URL.Query()
+
+	// 解析时间范围
+	startTime, endTime, err := util.TimeRangeQueryParse(query)
+	if err != nil {
+		responseWithError(rw, "无效的时间范围: "+err.Error())
+		return
+	}
+
+	// 验证时间范围
+	if endTime.Before(startTime) {
+		responseWithError(rw, "结束时间必须晚于开始时间")
+		return
+	}
+
+	// 获取granularity参数
+	granularity := 0
+	granularityStr := query.Get("granularity")
+	if granularityStr != "" {
+		granularityVal, err := strconv.Atoi(granularityStr)
+		if err != nil {
+			responseWithError(rw, "无效的颗粒度格式: "+err.Error())
+			return
+		}
+		if granularityVal < 0 {
+			responseWithError(rw, "颗粒度必须为非负数")
+			return
+		}
+		granularity = granularityVal
+	}
+
+	// 创建保存目录
+	savePath := filepath.Join("snap", "playback", streamPath)
+	os.MkdirAll(savePath, 0755)
+	savePath = strings.ReplaceAll(savePath, "/", "_")
+	os.MkdirAll(savePath, 0755)
+
+	// 立即返回成功响应，表示任务已接收
+	response := BatchSnapResponse{
+		Success: true,
+		Message: fmt.Sprintf("回放截图任务已开始。正在后台处理。时间范围: %s 到 %s (使用参数 start 和 end)", startTime.Format(time.RFC3339), endTime.Format(time.RFC3339)),
+	}
+
+	rw.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(rw).Encode(response)
+
+	// 在后台异步执行截图任务
+	go p.executePlayBackSnapTask(streamPath, startTime, endTime, savePath, granularity)
+}
+
+// executePlayBackSnapTask 在后台执行从MP4录像文件中截图的任务
+func (p *SnapPlugin) executePlayBackSnapTask(streamPath string, startTime, endTime time.Time, savePath string, granularity int) {
+	// 记录任务开始时间
+	taskStartTime := time.Now()
+	p.Info("playback snap task started", "streamPath", streamPath, "startTime", startTime, "endTime", endTime)
+
+	// 从数据库中查询指定时间范围内的MP4录像文件
+	var streams []m7s.RecordStream
+	queryRecord := m7s.RecordStream{
+		Type: "mp4",
+	}
+
+	// 查询条件：结束时间大于请求的开始时间，开始时间小于请求的结束时间，流路径匹配
+	p.DB.Where(&queryRecord).Find(&streams, "end_time>? AND start_time<? AND stream_path=?", startTime, endTime, streamPath)
+
+	// 检查是否找到录像文件
+	if len(streams) == 0 {
+		p.Warn("no mp4 records found for playback snap", "streamPath", streamPath, "startTime", startTime, "endTime", endTime)
+		return
+	}
+
+	p.Info("found mp4 records for playback snap", "streamPath", streamPath, "count", len(streams))
+
+	// 按开始时间排序录像文件，确保时间连续性
+	sort.Slice(streams, func(i, j int) bool {
+		return streams[i].StartTime.Before(streams[j].StartTime)
+	})
+
+	// 全局截图时间点列表
+	var allSnapTimes []time.Time
+
+	// 如果颜粒度小于等于0，则对每个文件提取关键帧
+	if granularity <= 0 {
+		// 对每个文件分别提取关键帧
+		for _, stream := range streams {
+			// 检查文件是否存在
+			if _, err := os.Stat(stream.FilePath); os.IsNotExist(err) {
+				p.Warn("mp4 file not found", "path", stream.FilePath)
+				continue
+			}
+
+			// 计算此文件的有效时间范围（与请求时间范围的交集）
+			fileStartTime := stream.StartTime
+			if fileStartTime.Before(startTime) {
+				fileStartTime = startTime
+			}
+
+			fileEndTime := stream.EndTime
+			if fileEndTime.After(endTime) {
+				fileEndTime = endTime
+			}
+
+			// 提取关键帧
+			keyFrameTimes, err := p.extractKeyFrameTimes(stream.FilePath, fileStartTime, fileEndTime)
+			if err != nil {
+				p.Error("extract key frames failed", "error", err.Error())
+				// 如果提取失败，使用默认的每2秒截图
+				defaultGranularity := 2 * time.Second
+				for t := fileStartTime; t.Before(fileEndTime); t = t.Add(defaultGranularity) {
+					allSnapTimes = append(allSnapTimes, t)
+				}
+			} else {
+				// 将关键帧时间点添加到全局列表
+				allSnapTimes = append(allSnapTimes, keyFrameTimes...)
+			}
+		}
+	} else {
+		// 当指定颜粒度时，基于整个时间范围生成均匀的截图时间点
+		// 这样可以确保在不同文件之间保持一致的颜粒度
+		for t := startTime; t.Before(endTime); t = t.Add(time.Duration(granularity) * time.Second) {
+			allSnapTimes = append(allSnapTimes, t)
+		}
+	}
+
+	// 按时间排序并去重
+	sort.Slice(allSnapTimes, func(i, j int) bool {
+		return allSnapTimes[i].Before(allSnapTimes[j])
+	})
+
+	// 去除重复的时间点（如果有）
+	var uniqueSnapTimes []time.Time
+	if len(allSnapTimes) > 0 {
+		uniqueSnapTimes = append(uniqueSnapTimes, allSnapTimes[0])
+		for i := 1; i < len(allSnapTimes); i++ {
+			// 如果与前一个时间点不同，则添加
+			if !allSnapTimes[i].Equal(allSnapTimes[i-1]) {
+				uniqueSnapTimes = append(uniqueSnapTimes, allSnapTimes[i])
+			}
+		}
+	}
+
+	p.Info("generated snapshot times", "count", len(uniqueSnapTimes))
+
+	// 处理每个截图时间点
+	var successCount, failCount int
+	for _, snapTime := range uniqueSnapTimes {
+		// 找到包含该时间点的录像文件
+		var targetStream *m7s.RecordStream
+		for j := range streams {
+			if (snapTime.Equal(streams[j].StartTime) || snapTime.After(streams[j].StartTime)) &&
+				(snapTime.Equal(streams[j].EndTime) || snapTime.Before(streams[j].EndTime)) {
+				targetStream = &streams[j]
+				break
+			}
+		}
+
+		// 如果找不到对应的文件，跳过该时间点
+		if targetStream == nil {
+			p.Warn("no mp4 file found for time point", "time", snapTime.Format(time.RFC3339))
+			failCount++
+			continue
+		}
+
+		// 检查文件是否存在
+		if _, err := os.Stat(targetStream.FilePath); os.IsNotExist(err) {
+			p.Warn("mp4 file not found", "path", targetStream.FilePath)
+			failCount++
+			continue
+		}
+
+		// 计算在文件中的时间偏移（毫秒）
+		// 使用文件的duration字段来计算时间偏移
+		// 首先计算截图时间点在整个文件时间范围内的相对位置
+		fileStartTime := targetStream.StartTime
+		fileEndTime := targetStream.EndTime
+		fileDuration := targetStream.Duration
+
+		// 如果数据库中的duration字段有效，则使用它来计算时间偏移
+		var timeOffset int64
+		if fileDuration > 0 {
+			// 注意：duration字段存储的是毫秒值，如 69792 表示 69.792 秒
+			// 计算截图时间点在整个文件时间范围内的相对位置（百分比）
+			totalDuration := fileEndTime.Sub(fileStartTime).Milliseconds()
+			if totalDuration > 0 {
+				position := float64(snapTime.Sub(fileStartTime).Milliseconds()) / float64(totalDuration)
+				// 根据百分比位置和实际duration计算出时间偏移
+				// duration已经是毫秒值，直接使用
+				timeOffset = int64(position * float64(fileDuration))
+				p.Debug("using duration for time offset calculation", "position", position, "duration_ms", fileDuration, "timeOffset_ms", timeOffset)
+			} else {
+				// 如果计算出问题，回退到直接使用时间差
+				timeOffset = snapTime.Sub(fileStartTime).Milliseconds()
+				p.Debug("fallback to direct time difference", "timeOffset", timeOffset)
+			}
+		} else {
+			// 如果duration无效，则使用时间差
+			timeOffset = snapTime.Sub(fileStartTime).Milliseconds()
+			p.Debug("invalid duration, using time difference", "timeOffset", timeOffset)
+		}
+
+		// 使用FFmpeg从MP4文件中截取指定时间点的图片
+		// 文件名包含截图时间点和颜粒度信息，避免不同颜粒度的截图相互覆盖
+		var granularityInfo string
+		if granularity <= 0 {
+			granularityInfo = "keyframe"
+		} else {
+			granularityInfo = fmt.Sprintf("%ds", granularity)
+		}
+
+		filename := fmt.Sprintf("%s_%s_%s.jpg",
+			streamPath,
+			snapTime.Format("20060102150405"),
+			granularityInfo)
+		filename = strings.ReplaceAll(filename, "/", "_")
+		filePath := filepath.Join(savePath, filename)
+
+		// 调用截图函数
+		err := p.snapFromMP4(targetStream.FilePath, filePath, timeOffset)
+		if err != nil {
+			p.Error("playback snap failed", "error", err.Error(), "time", snapTime.Format(time.RFC3339))
+			failCount++
+			continue
+		}
+
+		// 保存截图记录到数据库
+		if p.DB != nil {
+			record := snap_pkg.SnapRecord{
+				StreamName: streamPath,
+				SnapMode:   4, // 回放截图模式
+				SnapTime:   snapTime,
+				SnapPath:   filePath,
+			}
+			if err := p.DB.Create(&record).Error; err != nil {
+				p.Error("save playback snapshot record failed", "error", err.Error())
+			}
+		}
+
+		successCount++
+	}
+
+	// 记录任务完成时间和结果
+	taskEndTime := time.Now()
+	taskDuration := taskEndTime.Sub(taskStartTime)
+	p.Info("playback snap task completed",
+		"streamPath", streamPath,
+		"success", successCount,
+		"failed", failCount,
+		"duration", taskDuration.String())
+}
+
+// snapFromMP4 从MP4文件中截取指定时间点的图片
+func (p *SnapPlugin) snapFromMP4(mp4FilePath, outputPath string, timeOffsetMs int64) error {
+	// 将时间偏移转换为秒
+	timeOffsetSec := float64(timeOffsetMs) / 1000.0
+
+	// 构建ffmpeg命令
+	cmd := exec.Command(
+		"ffmpeg",
+		"-hide_banner",
+		"-ss", fmt.Sprintf("%f", timeOffsetSec), // 设置时间偏移
+		"-i", mp4FilePath, // 输入文件
+		"-vframes", "1", // 只截取一帧
+		"-q:v", "2", // 设置图片质量
+		"-y",       // 覆盖输出文件
+		outputPath, // 输出文件路径
+	)
+
+	// 执行命令
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		p.Error("ffmpeg command failed", "error", err.Error(), "output", string(output))
+		return fmt.Errorf("ffmpeg error: %s, output: %s", err.Error(), string(output))
+	}
+
+	return nil
+}
+
+// extractKeyFrameTimes 从MP4文件中提取关键帧时间点
+func (p *SnapPlugin) extractKeyFrameTimes(mp4FilePath string, startTime, endTime time.Time) ([]time.Time, error) {
+	// 使用FFmpeg的-skip_frame nokey参数和-show_entries frame=pkt_pts_time参数提取关键帧时间
+	cmd := exec.Command(
+		"ffprobe",
+		"-v", "quiet",
+		"-select_streams", "v",
+		"-skip_frame", "nokey", // 只处理关键帧
+		"-show_entries", "frame=pkt_pts_time", // 显示帧的时间戳
+		"-of", "csv=p=0", // 输出为CSV格式
+		"-i", mp4FilePath,
+	)
+
+	// 执行命令
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		p.Error("ffprobe command failed", "error", err.Error(), "output", string(output))
+		return nil, fmt.Errorf("ffprobe error: %s", err.Error())
+	}
+
+	// 解析输出结果，提取时间戳
+	lines := strings.Split(string(output), "\n")
+
+	// 获取MP4文件的开始时间信息
+	// 注意：ffprobe返回的时间戳是相对于文件开始的秒数
+	// 我们需要将其转换为绝对时间
+	fileStartTimeUnix := time.Time{}
+	// 使用数据库中记录的文件开始时间
+	// 查询数据库获取文件信息
+	var fileInfo m7s.RecordStream
+	if err := p.DB.Where("file_path = ?", mp4FilePath).First(&fileInfo).Error; err == nil {
+		fileStartTimeUnix = fileInfo.StartTime
+	} else {
+		p.Warn("failed to get file start time from database, using request start time", "error", err.Error())
+		fileStartTimeUnix = startTime
+	}
+
+	p.Info("file start time", "time", fileStartTimeUnix.Format(time.RFC3339))
+
+	// 存储关键帧时间点
+	var keyFrameTimes []time.Time
+
+	// 处理每一行输出
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+
+		// 将时间戳转换为浮点数（秒）
+		timeOffsetSec, err := strconv.ParseFloat(line, 64)
+		if err != nil {
+			p.Warn("invalid time format in ffprobe output", "line", line)
+			continue
+		}
+
+		// 计算实际时间：文件开始时间 + 偏移秒数
+		frameTime := fileStartTimeUnix.Add(time.Duration(timeOffsetSec * float64(time.Second)))
+
+		// 只保留在请求时间范围内的关键帧
+		if (frameTime.Equal(startTime) || frameTime.After(startTime)) &&
+			(frameTime.Equal(endTime) || frameTime.Before(endTime)) {
+			keyFrameTimes = append(keyFrameTimes, frameTime)
+		}
+	}
+
+	// 如果没有找到关键帧，返回错误
+	if len(keyFrameTimes) == 0 {
+		return nil, fmt.Errorf("no key frames found in the specified time range")
+	}
+
+	return keyFrameTimes, nil
 }
 
 func (p *SnapPlugin) RegisterHandler() map[string]http.HandlerFunc {
 	return map[string]http.HandlerFunc{
-		"/{streamPath...}":       p.doSnap,
-		"/query/{streamPath...}": p.querySnap,
-		"/batch/{streamPath...}": p.batchSnap,
+		"/{streamPath...}":               p.doSnap,
+		"/query/{streamPath...}":         p.querySnap,
+		"/batch/{streamPath...}":         p.batchSnap,
+		"/batchplayback/{streamPath...}": p.batchPlayBack,
 	}
 }
-
-

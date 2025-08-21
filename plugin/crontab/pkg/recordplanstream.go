@@ -9,7 +9,7 @@ import (
 type RecordPlanStream struct {
 	PlanID     uint   `json:"plan_id" gorm:"primaryKey;type:bigint;not null"` // 录制计划ID
 	StreamPath string `json:"stream_path" gorm:"primaryKey;type:varchar(255)"`
-	Fragment   string `json:"fragment" gorm:"type:text"`
+	Fragment   string `json:"fragment" gorm:"type:varchar(255)"`
 	FilePath   string `json:"file_path" gorm:"type:varchar(255)"`
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
