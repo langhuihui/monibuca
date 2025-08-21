@@ -217,7 +217,7 @@ func (task *registerHandlerTask) Run() (err error) {
 				channel.Status = "OFF"
 				return true
 			})
-			d.Stop(errors.New("unregister"))
+			//d.Stop(errors.New("unregister"))
 		}
 	} else {
 		if recover {
@@ -264,7 +264,7 @@ func (task *registerHandlerTask) RecoverDevice(d *Device, req *sip.Request) {
 			if sourceIPParse.IsPrivate() { // 源IP是内网IP
 				myWanIP = myLanIP // 使用内网IP作为外网IP
 			}
-		} else {                           // 目标地址是IP
+		} else { // 目标地址是IP
 			if sourceIPParse.IsPrivate() { // 源IP是内网IP
 				myLanIP, myWanIP = myIP, myIP // 使用目标IP作为内外网IP
 			}
@@ -372,7 +372,7 @@ func (task *registerHandlerTask) StoreDevice(deviceid string, req *sip.Request, 
 			if sourceIPParse.IsPrivate() { // 源IP是内网IP
 				myWanIP = myLanIP // 使用内网IP作为外网IP
 			}
-		} else {                           // 目标地址是IP
+		} else { // 目标地址是IP
 			if sourceIPParse.IsPrivate() { // 源IP是内网IP
 				myLanIP, myWanIP = myIP, myIP // 使用目标IP作为内外网IP
 			}
@@ -387,7 +387,9 @@ func (task *registerHandlerTask) StoreDevice(deviceid string, req *sip.Request, 
 	}
 
 	now := time.Now()
-	d.CreateTime = now
+	if d.CreateTime.IsZero() {
+		d.CreateTime = now
+	}
 	d.UpdateTime = now
 	d.RegisterTime = now
 	d.KeepaliveTime = now
@@ -454,15 +456,15 @@ func (task *registerHandlerTask) StoreDevice(deviceid string, req *sip.Request, 
 	task.gb.devices.Add(d).WaitStarted()
 
 	if task.gb.DB != nil {
-		var existing Device
-		if err := task.gb.DB.First(&existing, Device{DeviceId: d.DeviceId}).Error; err == nil {
-			d.ID = existing.ID // 保持原有的自增ID
-			task.gb.DB.Save(d).Omit("create_time")
-			task.gb.Info("StoreDevice", "type", "更新设备", "deviceId", d.DeviceId)
-		} else {
-			task.gb.DB.Save(d)
-			task.gb.Info("StoreDevice", "type", "新增设备", "deviceId", d.DeviceId)
-		}
+		//var existing Device
+		//if err := task.gb.DB.First(&existing, Device{DeviceId: d.DeviceId}).Error; err == nil {
+		//	d.ID = existing.ID // 保持原有的自增ID
+		//	task.gb.DB.Save(d).Omit("create_time")
+		//	task.gb.Info("StoreDevice", "type", "更新设备", "deviceId", d.DeviceId)
+		//} else {
+		task.gb.DB.Save(d)
+		task.gb.Info("StoreDevice", "type", "新增设备", "deviceId", d.DeviceId)
+		//}
 	}
 	return
 }

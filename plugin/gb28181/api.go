@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"gorm.io/gorm"
 	"net/http"
 	"net/url"
 	"os"
@@ -642,7 +643,13 @@ func (gb *GB28181Plugin) UpdateDevice(ctx context.Context, req *pb.Device) (*pb.
 				}
 			}
 		} else {
-			d.Stop(fmt.Errorf("password changed"))
+			d.Status = DeviceOfflineStatus
+			d.Online = false
+			d.channels.Range(func(c *Channel) bool {
+				c.Status = gb28181.ChannelOffStatus
+				return true
+			})
+			//d.Stop(fmt.Errorf("password changed"))
 		}
 
 		resp.Code = 0
@@ -2815,49 +2822,17 @@ func (gb *GB28181Plugin) RemoveDevice(ctx context.Context, req *pb.RemoveDeviceR
 
 	// 使用数据库中的 DeviceId 从内存中查找设备
 	if device, ok := gb.devices.Get(req.Id); ok {
-		device.channels.Range(func(channel *Channel) bool {
-			if err := device.plugin.DB.Where("device_id = ?", device.DeviceId).Delete(&gb28181.DeviceChannel{}).Error; err != nil {
-				device.Error("删除设备通道记录失败", "error", err)
-			}
-			return true
-		})
-		if device.Online {
-			// 停止设备相关任务
-			device.Stop(fmt.Errorf("device removed"))
-			device.WaitStopped()
-		}
-		// device.Stop() 会调用 Dispose()，其中已包含从 gb.devices 中移除设备的逻辑
-
-		// 开启数据库事务
-		//tx := gb.DB.Begin()
-		//if tx.Error != nil {
-		//	resp.Code = 500
-		//	resp.Message = "开启事务失败"
-		//	return resp, tx.Error
-		//}
-		//
-		//// 删除设备
-		//if err := tx.Delete(&Device{DeviceId: req.Id}).Error; err != nil {
-		//	tx.Rollback()
-		//	resp.Code = 500
-		//	resp.Message = "删除设备失败"
-		//	return resp, err
-		//}
-		//
-		//// 删除设备关联的通道
-		//if err := tx.Where("device_id = ?", req.Id).Delete(&gb28181.DeviceChannel{}).Error; err != nil {
-		//	tx.Rollback()
-		//	resp.Code = 500
-		//	resp.Message = "删除设备通道失败"
-		//	return resp, err
-		//}
-		//
-		//// 提交事务
-		//if err := tx.Commit().Error; err != nil {
-		//	tx.Rollback()
-		//	resp.Code = 500
-		//	resp.Message = "提交事务失败"
-		//	return resp, err
+		//device.channels.Range(func(channel *Channel) bool {
+		//	if err := device.plugin.DB.Where("device_id = ?", device.DeviceId).Delete(&gb28181.DeviceChannel{}).Error; err != nil {
+		//		device.Error("删除设备通道记录失败", "error", err)
+		//	}
+		//	return true
+		//})
+		//if device.Online {
+		// 停止设备相关任务
+		device.DeletedAt = gorm.DeletedAt{Time: time.Now(), Valid: true}
+		device.Stop(fmt.Errorf("device removed"))
+		device.WaitStopped()
 		//}
 
 		resp.Code = 200

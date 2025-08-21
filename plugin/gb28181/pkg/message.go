@@ -141,19 +141,22 @@ func BuildKeepAliveXML(sn int, id string) []byte {
 
 type (
 	Message struct {
-		XMLName           xml.Name
-		CmdType           string
-		SN                int // 请求序列号，一般用于对应 request 和 response
-		DeviceID          string
-		Longitude         string // 经度
-		Latitude          string // 纬度
-		DeviceName        string
-		Manufacturer      string
-		Model             string
-		Channel           string
-		Firmware          string
-		DeviceChannelList []DeviceChannel `xml:"DeviceList>Item"`
-		RecordList        struct {
+		XMLName      xml.Name
+		CmdType      string
+		SN           int // 请求序列号，一般用于对应 request 和 response
+		DeviceID     string
+		Longitude    string // 经度
+		Latitude     string // 纬度
+		DeviceName   string
+		Manufacturer string
+		Model        string
+		Channel      string
+		Firmware     string
+		DeviceList   struct {
+			DeviceChannelList []DeviceChannel `xml:"Item"`
+			DeviceNum         int             `xml:"Num,attr"` // 将 Num 属性映射到 DeviceNum
+		} `xml:"DeviceList"`
+		RecordList struct {
 			Num  int          `xml:"Num,attr"`
 			Item []RecordItem `xml:"Item"`
 		} `xml:"RecordList"`

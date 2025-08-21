@@ -78,7 +78,7 @@ type Device struct {
 	KeepaliveCount        int            `gorm:"default:3" default:"3"`   // 心跳次数
 	ChannelCount          int            // 通道个数
 	Expires               int            // 注册有效期
-	CreateTime            time.Time      // 创建时间
+	CreateTime            time.Time      `gorm:"primaryKey"` // 创建时间
 	UpdateTime            time.Time      // 更新时间
 	Charset               string         // 字符集, 支持 UTF-8 与 GB2312
 	SubscribeCatalog      int            `gorm:"default:0"` // 目录订阅周期，0为不订阅
@@ -154,8 +154,8 @@ func (d *Device) GetKey() string {
 
 // CatalogRequest 目录请求结构体
 type CatalogRequest struct {
-	SN, SumNum    int
-	FirstResponse bool // 是否为第一个响应
+	SN, SumNum, TotalCount int
+	FirstResponse          bool // 是否为第一个响应
 	*util.Promise
 	sync.Mutex // 保护并发访问
 }
@@ -168,21 +168,99 @@ func (r *CatalogRequest) GetKey() int {
 func (r *CatalogRequest) AddResponse() bool {
 	r.Lock()
 	defer r.Unlock()
-
+	fmt.Println("r.FirstResponse: " + fmt.Sprintf("%v", r.FirstResponse))
 	wasFirst := r.FirstResponse
 	r.FirstResponse = false
+	fmt.Println("r.FirstResponse after: " + fmt.Sprintf("%v", r.FirstResponse))
+
 	return wasFirst
 }
 
 // IsComplete 检查是否完成接收
-func (r *CatalogRequest) IsComplete(channelsLength int) bool {
+func (r *CatalogRequest) IsComplete() bool {
 	r.Lock()
 	defer r.Unlock()
-	return channelsLength >= r.SumNum
+	return r.TotalCount >= r.SumNum
+}
+
+type CatalogHandlerQueueTask struct {
+	task.Work
+}
+
+var catalogHandlerQueueTask CatalogHandlerQueueTask
+
+type catalogHandlerTask struct {
+	task.Task
+	d   *Device
+	msg *gb28181.Message
+}
+
+func (c *catalogHandlerTask) Run() (err error) {
+	// 处理目录信息
+	d := c.d
+	msg := c.msg
+	catalogReq, exists := d.catalogReqs.Get(msg.SN)
+	d.Debug("into catalog", "msg.SN", msg.SN, "exists", exists)
+	if !exists {
+		// 创建新的目录请求
+		catalogReq = &CatalogRequest{
+			SN:            msg.SN,
+			SumNum:        msg.SumNum,
+			TotalCount:    0,
+			FirstResponse: true,
+			Promise:       util.NewPromise(context.Background()),
+		}
+		d.catalogReqs.Set(catalogReq)
+		d.Debug("into catalog", "msg.SN", msg.SN, "d.catalogReqs", d.catalogReqs.Length)
+	}
+
+	// 添加响应并获取是否是第一个响应
+	isFirst := catalogReq.AddResponse()
+
+	// 更新设备信息到数据库
+	// 如果是第一个响应，将所有通道状态标记为OFF
+	if isFirst {
+		d.Debug("将所有通道状态标记为OFF", "deviceId", d.DeviceId)
+		// 标记所有通道为OFF状态
+		d.channels.Range(func(channel *Channel) bool {
+			if channel.DeviceChannel != nil {
+				channel.DeviceChannel.Status = gb28181.ChannelOffStatus
+			}
+			return true
+		})
+	}
+
+	// 更新通道信息
+	for _, c := range msg.DeviceList.DeviceChannelList {
+		// 设置关联的设备数据库ID
+		c.ChannelId = c.DeviceId
+		c.DeviceId = d.DeviceId
+		c.ID = d.DeviceId + "_" + c.ChannelId
+		if c.CustomChannelId == "" {
+			c.CustomChannelId = c.ChannelId
+		}
+		d.Debug("msg.DeviceList.DeviceChannelList range", "c.ChannelId", c.ChannelId, "c.Status", c.Status)
+		// 使用 Save 进行 upsert 操作
+		d.addOrUpdateChannel(c)
+		catalogReq.TotalCount++
+	}
+
+	// 更新当前设备的通道数
+	d.ChannelCount = msg.SumNum
+	d.UpdateTime = time.Now()
+	d.Debug("save channel", "deviceid", d.DeviceId, " d.channels.Length", d.channels.Length, "d.ChannelCount", d.ChannelCount, "d.UpdateTime", d.UpdateTime)
+
+	// 在所有通道都添加完成后，检查是否完成接收
+	if catalogReq.IsComplete() {
+		d.Debug("IsComplete")
+		catalogReq.Resolve()
+		d.catalogReqs.RemoveByKey(msg.SN)
+	}
+	return
 }
 
 func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28181.Message) (err error) {
-	d.plugin.Trace("into onMessage,deviceid is ", d.DeviceId)
+	d.plugin.Debug("into onMessage", "deviceid is ", d.DeviceId, "msg is", msg)
 	source := req.Source()
 	hostname, portStr, _ := net.SplitHostPort(source)
 	port, _ := strconv.Atoi(portStr)
@@ -216,68 +294,11 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 			}
 		}
 	case "Catalog":
-		// 处理目录信息
-		catalogReq, exists := d.catalogReqs.Get(msg.SN)
-		if !exists {
-			// 创建新的目录请求
-			catalogReq = &CatalogRequest{
-				SN:            msg.SN,
-				SumNum:        msg.SumNum,
-				FirstResponse: true,
-				Promise:       util.NewPromise(context.Background()),
-			}
-			d.catalogReqs.Set(catalogReq)
+		catalogHandler := &catalogHandlerTask{
+			d:   d,
+			msg: msg,
 		}
-
-		// 添加响应并获取是否是第一个响应
-		isFirst := catalogReq.AddResponse()
-
-		// 更新设备信息到数据库
-		// 如果是第一个响应，将所有通道状态标记为OFF
-		if isFirst {
-			d.Trace("将所有通道状态标记为OFF", "deviceId", d.DeviceId)
-			// 标记所有通道为OFF状态
-			d.channels.Range(func(channel *Channel) bool {
-				if channel.DeviceChannel != nil {
-					channel.DeviceChannel.Status = gb28181.ChannelOffStatus
-				}
-				return true
-			})
-		}
-
-		// 更新通道信息
-		for _, c := range msg.DeviceChannelList {
-			// 设置关联的设备数据库ID
-			c.ChannelId = c.DeviceId
-			c.DeviceId = d.DeviceId
-			c.ID = d.DeviceId + "_" + c.ChannelId
-			if c.CustomChannelId == "" {
-				c.CustomChannelId = c.ChannelId
-			}
-			// 使用 Save 进行 upsert 操作
-			d.addOrUpdateChannel(c)
-		}
-
-		// 更新当前设备的通道数
-		d.ChannelCount = msg.SumNum
-		d.UpdateTime = time.Now()
-		d.Debug("save channel", "deviceid", d.DeviceId, " d.channels.Length", d.channels.Length, "d.ChannelCount", d.ChannelCount, "d.UpdateTime", d.UpdateTime)
-
-		// 删除所有状态为OFF的通道
-		// d.channels.Range(func(channel *Channel) bool {
-		// 	if channel.DeviceChannel != nil && channel.DeviceChannel.Status == gb28181.ChannelOffStatus {
-		// 		d.Debug("删除不存在的通道", "channelId", channel.ID)
-		// 		d.channels.RemoveByKey(channel.ID)
-		// 		d.plugin.channels.RemoveByKey(channel.ID)
-		// 	}
-		// 	return true
-		// })
-
-		// 在所有通道都添加完成后，检查是否完成接收
-		if catalogReq.IsComplete(d.channels.Length) {
-			catalogReq.Resolve()
-			d.catalogReqs.RemoveByKey(msg.SN)
-		}
+		catalogHandlerQueueTask.AddTask(catalogHandler)
 	case "RecordInfo":
 		if channel, ok := d.channels.Get(d.DeviceId + "_" + msg.DeviceID); ok {
 			if req, ok := channel.RecordReqs.Get(msg.SN); ok {
@@ -614,6 +635,10 @@ func (d *Device) addOrUpdateChannel(c gb28181.DeviceChannel) {
 		}
 		// 更新通道信息
 		channel.DeviceChannel = &c
+		d.channels.Range(func(channel *Channel) bool {
+			d.Debug("range d.channels", "channel.ChannelId", channel.ChannelId, "channel.status", channel.Status)
+			return true
+		})
 	} else {
 		// 创建新通道
 		channel = &Channel{
@@ -840,12 +865,12 @@ func (d *Device) onNotify(req *sip.Request, tx sip.ServerTransaction, msg *gb281
 
 // handleCatalog 处理设备目录更新
 func (d *Device) handleCatalog(msg *gb28181.Message) error {
-	if msg.DeviceChannelList == nil || len(msg.DeviceChannelList) == 0 {
+	if msg.DeviceList.DeviceChannelList == nil || len(msg.DeviceList.DeviceChannelList) == 0 {
 		return fmt.Errorf("no device items in catalog")
 	}
 
 	// 遍历并更新设备列表
-	for _, item := range msg.DeviceChannelList {
+	for _, item := range msg.DeviceList.DeviceChannelList {
 		channel := &gb28181.DeviceChannel{
 			DeviceId:     item.DeviceId,
 			Name:         item.Name,

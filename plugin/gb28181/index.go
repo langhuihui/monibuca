@@ -155,6 +155,7 @@ func (gb *GB28181Plugin) OnInit() (err error) {
 	gb.ua, err = sipgo.NewUA(sipgo.WithUserAgent("M7S/" + m7s.Version)) // Build user agent
 	// Creating client handle for ua
 	if len(gb.Sip.ListenAddr) > 0 {
+		gb.AddTask(&catalogHandlerQueueTask)
 		gb.AddTask(&gb.devices)
 		gb.AddTask(&gb.platforms)
 		gb.AddTask(&gb.dialogs)
@@ -282,13 +283,17 @@ func (gb *GB28181Plugin) checkDeviceExpire() (err error) {
 		// 检查设备是否过期
 		expireTime := device.RegisterTime.Add(time.Duration(device.Expires) * time.Second)
 		isExpired := now.After(expireTime)
-
-		// 设置设备基本属性
-		device.Status = DeviceOfflineStatus
-		if !isExpired {
-			device.Status = DeviceOnlineStatus
+		if device.CustomName == "" {
+			device.CustomName = device.Name
 		}
-		device.Online = !isExpired
+		if device.Online || device.Status == DeviceOnlineStatus {
+			// 设置设备基本属性
+			device.Status = DeviceOfflineStatus
+			if !isExpired {
+				device.Status = DeviceOnlineStatus
+			}
+			device.Online = !isExpired
+		}
 
 		// 设置事件通道
 		device.eventChan = make(chan any, 10)
@@ -389,6 +394,12 @@ func (gb *GB28181Plugin) checkDeviceExpire() (err error) {
 
 		// 初始化设备通道并更新到数据库
 		for _, channel := range channels {
+			if channel.CustomName == "" {
+				channel.CustomName = channel.Name
+			}
+			if channel.CustomChannelId == "" {
+				channel.CustomChannelId = channel.ChannelId
+			}
 			if isExpired {
 				channel.Status = "OFF"
 			} else {
@@ -403,7 +414,7 @@ func (gb *GB28181Plugin) checkDeviceExpire() (err error) {
 
 		// 添加设备任务
 		gb.devices.Add(device)
-		gb.Info("设备有效", "deviceId", device.DeviceId, "registerTime", device.RegisterTime, "expireTime", expireTime)
+		gb.Info("设备有效", "deviceId", device.DeviceId, "registerTime", device.RegisterTime, "expireTime", expireTime, "isExpired", isExpired, "device.Name", device.Name)
 
 	}
 	return nil
