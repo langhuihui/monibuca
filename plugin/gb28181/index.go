@@ -435,13 +435,10 @@ func (gb *GB28181Plugin) checkPlatform() {
 		gb.Error("查询平台失败", "error", err.Error())
 		return
 	}
-
-	gb.Info("找到启用状态的平台", "count", len(platformModels))
-
 	if gb.Platforms != nil && len(gb.Platforms) > 0 {
 		platformModels = append(platformModels, gb.Platforms...)
 	}
-
+	gb.Info("找到启用状态的平台", "count", len(platformModels))
 	// 遍历所有平台进行初始化和注册
 	for _, platformModel := range platformModels {
 		if platformModel.Enable {

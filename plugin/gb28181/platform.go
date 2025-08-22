@@ -97,7 +97,7 @@ func NewPlatform(pm *gb28181.PlatformModel, plugin *GB28181Plugin, unRegister bo
 	p.DialogClient = sipgo.NewDialogClientCache(p.Client, *p.ContactHDR)
 
 	p.MaxForwardsHDR = sip.MaxForwardsHeader(70)
-	p.plugin.platforms.Set(p)
+	//p.plugin.platforms.Set(p)
 	p.OnDispose(func() {
 		if plugin.platforms.RemoveByKey(p.PlatformModel.ServerGBID) {
 			//for c := range d.channels.Range {
