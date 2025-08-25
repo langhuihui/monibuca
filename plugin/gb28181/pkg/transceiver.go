@@ -12,6 +12,7 @@ import (
 	"m7s.live/v5/pkg"
 	"m7s.live/v5/pkg/task"
 	"m7s.live/v5/pkg/util"
+	"m7s.live/v5/plugin/gb28181/udputils"
 	rtp2 "m7s.live/v5/plugin/rtp/pkg"
 )
 
@@ -36,17 +37,24 @@ var ErrRTPReceiveLost = errors.New("rtp receive lost")
 type Receiver struct {
 	task.Task
 	rtp.Packet
-	FeedChan   chan []byte
-	psm        util.Memory
-	dump       *os.File
-	dumpLen    []byte
-	psVideo    PSVideo
-	psAudio    PSAudio
-	RTPReader  *rtp2.TCP
-	ListenAddr string
-	Listener   net.Listener
-	StreamMode string // 数据流传输模式（UDP:udp传输/TCP-ACTIVE：tcp主动模式/TCP-PASSIVE：tcp被动模式）
-	SSRC       uint32 // RTP SSRC
+	FeedChan     chan []byte
+	psm          util.Memory
+	dump         *os.File
+	dumpLen      []byte
+	psVideo      PSVideo
+	psAudio      PSAudio
+	RTPReader    *rtp2.TCP
+	ListenAddr   string
+	Listener     net.Listener
+	StreamMode   string // 数据流传输模式（UDP:udp传输/TCP-ACTIVE：tcp主动模式/TCP-PASSIVE：tcp被动模式）
+	SSRC         uint32 // RTP SSRC
+	ListenerUdp  *net.UDPConn
+	RTPReaderUdp *rtp2.UDP
+	IsSinglePort bool
+	SingleStop   chan struct{}
+	udpCache     *udputils.PriorityQueueRtp
+	UdpCacheSize int
+	lastSeq      uint16
 }
 
 func NewPSPublisher(puber *m7s.Publisher) *PSPublisher {
@@ -142,6 +150,10 @@ func (dec *PSPublisher) decProgramStreamMap() (err error) {
 	return nil
 }
 
+func (p *PSPublisher) GetKey() uint32 {
+	return p.Receiver.SSRC
+}
+
 func (p *Receiver) ReadRTP(rtp util.Buffer) (err error) {
 	lastSeq := p.SequenceNumber
 	if err = p.Unmarshal(rtp); err != nil {
@@ -172,8 +184,63 @@ func (p *Receiver) ReadRTP(rtp util.Buffer) (err error) {
 			return task.ErrTaskComplete
 		}
 		return
+	} else {
+		p.Error("rtp seq mismatch,", "lastSeq", lastSeq, "seq", p.SequenceNumber)
+		return ErrRTPReceiveLost
 	}
-	return ErrRTPReceiveLost
+
+}
+
+func (p *Receiver) ReadUdpRTP(rtp util.Buffer) (err error) {
+	//解析rtp
+	if err = p.Unmarshal(rtp); err != nil {
+		p.Error("unmarshal error", "err", err)
+		return nil
+	}
+	//判断ssrc
+	if p.SSRC != 0 && p.SSRC != p.Packet.SSRC {
+		p.Info("ReadUdpRTP, ssrc mismatch", "expected", p.SSRC, "actual", p.Packet.SSRC)
+		if p.TraceEnabled() {
+			p.Trace("rtp ssrc mismatch, skip", "expected", p.SSRC, "actual", p.Packet.SSRC)
+		}
+		return nil
+	}
+
+	if p.UdpCacheSize > 0 && p.udpCache == nil {
+		p.udpCache = udputils.NewPqRtp()
+	}
+	//p.Info("ReadUdpRTP, seq", "rtpSeq", p.SequenceNumber)
+	//加入缓存，自动排序
+	rtpTmpCache := p.Packet
+	rtpTmpCache.Payload = make([]byte, len(p.Payload))
+	copy(rtpTmpCache.Payload, p.Payload)
+	p.udpCache.Push(rtpTmpCache)
+
+	rtpTmp := p.Packet
+	if p.udpCache.Len() < p.UdpCacheSize-1 {
+		return nil
+	} else {
+		rtpTmp, _ = p.udpCache.Pop()
+	}
+
+	//p.Info("ReadUdpRTP, seq", "rtpTmpSeq", rtpTmp.SequenceNumber)
+
+	p.lastSeq = rtpTmp.SequenceNumber
+
+	if p.TraceEnabled() {
+		p.Trace("rtp", "len", rtp.Len(), "seq", p.SequenceNumber, "payloadType", p.PayloadType, "ssrc", p.Packet.SSRC)
+	}
+
+	copyData := make([]byte, len(rtpTmp.Payload))
+	copy(copyData, rtpTmp.Payload)
+	select {
+	case p.FeedChan <- copyData:
+		// 成功发送数据
+	case <-p.Done():
+		// 任务已停止，返回错误
+		return task.ErrTaskComplete
+	}
+	return nil
 }
 
 func (p *Receiver) Start() (err error) {
@@ -181,17 +248,28 @@ func (p *Receiver) Start() (err error) {
 		// TCP主动模式不需要监听，直接返回
 		p.Info("TCP-ACTIVE mode, no need to listen")
 		return nil
-	}
-	// TCP被动模式
-	if p.Listener == nil {
-		p.Info("start new listener", "addr", p.ListenAddr)
-		p.Listener, err = net.Listen("tcp4", p.ListenAddr)
-		if err != nil {
-			p.Error("start listen", "err", err)
-			return errors.New("start listen,err" + err.Error())
+	} else if strings.ToUpper(p.StreamMode) == "TCP-PASSIVE" {
+		// TCP被动模式
+		if p.Listener == nil {
+			p.Info("start new listener", "addr", p.ListenAddr)
+			p.Listener, err = net.Listen("tcp4", p.ListenAddr)
+			if err != nil {
+				p.Error("start listen", "err", err)
+				return errors.New("start listen,err" + err.Error())
+			}
+		}
+		p.Info("start listen", "addr", p.ListenAddr)
+	} else {
+		if p.ListenerUdp == nil {
+			p.Info("start new listener", "addr", p.ListenAddr)
+
+			p.ListenerUdp, err = util.ListenUDP(p.ListenAddr, 1024*1024*10)
+			if err != nil {
+				p.Error("start listen", "err", err)
+				return errors.New("start listen,err" + err.Error())
+			}
 		}
 	}
-	p.Info("start listen", "addr", p.ListenAddr)
 	return
 }
 
@@ -205,6 +283,13 @@ func (p *Receiver) Dispose() {
 	if p.RTPReader != nil {
 		p.RTPReader.Close()
 	}
+	if p.ListenerUdp != nil && !p.IsSinglePort {
+		p.ListenerUdp.Close()
+	}
+	if p.IsSinglePort {
+		close(p.SingleStop)
+	}
+
 	if p.FeedChan != nil {
 		close(p.FeedChan)
 	}
@@ -230,15 +315,27 @@ func (p *Receiver) Go() error {
 		p.RTPReader = (*rtp2.TCP)(conn.(*net.TCPConn))
 		p.Info("connected to device", "addr", conn.RemoteAddr())
 		return p.RTPReader.Read(p.ReadRTP)
+	} else if strings.ToUpper(p.StreamMode) == "TCP-PASSIVE" { // TCP被动模式
+		p.Info("start accept")
+		conn, err := p.Listener.Accept()
+		if err != nil {
+			p.Error("accept", "err", err)
+			return err
+		}
+		p.RTPReader = (*rtp2.TCP)(conn.(*net.TCPConn))
+		p.Info("accept", "addr", conn.RemoteAddr())
+		return p.RTPReader.Read(p.ReadRTP)
+	} else { //UDP模式
+		if p.IsSinglePort {
+			p.SingleStop = make(chan struct{})
+			<-p.SingleStop
+			p.Info("stop udp accept", "ssrc", p.SSRC)
+			return nil
+
+		} else {
+			p.Info("start udp accept")
+			p.RTPReaderUdp = (*rtp2.UDP)(p.ListenerUdp)
+			return p.RTPReaderUdp.Read(p.ReadUdpRTP)
+		}
 	}
-	// TCP被动模式
-	p.Info("start accept")
-	conn, err := p.Listener.Accept()
-	if err != nil {
-		p.Error("accept", "err", err)
-		return err
-	}
-	p.RTPReader = (*rtp2.TCP)(conn.(*net.TCPConn))
-	p.Info("accept", "addr", conn.RemoteAddr())
-	return p.RTPReader.Read(p.ReadRTP)
 }
