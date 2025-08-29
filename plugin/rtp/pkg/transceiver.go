@@ -116,6 +116,7 @@ func (p *Receiver) Start() (err error) {
 			p.OnStop(p.Listener.Close)
 			conn, err = p.Accept()
 		} else {
+			conn, err = p.Accept()
 			//TODO: 公用监听端口
 		}
 		if err != nil {
