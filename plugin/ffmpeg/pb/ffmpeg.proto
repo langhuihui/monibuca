@@ -1,0 +1,114 @@
+syntax = "proto3";
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
+import "global.proto";
+
+package ffmpeg;
+option go_package="m7s.live/v5/plugin/ffmpeg/pb";
+
+service api {
+  // 创建 FFmpeg 进程
+  rpc CreateProcess (CreateProcessRequest) returns (ProcessResponse) {
+    option (google.api.http) = {
+      post: "/ffmpeg/api/create"
+      body: "*"
+    };
+  }
+  
+  // 更新 FFmpeg 进程
+  rpc UpdateProcess (UpdateProcessRequest) returns (ProcessResponse) {
+    option (google.api.http) = {
+      post: "/ffmpeg/api/update/{id}"
+      body: "*"
+    };
+  }
+  
+  // 删除 FFmpeg 进程
+  rpc DeleteProcess (ProcessIdRequest) returns (global.SuccessResponse) {
+    option (google.api.http) = {
+      post: "/ffmpeg/api/delete/{id}"
+    };
+  }
+  
+  // 获取 FFmpeg 进程列表
+  rpc ListProcesses (google.protobuf.Empty) returns (ListProcessesResponse) {
+    option (google.api.http) = {
+      get: "/ffmpeg/api/list"
+    };
+  }
+
+  // 启动 FFmpeg 进程
+  rpc StartProcess (ProcessIdRequest) returns (global.SuccessResponse) {
+    option (google.api.http) = {
+      post: "/ffmpeg/api/start/{id}"
+    };
+  }
+  
+  // 停止 FFmpeg 进程
+  rpc StopProcess (ProcessIdRequest) returns (global.SuccessResponse) {
+    option (google.api.http) = {
+      post: "/ffmpeg/api/stop/{id}"
+    };
+  }
+  
+  // 重启 FFmpeg 进程
+  rpc RestartProcess (ProcessIdRequest) returns (global.SuccessResponse) {
+    option (google.api.http) = {
+      post: "/ffmpeg/api/restart/{id}"
+    };
+  }
+  
+  // 检查 FFmpeg 版本
+  rpc GetVersion (google.protobuf.Empty) returns (VersionResponse) {
+    option (google.api.http) = {
+      get: "/ffmpeg/api/version"
+    };
+  }
+}
+
+message FFmpegProcess {
+  uint32 id = 1;
+  string description = 2;
+  string arguments = 3;
+  string status = 4;
+  int32 pid = 5;
+  bool autoStart = 6;
+  google.protobuf.Timestamp createdAt = 7;
+  google.protobuf.Timestamp updatedAt = 8;
+}
+
+message CreateProcessRequest {
+  string description = 1;
+  string arguments = 2;
+  bool autoStart = 3;
+}
+
+message UpdateProcessRequest {
+  uint32 id = 1;
+  string description = 2;
+  string arguments = 3;
+  bool autoStart = 4;
+}
+
+message ProcessIdRequest {
+  uint32 id = 1;
+}
+
+message ProcessResponse {
+  uint32 code = 1;
+  string message = 2;
+  FFmpegProcess data = 3;
+}
+
+message ListProcessesResponse {
+  uint32 code = 1;
+  string message = 2;
+  repeated FFmpegProcess data = 3;
+}
+
+message VersionResponse {
+  uint32 code = 1;
+  string message = 2;
+  string data = 3;
+}
