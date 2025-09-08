@@ -372,9 +372,10 @@ func (d *Dialog) Run() (err error) {
 
 	var pub mrtp.PSReceiver
 	pub.Publisher = d.pullCtx.Publisher
-	if d.StreamMode == mrtp.StreamModeTCPActive {
+	switch d.StreamMode {
+	case mrtp.StreamModeTCPActive:
 		pub.ListenAddr = fmt.Sprintf("%s:%d", d.targetIP, d.targetPort)
-	} else if d.StreamMode == mrtp.StreamModeTCPPassive {
+	case mrtp.StreamModeTCPPassive:
 		if d.gb.tcpPort > 0 {
 			d.Info("into single port mode,use gb.tcpPort", d.gb.tcpPort)
 			if d.gb.netListener != nil {
@@ -388,16 +389,14 @@ func (d *Dialog) Run() (err error) {
 			pub.SSRC = d.SSRC
 		}
 		pub.ListenAddr = fmt.Sprintf(":%d", d.MediaPort)
-	} else if d.StreamMode == mrtp.StreamModeUDP {
+	case mrtp.StreamModeUDP:
 		if d.gb.udpPort > 0 {
 			d.Info("into single port mode, use gb.udpPort", d.gb.udpPort)
 			if d.gb.netUDPListener != nil {
 				d.Info("use gb.netUDPListener", d.gb.netUDPListener.LocalAddr())
-				pub.ListenerUdp = d.gb.netUDPListener
 			} else {
 				d.Info("listen udp4", fmt.Sprintf(":%d", d.gb.udpPort))
-				pub.ListenerUdp, _ = util.ListenUDP(fmt.Sprintf(":%d", d.gb.udpPort), 1024*1024*4)
-				d.gb.netUDPListener = pub.ListenerUdp
+				d.gb.netUDPListener, _ = util.ListenUDP(fmt.Sprintf(":%d", d.gb.udpPort), 1024*1024*4)
 			}
 		}
 		pub.SSRC = d.SSRC

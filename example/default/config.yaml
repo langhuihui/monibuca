@@ -12,20 +12,20 @@ srt:
   listenaddr: :6000
   passphrase: foobarfoobar
 gb28181:
-  enable: false  # 是否启用GB28181协议
+  enable: false # 是否启用GB28181协议
   autoinvite: false #建议使用false，开启后会自动邀请设备推流
-  mediaip: 192.168.1.21  #流媒体收流IP,外网情况下使用公网IP,内网情况下使用网卡IP,不要用127.0.0.1
-  sipip: 192.168.1.21  #SIP通讯IP,不管公网还是内网都使用本机网卡IP,不要用127.0.0.1
+  mediaip: 192.168.1.21 #流媒体收流IP,外网情况下使用公网IP,内网情况下使用网卡IP,不要用127.0.0.1
+  sipip: 192.168.1.21 #SIP通讯IP,不管公网还是内网都使用本机网卡IP,不要用127.0.0.1
   sip:
     listenaddr:
-          - udp::5060
+      - udp::5060
   onsub:
     pull:
       ^\d{20}/\d{20}$: $0
       ^gb_\d+/(.+)$: $1
-#      .* : $0
+  #      .* : $0
   platforms:
-    - enable: false  #是否启用平台
+    - enable: false #是否启用平台
       name: "测试平台" #平台名称
       servergbid: "34020000002000000002" #上级平台GBID
       servergbdomain: "3402000000" #上级平台GB域
@@ -89,13 +89,10 @@ hls:
 #   onpub:
 #     transform:
 #       .* : 5s x 3
-#rtsp:
-#  pull:
-    # live/test: rtsp://admin:1qaz2wsx3EDC@giroro.tpddns.cn:1554/Streaming/Channels/101
-#    live/test: rtsp://admin:1qaz2wsx3EDC@localhost:8554/live/test
 
 s3:
-  auto: true              # 启用自动上传
+  enable: false
+  auto: true # 启用自动上传
   deleteAfterUpload: false # 上传后保留本地文件
   endpoint: "storage-dev.xiding.tech"
   accessKeyId: "xidinguser"
@@ -105,30 +102,38 @@ s3:
   forcePathStyle: true
   useSSL: true
 
+rtsp:
+  # pull:
+  # live/test: rtsp://admin:1qaz2wsx3EDC@58.212.158.30/Streaming/Channels/101
+  # live/test: rtsp://admin:1qaz2wsx3EDC@localhost:8554/live/test
+webrtc:
+  publish:
+    pubaudio: false
+  port: udp:9000-9100
 snap:
   enable: false
   onpub:
     transform:
       .+:
         output:
-          -   watermark:
-                text: "abcd"              # 水印文字内容
-                fontpath: /Users/dexter/Library/Fonts/MapleMono-NF-CN-Medium.ttf          # 水印字体文件路径
-                fontcolor: "rgba(255,165,0,1)" # 水印字体颜色，支持rgba格式
-                fontsize: 36          # 水印字体大小
-                offsetx: 0           # 水印位置X偏移
-                offsety: 0           # 水印位置Y偏移
-              timeinterval: 1s   # 截图时间间隔
-              savepath: "snaps"  # 截图保存路径
-              iframeinterval: 3  # 间隔多少帧截图
-              querytimedelta: 3  # 查询截图时允许的最大时间差（秒）
+          - watermark:
+              text: "abcd" # 水印文字内容
+              fontpath: /Users/dexter/Library/Fonts/MapleMono-NF-CN-Medium.ttf # 水印字体文件路径
+              fontcolor: "rgba(255,165,0,1)" # 水印字体颜色，支持rgba格式
+              fontsize: 36 # 水印字体大小
+              offsetx: 0 # 水印位置X偏移
+              offsety: 0 # 水印位置Y偏移
+            timeinterval: 1s # 截图时间间隔
+            savepath: "snaps" # 截图保存路径
+            iframeinterval: 3 # 间隔多少帧截图
+            querytimedelta: 3 # 查询截图时允许的最大时间差（秒）
 onvif:
   enable: false
   discoverinterval: 3 # 发现设备的间隔，单位秒，默认30秒，建议比rtsp插件的重连间隔大点
   autopull: true
   autoadd: true
   interfaces: # 设备发现指定网卡，以及该网卡对应IP段的全局默认账号密码，支持多网卡
-    - interfacename: 以太网  # 网卡名称 或者"以太网" "eth0"等，使用ipconfig 或者 ifconfig 查看网卡名称 
+    - interfacename: 以太网 # 网卡名称 或者"以太网" "eth0"等，使用ipconfig 或者 ifconfig 查看网卡名称
       username: admin # onvif 账号
       password: admin # onvif 密码
     # - interfacename: WLAN 2 # 网卡2
