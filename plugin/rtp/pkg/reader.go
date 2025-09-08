@@ -16,7 +16,6 @@ type IRTPReader interface {
 type RTPUDPReader struct {
 	io.Reader
 	RTPReorder[*rtp.Packet]
-	UdpCacheSize int
 }
 
 func NewRTPUDPReader(r io.Reader) *RTPUDPReader {
@@ -24,11 +23,11 @@ func NewRTPUDPReader(r io.Reader) *RTPUDPReader {
 }
 
 func (r *RTPUDPReader) Read(packet *rtp.Packet) error {
-	for {
-		ordered := r.Pop()
+	var ordered *rtp.Packet
+	for ordered == nil {
+		ordered = r.Pop()
 		if ordered != nil {
-			*packet = *ordered
-			return nil
+			break
 		}
 		var buf [MTUSize]byte
 		var pack rtp.Packet
@@ -40,8 +39,10 @@ func (r *RTPUDPReader) Read(packet *rtp.Packet) error {
 		if err != nil {
 			return err
 		}
-		r.Push(pack.SequenceNumber, &pack)
+		ordered = r.Push(pack.SequenceNumber, &pack)
 	}
+	*packet = *ordered
+	return nil
 }
 
 type RTPTCPReader struct {
