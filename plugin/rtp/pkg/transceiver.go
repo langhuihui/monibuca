@@ -56,9 +56,10 @@ type Receiver struct {
 	*util.BufReader
 	ListenAddr string
 	net.Listener
-	StreamMode StreamMode
-	SSRC       uint32 // RTP SSRC
-	RTPMouth   chan []byte
+	StreamMode  StreamMode
+	SSRC        uint32 // RTP SSRC
+	RTPMouth    chan []byte
+	ListenerUdp *net.UDPConn
 }
 
 type PSReceiver struct {
@@ -102,7 +103,8 @@ func (p *Receiver) Start() (err error) {
 			return err
 		}
 		p.OnStop(conn.Close)
-		rtpReader = NewRTPPayloadReader(NewRTPTCPReader(conn))
+		rtpReader = NewRTPPayloadReader(NewRTPTCPReader(conn), p.SSRC, false)
+
 		p.BufReader = util.NewBufReader(rtpReader)
 	case StreamModeTCPPassive:
 		var conn net.Conn
@@ -124,7 +126,8 @@ func (p *Receiver) Start() (err error) {
 			return err
 		}
 		p.OnStop(conn.Close)
-		rtpReader = NewRTPPayloadReader(NewRTPTCPReader(conn))
+		rtpReader = NewRTPPayloadReader(NewRTPTCPReader(conn), p.SSRC, false)
+
 		p.BufReader = util.NewBufReader(rtpReader)
 	case StreamModeUDP:
 		var udpAddr *net.UDPAddr
@@ -137,11 +140,14 @@ func (p *Receiver) Start() (err error) {
 		if err != nil {
 			return
 		}
-		rtpReader = NewRTPPayloadReader(NewRTPUDPReader(conn))
+		p.OnStop(conn.Close)
+		rtpReader = NewRTPPayloadReader(NewRTPUDPReader(conn), p.SSRC, true)
+
 		p.BufReader = util.NewBufReader(rtpReader)
 	case StreamModeManual:
 		p.RTPMouth = make(chan []byte)
-		rtpReader = NewRTPPayloadReader((RTPChanReader)(p.RTPMouth))
+		rtpReader = NewRTPPayloadReader((RTPChanReader)(p.RTPMouth), p.SSRC, false)
+
 		p.BufReader = util.NewBufReader(rtpReader)
 	}
 	p.Using(rtpReader, p.BufReader)
