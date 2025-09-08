@@ -98,31 +98,24 @@ func (r *RTPCtx) GetRTPCodecParameter() webrtc.RTPCodecParameters {
 	return r.RTPCodecParameters
 }
 
-func (r *RTPData) Append(ctx *RTPCtx, ts uint32, payload []byte) *rtp.Packet {
+func (r *RTPData) Append(ctx *RTPCtx, ts uint32, payload []byte) (packet *rtp.Packet) {
 	ctx.SequenceNumber++
-	r.Packets = append(r.Packets, rtp.Packet{
-		Header: rtp.Header{
-			Version:        2,
-			SequenceNumber: ctx.SequenceNumber,
-			Timestamp:      ts,
-			SSRC:           ctx.SSRC,
-			PayloadType:    uint8(ctx.PayloadType),
-		},
-		Payload: payload,
-	})
-	return &r.Packets[len(r.Packets)-1]
+	packet = r.Packets.GetNextPointer()
+	packet.Header = rtp.Header{
+		Version:        2,
+		SequenceNumber: ctx.SequenceNumber,
+		Timestamp:      ts,
+		SSRC:           ctx.SSRC,
+		PayloadType:    uint8(ctx.PayloadType),
+	}
+	packet.Payload = payload
+	return
 }
 
 var _ IAVFrame = (*AudioFrame)(nil)
 
 type AudioFrame struct {
 	RTPData
-}
-
-func (r *AudioFrame) Parse(data IAVFrame) (err error) {
-	input := data.(*AudioFrame)
-	r.Packets = append(r.Packets[:0], input.Packets...)
-	return
 }
 
 func payloadLengthInfoDecode(buf []byte) (int, int, error) {

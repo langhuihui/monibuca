@@ -61,7 +61,70 @@ go test ./...
 
 **Configuration System (`pkg/config/`):** Hierarchical configuration system with priority order: dynamic modifications > environment variables > config files > default YAML > global config > defaults.
 
-**Task System (`pkg/task/`):** Asynchronous task management with dependency handling, lifecycle management, and graceful shutdown capabilities.
+**Task System (`pkg/task/`):** Advanced asynchronous task management system with multiple layers:
+- **Task:** Basic unit of work with lifecycle management (Start/Run/Dispose)
+- **Job:** Container that manages multiple child tasks and provides event loops
+- **Work:** Special type of Job that acts as a persistent queue manager (keepalive=true)
+- **Channel:** Event-driven task for handling continuous data streams
+
+### Task System Deep Dive
+
+#### Task Hierarchy and Lifecycle
+```
+Work (Queue Manager)
+  └── Job (Container with Event Loop)
+      └── Task (Basic Work Unit)
+          ├── Start() - Initialization phase
+          ├── Run() - Main execution phase
+          └── Dispose() - Cleanup phase
+```
+
+#### Queue-based Asynchronous Processing
+The Task system supports sophisticated queue-based processing patterns:
+
+1. **Work as Queue Manager:** Work instances stay alive indefinitely and manage queues of tasks
+2. **Task Queuing:** Use `workInstance.AddTask(task, logger)` to queue tasks
+3. **Automatic Lifecycle:** Tasks are automatically started, executed, and disposed
+4. **Error Handling:** Built-in retry mechanisms and error propagation
+
+**Example Pattern (from S3 plugin):**
+```go
+type UploadQueueTask struct {
+    task.Work  // Persistent queue manager
+}
+
+type FileUploadTask struct {
+    task.Task  // Individual work item
+    // ... task-specific fields
+}
+
+// Initialize queue manager (typically in init())
+var uploadQueueTask UploadQueueTask
+m7s.Servers.AddTask(&uploadQueueTask)
+
+// Queue individual tasks
+uploadQueueTask.AddTask(&FileUploadTask{...}, logger)
+```
+
+#### Cross-Plugin Task Cooperation
+Tasks can coordinate across different plugins through:
+
+1. **Global Instance Pattern:** Plugins expose global instances for cross-plugin access
+2. **Event-based Triggers:** One plugin triggers tasks in another plugin
+3. **Shared Queue Managers:** Multiple plugins can use the same Work instance
+
+**Example (MP4 → S3 Integration):**
+```go
+// In MP4 plugin: trigger S3 upload after recording completes
+s3plugin.TriggerUpload(filePath, deleteAfter)
+
+// S3 plugin receives trigger and queues upload task
+func TriggerUpload(filePath string, deleteAfter bool) {
+    if s3PluginInstance != nil {
+        s3PluginInstance.QueueUpload(filePath, objectKey, deleteAfter)
+    }
+}
+```
 
 ### Key Interfaces
 
@@ -79,6 +142,18 @@ go test ./...
 3. **Subscribers** attach to publishers to receive media
 4. **Transformers** can process streams between publishers and subscribers
 5. **Plugins** provide protocol-specific implementations
+
+### Post-Recording Workflow
+
+Monibuca implements a sophisticated post-recording processing pipeline:
+
+1. **Recording Completion:** MP4 recorder finishes writing stream data
+2. **Trailer Writing:** Asynchronous task moves MOOV box to file beginning for web compatibility
+3. **File Optimization:** Temporary file operations ensure atomic updates
+4. **External Storage Integration:** Automatic upload to S3-compatible services
+5. **Cleanup:** Optional local file deletion after successful upload
+
+This workflow uses queue-based task processing to avoid blocking the main recording pipeline.
 
 ## Plugin Development
 
@@ -99,6 +174,81 @@ go test ./...
 2. **Start:** Network listeners and task registration
 3. **Run:** Active operation
 4. **Dispose:** Cleanup and shutdown
+
+### Cross-Plugin Communication Patterns
+
+#### 1. Global Instance Pattern
+```go
+// Expose global instance for cross-plugin access
+var s3PluginInstance *S3Plugin
+
+func (p *S3Plugin) Start() error {
+    s3PluginInstance = p  // Set global instance
+    // ... rest of start logic
+}
+
+// Provide public API functions
+func TriggerUpload(filePath string, deleteAfter bool) {
+    if s3PluginInstance != nil {
+        s3PluginInstance.QueueUpload(filePath, objectKey, deleteAfter)
+    }
+}
+```
+
+#### 2. Event-Driven Integration
+```go
+// In one plugin: trigger event after completion
+if t.filePath != "" {
+    t.Info("MP4 file processing completed, triggering S3 upload")
+    s3plugin.TriggerUpload(t.filePath, false)
+}
+```
+
+#### 3. Shared Queue Managers
+Multiple plugins can share Work instances for coordinated processing.
+
+### Asynchronous Task Development Best Practices
+
+#### 1. Implement Task Interfaces
+```go
+type MyTask struct {
+    task.Task
+    // ... custom fields
+}
+
+func (t *MyTask) Start() error {
+    // Initialize resources, validate inputs
+    return nil
+}
+
+func (t *MyTask) Run() error {
+    // Main work execution
+    // Return task.ErrTaskComplete for successful completion
+    return nil
+}
+```
+
+#### 2. Use Work for Queue Management
+```go
+type MyQueueManager struct {
+    task.Work
+}
+
+var myQueue MyQueueManager
+
+func init() {
+    m7s.Servers.AddTask(&myQueue)
+}
+
+// Queue tasks from anywhere
+myQueue.AddTask(&MyTask{...}, logger)
+```
+
+#### 3. Error Handling and Retry
+- Tasks automatically support retry mechanisms
+- Use `task.SetRetry(maxRetry, interval)` for custom retry behavior
+- Return `task.ErrTaskComplete` for successful completion
+- Return other errors to trigger retry or failure handling
 
 ## Configuration Structure
 
@@ -131,8 +281,9 @@ Automatic migration is handled for core models including users, proxies, and str
 - **WebRTC:** Web real-time communication
 - **GB28181:** Chinese surveillance standard
 - **FLV:** Flash video format
-- **MP4:** MPEG-4 format
+- **MP4:** MPEG-4 format with post-processing capabilities
 - **SRT:** Secure reliable transport
+- **S3:** File upload integration with AWS S3/MinIO compatibility
 
 ## Authentication & Security
 
@@ -154,11 +305,18 @@ Automatic migration is handled for core models including users, proxies, and str
 - Integration tests can use the example configurations
 - Use the mock.py script for protocol testing
 
+### Async Task Development
+- Always use Work instances for queue management
+- Implement proper Start/Run lifecycle in tasks
+- Use global instance pattern for cross-plugin communication
+- Handle errors gracefully with appropriate retry strategies
+
 ### Performance Considerations
 - Memory pool is enabled by default (disable with `disable_rm`)
 - Zero-copy design for media data where possible
 - Lock-free data structures for high concurrency
 - Efficient buffer management with ring buffers
+- Queue-based processing prevents blocking main threads
 
 ## Debugging
 
@@ -172,6 +330,12 @@ Automatic migration is handled for core models including users, proxies, and str
 - Configurable log levels
 - Log rotation support
 - Fatal crash logging
+
+### Task System Debugging
+- Tasks automatically include detailed logging with task IDs and types
+- Use `task.Debug/Info/Warn/Error` methods for consistent logging
+- Task state and progress can be monitored through descriptions
+- Event loop status and queue lengths are logged automatically
 
 ## Web Admin Interface
 
@@ -197,3 +361,9 @@ Automatic migration is handled for core models including users, proxies, and str
 - Plugins are auto-discovered from imports
 - Check plugin enable/disable status
 - Verify configuration merging
+
+### Task System Issues
+- Ensure Work instances are added to server during initialization
+- Check task queue status if tasks aren't executing
+- Verify proper error handling in task implementation
+- Monitor task retry counts and failure reasons in logs

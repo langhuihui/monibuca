@@ -59,8 +59,10 @@ func (c *Channel) GetKey() string {
 }
 
 type PullProxy struct {
-	task.Task
+	task.TickTask
 	m7s.BasePullProxy
+	deviceId, channelId string
+	devices             *task.WorkCollection[string, *Device]
 }
 
 func NewPullProxy() m7s.IPullProxy {
@@ -73,11 +75,17 @@ func (p *PullProxy) GetKey() uint {
 
 func (p *PullProxy) Start() error {
 	streamPaths := strings.Split(p.GetStreamPath(), "/")
-	deviceId, channelId := streamPaths[0], streamPaths[1]
-	if device, ok := p.Plugin.GetHandler().(*GB28181Plugin).devices.Get(deviceId); ok {
-		if _, ok := device.channels.Get(deviceId + "_" + channelId); ok {
+	p.deviceId, p.channelId = streamPaths[0], streamPaths[1]
+	p.devices = &p.Plugin.GetHandler().(*GB28181Plugin).devices
+	return p.TickTask.Start()
+}
+
+func (p *PullProxy) Tick(any) {
+	if device, ok := p.devices.Get(p.deviceId); ok {
+		if _, ok := device.channels.Get(p.deviceId + "_" + p.channelId); ok {
 			p.ChangeStatus(m7s.PullProxyStatusOnline)
+			return
 		}
 	}
-	return nil
+	p.ChangeStatus(m7s.PullProxyStatusOffline)
 }

@@ -13,6 +13,7 @@ import (
 	"m7s.live/v5/pkg/config"
 	"m7s.live/v5/pkg/task"
 	"m7s.live/v5/plugin/mp4/pkg/box"
+	s3plugin "m7s.live/v5/plugin/s3"
 )
 
 type WriteTrailerQueueTask struct {
@@ -23,8 +24,9 @@ var writeTrailerQueueTask WriteTrailerQueueTask
 
 type writeTrailerTask struct {
 	task.Task
-	muxer *Muxer
-	file  *os.File
+	muxer    *Muxer
+	file     *os.File
+	filePath string
 }
 
 func (task *writeTrailerTask) Start() (err error) {
@@ -102,6 +104,13 @@ func (t *writeTrailerTask) Run() (err error) {
 	if err = temp.Close(); err != nil {
 		t.Error("close temp file", "err", err)
 	}
+	
+	// MP4文件处理完成后，触发S3上传
+	if t.filePath != "" {
+		t.Info("MP4 file processing completed, triggering S3 upload", "filePath", t.filePath)
+		s3plugin.TriggerUpload(t.filePath, false) // 不删除本地文件，让用户配置决定
+	}
+	
 	return
 }
 
@@ -122,8 +131,9 @@ type Recorder struct {
 func (r *Recorder) writeTailer(end time.Time) {
 	r.WriteTail(end, &writeTrailerQueueTask)
 	writeTrailerQueueTask.AddTask(&writeTrailerTask{
-		muxer: r.muxer,
-		file:  r.file,
+		muxer:    r.muxer,
+		file:     r.file,
+		filePath: r.Event.FilePath,
 	}, r.Logger)
 }
 

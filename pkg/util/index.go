@@ -106,11 +106,9 @@ func (s *ReuseArray[T]) Reset() {
 	*s = (*s)[:0]
 }
 
-func (s *ReuseArray[T]) Reduce() ReuseArray[T] {
+func (s *ReuseArray[T]) Reduce() {
 	ss := *s
-	ss = ss[:len(ss)-1]
-	*s = ss
-	return ss
+	*s = ss[:len(ss)-1]
 }
 
 func (s *ReuseArray[T]) Remove(item *T) bool {

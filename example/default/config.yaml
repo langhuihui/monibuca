@@ -94,6 +94,17 @@ hls:
     # live/test: rtsp://admin:1qaz2wsx3EDC@giroro.tpddns.cn:1554/Streaming/Channels/101
 #    live/test: rtsp://admin:1qaz2wsx3EDC@localhost:8554/live/test
 
+s3:
+  auto: true              # 启用自动上传
+  deleteAfterUpload: false # 上传后保留本地文件
+  endpoint: "storage-dev.xiding.tech"
+  accessKeyId: "xidinguser"
+  secretAccessKey: "U2FsdGVkX1/7uyvj0trCzSNFsfDZ66dMSAEZjNlvW1c="
+  bucket: "vidu-media-bucket"
+  pathPrefix: "recordings"
+  forcePathStyle: true
+  useSSL: true
+
 snap:
   enable: false
   onpub:

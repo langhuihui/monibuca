@@ -136,18 +136,34 @@ func (d *Dialog) Start() (err error) {
 	d.pullCtx.GoToStepConst(StepSIPPrepare)
 
 	//defer d.gb.dialogs.Remove(d)
-	if d.gb.tcpPort > 0 {
-		d.MediaPort = d.gb.tcpPort
-	} else {
-		if d.gb.MediaPort.Valid() {
-			select {
-			case d.MediaPort = <-d.gb.tcpPorts:
-			default:
-				d.pullCtx.Fail("no available tcp port")
-				return fmt.Errorf("no available tcp port")
-			}
+	if d.StreamMode == mrtp.StreamModeTCPPassive {
+		if d.gb.tcpPort > 0 {
+			d.MediaPort = d.gb.tcpPort
 		} else {
-			d.MediaPort = d.gb.MediaPort[0]
+			if d.gb.MediaPort.Valid() {
+				select {
+				case d.MediaPort = <-d.gb.tcpPorts:
+				default:
+					d.pullCtx.Fail("no available tcp port")
+					return fmt.Errorf("no available tcp port")
+				}
+			} else {
+				d.MediaPort = d.gb.MediaPort[0]
+			}
+		}
+	} else if d.StreamMode == mrtp.StreamModeUDP {
+		if d.gb.udpPort > 0 {
+			d.MediaPort = d.gb.udpPort
+		} else {
+			if d.gb.MediaPort.Valid() {
+				select {
+				case d.MediaPort = <-d.gb.udpPorts:
+				default:
+					return fmt.Errorf("no available udp port")
+				}
+			} else {
+				d.MediaPort = d.gb.MediaPort[0]
+			}
 		}
 	}
 
@@ -214,7 +230,9 @@ func (d *Dialog) Start() (err error) {
 			"a=connection:new",
 		)
 	case mrtp.StreamModeUDP:
+		/* 支持udp收流 yjx
 		return errors.New("do not support udp mode")
+		*/
 	default:
 		sdpInfo = append(sdpInfo,
 			"a=setup:passive",
@@ -356,7 +374,7 @@ func (d *Dialog) Run() (err error) {
 	pub.Publisher = d.pullCtx.Publisher
 	if d.StreamMode == mrtp.StreamModeTCPActive {
 		pub.ListenAddr = fmt.Sprintf("%s:%d", d.targetIP, d.targetPort)
-	} else {
+	} else if d.StreamMode == mrtp.StreamModeTCPPassive {
 		if d.gb.tcpPort > 0 {
 			d.Info("into single port mode,use gb.tcpPort", d.gb.tcpPort)
 			if d.gb.netListener != nil {
@@ -370,6 +388,20 @@ func (d *Dialog) Run() (err error) {
 			pub.SSRC = d.SSRC
 		}
 		pub.ListenAddr = fmt.Sprintf(":%d", d.MediaPort)
+	} else if d.StreamMode == mrtp.StreamModeUDP {
+		if d.gb.udpPort > 0 {
+			d.Info("into single port mode, use gb.udpPort", d.gb.udpPort)
+			if d.gb.netUDPListener != nil {
+				d.Info("use gb.netUDPListener", d.gb.netUDPListener.LocalAddr())
+				pub.ListenerUdp = d.gb.netUDPListener
+			} else {
+				d.Info("listen udp4", fmt.Sprintf(":%d", d.gb.udpPort))
+				pub.ListenerUdp, _ = util.ListenUDP(fmt.Sprintf(":%d", d.gb.udpPort), 1024*1024*4)
+				d.gb.netUDPListener = pub.ListenerUdp
+			}
+		}
+		pub.SSRC = d.SSRC
+		pub.ListenAddr = fmt.Sprintf(":%d", d.MediaPort)
 	}
 	pub.StreamMode = d.StreamMode
 	return d.RunTask(&pub)
@@ -380,9 +412,16 @@ func (d *Dialog) GetKey() string {
 }
 
 func (d *Dialog) Dispose() {
-	if d.gb.tcpPort == 0 {
-		// 如果没有设置tcp端口，则将MediaPort设置为0，表示不再使用
-		d.gb.tcpPorts <- d.MediaPort
+	if d.StreamMode == mrtp.StreamModeUDP {
+		if d.gb.udpPort == 0 { //多端口
+			// 如果没有设置udp端口，则将MediaPort设置为0，表示不再使用
+			d.gb.udpPorts <- d.MediaPort
+		}
+	} else {
+		if d.gb.tcpPort == 0 {
+			// 如果没有设置tcp端口，则将MediaPort设置为0，表示不再使用
+			d.gb.tcpPorts <- d.MediaPort
+		}
 	}
 	d.Info("dialog dispose", "ssrc", d.SSRC, "mediaPort", d.MediaPort, "streamMode", d.StreamMode, "deviceId", d.Channel.DeviceId, "channelId", d.Channel.ChannelId)
 	if d.session != nil {
