@@ -4,11 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"os"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/emiago/sipgo"
@@ -16,7 +16,6 @@ import (
 	"gorm.io/gorm"
 	"m7s.live/v5/pkg/util"
 
-	"github.com/rs/zerolog"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"m7s.live/v5/plugin/gb28181/pb"
 	gb28181 "m7s.live/v5/plugin/gb28181/pkg"
@@ -393,64 +392,16 @@ func (gb *GB28181Plugin) SyncDevice(ctx context.Context, req *pb.SyncDeviceReque
 		Code:    404,
 		Message: "device not found",
 	}
+	var device *Device
 
 	// 先从内存中获取设备
-	d, ok := gb.devices.Get(req.DeviceId)
-	if !ok && gb.DB != nil {
-		// 如果内存中没有且数据库存在，则从数据库查询
-		var device Device
-		if err := gb.DB.Where("device_id = ?", req.DeviceId).First(&device).Error; err == nil {
-			d = &device
-			// 恢复设备的必要字段
-			d.Logger = gb.Logger.With("deviceid", req.DeviceId)
-			d.channels.L = new(sync.RWMutex)
-			d.plugin = gb
-
-			// 初始化 Task
-			var hash uint32
-			for i := 0; i < len(d.DeviceId); i++ {
-				ch := d.DeviceId[i]
-				hash = hash*31 + uint32(ch)
-			}
-			d.Task.ID = hash
-			d.Task.Logger = d.Logger
-			d.Task.Context, d.Task.CancelCauseFunc = context.WithCancelCause(context.Background())
-
-			// 初始化 SIP 相关字段
-			d.fromHDR = sip.FromHeader{
-				Address: sip.Uri{
-					User: gb.Serial,
-					Host: gb.Realm,
-				},
-				Params: sip.NewParams(),
-			}
-			d.fromHDR.Params.Add("tag", sip.GenerateTagN(16))
-
-			d.contactHDR = sip.ContactHeader{
-				Address: sip.Uri{
-					User: gb.Serial,
-					Host: d.SipIp,
-					Port: d.Port,
-				},
-			}
-
-			d.Recipient = sip.Uri{
-				Host: d.IP,
-				Port: d.Port,
-				User: d.DeviceId,
-			}
-
-			// 初始化 SIP 客户端
-			d.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(d.SipIp))
-
-			// 将设备添加到内存中
-			gb.devices.AddTask(d)
-		}
+	if d, ok := gb.devices.Get(req.DeviceId); ok {
+		device = d
 	}
 
-	if d != nil {
+	if device != nil {
 		// 发送目录查询请求
-		_, err := d.catalog()
+		_, err := device.catalog()
 		if err != nil {
 			resp.Code = 500
 			resp.Message = "catalog request failed"
@@ -458,7 +409,7 @@ func (gb *GB28181Plugin) SyncDevice(ctx context.Context, req *pb.SyncDeviceReque
 		} else {
 			resp.Code = 0
 			resp.Message = "sync request sent"
-			resp.Total = int32(d.ChannelCount)
+			resp.Total = int32(device.ChannelCount)
 			resp.Current = 0 // 初始化进度为0
 		}
 	}
@@ -1284,7 +1235,14 @@ func (gb *GB28181Plugin) TestSip(ctx context.Context, req *pb.TestSipRequest) (*
 	//    Request-URI: sip:34020000001320000006@192.168.1.102:5060
 	//    [Resent Packet: False]
 	// 初始化SIP客户端
-	device.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname("192.168.1.106"))
+	opts := &slog.HandlerOptions{
+		Level:     slog.LevelDebug,
+		AddSource: true,
+	}
+	logHandler := slog.NewJSONHandler(os.Stdout, opts)
+	logger := slog.New(logHandler)
+	slog.SetDefault(logger) // 设置为默认日志记录器
+	device.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(logger), sipgo.WithClientHostname("192.168.1.106"))
 	if device.client == nil {
 		resp.Code = 500
 		resp.Message = "failed to create sip client"

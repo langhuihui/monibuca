@@ -137,6 +137,7 @@ func (p *Receiver) Start() (err error) {
 		if err != nil {
 			return
 		}
+		p.OnStop(conn.Close)
 		rtpReader = NewRTPPayloadReader(NewRTPUDPReader(conn))
 		p.BufReader = util.NewBufReader(rtpReader)
 	case StreamModeManual:

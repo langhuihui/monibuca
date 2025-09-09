@@ -230,9 +230,10 @@ func (d *Dialog) Start() (err error) {
 			"a=connection:new",
 		)
 	case mrtp.StreamModeUDP:
-		/* 支持udp收流 yjx
-		return errors.New("do not support udp mode")
-		*/
+		sdpInfo = append(sdpInfo,
+			"a=setup:active",
+			"a=connection:new",
+		)
 	default:
 		sdpInfo = append(sdpInfo,
 			"a=setup:passive",
@@ -265,7 +266,7 @@ func (d *Dialog) Start() (err error) {
 	viaHeader := sip.ViaHeader{
 		ProtocolName:    "SIP",
 		ProtocolVersion: "2.0",
-		Transport:       "UDP",
+		Transport:       device.Transport,
 		Host:            device.MediaIp,
 		Port:            device.LocalPort,
 		Params:          sip.NewParams(),
@@ -305,7 +306,11 @@ func (d *Dialog) Start() (err error) {
 	//if runtime.GOOS == "windows" {
 	//	d.session, err = dialogClientCache.Invite(d.gb, recipient, []byte(strings.Join(sdpInfo, "\r\n")+"\r\n"), &callID, &csqHeader, &fromHDR, &toHeader, &maxforward, userAgentHeader, subjectHeader, &contentTypeHeader)
 	//} else {
-	d.session, err = dialogClientCache.Invite(d.gb, recipient, []byte(strings.Join(sdpInfo, "\r\n")+"\r\n"), &callID, &csqHeader, &fromHDR, &toHeader, &maxforward, userAgentHeader, subjectHeader, &contentTypeHeader)
+	if strings.ToLower(device.Transport) == "tcp" {
+		d.session, err = dialogClientCache.Invite(d.gb, recipient, []byte(strings.Join(sdpInfo, "\r\n")+"\r\n"), &viaHeader, &callID, &csqHeader, &fromHDR, &toHeader, &maxforward, userAgentHeader, subjectHeader, &contentTypeHeader)
+	} else {
+		d.session, err = dialogClientCache.Invite(d.gb, recipient, []byte(strings.Join(sdpInfo, "\r\n")+"\r\n"), &callID, &csqHeader, &fromHDR, &toHeader, &maxforward, userAgentHeader, subjectHeader, &contentTypeHeader)
+	}
 	//}
 	// 最后添加Content-Length头部
 	if err != nil {
@@ -423,14 +428,10 @@ func (d *Dialog) Dispose() {
 		}
 	}
 	d.Info("dialog dispose", "ssrc", d.SSRC, "mediaPort", d.MediaPort, "streamMode", d.StreamMode, "deviceId", d.Channel.DeviceId, "channelId", d.Channel.ChannelId)
-	if d.session != nil {
+	if d.session != nil && d.session.InviteResponse != nil {
 		err := d.session.Bye(d)
 		if err != nil {
 			d.Error("dialog bye bye err", err)
-		}
-		err = d.session.Close()
-		if err != nil {
-			d.Error("dialog close session err", err)
 		}
 	}
 }

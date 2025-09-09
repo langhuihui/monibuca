@@ -3,6 +3,7 @@ package plugin_gb28181pro
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -18,7 +19,6 @@ import (
 	"github.com/emiago/sipgo"
 	"github.com/emiago/sipgo/sip"
 	"github.com/pion/rtp"
-	"github.com/rs/zerolog"
 	m7s "m7s.live/v5"
 	"m7s.live/v5/pkg/config"
 	"m7s.live/v5/pkg/task"
@@ -164,8 +164,13 @@ func (gb *GB28181Plugin) Start() (err error) {
 		return pkg.ErrNoDB
 	}
 	gb.Info("GB28181 initing", gb.Platforms)
-	logger := zerolog.New(os.Stdout)
-	gb.ua, err = sipgo.NewUA(sipgo.WithUserAgent("M7S/" + m7s.Version)) // Build user agent
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	// 设置 TCP 传输模式
+	tcpOption := sip.WithTransportLayerConnectionReuse(true) // 启用连接重用
+	gb.ua, err = sipgo.NewUA(
+		sipgo.WithUserAgent("M7S/"+m7s.Version),
+		sipgo.WithUserAgentTransportLayerOptions(tcpOption), // 使用 TCP 选项
+	) // Build user agent
 	// Creating client handle for ua
 	if len(gb.Sip.ListenAddr) > 0 {
 		gb.AddTask(&catalogHandlerQueueTask)
@@ -371,7 +376,14 @@ func (gb *GB28181Plugin) checkDeviceExpire() (err error) {
 		}
 
 		// 创建SIP客户端
-		device.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(device.SipIp))
+		opts := &slog.HandlerOptions{
+			Level:     slog.LevelDebug,
+			AddSource: true,
+		}
+		logHandler := slog.NewJSONHandler(os.Stdout, opts)
+		logger := slog.New(logHandler)
+		slog.SetDefault(logger) // 设置为默认日志记录器
+		device.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(logger), sipgo.WithClientHostname(device.SipIp))
 		device.Info("checkDeviceExpire", "d.SipIp", device.SipIp, "d.LocalPort", device.LocalPort, "d.contactHDR", device.contactHDR)
 
 		// 设置设备ID的hash值作为任务ID

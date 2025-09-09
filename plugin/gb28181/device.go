@@ -467,6 +467,7 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 func (d *Device) send(req *sip.Request) (*sip.Response, error) {
 	d.SN++
 	d.Trace("send", "req", req.String())
+	req.SetTransport(d.Transport)
 	return d.client.Do(context.Background(), req)
 }
 

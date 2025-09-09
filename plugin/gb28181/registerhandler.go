@@ -3,6 +3,7 @@ package plugin_gb28181pro
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"os"
 	"strconv"
@@ -13,7 +14,6 @@ import (
 	"github.com/emiago/sipgo/sip"
 	myip "github.com/husanpao/ip"
 	"github.com/icholy/digest"
-	"github.com/rs/zerolog"
 	"gorm.io/gorm"
 	"m7s.live/v5"
 	"m7s.live/v5/pkg/task"
@@ -303,7 +303,15 @@ func (task *registerHandlerTask) RecoverDevice(d *Device, req *sip.Request) {
 	d.KeepaliveTime = time.Now()
 	d.RegisterTime = time.Now()
 	d.Online = true
-	d.client, _ = sipgo.NewClient(task.gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(d.SipIp))
+	d.Transport = req.Transport()
+	opts := &slog.HandlerOptions{
+		Level:     slog.LevelDebug,
+		AddSource: true,
+	}
+	logHandler := slog.NewJSONHandler(os.Stdout, opts)
+	logger := slog.New(logHandler)
+	slog.SetDefault(logger) // 设置为默认日志记录器
+	d.client, _ = sipgo.NewClient(task.gb.ua, sipgo.WithClientLogger(logger), sipgo.WithClientHostname(d.SipIp))
 	d.channels.L = new(sync.RWMutex)
 	d.catalogReqs.L = new(sync.RWMutex)
 	d.plugin = task.gb
@@ -432,7 +440,14 @@ func (task *registerHandlerTask) StoreDevice(deviceid string, req *sip.Request, 
 
 	d.Logger = task.gb.Logger.With("deviceid", deviceid)
 	d.fromHDR.Params.Add("tag", sip.GenerateTagN(16))
-	d.client, _ = sipgo.NewClient(task.gb.ua, sipgo.WithClientLogger(zerolog.New(os.Stdout)), sipgo.WithClientHostname(d.SipIp))
+	opts := &slog.HandlerOptions{
+		Level:     slog.LevelDebug,
+		AddSource: true,
+	}
+	logHandler := slog.NewJSONHandler(os.Stdout, opts)
+	logger := slog.New(logHandler)
+	slog.SetDefault(logger) // 设置为默认日志记录器
+	d.client, _ = sipgo.NewClient(task.gb.ua, sipgo.WithClientLogger(logger), sipgo.WithClientHostname(d.SipIp))
 	d.channels.L = new(sync.RWMutex)
 	d.catalogReqs.L = new(sync.RWMutex)
 	d.Info("StoreDevice", "source", source, "desc", desc, "device.SipIp", myLanIP, "device.WanIP", myWanIP, "req.Recipient", req.Recipient, "myPort", myPort, "d.Recipient", d.Recipient)
