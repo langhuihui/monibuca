@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	myproc "github.com/cloudwego/goref/pkg/proc"
@@ -568,7 +569,14 @@ func (p *DebugPlugin) GetHeapGraph(ctx context.Context, empty *emptypb.Empty) (*
 
 func (p *DebugPlugin) API_TcpDump(rw http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
+	cmdName := "sudo"
 	args := []string{"-S", "tcpdump", "-w", "dump.cap"}
+	// 检查当前程序是否具有 root 权限
+	isRoot := syscall.Geteuid() == 0
+	if isRoot {
+		cmdName = "tcpdump"
+		args = args[2:]
+	}
 	if query.Get("interface") != "" {
 		args = append(args, "-i", query.Get("interface"))
 	}
@@ -591,7 +599,8 @@ func (p *DebugPlugin) API_TcpDump(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx, _ := context.WithTimeout(p, time.Duration(duration)*time.Second)
-	cmd := exec.CommandContext(ctx, "sudo", args...)
+	cmd := exec.CommandContext(ctx, cmdName, args...)
+
 	p.Info("starting tcpdump", "args", strings.Join(cmd.Args, " "))
 	cmd.Stdin = strings.NewReader(query.Get("password"))
 	cmd.Stdout = os.Stdout
@@ -601,10 +610,18 @@ func (p *DebugPlugin) API_TcpDump(rw http.ResponseWriter, r *http.Request) {
 		http.Error(rw, fmt.Sprintf("failed to start tcpdump: %v", err), http.StatusInternalServerError)
 		return
 	}
+
 	<-ctx.Done()
-	killcmd := exec.Command("sudo", "-S", "pkill", "-9", "tcpdump")
+
+	// 杀死 tcpdump 进程
+	var killcmd *exec.Cmd
+	if isRoot {
+		killcmd = exec.Command("pkill", "-9", "tcpdump")
+	} else {
+		killcmd = exec.Command("sudo", "-S", "pkill", "-9", "tcpdump")
+		killcmd.Stdin = strings.NewReader(query.Get("password"))
+	}
 	p.Info("killing tcpdump", "args", strings.Join(killcmd.Args, " "))
-	killcmd.Stdin = strings.NewReader(query.Get("password"))
 	killcmd.Stderr = os.Stderr
 	killcmd.Stdout = os.Stdout
 	killcmd.Run()
