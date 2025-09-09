@@ -449,11 +449,11 @@ func (nc *NetConnection) SendMessage(t byte, msg RtmpMessage) (err error) {
 	if sid, ok := msg.(HaveStreamID); ok {
 		head.MessageStreamID = sid.GetStreamID()
 	}
-	nc.SetWriteDeadline(time.Now().Add(time.Second * 5)) // 设置写入超时时间为5秒
 	return nc.sendChunk(util.NewMemory(nc.tmpBuf), head, RTMP_CHUNK_HEAD_12)
 }
 
 func (nc *NetConnection) sendChunk(mem util.Memory, head *ChunkHeader, headType byte) (err error) {
+	nc.SetWriteDeadline(time.Now().Add(time.Second * 5)) // 设置写入超时时间为5秒
 	head.WriteTo(headType, &nc.chunkHeaderBuf)
 	defer func(reuse net.Buffers) {
 		nc.sendBuffers = reuse

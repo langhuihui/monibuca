@@ -5,7 +5,6 @@ go 1.23.0
 require (
 	github.com/IOTechSystems/onvif v1.2.0
 	github.com/VictoriaMetrics/VictoriaMetrics v1.102.0
-	github.com/asavie/xdp v0.3.3
 	github.com/aws/aws-sdk-go v1.55.7
 	github.com/beevik/etree v1.4.1
 	github.com/bluenviron/gohlslib v1.4.0
@@ -14,16 +13,15 @@ require (
 	github.com/cloudwego/goref v0.0.0-20240724113447-685d2a9523c8
 	github.com/deepch/vdk v0.0.27
 	github.com/disintegration/imaging v1.6.2
-	github.com/emiago/sipgo v0.29.0
+	github.com/emiago/sipgo v0.33.0
 	github.com/go-delve/delve v1.23.0
 	github.com/gobwas/ws v1.3.2
 	github.com/golang-jwt/jwt/v5 v5.2.1
 	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0
-	github.com/google/gopacket v1.1.19
 	github.com/google/uuid v1.6.0
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.19.1
 	github.com/husanpao/ip v0.0.0-20220711082147-73160bb611a8
-	github.com/icholy/digest v0.1.22
+	github.com/icholy/digest v1.1.0
 	github.com/jinzhu/copier v0.4.0
 	github.com/mark3labs/mcp-go v0.27.0
 	github.com/mattn/go-sqlite3 v1.14.24
@@ -113,7 +111,6 @@ require (
 	github.com/prometheus/common v0.55.0 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
 	github.com/samber/lo v1.44.0 // indirect
-	github.com/satori/go.uuid v1.2.1-0.20181028125025-b2ce2384e17b // indirect
 	github.com/shoenig/go-m1cpu v0.1.6 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/spf13/cast v1.7.1 // indirect
