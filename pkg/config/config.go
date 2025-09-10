@@ -239,9 +239,14 @@ func (config *Config) ParseUserFile(conf map[string]any) {
 				}
 			} else {
 				fv := prop.assign(k, v)
-				prop.File = fv.Interface()
-				if prop.Env == nil {
-					prop.Ptr.Set(fv)
+				if fv.IsValid() {
+					prop.File = fv.Interface()
+					if prop.Env == nil {
+						prop.Ptr.Set(fv)
+					}
+				} else {
+					// continue invalid field
+					slog.Error("Attempted to access invalid field during config parsing: %s", v)
 				}
 			}
 		}
