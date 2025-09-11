@@ -917,29 +917,33 @@ func (x *Channel) GetLatitude() string {
 }
 
 type Device struct {
-	state             protoimpl.MessageState `protogen:"open.v1"`
-	DeviceId          string                 `protobuf:"bytes,1,opt,name=deviceId,proto3" json:"deviceId,omitempty"`
-	Name              string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	Manufacturer      string                 `protobuf:"bytes,3,opt,name=manufacturer,proto3" json:"manufacturer,omitempty"`
-	Model             string                 `protobuf:"bytes,4,opt,name=model,proto3" json:"model,omitempty"`
-	Longitude         string                 `protobuf:"bytes,5,opt,name=longitude,proto3" json:"longitude,omitempty"`
-	Latitude          string                 `protobuf:"bytes,6,opt,name=latitude,proto3" json:"latitude,omitempty"`
-	Status            string                 `protobuf:"bytes,7,opt,name=status,proto3" json:"status,omitempty"`
-	MediaIp           string                 `protobuf:"bytes,8,opt,name=mediaIp,proto3" json:"mediaIp,omitempty"`
-	RegisterTime      *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=registerTime,proto3" json:"registerTime,omitempty"`
-	UpdateTime        *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=updateTime,proto3" json:"updateTime,omitempty"`
-	KeepAliveTime     *timestamppb.Timestamp `protobuf:"bytes,11,opt,name=keepAliveTime,proto3" json:"keepAliveTime,omitempty"`
-	ChannelCount      int32                  `protobuf:"varint,12,opt,name=channelCount,proto3" json:"channelCount,omitempty"`
-	Online            bool                   `protobuf:"varint,13,opt,name=online,proto3" json:"online,omitempty"`
-	Channels          []*Channel             `protobuf:"bytes,14,rep,name=channels,proto3" json:"channels,omitempty"`
-	SipIp             string                 `protobuf:"bytes,15,opt,name=sipIp,proto3" json:"sipIp,omitempty"`
-	StreamMode        string                 `protobuf:"bytes,16,opt,name=streamMode,proto3" json:"streamMode,omitempty"`
-	Password          string                 `protobuf:"bytes,17,opt,name=password,proto3" json:"password,omitempty"`
-	SubscribeCatalog  bool                   `protobuf:"varint,18,opt,name=subscribeCatalog,proto3" json:"subscribeCatalog,omitempty"`
-	SubscribePosition bool                   `protobuf:"varint,19,opt,name=subscribePosition,proto3" json:"subscribePosition,omitempty"`
-	SubscribeAlarm    bool                   `protobuf:"varint,20,opt,name=subscribeAlarm,proto3" json:"subscribeAlarm,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	state                 protoimpl.MessageState `protogen:"open.v1"`
+	DeviceId              string                 `protobuf:"bytes,1,opt,name=deviceId,proto3" json:"deviceId,omitempty"`
+	Name                  string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Manufacturer          string                 `protobuf:"bytes,3,opt,name=manufacturer,proto3" json:"manufacturer,omitempty"`
+	Model                 string                 `protobuf:"bytes,4,opt,name=model,proto3" json:"model,omitempty"`
+	Longitude             string                 `protobuf:"bytes,5,opt,name=longitude,proto3" json:"longitude,omitempty"`
+	Latitude              string                 `protobuf:"bytes,6,opt,name=latitude,proto3" json:"latitude,omitempty"`
+	Status                string                 `protobuf:"bytes,7,opt,name=status,proto3" json:"status,omitempty"`
+	MediaIp               string                 `protobuf:"bytes,8,opt,name=mediaIp,proto3" json:"mediaIp,omitempty"`
+	RegisterTime          *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=registerTime,proto3" json:"registerTime,omitempty"`
+	UpdateTime            *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=updateTime,proto3" json:"updateTime,omitempty"`
+	KeepAliveTime         *timestamppb.Timestamp `protobuf:"bytes,11,opt,name=keepAliveTime,proto3" json:"keepAliveTime,omitempty"`
+	ChannelCount          int32                  `protobuf:"varint,12,opt,name=channelCount,proto3" json:"channelCount,omitempty"`
+	Online                bool                   `protobuf:"varint,13,opt,name=online,proto3" json:"online,omitempty"`
+	Channels              []*Channel             `protobuf:"bytes,14,rep,name=channels,proto3" json:"channels,omitempty"`
+	SipIp                 string                 `protobuf:"bytes,15,opt,name=sipIp,proto3" json:"sipIp,omitempty"`
+	StreamMode            string                 `protobuf:"bytes,16,opt,name=streamMode,proto3" json:"streamMode,omitempty"`
+	Password              string                 `protobuf:"bytes,17,opt,name=password,proto3" json:"password,omitempty"`
+	SubscribeCatalog      bool                   `protobuf:"varint,18,opt,name=subscribeCatalog,proto3" json:"subscribeCatalog,omitempty"`
+	SubscribePosition     bool                   `protobuf:"varint,19,opt,name=subscribePosition,proto3" json:"subscribePosition,omitempty"`
+	SubscribeAlarm        bool                   `protobuf:"varint,20,opt,name=subscribeAlarm,proto3" json:"subscribeAlarm,omitempty"`
+	Transport             string                 `protobuf:"bytes,21,opt,name=transport,proto3" json:"transport,omitempty"`
+	Ip                    string                 `protobuf:"bytes,22,opt,name=ip,proto3" json:"ip,omitempty"`
+	Port                  int32                  `protobuf:"varint,23,opt,name=port,proto3" json:"port,omitempty"`
+	BroadcastPushAfterAck bool                   `protobuf:"varint,24,opt,name=broadcastPushAfterAck,proto3" json:"broadcastPushAfterAck,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
 }
 
 func (x *Device) Reset() {
@@ -1108,6 +1112,34 @@ func (x *Device) GetSubscribePosition() bool {
 func (x *Device) GetSubscribeAlarm() bool {
 	if x != nil {
 		return x.SubscribeAlarm
+	}
+	return false
+}
+
+func (x *Device) GetTransport() string {
+	if x != nil {
+		return x.Transport
+	}
+	return ""
+}
+
+func (x *Device) GetIp() string {
+	if x != nil {
+		return x.Ip
+	}
+	return ""
+}
+
+func (x *Device) GetPort() int32 {
+	if x != nil {
+		return x.Port
+	}
+	return 0
+}
+
+func (x *Device) GetBroadcastPushAfterAck() bool {
+	if x != nil {
+		return x.BroadcastPushAfterAck
 	}
 	return false
 }
@@ -6332,7 +6364,7 @@ const file_gb28181_proto_rawDesc = "" +
 	"\x06status\x18\x10 \x01(\tR\x06status\x124\n" +
 	"\agpsTime\x18\x11 \x01(\v2\x1a.google.protobuf.TimestampR\agpsTime\x12\x1c\n" +
 	"\tlongitude\x18\x12 \x01(\tR\tlongitude\x12\x1a\n" +
-	"\blatitude\x18\x13 \x01(\tR\blatitude\"\xdd\x05\n" +
+	"\blatitude\x18\x13 \x01(\tR\blatitude\"\xd5\x06\n" +
 	"\x06Device\x12\x1a\n" +
 	"\bdeviceId\x18\x01 \x01(\tR\bdeviceId\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\"\n" +
@@ -6358,7 +6390,11 @@ const file_gb28181_proto_rawDesc = "" +
 	"\bpassword\x18\x11 \x01(\tR\bpassword\x12*\n" +
 	"\x10subscribeCatalog\x18\x12 \x01(\bR\x10subscribeCatalog\x12,\n" +
 	"\x11subscribePosition\x18\x13 \x01(\bR\x11subscribePosition\x12&\n" +
-	"\x0esubscribeAlarm\x18\x14 \x01(\bR\x0esubscribeAlarm\"d\n" +
+	"\x0esubscribeAlarm\x18\x14 \x01(\bR\x0esubscribeAlarm\x12\x1c\n" +
+	"\ttransport\x18\x15 \x01(\tR\ttransport\x12\x0e\n" +
+	"\x02ip\x18\x16 \x01(\tR\x02ip\x12\x12\n" +
+	"\x04port\x18\x17 \x01(\x05R\x04port\x124\n" +
+	"\x15broadcastPushAfterAck\x18\x18 \x01(\bR\x15broadcastPushAfterAck\"d\n" +
 	"\fResponseList\x12\x12\n" +
 	"\x04code\x18\x01 \x01(\x05R\x04code\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12&\n" +

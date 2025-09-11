@@ -111,25 +111,34 @@ func (gb *GB28181Plugin) List(ctx context.Context, req *pb.GetDevicesRequest) (*
 		})
 
 		pbDevices = append(pbDevices, &pb.Device{
-			DeviceId:      d.DeviceId,
-			Name:          d.CustomName,
-			Manufacturer:  d.Manufacturer,
-			Model:         d.Model,
-			Status:        string(d.Status),
-			Online:        d.Online,
-			Longitude:     d.Longitude,
-			Latitude:      d.Latitude,
-			RegisterTime:  timestamppb.New(d.RegisterTime),
-			UpdateTime:    timestamppb.New(d.UpdateTime),
-			KeepAliveTime: timestamppb.New(d.KeepaliveTime),
-			ChannelCount:  int32(d.ChannelCount),
-			Channels:      pbChannels,
-			MediaIp:       d.MediaIp,
-			SipIp:         d.SipIp,
-			Password:      d.Password,
-			StreamMode:    string(d.StreamMode),
+			DeviceId:              d.DeviceId,
+			Name:                  d.CustomName,
+			Manufacturer:          d.Manufacturer,
+			Model:                 d.Model,
+			Status:                string(d.Status),
+			Online:                d.Online,
+			Longitude:             d.Longitude,
+			Latitude:              d.Latitude,
+			RegisterTime:          timestamppb.New(d.RegisterTime),
+			UpdateTime:            timestamppb.New(d.UpdateTime),
+			KeepAliveTime:         timestamppb.New(d.KeepaliveTime),
+			ChannelCount:          int32(d.ChannelCount),
+			Channels:              pbChannels,
+			MediaIp:               d.MediaIp,
+			SipIp:                 d.SipIp,
+			Password:              d.Password,
+			StreamMode:            string(d.StreamMode),
+			Transport:             d.Transport,
+			Ip:                    d.IP,
+			Port:                  int32(d.Port),
+			BroadcastPushAfterAck: d.BroadcastPushAfterAck,
 		})
 	}
+
+	// 按deviceId对设备列表进行排序
+	sort.Slice(pbDevices, func(i, j int) bool {
+		return pbDevices[i].DeviceId < pbDevices[j].DeviceId
+	})
 
 	resp.Code = 0
 	resp.Message = "success"

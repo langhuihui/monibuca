@@ -47,10 +47,6 @@ func (d *DeviceKeepaliveTickTask) Tick(any) {
 	if d.device.KeepaliveInterval >= 5 {
 		keepaliveSeconds = d.device.KeepaliveInterval
 	}
-	d.Debug("keepLiveTick", "deviceID", d.device.DeviceId,
-		"keepaliveTime", d.device.KeepaliveTime,
-		"interval", d.device.KeepaliveInterval,
-		"count", d.device.KeepaliveCount)
 	if timeDiff := time.Since(d.device.KeepaliveTime); timeDiff > time.Duration(d.device.KeepaliveCount*keepaliveSeconds)*time.Second {
 		d.device.Online = false
 		d.device.Status = DeviceOfflineStatus
@@ -94,7 +90,7 @@ type Device struct {
 	Password              string          // 密码
 	SipIp                 string          // SIP交互IP（设备访问平台的IP）
 	AsMessageChannel      bool            // 是否作为消息通道
-	BroadcastPushAfterAck bool            // 控制语音对讲流程，释放收到ACK后发流
+	BroadcastPushAfterAck bool            `gorm:"default:false" default:"false"` // 控制语音对讲流程，释放收到ACK后发流
 	DeletedAt             gorm.DeletedAt  `yaml:"-"`
 	// 删除强关联字段
 	// channels              []gb28181.DeviceChannel `gorm:"foreignKey:DeviceDBID;references:ID"` // 设备通道列表
@@ -203,7 +199,6 @@ func (c *catalogHandlerTask) Run() (err error) {
 	d := c.d
 	msg := c.msg
 	catalogReq, exists := d.catalogReqs.Get(msg.SN)
-	d.Debug("into catalog", "msg.SN", msg.SN, "exists", exists)
 	if !exists {
 		// 创建新的目录请求
 		catalogReq = &CatalogRequest{
@@ -214,7 +209,6 @@ func (c *catalogHandlerTask) Run() (err error) {
 			Promise:       util.NewPromise(context.Background()),
 		}
 		d.catalogReqs.Set(catalogReq)
-		d.Debug("into catalog", "msg.SN", msg.SN, "d.catalogReqs", d.catalogReqs.Length)
 	}
 
 	// 添加响应并获取是否是第一个响应
@@ -223,7 +217,6 @@ func (c *catalogHandlerTask) Run() (err error) {
 	// 更新设备信息到数据库
 	// 如果是第一个响应，将所有通道状态标记为OFF
 	if isFirst {
-		d.Debug("将所有通道状态标记为OFF", "deviceId", d.DeviceId)
 		// 标记所有通道为OFF状态
 		d.channels.Range(func(channel *Channel) bool {
 			if channel.DeviceChannel != nil {
@@ -242,7 +235,6 @@ func (c *catalogHandlerTask) Run() (err error) {
 		if c.CustomChannelId == "" {
 			c.CustomChannelId = c.ChannelId
 		}
-		d.Debug("msg.DeviceList.DeviceChannelList range", "c.ChannelId", c.ChannelId, "c.Status", c.Status)
 		// 使用 Save 进行 upsert 操作
 		d.addOrUpdateChannel(c)
 		catalogReq.TotalCount++
@@ -251,21 +243,9 @@ func (c *catalogHandlerTask) Run() (err error) {
 	// 更新当前设备的通道数
 	d.ChannelCount = msg.SumNum
 	d.UpdateTime = time.Now()
-	d.Debug("save channel", "deviceid", d.DeviceId, " d.channels.Length", d.channels.Length, "d.ChannelCount", d.ChannelCount, "d.UpdateTime", d.UpdateTime)
-
-	// 删除所有状态为OFF的通道
-	// d.channels.Range(func(channel *Channel) bool {
-	// 	if channel.DeviceChannel != nil && channel.DeviceChannel.Status == gb28181.ChannelOffStatus {
-	// 		d.Debug("删除不存在的通道", "channelId", channel.ID)
-	// 		d.channels.RemoveByKey(channel.ID)
-	// 		d.plugin.channels.RemoveByKey(channel.ID)
-	// 	}
-	// 	return true
-	// })
 
 	// 在所有通道都添加完成后，检查是否完成接收
 	if catalogReq.IsComplete() {
-		d.Debug("IsComplete")
 		catalogReq.Resolve()
 		d.catalogReqs.RemoveByKey(msg.SN)
 	}
@@ -273,7 +253,6 @@ func (c *catalogHandlerTask) Run() (err error) {
 }
 
 func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28181.Message) (err error) {
-	d.plugin.Debug("into onMessage", "deviceid is ", d.DeviceId, "msg is", msg)
 	source := req.Source()
 	hostname, portStr, _ := net.SplitHostPort(source)
 	port, _ := strconv.Atoi(portStr)
@@ -285,11 +264,6 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 	d.Port = port
 	d.HostAddress = hostname + ":" + portStr
 	var body []byte
-	//d.Online = true
-	//if d.Status != DeviceOnlineStatus {
-	//	d.Status = DeviceOnlineStatus
-	//}
-	//d.Debug("OnMessage", "cmdType", msg.CmdType, "body", string(req.Body()))
 	switch msg.CmdType {
 	case "Keepalive":
 		d.KeepaliveInterval = int(time.Since(d.KeepaliveTime).Seconds())
@@ -297,7 +271,6 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 			d.KeepaliveInterval = 60
 		}
 		d.KeepaliveTime = time.Now()
-		d.Debug("into keeplive,deviceid is ", d.DeviceId, "d.KeepaliveTime is", d.KeepaliveTime, "d.KeepaliveInterval is", d.KeepaliveInterval)
 		if d.plugin.DB != nil {
 			if err := d.plugin.DB.Model(d).Updates(map[string]interface{}{
 				"keepalive_interval": d.KeepaliveInterval,
@@ -399,7 +372,6 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 		d.UpdateTime = time.Now()
 	case "DeviceInfo":
 		// 主设备信息
-		d.Info("DeviceInfo message", "body", req.Body(), "d.Name", d.Name, "d.DeviceId", d.DeviceId, "msg.DeviceName", msg.DeviceName)
 		if msg.DeviceName != "" {
 			d.Name = msg.DeviceName
 			if d.CustomName == "" {
@@ -646,7 +618,6 @@ func (d *Device) addOrUpdateChannel(c gb28181.DeviceChannel) {
 		// 更新通道信息
 		channel.DeviceChannel = &c
 		d.channels.Range(func(channel *Channel) bool {
-			d.Debug("range d.channels", "channel.ChannelId", channel.ChannelId, "channel.status", channel.Status)
 			return true
 		})
 	} else {

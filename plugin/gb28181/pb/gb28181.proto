@@ -607,6 +607,10 @@ message Device {
   bool subscribeCatalog = 18;
   bool subscribePosition = 19;
   bool subscribeAlarm = 20;
+  string transport = 21;
+  string ip = 22;
+  int32 port = 23;
+  bool broadcastPushAfterAck =24;
 }
 
 message ResponseList {
