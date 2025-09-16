@@ -427,6 +427,8 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 		d.Info("Broadcast message", "body", req.Body())
 	case "DeviceControl":
 		d.Info("DeviceControl message", "body", req.Body())
+	case "DataTransfer":
+		/*todo*/
 	default:
 		d.Warn("Not supported CmdType", "CmdType", msg.CmdType, "body", req.Body())
 		err = tx.Respond(sip.NewResponseFromRequest(req, http.StatusBadRequest, "", nil))
