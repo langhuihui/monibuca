@@ -238,13 +238,13 @@ func (p *RTPPlugin) Forward(ctx context.Context, req *pb.ForwardRequest) (res *p
 	config := &mrtp.ForwardConfig{
 		Source: mrtp.ConnectionConfig{
 			IP:   req.Source.Ip,
-			Port: req.Source.Port,
+			Port: uint16(req.Source.Port), //req.Source.Port,
 			Mode: mrtp.StreamMode(req.Source.Mode),
 			SSRC: req.Source.Ssrc,
 		},
 		Target: mrtp.ConnectionConfig{
 			IP:   req.Target.Ip,
-			Port: req.Target.Port,
+			Port: uint16(req.Target.Port),
 			Mode: mrtp.StreamMode(req.Target.Mode),
 			SSRC: req.Target.Ssrc,
 		},

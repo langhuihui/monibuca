@@ -625,9 +625,6 @@ func (d *Device) frontEndCmdString(cmdCode int32, parameter1 int32, parameter2 i
 }
 
 func (d *Device) addOrUpdateChannel(c gb28181.DeviceChannel) {
-	// 设置通道状态为在线
-	c.Status = gb28181.ChannelOnStatus
-
 	if channel, ok := d.channels.Get(c.ID); ok {
 		// 通道已存在，保留自定义字段
 		if channel.DeviceChannel != nil {
