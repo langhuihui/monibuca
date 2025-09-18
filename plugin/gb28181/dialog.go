@@ -298,7 +298,7 @@ func (d *Dialog) Start() (err error) {
 	fromHDR.Params.Add("tag", sip.GenerateTagN(32))
 	dialogClientCache := sipgo.NewDialogClientCache(device.client, contactHDR)
 	// 创建会话
-	d.gb.Info("start to invite,recipient:", recipient, " viaHeader:", viaHeader, " fromHDR:", fromHDR, " toHeader:", toHeader, " device.contactHDR:", device.contactHDR, "contactHDR:", contactHDR)
+	d.Info("start to invite", "recipient:", recipient, " viaHeader:", viaHeader, " fromHDR:", fromHDR, " toHeader:", toHeader, " device.contactHDR:", device.contactHDR, "contactHDR:", contactHDR)
 
 	d.pullCtx.GoToStepConst(StepInviteSend)
 
@@ -323,15 +323,15 @@ func (d *Dialog) Start() (err error) {
 }
 
 func (d *Dialog) Run() (err error) {
-	d.gb.Info("before WaitAnswer")
+	d.Info("before WaitAnswer")
 	err = d.session.WaitAnswer(d.gb, sipgo.AnswerOptions{})
-	d.gb.Info("after WaitAnswer")
+	d.Info("after WaitAnswer")
 	if err != nil {
 		d.pullCtx.Fail("等待响应错误: " + err.Error())
 		return errors.New("wait answer error" + err.Error())
 	}
 	inviteResponseBody := string(d.session.InviteResponse.Body())
-	d.gb.Info("inviteResponse", "body", inviteResponseBody)
+	d.Info("inviteResponse", "body", inviteResponseBody)
 	ds := strings.Split(inviteResponseBody, "\r\n")
 	for _, l := range ds {
 		if ls := strings.Split(l, "="); len(ls) > 1 {
@@ -422,7 +422,7 @@ func (d *Dialog) Run() (err error) {
 
 	err = d.session.Ack(d.gb)
 	if err != nil {
-		d.gb.Error("ack session err", err)
+		d.Error("ack session err", err)
 	}
 
 	return d.RunTask(&pub)

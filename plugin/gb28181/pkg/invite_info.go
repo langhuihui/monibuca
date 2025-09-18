@@ -1,5 +1,7 @@
 package gb28181
 
+import mrtp "m7s.live/v5/plugin/rtp/pkg"
+
 // InviteInfo 从INVITE消息中解析需要的信息
 type InviteInfo struct {
 	// 请求者ID
@@ -11,11 +13,7 @@ type InviteInfo struct {
 	// 会话名称
 	SessionName string `json:"sessionName"`
 	// SSRC
-	SSRC string `json:"ssrc"`
-	// 是否使用TCP
-	TCP bool `json:"tcp"`
-	// TCP是否为主动模式
-	TCPActive bool `json:"tcpActive"`
+	SSRC uint32 `json:"ssrc"`
 	// 呼叫ID
 	CallId string `json:"callId"`
 	// 开始时间
@@ -27,7 +25,9 @@ type InviteInfo struct {
 	// IP地址
 	IP string `json:"ip"`
 	// 端口
-	Port int `json:"port"`
+	Port uint16 `json:"port"`
+	//传输模式
+	StreamMode mrtp.StreamMode
 }
 
 // NewInviteInfo 创建一个新的 InviteInfo 实例

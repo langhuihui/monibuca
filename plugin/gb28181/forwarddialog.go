@@ -27,7 +27,7 @@ type ForwardDialog struct {
 	// 嵌入 ForwardConfig 来管理转发配置
 	ForwardConfig  mrtp.ForwardConfig
 	platformCallId string //上级平台发起invite的callid
-	platformSSRC   string // 上级平台的SSRC
+	platformSSRC   uint32 // 上级平台的SSRC
 	start          int64
 	end            int64
 }
@@ -75,36 +75,30 @@ func (d *ForwardDialog) Start() (err error) {
 	}
 
 	// 注册对话到集合，使用类型转换
+	d.MediaPort = uint16(0)
 
-	if d.gb.MediaPort.Valid() {
-		select {
-		case d.MediaPort = <-d.gb.tcpPorts:
-			defer func() {
-				d.gb.tcpPorts <- d.MediaPort
-			}()
-		default:
-			return fmt.Errorf("no available tcp port")
+	if device.StreamMode != mrtp.StreamModeTCPActive {
+		if d.gb.MediaPort.Valid() {
+			select {
+			case d.MediaPort = <-d.gb.tcpPorts:
+				defer func() {
+					d.gb.tcpPorts <- d.MediaPort
+				}()
+			default:
+				return fmt.Errorf("no available tcp port")
+			}
+		} else {
+			d.MediaPort = d.gb.MediaPort[0]
 		}
-	} else {
-		d.MediaPort = d.gb.MediaPort[0]
 	}
 
 	// 使用上级平台的SSRC（如果有）或者设备的CreateSSRC方法
-	var ssrcValue uint16
-	if d.platformSSRC != "" {
+	if d.platformSSRC != 0 {
 		// 使用上级平台的SSRC
-		if ssrcInt, err := strconv.ParseUint(d.platformSSRC, 10, 32); err == nil {
-			d.SSRC = uint32(ssrcInt)
-		} else {
-			d.gb.Error("parse platform ssrc error", "err", err)
-			// 使用设备的CreateSSRC方法作为备选
-			ssrcValue = device.CreateSSRC(d.gb.Serial)
-			d.SSRC = uint32(ssrcValue)
-		}
+		d.SSRC = d.platformSSRC
 	} else {
 		// 使用设备的CreateSSRC方法
-		ssrcValue = device.CreateSSRC(d.gb.Serial)
-		d.SSRC = uint32(ssrcValue)
+		d.SSRC = device.CreateSSRC(d.gb.Serial)
 	}
 
 	// 构建 SDP 内容
@@ -130,11 +124,21 @@ func (d *ForwardDialog) Start() (err error) {
 		sdpInfo = append(sdpInfo, "t=0 0")
 	}
 
-	sdpInfo = append(sdpInfo, fmt.Sprintf("m=video %d TCP/RTP/AVP 96", d.MediaPort))
+	// 添加媒体行和相关属性
+	var mediaLine string
+	switch device.StreamMode {
+	case mrtp.StreamModeTCPPassive, mrtp.StreamModeTCPActive:
+		mediaLine = fmt.Sprintf("m=video %d TCP/RTP/AVP 96", d.MediaPort)
+	case mrtp.StreamModeUDP:
+		mediaLine = fmt.Sprintf("m=video %d RTP/AVP 96", d.MediaPort)
+	default:
+		mediaLine = fmt.Sprintf("m=video %d TCP/RTP/AVP 96", d.MediaPort)
+	}
+
+	sdpInfo = append(sdpInfo, mediaLine)
+
 	sdpInfo = append(sdpInfo, "a=recvonly")
 	sdpInfo = append(sdpInfo, "a=rtpmap:96 PS/90000")
-	//sdpInfo = append(sdpInfo, "a=rtpmap:98 H264/90000")
-	//sdpInfo = append(sdpInfo, "a=rtpmap:97 MPEG4/90000")
 
 	//根据传输模式添加 setup 和 connection 属性
 	switch device.StreamMode {
@@ -149,15 +153,15 @@ func (d *ForwardDialog) Start() (err error) {
 			"a=connection:new",
 		)
 	case mrtp.StreamModeUDP:
-		d.Stop(errors.New("do not support udp mode"))
+		sdpInfo = append(sdpInfo,
+			"a=setup:active",
+			"a=connection:new",
+		)
 	default:
 		sdpInfo = append(sdpInfo,
 			"a=setup:passive",
 			"a=connection:new",
 		)
-	}
-	if d.SSRC == 0 {
-		d.SSRC = uint32(ssrcValue)
 	}
 
 	// 将SSRC转换为字符串格式
@@ -202,6 +206,7 @@ func (d *ForwardDialog) Start() (err error) {
 	fromHDR.Params.Add("tag", sip.GenerateTagN(16))
 	// 创建会话 - 使用device的dialogClient创建
 	dialogClientCache := sipgo.NewDialogClientCache(device.client, device.contactHDR)
+	d.Info("start to invite", "recipient:", recipient, " viaHeader:", viaHeader, " fromHDR:", fromHDR, " toHeader:", toHeader, " device.contactHDR:", device.contactHDR, "contactHDR:", device.contactHDR)
 	//d.session, err = dialogClientCache.Invite(d.gb, recipient, request.Body(), &fromHDR, &toHeader, &viaHeader, subjectHeader, &contentTypeHeader)
 	d.session, err = dialogClientCache.Invite(d.gb, recipient, []byte(strings.Join(sdpInfo, "\r\n")+"\r\n"), &fromHDR, &toHeader, subjectHeader, &contentTypeHeader)
 	return
@@ -209,14 +214,12 @@ func (d *ForwardDialog) Start() (err error) {
 
 // Run 运行会话
 func (d *ForwardDialog) Run() (err error) {
-	d.channel.Info("before WaitAnswer")
 	err = d.session.WaitAnswer(d.gb, sipgo.AnswerOptions{})
-	d.channel.Info("after WaitAnswer")
 	if err != nil {
 		return
 	}
 	inviteResponseBody := string(d.session.InviteResponse.Body())
-	d.channel.Info("inviteResponse", "body", inviteResponseBody)
+	d.Info("inviteResponse", "body", inviteResponseBody)
 	ds := strings.Split(inviteResponseBody, "\r\n")
 	for _, l := range ds {
 		if ls := strings.Split(l, "="); len(ls) > 1 {
@@ -237,11 +240,15 @@ func (d *ForwardDialog) Run() (err error) {
 				}
 			case "m":
 				// 解析 m=video port xxx 格式
-				parts := strings.Split(ls[1], " ")
-				if len(parts) >= 2 {
-					if port, err := strconv.Atoi(parts[1]); err == nil {
-						d.ForwardConfig.Source.Port = uint32(port)
+				if d.ForwardConfig.Source.Mode == mrtp.StreamModeTCPActive {
+					parts := strings.Split(ls[1], " ")
+					if len(parts) >= 2 {
+						if port, err := strconv.Atoi(parts[1]); err == nil {
+							d.ForwardConfig.Source.Port = uint16(port)
+						}
 					}
+				} else {
+					d.ForwardConfig.Source.Port = d.MediaPort
 				}
 			}
 		}
@@ -253,31 +260,12 @@ func (d *ForwardDialog) Run() (err error) {
 	}
 	err = d.session.Ack(d.gb)
 	if err != nil {
-		d.gb.Error("ack session err", err)
+		d.Error("ack session err", err)
 		d.Stop(errors.New("ack session err" + err.Error()))
 	}
 
 	// 更新 ForwardConfig 中的 SSRC
 	d.ForwardConfig.Source.SSRC = d.SSRC
-
-	// 设置源和目标配置
-	// Source 模式由设备决定
-	d.ForwardConfig.Source.Mode = d.channel.Device.StreamMode
-
-	// Target 模式应该根据平台配置或默认设置
-	// 这里可以根据实际需求设置，比如从平台配置中获取
-	// 暂时使用默认的 TCP-PASSIVE 模式
-	d.ForwardConfig.Target.Mode = mrtp.StreamModeTCPPassive
-
-	// 解析目标SSRC
-	if d.ForwardConfig.Target.SSRC == 0 && d.platformSSRC != "" {
-		if ssrcInt, err := strconv.ParseUint(d.platformSSRC, 10, 32); err == nil {
-			d.ForwardConfig.Target.SSRC = uint32(ssrcInt)
-		} else {
-			d.gb.Error("parse platform ssrc error", "err", err)
-		}
-	}
-
 	// 创建新的 Forwarder
 	d.forwarder = mrtp.NewForwarder(&d.ForwardConfig)
 
@@ -295,14 +283,10 @@ func (d *ForwardDialog) Run() (err error) {
 
 // Dispose 释放会话资源
 func (d *ForwardDialog) Dispose() {
-	if d.session != nil {
+	if d.session != nil && d.session.InviteResponse != nil {
 		err := d.session.Bye(d)
 		if err != nil {
 			d.Error("forwarddialog bye bye err", err)
-		}
-		err = d.session.Close()
-		if err != nil {
-			d.Error("forwarddialog close session err", err)
 		}
 	}
 }

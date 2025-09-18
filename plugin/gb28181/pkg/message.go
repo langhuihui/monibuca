@@ -23,6 +23,14 @@ const (
 <DeviceID>%s</DeviceID>
 </Query>
 `
+	// SubscribeCatalogXML 获取设备列表xml样式
+	SubscribeCatalogXML = `<?xml version="1.0" encoding="%s"?>
+<Query>
+<CmdType>Catalog</CmdType>
+<SN>%d</SN>
+<DeviceID>%s</DeviceID>
+</Query>
+`
 	// RecordInfoXML 获取录像文件列表xml样式
 	RecordInfoXML = `<?xml version="1.0"?>
 <Query>
@@ -41,6 +49,14 @@ const (
 <CmdType>DeviceInfo</CmdType>
 <SN>%d</SN>
 <DeviceID>%s</DeviceID>
+</Query>
+`
+	ConfigDownloadXML = `<?xml version="1.0" encoding="%s"?>
+<Query>
+<CmdType>ConfigDownload</CmdType>
+<SN>%d</SN>
+<DeviceID>%s</DeviceID>
+<ConfigType>BasicParam/VideoParamOpt/SVACEncodeConfig/SVACDecodeConfig</ConfigType>
 </Query>
 `
 	// DeviceStatusXML 查询设备详情xml样式
@@ -106,9 +122,19 @@ func BuildDeviceInfoXML(sn int, id string, charset string) []byte {
 	return toGB2312(fmt.Sprintf(DeviceInfoXML, charset, sn, id))
 }
 
+// BuildDeviceInfoXML 获取设备详情指令
+func BuildConfigDownloadXML(sn int, id string, charset string) []byte {
+	return toGB2312(fmt.Sprintf(ConfigDownloadXML, charset, sn, id))
+}
+
 // BuildDeviceStatusXML 获取设备详情指令
 func BuildDeviceStatusXML(sn int, id string, charset string) []byte {
 	return toGB2312(fmt.Sprintf(DeviceStatusXML, charset, sn, id))
+}
+
+// BuildCatalogXML 获取NVR下设备列表指令
+func BuildSubscribeCatalogXML(charset string, sn int, id string) []byte {
+	return toGB2312(fmt.Sprintf(SubscribeCatalogXML, charset, sn, id))
 }
 
 // BuildCatalogXML 获取NVR下设备列表指令
@@ -171,9 +197,21 @@ type (
 		AlarmPriority string `xml:"AlarmPriority"` // 报警级别
 		AlarmMethod   string `xml:"AlarmMethod"`   // 报警方式
 		AlarmTime     string `xml:"AlarmTime"`     // 报警时间
-		Info          struct {
+		BasicParam    struct {
+			Expiration         int    `xml:"Expiration"`         //注册过期时间
+			HeartBeatInterval  int    `xml:"HeartBeatInterval"`  // 心跳间隔
+			HeartBeatCount     int    `xml:"HeartBeatCount"`     // 心跳次数
+			PositionCapability int    `xml:"PositionCapability"` //定位功能支持情况  取值:0-不支持;1-支持GPS定位;2-支持北斗定位(可选,默认取值为0)
+			Name               string `xml:"Name"`
+		} `xml:"BasicParam"`
+		Info struct {
 			AlarmType string `xml:"AlarmType"` // 报警类型
 		} `xml:"Info"`
+		Record string `xml:"Record"` //录像状态,DeviceStatus响应可选,On,Off
+		Online string `xml:"Online"` //是否在线,DeviceStatus响应必选
+		Status string `xml:"Status"` //是否正常工作,DeviceStatus响应必选
+		Reason string `xml:"Reason"` //不正常工作原因，DeviceStatus响应可选
+		Encode string `xml:"Encode"` //是否编码，DeviceStatus响应可选，On,Off
 	}
 
 	PresetItem struct {

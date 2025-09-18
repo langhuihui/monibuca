@@ -506,7 +506,7 @@ message GetDevicesRequest {
   int32 page = 1;
   int32 count = 2;
   string query = 3;
-  bool status = 4;
+  int32 status = 4;
 }
 
 message DevicesPageInfo {

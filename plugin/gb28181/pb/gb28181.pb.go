@@ -129,7 +129,7 @@ type GetDevicesRequest struct {
 	Page          int32                  `protobuf:"varint,1,opt,name=page,proto3" json:"page,omitempty"`
 	Count         int32                  `protobuf:"varint,2,opt,name=count,proto3" json:"count,omitempty"`
 	Query         string                 `protobuf:"bytes,3,opt,name=query,proto3" json:"query,omitempty"`
-	Status        bool                   `protobuf:"varint,4,opt,name=status,proto3" json:"status,omitempty"`
+	Status        int32                  `protobuf:"varint,4,opt,name=status,proto3" json:"status,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -185,11 +185,11 @@ func (x *GetDevicesRequest) GetQuery() string {
 	return ""
 }
 
-func (x *GetDevicesRequest) GetStatus() bool {
+func (x *GetDevicesRequest) GetStatus() int32 {
 	if x != nil {
 		return x.Status
 	}
-	return false
+	return 0
 }
 
 type DevicesPageInfo struct {
@@ -6303,7 +6303,7 @@ const file_gb28181_proto_rawDesc = "" +
 	"\x04page\x18\x01 \x01(\x05R\x04page\x12\x14\n" +
 	"\x05count\x18\x02 \x01(\x05R\x05count\x12\x14\n" +
 	"\x05query\x18\x03 \x01(\tR\x05query\x12\x16\n" +
-	"\x06status\x18\x04 \x01(\bR\x06status\"}\n" +
+	"\x06status\x18\x04 \x01(\x05R\x06status\"}\n" +
 	"\x0fDevicesPageInfo\x12\x12\n" +
 	"\x04code\x18\x01 \x01(\x05R\x04code\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12\x14\n" +

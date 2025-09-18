@@ -217,13 +217,7 @@ func (c *catalogHandlerTask) Run() (err error) {
 	// 更新设备信息到数据库
 	// 如果是第一个响应，将所有通道状态标记为OFF
 	if isFirst {
-		// 标记所有通道为OFF状态
-		d.channels.Range(func(channel *Channel) bool {
-			if channel.DeviceChannel != nil {
-				channel.DeviceChannel.Status = gb28181.ChannelOffStatus
-			}
-			return true
-		})
+		d.channels.Clear()
 	}
 
 	// 更新通道信息
@@ -266,19 +260,7 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 	var body []byte
 	switch msg.CmdType {
 	case "Keepalive":
-		d.KeepaliveInterval = int(time.Since(d.KeepaliveTime).Seconds())
-		if d.KeepaliveInterval < 60 {
-			d.KeepaliveInterval = 60
-		}
 		d.KeepaliveTime = time.Now()
-		if d.plugin.DB != nil {
-			if err := d.plugin.DB.Model(d).Updates(map[string]interface{}{
-				"keepalive_interval": d.KeepaliveInterval,
-				"keepalive_time":     d.KeepaliveTime,
-			}).Error; err != nil {
-				d.Error("update keepalive info failed", "error", err)
-			}
-		}
 	case "Catalog":
 		catalogHandler := &catalogHandlerTask{
 			d:   d,
@@ -427,6 +409,18 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 		d.Info("Broadcast message", "body", req.Body())
 	case "DeviceControl":
 		d.Info("DeviceControl message", "body", req.Body())
+	case "ConfigDownload":
+		if msg.BasicParam.Expiration > 0 {
+			d.Expires = msg.BasicParam.Expiration
+			d.KeepaliveInterval = msg.BasicParam.HeartBeatInterval
+			d.KeepaliveCount = msg.BasicParam.HeartBeatCount
+			if msg.BasicParam.Name != "" {
+				d.Name = msg.BasicParam.Name
+				if d.CustomName == "" {
+					d.CustomName = msg.BasicParam.Name
+				}
+			}
+		}
 	case "DataTransfer":
 		/*todo*/
 	default:
@@ -460,6 +454,10 @@ func (d *Device) Go() (err error) {
 	if err != nil {
 		d.Error("queryDeviceStatus", "err", err)
 	}
+	response, err = d.configDownload()
+	if err != nil {
+		d.Error("configDownload", "err", err)
+	}
 	response, err = d.catalog()
 	if err != nil {
 		d.Error("catalog", "err", err)
@@ -469,12 +467,25 @@ func (d *Device) Go() (err error) {
 
 	// 创建并启动目录订阅任务
 	if d.SubscribeCatalog > 0 {
-		d.AddTask(NewCatalogSubscribeTask(d))
+		if d.CatalogSubscribeTask != nil {
+			d.CatalogSubscribeTask.Ticker.Reset(time.Second * time.Duration(d.SubscribeCatalog))
+		} else {
+			d.CatalogSubscribeTask = NewCatalogSubscribeTask(d)
+			d.AddTask(d.CatalogSubscribeTask)
+		}
+		d.CatalogSubscribeTask.Tick(nil)
 	}
 
 	// 创建并启动位置订阅任务
 	if d.SubscribePosition > 0 {
-		d.AddTask(NewPositionSubscribeTask(d))
+		if d.PositionSubscribeTask != nil {
+			d.PositionSubscribeTask.Ticker.Reset(time.Second * time.Duration(d.SubscribePosition))
+			d.PositionSubscribeTask.Tick(nil)
+		} else {
+			d.PositionSubscribeTask = NewPositionSubscribeTask(d)
+			d.AddTask(d.PositionSubscribeTask)
+			d.PositionSubscribeTask.Tick(nil)
+		}
 	}
 	deviceKeepaliveTickTask := &DeviceKeepaliveTickTask{
 		seconds: time.Second * 30,
@@ -526,13 +537,28 @@ func (d *Device) catalog() (*sip.Response, error) {
 func (d *Device) subscribeCatalog() (*sip.Response, error) {
 	request := d.CreateRequest(sip.SUBSCRIBE, nil)
 	request.AppendHeader(sip.NewHeader("Expires", strconv.Itoa(d.SubscribeCatalog)))
-	request.SetBody(gb28181.BuildCatalogXML(d.Charset, d.SN, d.DeviceId))
+	request.AppendHeader(sip.NewHeader("Event", "presence"))
+	request.SetBody(gb28181.BuildSubscribeCatalogXML(d.Charset, d.SN, d.DeviceId))
+	return d.send(request)
+}
+
+func (d *Device) unSubscribeCatalog() (*sip.Response, error) {
+	request := d.CreateRequest(sip.SUBSCRIBE, nil)
+	request.AppendHeader(sip.NewHeader("Expires", "0"))
+	request.AppendHeader(sip.NewHeader("Event", "presence"))
+	request.SetBody(gb28181.BuildSubscribeCatalogXML(d.Charset, d.SN, d.DeviceId))
 	return d.send(request)
 }
 
 func (d *Device) queryDeviceInfo() (*sip.Response, error) {
 	request := d.CreateRequest(sip.MESSAGE, nil)
 	request.SetBody(gb28181.BuildDeviceInfoXML(d.SN, d.DeviceId, d.Charset))
+	return d.send(request)
+}
+
+func (d *Device) configDownload() (*sip.Response, error) {
+	request := d.CreateRequest(sip.MESSAGE, nil)
+	request.SetBody(gb28181.BuildConfigDownloadXML(d.SN, d.DeviceId, d.Charset))
 	return d.send(request)
 }
 
@@ -619,9 +645,6 @@ func (d *Device) addOrUpdateChannel(c gb28181.DeviceChannel) {
 		}
 		// 更新通道信息
 		channel.DeviceChannel = &c
-		d.channels.Range(func(channel *Channel) bool {
-			return true
-		})
 	} else {
 		// 创建新通道
 		channel = &Channel{
@@ -650,11 +673,11 @@ func (d *Device) Send(req *sip.Request) (*sip.Response, error) {
 	return d.send(req)
 }
 
-func (d *Device) CreateSSRC(serial string) uint16 {
+func (d *Device) CreateSSRC(serial string) uint32 {
 	// 使用简单的 hash 函数将设备 ID 转换为 uint16
-	var hash uint16
+	var hash uint32
 	for i := 0; i < len(d.DeviceId); i++ {
-		hash = hash*31 + uint16(d.DeviceId[i])
+		hash = hash*31 + uint32(d.DeviceId[i])
 	}
 	return hash
 }

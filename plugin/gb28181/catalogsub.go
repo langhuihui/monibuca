@@ -1,6 +1,7 @@
 package plugin_gb28181pro
 
 import (
+	"github.com/emiago/sipgo/sip"
 	"time"
 
 	"m7s.live/v5/pkg/task"
@@ -30,8 +31,13 @@ func (c *CatalogSubscribeTask) GetTickInterval() time.Duration {
 
 // Tick 定时执行的方法
 func (c *CatalogSubscribeTask) Tick(any) {
-	// 执行目录订阅
-	response, err := c.device.subscribeCatalog()
+	var response *sip.Response
+	var err error
+	if c.device.SubscribeCatalog > 0 {
+		response, err = c.device.subscribeCatalog()
+	} else {
+		response, err = c.device.unSubscribeCatalog()
+	}
 	if err != nil {
 		c.Error("subCatalog", "err", err)
 	} else {

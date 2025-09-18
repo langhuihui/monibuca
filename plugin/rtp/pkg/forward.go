@@ -15,7 +15,7 @@ import (
 // ConnectionConfig 连接配置
 type ConnectionConfig struct {
 	IP   string
-	Port uint32
+	Port uint16
 	Mode StreamMode
 	SSRC uint32 // RTP SSRC
 }
@@ -53,7 +53,7 @@ func (f *Forwarder) establishSourceConnection(config ConnectionConfig) (net.Conn
 		return netConn, nil
 
 	case StreamModeTCPPassive:
-		listener, err := net.Listen("tcp4", fmt.Sprintf("%s:%d", config.IP, config.Port))
+		listener, err := net.Listen("tcp4", fmt.Sprintf(":%d", config.Port))
 		if err != nil {
 			return nil, fmt.Errorf("listen failed: %v", err)
 		}
@@ -73,7 +73,7 @@ func (f *Forwarder) establishSourceConnection(config ConnectionConfig) (net.Conn
 
 	case StreamModeUDP:
 		// Source UDP - listen
-		udpAddr, err := net.ResolveUDPAddr("udp4", fmt.Sprintf("%s:%d", config.IP, config.Port))
+		udpAddr, err := net.ResolveUDPAddr("udp4", fmt.Sprintf(":%d", config.Port))
 		if err != nil {
 			return nil, fmt.Errorf("resolve UDP address failed: %v", err)
 		}
@@ -90,7 +90,7 @@ func (f *Forwarder) establishSourceConnection(config ConnectionConfig) (net.Conn
 // establishTargetConnection 建立目标连接
 func (f *Forwarder) establishTargetConnection(config ConnectionConfig) (net.Conn, error) {
 	switch config.Mode {
-	case StreamModeTCPActive:
+	case StreamModeTCPPassive:
 		dialer := &net.Dialer{Timeout: 10 * time.Second}
 		netConn, err := dialer.Dial("tcp", fmt.Sprintf("%s:%d", config.IP, config.Port))
 		if err != nil {
@@ -98,8 +98,8 @@ func (f *Forwarder) establishTargetConnection(config ConnectionConfig) (net.Conn
 		}
 		return netConn, nil
 
-	case StreamModeTCPPassive:
-		listener, err := net.Listen("tcp4", fmt.Sprintf("%s:%d", config.IP, config.Port))
+	case StreamModeTCPActive:
+		listener, err := net.Listen("tcp4", fmt.Sprintf(":%d", config.Port))
 		if err != nil {
 			return nil, fmt.Errorf("listen failed: %v", err)
 		}

@@ -2,6 +2,7 @@ package gb28181
 
 import (
 	"fmt"
+	mrtp "m7s.live/v5/plugin/rtp/pkg"
 	"strconv"
 	"strings"
 
@@ -11,7 +12,7 @@ import (
 // DecodeSDP 从 SIP 请求中解析 SDP 信息
 func DecodeSDP(req *sip.Request) (*InviteInfo, error) {
 	inviteInfo := NewInviteInfo()
-
+	inviteInfo.StreamMode = mrtp.StreamModeUDP
 	// 获取请求者ID
 	from := req.From()
 	if from == nil || from.Address.User == "" {
@@ -37,9 +38,8 @@ func DecodeSDP(req *sip.Request) (*InviteInfo, error) {
 	// 解析SDP各个字段
 	lines := strings.Split(sdpStr, "\r\n")
 	var channelIdFromSdp string
-	var port int = -1
+	var port uint16 = 0
 	var mediaTransmissionTCP bool
-	var tcpActive *bool
 	var supportedMediaFormat bool
 	var sessionName string
 
@@ -93,7 +93,7 @@ func DecodeSDP(req *sip.Request) (*InviteInfo, error) {
 			if len(mediaDesc) >= 4 { // 必须有足够的元素：类型、端口、传输协议和格式
 				portVal, err := strconv.Atoi(mediaDesc[1])
 				if err == nil {
-					port = portVal
+					port = uint16(portVal)
 				}
 
 				// 检查传输协议
@@ -113,15 +113,21 @@ func DecodeSDP(req *sip.Request) (*InviteInfo, error) {
 		case strings.HasPrefix(line, "a=setup:"):
 			val := strings.TrimPrefix(line, "a=setup:")
 			if strings.EqualFold(val, "active") {
-				activeVal := true
-				tcpActive = &activeVal
+				if mediaTransmissionTCP {
+					inviteInfo.StreamMode = mrtp.StreamModeTCPActive
+				}
 			} else if strings.EqualFold(val, "passive") {
-				passiveVal := false
-				tcpActive = &passiveVal
+				if mediaTransmissionTCP {
+					inviteInfo.StreamMode = mrtp.StreamModeTCPPassive
+				}
 			}
 
 		case strings.HasPrefix(line, "y="):
-			inviteInfo.SSRC = strings.TrimPrefix(line, "y=")
+			tmpSSRC, err := strconv.ParseUint(strings.TrimPrefix(line, "y="), 10, 32)
+			if err != nil {
+				return nil, fmt.Errorf(err.Error())
+			}
+			inviteInfo.SSRC = uint32(tmpSSRC)
 
 		case strings.HasPrefix(line, "a=downloadspeed:"):
 			inviteInfo.DownloadSpeed = strings.TrimPrefix(line, "a=downloadspeed:")
@@ -150,17 +156,10 @@ func DecodeSDP(req *sip.Request) (*InviteInfo, error) {
 	}
 
 	// 验证媒体格式支持
-	if port == -1 || !supportedMediaFormat {
+	if port == 0 || !supportedMediaFormat {
 		return nil, fmt.Errorf("不支持的媒体格式")
 	}
 
-	// 设置传输相关信息
-	inviteInfo.TCP = mediaTransmissionTCP
-	if tcpActive != nil {
-		inviteInfo.TCPActive = *tcpActive
-	} else {
-		inviteInfo.TCPActive = false // 默认值
-	}
 	inviteInfo.Port = port
 
 	return inviteInfo, nil

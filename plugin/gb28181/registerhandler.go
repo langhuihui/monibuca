@@ -458,7 +458,7 @@ func (task *registerHandlerTask) StoreDevice(deviceid string, req *sip.Request, 
 		ch := d.DeviceId[i]
 		hash = hash*31 + uint32(ch)
 	}
-	d.Task.ID = hash
+	//d.Task.ID = hash
 
 	d.channels.OnAdd(func(c *Channel) {
 		if absDevice, ok := task.gb.Server.PullProxies.Find(func(absDevice m7s.IPullProxy) bool {
