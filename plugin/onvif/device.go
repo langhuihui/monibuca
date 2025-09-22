@@ -8,15 +8,14 @@ import (
 	"m7s.live/v5/pkg/util"
 	"strings"
 
-	donvif "github.com/IOTechSystems/onvif"
-	"github.com/IOTechSystems/onvif/gosoap"
-	"github.com/IOTechSystems/onvif/imaging"
-	"github.com/IOTechSystems/onvif/media"
-	"github.com/IOTechSystems/onvif/ptz"
-	"github.com/IOTechSystems/onvif/xsd"
-	"github.com/IOTechSystems/onvif/xsd/onvif"
-	onvifTypes "github.com/IOTechSystems/onvif/xsd/onvif"
 	"github.com/beevik/etree"
+	donvif "github.com/kerberos-io/onvif"
+	"github.com/kerberos-io/onvif/gosoap"
+	"github.com/kerberos-io/onvif/imaging"
+	"github.com/kerberos-io/onvif/media"
+	"github.com/kerberos-io/onvif/ptz"
+	"github.com/kerberos-io/onvif/xsd"
+	onvifTypes "github.com/kerberos-io/onvif/xsd/onvif"
 	"m7s.live/v5/pkg/config"
 	rtsp "m7s.live/v5/plugin/rtsp/pkg"
 )
@@ -59,7 +58,7 @@ type DeviceStatus struct {
 	Stream      string `json:"stream"`      // 设备流
 	Status      int    `json:"status"`      // 设备状态
 	Description string `json:"description"` // 状态描述
-	Profiles    []onvif.Profile
+	Profiles    []onvifTypes.Profile
 }
 
 func (d *DeviceStatus) GetKey() string {
@@ -226,10 +225,10 @@ func (d *DeviceStatus) GetPtzPresets() ([]onvifTypes.PTZPreset, error) {
 }
 
 // SetPtzPreset 设置预置点
-func (d *DeviceStatus) SetPtzPreset(name string, presetToken string) (*onvif.ReferenceToken, error) {
+func (d *DeviceStatus) SetPtzPreset(name string, presetToken string) (*onvifTypes.ReferenceToken, error) {
 	token := d.Profiles[d.Channel].Token
 	ptzName := xsd.String(name)
-	ptzPresetToken := onvif.ReferenceToken(presetToken)
+	ptzPresetToken := onvifTypes.ReferenceToken(presetToken)
 	result, err := d.Device.CallMethod(ptz.SetPreset{
 		ProfileToken: &token,
 		PresetToken:  &ptzPresetToken,
@@ -264,14 +263,17 @@ func (d *DeviceStatus) PtzMove(mode int, move ptz.Vector, speed ptz.Speed) error
 	if len(d.Profiles) == 0 {
 		return fmt.Errorf("no profiles found")
 	}
-	token := onvifTypes.ReferenceToken(d.Profiles[d.Channel].Token)
+	token := d.Profiles[d.Channel].Token
 
 	switch mode {
 	case PtzMoveAbs:
 		result, err := dev.CallMethod(ptz.AbsoluteMove{
 			ProfileToken: token,
-			Position:     move,
-			Speed:        speed,
+			Position: onvifTypes.PTZVector{
+				PanTilt: move.PanTilt,
+				Zoom:    move.Zoom,
+			},
+			Speed: speed,
 		})
 		if err != nil {
 			return err
@@ -302,7 +304,7 @@ func (d *DeviceStatus) PtzMove(mode int, move ptz.Vector, speed ptz.Speed) error
 	case PtzMoveContinue:
 		result, err := dev.CallMethod(ptz.ContinuousMove{
 			ProfileToken: &token,
-			Velocity: &onvifTypes.PTZSpeed{
+			Velocity: &ptz.Speed{
 				PanTilt: move.PanTilt,
 				Zoom:    move.Zoom,
 			},
@@ -386,7 +388,7 @@ func (d *DeviceStatus) PullStream(ifname string, channel int) error {
 	return nil
 }
 
-func (d *DeviceStatus) GetPtzPreset() ([]onvif.PTZPreset, error) {
+func (d *DeviceStatus) GetPtzPreset() ([]onvifTypes.PTZPreset, error) {
 	token := d.Profiles[d.Channel].Token
 	result, err := d.Device.CallMethod(ptz.GetPresets{ProfileToken: token})
 	if err != nil {
@@ -406,7 +408,7 @@ func (d *DeviceStatus) GetPtzPreset() ([]onvif.PTZPreset, error) {
 }
 
 func (d *DeviceStatus) RemovePtzPreset(presetToken string) error {
-	ptzPresetToken := onvif.ReferenceToken(presetToken)
+	ptzPresetToken := onvifTypes.ReferenceToken(presetToken)
 	token := d.Profiles[d.Channel].Token
 	result, err := d.Device.CallMethod(ptz.RemovePreset{
 		ProfileToken: token,
@@ -428,7 +430,7 @@ func (d *DeviceStatus) RemovePtzPreset(presetToken string) error {
 	return nil
 }
 
-func (d *DeviceStatus) PtzContinueMove(vel *onvif.PTZSpeed, tmout *xsd.Duration) error {
+func (d *DeviceStatus) PtzContinueMove(vel *onvifTypes.PTZSpeed, tmout *xsd.Duration) error {
 	token := d.Profiles[d.Channel].Token
 
 	result, err := d.Device.CallMethod(ptz.ContinuousMove{

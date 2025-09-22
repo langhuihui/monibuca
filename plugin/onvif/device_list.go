@@ -7,8 +7,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/IOTechSystems/onvif"
-	wsdiscovery "github.com/IOTechSystems/onvif/ws-discovery"
+	"github.com/kerberos-io/onvif"
+	wsdiscovery "github.com/kerberos-io/onvif/ws-discovery"
 	"m7s.live/v5/pkg/util"
 )
 
@@ -75,6 +75,9 @@ func (d *DeviceList) discoveryDevice() {
 				}
 
 				ipPort := strings.Split(u.Host, ":")
+				if len(ipPort) == 1 {
+					ipPort = append(ipPort, "80")
+				}
 				if _, ok := ifaceDevices.Get(u.Host); !ok {
 					auth := getAuth(iface.InterfaceName, ipPort[0])
 					if auth == nil {

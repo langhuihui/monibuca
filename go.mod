@@ -3,7 +3,6 @@ module m7s.live/v5
 go 1.23.0
 
 require (
-	github.com/IOTechSystems/onvif v1.2.0
 	github.com/VictoriaMetrics/VictoriaMetrics v1.102.0
 	github.com/aws/aws-sdk-go v1.55.7
 	github.com/beevik/etree v1.4.1
@@ -23,6 +22,7 @@ require (
 	github.com/husanpao/ip v0.0.0-20220711082147-73160bb611a8
 	github.com/icholy/digest v1.1.0
 	github.com/jinzhu/copier v0.4.0
+	github.com/kerberos-io/onvif v1.0.0
 	github.com/mark3labs/mcp-go v0.27.0
 	github.com/mattn/go-sqlite3 v1.14.24
 	github.com/mcuadros/go-defaults v1.2.0
@@ -84,6 +84,7 @@ require (
 	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
+	github.com/juju/errors v1.0.0 // indirect
 	github.com/klauspost/compress v1.18.0 // indirect
 	github.com/lufia/plan9stats v0.0.0-20211012122336-39d0f177ccd0 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect

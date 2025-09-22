@@ -1,9 +1,9 @@
 package plugin_onvif
 
 import (
-	"github.com/IOTechSystems/onvif/ptz"
-	"github.com/IOTechSystems/onvif/xsd"
-	"github.com/IOTechSystems/onvif/xsd/onvif"
+	"github.com/kerberos-io/onvif/ptz"
+	"github.com/kerberos-io/onvif/xsd"
+	"github.com/kerberos-io/onvif/xsd/onvif"
 )
 
 type ImageSettings struct {

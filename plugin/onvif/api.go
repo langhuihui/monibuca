@@ -8,8 +8,8 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/IOTechSystems/onvif/xsd/onvif"
 	"github.com/jinzhu/copier"
+	"github.com/kerberos-io/onvif/xsd/onvif"
 )
 
 type Response struct {
@@ -624,16 +624,16 @@ func (o *OnvifPlugin) API_ptz(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
-func (p *OnvifPlugin) RegisterHandler() map[string]http.HandlerFunc {
-	return map[string]http.HandlerFunc{
-		"/list":            p.API_list,
-		"/add":             p.API_adddevice,
-		"/remove":          p.API_deldevice,
-		"/ptz":             p.API_ptz,
-		"/ptz/preset/get":  p.API_ptzPreset,
-		"/ptz/preset/set":  p.API_setPtzPreset,
-		"/ptz/preset/goto": p.API_gotoPtzPreset,
-		"/imaging/get":     p.API_imageProfile,
-		"/imaging/set":     p.API_setImageProfile,
-	}
-}
+//func (p *OnvifPlugin) RegisterHandler() map[string]http.HandlerFunc {
+//	return map[string]http.HandlerFunc{
+//		"/list":            p.API_list,
+//		"/add":             p.API_adddevice,
+//		"/remove":          p.API_deldevice,
+//		"/ptz":             p.API_ptz,
+//		"/ptz/preset/get":  p.API_ptzPreset,
+//		"/ptz/preset/set":  p.API_setPtzPreset,
+//		"/ptz/preset/goto": p.API_gotoPtzPreset,
+//		"/imaging/get":     p.API_imageProfile,
+//		"/imaging/set":     p.API_setImageProfile,
+//	}
+//}

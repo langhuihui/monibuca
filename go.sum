@@ -1,5 +1,3 @@
-github.com/IOTechSystems/onvif v1.2.0 h1:vplyPdhFhMRtIdkEbQIkTlrKjXpeDj+WUTt5UW61ZcI=
-github.com/IOTechSystems/onvif v1.2.0/go.mod h1:/dTr5BtFaGojYGJ2rEBIVWh3seGIcSuCJhcK9zwTsk0=
 github.com/VictoriaMetrics/VictoriaMetrics v1.102.0 h1:eRi6VGT7ntLG/OW8XTWUYhSvA+qGD3FHaRkzdgYHOOw=
 github.com/VictoriaMetrics/VictoriaMetrics v1.102.0/go.mod h1:QZhCsD2l+S+BHTdspVSsE4oiFhdKzgVziSy5Q/FZHcs=
 github.com/VictoriaMetrics/easyproto v0.1.4 h1:r8cNvo8o6sR4QShBXQd1bKw/VVLSQma/V2KhTBPf+Sc=
@@ -137,6 +135,10 @@ github.com/jmespath/go-jmespath/internal/testify v1.5.1 h1:shLQSRRSCCPj3f2gpwzGw
 github.com/jmespath/go-jmespath/internal/testify v1.5.1/go.mod h1:L3OGu8Wl2/fWfCI6z80xFu9LTZmf1ZRjMHUOPmWr69U=
 github.com/josharian/intern v1.0.0 h1:vlS4z54oSdjm0bgjRigI+G1HpF+tI+9rE5LLzOg8HmY=
 github.com/josharian/intern v1.0.0/go.mod h1:5DoeVV0s6jJacbCEi61lwdGj/aVlrQvzHFFd8Hwg//Y=
+github.com/juju/errors v1.0.0 h1:yiq7kjCLll1BiaRuNY53MGI0+EQ3rF6GB+wvboZDefM=
+github.com/juju/errors v1.0.0/go.mod h1:B5x9thDqx0wIMH3+aLIMP9HjItInYWObRovoCFM5Qe8=
+github.com/kerberos-io/onvif v1.0.0 h1:pLJrK6skPkK+5Bj4XfqHUkQ2I+p5pwELnp+kQTJWXiQ=
+github.com/kerberos-io/onvif v1.0.0/go.mod h1:P1kUcCfeotJSlL1jwGseH6NSnCwWiuJLl3gAzafnLbA=
 github.com/klauspost/compress v1.18.0 h1:c/Cqfb0r+Yi+JtIEq73FWXVkRonBlf0CRNYc8Zttxdo=
 github.com/klauspost/compress v1.18.0/go.mod h1:2Pp+KzxcywXVXMr50+X0Q/Lsb43OQHYWRCY2AiWywWQ=
 github.com/kr/pretty v0.1.0/go.mod h1:dAy3ld7l9f0ibDNOQOHHMYYIIbhfbHSm3C4ZsoJORNo=
