@@ -364,8 +364,12 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 		d.Model = msg.Model
 		d.Firmware = msg.Firmware
 		d.UpdateTime = time.Now()
-		d.Latitude = msg.Latitude
-		d.Longitude = msg.Longitude
+		if msg.Latitude != "" {
+			d.Latitude = msg.Latitude
+		}
+		if msg.Longitude != "" {
+			d.Longitude = msg.Longitude
+		}
 	case "Alarm":
 		// 创建报警记录
 		alarm := &gb28181.DeviceAlarm{
@@ -766,8 +770,12 @@ func (d *Device) onNotify(req *sip.Request, tx sip.ServerTransaction, msg *gb281
 			gpsTime = gpsTime.UTC()
 
 			// 更新设备的经纬度信息
-			d.Longitude = fmt.Sprintf("%.6f", posNotify.Longitude)
-			d.Latitude = fmt.Sprintf("%.6f", posNotify.Latitude)
+			if posNotify.Longitude != 0 {
+				d.Longitude = fmt.Sprintf("%.6f", posNotify.Longitude)
+			}
+			if posNotify.Latitude != 0 {
+				d.Latitude = fmt.Sprintf("%.6f", posNotify.Latitude)
+			}
 			d.UpdateTime = time.Now()
 
 			// 如果需要，可以将更新保存到数据库

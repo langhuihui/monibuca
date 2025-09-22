@@ -299,6 +299,10 @@ func (s *Server) Start() (err error) {
 				s.Error("failed to connect database", "error", err, "dsn", s.config.DSN, "type", s.config.DBType)
 				return
 			}
+			sqlDB, _ := s.DB.DB()
+			sqlDB.SetMaxIdleConns(25)
+			sqlDB.SetMaxOpenConns(100)
+			sqlDB.SetConnMaxLifetime(5 * time.Minute)
 			// Auto-migrate models
 			if err = s.DB.AutoMigrate(&db.User{}, &PullProxyConfig{}, &PushProxyConfig{}, &StreamAliasDB{}, &AlarmInfo{}); err != nil {
 				s.Error("failed to auto-migrate models", "error", err)

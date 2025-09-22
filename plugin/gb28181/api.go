@@ -133,6 +133,8 @@ func (gb *GB28181Plugin) List(ctx context.Context, req *pb.GetDevicesRequest) (*
 			Port:                  int32(d.Port),
 			BroadcastPushAfterAck: d.BroadcastPushAfterAck,
 			SubscribeCatalog:      util.Conditional(d.SubscribeCatalog == 0, false, true),
+			SubscribePosition:     util.Conditional(d.SubscribePosition == 0, false, true),
+			SubscribeAlarm:        util.Conditional(d.SubscribeAlarm == 0, false, true),
 		})
 	}
 
@@ -564,7 +566,7 @@ func (gb *GB28181Plugin) UpdateDevice(ctx context.Context, req *pb.Device) (*pb.
 					d.PositionSubscribeTask.Tick(nil)
 				} else {
 					if d.PositionSubscribeTask != nil {
-						d.CatalogSubscribeTask.Tick(nil)
+						d.PositionSubscribeTask.Tick(nil)
 						d.PositionSubscribeTask.Ticker.Reset(time.Hour * 999999)
 					}
 				}
