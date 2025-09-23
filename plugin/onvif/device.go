@@ -253,7 +253,7 @@ func (d *DeviceStatus) SetPtzPreset(name string, presetToken string) (*onvifType
 // PtzMove PTZ移动控制
 func (d *DeviceStatus) PtzMove(mode int, move ptz.Vector, speed ptz.Speed) error {
 	dev, err := donvif.NewDevice(donvif.DeviceParams{
-		Xaddr:    fmt.Sprintf("http://%s/onvif/device_service", d.IP),
+		Xaddr:    fmt.Sprintf("%s:%s", d.IP, d.Port),
 		Username: d.Username,
 		Password: d.Password,
 	})
