@@ -2897,7 +2897,7 @@ func (gb *GB28181Plugin) UpdateChannel(ctx context.Context, req *pb.UpdateChanne
 	}
 
 	// 记录日志
-	gb.Info("通道信息已更新",
+	gb.Debug("通道信息已更新",
 		"通道ID", req.Id,
 		"自定义通道ID", channel.DeviceChannel.CustomChannelId,
 		"自定义名称", channel.DeviceChannel.CustomName)
