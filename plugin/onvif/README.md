@@ -930,14 +930,14 @@ POST /onvif/api/ptz
 
 ```json
 {
-  "PanTilt": {
-    "X": 1,
-    "Y": 1,
-    "Space": "http://www.onvif.org/ver10/tptz/ZoomSpaces/VelocityGenericSpace"
-  },
-  "Zoom": {
-    "X": 1,
-    "Space": "http://www.onvif.org/ver10/tptz/ZoomSpaces/VelocityGenericSpace"
+  "Move":{
+    "PanTilt": {
+      "X": 1,
+      "Y": 1
+    },
+    "Zoom": {
+      "X": 1
+    }
   }
 }
 ```
