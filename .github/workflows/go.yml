@@ -4,6 +4,7 @@ on:
   create:
     tags:
       - 'v5*'
+    workflow_dispatch:
 env:
   dest: bin
 jobs:
@@ -34,7 +35,6 @@ jobs:
 
     - name: Run GoReleaser
       uses: goreleaser/goreleaser-action@v2
-      if: success() && startsWith(github.ref, 'refs/tags/')
       with:
         version: v1.8.3
         args: release --rm-dist
@@ -60,49 +60,7 @@ jobs:
     #     cp ../dist/m7s_${{ env.version }}_linux_amd64.tar.gz   apps/m7s-website/src/public/bin/m7s_linux_amd64.tar.gz 
     #     cp ../dist/m7s_${{ env.version }}_linux_arm64.tar.gz   apps/m7s-website/src/public/bin/m7s_linux_arm64.tar.gz 
     #     ls apps/m7s-website/src/public/bin
-    - name: copy
-      if: success() && startsWith(github.ref, 'refs/tags/')
-      run:  |
-        mkdir -p bin
-        cp dist/m7s_${{ env.version }}_windows_amd64.tar.gz bin/m7s_v5_windows_amd64.tar.gz
-        cp dist/m7s_${{ env.version }}_darwin_amd64.tar.gz  bin/m7s_v5_darwin_amd64.tar.gz 
-        cp dist/m7s_${{ env.version }}_darwin_arm64.tar.gz  bin/m7s_v5_darwin_arm64.tar.gz 
-        cp dist/m7s_${{ env.version }}_linux_amd64.tar.gz   bin/m7s_v5_linux_amd64.tar.gz 
-        cp dist/m7s_${{ env.version }}_linux_arm64.tar.gz   bin/m7s_v5_linux_arm64.tar.gz 
-        ls bin
-    - uses: jakejarvis/s3-sync-action@master
-        # with:
-        #   args: --acl public-read --follow-symlinks --delete
-      env:
-        AWS_S3_ENDPOINT: https://${{ secrets.R2_DOMAIN }}
-        AWS_ACCESS_KEY_ID: ${{ secrets.R2_KEY }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET }}
-        AWS_S3_BUCKET: monibuca
-        SOURCE_DIR: 'bin'
-        DEST_DIR: ${{ env.dest }}
-    - name: Set up QEMU
-      uses: docker/setup-qemu-action@v3
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-    - name: docker build
-      if: success() && startsWith(github.ref, 'refs/tags/')
-      run:  |
-        curl -L https://download.m7s.live/bin/admin.zip -o admin.zip
-        tar -zxvf bin/m7s_v5_linux_amd64.tar.gz
-        mv m7s monibuca_amd64
-        tar -zxvf bin/m7s_v5_linux_arm64.tar.gz
-        mv m7s monibuca_arm64
-        docker login -u langhuihui -p ${{ secrets.DOCKER_PASSWORD }}
-        if [[ "${{ env.version }}" == *"beta"* ]]; then
-          docker buildx build --platform linux/amd64,linux/arm64 -t langhuihui/monibuca:v5 --push .
-        else
-          docker buildx build --platform linux/amd64,linux/arm64 -t langhuihui/monibuca:v5 -t langhuihui/monibuca:${{ env.version }} --push .
-        fi
-    - name: docker build lite version
-      if: success() && startsWith(github.ref, 'refs/tags/')
-      run:  |
-        if [[ "${{ env.version }}" == *"beta"* ]]; then
-          docker buildx build --platform linux/amd64,linux/arm64 -f DockerfileLite -t monibuca/v5:latest --push .
-        else
-          docker buildx build --platform linux/amd64,linux/arm64 -f DockerfileLite -t monibuca/v5:latest -t monibuca/v5:${{ env.version }} --push .
-        fi
+    - uses: actions/upload-artifact@v4
+      with:
+        name: my-artifact
+        path: dist
