@@ -50,6 +50,21 @@ type Writers = map[uint32]*struct {
 	*m7s.Publisher
 }
 
+type PingTask struct {
+	task.TickTask
+	NetConnection *NetConnection
+}
+
+func (t *PingTask) GetTickInterval() time.Duration {
+	return time.Second * 10
+}
+
+func (t *PingTask) Tick(any) {
+	if t.NetConnection.Connected {
+		t.NetConnection.SendPingRequest()
+	}
+}
+
 type NetConnection struct {
 	task.Job
 	*util.BufReader
@@ -67,6 +82,7 @@ type NetConnection struct {
 	writing                       atomic.Bool // false 可写，true 不可写
 	Writers                       Writers
 	sendBuffers                   net.Buffers
+	Connected                     bool
 }
 
 func NewNetConnection(conn net.Conn) (ret *NetConnection) {
@@ -77,7 +93,7 @@ func NewNetConnection(conn net.Conn) (ret *NetConnection) {
 
 func (nc *NetConnection) Init(conn net.Conn) {
 	nc.Conn = conn
-	nc.BufReader = util.NewBufReaderWithTimeout(conn, 10*time.Second)
+	nc.BufReader = util.NewBufReaderWithTimeout(conn, 30*time.Second)
 	nc.bandwidth = RTMP_MAX_CHUNK_SIZE << 3
 	nc.ReadChunkSize = RTMP_DEFAULT_CHUNK_SIZE
 	nc.WriteChunkSize = RTMP_DEFAULT_CHUNK_SIZE
@@ -87,6 +103,9 @@ func (nc *NetConnection) Init(conn net.Conn) {
 	nc.mediaDataPool = util.NewScalableMemoryAllocator(1 << util.MinPowerOf2)
 	nc.sendBuffers = make(net.Buffers, 0, 50)
 	nc.Writers = make(Writers)
+	nc.AddTask(&PingTask{
+		NetConnection: nc,
+	})
 }
 
 func (nc *NetConnection) Dispose() {
@@ -429,7 +448,6 @@ func (nc *NetConnection) SendMessage(t byte, msg RtmpMessage) (err error) {
 		nc.totalWrite += nc.writeSeqNum
 		nc.writeSeqNum = 0
 		err = nc.SendMessage(RTMP_MSG_ACK, Uint32Message(nc.totalWrite))
-		err = nc.SendPingRequest()
 	}
 	for !nc.writing.CompareAndSwap(false, true) {
 		runtime.Gosched()
