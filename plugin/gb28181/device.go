@@ -249,6 +249,7 @@ func (c *catalogHandlerTask) Run() (err error) {
 func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28181.Message) (err error) {
 	source := req.Source()
 	hostname, portStr, _ := net.SplitHostPort(source)
+	d.Debug("onMessage", "source", source, "hostname", hostname, "port", portStr)
 	port, _ := strconv.Atoi(portStr)
 	if d.IP != hostname || d.Port != port {
 		d.Recipient.Host = hostname
@@ -257,6 +258,7 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 	d.IP = hostname
 	d.Port = port
 	d.HostAddress = hostname + ":" + portStr
+	d.Debug("onMessage", "d.IP", d.IP, "d.Port", d.Port, "d.HostAddress", d.HostAddress)
 	var body []byte
 	switch msg.CmdType {
 	case "Keepalive":

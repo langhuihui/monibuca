@@ -109,6 +109,9 @@ func (gb *GB28181Plugin) List(ctx context.Context, req *pb.GetDevicesRequest) (*
 			})
 			return true
 		})
+		sort.Slice(pbChannels, func(i, j int) bool {
+			return pbChannels[i].DeviceId < pbChannels[j].DeviceId
+		})
 
 		pbDevices = append(pbDevices, &pb.Device{
 			DeviceId:              d.DeviceId,
@@ -872,77 +875,131 @@ func (gb *GB28181Plugin) UpdatePlatform(ctx context.Context, req *pb.Platform) (
 	}
 
 	// 检查平台是否存在
-	var platform gb28181.PlatformModel
-	if err := gb.DB.First(&platform, req.Id).Error; err != nil {
+	if oldPlatform, ok := gb.platforms.Get(req.ServerGBId); !ok {
 		resp.Code = 404
 		resp.Message = "platform not found"
 		return resp, nil
-	}
-
-	// 从请求中创建一个新的平台模型
-	updatedPlatform := gb28181.PlatformModel{
-		Enable:                  req.Enable,
-		Name:                    req.Name,
-		ServerGBID:              req.ServerGBId,
-		ServerGBDomain:          req.ServerGBDomain,
-		ServerIP:                req.ServerIp,
-		ServerPort:              int(req.ServerPort),
-		DeviceGBID:              req.DeviceGBId,
-		DeviceIP:                req.DeviceIp,
-		DevicePort:              int(req.DevicePort),
-		Username:                req.Username,
-		Password:                req.Password,
-		Expires:                 int(req.Expires),
-		KeepTimeout:             int(req.KeepTimeout),
-		Transport:               req.Transport,
-		CharacterSet:            req.CharacterSet,
-		PTZ:                     req.Ptz,
-		RTCP:                    req.Rtcp,
-		Status:                  req.Status,
-		ChannelCount:            int(req.ChannelCount),
-		CatalogSubscribe:        req.CatalogSubscribe,
-		AlarmSubscribe:          req.AlarmSubscribe,
-		MobilePositionSubscribe: req.MobilePositionSubscribe,
-		CatalogGroup:            int(req.CatalogGroup),
-		UpdateTime:              req.UpdateTime,
-		AsMessageChannel:        req.AsMessageChannel,
-		SendStreamIp:            req.SendStreamIp,
-		AutoPushChannel:         req.AutoPushChannel,
-		CatalogWithPlatform:     int(req.CatalogWithPlatform),
-		CatalogWithGroup:        int(req.CatalogWithGroup),
-		CatalogWithRegion:       int(req.CatalogWithRegion),
-		CivilCode:               req.CivilCode,
-		Manufacturer:            req.Manufacturer,
-		Model:                   req.Model,
-		Address:                 req.Address,
-		RegisterWay:             int(req.RegisterWay),
-		Secrecy:                 int(req.Secrecy),
-	}
-
-	// 使用 GORM 的 Updates 方法更新非零值字段
-	if err := gb.DB.Model(&platform).Updates(updatedPlatform).Error; err != nil {
-		resp.Code = 500
-		resp.Message = fmt.Sprintf("failed to update platform: %v", err)
-		return resp, nil
-	}
-	gb.DB.Model(&platform).Find(&platform)
-	// 处理平台启用状态变化
-	if platform.Enable {
-		// 如果存在旧的platform实例，先停止并移除
-		if oldPlatform, ok := gb.platforms.Get(platform.ServerGBID); ok {
-			oldPlatform.Unregister()
-			oldPlatform.Stop(fmt.Errorf("platform updated"))
-			oldPlatform.WaitStopped()
-		}
-		// 创建新的Platform实例
-		platformInstance := NewPlatform(&platform, gb, false)
-		// 添加到任务系统
-		gb.platforms.AddTask(platformInstance)
 	} else {
-		// 如果平台被禁用，停止并移除旧的platform实例
-		if oldPlatform, ok := gb.platforms.Get(platform.ServerGBID); ok {
+		// 记录原始值，用于检查是否有变化
+		oldEnable := oldPlatform.PlatformModel.Enable
+		oldExpires := oldPlatform.PlatformModel.Expires
+		oldKeepTimeout := oldPlatform.PlatformModel.KeepTimeout
+
+		// 更新oldPlatform中的字段
+		if req.Name != "" {
+			oldPlatform.PlatformModel.Name = req.Name
+		}
+		if req.ServerGBDomain != "" {
+			oldPlatform.PlatformModel.ServerGBDomain = req.ServerGBDomain
+		}
+		if req.ServerIp != "" {
+			oldPlatform.PlatformModel.ServerIP = req.ServerIp
+		}
+		if req.ServerPort > 0 {
+			oldPlatform.PlatformModel.ServerPort = int(req.ServerPort)
+		}
+		if req.DeviceGBId != "" {
+			oldPlatform.PlatformModel.DeviceGBID = req.DeviceGBId
+		}
+		if req.DeviceIp != "" {
+			oldPlatform.PlatformModel.DeviceIP = req.DeviceIp
+		}
+		if req.DevicePort > 0 {
+			oldPlatform.PlatformModel.DevicePort = int(req.DevicePort)
+		}
+		if req.Username != "" {
+			oldPlatform.PlatformModel.Username = req.Username
+		}
+		if req.Password != "" {
+			oldPlatform.PlatformModel.Password = req.Password
+		}
+		if req.Expires > 0 {
+			oldPlatform.PlatformModel.Expires = int(req.Expires)
+		}
+		if req.KeepTimeout > 0 {
+			oldPlatform.PlatformModel.KeepTimeout = int(req.KeepTimeout)
+		}
+		if req.Transport != "" {
+			oldPlatform.PlatformModel.Transport = req.Transport
+		}
+		if req.CharacterSet != "" {
+			oldPlatform.PlatformModel.CharacterSet = req.CharacterSet
+		}
+
+		oldPlatform.PlatformModel.Enable = req.Enable
+		oldPlatform.PlatformModel.PTZ = req.Ptz
+		oldPlatform.PlatformModel.RTCP = req.Rtcp
+		oldPlatform.PlatformModel.CatalogSubscribe = req.CatalogSubscribe
+		oldPlatform.PlatformModel.AlarmSubscribe = req.AlarmSubscribe
+		oldPlatform.PlatformModel.MobilePositionSubscribe = req.MobilePositionSubscribe
+
+		if req.CatalogGroup > 0 {
+			oldPlatform.PlatformModel.CatalogGroup = int(req.CatalogGroup)
+		}
+		if req.SendStreamIp != "" {
+			oldPlatform.PlatformModel.SendStreamIp = req.SendStreamIp
+		}
+
+		oldPlatform.PlatformModel.AsMessageChannel = req.AsMessageChannel
+		oldPlatform.PlatformModel.AutoPushChannel = req.AutoPushChannel
+
+		if req.CatalogWithPlatform > 0 {
+			oldPlatform.PlatformModel.CatalogWithPlatform = int(req.CatalogWithPlatform)
+		}
+		if req.CatalogWithGroup > 0 {
+			oldPlatform.PlatformModel.CatalogWithGroup = int(req.CatalogWithGroup)
+		}
+		if req.CatalogWithRegion > 0 {
+			oldPlatform.PlatformModel.CatalogWithRegion = int(req.CatalogWithRegion)
+		}
+		if req.CivilCode != "" {
+			oldPlatform.PlatformModel.CivilCode = req.CivilCode
+		}
+		if req.Manufacturer != "" {
+			oldPlatform.PlatformModel.Manufacturer = req.Manufacturer
+		}
+		if req.Model != "" {
+			oldPlatform.PlatformModel.Model = req.Model
+		}
+		if req.Address != "" {
+			oldPlatform.PlatformModel.Address = req.Address
+		}
+		if req.RegisterWay > 0 {
+			oldPlatform.PlatformModel.RegisterWay = int(req.RegisterWay)
+		}
+		if req.Secrecy > 0 {
+			oldPlatform.PlatformModel.Secrecy = int(req.Secrecy)
+		}
+
+		// 更新时间，使用UTC时间
+		oldPlatform.PlatformModel.UpdateTime = time.Now().UTC().Format("2006-01-02 15:04:05")
+
+		// 使用 GORM 的 Updates 方法更新数据库
+		if err := gb.DB.Model(&gb28181.PlatformModel{}).Where("server_gb_id = ?", req.ServerGBId).Updates(oldPlatform.PlatformModel).Error; err != nil {
+			resp.Code = 500
+			resp.Message = fmt.Sprintf("failed to update platform: %v", err)
+			return resp, nil
+		}
+
+		// 检查关键字段是否有变化
+		enableChanged := oldEnable != oldPlatform.PlatformModel.Enable
+		expiresChanged := oldExpires != oldPlatform.PlatformModel.Expires
+		keepTimeoutChanged := oldKeepTimeout != oldPlatform.PlatformModel.KeepTimeout
+
+		// 处理平台启用状态变化
+		if oldPlatform.PlatformModel.Enable {
+			// 如果平台被启用或关键参数变化，需要更新注册和心跳任务
+			if enableChanged || expiresChanged || keepTimeoutChanged {
+				oldPlatform.Unregister()
+				oldPlatform.register.Ticker.Reset(time.Second * time.Duration(oldPlatform.PlatformModel.Expires))
+				oldPlatform.register.Tick(nil)
+				oldPlatform.register.platformKeepAliveTask.Ticker.Reset(time.Second * time.Duration(oldPlatform.PlatformModel.KeepTimeout))
+			}
+		} else {
+			// 如果平台被禁用，停止并移除旧的platform实例
 			oldPlatform.Unregister()
-			oldPlatform.Stop(fmt.Errorf("platform disabled"))
+			oldPlatform.register.Ticker.Reset(time.Hour * 999999)
+			oldPlatform.register.platformKeepAliveTask.Ticker.Reset(time.Hour * 999999)
 		}
 	}
 
@@ -977,97 +1034,111 @@ func (gb *GB28181Plugin) DeletePlatform(ctx context.Context, req *pb.DeletePlatf
 func (gb *GB28181Plugin) ListPlatforms(ctx context.Context, req *pb.ListPlatformsRequest) (*pb.PlatformsPageInfo, error) {
 	resp := &pb.PlatformsPageInfo{}
 
-	if gb.DB == nil {
-		resp.Code = 500
-		resp.Message = "database not initialized"
-		return resp, nil
-	}
+	// 从内存中读取平台信息，而不是从数据库查询
+	var pbPlatforms []*pb.Platform
+	var filteredPlatforms []*Platform
 
-	var platforms []gb28181.PlatformModel
-	var total int64
+	// 遍历内存中的平台集合
+	gb.platforms.Range(func(platform *Platform) bool {
+		// 应用筛选条件
+		if req.Query != "" {
+			// 检查平台名称、ServerGBID或DeviceGBID是否包含查询字符串
+			if !strings.Contains(platform.PlatformModel.Name, req.Query) &&
+				!strings.Contains(platform.PlatformModel.ServerGBID, req.Query) &&
+				!strings.Contains(platform.PlatformModel.DeviceGBID, req.Query) {
+				return true // 继续遍历
+			}
+		}
 
-	// 构建查询条件
-	query := gb.DB.Model(&gb28181.PlatformModel{})
-	if req.Query != "" {
-		query = query.Where("name LIKE ? OR server_gb_id LIKE ? OR device_gb_id LIKE ?",
-			"%"+req.Query+"%", "%"+req.Query+"%", "%"+req.Query+"%")
-	}
-	if req.Status {
-		query = query.Where("status = ?", true)
-	}
+		// 如果需要筛选在线平台
+		if req.Enable != -1 && req.Enable != int32(util.Conditional(platform.PlatformModel.Enable, 1, 0)) {
+			return true // 继续遍历
+		}
 
-	// 获取总数
-	if err := query.Count(&total).Error; err != nil {
-		resp.Code = 500
-		resp.Message = fmt.Sprintf("failed to count platforms: %v", err)
-		return resp, nil
-	}
+		// 添加到过滤后的平台列表
+		filteredPlatforms = append(filteredPlatforms, platform)
+		return true
+	})
 
-	// 查询平台列表
-	// 当Page和Count都为0时，不做分页，返回所有数据
-	if req.Page == 0 && req.Count == 0 {
-		// 不分页，查询所有数据
-		if err := query.Find(&platforms).Error; err != nil {
-			resp.Code = 500
-			resp.Message = fmt.Sprintf("failed to list platforms: %v", err)
+	// 计算总数
+	total := len(filteredPlatforms)
+	resp.Total = int32(total)
+
+	// 按ServerGBID对平台列表进行排序
+	sort.Slice(filteredPlatforms, func(i, j int) bool {
+		return filteredPlatforms[i].PlatformModel.ServerGBID < filteredPlatforms[j].PlatformModel.ServerGBID
+	})
+
+	// 处理分页
+	var pagePlatforms []*Platform
+	if req.Page > 0 && req.Count > 0 {
+		// 计算起始和结束索引
+		start := int(req.Page-1) * int(req.Count)
+		end := start + int(req.Count)
+
+		// 边界检查
+		if start >= total {
+			// 超出范围，返回空列表
+			resp.Code = 0
+			resp.Message = "success"
+			resp.List = pbPlatforms
 			return resp, nil
 		}
+
+		if end > total {
+			end = total
+		}
+
+		// 应用分页
+		pagePlatforms = filteredPlatforms[start:end]
 	} else {
-		// 分页查询
-		if err := query.Offset(int(req.Page-1) * int(req.Count)).
-			Limit(int(req.Count)).
-			Find(&platforms).Error; err != nil {
-			resp.Code = 500
-			resp.Message = fmt.Sprintf("failed to list platforms: %v", err)
-			return resp, nil
-		}
+		// 不分页，返回所有数据
+		pagePlatforms = filteredPlatforms
 	}
 
 	// 转换为proto消息
-	var pbPlatforms []*pb.Platform
-	for _, p := range platforms {
+	for _, p := range pagePlatforms {
 		pbPlatforms = append(pbPlatforms, &pb.Platform{
-			Enable:                  p.Enable,
-			Name:                    p.Name,
-			ServerGBId:              p.ServerGBID,
-			ServerGBDomain:          p.ServerGBDomain,
-			ServerIp:                p.ServerIP,
-			ServerPort:              int32(p.ServerPort),
-			DeviceGBId:              p.DeviceGBID,
-			DeviceIp:                p.DeviceIP,
-			DevicePort:              int32(p.DevicePort),
-			Username:                p.Username,
-			Password:                p.Password,
-			Expires:                 int32(p.Expires),
-			KeepTimeout:             int32(p.KeepTimeout),
-			Transport:               p.Transport,
-			CharacterSet:            p.CharacterSet,
-			Ptz:                     p.PTZ,
-			Rtcp:                    p.RTCP,
-			Status:                  p.Status,
-			ChannelCount:            int32(p.ChannelCount),
-			CatalogSubscribe:        p.CatalogSubscribe,
-			AlarmSubscribe:          p.AlarmSubscribe,
-			MobilePositionSubscribe: p.MobilePositionSubscribe,
-			CatalogGroup:            int32(p.CatalogGroup),
-			UpdateTime:              p.UpdateTime,
-			CreateTime:              p.CreateTime,
-			AsMessageChannel:        p.AsMessageChannel,
-			SendStreamIp:            p.SendStreamIp,
-			AutoPushChannel:         p.AutoPushChannel,
-			CatalogWithPlatform:     int32(p.CatalogWithPlatform),
-			CatalogWithGroup:        int32(p.CatalogWithGroup),
-			CatalogWithRegion:       int32(p.CatalogWithRegion),
-			CivilCode:               p.CivilCode,
-			Manufacturer:            p.Manufacturer,
-			Model:                   p.Model,
-			Address:                 p.Address,
-			RegisterWay:             int32(p.RegisterWay),
-			Secrecy:                 int32(p.Secrecy),
+			Enable:                  p.PlatformModel.Enable,
+			Name:                    p.PlatformModel.Name,
+			ServerGBId:              p.PlatformModel.ServerGBID,
+			ServerGBDomain:          p.PlatformModel.ServerGBDomain,
+			ServerIp:                p.PlatformModel.ServerIP,
+			ServerPort:              int32(p.PlatformModel.ServerPort),
+			DeviceGBId:              p.PlatformModel.DeviceGBID,
+			DeviceIp:                p.PlatformModel.DeviceIP,
+			DevicePort:              int32(p.PlatformModel.DevicePort),
+			Username:                p.PlatformModel.Username,
+			Password:                p.PlatformModel.Password,
+			Expires:                 int32(p.PlatformModel.Expires),
+			KeepTimeout:             int32(p.PlatformModel.KeepTimeout),
+			Transport:               p.PlatformModel.Transport,
+			CharacterSet:            p.PlatformModel.CharacterSet,
+			Ptz:                     p.PlatformModel.PTZ,
+			Rtcp:                    p.PlatformModel.RTCP,
+			Status:                  p.PlatformModel.Status,
+			ChannelCount:            int32(p.PlatformModel.ChannelCount),
+			CatalogSubscribe:        p.PlatformModel.CatalogSubscribe,
+			AlarmSubscribe:          p.PlatformModel.AlarmSubscribe,
+			MobilePositionSubscribe: p.PlatformModel.MobilePositionSubscribe,
+			CatalogGroup:            int32(p.PlatformModel.CatalogGroup),
+			UpdateTime:              p.PlatformModel.UpdateTime,
+			CreateTime:              p.PlatformModel.CreateTime,
+			AsMessageChannel:        p.PlatformModel.AsMessageChannel,
+			SendStreamIp:            p.PlatformModel.SendStreamIp,
+			AutoPushChannel:         p.PlatformModel.AutoPushChannel,
+			CatalogWithPlatform:     int32(p.PlatformModel.CatalogWithPlatform),
+			CatalogWithGroup:        int32(p.PlatformModel.CatalogWithGroup),
+			CatalogWithRegion:       int32(p.PlatformModel.CatalogWithRegion),
+			CivilCode:               p.PlatformModel.CivilCode,
+			Manufacturer:            p.PlatformModel.Manufacturer,
+			Model:                   p.PlatformModel.Model,
+			Address:                 p.PlatformModel.Address,
+			RegisterWay:             int32(p.PlatformModel.RegisterWay),
+			Secrecy:                 int32(p.PlatformModel.Secrecy),
 		})
 	}
 
-	resp.Total = int32(total)
 	resp.List = pbPlatforms
 	resp.Code = 0
 	resp.Message = "success"

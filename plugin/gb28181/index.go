@@ -343,14 +343,6 @@ func (gb *GB28181Plugin) checkDeviceExpire() (err error) {
 		slog.SetDefault(logger) // 设置为默认日志记录器
 		device.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(logger), sipgo.WithClientHostname(device.SipIp))
 		device.Info("checkDeviceExpire", "d.SipIp", device.SipIp, "d.LocalPort", device.LocalPort, "d.contactHDR", device.contactHDR)
-
-		// 设置设备ID的hash值作为任务ID
-		var hash uint32
-		for i := 0; i < len(device.DeviceId); i++ {
-			ch := device.DeviceId[i]
-			hash = hash*31 + uint32(ch)
-		}
-		//device.Task.ID = hash
 		device.channels.OnAdd(func(c *Channel) {
 			if absDevice, ok := gb.Server.PullProxies.Find(func(absDevice m7s.IPullProxy) bool {
 				conf := absDevice.GetConfig()
@@ -444,48 +436,41 @@ func (gb *GB28181Plugin) checkPlatform() {
 	gb.Info("找到启用状态的平台", "count", len(platformModels))
 	// 遍历所有平台进行初始化和注册
 	for _, platformModel := range platformModels {
-		if platformModel.Enable {
+		// 创建Platform实例
+		platform := NewPlatform(platformModel, gb, true)
 
-			// 创建Platform实例
-			platform := NewPlatform(platformModel, gb, true)
-
-			if platformModel.PlatformChannels != nil && len(platformModel.PlatformChannels) > 0 {
-				for i := range platformModel.PlatformChannels {
-					channelDbId := platformModel.PlatformChannels[i].ChannelDBID
-					if channelDbId != "" {
-						if channel, ok := gb.channels.Get(channelDbId); ok {
+		if platformModel.PlatformChannels != nil && len(platformModel.PlatformChannels) > 0 {
+			for i := range platformModel.PlatformChannels {
+				channelDbId := platformModel.PlatformChannels[i].ChannelDBID
+				if channelDbId != "" {
+					if channel, ok := gb.channels.Get(channelDbId); ok {
+						platform.channels.Set(channel)
+					}
+				}
+			}
+		} else {
+			// 查询通道列表
+			var channels []gb28181.DeviceChannel
+			if gb.DB != nil {
+				if err := gb.DB.Table("gb28181_channel gc").
+					Select(`gc.*`).
+					Joins("left join gb28181_platform_channel gpc on gc.id=gpc.channel_db_id").
+					Where("gpc.platform_server_gb_id = ? and gc.status='ON'", platformModel.ServerGBID).
+					Find(&channels).Error; err != nil {
+					gb.Error("<UNK>", "error", err.Error())
+				}
+				if channels != nil && len(channels) > 0 {
+					for i := range channels {
+						if channel, ok := gb.channels.Get(channels[i].ID); ok {
 							platform.channels.Set(channel)
 						}
 					}
 				}
-			} else {
-				// 查询通道列表
-				var channels []gb28181.DeviceChannel
-				if gb.DB != nil {
-					if err := gb.DB.Table("gb28181_channel gc").
-						Select(`gc.*`).
-						Joins("left join gb28181_platform_channel gpc on gc.id=gpc.channel_db_id").
-						Where("gpc.platform_server_gb_id = ? and gc.status='ON'", platformModel.ServerGBID).
-						Find(&channels).Error; err != nil {
-						gb.Error("<UNK>", "error", err.Error())
-					}
-					if channels != nil && len(channels) > 0 {
-						for i := range channels {
-							if channel, ok := gb.channels.Get(channels[i].ID); ok {
-								platform.channels.Set(channel)
-							}
-						}
-					}
-				}
 			}
-			//go platform.Unregister()
-			//if err != nil {
-			//	 gb.Error("unregister err ", err)
-			//}
-			// 添加到任务系统
-			gb.platforms.AddTask(platform)
-			gb.Info("平台初始化完成", "ID", platformModel.ServerGBID, "Name", platformModel.Name)
 		}
+		// 添加到任务系统
+		gb.platforms.AddTask(platform)
+		gb.Info("平台初始化完成", "ID", platformModel.ServerGBID, "Name", platformModel.Name)
 	}
 }
 

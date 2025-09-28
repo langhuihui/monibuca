@@ -180,6 +180,7 @@ func (c *Client) Run() (err error) {
 					err = c.SendMessage(RTMP_MSG_AMF0_COMMAND, &CommandMessage{"createStream", 2})
 					if err == nil {
 						c.Info("connected")
+						c.Connected = true
 					}
 				}
 			case *ResponseCreateStreamMessage:

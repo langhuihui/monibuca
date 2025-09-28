@@ -229,16 +229,6 @@ func (d *Dialog) Start() (err error) {
 			"a=setup:active",
 			"a=connection:new",
 		)
-	case mrtp.StreamModeUDP:
-		sdpInfo = append(sdpInfo,
-			"a=setup:active",
-			"a=connection:new",
-		)
-	default:
-		sdpInfo = append(sdpInfo,
-			"a=setup:passive",
-			"a=connection:new",
-		)
 	}
 
 	// 添加 SSRC
@@ -298,7 +288,8 @@ func (d *Dialog) Start() (err error) {
 	fromHDR.Params.Add("tag", sip.GenerateTagN(32))
 	dialogClientCache := sipgo.NewDialogClientCache(device.client, contactHDR)
 	// 创建会话
-	d.Info("start to invite", "recipient:", recipient, " viaHeader:", viaHeader, " fromHDR:", fromHDR, " toHeader:", toHeader, " device.contactHDR:", device.contactHDR, "contactHDR:", contactHDR)
+	d.Info("start to invite", "recipient:", recipient, " viaHeader:", viaHeader, " fromHDR:", fromHDR, " toHeader:", toHeader, " device.contactHDR:",
+		device.contactHDR, "contactHDR:", contactHDR, "sdpInfo:", strings.Join(sdpInfo, "\r\n")+"\r\n")
 
 	d.pullCtx.GoToStepConst(StepInviteSend)
 

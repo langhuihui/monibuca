@@ -2716,44 +2716,43 @@ func (x *SSRCListResponse) GetCount() int32 {
 // Platform消息定义
 type Platform struct {
 	state                   protoimpl.MessageState `protogen:"open.v1"`
-	Id                      uint32                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`                                            // id(数据库中)
-	Enable                  bool                   `protobuf:"varint,2,opt,name=enable,proto3" json:"enable,omitempty"`                                    // 是否启用
-	Name                    string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`                                         // 名称
-	ServerGBId              string                 `protobuf:"bytes,4,opt,name=serverGBId,proto3" json:"serverGBId,omitempty"`                             // SIP服务国标编码
-	ServerGBDomain          string                 `protobuf:"bytes,5,opt,name=serverGBDomain,proto3" json:"serverGBDomain,omitempty"`                     // SIP服务国标域
-	ServerIp                string                 `protobuf:"bytes,6,opt,name=serverIp,proto3" json:"serverIp,omitempty"`                                 // SIP服务IP
-	ServerPort              int32                  `protobuf:"varint,7,opt,name=serverPort,proto3" json:"serverPort,omitempty"`                            // SIP服务端口
-	DeviceGBId              string                 `protobuf:"bytes,8,opt,name=deviceGBId,proto3" json:"deviceGBId,omitempty"`                             // 设备国标编号
-	DeviceIp                string                 `protobuf:"bytes,9,opt,name=deviceIp,proto3" json:"deviceIp,omitempty"`                                 // 设备ip
-	DevicePort              int32                  `protobuf:"varint,10,opt,name=devicePort,proto3" json:"devicePort,omitempty"`                           // 设备端口
-	Username                string                 `protobuf:"bytes,11,opt,name=username,proto3" json:"username,omitempty"`                                // SIP认证用户名
-	Password                string                 `protobuf:"bytes,12,opt,name=password,proto3" json:"password,omitempty"`                                // SIP认证密码
-	Expires                 int32                  `protobuf:"varint,13,opt,name=expires,proto3" json:"expires,omitempty"`                                 // 注册周期(秒)
-	KeepTimeout             int32                  `protobuf:"varint,14,opt,name=keepTimeout,proto3" json:"keepTimeout,omitempty"`                         // 心跳周期(秒)
-	Transport               string                 `protobuf:"bytes,15,opt,name=transport,proto3" json:"transport,omitempty"`                              // 传输协议
-	CharacterSet            string                 `protobuf:"bytes,16,opt,name=characterSet,proto3" json:"characterSet,omitempty"`                        // 字符集
-	Ptz                     bool                   `protobuf:"varint,17,opt,name=ptz,proto3" json:"ptz,omitempty"`                                         // 允许云台控制
-	Rtcp                    bool                   `protobuf:"varint,18,opt,name=rtcp,proto3" json:"rtcp,omitempty"`                                       // RTCP流保活
-	Status                  bool                   `protobuf:"varint,19,opt,name=status,proto3" json:"status,omitempty"`                                   // 在线状态
-	ChannelCount            int32                  `protobuf:"varint,20,opt,name=channelCount,proto3" json:"channelCount,omitempty"`                       // 通道数量
-	CatalogSubscribe        bool                   `protobuf:"varint,21,opt,name=catalogSubscribe,proto3" json:"catalogSubscribe,omitempty"`               // 已被订阅目录信息
-	AlarmSubscribe          bool                   `protobuf:"varint,22,opt,name=alarmSubscribe,proto3" json:"alarmSubscribe,omitempty"`                   // 已被订阅报警信息
-	MobilePositionSubscribe bool                   `protobuf:"varint,23,opt,name=mobilePositionSubscribe,proto3" json:"mobilePositionSubscribe,omitempty"` // 已被订阅移动位置信息
-	CatalogGroup            int32                  `protobuf:"varint,24,opt,name=catalogGroup,proto3" json:"catalogGroup,omitempty"`                       // 目录分组大小
-	UpdateTime              string                 `protobuf:"bytes,25,opt,name=updateTime,proto3" json:"updateTime,omitempty"`                            // 最后更新时间
-	CreateTime              string                 `protobuf:"bytes,26,opt,name=createTime,proto3" json:"createTime,omitempty"`                            // 创建时间
-	AsMessageChannel        bool                   `protobuf:"varint,27,opt,name=asMessageChannel,proto3" json:"asMessageChannel,omitempty"`               // 是否作为消息通道
-	SendStreamIp            string                 `protobuf:"bytes,28,opt,name=sendStreamIp,proto3" json:"sendStreamIp,omitempty"`                        // 点播回复200OK使用的IP
-	AutoPushChannel         bool                   `protobuf:"varint,29,opt,name=autoPushChannel,proto3" json:"autoPushChannel,omitempty"`                 // 是否自动推送通道变化
-	CatalogWithPlatform     int32                  `protobuf:"varint,30,opt,name=catalogWithPlatform,proto3" json:"catalogWithPlatform,omitempty"`         // 目录信息包含平台信息
-	CatalogWithGroup        int32                  `protobuf:"varint,31,opt,name=catalogWithGroup,proto3" json:"catalogWithGroup,omitempty"`               // 目录信息包含分组信息
-	CatalogWithRegion       int32                  `protobuf:"varint,32,opt,name=catalogWithRegion,proto3" json:"catalogWithRegion,omitempty"`             // 目录信息包含行政区划
-	CivilCode               string                 `protobuf:"bytes,33,opt,name=civilCode,proto3" json:"civilCode,omitempty"`                              // 行政区划代码
-	Manufacturer            string                 `protobuf:"bytes,34,opt,name=manufacturer,proto3" json:"manufacturer,omitempty"`                        // 平台厂商
-	Model                   string                 `protobuf:"bytes,35,opt,name=model,proto3" json:"model,omitempty"`                                      // 平台型号
-	Address                 string                 `protobuf:"bytes,36,opt,name=address,proto3" json:"address,omitempty"`                                  // 平台安装地址
-	RegisterWay             int32                  `protobuf:"varint,37,opt,name=registerWay,proto3" json:"registerWay,omitempty"`                         // 注册方式
-	Secrecy                 int32                  `protobuf:"varint,38,opt,name=secrecy,proto3" json:"secrecy,omitempty"`                                 // 保密属性
+	Enable                  bool                   `protobuf:"varint,1,opt,name=enable,proto3" json:"enable,omitempty"`                                    // 是否启用
+	Name                    string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`                                         // 名称
+	ServerGBId              string                 `protobuf:"bytes,3,opt,name=serverGBId,proto3" json:"serverGBId,omitempty"`                             // SIP服务国标编码
+	ServerGBDomain          string                 `protobuf:"bytes,4,opt,name=serverGBDomain,proto3" json:"serverGBDomain,omitempty"`                     // SIP服务国标域
+	ServerIp                string                 `protobuf:"bytes,5,opt,name=serverIp,proto3" json:"serverIp,omitempty"`                                 // SIP服务IP
+	ServerPort              int32                  `protobuf:"varint,6,opt,name=serverPort,proto3" json:"serverPort,omitempty"`                            // SIP服务端口
+	DeviceGBId              string                 `protobuf:"bytes,7,opt,name=deviceGBId,proto3" json:"deviceGBId,omitempty"`                             // 设备国标编号
+	DeviceIp                string                 `protobuf:"bytes,8,opt,name=deviceIp,proto3" json:"deviceIp,omitempty"`                                 // 设备ip
+	DevicePort              int32                  `protobuf:"varint,9,opt,name=devicePort,proto3" json:"devicePort,omitempty"`                            // 设备端口
+	Username                string                 `protobuf:"bytes,10,opt,name=username,proto3" json:"username,omitempty"`                                // SIP认证用户名
+	Password                string                 `protobuf:"bytes,11,opt,name=password,proto3" json:"password,omitempty"`                                // SIP认证密码
+	Expires                 int32                  `protobuf:"varint,12,opt,name=expires,proto3" json:"expires,omitempty"`                                 // 注册周期(秒)
+	KeepTimeout             int32                  `protobuf:"varint,13,opt,name=keepTimeout,proto3" json:"keepTimeout,omitempty"`                         // 心跳周期(秒)
+	Transport               string                 `protobuf:"bytes,14,opt,name=transport,proto3" json:"transport,omitempty"`                              // 传输协议
+	CharacterSet            string                 `protobuf:"bytes,15,opt,name=characterSet,proto3" json:"characterSet,omitempty"`                        // 字符集
+	Ptz                     bool                   `protobuf:"varint,16,opt,name=ptz,proto3" json:"ptz,omitempty"`                                         // 允许云台控制
+	Rtcp                    bool                   `protobuf:"varint,17,opt,name=rtcp,proto3" json:"rtcp,omitempty"`                                       // RTCP流保活
+	Status                  bool                   `protobuf:"varint,18,opt,name=status,proto3" json:"status,omitempty"`                                   // 在线状态
+	ChannelCount            int32                  `protobuf:"varint,19,opt,name=channelCount,proto3" json:"channelCount,omitempty"`                       // 通道数量
+	CatalogSubscribe        bool                   `protobuf:"varint,20,opt,name=catalogSubscribe,proto3" json:"catalogSubscribe,omitempty"`               // 已被订阅目录信息
+	AlarmSubscribe          bool                   `protobuf:"varint,21,opt,name=alarmSubscribe,proto3" json:"alarmSubscribe,omitempty"`                   // 已被订阅报警信息
+	MobilePositionSubscribe bool                   `protobuf:"varint,22,opt,name=mobilePositionSubscribe,proto3" json:"mobilePositionSubscribe,omitempty"` // 已被订阅移动位置信息
+	CatalogGroup            int32                  `protobuf:"varint,23,opt,name=catalogGroup,proto3" json:"catalogGroup,omitempty"`                       // 目录分组大小
+	UpdateTime              string                 `protobuf:"bytes,24,opt,name=updateTime,proto3" json:"updateTime,omitempty"`                            // 最后更新时间
+	CreateTime              string                 `protobuf:"bytes,25,opt,name=createTime,proto3" json:"createTime,omitempty"`                            // 创建时间
+	AsMessageChannel        bool                   `protobuf:"varint,26,opt,name=asMessageChannel,proto3" json:"asMessageChannel,omitempty"`               // 是否作为消息通道
+	SendStreamIp            string                 `protobuf:"bytes,27,opt,name=sendStreamIp,proto3" json:"sendStreamIp,omitempty"`                        // 点播回复200OK使用的IP
+	AutoPushChannel         bool                   `protobuf:"varint,28,opt,name=autoPushChannel,proto3" json:"autoPushChannel,omitempty"`                 // 是否自动推送通道变化
+	CatalogWithPlatform     int32                  `protobuf:"varint,29,opt,name=catalogWithPlatform,proto3" json:"catalogWithPlatform,omitempty"`         // 目录信息包含平台信息
+	CatalogWithGroup        int32                  `protobuf:"varint,30,opt,name=catalogWithGroup,proto3" json:"catalogWithGroup,omitempty"`               // 目录信息包含分组信息
+	CatalogWithRegion       int32                  `protobuf:"varint,31,opt,name=catalogWithRegion,proto3" json:"catalogWithRegion,omitempty"`             // 目录信息包含行政区划
+	CivilCode               string                 `protobuf:"bytes,32,opt,name=civilCode,proto3" json:"civilCode,omitempty"`                              // 行政区划代码
+	Manufacturer            string                 `protobuf:"bytes,33,opt,name=manufacturer,proto3" json:"manufacturer,omitempty"`                        // 平台厂商
+	Model                   string                 `protobuf:"bytes,34,opt,name=model,proto3" json:"model,omitempty"`                                      // 平台型号
+	Address                 string                 `protobuf:"bytes,35,opt,name=address,proto3" json:"address,omitempty"`                                  // 平台安装地址
+	RegisterWay             int32                  `protobuf:"varint,36,opt,name=registerWay,proto3" json:"registerWay,omitempty"`                         // 注册方式
+	Secrecy                 int32                  `protobuf:"varint,37,opt,name=secrecy,proto3" json:"secrecy,omitempty"`                                 // 保密属性
 	unknownFields           protoimpl.UnknownFields
 	sizeCache               protoimpl.SizeCache
 }
@@ -2786,13 +2785,6 @@ func (x *Platform) ProtoReflect() protoreflect.Message {
 // Deprecated: Use Platform.ProtoReflect.Descriptor instead.
 func (*Platform) Descriptor() ([]byte, []int) {
 	return file_gb28181_proto_rawDescGZIP(), []int{39}
-}
-
-func (x *Platform) GetId() uint32 {
-	if x != nil {
-		return x.Id
-	}
-	return 0
 }
 
 func (x *Platform) GetEnable() bool {
@@ -3150,7 +3142,7 @@ type ListPlatformsRequest struct {
 	Page          int32                  `protobuf:"varint,1,opt,name=page,proto3" json:"page,omitempty"`
 	Count         int32                  `protobuf:"varint,2,opt,name=count,proto3" json:"count,omitempty"`
 	Query         string                 `protobuf:"bytes,3,opt,name=query,proto3" json:"query,omitempty"`
-	Status        bool                   `protobuf:"varint,4,opt,name=status,proto3" json:"status,omitempty"`
+	Enable        int32                  `protobuf:"varint,4,opt,name=enable,proto3" json:"enable,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3206,11 +3198,11 @@ func (x *ListPlatformsRequest) GetQuery() string {
 	return ""
 }
 
-func (x *ListPlatformsRequest) GetStatus() bool {
+func (x *ListPlatformsRequest) GetEnable() int32 {
 	if x != nil {
-		return x.Status
+		return x.Enable
 	}
-	return false
+	return 0
 }
 
 // 平台响应
@@ -6506,59 +6498,58 @@ const file_gb28181_proto_rawDesc = "" +
 	"\x04code\x18\x01 \x01(\x05R\x04code\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12(\n" +
 	"\x04data\x18\x03 \x03(\v2\x14.gb28181pro.SSRCInfoR\x04data\x12\x14\n" +
-	"\x05count\x18\x04 \x01(\x05R\x05count\"\xe4\t\n" +
-	"\bPlatform\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\rR\x02id\x12\x16\n" +
-	"\x06enable\x18\x02 \x01(\bR\x06enable\x12\x12\n" +
-	"\x04name\x18\x03 \x01(\tR\x04name\x12\x1e\n" +
+	"\x05count\x18\x04 \x01(\x05R\x05count\"\xd4\t\n" +
+	"\bPlatform\x12\x16\n" +
+	"\x06enable\x18\x01 \x01(\bR\x06enable\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1e\n" +
 	"\n" +
-	"serverGBId\x18\x04 \x01(\tR\n" +
+	"serverGBId\x18\x03 \x01(\tR\n" +
 	"serverGBId\x12&\n" +
-	"\x0eserverGBDomain\x18\x05 \x01(\tR\x0eserverGBDomain\x12\x1a\n" +
-	"\bserverIp\x18\x06 \x01(\tR\bserverIp\x12\x1e\n" +
+	"\x0eserverGBDomain\x18\x04 \x01(\tR\x0eserverGBDomain\x12\x1a\n" +
+	"\bserverIp\x18\x05 \x01(\tR\bserverIp\x12\x1e\n" +
 	"\n" +
-	"serverPort\x18\a \x01(\x05R\n" +
+	"serverPort\x18\x06 \x01(\x05R\n" +
 	"serverPort\x12\x1e\n" +
 	"\n" +
-	"deviceGBId\x18\b \x01(\tR\n" +
+	"deviceGBId\x18\a \x01(\tR\n" +
 	"deviceGBId\x12\x1a\n" +
-	"\bdeviceIp\x18\t \x01(\tR\bdeviceIp\x12\x1e\n" +
+	"\bdeviceIp\x18\b \x01(\tR\bdeviceIp\x12\x1e\n" +
 	"\n" +
-	"devicePort\x18\n" +
-	" \x01(\x05R\n" +
+	"devicePort\x18\t \x01(\x05R\n" +
 	"devicePort\x12\x1a\n" +
-	"\busername\x18\v \x01(\tR\busername\x12\x1a\n" +
-	"\bpassword\x18\f \x01(\tR\bpassword\x12\x18\n" +
-	"\aexpires\x18\r \x01(\x05R\aexpires\x12 \n" +
-	"\vkeepTimeout\x18\x0e \x01(\x05R\vkeepTimeout\x12\x1c\n" +
-	"\ttransport\x18\x0f \x01(\tR\ttransport\x12\"\n" +
-	"\fcharacterSet\x18\x10 \x01(\tR\fcharacterSet\x12\x10\n" +
-	"\x03ptz\x18\x11 \x01(\bR\x03ptz\x12\x12\n" +
-	"\x04rtcp\x18\x12 \x01(\bR\x04rtcp\x12\x16\n" +
-	"\x06status\x18\x13 \x01(\bR\x06status\x12\"\n" +
-	"\fchannelCount\x18\x14 \x01(\x05R\fchannelCount\x12*\n" +
-	"\x10catalogSubscribe\x18\x15 \x01(\bR\x10catalogSubscribe\x12&\n" +
-	"\x0ealarmSubscribe\x18\x16 \x01(\bR\x0ealarmSubscribe\x128\n" +
-	"\x17mobilePositionSubscribe\x18\x17 \x01(\bR\x17mobilePositionSubscribe\x12\"\n" +
-	"\fcatalogGroup\x18\x18 \x01(\x05R\fcatalogGroup\x12\x1e\n" +
+	"\busername\x18\n" +
+	" \x01(\tR\busername\x12\x1a\n" +
+	"\bpassword\x18\v \x01(\tR\bpassword\x12\x18\n" +
+	"\aexpires\x18\f \x01(\x05R\aexpires\x12 \n" +
+	"\vkeepTimeout\x18\r \x01(\x05R\vkeepTimeout\x12\x1c\n" +
+	"\ttransport\x18\x0e \x01(\tR\ttransport\x12\"\n" +
+	"\fcharacterSet\x18\x0f \x01(\tR\fcharacterSet\x12\x10\n" +
+	"\x03ptz\x18\x10 \x01(\bR\x03ptz\x12\x12\n" +
+	"\x04rtcp\x18\x11 \x01(\bR\x04rtcp\x12\x16\n" +
+	"\x06status\x18\x12 \x01(\bR\x06status\x12\"\n" +
+	"\fchannelCount\x18\x13 \x01(\x05R\fchannelCount\x12*\n" +
+	"\x10catalogSubscribe\x18\x14 \x01(\bR\x10catalogSubscribe\x12&\n" +
+	"\x0ealarmSubscribe\x18\x15 \x01(\bR\x0ealarmSubscribe\x128\n" +
+	"\x17mobilePositionSubscribe\x18\x16 \x01(\bR\x17mobilePositionSubscribe\x12\"\n" +
+	"\fcatalogGroup\x18\x17 \x01(\x05R\fcatalogGroup\x12\x1e\n" +
 	"\n" +
-	"updateTime\x18\x19 \x01(\tR\n" +
+	"updateTime\x18\x18 \x01(\tR\n" +
 	"updateTime\x12\x1e\n" +
 	"\n" +
-	"createTime\x18\x1a \x01(\tR\n" +
+	"createTime\x18\x19 \x01(\tR\n" +
 	"createTime\x12*\n" +
-	"\x10asMessageChannel\x18\x1b \x01(\bR\x10asMessageChannel\x12\"\n" +
-	"\fsendStreamIp\x18\x1c \x01(\tR\fsendStreamIp\x12(\n" +
-	"\x0fautoPushChannel\x18\x1d \x01(\bR\x0fautoPushChannel\x120\n" +
-	"\x13catalogWithPlatform\x18\x1e \x01(\x05R\x13catalogWithPlatform\x12*\n" +
-	"\x10catalogWithGroup\x18\x1f \x01(\x05R\x10catalogWithGroup\x12,\n" +
-	"\x11catalogWithRegion\x18  \x01(\x05R\x11catalogWithRegion\x12\x1c\n" +
-	"\tcivilCode\x18! \x01(\tR\tcivilCode\x12\"\n" +
-	"\fmanufacturer\x18\" \x01(\tR\fmanufacturer\x12\x14\n" +
-	"\x05model\x18# \x01(\tR\x05model\x12\x18\n" +
-	"\aaddress\x18$ \x01(\tR\aaddress\x12 \n" +
-	"\vregisterWay\x18% \x01(\x05R\vregisterWay\x12\x18\n" +
-	"\asecrecy\x18& \x01(\x05R\asecrecy\"$\n" +
+	"\x10asMessageChannel\x18\x1a \x01(\bR\x10asMessageChannel\x12\"\n" +
+	"\fsendStreamIp\x18\x1b \x01(\tR\fsendStreamIp\x12(\n" +
+	"\x0fautoPushChannel\x18\x1c \x01(\bR\x0fautoPushChannel\x120\n" +
+	"\x13catalogWithPlatform\x18\x1d \x01(\x05R\x13catalogWithPlatform\x12*\n" +
+	"\x10catalogWithGroup\x18\x1e \x01(\x05R\x10catalogWithGroup\x12,\n" +
+	"\x11catalogWithRegion\x18\x1f \x01(\x05R\x11catalogWithRegion\x12\x1c\n" +
+	"\tcivilCode\x18  \x01(\tR\tcivilCode\x12\"\n" +
+	"\fmanufacturer\x18! \x01(\tR\fmanufacturer\x12\x14\n" +
+	"\x05model\x18\" \x01(\tR\x05model\x12\x18\n" +
+	"\aaddress\x18# \x01(\tR\aaddress\x12 \n" +
+	"\vregisterWay\x18$ \x01(\x05R\vregisterWay\x12\x18\n" +
+	"\asecrecy\x18% \x01(\x05R\asecrecy\"$\n" +
 	"\x12GetPlatformRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x05R\x02id\"'\n" +
 	"\x15DeletePlatformRequest\x12\x0e\n" +
@@ -6567,7 +6558,7 @@ const file_gb28181_proto_rawDesc = "" +
 	"\x04page\x18\x01 \x01(\x05R\x04page\x12\x14\n" +
 	"\x05count\x18\x02 \x01(\x05R\x05count\x12\x14\n" +
 	"\x05query\x18\x03 \x01(\tR\x05query\x12\x16\n" +
-	"\x06status\x18\x04 \x01(\bR\x06status\"j\n" +
+	"\x06enable\x18\x04 \x01(\x05R\x06enable\"j\n" +
 	"\x10PlatformResponse\x12\x12\n" +
 	"\x04code\x18\x01 \x01(\x05R\x04code\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12(\n" +
