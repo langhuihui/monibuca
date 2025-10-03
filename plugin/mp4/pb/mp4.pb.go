@@ -585,6 +585,475 @@ func (x *ResponseStopRecord) GetData() uint64 {
 	return 0
 }
 
+// 标签相关消息定义
+type TagInfo struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            uint32                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	TagName       string                 `protobuf:"bytes,2,opt,name=tagName,proto3" json:"tagName,omitempty"`
+	StreamPath    string                 `protobuf:"bytes,3,opt,name=streamPath,proto3" json:"streamPath,omitempty"`
+	TagTime       string                 `protobuf:"bytes,4,opt,name=tagTime,proto3" json:"tagTime,omitempty"`
+	CreatedAt     string                 `protobuf:"bytes,5,opt,name=createdAt,proto3" json:"createdAt,omitempty"`
+	UpdatedAt     string                 `protobuf:"bytes,6,opt,name=updatedAt,proto3" json:"updatedAt,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TagInfo) Reset() {
+	*x = TagInfo{}
+	mi := &file_mp4_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TagInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TagInfo) ProtoMessage() {}
+
+func (x *TagInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_mp4_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TagInfo.ProtoReflect.Descriptor instead.
+func (*TagInfo) Descriptor() ([]byte, []int) {
+	return file_mp4_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *TagInfo) GetId() uint32 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *TagInfo) GetTagName() string {
+	if x != nil {
+		return x.TagName
+	}
+	return ""
+}
+
+func (x *TagInfo) GetStreamPath() string {
+	if x != nil {
+		return x.StreamPath
+	}
+	return ""
+}
+
+func (x *TagInfo) GetTagTime() string {
+	if x != nil {
+		return x.TagTime
+	}
+	return ""
+}
+
+func (x *TagInfo) GetCreatedAt() string {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return ""
+}
+
+func (x *TagInfo) GetUpdatedAt() string {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return ""
+}
+
+type ReqCreateTag struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TagName       string                 `protobuf:"bytes,1,opt,name=tagName,proto3" json:"tagName,omitempty"`
+	StreamPath    string                 `protobuf:"bytes,2,opt,name=streamPath,proto3" json:"streamPath,omitempty"`
+	TagTime       string                 `protobuf:"bytes,3,opt,name=tagTime,proto3" json:"tagTime,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReqCreateTag) Reset() {
+	*x = ReqCreateTag{}
+	mi := &file_mp4_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReqCreateTag) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReqCreateTag) ProtoMessage() {}
+
+func (x *ReqCreateTag) ProtoReflect() protoreflect.Message {
+	mi := &file_mp4_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReqCreateTag.ProtoReflect.Descriptor instead.
+func (*ReqCreateTag) Descriptor() ([]byte, []int) {
+	return file_mp4_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *ReqCreateTag) GetTagName() string {
+	if x != nil {
+		return x.TagName
+	}
+	return ""
+}
+
+func (x *ReqCreateTag) GetStreamPath() string {
+	if x != nil {
+		return x.StreamPath
+	}
+	return ""
+}
+
+func (x *ReqCreateTag) GetTagTime() string {
+	if x != nil {
+		return x.TagTime
+	}
+	return ""
+}
+
+type ReqUpdateTag struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            uint32                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	TagName       string                 `protobuf:"bytes,2,opt,name=tagName,proto3" json:"tagName,omitempty"`
+	StreamPath    string                 `protobuf:"bytes,3,opt,name=streamPath,proto3" json:"streamPath,omitempty"`
+	TagTime       string                 `protobuf:"bytes,4,opt,name=tagTime,proto3" json:"tagTime,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReqUpdateTag) Reset() {
+	*x = ReqUpdateTag{}
+	mi := &file_mp4_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReqUpdateTag) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReqUpdateTag) ProtoMessage() {}
+
+func (x *ReqUpdateTag) ProtoReflect() protoreflect.Message {
+	mi := &file_mp4_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReqUpdateTag.ProtoReflect.Descriptor instead.
+func (*ReqUpdateTag) Descriptor() ([]byte, []int) {
+	return file_mp4_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *ReqUpdateTag) GetId() uint32 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *ReqUpdateTag) GetTagName() string {
+	if x != nil {
+		return x.TagName
+	}
+	return ""
+}
+
+func (x *ReqUpdateTag) GetStreamPath() string {
+	if x != nil {
+		return x.StreamPath
+	}
+	return ""
+}
+
+func (x *ReqUpdateTag) GetTagTime() string {
+	if x != nil {
+		return x.TagTime
+	}
+	return ""
+}
+
+type ReqDeleteTag struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            uint32                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReqDeleteTag) Reset() {
+	*x = ReqDeleteTag{}
+	mi := &file_mp4_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReqDeleteTag) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReqDeleteTag) ProtoMessage() {}
+
+func (x *ReqDeleteTag) ProtoReflect() protoreflect.Message {
+	mi := &file_mp4_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReqDeleteTag.ProtoReflect.Descriptor instead.
+func (*ReqDeleteTag) Descriptor() ([]byte, []int) {
+	return file_mp4_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *ReqDeleteTag) GetId() uint32 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+type ReqListTag struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	StreamPath    string                 `protobuf:"bytes,1,opt,name=streamPath,proto3" json:"streamPath,omitempty"`
+	TagName       string                 `protobuf:"bytes,2,opt,name=tagName,proto3" json:"tagName,omitempty"`
+	Start         string                 `protobuf:"bytes,3,opt,name=start,proto3" json:"start,omitempty"`
+	End           string                 `protobuf:"bytes,4,opt,name=end,proto3" json:"end,omitempty"`
+	Page          uint32                 `protobuf:"varint,5,opt,name=page,proto3" json:"page,omitempty"`
+	Count         uint32                 `protobuf:"varint,6,opt,name=count,proto3" json:"count,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReqListTag) Reset() {
+	*x = ReqListTag{}
+	mi := &file_mp4_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReqListTag) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReqListTag) ProtoMessage() {}
+
+func (x *ReqListTag) ProtoReflect() protoreflect.Message {
+	mi := &file_mp4_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReqListTag.ProtoReflect.Descriptor instead.
+func (*ReqListTag) Descriptor() ([]byte, []int) {
+	return file_mp4_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *ReqListTag) GetStreamPath() string {
+	if x != nil {
+		return x.StreamPath
+	}
+	return ""
+}
+
+func (x *ReqListTag) GetTagName() string {
+	if x != nil {
+		return x.TagName
+	}
+	return ""
+}
+
+func (x *ReqListTag) GetStart() string {
+	if x != nil {
+		return x.Start
+	}
+	return ""
+}
+
+func (x *ReqListTag) GetEnd() string {
+	if x != nil {
+		return x.End
+	}
+	return ""
+}
+
+func (x *ReqListTag) GetPage() uint32 {
+	if x != nil {
+		return x.Page
+	}
+	return 0
+}
+
+func (x *ReqListTag) GetCount() uint32 {
+	if x != nil {
+		return x.Count
+	}
+	return 0
+}
+
+type ResponseTag struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Code          int32                  `protobuf:"varint,1,opt,name=code,proto3" json:"code,omitempty"`
+	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	Data          *TagInfo               `protobuf:"bytes,3,opt,name=data,proto3" json:"data,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ResponseTag) Reset() {
+	*x = ResponseTag{}
+	mi := &file_mp4_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResponseTag) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResponseTag) ProtoMessage() {}
+
+func (x *ResponseTag) ProtoReflect() protoreflect.Message {
+	mi := &file_mp4_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResponseTag.ProtoReflect.Descriptor instead.
+func (*ResponseTag) Descriptor() ([]byte, []int) {
+	return file_mp4_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *ResponseTag) GetCode() int32 {
+	if x != nil {
+		return x.Code
+	}
+	return 0
+}
+
+func (x *ResponseTag) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+func (x *ResponseTag) GetData() *TagInfo {
+	if x != nil {
+		return x.Data
+	}
+	return nil
+}
+
+type ResponseTagList struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Code          int32                  `protobuf:"varint,1,opt,name=code,proto3" json:"code,omitempty"`
+	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	List          []*TagInfo             `protobuf:"bytes,3,rep,name=list,proto3" json:"list,omitempty"`
+	Total         uint32                 `protobuf:"varint,4,opt,name=total,proto3" json:"total,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ResponseTagList) Reset() {
+	*x = ResponseTagList{}
+	mi := &file_mp4_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResponseTagList) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResponseTagList) ProtoMessage() {}
+
+func (x *ResponseTagList) ProtoReflect() protoreflect.Message {
+	mi := &file_mp4_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResponseTagList.ProtoReflect.Descriptor instead.
+func (*ResponseTagList) Descriptor() ([]byte, []int) {
+	return file_mp4_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *ResponseTagList) GetCode() int32 {
+	if x != nil {
+		return x.Code
+	}
+	return 0
+}
+
+func (x *ResponseTagList) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+func (x *ResponseTagList) GetList() []*TagInfo {
+	if x != nil {
+		return x.List
+	}
+	return nil
+}
+
+func (x *ResponseTagList) GetTotal() uint32 {
+	if x != nil {
+		return x.Total
+	}
+	return 0
+}
+
 var File_mp4_proto protoreflect.FileDescriptor
 
 const file_mp4_proto_rawDesc = "" +
@@ -645,7 +1114,50 @@ const file_mp4_proto_rawDesc = "" +
 	"\x12ResponseStopRecord\x12\x12\n" +
 	"\x04code\x18\x01 \x01(\x05R\x04code\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12\x12\n" +
-	"\x04data\x18\x03 \x01(\x04R\x04data2\xca\x04\n" +
+	"\x04data\x18\x03 \x01(\x04R\x04data\"\xa9\x01\n" +
+	"\aTagInfo\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\rR\x02id\x12\x18\n" +
+	"\atagName\x18\x02 \x01(\tR\atagName\x12\x1e\n" +
+	"\n" +
+	"streamPath\x18\x03 \x01(\tR\n" +
+	"streamPath\x12\x18\n" +
+	"\atagTime\x18\x04 \x01(\tR\atagTime\x12\x1c\n" +
+	"\tcreatedAt\x18\x05 \x01(\tR\tcreatedAt\x12\x1c\n" +
+	"\tupdatedAt\x18\x06 \x01(\tR\tupdatedAt\"b\n" +
+	"\fReqCreateTag\x12\x18\n" +
+	"\atagName\x18\x01 \x01(\tR\atagName\x12\x1e\n" +
+	"\n" +
+	"streamPath\x18\x02 \x01(\tR\n" +
+	"streamPath\x12\x18\n" +
+	"\atagTime\x18\x03 \x01(\tR\atagTime\"r\n" +
+	"\fReqUpdateTag\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\rR\x02id\x12\x18\n" +
+	"\atagName\x18\x02 \x01(\tR\atagName\x12\x1e\n" +
+	"\n" +
+	"streamPath\x18\x03 \x01(\tR\n" +
+	"streamPath\x12\x18\n" +
+	"\atagTime\x18\x04 \x01(\tR\atagTime\"\x1e\n" +
+	"\fReqDeleteTag\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\rR\x02id\"\x98\x01\n" +
+	"\n" +
+	"ReqListTag\x12\x1e\n" +
+	"\n" +
+	"streamPath\x18\x01 \x01(\tR\n" +
+	"streamPath\x12\x18\n" +
+	"\atagName\x18\x02 \x01(\tR\atagName\x12\x14\n" +
+	"\x05start\x18\x03 \x01(\tR\x05start\x12\x10\n" +
+	"\x03end\x18\x04 \x01(\tR\x03end\x12\x12\n" +
+	"\x04page\x18\x05 \x01(\rR\x04page\x12\x14\n" +
+	"\x05count\x18\x06 \x01(\rR\x05count\"]\n" +
+	"\vResponseTag\x12\x12\n" +
+	"\x04code\x18\x01 \x01(\x05R\x04code\x12\x18\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\x12 \n" +
+	"\x04data\x18\x03 \x01(\v2\f.mp4.TagInfoR\x04data\"w\n" +
+	"\x0fResponseTagList\x12\x12\n" +
+	"\x04code\x18\x01 \x01(\x05R\x04code\x12\x18\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\x12 \n" +
+	"\x04list\x18\x03 \x03(\v2\f.mp4.TagInfoR\x04list\x12\x14\n" +
+	"\x05total\x18\x04 \x01(\rR\x05total2\x94\a\n" +
 	"\x03api\x12]\n" +
 	"\x04List\x12\x12.mp4.ReqRecordList\x1a\x1a.global.RecordResponseList\"%\x82\xd3\xe4\x93\x02\x1f\x12\x1d/mp4/api/list/{streamPath=**}\x12T\n" +
 	"\aCatalog\x12\x16.google.protobuf.Empty\x1a\x17.global.ResponseCatalog\"\x18\x82\xd3\xe4\x93\x02\x12\x12\x10/mp4/api/catalog\x12b\n" +
@@ -654,7 +1166,11 @@ const file_mp4_proto_rawDesc = "" +
 	"EventStart\x12\x13.mp4.ReqEventRecord\x1a\x18.mp4.ResponseEventRecord\"\x1f\x82\xd3\xe4\x93\x02\x19:\x01*\"\x14/mp4/api/event/start\x12g\n" +
 	"\vStartRecord\x12\x13.mp4.ReqStartRecord\x1a\x18.mp4.ResponseStartRecord\")\x82\xd3\xe4\x93\x02#:\x01*\"\x1e/mp4/api/start/{streamPath=**}\x12c\n" +
 	"\n" +
-	"StopRecord\x12\x12.mp4.ReqStopRecord\x1a\x17.mp4.ResponseStopRecord\"(\x82\xd3\xe4\x93\x02\":\x01*\"\x1d/mp4/api/stop/{streamPath=**}B\x1bZ\x19m7s.live/v5/plugin/mp4/pbb\x06proto3"
+	"StopRecord\x12\x12.mp4.ReqStopRecord\x1a\x17.mp4.ResponseStopRecord\"(\x82\xd3\xe4\x93\x02\":\x01*\"\x1d/mp4/api/stop/{streamPath=**}\x12M\n" +
+	"\tCreateTag\x12\x11.mp4.ReqCreateTag\x1a\x10.mp4.ResponseTag\"\x1b\x82\xd3\xe4\x93\x02\x15:\x01*\"\x10/mp4/api/tag/add\x12U\n" +
+	"\tUpdateTag\x12\x11.mp4.ReqUpdateTag\x1a\x10.mp4.ResponseTag\"#\x82\xd3\xe4\x93\x02\x1d:\x01*\"\x18/mp4/api/tag/update/{id}\x12U\n" +
+	"\tDeleteTag\x12\x11.mp4.ReqDeleteTag\x1a\x10.mp4.ResponseTag\"#\x82\xd3\xe4\x93\x02\x1d:\x01*\"\x18/mp4/api/tag/delete/{id}\x12K\n" +
+	"\aListTag\x12\x0f.mp4.ReqListTag\x1a\x14.mp4.ResponseTagList\"\x19\x82\xd3\xe4\x93\x02\x13\x12\x11/mp4/api/tag/listB\x1bZ\x19m7s.live/v5/plugin/mp4/pbb\x06proto3"
 
 var (
 	file_mp4_proto_rawDescOnce sync.Once
@@ -668,7 +1184,7 @@ func file_mp4_proto_rawDescGZIP() []byte {
 	return file_mp4_proto_rawDescData
 }
 
-var file_mp4_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
+var file_mp4_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
 var file_mp4_proto_goTypes = []any{
 	(*ReqRecordList)(nil),         // 0: mp4.ReqRecordList
 	(*ReqRecordDelete)(nil),       // 1: mp4.ReqRecordDelete
@@ -678,31 +1194,48 @@ var file_mp4_proto_goTypes = []any{
 	(*ResponseStartRecord)(nil),   // 5: mp4.ResponseStartRecord
 	(*ReqStopRecord)(nil),         // 6: mp4.ReqStopRecord
 	(*ResponseStopRecord)(nil),    // 7: mp4.ResponseStopRecord
-	(*durationpb.Duration)(nil),   // 8: google.protobuf.Duration
-	(*emptypb.Empty)(nil),         // 9: google.protobuf.Empty
-	(*pb.RecordResponseList)(nil), // 10: global.RecordResponseList
-	(*pb.ResponseCatalog)(nil),    // 11: global.ResponseCatalog
-	(*pb.ResponseDelete)(nil),     // 12: global.ResponseDelete
+	(*TagInfo)(nil),               // 8: mp4.TagInfo
+	(*ReqCreateTag)(nil),          // 9: mp4.ReqCreateTag
+	(*ReqUpdateTag)(nil),          // 10: mp4.ReqUpdateTag
+	(*ReqDeleteTag)(nil),          // 11: mp4.ReqDeleteTag
+	(*ReqListTag)(nil),            // 12: mp4.ReqListTag
+	(*ResponseTag)(nil),           // 13: mp4.ResponseTag
+	(*ResponseTagList)(nil),       // 14: mp4.ResponseTagList
+	(*durationpb.Duration)(nil),   // 15: google.protobuf.Duration
+	(*emptypb.Empty)(nil),         // 16: google.protobuf.Empty
+	(*pb.RecordResponseList)(nil), // 17: global.RecordResponseList
+	(*pb.ResponseCatalog)(nil),    // 18: global.ResponseCatalog
+	(*pb.ResponseDelete)(nil),     // 19: global.ResponseDelete
 }
 var file_mp4_proto_depIdxs = []int32{
-	8,  // 0: mp4.ReqStartRecord.fragment:type_name -> google.protobuf.Duration
-	0,  // 1: mp4.api.List:input_type -> mp4.ReqRecordList
-	9,  // 2: mp4.api.Catalog:input_type -> google.protobuf.Empty
-	1,  // 3: mp4.api.Delete:input_type -> mp4.ReqRecordDelete
-	2,  // 4: mp4.api.EventStart:input_type -> mp4.ReqEventRecord
-	4,  // 5: mp4.api.StartRecord:input_type -> mp4.ReqStartRecord
-	6,  // 6: mp4.api.StopRecord:input_type -> mp4.ReqStopRecord
-	10, // 7: mp4.api.List:output_type -> global.RecordResponseList
-	11, // 8: mp4.api.Catalog:output_type -> global.ResponseCatalog
-	12, // 9: mp4.api.Delete:output_type -> global.ResponseDelete
-	3,  // 10: mp4.api.EventStart:output_type -> mp4.ResponseEventRecord
-	5,  // 11: mp4.api.StartRecord:output_type -> mp4.ResponseStartRecord
-	7,  // 12: mp4.api.StopRecord:output_type -> mp4.ResponseStopRecord
-	7,  // [7:13] is the sub-list for method output_type
-	1,  // [1:7] is the sub-list for method input_type
-	1,  // [1:1] is the sub-list for extension type_name
-	1,  // [1:1] is the sub-list for extension extendee
-	0,  // [0:1] is the sub-list for field type_name
+	15, // 0: mp4.ReqStartRecord.fragment:type_name -> google.protobuf.Duration
+	8,  // 1: mp4.ResponseTag.data:type_name -> mp4.TagInfo
+	8,  // 2: mp4.ResponseTagList.list:type_name -> mp4.TagInfo
+	0,  // 3: mp4.api.List:input_type -> mp4.ReqRecordList
+	16, // 4: mp4.api.Catalog:input_type -> google.protobuf.Empty
+	1,  // 5: mp4.api.Delete:input_type -> mp4.ReqRecordDelete
+	2,  // 6: mp4.api.EventStart:input_type -> mp4.ReqEventRecord
+	4,  // 7: mp4.api.StartRecord:input_type -> mp4.ReqStartRecord
+	6,  // 8: mp4.api.StopRecord:input_type -> mp4.ReqStopRecord
+	9,  // 9: mp4.api.CreateTag:input_type -> mp4.ReqCreateTag
+	10, // 10: mp4.api.UpdateTag:input_type -> mp4.ReqUpdateTag
+	11, // 11: mp4.api.DeleteTag:input_type -> mp4.ReqDeleteTag
+	12, // 12: mp4.api.ListTag:input_type -> mp4.ReqListTag
+	17, // 13: mp4.api.List:output_type -> global.RecordResponseList
+	18, // 14: mp4.api.Catalog:output_type -> global.ResponseCatalog
+	19, // 15: mp4.api.Delete:output_type -> global.ResponseDelete
+	3,  // 16: mp4.api.EventStart:output_type -> mp4.ResponseEventRecord
+	5,  // 17: mp4.api.StartRecord:output_type -> mp4.ResponseStartRecord
+	7,  // 18: mp4.api.StopRecord:output_type -> mp4.ResponseStopRecord
+	13, // 19: mp4.api.CreateTag:output_type -> mp4.ResponseTag
+	13, // 20: mp4.api.UpdateTag:output_type -> mp4.ResponseTag
+	13, // 21: mp4.api.DeleteTag:output_type -> mp4.ResponseTag
+	14, // 22: mp4.api.ListTag:output_type -> mp4.ResponseTagList
+	13, // [13:23] is the sub-list for method output_type
+	3,  // [3:13] is the sub-list for method input_type
+	3,  // [3:3] is the sub-list for extension type_name
+	3,  // [3:3] is the sub-list for extension extendee
+	0,  // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_mp4_proto_init() }
@@ -716,7 +1249,7 @@ func file_mp4_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_mp4_proto_rawDesc), len(file_mp4_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   8,
+			NumMessages:   15,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

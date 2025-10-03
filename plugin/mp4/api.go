@@ -608,3 +608,227 @@ func (p *MP4Plugin) Delete(ctx context.Context, req *mp4pb.ReqRecordDelete) (res
 	}
 	return p.Server.DeleteRecord(ctx, globalReq)
 }
+
+// CreateTag 创建标签
+func (p *MP4Plugin) CreateTag(ctx context.Context, req *mp4pb.ReqCreateTag) (res *mp4pb.ResponseTag, err error) {
+	res = &mp4pb.ResponseTag{}
+	
+	// 检查数据库连接
+	if p.DB == nil {
+		res.Code = 500
+		res.Message = pkg.ErrNoDB.Error()
+		return res, pkg.ErrNoDB
+	}
+	
+	// 解析标签时间
+	tagTime, err := util.TimeQueryParse(req.TagTime)
+	if err != nil {
+		res.Code = 400
+		res.Message = "标签时间格式错误: " + err.Error()
+		return res, err
+	}
+	
+	// 创建标签记录
+	tag := &mp4.TagModel{
+		TagName:    req.TagName,
+		StreamPath: req.StreamPath,
+		TagTime:    tagTime,
+	}
+	
+	// 保存到数据库
+	if err = p.DB.Create(tag).Error; err != nil {
+		res.Code = 500
+		res.Message = "创建标签失败: " + err.Error()
+		return res, err
+	}
+	
+	// 返回成功结果
+	res.Code = 0
+	res.Message = "创建成功"
+	res.Data = &mp4pb.TagInfo{
+		Id:         uint32(tag.ID),
+		TagName:    tag.TagName,
+		StreamPath: tag.StreamPath,
+		TagTime:    tag.TagTime.Format(time.RFC3339),
+		CreatedAt:  tag.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:  tag.UpdatedAt.Format(time.RFC3339),
+	}
+	
+	return res, nil
+}
+
+// UpdateTag 更新标签
+func (p *MP4Plugin) UpdateTag(ctx context.Context, req *mp4pb.ReqUpdateTag) (res *mp4pb.ResponseTag, err error) {
+	res = &mp4pb.ResponseTag{}
+	
+	// 检查数据库连接
+	if p.DB == nil {
+		res.Code = 500
+		res.Message = pkg.ErrNoDB.Error()
+		return res, pkg.ErrNoDB
+	}
+	
+	// 查询标签是否存在
+	var tag mp4.TagModel
+	if err = p.DB.First(&tag, req.Id).Error; err != nil {
+		res.Code = 404
+		res.Message = "标签不存在: " + err.Error()
+		return res, err
+	}
+	
+	// 更新字段
+	if req.TagName != "" {
+		tag.TagName = req.TagName
+	}
+	if req.StreamPath != "" {
+		tag.StreamPath = req.StreamPath
+	}
+	if req.TagTime != "" {
+		tagTime, err := util.TimeQueryParse(req.TagTime)
+		if err != nil {
+			res.Code = 400
+			res.Message = "标签时间格式错误: " + err.Error()
+			return res, err
+		}
+		tag.TagTime = tagTime
+	}
+	
+	// 保存更新
+	if err = p.DB.Save(&tag).Error; err != nil {
+		res.Code = 500
+		res.Message = "更新标签失败: " + err.Error()
+		return res, err
+	}
+	
+	// 返回成功结果
+	res.Code = 0
+	res.Message = "更新成功"
+	res.Data = &mp4pb.TagInfo{
+		Id:         uint32(tag.ID),
+		TagName:    tag.TagName,
+		StreamPath: tag.StreamPath,
+		TagTime:    tag.TagTime.Format(time.RFC3339),
+		CreatedAt:  tag.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:  tag.UpdatedAt.Format(time.RFC3339),
+	}
+	
+	return res, nil
+}
+
+// DeleteTag 删除标签（软删除）
+func (p *MP4Plugin) DeleteTag(ctx context.Context, req *mp4pb.ReqDeleteTag) (res *mp4pb.ResponseTag, err error) {
+	res = &mp4pb.ResponseTag{}
+	
+	// 检查数据库连接
+	if p.DB == nil {
+		res.Code = 500
+		res.Message = pkg.ErrNoDB.Error()
+		return res, pkg.ErrNoDB
+	}
+	
+	// 软删除标签
+	if err = p.DB.Delete(&mp4.TagModel{}, req.Id).Error; err != nil {
+		res.Code = 500
+		res.Message = "删除标签失败: " + err.Error()
+		return res, err
+	}
+	
+	// 返回成功结果
+	res.Code = 0
+	res.Message = "删除成功"
+	
+	return res, nil
+}
+
+// ListTag 查询标签列表
+func (p *MP4Plugin) ListTag(ctx context.Context, req *mp4pb.ReqListTag) (res *mp4pb.ResponseTagList, err error) {
+	res = &mp4pb.ResponseTagList{}
+	
+	// 检查数据库连接
+	if p.DB == nil {
+		res.Code = 500
+		res.Message = pkg.ErrNoDB.Error()
+		return res, pkg.ErrNoDB
+	}
+	
+	// 构建查询
+	query := p.DB.Model(&mp4.TagModel{})
+	
+	// 流路径过滤（默认模糊匹配）
+	if req.StreamPath != "" {
+		if strings.Contains(req.StreamPath, "*") {
+			query = query.Where("stream_path LIKE ?", strings.ReplaceAll(req.StreamPath, "*", "%"))
+		} else {
+			query = query.Where("stream_path LIKE ?", "%"+req.StreamPath+"%")
+		}
+	}
+	
+	// 标签名称过滤（默认模糊匹配）
+	if req.TagName != "" {
+		if strings.Contains(req.TagName, "*") {
+			query = query.Where("tag_name LIKE ?", strings.ReplaceAll(req.TagName, "*", "%"))
+		} else {
+			query = query.Where("tag_name LIKE ?", "%"+req.TagName+"%")
+		}
+	}
+	
+	// 时间范围过滤（只有当传入了时间参数时才进行过滤）
+	if req.Start != "" {
+		startTime, err := util.TimeQueryParse(req.Start)
+		if err == nil && !startTime.IsZero() {
+			query = query.Where("tag_time >= ?", startTime)
+		}
+	}
+	if req.End != "" {
+		endTime, err := util.TimeQueryParse(req.End)
+		if err == nil && !endTime.IsZero() {
+			query = query.Where("tag_time <= ?", endTime)
+		}
+	}
+	
+	// 分页
+	page := req.Page
+	count := req.Count
+	if page < 1 {
+		page = 1
+	}
+	if count < 1 {
+		count = 10
+	}
+	offset := (page - 1) * count
+	
+	// 获取总数
+	var total int64
+	if err = query.Count(&total).Error; err != nil {
+		res.Code = 500
+		res.Message = "查询总数失败: " + err.Error()
+		return res, err
+	}
+	
+	// 查询数据
+	var tags []mp4.TagModel
+	if err = query.Order("tag_time DESC").Offset(int(offset)).Limit(int(count)).Find(&tags).Error; err != nil {
+		res.Code = 500
+		res.Message = "查询标签失败: " + err.Error()
+		return res, err
+	}
+	
+	// 转换为响应格式
+	res.Code = 0
+	res.Message = "查询成功"
+	res.Total = uint32(total)
+	res.List = make([]*mp4pb.TagInfo, 0, len(tags))
+	
+	for _, tag := range tags {
+		res.List = append(res.List, &mp4pb.TagInfo{
+			Id:         uint32(tag.ID),
+			TagName:    tag.TagName,
+			StreamPath: tag.StreamPath,
+			TagTime:    tag.TagTime.Format(time.RFC3339),
+			CreatedAt:  tag.CreatedAt.Format(time.RFC3339),
+			UpdatedAt:  tag.UpdatedAt.Format(time.RFC3339),
+		})
+	}
+	
+	return res, nil
+}

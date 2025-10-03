@@ -27,6 +27,10 @@ const (
 	Api_EventStart_FullMethodName  = "/mp4.api/EventStart"
 	Api_StartRecord_FullMethodName = "/mp4.api/StartRecord"
 	Api_StopRecord_FullMethodName  = "/mp4.api/StopRecord"
+	Api_CreateTag_FullMethodName   = "/mp4.api/CreateTag"
+	Api_UpdateTag_FullMethodName   = "/mp4.api/UpdateTag"
+	Api_DeleteTag_FullMethodName   = "/mp4.api/DeleteTag"
+	Api_ListTag_FullMethodName     = "/mp4.api/ListTag"
 )
 
 // ApiClient is the client API for Api service.
@@ -39,6 +43,10 @@ type ApiClient interface {
 	EventStart(ctx context.Context, in *ReqEventRecord, opts ...grpc.CallOption) (*ResponseEventRecord, error)
 	StartRecord(ctx context.Context, in *ReqStartRecord, opts ...grpc.CallOption) (*ResponseStartRecord, error)
 	StopRecord(ctx context.Context, in *ReqStopRecord, opts ...grpc.CallOption) (*ResponseStopRecord, error)
+	CreateTag(ctx context.Context, in *ReqCreateTag, opts ...grpc.CallOption) (*ResponseTag, error)
+	UpdateTag(ctx context.Context, in *ReqUpdateTag, opts ...grpc.CallOption) (*ResponseTag, error)
+	DeleteTag(ctx context.Context, in *ReqDeleteTag, opts ...grpc.CallOption) (*ResponseTag, error)
+	ListTag(ctx context.Context, in *ReqListTag, opts ...grpc.CallOption) (*ResponseTagList, error)
 }
 
 type apiClient struct {
@@ -109,6 +117,46 @@ func (c *apiClient) StopRecord(ctx context.Context, in *ReqStopRecord, opts ...g
 	return out, nil
 }
 
+func (c *apiClient) CreateTag(ctx context.Context, in *ReqCreateTag, opts ...grpc.CallOption) (*ResponseTag, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ResponseTag)
+	err := c.cc.Invoke(ctx, Api_CreateTag_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *apiClient) UpdateTag(ctx context.Context, in *ReqUpdateTag, opts ...grpc.CallOption) (*ResponseTag, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ResponseTag)
+	err := c.cc.Invoke(ctx, Api_UpdateTag_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *apiClient) DeleteTag(ctx context.Context, in *ReqDeleteTag, opts ...grpc.CallOption) (*ResponseTag, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ResponseTag)
+	err := c.cc.Invoke(ctx, Api_DeleteTag_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *apiClient) ListTag(ctx context.Context, in *ReqListTag, opts ...grpc.CallOption) (*ResponseTagList, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ResponseTagList)
+	err := c.cc.Invoke(ctx, Api_ListTag_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ApiServer is the server API for Api service.
 // All implementations must embed UnimplementedApiServer
 // for forward compatibility.
@@ -119,6 +167,10 @@ type ApiServer interface {
 	EventStart(context.Context, *ReqEventRecord) (*ResponseEventRecord, error)
 	StartRecord(context.Context, *ReqStartRecord) (*ResponseStartRecord, error)
 	StopRecord(context.Context, *ReqStopRecord) (*ResponseStopRecord, error)
+	CreateTag(context.Context, *ReqCreateTag) (*ResponseTag, error)
+	UpdateTag(context.Context, *ReqUpdateTag) (*ResponseTag, error)
+	DeleteTag(context.Context, *ReqDeleteTag) (*ResponseTag, error)
+	ListTag(context.Context, *ReqListTag) (*ResponseTagList, error)
 	mustEmbedUnimplementedApiServer()
 }
 
@@ -146,6 +198,18 @@ func (UnimplementedApiServer) StartRecord(context.Context, *ReqStartRecord) (*Re
 }
 func (UnimplementedApiServer) StopRecord(context.Context, *ReqStopRecord) (*ResponseStopRecord, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StopRecord not implemented")
+}
+func (UnimplementedApiServer) CreateTag(context.Context, *ReqCreateTag) (*ResponseTag, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CreateTag not implemented")
+}
+func (UnimplementedApiServer) UpdateTag(context.Context, *ReqUpdateTag) (*ResponseTag, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpdateTag not implemented")
+}
+func (UnimplementedApiServer) DeleteTag(context.Context, *ReqDeleteTag) (*ResponseTag, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DeleteTag not implemented")
+}
+func (UnimplementedApiServer) ListTag(context.Context, *ReqListTag) (*ResponseTagList, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListTag not implemented")
 }
 func (UnimplementedApiServer) mustEmbedUnimplementedApiServer() {}
 func (UnimplementedApiServer) testEmbeddedByValue()             {}
@@ -276,6 +340,78 @@ func _Api_StopRecord_Handler(srv interface{}, ctx context.Context, dec func(inte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Api_CreateTag_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReqCreateTag)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).CreateTag(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_CreateTag_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).CreateTag(ctx, req.(*ReqCreateTag))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Api_UpdateTag_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReqUpdateTag)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).UpdateTag(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_UpdateTag_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).UpdateTag(ctx, req.(*ReqUpdateTag))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Api_DeleteTag_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReqDeleteTag)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).DeleteTag(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_DeleteTag_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).DeleteTag(ctx, req.(*ReqDeleteTag))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Api_ListTag_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReqListTag)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).ListTag(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_ListTag_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).ListTag(ctx, req.(*ReqListTag))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Api_ServiceDesc is the grpc.ServiceDesc for Api service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -306,6 +442,22 @@ var Api_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "StopRecord",
 			Handler:    _Api_StopRecord_Handler,
+		},
+		{
+			MethodName: "CreateTag",
+			Handler:    _Api_CreateTag_Handler,
+		},
+		{
+			MethodName: "UpdateTag",
+			Handler:    _Api_UpdateTag_Handler,
+		},
+		{
+			MethodName: "DeleteTag",
+			Handler:    _Api_DeleteTag_Handler,
+		},
+		{
+			MethodName: "ListTag",
+			Handler:    _Api_ListTag_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

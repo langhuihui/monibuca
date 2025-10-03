@@ -56,6 +56,10 @@ func (p *MP4Plugin) Start() (err error) {
 		if err != nil {
 			return
 		}
+		err = p.DB.AutoMigrate(&mp4.TagModel{})
+		if err != nil {
+			return
+		}
 		if p.AutoOverWriteDiskPercent > 0 {
 			var deleteRecordTask DeleteRecordTask
 			deleteRecordTask.DB = p.DB
