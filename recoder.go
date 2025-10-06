@@ -40,19 +40,20 @@ type (
 		Event     EventRecordStream
 	}
 	RecordStream struct {
-		ID          uint      `gorm:"primarykey"`
-		StartTime   time.Time `gorm:"default:NULL"`
-		EndTime     time.Time `gorm:"default:NULL"`
-		Duration    uint32    `gorm:"comment:录像时长;default:0"`
-		Filename    string    `json:"fileName" desc:"文件名" gorm:"type:varchar(255);comment:文件名"`
-		Type        string    `json:"type" desc:"录像文件类型" gorm:"type:varchar(255);comment:录像文件类型,flv,mp4,raw,fmp4,hls"`
-		FilePath    string
-		StreamPath  string
-		AudioCodec  string
-		VideoCodec  string
-		CreatedAt   time.Time
-		DeletedAt   gorm.DeletedAt    `gorm:"index" yaml:"-"`
-		RecordLevel config.EventLevel `json:"eventLevel" desc:"事件级别" gorm:"type:varchar(255);comment:事件级别,high表示重要事件，无法删除且表示无需自动删除,low表示非重要事件,达到自动删除时间后，自动删除;default:'low'"`
+		ID           uint      `gorm:"primarykey"`
+		StartTime    time.Time `gorm:"default:NULL"`
+		EndTime      time.Time `gorm:"default:NULL"`
+		Duration     uint32    `gorm:"comment:录像时长;default:0"`
+		Filename     string    `json:"fileName" desc:"文件名" gorm:"type:varchar(255);comment:文件名"`
+		Type         string    `json:"type" desc:"录像文件类型" gorm:"type:varchar(255);comment:录像文件类型,flv,mp4,raw,fmp4,hls"`
+		FilePath     string
+		StreamPath   string
+		AudioCodec   string
+		VideoCodec   string
+		CreatedAt    time.Time
+		DeletedAt    gorm.DeletedAt    `gorm:"index" yaml:"-"`
+		RecordLevel  config.EventLevel `json:"eventLevel" desc:"事件级别" gorm:"type:varchar(255);comment:事件级别,high表示重要事件，无法删除且表示无需自动删除,low表示非重要事件,达到自动删除时间后，自动删除;default:'low'"`
+		StorageLevel int                `json:"storageLevel" desc:"存储级别" gorm:"comment:存储级别,1=主存储,2=次级存储;default:1"`
 	}
 )
 
@@ -78,10 +79,11 @@ func (r *DefaultRecorder) CreateStream(start time.Time, customFileName func(*Rec
 	}
 
 	r.Event.RecordStream = RecordStream{
-		StartTime:  start,
-		StreamPath: sub.StreamPath,
-		FilePath:   filePath,
-		Type:       recordJob.RecConf.Type,
+		StartTime:    start,
+		StreamPath:   sub.StreamPath,
+		FilePath:     filePath,
+		Type:         recordJob.RecConf.Type,
+		StorageLevel: 1, // 默认为主存储
 	}
 
 	if sub.Publisher.HasAudioTrack() {

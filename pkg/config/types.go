@@ -122,14 +122,15 @@ type (
 		EventName      string     `json:"eventName" desc:"事件名称" gorm:"type:varchar(255);comment:事件名称"`
 	}
 	Record struct {
-		Mode     RecordMode     `json:"mode" desc:"事件类型,auto=连续录像模式，event=事件录像模式" gorm:"type:varchar(255);comment:事件类型,auto=连续录像模式，event=事件录像模式;default:'auto'"`
-		Type     string         `desc:"录制类型"`                         // 录制类型 mp4、flv、hls、hlsv7
-		FilePath string         `desc:"录制文件路径"`                       // 录制文件路径
-		Fragment time.Duration  `desc:"分片时长"`                         // 分片时长
-		RealTime bool           `desc:"是否实时录制"`                       // 是否实时录制
-		Append   bool           `desc:"是否追加录制"`                       // 是否追加录制
-		Event    *RecordEvent   `json:"event" desc:"事件录像配置" gorm:"-"` // 事件录像配置
-		Storage  map[string]any `json:"storage" desc:"存储配置" gorm:"-"` // 存储配置
+		Mode              RecordMode     `json:"mode" desc:"事件类型,auto=连续录像模式，event=事件录像模式" gorm:"type:varchar(255);comment:事件类型,auto=连续录像模式，event=事件录像模式;default:'auto'"`
+		Type              string         `desc:"录制类型"`                         // 录制类型 mp4、flv、hls、hlsv7
+		FilePath          string         `desc:"录制文件路径"`                       // 录制文件路径
+		Fragment          time.Duration  `desc:"分片时长"`                         // 分片时长
+		RealTime          bool           `desc:"是否实时录制"`                       // 是否实时录制
+		Append            bool           `desc:"是否追加录制"`                       // 是否追加录制
+		Event             *RecordEvent   `json:"event" desc:"事件录像配置" gorm:"-"` // 事件录像配置
+		Storage           map[string]any `json:"storage" desc:"存储配置" gorm:"-"` // 存储配置
+		SecondaryFilePath string         `json:"secondaryFilePath" desc:"录制文件次级路径" gorm:"-"`
 	}
 	TransfromOutput struct {
 		Target     string `desc:"转码目标"` // 转码目标

@@ -65,6 +65,7 @@ func (t *writeTrailerTask) Run() (err error) {
 	// 复制 mdat box之前的内容
 	_, err = io.CopyN(temp, t.file, int64(t.muxer.mdatOffset)-BeforeMdatData)
 	if err != nil {
+		t.Error("copy file", "err", err)
 		return
 	}
 	for _, track := range t.muxer.Tracks {
@@ -74,6 +75,7 @@ func (t *writeTrailerTask) Run() (err error) {
 	}
 	err = t.muxer.WriteMoov(temp)
 	if err != nil {
+		t.Error("rewrite with moov", "err", err)
 		return
 	}
 	// 复制 mdat box
@@ -148,6 +150,10 @@ func (r *Recorder) createStream(start time.Time) (err error) {
 		return
 	}
 
+	// 注意: 不要在这里关闭旧文件,因为它已经被传递给 writeTrailerTask
+	// writeTrailerTask 会负责关闭旧文件
+	// 直接创建新文件并覆盖 r.file
+
 	// 获取存储实例
 	storage := r.RecordJob.GetStorage()
 
@@ -159,7 +165,8 @@ func (r *Recorder) createStream(start time.Time) (err error) {
 		}
 	} else {
 		// 默认本地文件行为
-		r.file, err = os.Create(r.Event.FilePath)
+		// 使用 OpenFile 以读写模式打开,因为 writeTrailerTask.Run() 需要读取文件内容
+		r.file, err = os.OpenFile(r.Event.FilePath, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0644)
 		if err != nil {
 			return
 		}
@@ -177,11 +184,13 @@ func (r *Recorder) createStream(start time.Time) (err error) {
 func (r *Recorder) Dispose() {
 	if r.muxer != nil {
 		r.writeTailer(time.Now())
-	}
-
-	// 关闭存储写入器
-	if r.file != nil {
-		r.file.Close()
+		// 注意: 文件的关闭由 writeTrailerTask.Run() 负责
+		// 不在这里关闭,避免在异步任务执行前文件被关闭
+	} else {
+		// 如果没有 muxer,需要在这里关闭文件
+		if r.file != nil {
+			r.file.Close()
+		}
 	}
 }
 

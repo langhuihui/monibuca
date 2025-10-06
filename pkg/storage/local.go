@@ -54,7 +54,8 @@ func (s *LocalStorage) CreateFile(ctx context.Context, path string) (File, error
 		return nil, fmt.Errorf("failed to create directory: %w", err)
 	}
 
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	// 使用 O_RDWR 而不是 O_WRONLY,因为某些场景(如 MP4 writeTrailer)需要读取文件内容
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0644)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create file: %w", err)
 	}
