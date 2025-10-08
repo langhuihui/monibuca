@@ -495,6 +495,29 @@ service api {
       body: "*"
     };
   }
+
+  // 添加通道并关联拉流代理
+  rpc AddChannelWithProxy (AddChannelWithProxyRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      post: "/gb28181/api/channel/add_with_proxy/{streamPath=**}"
+      body: "*"
+    };
+  }
+
+  // 更新通道信息
+  rpc UpdateChannelWithProxy (UpdateChannelWithProxyRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      post: "/gb28181/api/channel/update_with_proxy/{channelId}"
+      body: "*"
+    };
+  }
+
+  // 删除通道
+  rpc DeleteChannelWithProxy (DeleteChannelWithProxyRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      post: "/gb28181/api/channel/delete_with_proxy/{channelId}"
+    };
+  }
 }
 
 // 请求和响应消息定义
@@ -1166,5 +1189,89 @@ message AlarmInfoRequest {
   string alarm_desc = 4;            // 报警描述
   int32 alarm_type = 5;             // 报警类型（对应之前定义的常量）
   google.protobuf.Timestamp createAt=6;//创建时间
+}
+
+// AddChannelWithProxyRequest 添加通道并关联拉流代理的请求
+message AddChannelWithProxyRequest {
+  string streamPath = 1;            // 拉流代理的流路径（URL路径参数）
+  string deviceId = 2;              // 设备国标编号
+  string channelId = 3;             // 通道ID
+  string name = 4;                  // 通道名称
+  string manufacturer = 5;          // 设备厂商
+  string model = 6;                 // 设备型号
+  string owner = 7;                 // 设备归属
+  string civilCode = 8;             // 行政区域
+  string block = 9;                 // 警区
+  string address = 10;              // 安装地址
+  int32 port = 11;                  // 端口
+  int32 parental = 12;              // 是否有子设备
+  string parentId = 13;             // 父节点ID
+  int32 safetyWay = 14;             // 信令安全模式
+  int32 registerWay = 15;           // 注册方式
+  string certNum = 16;              // 证书序列号
+  int32 certifiable = 17;           // 证书有效标识
+  int32 errCode = 18;               // 无效原因码
+  string endTime = 19;              // 证书终止有效期
+  int32 secrecy = 20;               // 保密属性
+  string ipAddress = 21;            // 设备/系统IP地址
+  string password = 22;             // 设备口令
+  int32 ptzType = 23;               // 摄像机类型
+  int32 positionType = 24;          // 摄像机位置类型
+  int32 roomType = 25;              // 安装位置室内外属性
+  int32 useType = 26;               // 用途属性
+  int32 supplyLightType = 27;       // 摄像机补光属性
+  int32 directionType = 28;         // 摄像机监视方位属性
+  string resolution = 29;           // 摄像机支持的分辨率
+  string businessGroupId = 30;      // 虚拟组织所属的业务分组ID
+  string downloadSpeed = 31;        // 下载倍速
+  int32 svcSpaceSupportMod = 32;    // 空域编码能力
+  int32 svcTimeSupportMode = 33;    // 时域编码能力
+  string status = 34;               // 设备状态
+  string longitude = 35;            // 经度
+  string latitude = 36;             // 纬度
+}
+
+// UpdateChannelWithProxyRequest 更新通道信息的请求
+message UpdateChannelWithProxyRequest {
+  string channelId = 1;             // 通道ID（URL路径参数，必填）
+  string streamPath = 2;            // 拉流代理的流路径（可选）
+  string name = 3;                  // 通道名称（可选）
+  string manufacturer = 4;          // 设备厂商（可选）
+  string model = 5;                 // 设备型号（可选）
+  string owner = 6;                 // 设备归属（可选）
+  string civilCode = 7;             // 行政区域（可选）
+  string block = 8;                 // 警区（可选）
+  string address = 9;               // 安装地址（可选）
+  int32 port = 10;                  // 端口（可选）
+  int32 parental = 11;              // 是否有子设备（可选）
+  string parentId = 12;             // 父节点ID（可选）
+  int32 safetyWay = 13;             // 信令安全模式（可选）
+  int32 registerWay = 14;           // 注册方式（可选）
+  string certNum = 15;              // 证书序列号（可选）
+  int32 certifiable = 16;           // 证书有效标识（可选）
+  int32 errCode = 17;               // 无效原因码（可选）
+  string endTime = 18;              // 证书终止有效期（可选）
+  int32 secrecy = 19;               // 保密属性（可选）
+  string ipAddress = 20;            // 设备/系统IP地址（可选）
+  string password = 21;             // 设备口令（可选）
+  int32 ptzType = 22;               // 摄像机类型（可选）
+  int32 positionType = 23;          // 摄像机位置类型（可选）
+  int32 roomType = 24;              // 安装位置室内外属性（可选）
+  int32 useType = 25;               // 用途属性（可选）
+  int32 supplyLightType = 26;       // 摄像机补光属性（可选）
+  int32 directionType = 27;         // 摄像机监视方位属性（可选）
+  string resolution = 28;           // 摄像机支持的分辨率（可选）
+  string businessGroupId = 29;      // 虚拟组织所属的业务分组ID（可选）
+  string downloadSpeed = 30;        // 下载倍速（可选）
+  int32 svcSpaceSupportMod = 31;    // 空域编码能力（可选）
+  int32 svcTimeSupportMode = 32;    // 时域编码能力（可选）
+  string status = 33;               // 设备状态（可选）
+  string longitude = 34;            // 经度（可选）
+  string latitude = 35;             // 纬度（可选）
+}
+
+// DeleteChannelWithProxyRequest 删除通道的请求
+message DeleteChannelWithProxyRequest {
+  string channelId = 1;             // 通道ID（URL路径参数）
 }
 

@@ -1,9 +1,12 @@
 package plugin_gb28181pro
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"regexp"
@@ -13,7 +16,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/langhuihui/gomem"
+	"github.com/pion/rtp"
 	"m7s.live/v5/pkg"
+	mpegps "m7s.live/v5/pkg/format/ps"
 
 	"github.com/emiago/sipgo"
 	"github.com/emiago/sipgo/sip"
@@ -365,9 +371,9 @@ func (gb *GB28181Plugin) checkDeviceExpire() (err error) {
 		//	}
 		//})
 
-		// 加载设备的通道
+		// 加载设备的通道（包括deviceId或parentId等于device.DeviceId的通道）
 		var channels []gb28181.DeviceChannel
-		if err := gb.DB.Where(&gb28181.DeviceChannel{DeviceId: device.DeviceId}).Find(&channels).Error; err != nil {
+		if err := gb.DB.Where("device_id = ? OR parent_id = ?", device.DeviceId, device.DeviceId).Find(&channels).Error; err != nil {
 			gb.Error("加载通道失败", "error", err, "deviceId", device.DeviceId)
 			continue
 		}
@@ -412,6 +418,26 @@ func (gb *GB28181Plugin) checkDeviceExpire() (err error) {
 		gb.Info("设备有效", "deviceId", device.DeviceId, "registerTime", device.RegisterTime, "expireTime", expireTime, "isExpired", isExpired, "device.Online", device.Online, "device.Status", device.Status)
 
 	}
+
+	// 查询streamPath不为空的拉流代理通道
+	var proxyChannels []gb28181.DeviceChannel
+	if err := gb.DB.Where("stream_path != ? AND stream_path IS NOT NULL", "").Find(&proxyChannels).Error; err != nil {
+		gb.Error("查询拉流代理通道失败", "error", err)
+	} else if len(proxyChannels) > 0 {
+		gb.Info("找到拉流代理通道", "count", len(proxyChannels))
+		for _, c := range proxyChannels {
+			// 创建Channel实例
+			channel := &Channel{
+				DeviceChannel: &c,
+				Device:        nil, // 拉流代理通道不关联真实GB设备
+				Logger:        gb.Logger.With("channel", c.ID, "streamPath", c.StreamPath),
+			}
+			// 添加到内存集合
+			gb.channels.Add(channel)
+			gb.Info("加载拉流代理通道", "channelId", c.ChannelId, "id", c.ID, "streamPath", c.StreamPath)
+		}
+	}
+
 	return nil
 }
 
@@ -887,7 +913,12 @@ func (gb *GB28181Plugin) OnInvite(req *sip.Request, tx sip.ServerTransaction) {
 	contentType := sip.ContentTypeHeader("application/sdp")
 	response.AppendHeader(&contentType)
 	response.SetBody([]byte(strings.Join(content, "\r\n") + "\r\n"))
-
+	var ip = ""
+	var streamMode mrtp.StreamMode
+	if channel.StreamPath == "" {
+		ip = channel.Device.MediaIp
+		streamMode = channel.Device.StreamMode
+	}
 	// 创建并保存SendRtpInfo，以供OnAck方法使用
 	forwardDialog := &ForwardDialog{
 		gb:             gb,
@@ -899,10 +930,12 @@ func (gb *GB28181Plugin) OnInvite(req *sip.Request, tx sip.ServerTransaction) {
 		// 初始化 ForwardConfig
 		ForwardConfig: mrtp.ForwardConfig{
 			Source: mrtp.ConnectionConfig{
-				IP:   channel.Device.MediaIp,    // 将在 Run 方法中从 SDP 响应中获取
-				Port: 0,                         // 将在 Run 方法中从 SDP 响应中获取
-				Mode: channel.Device.StreamMode, // 默认值，将在 Run 方法中根据 StreamMode 更新
-				SSRC: 0,                         // 将在 Start 方法中设置
+				//IP:   util.Conditional(channel.StreamPath != "", "", channel.Device.MediaIp),    // 将在 Run 方法中从 SDP 响应中获取
+				IP:   ip, // 将在 Run 方法中从 SDP 响应中获取
+				Port: 0,  // 将在 Run 方法中从 SDP 响应中获取
+				//Mode: util.Conditional(channel.StreamPath != "", "", channel.Device.StreamMode), // 默认值，将在 Run 方法中根据 StreamMode 更新
+				Mode: streamMode, // 默认值，将在 Run 方法中根据 StreamMode 更新
+				SSRC: 0,          // 将在 Start 方法中设置
 			},
 			Target: mrtp.ConnectionConfig{
 				IP:   inviteInfo.IP,
@@ -913,7 +946,7 @@ func (gb *GB28181Plugin) OnInvite(req *sip.Request, tx sip.ServerTransaction) {
 			Relay: false,
 		},
 	}
-	forwardDialog.Logger = gb.Logger.With("ssrc", inviteInfo.SSRC, "platformid", platform.PlatformModel.ServerGBID, "deviceid", channel.Device.DeviceId)
+	forwardDialog.Logger = gb.Logger.With("ssrc", inviteInfo.SSRC, "platformid", platform.PlatformModel.ServerGBID, "deviceid", channel.ID)
 	gb.forwardDialogs.Set(forwardDialog)
 	gb.Info("OnInvite", "action", "sendRtpInfo created", "callId", req.CallID().Value())
 
@@ -937,17 +970,152 @@ func (gb *GB28181Plugin) OnAck(req *sip.Request, tx sip.ServerTransaction) {
 	if forwardDialog, ok := gb.forwardDialogs.Find(func(dialog *ForwardDialog) bool {
 		return dialog.platformCallId == callID
 	}); ok {
-		pullUrl := fmt.Sprintf("%s/%s", forwardDialog.channel.DeviceId, forwardDialog.channel.ChannelId)
-		streamPath := fmt.Sprintf("platform_%d/%s/%s", time.Now().UnixMilli(), forwardDialog.channel.DeviceId, forwardDialog.channel.ChannelId)
+		if forwardDialog.channel.StreamPath == "" { //为空表示是正常的GB设备
+			pullUrl := fmt.Sprintf("%s/%s", forwardDialog.channel.ParentId, forwardDialog.channel.ChannelId)
+			streamPath := fmt.Sprintf("platform_%d/%s/%s", time.Now().UnixMilli(), forwardDialog.channel.DeviceId, forwardDialog.channel.ChannelId)
 
-		// 创建配置
-		pullConf := config.Pull{
-			URL: pullUrl,
+			// 创建配置
+			pullConf := config.Pull{
+				URL: pullUrl,
+			}
+			// 初始化拉流任务
+			forwardDialog.GetPullJob().Init(forwardDialog, &gb.Plugin, streamPath, pullConf, nil)
+		} else { //不为空表示是个拉流代理相关联的设备，直接推送已有的流
+			// 异步推送PS流到上级平台
+			go gb.sendPSToUpstream(forwardDialog)
 		}
-		// 初始化拉流任务
-		forwardDialog.GetPullJob().Init(forwardDialog, &gb.Plugin, streamPath, pullConf, nil)
 	} else {
 		gb.Error("OnAck", "error", "forwardDialog not found", "callID", callID)
 		return
 	}
+}
+
+// sendPSToUpstream 将拉流代理的流转换为PS格式并推送到上级平台
+func (gb *GB28181Plugin) sendPSToUpstream(forwardDialog *ForwardDialog) {
+	streamPath := forwardDialog.channel.StreamPath
+	targetIP := forwardDialog.ForwardConfig.Target.IP
+	targetPort := forwardDialog.ForwardConfig.Target.Port
+	isUDP := forwardDialog.ForwardConfig.Target.Mode == mrtp.StreamModeUDP
+	ssrc := forwardDialog.ForwardConfig.Target.SSRC
+
+	// 订阅流 - 使用gb作为context
+	suber, err := gb.Subscribe(gb, streamPath)
+	if err != nil {
+		gb.Error("sendPSToUpstream", "error", "subscribe stream failed", "err", err, "streamPath", streamPath)
+		return
+	}
+
+	var w io.WriteCloser
+	var writeRTP func() error
+	var mem gomem.RecyclableMemory
+	allocator := gomem.NewScalableMemoryAllocator(1 << gomem.MinPowerOf2)
+	mem.SetAllocator(allocator)
+	defer allocator.Recycle()
+	var headerBuf [14]byte
+	writeBuffer := make(net.Buffers, 1)
+	var totalBytesSent int
+	var packet rtp.Packet
+	packet.Version = 2
+	packet.SSRC = ssrc
+	packet.PayloadType = 96
+	defer func() {
+		gb.Info("sendPSToUpstream", "action", "complete", "total", packet.SequenceNumber, "totalBytesSent", totalBytesSent)
+	}()
+
+	if isUDP {
+		// UDP模式
+		conn, err := net.DialUDP("udp", nil, &net.UDPAddr{
+			IP:   net.ParseIP(targetIP),
+			Port: int(targetPort),
+		})
+		if err != nil {
+			gb.Error("sendPSToUpstream", "error", "dial udp failed", "err", err)
+			return
+		}
+		w = conn
+		writeRTP = func() (err error) {
+			defer mem.Recycle()
+			r := mem.NewReader()
+			packet.Timestamp = uint32(time.Now().UnixMilli()) * 90
+			for r.Length > 0 {
+				packet.SequenceNumber += 1
+				buf := writeBuffer
+				buf[0] = headerBuf[:12]
+				_, err = packet.Header.MarshalTo(headerBuf[:12])
+				if err != nil {
+					return
+				}
+				r.RangeN(mrtp.MTUSize, func(b []byte) {
+					buf = append(buf, b)
+				})
+				n, _ := buf.WriteTo(w)
+				totalBytesSent += int(n)
+			}
+			return
+		}
+	} else {
+		// TCP模式
+		gb.Info("sendPSToUpstream", "action", "connect tcp", "ip", targetIP, "port", targetPort)
+		conn, err := net.DialTCP("tcp", nil, &net.TCPAddr{
+			IP:   net.ParseIP(targetIP),
+			Port: int(targetPort),
+		})
+		if err != nil {
+			gb.Error("sendPSToUpstream", "error", "dial tcp failed", "err", err)
+			return
+		}
+		w = conn
+		writeRTP = func() (err error) {
+			defer mem.Recycle()
+			r := mem.NewReader()
+			packet.Timestamp = uint32(time.Now().UnixMilli()) * 90
+
+			// 检查是否需要分割成多个RTP包
+			const maxRTPSize = 65535 - 12 // uint16最大值减去RTP头部长度
+
+			for r.Length > 0 {
+				buf := writeBuffer
+				buf[0] = headerBuf[:14]
+				packet.SequenceNumber += 1
+
+				// 计算当前包的有效载荷大小
+				payloadSize := r.Length
+				if payloadSize > maxRTPSize {
+					payloadSize = maxRTPSize
+				}
+
+				// 设置TCP长度字段 (2字节) + RTP头部长度 (12字节) + 载荷长度
+				rtpPacketSize := uint16(12 + payloadSize)
+				binary.BigEndian.PutUint16(headerBuf[:2], rtpPacketSize)
+
+				// 生成RTP头部
+				_, err = packet.Header.MarshalTo(headerBuf[2:14])
+				if err != nil {
+					return
+				}
+
+				// 添加载荷数据
+				r.RangeN(payloadSize, func(b []byte) {
+					buf = append(buf, b)
+				})
+
+				// 发送RTP包
+				n, writeErr := buf.WriteTo(w)
+				if writeErr != nil {
+					return writeErr
+				}
+				totalBytesSent += int(n)
+			}
+			return
+		}
+	}
+	defer w.Close()
+
+	// 创建PS封装器
+	var muxer mpegps.MpegPSMuxer
+	muxer.Subscriber = suber
+	muxer.Packet = &mem
+	muxer.Mux(writeRTP)
+
+	gb.Info("sendPSToUpstream", "action", "stream ended", "streamPath", streamPath)
 }

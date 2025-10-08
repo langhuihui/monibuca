@@ -2978,3 +2978,378 @@ func (gb *GB28181Plugin) UpdateChannel(ctx context.Context, req *pb.UpdateChanne
 	resp.Message = "通道信息更新成功"
 	return resp, nil
 }
+
+// AddChannelWithProxy 添加通道并关联拉流代理
+func (gb *GB28181Plugin) AddChannelWithProxy(ctx context.Context, req *pb.AddChannelWithProxyRequest) (*pb.BaseResponse, error) {
+	resp := &pb.BaseResponse{}
+
+	// 1. 参数验证
+	if req.ChannelId == "" {
+		resp.Code = 400
+		resp.Message = "channelId不能为空"
+		return resp, nil
+	}
+	if req.Name == "" {
+		resp.Code = 400
+		resp.Message = "name不能为空"
+		return resp, nil
+	}
+	if req.StreamPath == "" {
+		resp.Code = 400
+		resp.Message = "streamPath不能为空"
+		return resp, nil
+	}
+
+	// 2. 检查数据库连接
+	if gb.DB == nil {
+		resp.Code = 500
+		resp.Message = "数据库未初始化"
+		return resp, nil
+	}
+
+	// 3. 重复检查 - 检查customChannelId是否已存在
+	var existingChannel gb28181.DeviceChannel
+	if err := gb.DB.Where("custom_channel_id = ?", req.ChannelId).First(&existingChannel).Error; err == nil {
+		resp.Code = 409
+		resp.Message = "通道ID已存在，请使用其他ID"
+		return resp, nil
+	} else if err != gorm.ErrRecordNotFound {
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("检查通道ID失败: %v", err)
+		return resp, nil
+	}
+
+	// 4. 生成ID和相关字段
+	channelID := req.ChannelId + "_" + req.ChannelId
+	deviceID := req.ChannelId
+
+	// 5. 创建DeviceChannel实例
+	now := time.Now().Format("2006-01-02 15:04:05")
+	deviceChannel := &gb28181.DeviceChannel{
+		ID:                 channelID,
+		DeviceId:           deviceID,
+		ChannelId:          req.ChannelId,
+		CustomChannelId:    req.ChannelId,
+		Name:               req.Name,
+		CustomName:         req.Name,
+		Manufacturer:       req.Manufacturer,
+		Model:              req.Model,
+		Owner:              req.Owner,
+		CivilCode:          req.CivilCode,
+		Block:              req.Block,
+		Address:            req.Address,
+		Port:               int(req.Port),
+		Parental:           int(req.Parental),
+		ParentId:           req.ParentId,
+		SafetyWay:          int(req.SafetyWay),
+		RegisterWay:        int(req.RegisterWay),
+		CertNum:            req.CertNum,
+		Certifiable:        int(req.Certifiable),
+		ErrCode:            int(req.ErrCode),
+		EndTime:            req.EndTime,
+		Secrecy:            int(req.Secrecy),
+		IPAddress:          req.IpAddress,
+		Password:           req.Password,
+		PTZType:            int(req.PtzType),
+		PositionType:       int(req.PositionType),
+		RoomType:           int(req.RoomType),
+		UseType:            int(req.UseType),
+		SupplyLightType:    int(req.SupplyLightType),
+		DirectionType:      int(req.DirectionType),
+		Resolution:         req.Resolution,
+		BusinessGroupID:    req.BusinessGroupId,
+		DownloadSpeed:      req.DownloadSpeed,
+		SVCSpaceSupportMod: int(req.SvcSpaceSupportMod),
+		SVCTimeSupportMode: int(req.SvcTimeSupportMode),
+		Status:             gb28181.ChannelStatus(req.Status),
+		CreateTime:         now,
+		StreamPath:         req.StreamPath, // 关联拉流代理的流路径
+	}
+
+	// 6. 处理经纬度 - 字符串转float64
+	if req.Longitude != "" {
+		// 使用fmt.Sscanf解析字符串为float64
+		var lon float64
+		if _, err := fmt.Sscanf(req.Longitude, "%f", &lon); err == nil {
+			deviceChannel.Longitude = lon
+			deviceChannel.GbLongitude = lon
+		}
+	}
+	if req.Latitude != "" {
+		var lat float64
+		if _, err := fmt.Sscanf(req.Latitude, "%f", &lat); err == nil {
+			deviceChannel.Latitude = lat
+			deviceChannel.GbLatitude = lat
+		}
+	}
+
+	// 7. 设置默认状态
+	if deviceChannel.Status == "" {
+		deviceChannel.Status = gb28181.ChannelOffStatus
+	}
+
+	// 8. 保存到数据库
+	if err := gb.DB.Create(deviceChannel).Error; err != nil {
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("保存通道失败: %v", err)
+		return resp, nil
+	}
+
+	// 9. 添加到内存集合
+	channel := &Channel{
+		DeviceChannel: deviceChannel,
+		Device:        nil, // 这是虚拟设备通道，不关联真实GB设备
+		Logger:        gb.Logger.With("channel", channelID),
+	}
+	gb.channels.Add(channel)
+
+	// 10. 记录日志
+	gb.Info("添加通道成功",
+		"channelId", req.ChannelId,
+		"id", channelID,
+		"deviceId", deviceID,
+		"streamPath", req.StreamPath,
+		"name", req.Name)
+
+	resp.Code = 0
+	resp.Message = "通道添加成功"
+	return resp, nil
+}
+
+// UpdateChannelWithProxy 更新通道信息
+func (gb *GB28181Plugin) UpdateChannelWithProxy(ctx context.Context, req *pb.UpdateChannelWithProxyRequest) (*pb.BaseResponse, error) {
+	resp := &pb.BaseResponse{}
+
+	// 1. 参数验证
+	if req.ChannelId == "" {
+		resp.Code = 400
+		resp.Message = "channelId不能为空"
+		return resp, nil
+	}
+
+	// 2. 检查数据库连接
+	if gb.DB == nil {
+		resp.Code = 500
+		resp.Message = "数据库未初始化"
+		return resp, nil
+	}
+
+	// 3. 生成ID并查找通道
+	channelID := req.ChannelId + "_" + req.ChannelId
+	var existingChannel gb28181.DeviceChannel
+	if err := gb.DB.Where("id = ?", channelID).First(&existingChannel).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			resp.Code = 404
+			resp.Message = "通道不存在"
+			return resp, nil
+		}
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("查询通道失败: %v", err)
+		return resp, nil
+	}
+
+	// 4. 构建更新字段（只更新非空字段）
+	updates := make(map[string]interface{})
+
+	if req.StreamPath != "" {
+		updates["stream_path"] = req.StreamPath
+	}
+	if req.Name != "" {
+		updates["name"] = req.Name
+		updates["custom_name"] = req.Name
+	}
+	if req.Manufacturer != "" {
+		updates["manufacturer"] = req.Manufacturer
+	}
+	if req.Model != "" {
+		updates["model"] = req.Model
+	}
+	if req.Owner != "" {
+		updates["owner"] = req.Owner
+	}
+	if req.CivilCode != "" {
+		updates["civil_code"] = req.CivilCode
+	}
+	if req.Block != "" {
+		updates["block"] = req.Block
+	}
+	if req.Address != "" {
+		updates["address"] = req.Address
+	}
+	if req.Port > 0 {
+		updates["port"] = req.Port
+	}
+	if req.Parental >= 0 {
+		updates["parental"] = req.Parental
+	}
+	if req.ParentId != "" {
+		updates["parent_id"] = req.ParentId
+	}
+	if req.SafetyWay >= 0 {
+		updates["safety_way"] = req.SafetyWay
+	}
+	if req.RegisterWay >= 0 {
+		updates["register_way"] = req.RegisterWay
+	}
+	if req.CertNum != "" {
+		updates["cert_num"] = req.CertNum
+	}
+	if req.Certifiable >= 0 {
+		updates["certifiable"] = req.Certifiable
+	}
+	if req.ErrCode >= 0 {
+		updates["err_code"] = req.ErrCode
+	}
+	if req.EndTime != "" {
+		updates["end_time"] = req.EndTime
+	}
+	if req.Secrecy >= 0 {
+		updates["secrecy"] = req.Secrecy
+	}
+	if req.IpAddress != "" {
+		updates["ip_address"] = req.IpAddress
+	}
+	if req.Password != "" {
+		updates["password"] = req.Password
+	}
+	if req.PtzType >= 0 {
+		updates["ptz_type"] = req.PtzType
+	}
+	if req.PositionType >= 0 {
+		updates["position_type"] = req.PositionType
+	}
+	if req.RoomType >= 0 {
+		updates["room_type"] = req.RoomType
+	}
+	if req.UseType >= 0 {
+		updates["use_type"] = req.UseType
+	}
+	if req.SupplyLightType >= 0 {
+		updates["supply_light_type"] = req.SupplyLightType
+	}
+	if req.DirectionType >= 0 {
+		updates["direction_type"] = req.DirectionType
+	}
+	if req.Resolution != "" {
+		updates["resolution"] = req.Resolution
+	}
+	if req.BusinessGroupId != "" {
+		updates["business_group_id"] = req.BusinessGroupId
+	}
+	if req.DownloadSpeed != "" {
+		updates["download_speed"] = req.DownloadSpeed
+	}
+	if req.SvcSpaceSupportMod >= 0 {
+		updates["svc_space_support_mod"] = req.SvcSpaceSupportMod
+	}
+	if req.SvcTimeSupportMode >= 0 {
+		updates["svc_time_support_mode"] = req.SvcTimeSupportMode
+	}
+	if req.Status != "" {
+		updates["status"] = req.Status
+	}
+	if req.Longitude != "" {
+		var lon float64
+		if _, err := fmt.Sscanf(req.Longitude, "%f", &lon); err == nil {
+			updates["longitude"] = lon
+			updates["gb_longitude"] = lon
+		}
+	}
+	if req.Latitude != "" {
+		var lat float64
+		if _, err := fmt.Sscanf(req.Latitude, "%f", &lat); err == nil {
+			updates["latitude"] = lat
+			updates["gb_latitude"] = lat
+		}
+	}
+
+	// 5. 如果没有要更新的字段
+	if len(updates) == 0 {
+		resp.Code = 400
+		resp.Message = "没有要更新的字段"
+		return resp, nil
+	}
+
+	// 6. 更新数据库
+	if err := gb.DB.Model(&gb28181.DeviceChannel{}).Where("id = ?", channelID).Updates(updates).Error; err != nil {
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("更新通道失败: %v", err)
+		return resp, nil
+	}
+
+	// 7. 更新内存中的通道（如果存在）
+	if channel, ok := gb.channels.Get(channelID); ok {
+		// 重新从数据库加载最新数据
+		if err := gb.DB.Where("id = ?", channelID).First(channel.DeviceChannel).Error; err == nil {
+			gb.Info("内存中的通道已更新", "channelId", req.ChannelId)
+		}
+	}
+
+	// 8. 记录日志
+	gb.Info("更新通道成功",
+		"channelId", req.ChannelId,
+		"id", channelID,
+		"updatedFields", len(updates))
+
+	resp.Code = 0
+	resp.Message = "通道更新成功"
+	return resp, nil
+}
+
+// DeleteChannelWithProxy 删除通道
+func (gb *GB28181Plugin) DeleteChannelWithProxy(ctx context.Context, req *pb.DeleteChannelWithProxyRequest) (*pb.BaseResponse, error) {
+	resp := &pb.BaseResponse{}
+
+	// 1. 参数验证
+	if req.ChannelId == "" {
+		resp.Code = 400
+		resp.Message = "channelId不能为空"
+		return resp, nil
+	}
+
+	// 2. 检查数据库连接
+	if gb.DB == nil {
+		resp.Code = 500
+		resp.Message = "数据库未初始化"
+		return resp, nil
+	}
+
+	// 3. 生成ID
+	channelID := req.ChannelId + "_" + req.ChannelId
+
+	// 4. 检查通道是否存在
+	var existingChannel gb28181.DeviceChannel
+	if err := gb.DB.Where("id = ?", channelID).First(&existingChannel).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			resp.Code = 404
+			resp.Message = "通道不存在"
+			return resp, nil
+		}
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("查询通道失败: %v", err)
+		return resp, nil
+	}
+
+	// 5. 从数据库删除
+	if err := gb.DB.Where("id = ?", channelID).Delete(&gb28181.DeviceChannel{}).Error; err != nil {
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("删除通道失败: %v", err)
+		return resp, nil
+	}
+
+	// 6. 从内存中移除
+	if channel, ok := gb.channels.Get(channelID); ok {
+		gb.channels.RemoveByKey(channel.ID)
+		gb.Info("从内存中移除通道", "channelId", req.ChannelId)
+	}
+
+	// 7. 记录日志
+	gb.Info("删除通道成功",
+		"channelId", req.ChannelId,
+		"id", channelID,
+		"streamPath", existingChannel.StreamPath)
+
+	resp.Code = 0
+	resp.Message = "通道删除成功"
+	return resp, nil
+}

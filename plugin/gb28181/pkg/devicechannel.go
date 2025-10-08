@@ -62,6 +62,7 @@ type DeviceChannel struct {
 	PTZTypeText string  `json:"ptzTypeText"` // 云台类型描述字符串
 	GbLongitude float64 `json:"gbLongitude"`
 	GbLatitude  float64 `json:"gbLatitude"`
+	StreamPath  string  `json:"streamPath"` // 拉流代理的流路径
 }
 
 // SetPTZType 设置云台类型并更新描述文本

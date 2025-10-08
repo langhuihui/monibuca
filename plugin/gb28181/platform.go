@@ -134,7 +134,7 @@ func (p *Platform) Keepalive() (*sipgo.DialogClientSession, error) {
 
 	csqHeader := sip.CSeqHeader{
 		SeqNo:      uint32(p.SN),
-		MethodName: "REGISTER",
+		MethodName: "MESSAGE",
 	}
 	p.SN++
 	req.AppendHeader(&csqHeader)
@@ -852,7 +852,7 @@ func (p *Platform) buildChannelItem(channel gb28181.DeviceChannel) string {
 		channel.RegisterWay, // 直接使用整数值
 		channel.Secrecy,     // 直接使用整数值
 		parentID,
-		channel.Parental,  // 直接使用整数值
+		channel.Parental, // 直接使用整数值
 		channel.SafetyWay) // 直接使用整数值
 }
 
