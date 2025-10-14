@@ -54,6 +54,11 @@ func (w *HLSWriter) GetTs(key string) (any, bool) {
 }
 
 func (w *HLSWriter) checkNoBodyRead() bool {
+	// 如果从未被读取过（纯录制模式），不检查超时
+	if w.lastReadTime.IsZero() {
+		return false
+	}
+	// 曾经有人播放过，检查是否15秒无访问
 	return time.Since(w.lastReadTime) > time.Second*15
 }
 
