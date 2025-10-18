@@ -4,6 +4,7 @@ import (
     "sync"
     "time"
 
+    "github.com/bluenviron/mediacommon/pkg/bits"
     "github.com/bluenviron/mediacommon/pkg/codecs/av1"
     "github.com/langhuihui/gomem"
     "m7s.live/v5/pkg/codec"
@@ -11,65 +12,137 @@ import (
 )
 
 type (
-    IAudioCodecCtx interface {
-        codec.ICodecCtx
-        GetSampleRate() int
-        GetChannels() int
-        GetSampleSize() int
-    }
-    IVideoCodecCtx interface {
-        codec.ICodecCtx
-        Width() int
-        Height() int
-    }
-    IDataFrame interface {
-    }
-    // Source -> Parse -> Demux -> (ConvertCtx) -> Mux(GetAllocator) -> Recycle
-    IAVFrame interface {
-        GetSample() *Sample
-        GetSize() int
-        CheckCodecChange() error
-        Demux() error      // demux to raw format
-        Mux(*Sample) error // mux from origin format
-        Recycle()
-        String() string
-    }
-    ISequenceCodecCtx[T any] interface {
-        GetSequenceFrame() T
-    }
-    BaseSample struct {
-        Raw                 IRaw // 裸格式用于转换的中间格式
-        IDR                 bool
-        TS0, Timestamp, CTS time.Duration // 原始 TS、修正 TS、Composition Time Stamp
-    }
-    Sample struct {
-        codec.ICodecCtx
-        gomem.RecyclableMemory
-        *BaseSample
-    }
-    Nalus = util.ReuseArray[gomem.Memory]
+        IAudioCodecCtx interface {
+            codec.ICodecCtx
+            GetSampleRate() int
+            GetChannels() int
+            GetSampleSize() int
+        }
+        IVideoCodecCtx interface {
+            codec.ICodecCtx
+            Width() int
+            Height() int
+        }
+        IDataFrame interface {
+        }
+        // Source -> Parse -> Demux -> (ConvertCtx) -> Mux(GetAllocator) -> Recycle
+        IAVFrame interface {
+            GetSample() *Sample
+            GetSize() int
+            CheckCodecChange() error
+            Demux() error      // demux to raw format
+            Mux(*Sample) error // mux from origin format
+            Recycle()
+            String() string
+        }
+        ISequenceCodecCtx[T any] interface {
+            GetSequenceFrame() T
+        }
+        BaseSample struct {
+            Raw                 IRaw // 裸格式用于转换的中间格式
+            IDR                 bool
+            TS0, Timestamp, CTS time.Duration // 原始 TS、修正 TS、Composition Time Stamp
+        }
+        Sample struct {
+            codec.ICodecCtx
+            gomem.RecyclableMemory
+            *BaseSample
+        }
+        Nalus = util.ReuseArray[gomem.Memory]
 
-    AudioData = gomem.Memory
+        AudioData = gomem.Memory
 
-    OBUs = util.ReuseArray[gomem.Memory]
+        OBUs = util.ReuseArray[gomem.Memory]
 
-    AVFrame struct {
-        DataFrame
-        *Sample
-        Wraps []IAVFrame // 封装格式
+        AVFrame struct {
+            DataFrame
+            *Sample
+            Wraps []IAVFrame // 封装格式
+        }
+        IRaw interface {
+            util.Resetter
+            Count() int
+        }
+        AVRing    = util.Ring[AVFrame]
+        DataFrame struct {
+            sync.RWMutex
+            discard   bool
+            Sequence  uint32    // 在一个Track中的序号
+            WriteTime time.Time // 写入时间,可用于比较两个帧的先后
+        }
+    )
+
+// AV1 helper to detect keyframe (KEY_FRAME or INTRA_ONLY)
+func (obus *OBUs) IsKeyFrame() bool {
+    for o := range obus.RangePoint {
+        reader := o.NewReader()
+        if reader.Length < 2 { // need at least header + leb
+            continue
+        }
+        var first byte
+        if b, err := reader.ReadByte(); err == nil {
+            first = b
+        } else {
+            continue
+        }
+        var header av1.OBUHeader
+        if err := header.Unmarshal([]byte{first}); err != nil {
+            continue
+        }
+        // skip extension header if present
+        if header.Extension {
+            if _, err := reader.ReadByte(); err != nil {
+                continue
+            }
+        }
+        // read leb128 size to move to payload start
+        _, _, _ = reader.LEB128Unmarshal()
+        // only inspect frame header or frame obu
+        switch header.Type {
+        case av1.OBUTypeFrameHeader, av1.OBUTypeFrame:
+            // try parse a minimal frame header: show_existing_frame (1), frame_type (2)
+            payload := reader
+            var pos int
+            // read show_existing_frame
+            showExisting, ok := utilReadBits(&payload, &pos, 1)
+            if !ok {
+                continue
+            }
+            if showExisting == 1 {
+                return false
+            }
+            // attempt to read frame_type (2 bits)
+            ft, ok := utilReadBits(&payload, &pos, 2)
+            if !ok {
+                continue
+            }
+            if ft == 0 || ft == 2 { // KEY_FRAME(0) or INTRA_ONLY(2)
+                return true
+            }
+        case av1.OBUTypeSequenceHeader:
+            // sequence header often precedes keyframes; treat as keyframe
+            return true
+        }
     }
-    IRaw interface {
-        util.Resetter
-        Count() int
+    return false
+}
+
+// utilReadBits reads nbits from MemoryReader, returns value and ok
+func utilReadBits(r *gomem.MemoryReader, pos *int, nbits int) (uint64, bool) {
+    // use mediacommon bits reader on a copy of remaining bytes
+    data, err := r.ReadBytes(r.Length)
+    if err != nil {
+        return 0, false
     }
-    AVRing    = util.Ring[AVFrame]
-    DataFrame struct {
-        sync.RWMutex
-        discard   bool
-        Sequence  uint32    // 在一个Track中的序号
-        WriteTime time.Time // 写入时间,可用于比较两个帧的先后
-    }
-)
+    v, err2 := av1ReadBits(data, pos, nbits)
+    return v, err2 == nil
+}
+
+// av1ReadBits uses mediacommon bits helper
+func av1ReadBits(buf []byte, pos *int, nbits int) (uint64, error) {
+    return bits.ReadBits(buf, pos, nbits)
+}
+
 
 func (sample *Sample) GetSize() int {
     return sample.Size

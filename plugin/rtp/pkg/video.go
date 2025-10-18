@@ -61,6 +61,10 @@ const (
     endBit       = 1 << 6
     MTUSize      = 1460
     ReceiveMTU   = 1500
+
+    // AV1 RTP payload descriptor bits (subset used)
+    av1ZBit = 1 << 7 // start of OBU
+    av1YBit = 1 << 6 // end of OBU
 )
 
 func (r *VideoFrame) Recycle() {
@@ -236,6 +240,15 @@ func (r *VideoFrame) CheckCodecChange() (err error) {
     case *AV1Ctx:
         r.SetPTS(time.Duration(pts))
         r.SetDTS(time.Duration(pts))
+        // detect keyframe from OBUs
+        if obus, ok := r.Raw.(*OBUs); ok {
+            r.IDR = obus.IsKeyFrame()
+        }
+        // 更新序列号
+        for p := range r.Packets.RangePoint {
+            p.SequenceNumber = ctx.seq
+            ctx.seq++
+        }
     }
     return
 }
@@ -365,9 +378,35 @@ func (r *VideoFrame) Mux(baseFrame *Sample) error {
         ctx := &c.RTPCtx
         var lastPacket *rtp.Packet
         for obu := range baseFrame.Raw.(*OBUs).RangePoint {
-            mem := r.NextN(obu.Size)
-            obu.NewReader().Read(mem)
-            lastPacket = r.Append(ctx, pts, mem)
+            reader := obu.NewReader()
+            payloadCap := MTUSize - 1
+            if reader.Length+1 <= MTUSize {
+                mem := r.NextN(reader.Length + 1)
+                mem[0] = av1ZBit | av1YBit
+                reader.Read(mem[1:])
+                lastPacket = r.Append(ctx, pts, mem)
+                continue
+            }
+            // fragmented OBU
+            first := true
+            for reader.Length > 0 {
+                chunk := payloadCap
+                if reader.Length < chunk {
+                    chunk = reader.Length
+                }
+                mem := r.NextN(chunk + 1)
+                head := byte(0)
+                if first {
+                    head |= av1ZBit
+                    first = false
+                }
+                reader.Read(mem[1:])
+                if reader.Length == 0 {
+                    head |= av1YBit
+                }
+                mem[0] = head
+                lastPacket = r.Append(ctx, pts, mem)
+            }
         }
         if lastPacket != nil {
             lastPacket.Header.Marker = true
@@ -484,9 +523,22 @@ func (r *VideoFrame) Demux() (err error) {
     case *AV1Ctx:
         obus := r.GetOBUs()
         obus.Reset()
+        var cur *gomem.Memory
         for _, packet := range r.Packets {
-            if len(packet.Payload) > 0 {
-                obus.GetNextPointer().PushOne(packet.Payload)
+            if len(packet.Payload) <= 1 {
+                continue
+            }
+            desc := packet.Payload[0]
+            payload := packet.Payload[1:]
+            if desc&av1ZBit != 0 {
+                // start of OBU
+                cur = obus.GetNextPointer()
+            }
+            if cur != nil {
+                cur.PushOne(payload)
+                if desc&av1YBit != 0 {
+                    cur = nil
+                }
             }
         }
         return nil

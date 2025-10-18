@@ -212,6 +212,8 @@ func (avcc *VideoFrame) parseAV1(reader *gomem.MemoryReader) error {
     if err := obus.ParseAVCC(reader); err != nil {
         return err
     }
+    // set keyframe flag for AV1
+    avcc.IDR = obus.IsKeyFrame()
     return nil
 }
 
