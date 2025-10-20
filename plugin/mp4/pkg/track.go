@@ -73,9 +73,14 @@ func (track *Track) makeElstBox() *EditListBox {
 	// 	elst.entrys.entrys[0].mediaRateFraction = 0
 	// }
 
-	//简单起见，mediaTime先固定为0,即不延迟播放
+	//使用第一个sample的时间戳作为MediaTime，确保时间轴对齐
+	firstTimestamp := track.Samplelist[0].Timestamp
+	firstCTS := track.Samplelist[0].CTS
+	mediaTime := int64(firstTimestamp) + int64(firstCTS)
+	
 	entrys[entryCount-1].SegmentDuration = uint64(track.Duration)
-	entrys[entryCount-1].MediaTime = 0
+	// MediaTime应该是第一个sample的PTS (DTS + CTS)
+	entrys[entryCount-1].MediaTime = mediaTime
 	entrys[entryCount-1].MediaRateInteger = 0x0001
 	entrys[entryCount-1].MediaRateFraction = 0
 
