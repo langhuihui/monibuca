@@ -429,7 +429,7 @@ func (d *Dialog) Dispose() {
 			// 如果没有设置udp端口，则将MediaPort设置为0，表示不再使用
 			d.gb.udpPorts <- d.MediaPort
 		}
-	} else {
+	} else if d.StreamMode == mrtp.StreamModeTCPPassive {
 		if d.gb.tcpPort == 0 {
 			// 如果没有设置tcp端口，则将MediaPort设置为0，表示不再使用
 			d.gb.tcpPorts <- d.MediaPort
