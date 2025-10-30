@@ -73,6 +73,7 @@ type GB28181Plugin struct {
 	Platforms             []*gb28181.PlatformModel
 	channels              util.Collection[string, *Channel]
 	singlePorts           util.Collection[uint32, *gb28181.SinglePortReader]
+	downloadDialogs       task.WorkCollection[string, *DownloadDialog]
 }
 
 var _ = m7s.InstallPlugin[GB28181Plugin](m7s.PluginMeta{
@@ -86,6 +87,13 @@ var _ = m7s.InstallPlugin[GB28181Plugin](m7s.PluginMeta{
 	},
 	NewPullProxy: NewPullProxy,
 })
+
+// RegisterHandler 注册自定义 HTTP 路由
+func (gb *GB28181Plugin) RegisterHandler() map[string]http.HandlerFunc {
+	return map[string]http.HandlerFunc{
+		"/download/{deviceId}/{channelId}/{filename}": gb.handleDownloadFile,
+	}
+}
 
 func init() {
 	sip.SIPDebug = true
@@ -161,6 +169,7 @@ func (gb *GB28181Plugin) Start() (err error) {
 		gb.AddTask(&gb.devices)
 		gb.AddTask(&gb.platforms)
 		gb.AddTask(&gb.deviceRegisterManager)
+		gb.AddTask(&gb.downloadDialogs)
 		gb.dialogs.L = new(sync.RWMutex)
 		gb.forwardDialogs.L = new(sync.RWMutex)
 		gb.singlePorts.L = new(sync.RWMutex)

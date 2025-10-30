@@ -135,13 +135,8 @@ func (r *Recorder) writeTailer(end time.Time) {
 }
 
 var CustomFileName = func(job *m7s.RecordJob) string {
-	if job.RecConf.Fragment == 0 {
-		return fmt.Sprintf("%s.mp4", job.RecConf.FilePath)
-	}
-	// 使用纳秒级时间戳，避免同一秒内多次切片时文件名冲突
-	// 格式：秒_纳秒.mp4 (例如: 1760431346_123456789.mp4)
 	now := time.Now()
-	return filepath.Join(job.RecConf.FilePath, fmt.Sprintf("%d_%09d.mp4", now.Unix(), now.Nanosecond()))
+	return filepath.Join(job.RecConf.FilePath, fmt.Sprintf("%s_%09d.mp4", time.Now().Local().Format("2006-01-02-15-04-05"), now.Nanosecond()))
 }
 
 func (r *Recorder) createStream(start time.Time) (err error) {

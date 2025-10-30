@@ -83,8 +83,9 @@ func (r *RTPTCPReader) Read(packet *rtp.Packet) (err error) {
 type RTPPayloadReader struct {
 	IRTPReader
 	rtp.Packet
-	SSRC   uint32 // RTP SSRC
-	buffer gomem.MemoryReader
+	SSRC              uint32 // RTP SSRC
+	buffer            gomem.MemoryReader
+	onTimestampUpdate func(uint32) // 时间戳更新回调
 }
 
 // func NewTCPRTPPayloadReaderForFeed() *RTPPayloadReader {
@@ -123,6 +124,11 @@ func (r *RTPPayloadReader) Read(buf []byte) (n int, err error) {
 		if r.SSRC != 0 && r.SSRC != r.Packet.SSRC {
 			// SSRC不匹配，继续读取下一个包
 			continue
+		}
+
+		// 更新时间戳
+		if r.onTimestampUpdate != nil {
+			r.onTimestampUpdate(r.Timestamp)
 		}
 
 		// 检查序列号是否连续

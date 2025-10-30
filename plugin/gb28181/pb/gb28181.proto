@@ -518,6 +518,20 @@ service api {
       post: "/gb28181/api/channel/delete_with_proxy/{channelId}"
     };
   }
+
+  // 发起录像下载
+  rpc StartDownload (StartDownloadRequest) returns (StartDownloadResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/download/{deviceId}/{channelId}"
+    };
+  }
+
+  // 查询下载进度
+  rpc GetDownloadProgress (GetDownloadProgressRequest) returns (DownloadProgressResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/download/progress/{downloadId}"
+    };
+  }
 }
 
 // 请求和响应消息定义
@@ -1273,5 +1287,56 @@ message UpdateChannelWithProxyRequest {
 // DeleteChannelWithProxyRequest 删除通道的请求
 message DeleteChannelWithProxyRequest {
   string channelId = 1;             // 通道ID（URL路径参数）
+}
+
+// StartDownloadRequest 发起录像下载请求
+message StartDownloadRequest {
+  string deviceId = 1;              // 设备ID（URL路径参数）
+  string channelId = 2;             // 通道ID（URL路径参数）
+  string start = 3;                 // 开始时间（UTC时间戳，秒级或RFC3339格式）
+  string end = 4;                   // 结束时间（UTC时间戳，秒级或RFC3339格式）
+  int32 downloadSpeed = 5;          // 下载速度倍数（1-4倍，默认1倍，避免丢帧）
+}
+
+// StartDownloadData 下载任务数据
+message StartDownloadData {
+  string downloadId = 1;            // 下载任务ID（格式：startTime_endTime_deviceId_channelId）
+  string status = 2;                // 初始状态（pending）
+  string downloadUrl = 3;           // 下载链接（完成后可直接访问）
+}
+
+// StartDownloadResponse 发起录像下载响应
+message StartDownloadResponse {
+  int32 code = 1;                   // 响应代码
+  string message = 2;               // 响应消息
+  int32 total = 3;                  // 总数（统一格式，这里为0）
+  StartDownloadData data = 4;       // 下载任务数据
+}
+
+// GetDownloadProgressRequest 查询下载进度请求
+message GetDownloadProgressRequest {
+  string downloadId = 1;            // 下载任务ID（URL路径参数）
+}
+
+// DownloadProgressData 下载进度数据
+message DownloadProgressData {
+  string downloadId = 1;            // 下载任务ID
+  string status = 2;                // 状态：pending/downloading/completed/failed
+  int32 progress = 3;               // 下载进度（0-100）
+  string filePath = 4;              // 完成后的文件路径
+  string error = 5;                 // 错误信息（如果失败）
+  int64 downloadedBytes = 6;        // 已下载字节数
+  int64 totalBytes = 7;             // 总字节数（预估）
+  google.protobuf.Timestamp startedAt = 8;  // 开始时间
+  google.protobuf.Timestamp completedAt = 9; // 完成时间
+  string downloadUrl = 10;          // 下载链接（完成后可直接访问）
+}
+
+// DownloadProgressResponse 下载进度响应
+message DownloadProgressResponse {
+  int32 code = 1;                   // 响应代码
+  string message = 2;               // 响应消息
+  int32 total = 3;                  // 总数（统一格式，这里为0）
+  DownloadProgressData data = 4;    // 下载进度数据
 }
 

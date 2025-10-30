@@ -2,6 +2,7 @@ package plugin_gb28181pro
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -131,7 +132,7 @@ func (d *Device) Dispose() {
 		// 保存当前内存中的channels
 		if d.channels.Length > 0 {
 			d.channels.Range(func(channel *Channel) bool {
-				if err := d.plugin.DB.Create(channel.DeviceChannel).Error; err != nil {
+				if err := d.plugin.DB.Save(channel.DeviceChannel).Error; err != nil {
 					d.Error("保存设备通道记录失败", "error", err)
 				}
 				if channel.PullProxyTask != nil {
@@ -144,6 +145,9 @@ func (d *Device) Dispose() {
 		}
 		// 保存设备信息
 		d.plugin.DB.Save(d)
+		if deviceRegisterQueueTask, ok := d.plugin.deviceRegisterManager.Get(d.DeviceId); ok {
+			deviceRegisterQueueTask.Stop(errors.New("设备注销"))
+		}
 	}
 }
 

@@ -1225,9 +1225,9 @@ func (gb *GB28181Plugin) QueryRecord(ctx context.Context, req *pb.QueryRecordReq
 	resp.Code = 0
 	resp.Message = fmt.Sprintf("success, received %d/%d records", recordReq.ReceivedNum, recordReq.SumNum)
 
-	// 排序录像列表，按StartTime升序排序
+	// 排序录像列表，按StartTime降序排序（最新的在前）
 	sort.Slice(resp.Data, func(i, j int) bool {
-		return resp.Data[i].StartTime < resp.Data[j].StartTime
+		return resp.Data[i].StartTime > resp.Data[j].StartTime
 	})
 
 	// 清理请求
@@ -3351,5 +3351,144 @@ func (gb *GB28181Plugin) DeleteChannelWithProxy(ctx context.Context, req *pb.Del
 
 	resp.Code = 0
 	resp.Message = "通道删除成功"
+	return resp, nil
+}
+
+// StartDownload 实现发起录像下载接口
+func (gb *GB28181Plugin) StartDownload(ctx context.Context, req *pb.StartDownloadRequest) (*pb.StartDownloadResponse, error) {
+	resp := &pb.StartDownloadResponse{}
+
+	// 1. 参数验证
+	if req.DeviceId == "" || req.ChannelId == "" {
+		resp.Code = 400
+		resp.Message = "deviceId 和 channelId 不能为空"
+		return resp, nil
+	}
+
+	if req.Start == "" || req.End == "" {
+		resp.Code = 400
+		resp.Message = "start 和 end 时间不能为空"
+		return resp, nil
+	}
+
+	// 2. 解析时间范围
+	startTime, endTime, err := util.TimeRangeQueryParse(url.Values{
+		"start": []string{req.Start},
+		"end":   []string{req.End},
+	})
+	if err != nil {
+		resp.Code = 400
+		resp.Message = fmt.Sprintf("时间解析失败: %v", err)
+		return resp, nil
+	}
+
+	// 3. 验证设备和通道是否存在
+	device, ok := gb.devices.Get(req.DeviceId)
+	if !ok {
+		resp.Code = 404
+		resp.Message = "设备不存在"
+		return resp, nil
+	}
+
+	channelKey := req.DeviceId + "_" + req.ChannelId
+	_, ok = device.channels.Get(channelKey)
+	if !ok {
+		resp.Code = 404
+		resp.Message = "通道不存在"
+		return resp, nil
+	}
+
+	// 4. 生成下载任务ID
+	downloadId := fmt.Sprintf("%d_%d_%s_%s", startTime.Unix(), endTime.Unix(), req.DeviceId, req.ChannelId)
+
+	// 5. 检查任务是否已存在
+	if existingDialog, exists := gb.downloadDialogs.Get(downloadId); exists {
+		resp.Code = 200
+		resp.Message = "下载任务已存在"
+		resp.Total = 0
+		resp.Data = &pb.StartDownloadData{
+			DownloadId:  downloadId,
+			Status:      existingDialog.Status,
+			DownloadUrl: existingDialog.DownloadUrl,
+		}
+		return resp, nil
+	}
+
+	// 6. 下载链接将在录制开始后动态生成
+	// 初始为空，等进度更新时从数据库查询后填充
+	downloadUrl := ""
+
+	// 7. 创建下载对话
+	downloadSpeed := int(req.DownloadSpeed)
+	if downloadSpeed <= 0 || downloadSpeed > 4 {
+		downloadSpeed = 1 // 默认1倍速，避免丢帧
+	}
+
+	dialog := &DownloadDialog{
+		gb:            gb,
+		DownloadId:    downloadId,
+		DeviceId:      req.DeviceId,
+		ChannelId:     req.ChannelId,
+		StartTime:     startTime,
+		EndTime:       endTime,
+		DownloadSpeed: downloadSpeed,
+		DownloadUrl:   downloadUrl,
+		Status:        "pending",
+		Progress:      0,
+	}
+	dialog.Task.Context = ctx
+
+	// 8. 添加到下载对话集合（会自动调用 Start 方法）
+	gb.downloadDialogs.AddTask(dialog)
+
+	resp.Code = 0
+	resp.Message = "下载任务已创建"
+	resp.Total = 0
+	resp.Data = &pb.StartDownloadData{
+		DownloadId:  downloadId,
+		Status:      "pending",
+		DownloadUrl: downloadUrl,
+	}
+	return resp, nil
+}
+
+// GetDownloadProgress 实现查询下载进度接口
+func (gb *GB28181Plugin) GetDownloadProgress(ctx context.Context, req *pb.GetDownloadProgressRequest) (*pb.DownloadProgressResponse, error) {
+	resp := &pb.DownloadProgressResponse{}
+
+	// 1. 参数验证
+	if req.DownloadId == "" {
+		resp.Code = 400
+		resp.Message = "downloadId 不能为空"
+		return resp, nil
+	}
+
+	// 2. 查询任务
+	dialog, exists := gb.downloadDialogs.Get(req.DownloadId)
+	if !exists {
+		resp.Code = 404
+		resp.Message = "下载任务不存在"
+		return resp, nil
+	}
+
+	// 3. 构建响应
+	resp.Code = 0
+	resp.Message = "success"
+	resp.Total = 0
+	resp.Data = &pb.DownloadProgressData{
+		DownloadId:      dialog.DownloadId,
+		Status:          dialog.Status,
+		Progress:        int32(dialog.Progress),
+		FilePath:        dialog.FilePath,
+		DownloadUrl:     dialog.DownloadUrl,
+		Error:           dialog.Error,
+		DownloadedBytes: dialog.DownloadedBytes,
+		TotalBytes:      dialog.TotalBytes,
+		StartedAt:       timestamppb.New(dialog.StartedAt),
+	}
+	if !dialog.CompletedAt.IsZero() {
+		resp.Data.CompletedAt = timestamppb.New(dialog.CompletedAt)
+	}
+
 	return resp, nil
 }
