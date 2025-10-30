@@ -80,15 +80,34 @@ func (d *DownloadDialog) Start() error {
 	d.channel = channel
 
 	// 2. 分配媒体端口
-	if device.StreamMode != mrtp.StreamModeTCPActive {
-		if d.gb.MediaPort.Valid() {
-			select {
-			case d.MediaPort = <-d.gb.tcpPorts:
-			default:
-				return fmt.Errorf("没有可用的 TCP 端口")
-			}
+	switch d.device.StreamMode {
+	case mrtp.StreamModeTCPPassive:
+		if d.gb.tcpPort > 0 {
+			d.MediaPort = d.gb.tcpPort
 		} else {
-			d.MediaPort = d.gb.MediaPort[0]
+			if d.gb.MediaPort.Valid() {
+				var ok bool
+				d.MediaPort, ok = d.gb.tcpPB.Allocate()
+				if !ok {
+					return fmt.Errorf("no available tcp port")
+				}
+			} else {
+				d.MediaPort = d.gb.MediaPort[0]
+			}
+		}
+	case mrtp.StreamModeUDP:
+		if d.gb.udpPort > 0 {
+			d.MediaPort = d.gb.udpPort
+		} else {
+			if d.gb.MediaPort.Valid() {
+				var ok bool
+				d.MediaPort, ok = d.gb.udpPB.Allocate()
+				if !ok {
+					return fmt.Errorf("no available udp port")
+				}
+			} else {
+				d.MediaPort = d.gb.MediaPort[0]
+			}
 		}
 	}
 
@@ -363,7 +382,7 @@ func (d *DownloadDialog) Go() error {
 		isNormalEnd := err == io.EOF ||
 			strings.Contains(errStr, "EOF") ||
 			strings.Contains(errStr, "timeout")
-		
+
 		// 时间戳稳定说明设备已经停止发送数据，流真正结束了
 		timestampStable := psReceiver.IsTimestampStable()
 
@@ -457,26 +476,19 @@ func (d *DownloadDialog) updateProgress(psReceiver *mrtp.PSReceiver, totalDurati
 
 // Dispose 释放资源
 func (d *DownloadDialog) Dispose() {
-	d.gb.Info("download dialog dispose", "downloadId", d.DownloadId, "deviceId", d.DeviceId, "channelId", d.ChannelId)
-	// 1. 回收端口
-	if d.device != nil {
-		if d.device.StreamMode == mrtp.StreamModeUDP {
-			if d.gb.udpPort == 0 { // 多端口模式
-				select {
-				case d.gb.udpPorts <- d.MediaPort:
-					d.gb.Info("udp port returned", "port", d.MediaPort)
-				default:
-					d.gb.Warn("udpPorts channel full, port not returned", "port", d.MediaPort)
-				}
+	switch d.device.StreamMode {
+	case mrtp.StreamModeUDP:
+		if d.gb.udpPort == 0 { //多端口模式
+			// 回收端口，防止重复回收
+			if !d.gb.udpPB.Release(d.MediaPort) {
+				d.Warn("port already released or not allocated", "port", d.MediaPort, "type", "udp")
 			}
-		} else if d.device.StreamMode == mrtp.StreamModeTCPPassive {
-			if d.gb.tcpPort == 0 { // 多端口模式
-				select {
-				case d.gb.tcpPorts <- d.MediaPort:
-					d.gb.Info("tcp port returned", "port", d.MediaPort)
-				default:
-					d.gb.Warn("tcpPorts channel full, port not returned", "port", d.MediaPort)
-				}
+		}
+	case mrtp.StreamModeTCPPassive:
+		if d.gb.tcpPort == 0 { //多端口模式
+			// 回收端口，防止重复回收
+			if !d.gb.tcpPB.Release(d.MediaPort) {
+				d.Warn("port already released or not allocated", "port", d.MediaPort, "type", "tcp")
 			}
 		}
 	}
