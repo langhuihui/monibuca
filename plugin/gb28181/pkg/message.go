@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"golang.org/x/net/html/charset"
 	"golang.org/x/text/encoding/simplifiedchinese"
 	"golang.org/x/text/transform"
 )
@@ -243,14 +242,134 @@ type (
 	}
 )
 
-func DecodeXML(v any, body []byte) error {
-	decoder := xml.NewDecoder(bytes.NewReader(body))
-	decoder.CharsetReader = charset.NewReaderLabel
+// DecodeXML 根据指定的字符集解码XML
+// charset: 字符集，如 "GB2312", "UTF-8" 等，如果为空则默认使用GB2312
+func DecodeXML(v any, body []byte, charset string) error {
+	// 标准化字符集名称
+	if charset == "" {
+		charset = "GB2312" // 默认使用GB2312
+	}
+	charset = strings.ToUpper(strings.TrimSpace(charset))
+
+	// 提取XML声明中的encoding
+	declaredEncoding := extractXMLEncoding(body)
+	
+	// 判断是否需要转换编码
+	needConvert := false
+	if declaredEncoding != "" {
+		declaredEncoding = strings.ToUpper(strings.TrimSpace(declaredEncoding))
+		// 如果声明的encoding与配置的charset不一致，需要转换
+		if !isSameCharset(declaredEncoding, charset) {
+			needConvert = true
+		}
+	}
+	
+	var finalBody []byte
+	if needConvert {
+		// 需要转换：根据配置的charset决定如何处理
+		switch charset {
+		case "GB2312", "GBK", "GB18030":
+			// 配置说实际是GB2312，先用GBK解码转成UTF-8
+			reader := transform.NewReader(bytes.NewReader(body), simplifiedchinese.GBK.NewDecoder())
+			utf8Body, err := io.ReadAll(reader)
+			if err != nil {
+				return fmt.Errorf("convert from %s to UTF-8 failed: %v", charset, err)
+			}
+			// 修改XML声明为UTF-8
+			finalBody = replaceXMLEncoding(utf8Body, "UTF-8")
+		case "UTF-8", "UTF8":
+			// 配置说实际是UTF-8，但声明不是UTF-8
+			// 只需要修改XML声明，不转换内容
+			finalBody = replaceXMLEncoding(body, "UTF-8")
+		default:
+			return fmt.Errorf("unsupported charset: %s", charset)
+		}
+	} else {
+		// 不需要转换，直接使用原始body
+		finalBody = body
+	}
+	
+	// 解析XML
+	decoder := xml.NewDecoder(bytes.NewReader(finalBody))
+	decoder.CharsetReader = func(declaredCharset string, input io.Reader) (io.Reader, error) {
+		// 如果XML声明的是GB2312/GBK，提供GBK解码器
+		dc := strings.ToUpper(strings.TrimSpace(declaredCharset))
+		switch dc {
+		case "GB2312", "GBK", "GB18030":
+			return transform.NewReader(input, simplifiedchinese.GBK.NewDecoder()), nil
+		default:
+			return input, nil
+		}
+	}
+	
 	err := decoder.Decode(v)
 	if err != nil {
-		decoder = xml.NewDecoder(transform.NewReader(bytes.NewReader(body), simplifiedchinese.GBK.NewDecoder()))
-		decoder.CharsetReader = charset.NewReaderLabel
-		return decoder.Decode(v)
+		return fmt.Errorf("decode XML failed: %v", err)
 	}
+
 	return nil
+}
+
+// extractXMLEncoding 从XML中提取encoding声明
+func extractXMLEncoding(body []byte) string {
+	// 查找 encoding="xxx" 或 encoding='xxx'
+	bodyStr := string(body[:min(len(body), 200)]) // 只检查前200字节
+	if idx := strings.Index(bodyStr, "encoding="); idx >= 0 {
+		start := idx + 9
+		if start < len(bodyStr) {
+			quote := bodyStr[start]
+			if quote == '"' || quote == '\'' {
+				end := strings.IndexByte(bodyStr[start+1:], quote)
+				if end >= 0 {
+					return bodyStr[start+1 : start+1+end]
+				}
+			}
+		}
+	}
+	return ""
+}
+
+// isSameCharset 判断两个字符集是否相同
+func isSameCharset(a, b string) bool {
+	a = strings.ToUpper(strings.TrimSpace(a))
+	b = strings.ToUpper(strings.TrimSpace(b))
+	
+	// GB2312, GBK, GB18030 视为相同
+	if (a == "GB2312" || a == "GBK" || a == "GB18030") &&
+		(b == "GB2312" || b == "GBK" || b == "GB18030") {
+		return true
+	}
+	
+	// UTF-8 和 UTF8 视为相同
+	if (a == "UTF-8" || a == "UTF8") && (b == "UTF-8" || b == "UTF8") {
+		return true
+	}
+	
+	return a == b
+}
+
+// replaceXMLEncoding 替换XML声明中的encoding
+func replaceXMLEncoding(body []byte, newEncoding string) []byte {
+	bodyStr := string(body)
+	if idx := strings.Index(bodyStr, "encoding="); idx >= 0 {
+		start := idx + 9
+		if start < len(bodyStr) {
+			quote := bodyStr[start]
+			if quote == '"' || quote == '\'' {
+				end := strings.IndexByte(bodyStr[start+1:], quote)
+				if end >= 0 {
+					// 替换encoding值
+					return []byte(bodyStr[:start+1] + newEncoding + bodyStr[start+1+end:])
+				}
+			}
+		}
+	}
+	return body
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

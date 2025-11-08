@@ -29,9 +29,11 @@ type ForwardConfig struct {
 
 // Forwarder 转发器
 type Forwarder struct {
-	config *ForwardConfig
-	source net.Conn
-	target net.Conn
+	config         *ForwardConfig
+	source         net.Conn
+	target         net.Conn
+	sourceListener net.Listener // 保存source的listener，用于cleanup时关闭
+	targetListener net.Listener // 保存target的listener，用于cleanup时关闭
 }
 
 // NewForwarder 创建新的转发器
@@ -53,21 +55,32 @@ func (f *Forwarder) establishSourceConnection(config ConnectionConfig) (net.Conn
 		return netConn, nil
 
 	case StreamModeTCPPassive:
-		listener, err := net.Listen("tcp4", fmt.Sprintf(":%d", config.Port))
+		addr := fmt.Sprintf(":%d", config.Port)
+		fmt.Printf("[Forwarder] TCP-PASSIVE: 开始监听端口 %s\n", addr)
+		listener, err := net.Listen("tcp4", addr)
 		if err != nil {
+			fmt.Printf("[Forwarder] TCP-PASSIVE: 监听失败 %s, err=%v\n", addr, err)
 			return nil, fmt.Errorf("listen failed: %v", err)
 		}
+		fmt.Printf("[Forwarder] TCP-PASSIVE: 监听成功 %s, listener=%p\n", addr, listener)
+
+		// 保存listener，用于cleanup时关闭
+		f.sourceListener = listener
 
 		// Set timeout for accepting connections
 		if tcpListener, ok := listener.(*net.TCPListener); ok {
 			tcpListener.SetDeadline(time.Now().Add(30 * time.Second))
 		}
 
+		fmt.Printf("[Forwarder] TCP-PASSIVE: 等待连接 %s\n", addr)
 		netConn, err := listener.Accept()
 		if err != nil {
+			fmt.Printf("[Forwarder] TCP-PASSIVE: Accept失败 %s, err=%v, 关闭listener\n", addr, err)
 			listener.Close()
+			f.sourceListener = nil
 			return nil, fmt.Errorf("accept failed: %v", err)
 		}
+		fmt.Printf("[Forwarder] TCP-PASSIVE: Accept成功 %s, conn=%p, listener=%p 已保存到f.sourceListener\n", addr, netConn, listener)
 
 		return netConn, nil
 
@@ -104,6 +117,9 @@ func (f *Forwarder) establishTargetConnection(config ConnectionConfig) (net.Conn
 			return nil, fmt.Errorf("listen failed: %v", err)
 		}
 
+		// 保存listener，用于cleanup时关闭
+		f.targetListener = listener
+
 		// Set timeout for accepting connections
 		if tcpListener, ok := listener.(*net.TCPListener); ok {
 			tcpListener.SetDeadline(time.Now().Add(30 * time.Second))
@@ -112,6 +128,7 @@ func (f *Forwarder) establishTargetConnection(config ConnectionConfig) (net.Conn
 		netConn, err := listener.Accept()
 		if err != nil {
 			listener.Close()
+			f.targetListener = nil
 			return nil, fmt.Errorf("accept failed: %v", err)
 		}
 
@@ -153,12 +170,32 @@ func (f *Forwarder) setupConnections() error {
 
 // cleanup 清理连接
 func (f *Forwarder) cleanup() {
+	fmt.Printf("[Forwarder] cleanup: 开始清理, source=%p, target=%p, sourceListener=%p, targetListener=%p\n",
+		f.source, f.target, f.sourceListener, f.targetListener)
+
+	// 先关闭连接
 	if f.source != nil {
+		fmt.Printf("[Forwarder] cleanup: 关闭source连接 %p\n", f.source)
 		f.source.Close()
 	}
 	if f.target != nil {
+		fmt.Printf("[Forwarder] cleanup: 关闭target连接 %p\n", f.target)
 		f.target.Close()
 	}
+
+	// 再关闭listener（重要！释放端口）
+	if f.sourceListener != nil {
+		fmt.Printf("[Forwarder] cleanup: ✅ 关闭sourceListener %p，释放端口\n", f.sourceListener)
+		f.sourceListener.Close()
+		f.sourceListener = nil
+	}
+	if f.targetListener != nil {
+		fmt.Printf("[Forwarder] cleanup: ✅ 关闭targetListener %p，释放端口\n", f.targetListener)
+		f.targetListener.Close()
+		f.targetListener = nil
+	}
+
+	fmt.Printf("[Forwarder] cleanup: 清理完成\n")
 }
 
 // createRTPReader 创建RTP读取器
@@ -454,23 +491,38 @@ func (p *RTPProcessor) processFragmentedPacket(packet *rtp.Packet, sequenceNumbe
 
 // Forward 执行转发
 func (f *Forwarder) Forward(ctx context.Context) error {
+	fmt.Printf("[Forwarder] Forward: 开始, source=%s:%d mode=%s, target=%s:%d mode=%s\n",
+		f.config.Source.IP, f.config.Source.Port, f.config.Source.Mode,
+		f.config.Target.IP, f.config.Target.Port, f.config.Target.Mode)
+
 	// 建立连接
 	err := f.setupConnections()
 	if err != nil {
+		fmt.Printf("[Forwarder] Forward: setupConnections失败, err=%v\n", err)
 		return err
 	}
-	defer f.cleanup()
+	fmt.Printf("[Forwarder] Forward: setupConnections成功, source=%p, target=%p\n", f.source, f.target)
+	defer func() {
+		fmt.Printf("[Forwarder] Forward: 准备执行cleanup (defer)\n")
+		f.cleanup()
+	}()
 
 	// 检查是否为中继模式
 	if f.config.Relay {
+		fmt.Printf("[Forwarder] Forward: 使用中继模式\n")
 		processor := NewRelayProcessor(f.source, f.target, f.config.Source.Mode, f.config.Target.Mode)
-		return processor.Process(ctx)
+		err := processor.Process(ctx)
+		fmt.Printf("[Forwarder] Forward: 中继模式结束, err=%v\n", err)
+		return err
 	}
 
 	// RTP处理模式
+	fmt.Printf("[Forwarder] Forward: 使用RTP处理模式\n")
 	reader := f.createRTPReader()
 	writer := f.createRTPWriter()
 	processor := NewRTPProcessor(reader, writer, f.config)
 
-	return processor.Process(ctx)
+	err = processor.Process(ctx)
+	fmt.Printf("[Forwarder] Forward: RTP处理模式结束, err=%v\n", err)
+	return err
 }

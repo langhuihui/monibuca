@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"net/url"
 	"os"
 	"sort"
@@ -1150,6 +1149,7 @@ func (gb *GB28181Plugin) QueryRecord(ctx context.Context, req *pb.QueryRecordReq
 	resp := &pb.QueryRecordResponse{
 		Code:    0,
 		Message: "",
+		Data:    []*pb.RecordItem{},
 	}
 	startTime, endTime, err := util.TimeRangeQueryParse(url.Values{"range": []string{req.Range}, "start": []string{req.Start}, "end": []string{req.End}})
 	// 获取设备和通道
@@ -1200,14 +1200,21 @@ func (gb *GB28181Plugin) QueryRecord(ctx context.Context, req *pb.QueryRecordReq
 		resp.DeviceId = req.DeviceId
 		resp.ChannelId = req.ChannelId
 		resp.Name = firstResponse.Name
-		resp.Count = int32(recordReq.ReceivedNum)
+		resp.SumNum = int32(recordReq.SumNum)
 		if !firstResponse.LastTime.IsZero() {
 			resp.LastTime = timestamppb.New(firstResponse.LastTime)
 		}
 	}
 
 	for _, record := range recordReq.Response {
+		if len(record.RecordList.Item) == 0 {
+			continue
+		}
 		for _, item := range record.RecordList.Item {
+			// 过滤无效的记录（所有字段都为空）
+			if item.DeviceID == "" && item.StartTime == "" {
+				continue
+			}
 			resp.Data = append(resp.Data, &pb.RecordItem{
 				DeviceId:   item.DeviceID,
 				Name:       item.Name,
@@ -1222,6 +1229,7 @@ func (gb *GB28181Plugin) QueryRecord(ctx context.Context, req *pb.QueryRecordReq
 		}
 	}
 
+	resp.Count = int32(recordReq.SumNum)
 	resp.Code = 0
 	resp.Message = fmt.Sprintf("success, received %d/%d records", recordReq.ReceivedNum, recordReq.SumNum)
 
@@ -1290,6 +1298,7 @@ func (gb *GB28181Plugin) TestSip(ctx context.Context, req *pb.TestSipRequest) (*
 	device := &Device{
 		DeviceId:   "34020000002000000001",
 		SipIp:      "192.168.1.106",
+		LocalPort:  5060,
 		Port:       5060,
 		IP:         "192.168.1.102",
 		StreamMode: "TCP-PASSIVE",
@@ -1317,20 +1326,15 @@ func (gb *GB28181Plugin) TestSip(ctx context.Context, req *pb.TestSipRequest) (*
 	//    Method: INVITE
 	//    Request-URI: sip:34020000001320000006@192.168.1.102:5060
 	//    [Resent Packet: False]
-	// 初始化SIP客户端
-	opts := &slog.HandlerOptions{
-		Level:     slog.LevelDebug,
-		AddSource: true,
-	}
-	logHandler := slog.NewJSONHandler(os.Stdout, opts)
-	logger := slog.New(logHandler)
-	slog.SetDefault(logger) // 设置为默认日志记录器
-	device.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(logger), sipgo.WithClientHostname("192.168.1.106"))
-	if device.client == nil {
+	// 根据设备的SipIp、LocalPort和Transport获取或创建对应的Client
+	// 测试默认使用UDP
+	client, err := gb.getOrCreateClient(device.SipIp, device.LocalPort, "UDP")
+	if err != nil {
 		resp.Code = 500
-		resp.Message = "failed to create sip client"
+		resp.Message = fmt.Sprintf("创建Client失败: %v", err)
 		return resp, nil
 	}
+	device.client = client
 
 	// 构建目标URI
 	recipient := sip.Uri{
@@ -1379,16 +1383,7 @@ func (gb *GB28181Plugin) TestSip(ctx context.Context, req *pb.TestSipRequest) (*
 		},
 	}
 	userAgentHeader := sip.NewHeader("User-Agent", "WVP-Pro v2.7.3.20241218")
-	//Via: SIP/2.0/UDP 192.168.1.106:5060;branch=z9hG4bK9279674404;rport
-	viaHeader := sip.ViaHeader{
-		ProtocolName:    "SIP",
-		ProtocolVersion: "2.0",
-		Transport:       "UDP",
-		Host:            "192.168.1.106",
-		Port:            5060,
-		Params:          sip.HeaderParams(sip.NewParams()),
-	}
-	viaHeader.Params.Add("branch", "z9hG4bK9279674404").Add("rport", "")
+	// 不手动添加Via头部，让Client自动创建
 
 	csqHeader := sip.CSeqHeader{
 		SeqNo:      3,
@@ -1400,7 +1395,6 @@ func (gb *GB28181Plugin) TestSip(ctx context.Context, req *pb.TestSipRequest) (*
 	request.AppendHeader(subjectHeader)
 	request.AppendHeader(&toHeader)
 	request.AppendHeader(userAgentHeader)
-	request.AppendHeader(&viaHeader)
 
 	// 设置消息体
 	request.SetBody([]byte(strings.Join(sdpInfo, "\r\n") + "\r\n"))

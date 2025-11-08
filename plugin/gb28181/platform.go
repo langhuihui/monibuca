@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/langhuihui/gotask"
+	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/simplifiedchinese"
 	"golang.org/x/text/transform"
 	"m7s.live/v5"
@@ -46,14 +47,37 @@ type Platform struct {
 	register   *Register
 }
 
-// UTF8ToGB2312 将UTF-8编码的字符串转换为GB2312编码
-func UTF8ToGB2312(s string) (string, error) {
-	reader := transform.NewReader(bytes.NewReader([]byte(s)), simplifiedchinese.GB18030.NewEncoder())
+// EncodeToCharset 将UTF-8编码的字符串转换为指定字符集的字节数组
+// charset: 目标字符集，支持 "GB2312", "GBK", "UTF-8" 等
+func EncodeToCharset(s string, charset string) ([]byte, string, error) {
+	// 标准化字符集名称
+	charset = strings.ToUpper(strings.TrimSpace(charset))
+	if charset == "" {
+		charset = "GB2312" // 默认使用GB2312
+	}
+
+	// 如果是UTF-8，直接返回
+	if charset == "UTF-8" || charset == "UTF8" {
+		return []byte(s), "UTF-8", nil
+	}
+
+	// 选择编码器
+	var encoder *encoding.Encoder
+	switch charset {
+	case "GB2312", "GBK", "GB18030":
+		encoder = simplifiedchinese.GB18030.NewEncoder()
+	default:
+		// 不支持的字符集，返回UTF-8
+		return []byte(s), "UTF-8", fmt.Errorf("unsupported charset: %s, using UTF-8", charset)
+	}
+
+	// 执行编码转换
+	reader := transform.NewReader(bytes.NewReader([]byte(s)), encoder)
 	d, err := io.ReadAll(reader)
 	if err != nil {
-		return "", err
+		return []byte(s), "UTF-8", fmt.Errorf("encoding failed: %v", err)
 	}
-	return string(d), nil
+	return d, charset, nil
 }
 
 func NewPlatform(pm *gb28181.PlatformModel, plugin *GB28181Plugin, unRegister bool) *Platform {
@@ -62,9 +86,16 @@ func NewPlatform(pm *gb28181.PlatformModel, plugin *GB28181Plugin, unRegister bo
 		plugin:        plugin,
 		unRegister:    unRegister,
 	}
-	client, err := sipgo.NewClient(p.plugin.ua, sipgo.WithClientHostname(p.PlatformModel.DeviceIP), sipgo.WithClientPort(p.PlatformModel.DevicePort))
+	// Platform根据配置的DeviceIP、DevicePort和Transport获取或创建对应的Client
+	// 这样可以支持多网卡场景，每个Platform可以使用不同的网卡和传输协议
+	transport := pm.Transport
+	if transport == "" {
+		transport = "UDP" // 默认UDP
+	}
+	client, err := plugin.getOrCreateClient(pm.DeviceIP, pm.DevicePort, transport)
 	if err != nil {
-		p.Error("failed to create sip client", "err", err)
+		plugin.Error("创建Platform Client失败", "error", err, "deviceIP", pm.DeviceIP, "devicePort", pm.DevicePort, "transport", transport)
+		return nil
 	}
 	p.Client = client
 	userAgentHeader := sip.NewHeader("User-Agent", "M7S/"+m7s.Version)
@@ -347,13 +378,29 @@ func (p *Platform) Register(isUnregister bool) error {
 
 		// 创建新的带认证信息的请求
 		newReq := req.Clone()
-		newReq.RemoveHeader("Via") // 必须由传输层重新生成
+		newReq.RemoveHeader("Via")
 		newReq.AppendHeader(sip.NewHeader("Authorization", cred.String()))
 		newReq.CSeq().SeqNo = uint32(p.SN) // 更新CSeq序号
 		p.SN++
 
+		// 手动添加Via头部，使用平台配置的Transport
+		transport := p.PlatformModel.Transport
+		if transport == "" {
+			transport = "UDP"
+		}
+		viaHeader := &sip.ViaHeader{
+			ProtocolName:    "SIP",
+			ProtocolVersion: "2.0",
+			Transport:       transport,
+			Host:            p.PlatformModel.DeviceIP,
+			Port:            p.PlatformModel.DevicePort,
+			Params:          sip.HeaderParams(sip.NewParams()),
+		}
+		viaHeader.Params.Add("branch", sip.GenerateBranchN(16))
+		newReq.PrependHeader(viaHeader)
+
 		// 发送认证请求
-		tx, err = p.Client.TransactionRequest(p, newReq, sipgo.ClientRequestAddVia)
+		tx, err = p.Client.TransactionRequest(p, newReq)
 		if err != nil {
 			p.plugin.Error(logTag, "error", err.Error())
 			return err
@@ -501,7 +548,24 @@ func (p *Platform) handleCatalog(req *sip.Request, tx sip.ServerTransaction, msg
 // CreateRequest 创建 SIP 请求
 func (p *Platform) CreateRequest(method string) *sip.Request {
 	request := sip.NewRequest(sip.RequestMethod(method), p.Recipient)
-	//request.SetDestination(p.Recipient.String())
+
+	// 添加Via头部，使用平台配置的Transport协议
+	// Via头部必须用PrependHeader放在最前面
+	transport := p.PlatformModel.Transport
+	if transport == "" {
+		transport = "UDP" // 默认UDP
+	}
+	viaHeader := sip.ViaHeader{
+		ProtocolName:    "SIP",
+		ProtocolVersion: "2.0",
+		Transport:       transport,
+		Host:            p.PlatformModel.DeviceIP,
+		Port:            p.PlatformModel.DevicePort,
+		Params:          sip.HeaderParams(sip.NewParams()),
+	}
+	viaHeader.Params.Add("branch", sip.GenerateBranchN(16))
+	request.PrependHeader(&viaHeader)
+
 	return request
 }
 
@@ -544,11 +608,15 @@ func (p *Platform) sendCatalogResponse(req *sip.Request, sn string, fromTag stri
 		//request.AppendHeader(&viaHeader)
 
 		request.SetTransport(req.Transport())
-		contentTypeHeader := sip.ContentTypeHeader("Application/MANSCDP+xml")
-		request.AppendHeader(&contentTypeHeader)
+
+		// 根据平台配置的字符集进行编码
+		charset := p.PlatformModel.CharacterSet
+		if charset == "" {
+			charset = "GB2312" // 默认使用GB2312
+		}
 
 		// 空目录列表XML
-		xmlContent := fmt.Sprintf(`<?xml version="1.0" encoding="GB2312"?>
+		xmlContent := fmt.Sprintf(`<?xml version="1.0" encoding="%s"?>
 <Response>
 <CmdType>Catalog</CmdType>
 <SN>%s</SN>
@@ -556,8 +624,17 @@ func (p *Platform) sendCatalogResponse(req *sip.Request, sn string, fromTag stri
 <SumNum>0</SumNum>
 <DeviceList Num="0">
 </DeviceList>
-</Response>`, sn, p.PlatformModel.DeviceGBID)
-		request.SetBody([]byte(xmlContent))
+</Response>`, charset, sn, p.PlatformModel.DeviceGBID)
+
+		encodedContent, actualCharset, err := EncodeToCharset(xmlContent, charset)
+		if err != nil {
+			p.Error("sendCatalogResponse 编码转换失败", "error", err.Error(), "charset", charset)
+			request.SetBody([]byte(xmlContent))
+			actualCharset = "UTF-8" // 失败时使用UTF-8
+		} else {
+			request.SetBody(encodedContent)
+		}
+		request.AppendHeader(sip.NewHeader("Content-Type", fmt.Sprintf("Application/MANSCDP+xml;charset=%s", actualCharset)))
 
 		// 修正：使用TransactionRequest替代Do
 		tx, err := p.Client.TransactionRequest(p, request)
@@ -621,11 +698,27 @@ func (p *Platform) sendCatalogResponse(req *sip.Request, sn string, fromTag stri
 
 			// 创建新的带认证信息的请求
 			newReq := request.Clone()
-			newReq.RemoveHeader("Via") // 必须由传输层重新生成
+			newReq.RemoveHeader("Via")
 			newReq.AppendHeader(sip.NewHeader("Authorization", cred.String()))
 
+			// 手动添加Via头部，使用平台配置的Transport
+			transport := p.PlatformModel.Transport
+			if transport == "" {
+				transport = "UDP"
+			}
+			viaHeader := &sip.ViaHeader{
+				ProtocolName:    "SIP",
+				ProtocolVersion: "2.0",
+				Transport:       transport,
+				Host:            p.PlatformModel.DeviceIP,
+				Port:            p.PlatformModel.DevicePort,
+				Params:          sip.HeaderParams(sip.NewParams()),
+			}
+			viaHeader.Params.Add("branch", sip.GenerateBranchN(16))
+			newReq.PrependHeader(viaHeader)
+
 			// 发送认证请求
-			tx, err = p.Client.TransactionRequest(p, newReq, sipgo.ClientRequestAddVia)
+			tx, err = p.Client.TransactionRequest(p, newReq)
 			if err != nil {
 				p.Error("sendCatalogResponse", "error", err.Error())
 				return err
@@ -686,12 +779,16 @@ func (p *Platform) sendCatalogResponse(req *sip.Request, sn string, fromTag stri
 		//request.AppendHeader(&viaHeader)
 
 		request.SetTransport(req.Transport())
-		contentTypeHeader := sip.ContentTypeHeader("Application/MANSCDP+xml")
-		request.AppendHeader(&contentTypeHeader)
+
+		// 根据平台配置的字符集进行编码
+		charset := p.PlatformModel.CharacterSet
+		if charset == "" {
+			charset = "GB2312" // 默认使用GB2312
+		}
 
 		// 为单个通道创建XML
 		channelXML := p.buildChannelItem(channel)
-		xmlContent := fmt.Sprintf(`<?xml version="1.0" encoding="GB2312"?>
+		xmlContent := fmt.Sprintf(`<?xml version="1.0" encoding="%s"?>
 <Response>
 <CmdType>Catalog</CmdType>
 <SN>%s</SN>
@@ -700,9 +797,17 @@ func (p *Platform) sendCatalogResponse(req *sip.Request, sn string, fromTag stri
 <DeviceList Num="1">
 %s
 </DeviceList>
-</Response>`, sn, p.PlatformModel.DeviceGBID, len(channels), channelXML)
+</Response>`, charset, sn, p.PlatformModel.DeviceGBID, len(channels), channelXML)
 
-		request.SetBody([]byte(xmlContent))
+		encodedContent, actualCharset, err := EncodeToCharset(xmlContent, charset)
+		if err != nil {
+			p.Error("sendCatalogResponse 编码转换失败", "error", err.Error(), "charset", charset, "channel_index", i)
+			request.SetBody([]byte(xmlContent))
+			actualCharset = "UTF-8" // 失败时使用UTF-8
+		} else {
+			request.SetBody(encodedContent)
+		}
+		request.AppendHeader(sip.NewHeader("Content-Type", fmt.Sprintf("Application/MANSCDP+xml;charset=%s", actualCharset)))
 
 		// 修正：使用TransactionRequest替代Do
 		tx, err := p.Client.TransactionRequest(p, request)
@@ -768,11 +873,27 @@ func (p *Platform) sendCatalogResponse(req *sip.Request, sn string, fromTag stri
 
 			// 创建新的带认证信息的请求
 			newReq := request.Clone()
-			newReq.RemoveHeader("Via") // 必须由传输层重新生成
+			newReq.RemoveHeader("Via")
 			newReq.AppendHeader(sip.NewHeader("Authorization", cred.String()))
 
+			// 手动添加Via头部，使用平台配置的Transport
+			transport := p.PlatformModel.Transport
+			if transport == "" {
+				transport = "UDP"
+			}
+			viaHeader := &sip.ViaHeader{
+				ProtocolName:    "SIP",
+				ProtocolVersion: "2.0",
+				Transport:       transport,
+				Host:            p.PlatformModel.DeviceIP,
+				Port:            p.PlatformModel.DevicePort,
+				Params:          sip.HeaderParams(sip.NewParams()),
+			}
+			viaHeader.Params.Add("branch", sip.GenerateBranchN(16))
+			newReq.PrependHeader(viaHeader)
+
 			// 发送认证请求
-			tx, err = p.Client.TransactionRequest(p, newReq, sipgo.ClientRequestAddVia)
+			tx, err = p.Client.TransactionRequest(p, newReq)
 			if err != nil {
 				p.Error("sendCatalogResponse", "error", err.Error(), "channel_index", i)
 				return err
@@ -852,7 +973,7 @@ func (p *Platform) buildChannelItem(channel gb28181.DeviceChannel) string {
 		channel.RegisterWay, // 直接使用整数值
 		channel.Secrecy,     // 直接使用整数值
 		parentID,
-		channel.Parental, // 直接使用整数值
+		channel.Parental,  // 直接使用整数值
 		channel.SafetyWay) // 直接使用整数值
 }
 
@@ -1199,16 +1320,20 @@ func (p *Platform) sendDeviceInfoResponse(req *sip.Request, device *Device, sn s
 </Response>`, sn, device.DeviceId, device.Name, device.Manufacturer, device.Model, device.Firmware, device.ChannelCount)
 	}
 
-	// 将UTF-8编码的XML内容转换为GB2312编码
-	gb2312Content, err := UTF8ToGB2312(xmlContent)
-	if err != nil {
-		p.Error("sendDeviceInfoResponse", "encoding error", err.Error())
-		// 如果转换失败，仍然使用原始内容，避免完全失败
-		request.SetBody([]byte(xmlContent))
-	} else {
-		// 使用转换后的GB2312编码内容
-		request.SetBody([]byte(gb2312Content))
+	// 根据平台配置的字符集进行编码
+	charset := p.PlatformModel.CharacterSet
+	if charset == "" {
+		charset = "GB2312" // 默认使用GB2312
 	}
+	encodedContent, actualCharset, err := EncodeToCharset(xmlContent, charset)
+	if err != nil {
+		p.Error("sendDeviceInfoResponse 编码转换失败", "error", err.Error(), "charset", charset)
+		request.SetBody([]byte(xmlContent))
+		actualCharset = "UTF-8" // 失败时使用UTF-8
+	} else {
+		request.SetBody(encodedContent)
+	}
+	request.AppendHeader(sip.NewHeader("Content-Type", fmt.Sprintf("Application/MANSCDP+xml;charset=%s", actualCharset)))
 
 	// 修正：使用正确的上下文参数
 	tx, err := p.Client.TransactionRequest(p, request)
@@ -1272,11 +1397,27 @@ func (p *Platform) sendDeviceInfoResponse(req *sip.Request, device *Device, sn s
 
 		// 创建新的带认证信息的请求
 		newReq := request.Clone()
-		newReq.RemoveHeader("Via") // 必须由传输层重新生成
+		newReq.RemoveHeader("Via")
 		newReq.AppendHeader(sip.NewHeader("Authorization", cred.String()))
 
+		// 手动添加Via头部，使用平台配置的Transport
+		transport := p.PlatformModel.Transport
+		if transport == "" {
+			transport = "UDP"
+		}
+		viaHeader := &sip.ViaHeader{
+			ProtocolName:    "SIP",
+			ProtocolVersion: "2.0",
+			Transport:       transport,
+			Host:            p.PlatformModel.DeviceIP,
+			Port:            p.PlatformModel.DevicePort,
+			Params:          sip.HeaderParams(sip.NewParams()),
+		}
+		viaHeader.Params.Add("branch", sip.GenerateBranchN(16))
+		newReq.PrependHeader(viaHeader)
+
 		// 发送认证请求
-		tx, err = p.Client.TransactionRequest(p, newReq, sipgo.ClientRequestAddVia)
+		tx, err = p.Client.TransactionRequest(p, newReq)
 		if err != nil {
 			p.Error("sendDeviceInfoResponse", "error", err.Error())
 			return err

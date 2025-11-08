@@ -57,6 +57,9 @@ type GB28181Plugin struct {
 	AutoMigrate    bool   `default:"true" desc:"自动迁移数据库结构并初始化根组织"`
 	ua             *sipgo.UserAgent
 	server         *sipgo.Server
+	clients        util.Collection[string, *ClientWrapper] // Client池，key为"IP:Port"
+	defaultSipIP   string                                  // 默认SIP IP
+	defaultSipPort int                                     // 默认SIP Port
 	devices        task.WorkCollection[string, *Device]
 	dialogs        util.Collection[string, *Dialog]
 	forwardDialogs util.Collection[uint32, *ForwardDialog]
@@ -74,6 +77,16 @@ type GB28181Plugin struct {
 	channels              util.Collection[string, *Channel]
 	singlePorts           util.Collection[uint32, *gb28181.SinglePortReader]
 	downloadDialogs       task.WorkCollection[string, *DownloadDialog]
+}
+
+// ClientWrapper 包装sipgo.Client以实现GetKey接口
+type ClientWrapper struct {
+	*sipgo.Client
+	key string
+}
+
+func (c *ClientWrapper) GetKey() string {
+	return c.key
 }
 
 var _ = m7s.InstallPlugin[GB28181Plugin](m7s.PluginMeta{
@@ -156,7 +169,11 @@ func (gb *GB28181Plugin) Start() (err error) {
 		return pkg.ErrNoDB
 	}
 	gb.Info("GB28181 initing", gb.Platforms)
-	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+		Level:     slog.LevelDebug,
+		AddSource: false,
+	}))
+	slog.SetDefault(logger) // 设置为默认logger，确保所有日志都使用这个配置
 	// 设置 TCP 传输模式
 	tcpOption := sip.WithTransportLayerConnectionReuse(true) // 启用连接重用
 	gb.ua, err = sipgo.NewUA(
@@ -173,6 +190,7 @@ func (gb *GB28181Plugin) Start() (err error) {
 		gb.dialogs.L = new(sync.RWMutex)
 		gb.forwardDialogs.L = new(sync.RWMutex)
 		gb.singlePorts.L = new(sync.RWMutex)
+		gb.clients.L = new(sync.RWMutex)
 		gb.server, _ = sipgo.NewServer(gb.ua, sipgo.WithServerLogger(logger)) // Creating server handle for ua
 		gb.server.OnMessage(gb.OnMessage)
 		gb.server.OnRegister(gb.OnRegister)
@@ -226,6 +244,38 @@ func (gb *GB28181Plugin) Start() (err error) {
 				return err
 			}
 		}
+
+		// 初始化默认SIP配置
+		// 用于在无法从设备请求中确定本地IP时使用
+		gb.defaultSipIP = gb.SipIP
+		gb.defaultSipPort = 5060 // 默认端口
+
+		if gb.defaultSipIP == "" {
+			// 从第一个监听地址提取默认IP
+			if len(gb.Sip.ListenAddr) > 0 {
+				_, addr, _ := strings.Cut(gb.Sip.ListenAddr[0], ":")
+				if strings.HasPrefix(addr, ":") {
+					// 如果是 ":5060" 格式，提取端口
+					gb.defaultSipIP = "0.0.0.0"
+					if port, err := strconv.Atoi(strings.TrimPrefix(addr, ":")); err == nil {
+						gb.defaultSipPort = port
+					}
+				} else {
+					// 如果是 "192.168.1.106:5060" 格式，提取IP和端口
+					host, portStr, _ := net.SplitHostPort(addr)
+					if host != "" {
+						gb.defaultSipIP = host
+					} else {
+						gb.defaultSipIP = addr
+					}
+					if port, err := strconv.Atoi(portStr); err == nil {
+						gb.defaultSipPort = port
+					}
+				}
+			}
+		}
+		gb.Info("默认SIP配置已初始化", "defaultSipIP", gb.defaultSipIP, "defaultSipPort", gb.defaultSipPort)
+
 		if gb.DB != nil {
 			err = gb.initDatabase()
 			if err != nil {
@@ -244,6 +294,45 @@ func (gb *GB28181Plugin) Start() (err error) {
 		gb.Error("GB28181 init failed,please set Sip.ListenAddr in GB28181 configuration like this   \nsip:\n  listenaddr:\n    - udp::5060\n")
 	}
 	return
+}
+
+// getOrCreateClient 根据IP:Port:Transport获取或创建Client
+// hostname: SIP IP地址
+// port: SIP端口
+// transport: 传输协议（TCP/UDP）
+func (gb *GB28181Plugin) getOrCreateClient(hostname string, port int, transport string) (*sipgo.Client, error) {
+	// Key包含transport，因为同一个IP:Port可能同时有TCP和UDP
+	key := fmt.Sprintf("%s:%d:%s", hostname, port, strings.ToUpper(transport))
+	
+	// 尝试从缓存获取
+	if wrapper, ok := gb.clients.Get(key); ok {
+		return wrapper.Client, nil
+	}
+	
+	// 创建新Client
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+		Level:     slog.LevelDebug,
+		AddSource: false,
+	}))
+	
+	client, err := sipgo.NewClient(gb.ua,
+		sipgo.WithClientLogger(logger),
+		sipgo.WithClientHostname(hostname),
+		sipgo.WithClientPort(port),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("创建Client失败 %s: %v", key, err)
+	}
+	
+	// 存入缓存（需要包装成实现GetKey的类型）
+	wrapper := &ClientWrapper{
+		Client: client,
+		key:    key,
+	}
+	gb.clients.Set(wrapper)
+	gb.Info("创建新Client", "hostname", hostname, "port", port, "key", key)
+	
+	return client, nil
 }
 
 func (gb *GB28181Plugin) deleteDevice(device *Device, reason string) bool {
@@ -346,15 +435,17 @@ func (gb *GB28181Plugin) checkDeviceExpire() (err error) {
 			User: device.DeviceId,
 		}
 
-		// 创建SIP客户端
-		opts := &slog.HandlerOptions{
-			Level:     slog.LevelDebug,
-			AddSource: true,
+		// 根据设备的SipIp、LocalPort和Transport获取或创建对应的Client
+		transport := device.Transport
+		if transport == "" {
+			transport = "UDP" // 默认UDP
 		}
-		logHandler := slog.NewJSONHandler(os.Stdout, opts)
-		logger := slog.New(logHandler)
-		slog.SetDefault(logger) // 设置为默认日志记录器
-		device.client, _ = sipgo.NewClient(gb.ua, sipgo.WithClientLogger(logger), sipgo.WithClientHostname(device.SipIp))
+		client, err := gb.getOrCreateClient(device.SipIp, device.LocalPort, transport)
+		if err != nil {
+			gb.Error("创建Device Client失败", "error", err, "deviceId", device.DeviceId, "sipIp", device.SipIp, "localPort", device.LocalPort, "transport", transport)
+			continue
+		}
+		device.client = client
 		device.Info("checkDeviceExpire", "d.SipIp", device.SipIp, "d.LocalPort", device.LocalPort, "d.contactHDR", device.contactHDR)
 		device.channels.OnAdd(func(c *Channel) {
 			if absDevice, ok := gb.Server.PullProxies.Find(func(absDevice m7s.IPullProxy) bool {
@@ -543,18 +634,6 @@ func (gb *GB28181Plugin) OnRegister(req *sip.Request, tx sip.ServerTransaction) 
 }
 
 func (gb *GB28181Plugin) OnMessage(req *sip.Request, tx sip.ServerTransaction) {
-	// 解析消息内容
-	temp := &gb28181.Message{}
-	err := gb28181.DecodeXML(temp, req.Body())
-	gb.Debug("OnMessage debug", "message", temp.BasicParam.Expiration)
-	if err != nil {
-		gb.Error("OnMessage", "error", err.Error())
-		response := sip.NewResponseFromRequest(req, sip.StatusBadRequest, "Bad Request", nil)
-		if err := tx.Respond(response); err != nil {
-			gb.Error("respond BadRequest", "error", err.Error())
-		}
-		return
-	}
 	from := req.From()
 	if from == nil || from.Address.User == "" {
 		gb.Error("OnMessage", "error", "no user")
@@ -562,12 +641,29 @@ func (gb *GB28181Plugin) OnMessage(req *sip.Request, tx sip.ServerTransaction) {
 	}
 	id := from.Address.User
 
-	// 检查消息来源
+	// 检查消息来源，获取字符集配置
 	var d *Device
 	var p *gb28181.PlatformModel
+	var charset string = "GB2312" // 默认字符集
 
 	// 先从设备缓存中获取
 	d, _ = gb.devices.Get(id)
+	if d != nil && d.Charset != "" {
+		charset = d.Charset
+	}
+
+	// 使用正确的字符集解析消息内容
+	temp := &gb28181.Message{}
+	err := gb28181.DecodeXML(temp, req.Body(), charset)
+	gb.Debug("OnMessage debug", "message", temp.BasicParam.Expiration, "charset", charset)
+	if err != nil {
+		gb.Error("OnMessage", "error", err.Error(), "charset", charset)
+		response := sip.NewResponseFromRequest(req, sip.StatusBadRequest, "Bad Request", nil)
+		if err := tx.Respond(response); err != nil {
+			gb.Error("respond BadRequest", "error", err.Error())
+		}
+		return
+	}
 
 	// 检查是否是平台
 	//if gb.DB != nil {
@@ -623,19 +719,6 @@ func (gb *GB28181Plugin) OnMessage(req *sip.Request, tx sip.ServerTransaction) {
 }
 
 func (gb *GB28181Plugin) OnNotify(req *sip.Request, tx sip.ServerTransaction) {
-	// 解析消息内容
-	temp := &gb28181.Message{}
-	err := gb28181.DecodeXML(temp, req.Body())
-	gb.Debug("onnotify debug", "message", temp)
-	if err != nil {
-		gb.Error("OnNotify", "error", err.Error())
-		response := sip.NewResponseFromRequest(req, sip.StatusBadRequest, "Bad Request", nil)
-		if err := tx.Respond(response); err != nil {
-			gb.Error("respond BadRequest", "error", err.Error())
-		}
-		return
-	}
-
 	from := req.From()
 	if from == nil || from.Address.User == "" {
 		gb.Error("OnNotify", "error", "no user")
@@ -643,12 +726,29 @@ func (gb *GB28181Plugin) OnNotify(req *sip.Request, tx sip.ServerTransaction) {
 	}
 	id := from.Address.User
 
-	// 检查消息来源
+	// 检查消息来源，获取字符集配置
 	var d *Device
 	var p *gb28181.PlatformModel
+	var charset string = "GB2312" // 默认字符集
 
 	// 先从设备缓存中获取
 	d, _ = gb.devices.Get(id)
+	if d != nil && d.Charset != "" {
+		charset = d.Charset
+	}
+
+	// 使用正确的字符集解析消息内容
+	temp := &gb28181.Message{}
+	err := gb28181.DecodeXML(temp, req.Body(), charset)
+	gb.Debug("onnotify debug", "message", temp, "charset", charset)
+	if err != nil {
+		gb.Error("OnNotify", "error", err.Error(), "charset", charset)
+		response := sip.NewResponseFromRequest(req, sip.StatusBadRequest, "Bad Request", nil)
+		if err := tx.Respond(response); err != nil {
+			gb.Error("respond BadRequest", "error", err.Error())
+		}
+		return
+	}
 
 	// 检查是否是平台
 	if gb.DB != nil {
@@ -977,7 +1077,7 @@ func (gb *GB28181Plugin) OnAck(req *sip.Request, tx sip.ServerTransaction) {
 		return dialog.platformCallId == callID
 	}); ok {
 		if forwardDialog.channel.StreamPath == "" { //为空表示是正常的GB设备
-			pullUrl := fmt.Sprintf("%s/%s", forwardDialog.channel.ParentId, forwardDialog.channel.ChannelId)
+			pullUrl := fmt.Sprintf("%s/%s", util.Conditional(forwardDialog.channel.DeviceId == "", forwardDialog.channel.ParentId, forwardDialog.channel.DeviceId), forwardDialog.channel.ChannelId)
 			streamPath := fmt.Sprintf("platform_%d/%s/%s", time.Now().UnixMilli(), forwardDialog.channel.DeviceId, forwardDialog.channel.ChannelId)
 
 			// 创建配置

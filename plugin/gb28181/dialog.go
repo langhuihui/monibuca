@@ -254,15 +254,6 @@ func (d *Dialog) Start() (err error) {
 	//customCallID := fmt.Sprintf("%s-%s-%d@%s", device.DeviceId, channelId, time.Now().Unix(), device.SipIp)
 	customCallID := fmt.Sprintf("%s@%s", GenerateCallID(32), device.MediaIp)
 	callID := sip.CallIDHeader(customCallID)
-	viaHeader := sip.ViaHeader{
-		ProtocolName:    "SIP",
-		ProtocolVersion: "2.0",
-		Transport:       device.Transport,
-		Host:            device.MediaIp,
-		Port:            device.LocalPort,
-		Params:          sip.NewParams(),
-	}
-	viaHeader.Params.Add("branch", sip.GenerateBranchN(10)).Add("rport", "")
 	maxforward := sip.MaxForwardsHeader(70)
 	//contentLengthHeader := sip.ContentLengthHeader(len(strings.Join(sdpInfo, "\r\n") + "\r\n"))
 	csqHeader := sip.CSeqHeader{
@@ -287,23 +278,34 @@ func (d *Dialog) Start() (err error) {
 		Params: sip.NewParams(),
 	}
 	fromHDR.Params.Add("tag", sip.GenerateTagN(32))
+	
+	// 输出设备Transport信息用于调试
+	d.Info("准备发送INVITE", "deviceId", device.DeviceId, "device.Transport", device.Transport, "device.SipIp", device.SipIp, "device.LocalPort", device.LocalPort)
+	
 	dialogClientCache := sipgo.NewDialogClientCache(device.client, contactHDR)
-	// 创建会话
-	d.Info("start to invite", "recipient:", recipient, " viaHeader:", viaHeader, " fromHDR:", fromHDR, " toHeader:", toHeader, " device.contactHDR:",
+	// 创建会话，不传递Via头部，让Client自动创建
+	d.Info("start to invite", "recipient:", recipient, " fromHDR:", fromHDR, " toHeader:", toHeader, " device.contactHDR:",
 		device.contactHDR, "contactHDR:", contactHDR, "sdpInfo:", strings.Join(sdpInfo, "\r\n")+"\r\n")
 
 	d.pullCtx.GoToStepConst(StepInviteSend)
 
-	// 判断当前系统类型
-	//if runtime.GOOS == "windows" {
-	//	d.session, err = dialogClientCache.Invite(d.gb, recipient, []byte(strings.Join(sdpInfo, "\r\n")+"\r\n"), &callID, &csqHeader, &fromHDR, &toHeader, &maxforward, userAgentHeader, subjectHeader, &contentTypeHeader)
-	//} else {
-	if strings.ToLower(device.Transport) == "tcp" {
-		d.session, err = dialogClientCache.Invite(d.gb, recipient, []byte(strings.Join(sdpInfo, "\r\n")+"\r\n"), &viaHeader, &callID, &csqHeader, &fromHDR, &toHeader, &maxforward, userAgentHeader, subjectHeader, &contentTypeHeader)
-	} else {
-		d.session, err = dialogClientCache.Invite(d.gb, recipient, []byte(strings.Join(sdpInfo, "\r\n")+"\r\n"), &callID, &csqHeader, &fromHDR, &toHeader, &maxforward, userAgentHeader, subjectHeader, &contentTypeHeader)
+	// 创建Via头部，使用设备的Transport协议
+	// Via头部必须放在第一个位置，这样AppendHeader时Via会在最前面
+	viaHeader := &sip.ViaHeader{
+		ProtocolName:    "SIP",
+		ProtocolVersion: "2.0",
+		Transport:       device.Transport, // 使用设备注册时的Transport
+		Host:            device.SipIp,
+		Port:            device.LocalPort,
+		Params:          sip.HeaderParams(sip.NewParams()),
 	}
-	//}
+	viaHeader.Params.Add("branch", sip.GenerateBranchN(16))
+	
+	d.Info("发送INVITE使用Transport", "transport", device.Transport, "via", viaHeader)
+	
+	// Via头部必须是第一个参数！这样即使用AppendHeader，Via也会在最前面
+	// 这样Client检查req.Via()时就能找到我们的Via头部，不会再创建默认的UDP Via
+	d.session, err = dialogClientCache.Invite(d.gb, recipient, []byte(strings.Join(sdpInfo, "\r\n")+"\r\n"), viaHeader, &callID, &csqHeader, &fromHDR, &toHeader, &maxforward, userAgentHeader, subjectHeader, &contentTypeHeader)
 	// 最后添加Content-Length头部
 	if err != nil {
 		d.pullCtx.Fail("dialog invite error: " + err.Error())
