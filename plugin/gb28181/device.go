@@ -49,10 +49,12 @@ func (d *DeviceKeepaliveTickTask) Tick(any) {
 		keepaliveSeconds = d.device.KeepaliveInterval
 	}
 	if timeDiff := time.Since(d.device.KeepaliveTime); timeDiff > time.Duration(d.device.KeepaliveCount*keepaliveSeconds)*time.Second {
+		d.device.Debug("keeplive time out", "timediff", timeDiff, "currettime", time.Now(), "d.device.KeepaliveTime", d.device.KeepaliveTime, "timeout time", time.Duration(d.device.KeepaliveCount*keepaliveSeconds)*time.Second)
 		d.device.Online = false
 		d.device.Status = DeviceOfflineStatus
 		// 设置所有通道状态为off
 		d.device.channels.Range(func(channel *Channel) bool {
+			d.device.Debug("keeplive time out", "timediff", timeDiff, "offline channeid", channel.ChannelId)
 			channel.Status = "OFF"
 			return true
 		})
@@ -114,6 +116,7 @@ type Device struct {
 	CatalogSubscribeTask  *CatalogSubscribeTask  `gorm:"-:all"`
 	PositionSubscribeTask *PositionSubscribeTask `gorm:"-:all"`
 	AlarmSubscribeTask    *AlarmSubscribeTask    `gorm:"-:all"`
+	Cataloging            bool                   `gorm:"-:all" default:"false"`
 }
 
 func (d *Device) TableName() string {
@@ -201,6 +204,7 @@ type catalogHandlerTask struct {
 func (c *catalogHandlerTask) Run() (err error) {
 	// 处理目录信息
 	d := c.d
+	d.Cataloging = true
 	msg := c.msg
 	catalogReq, exists := d.catalogReqs.Get(msg.SN)
 	if !exists {
@@ -250,6 +254,7 @@ func (c *catalogHandlerTask) Run() (err error) {
 	if catalogReq.IsComplete() {
 		catalogReq.Resolve()
 		d.catalogReqs.RemoveByKey(msg.SN)
+		d.Cataloging = false
 	}
 	return
 }

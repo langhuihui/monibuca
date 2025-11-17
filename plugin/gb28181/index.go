@@ -77,6 +77,7 @@ type GB28181Plugin struct {
 	channels              util.Collection[string, *Channel]
 	singlePorts           util.Collection[uint32, *gb28181.SinglePortReader]
 	downloadDialogs       task.WorkCollection[string, *DownloadDialog]
+	completedDownloads    util.Collection[string, *CompletedDownloadDialog]
 }
 
 // ClientWrapper 包装sipgo.Client以实现GetKey接口
@@ -104,7 +105,7 @@ var _ = m7s.InstallPlugin[GB28181Plugin](m7s.PluginMeta{
 // RegisterHandler 注册自定义 HTTP 路由
 func (gb *GB28181Plugin) RegisterHandler() map[string]http.HandlerFunc {
 	return map[string]http.HandlerFunc{
-		"/download/{deviceId}/{channelId}/{filename}": gb.handleDownloadFile,
+		"/download": gb.handleDownloadFile,
 	}
 }
 
@@ -130,6 +131,7 @@ func (gb *GB28181Plugin) initDatabase() error {
 			&gb28181.GroupsModel{},
 			&gb28181.GroupsChannelModel{},
 			&gb28181.DevicePosition{},
+			&gb28181.GB28181Record{},
 		); err != nil {
 			return fmt.Errorf("auto migrate tables error: %v", err)
 		}
@@ -191,6 +193,7 @@ func (gb *GB28181Plugin) Start() (err error) {
 		gb.forwardDialogs.L = new(sync.RWMutex)
 		gb.singlePorts.L = new(sync.RWMutex)
 		gb.clients.L = new(sync.RWMutex)
+		gb.completedDownloads.L = new(sync.RWMutex)
 		gb.server, _ = sipgo.NewServer(gb.ua, sipgo.WithServerLogger(logger)) // Creating server handle for ua
 		gb.server.OnMessage(gb.OnMessage)
 		gb.server.OnRegister(gb.OnRegister)
@@ -303,18 +306,18 @@ func (gb *GB28181Plugin) Start() (err error) {
 func (gb *GB28181Plugin) getOrCreateClient(hostname string, port int, transport string) (*sipgo.Client, error) {
 	// Key包含transport，因为同一个IP:Port可能同时有TCP和UDP
 	key := fmt.Sprintf("%s:%d:%s", hostname, port, strings.ToUpper(transport))
-	
+
 	// 尝试从缓存获取
 	if wrapper, ok := gb.clients.Get(key); ok {
 		return wrapper.Client, nil
 	}
-	
+
 	// 创建新Client
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
 		Level:     slog.LevelDebug,
 		AddSource: false,
 	}))
-	
+
 	client, err := sipgo.NewClient(gb.ua,
 		sipgo.WithClientLogger(logger),
 		sipgo.WithClientHostname(hostname),
@@ -323,7 +326,7 @@ func (gb *GB28181Plugin) getOrCreateClient(hostname string, port int, transport 
 	if err != nil {
 		return nil, fmt.Errorf("创建Client失败 %s: %v", key, err)
 	}
-	
+
 	// 存入缓存（需要包装成实现GetKey的类型）
 	wrapper := &ClientWrapper{
 		Client: client,
@@ -331,7 +334,7 @@ func (gb *GB28181Plugin) getOrCreateClient(hostname string, port int, transport 
 	}
 	gb.clients.Set(wrapper)
 	gb.Info("创建新Client", "hostname", hostname, "port", port, "key", key)
-	
+
 	return client, nil
 }
 
@@ -471,7 +474,7 @@ func (gb *GB28181Plugin) checkDeviceExpire() (err error) {
 
 		// 加载设备的通道（包括deviceId或parentId等于device.DeviceId的通道）
 		var channels []gb28181.DeviceChannel
-		if err := gb.DB.Where("device_id = ? OR parent_id = ?", device.DeviceId, device.DeviceId).Find(&channels).Error; err != nil {
+		if err := gb.DB.Where("device_id = ?", device.DeviceId).Find(&channels).Error; err != nil {
 			gb.Error("加载通道失败", "error", err, "deviceId", device.DeviceId)
 			continue
 		}
@@ -479,7 +482,7 @@ func (gb *GB28181Plugin) checkDeviceExpire() (err error) {
 		if gb.SipIP != "" {
 			device.SipIp = gb.SipIP
 		}
-		if gb.MediaIP != "" {
+		if gb.MediaIP != "" && device.MediaIp == "" {
 			device.MediaIp = gb.MediaIP
 		}
 

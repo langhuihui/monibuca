@@ -5,31 +5,53 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
+
+	gb28181 "m7s.live/v5/plugin/gb28181/pkg"
 )
 
 // handleDownloadFile 处理文件下载请求
+// URL: /gb28181/download?downloadId=xxx
 func (gb *GB28181Plugin) handleDownloadFile(w http.ResponseWriter, r *http.Request) {
-	// 从 URL 路径中提取参数
-	// 路径格式：/gb28181/download/{deviceId}/{channelId}/{filename}
-	pathParts := strings.Split(strings.TrimPrefix(r.URL.Path, "/"), "/")
-	if len(pathParts) < 3 {
-		http.Error(w, "Invalid path", http.StatusBadRequest)
+	// 获取 downloadId 参数
+	downloadId := r.URL.Query().Get("downloadId")
+	if downloadId == "" {
+		http.Error(w, "downloadId parameter is required", http.StatusBadRequest)
 		return
 	}
 
-	deviceId := pathParts[len(pathParts)-3]
-	channelId := pathParts[len(pathParts)-2]
-	filename := pathParts[len(pathParts)-1]
-
-	// 验证文件名格式（防止路径遍历攻击）
-	if strings.Contains(filename, "..") || strings.Contains(filename, "/") {
-		http.Error(w, "Invalid filename", http.StatusBadRequest)
+	// 检查数据库
+	if gb.DB == nil {
+		http.Error(w, "Database not available", http.StatusInternalServerError)
+		gb.Error("数据库未初始化")
 		return
 	}
 
-	// 构建文件路径
-	filePath := filepath.Join("download", deviceId, channelId, filename)
+	// 从 gb28181_record 表查询文件路径
+	var record gb28181.GB28181Record
+	if err := gb.DB.Where("download_id = ? AND status = ?", downloadId, "completed").First(&record).Error; err != nil {
+		// 检查是否是正在进行的下载任务
+		if dialog, exists := gb.downloadDialogs.Get(downloadId); exists {
+			http.Error(w, "Download in progress", http.StatusAccepted)
+			gb.Info("下载任务进行中",
+				"downloadId", downloadId,
+				"status", dialog.Status,
+				"progress", dialog.Progress)
+			return
+		}
+
+		http.Error(w, "Download record not found or not completed", http.StatusNotFound)
+		gb.Warn("下载记录不存在或未完成",
+			"downloadId", downloadId,
+			"error", err)
+		return
+	}
+
+	filePath := record.FilePath
+	filename := filepath.Base(filePath)
+
+	gb.Info("从缓存记录获取文件路径",
+		"downloadId", downloadId,
+		"filePath", filePath)
 
 	// 检查文件是否存在
 	fileInfo, err := os.Stat(filePath)
@@ -68,9 +90,8 @@ func (gb *GB28181Plugin) handleDownloadFile(w http.ResponseWriter, r *http.Reque
 	http.ServeContent(w, r, filename, fileInfo.ModTime(), file)
 
 	gb.Info("文件下载",
-		"deviceId", deviceId,
-		"channelId", channelId,
 		"filename", filename,
+		"filePath", filePath,
 		"size", fileInfo.Size(),
 		"remote", r.RemoteAddr)
 }

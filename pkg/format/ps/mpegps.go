@@ -43,6 +43,7 @@ type MpegPsDemuxer struct {
 	Publisher        *m7s.Publisher
 	Allocator        *gomem.ScalableMemoryAllocator
 	writer           m7s.PublishWriter[*format.Mpeg2Audio, *format.AnnexB]
+	OnVideoPtsUpdate func(pts uint64) // 视频PTS更新回调
 }
 
 func (s *MpegPsDemuxer) Feed(reader *util.BufReader) (err error) {
@@ -104,6 +105,10 @@ func (s *MpegPsDemuxer) Feed(reader *util.BufReader) (err error) {
 				pes.SetDTS(time.Duration(pesHeader.Dts))
 				pes.SetPTS(time.Duration(pesHeader.Pts))
 				lastVideoPts = pesHeader.Pts
+				// 触发PTS更新回调
+				if s.OnVideoPtsUpdate != nil {
+					s.OnVideoPtsUpdate(pesHeader.Pts)
+				}
 			}
 			annexb := s.Allocator.Malloc(reader.Length)
 			reader.Read(annexb)

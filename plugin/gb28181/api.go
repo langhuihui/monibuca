@@ -13,6 +13,7 @@ import (
 	"github.com/emiago/sipgo"
 	"github.com/emiago/sipgo/sip"
 	"gorm.io/gorm"
+	"m7s.live/v5"
 	"m7s.live/v5/pkg/util"
 
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -137,6 +138,7 @@ func (gb *GB28181Plugin) List(ctx context.Context, req *pb.GetDevicesRequest) (*
 			SubscribeCatalog:      util.Conditional(d.SubscribeCatalog == 0, false, true),
 			SubscribePosition:     util.Conditional(d.SubscribePosition == 0, false, true),
 			SubscribeAlarm:        util.Conditional(d.SubscribeAlarm == 0, false, true),
+			Charset:               d.Charset,
 		})
 	}
 
@@ -484,6 +486,9 @@ func (gb *GB28181Plugin) UpdateDevice(ctx context.Context, req *pb.Device) (*pb.
 		if req.StreamMode != "" {
 			d.StreamMode = mrtp.StreamMode(req.StreamMode)
 		}
+		if req.Charset != "" {
+			d.Charset = req.Charset
+		}
 		if req.Password != "" {
 			d.Password = req.Password
 		}
@@ -507,6 +512,12 @@ func (gb *GB28181Plugin) UpdateDevice(ctx context.Context, req *pb.Device) (*pb.
 		} else {
 			d.SubscribeAlarm = 0 // 不订阅
 		}
+		if req.BroadcastPushAfterAck {
+			d.BroadcastPushAfterAck = req.BroadcastPushAfterAck
+		} else {
+			d.BroadcastPushAfterAck = false
+		}
+
 		d.UpdateTime = time.Now()
 
 		// 先停止设备任务
@@ -3392,13 +3403,47 @@ func (gb *GB28181Plugin) StartDownload(ctx context.Context, req *pb.StartDownloa
 		return resp, nil
 	}
 
-	// 4. 生成下载任务ID
-	downloadId := fmt.Sprintf("%d_%d_%s_%s", startTime.Unix(), endTime.Unix(), req.DeviceId, req.ChannelId)
+	// 4. 生成下载任务ID（复合键）
+	downloadId := fmt.Sprintf("%s_%s_%d_%d", req.DeviceId, req.ChannelId, startTime.Unix(), endTime.Unix())
 
-	// 5. 检查任务是否已存在
+	// 5. 优先从缓存表查询已完成的下载
+	if gb.DB != nil {
+		var cachedRecord gb28181.GB28181Record
+		if err := gb.DB.Where("download_id = ? AND status = ?", downloadId, "completed").First(&cachedRecord).Error; err == nil {
+			// 检查文件是否存在
+			if _, err := os.Stat(cachedRecord.FilePath); err == nil {
+				// 生成下载 URL
+				downloadUrl := fmt.Sprintf("/gb28181/download?downloadId=%s", downloadId)
+
+				gb.Info("从缓存返回已下载的录像",
+					"downloadId", downloadId,
+					"filePath", cachedRecord.FilePath,
+					"downloadUrl", downloadUrl)
+				resp.Code = 0
+				resp.Message = "录像已存在（来自缓存）"
+				resp.Total = 0
+				resp.Data = &pb.StartDownloadData{
+					DownloadId:  downloadId,
+					Status:      "completed",
+					DownloadUrl: downloadUrl,
+				}
+				return resp, nil
+			} else {
+				// 文件不存在，删除缓存记录和RecordStream记录
+				gb.DB.Delete(&cachedRecord)
+				// 同时删除MP4插件的RecordStream记录（通过FilePath）
+				gb.DB.Where("file_path = ?", cachedRecord.FilePath).Delete(&m7s.RecordStream{})
+				gb.Warn("缓存记录的文件不存在，已删除缓存和RecordStream记录",
+					"downloadId", downloadId,
+					"filePath", cachedRecord.FilePath)
+			}
+		}
+	}
+
+	// 6. 检查正在进行的下载任务
 	if existingDialog, exists := gb.downloadDialogs.Get(downloadId); exists {
 		resp.Code = 200
-		resp.Message = "下载任务已存在"
+		resp.Message = "下载任务正在进行中"
 		resp.Total = 0
 		resp.Data = &pb.StartDownloadData{
 			DownloadId:  downloadId,
@@ -3408,14 +3453,27 @@ func (gb *GB28181Plugin) StartDownload(ctx context.Context, req *pb.StartDownloa
 		return resp, nil
 	}
 
-	// 6. 下载链接将在录制开始后动态生成
+	// 7. 检查已完成的下载任务（内存缓存）
+	if completedDialog, exists := gb.completedDownloads.Get(downloadId); exists {
+		resp.Code = 0
+		resp.Message = "下载任务已完成"
+		resp.Total = 0
+		resp.Data = &pb.StartDownloadData{
+			DownloadId:  downloadId,
+			Status:      completedDialog.Status,
+			DownloadUrl: completedDialog.DownloadUrl,
+		}
+		return resp, nil
+	}
+
+	// 8. 下载链接将在录制开始后动态生成
 	// 初始为空，等进度更新时从数据库查询后填充
 	downloadUrl := ""
 
-	// 7. 创建下载对话
+	// 9. 创建下载对话
 	downloadSpeed := int(req.DownloadSpeed)
 	if downloadSpeed <= 0 || downloadSpeed > 4 {
-		downloadSpeed = 1 // 默认1倍速，避免丢帧
+		downloadSpeed = 4 // 默认4倍速，避免丢帧
 	}
 
 	dialog := &DownloadDialog{
@@ -3432,7 +3490,7 @@ func (gb *GB28181Plugin) StartDownload(ctx context.Context, req *pb.StartDownloa
 	}
 	dialog.Task.Context = ctx
 
-	// 8. 添加到下载对话集合（会自动调用 Start 方法）
+	// 10. 添加到下载对话集合（会自动调用 Start 方法）
 	gb.downloadDialogs.AddTask(dialog)
 
 	resp.Code = 0
@@ -3460,9 +3518,29 @@ func (gb *GB28181Plugin) GetDownloadProgress(ctx context.Context, req *pb.GetDow
 	// 2. 查询任务
 	dialog, exists := gb.downloadDialogs.Get(req.DownloadId)
 	if !exists {
-		resp.Code = 404
-		resp.Message = "下载任务不存在"
-		return resp, nil
+		completedDialog, exists := gb.completedDownloads.Get(req.DownloadId)
+		if exists {
+			resp.Code = 0
+			resp.Message = "success"
+			resp.Total = 0
+			resp.Data = &pb.DownloadProgressData{
+				DownloadId:  completedDialog.DownloadId,
+				Status:      completedDialog.Status,
+				Progress:    int32(completedDialog.Progress),
+				FilePath:    completedDialog.FilePath,
+				DownloadUrl: completedDialog.DownloadUrl,
+				Error:       completedDialog.Error,
+				StartedAt:   timestamppb.New(completedDialog.StartedAt),
+			}
+			if !completedDialog.CompletedAt.IsZero() {
+				resp.Data.CompletedAt = timestamppb.New(completedDialog.CompletedAt)
+			}
+			return resp, nil
+		} else {
+			resp.Code = 404
+			resp.Message = "下载任务不存在"
+			return resp, nil
+		}
 	}
 
 	// 3. 构建响应
@@ -3470,15 +3548,13 @@ func (gb *GB28181Plugin) GetDownloadProgress(ctx context.Context, req *pb.GetDow
 	resp.Message = "success"
 	resp.Total = 0
 	resp.Data = &pb.DownloadProgressData{
-		DownloadId:      dialog.DownloadId,
-		Status:          dialog.Status,
-		Progress:        int32(dialog.Progress),
-		FilePath:        dialog.FilePath,
-		DownloadUrl:     dialog.DownloadUrl,
-		Error:           dialog.Error,
-		DownloadedBytes: dialog.DownloadedBytes,
-		TotalBytes:      dialog.TotalBytes,
-		StartedAt:       timestamppb.New(dialog.StartedAt),
+		DownloadId:  dialog.DownloadId,
+		Status:      dialog.Status,
+		Progress:    int32(dialog.Progress),
+		FilePath:    dialog.FilePath,
+		DownloadUrl: dialog.DownloadUrl,
+		Error:       dialog.Error,
+		StartedAt:   timestamppb.New(dialog.StartedAt),
 	}
 	if !dialog.CompletedAt.IsZero() {
 		resp.Data.CompletedAt = timestamppb.New(dialog.CompletedAt)

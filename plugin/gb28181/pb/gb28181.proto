@@ -648,6 +648,7 @@ message Device {
   string ip = 22;
   int32 port = 23;
   bool broadcastPushAfterAck =24;
+  string charset =25;
 }
 
 message ResponseList {
@@ -1300,7 +1301,7 @@ message StartDownloadRequest {
 
 // StartDownloadData 下载任务数据
 message StartDownloadData {
-  string downloadId = 1;            // 下载任务ID（格式：startTime_endTime_deviceId_channelId）
+  string downloadId = 1;            // 下载任务ID（格式：deviceId_channelId_startTime_endTime）
   string status = 2;                // 初始状态（pending）
   string downloadUrl = 3;           // 下载链接（完成后可直接访问）
 }

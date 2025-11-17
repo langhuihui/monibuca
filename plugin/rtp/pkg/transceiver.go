@@ -62,27 +62,42 @@ type Receiver struct {
 	RTPMouth   chan []byte
 	SinglePort io.ReadCloser
 	rtpReader  *RTPPayloadReader // 保存 RTP 读取器引用
+	AllowedIP  string            // 允许连接的IP地址（为空则不限制）
+	started    bool              // 标记是否已经启动过
 }
 
 type PSReceiver struct {
 	Receiver
 	mpegps.MpegPsDemuxer
-	firstRtpTimestamp    uint32        // 第一个 RTP 包的时间戳
-	currentRtpTimestamp  uint32        // 当前 RTP 包的时间戳
-	hasFirstTimestamp    bool          // 是否已记录第一个时间戳
-	lastTimestampUpdate  time.Time     // 最后一次时间戳更新的时间
+	firstVideoPts        uint64        // 第一个视频帧的 PTS（90kHz）
+	currentVideoPts      uint64        // 当前视频帧的 PTS（90kHz）
+	hasFirstPts          bool          // 是否已记录第一个 PTS
+	lastPtsUpdate        time.Time     // 最后一次 PTS 更新的时间
 	OnProgressUpdate     func()        // 进度更新回调（可选，导出供外部使用）
 	lastProgressUpdate   time.Time     // 最后一次进度更新时间
 	ProgressUpdatePeriod time.Duration // 进度更新周期（默认1秒，导出供外部配置）
 }
 
 func (p *PSReceiver) Start() error {
+	p.Info("PSReceiver.Start called", "StreamMode", p.Receiver.StreamMode, "SinglePort", p.Receiver.SinglePort != nil, "started", p.Receiver.started, "ListenAddr", p.Receiver.ListenAddr)
+
+	// 多端口模式下始终打印启动日志
+	if p.Receiver.StreamMode == StreamModeTCPPassive && p.Receiver.SinglePort == nil {
+		if !p.Receiver.started {
+			p.Info("start new listener", "addr", p.Receiver.ListenAddr)
+		} else {
+			p.Info("listener already started", "addr", p.Receiver.ListenAddr)
+		}
+	}
+
 	err := p.Receiver.Start()
 	if err == nil {
 		p.Using(p.Publisher)
-		// 设置 RTP 时间戳更新回调
-		if p.rtpReader != nil {
-			p.rtpReader.onTimestampUpdate = p.UpdateRtpTimestamp
+		// 设置 PTS 更新回调到 MpegPsDemuxer
+		p.MpegPsDemuxer.OnVideoPtsUpdate = p.UpdateVideoPts
+		// 默认进度更新周期为1秒
+		if p.ProgressUpdatePeriod == 0 {
+			p.ProgressUpdatePeriod = time.Second
 		}
 	}
 	return err
@@ -93,30 +108,29 @@ func (p *PSReceiver) Run() error {
 	if err != nil {
 		return err
 	}
+
 	p.MpegPsDemuxer.Allocator = gomem.NewScalableMemoryAllocator(1 << gomem.MinPowerOf2)
 	p.Using(p.MpegPsDemuxer.Allocator)
+	// 确保回调已设置
+	p.MpegPsDemuxer.OnVideoPtsUpdate = p.UpdateVideoPts
 	return p.MpegPsDemuxer.Feed(p.BufReader)
 }
 
-// UpdateRtpTimestamp 更新 RTP 时间戳（从 RTP 包中调用）
-func (p *PSReceiver) UpdateRtpTimestamp(timestamp uint32) {
+// UpdateVideoPts 更新视频 PTS（从 MpegPsDemuxer 中调用）
+func (p *PSReceiver) UpdateVideoPts(pts uint64) {
 	now := time.Now()
-
-	if !p.hasFirstTimestamp {
-		p.firstRtpTimestamp = timestamp
-		p.hasFirstTimestamp = true
-		p.lastTimestampUpdate = now
+	if !p.hasFirstPts {
+		p.firstVideoPts = pts
+		p.hasFirstPts = true
+		p.lastPtsUpdate = now
 		p.lastProgressUpdate = now
-		// 默认进度更新周期为1秒
-		if p.ProgressUpdatePeriod == 0 {
-			p.ProgressUpdatePeriod = time.Second
-		}
+		p.Info("PSReceiver: 首帧视频PTS", "pts", pts)
 	}
 
-	// 检测时间戳是否变化
-	if timestamp != p.currentRtpTimestamp {
-		p.currentRtpTimestamp = timestamp
-		p.lastTimestampUpdate = now
+	// 检测 PTS 是否变化
+	if pts != p.currentVideoPts {
+		p.currentVideoPts = pts
+		p.lastPtsUpdate = now
 
 		// 定期触发进度更新回调（避免过于频繁）
 		if p.OnProgressUpdate != nil && now.Sub(p.lastProgressUpdate) >= p.ProgressUpdatePeriod {
@@ -126,34 +140,40 @@ func (p *PSReceiver) UpdateRtpTimestamp(timestamp uint32) {
 	}
 }
 
-// GetElapsedSeconds 获取已播放的时长（秒），基于 RTP 时间戳
-// RTP 时间戳单位是 90kHz（视频标准时钟频率）
+// GetElapsedSeconds 获取已播放的时长（秒），基于视频 PTS
+// PTS 时间戳单位是 90kHz（MPEG标准时钟频率）
 func (p *PSReceiver) GetElapsedSeconds() float64 {
-	if !p.hasFirstTimestamp {
+	if !p.hasFirstPts {
 		return 0
 	}
-	// 计算时间戳差值（处理回绕）
-	var diff uint32
-	if p.currentRtpTimestamp >= p.firstRtpTimestamp {
-		diff = p.currentRtpTimestamp - p.firstRtpTimestamp
+	// 计算 PTS 差值（处理回绕）
+	var diff uint64
+	if p.currentVideoPts >= p.firstVideoPts {
+		diff = p.currentVideoPts - p.firstVideoPts
 	} else {
-		// 32位回绕
-		diff = (0xFFFFFFFF - p.firstRtpTimestamp) + p.currentRtpTimestamp + 1
+		// 33位PTS回绕（虽然极少发生）
+		diff = (0x1FFFFFFFF - p.firstVideoPts) + p.currentVideoPts + 1
 	}
-	// 转换为秒：timestamp / 90000
+	// 转换为秒：pts / 90000
 	return float64(diff) / 90000.0
 }
 
-// IsTimestampStable 检查 RTP 时间戳是否已经稳定（停止增长）
-// 如果时间戳超过 2 秒没有变化，认为已经稳定
-func (p *PSReceiver) IsTimestampStable() bool {
-	if !p.hasFirstTimestamp {
+// IsPtsStable 检查视频 PTS 是否已经稳定（停止增长）
+// 如果 PTS 超过 2 秒没有变化，认为已经稳定
+func (p *PSReceiver) IsPtsStable() bool {
+	if !p.hasFirstPts {
 		return false
 	}
-	return time.Since(p.lastTimestampUpdate) > 2*time.Second
+	return time.Since(p.lastPtsUpdate) > 2*time.Second
 }
 
 func (p *Receiver) Start() (err error) {
+	// 如果已经启动过，直接返回
+	if p.started {
+		return nil
+	}
+	p.started = true
+
 	var rtpReader *RTPPayloadReader
 	switch p.StreamMode {
 	case StreamModeTCPActive:
@@ -220,10 +240,14 @@ func (p *Receiver) Start() (err error) {
 		p.rtpReader = rtpReader
 		p.BufReader = util.NewBufReader(rtpReader)
 	case StreamModeManual:
+		p.Info("进入 StreamModeManual 分支")
 		p.RTPMouth = make(chan []byte)
 		rtpReader = NewRTPPayloadReader((RTPChanReader)(p.RTPMouth))
 		p.rtpReader = rtpReader
 		p.BufReader = util.NewBufReader(rtpReader)
+	default:
+		p.Error("未知的 StreamMode", "StreamMode", p.StreamMode)
+		return fmt.Errorf("unknown StreamMode: %s", p.StreamMode)
 	}
 	p.Using(rtpReader, p.BufReader)
 	return

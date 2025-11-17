@@ -78,7 +78,7 @@ func (d *ForwardDialog) Start() (err error) {
 	d.MediaPort = uint16(0)
 
 	d.Debug("ForwardDialog端口分配", "device.StreamMode", device.StreamMode, "StreamModeTCPActive", mrtp.StreamModeTCPActive)
-	
+
 	if device.StreamMode != mrtp.StreamModeTCPActive {
 		if d.gb.MediaPort.Valid() {
 			d.Debug("ForwardDialog端口分配路径", "path", "tcpPB.Allocate()", "MediaPort.Valid", true)
@@ -223,13 +223,13 @@ func (d *ForwardDialog) Start() (err error) {
 	d.Info("ForwardDialog发送INVITE使用Transport", "transport", device.Transport, "via", viaHeader)
 
 	// Via头部必须是第一个参数！
-	d.session, err = dialogClientCache.Invite(d.gb, recipient, []byte(strings.Join(sdpInfo, "\r\n")+"\r\n"), viaHeader, &fromHDR, &toHeader, subjectHeader, &contentTypeHeader)
+	d.session, err = dialogClientCache.Invite(d, recipient, []byte(strings.Join(sdpInfo, "\r\n")+"\r\n"), viaHeader, &fromHDR, &toHeader, subjectHeader, &contentTypeHeader)
 	return
 }
 
 // Run 运行会话
 func (d *ForwardDialog) Run() (err error) {
-	err = d.session.WaitAnswer(d.gb, sipgo.AnswerOptions{})
+	err = d.session.WaitAnswer(d, sipgo.AnswerOptions{})
 	if err != nil {
 		return
 	}
@@ -273,7 +273,7 @@ func (d *ForwardDialog) Run() (err error) {
 			d.session.InviteResponse.Contact().Address = d.session.InviteRequest.Recipient
 		}
 	}
-	err = d.session.Ack(d.gb)
+	err = d.session.Ack(d)
 	if err != nil {
 		d.Error("ack session err", err)
 		d.Stop(errors.New("ack session err" + err.Error()))

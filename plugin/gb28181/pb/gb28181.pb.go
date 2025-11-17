@@ -942,6 +942,7 @@ type Device struct {
 	Ip                    string                 `protobuf:"bytes,22,opt,name=ip,proto3" json:"ip,omitempty"`
 	Port                  int32                  `protobuf:"varint,23,opt,name=port,proto3" json:"port,omitempty"`
 	BroadcastPushAfterAck bool                   `protobuf:"varint,24,opt,name=broadcastPushAfterAck,proto3" json:"broadcastPushAfterAck,omitempty"`
+	Charset               string                 `protobuf:"bytes,25,opt,name=charset,proto3" json:"charset,omitempty"`
 	unknownFields         protoimpl.UnknownFields
 	sizeCache             protoimpl.SizeCache
 }
@@ -1142,6 +1143,13 @@ func (x *Device) GetBroadcastPushAfterAck() bool {
 		return x.BroadcastPushAfterAck
 	}
 	return false
+}
+
+func (x *Device) GetCharset() string {
+	if x != nil {
+		return x.Charset
+	}
+	return ""
 }
 
 type ResponseList struct {
@@ -7481,7 +7489,7 @@ const file_gb28181_proto_rawDesc = "" +
 	"\x06status\x18\x10 \x01(\tR\x06status\x124\n" +
 	"\agpsTime\x18\x11 \x01(\v2\x1a.google.protobuf.TimestampR\agpsTime\x12\x1c\n" +
 	"\tlongitude\x18\x12 \x01(\tR\tlongitude\x12\x1a\n" +
-	"\blatitude\x18\x13 \x01(\tR\blatitude\"\xd5\x06\n" +
+	"\blatitude\x18\x13 \x01(\tR\blatitude\"\xef\x06\n" +
 	"\x06Device\x12\x1a\n" +
 	"\bdeviceId\x18\x01 \x01(\tR\bdeviceId\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\"\n" +
@@ -7511,7 +7519,8 @@ const file_gb28181_proto_rawDesc = "" +
 	"\ttransport\x18\x15 \x01(\tR\ttransport\x12\x0e\n" +
 	"\x02ip\x18\x16 \x01(\tR\x02ip\x12\x12\n" +
 	"\x04port\x18\x17 \x01(\x05R\x04port\x124\n" +
-	"\x15broadcastPushAfterAck\x18\x18 \x01(\bR\x15broadcastPushAfterAck\"d\n" +
+	"\x15broadcastPushAfterAck\x18\x18 \x01(\bR\x15broadcastPushAfterAck\x12\x18\n" +
+	"\acharset\x18\x19 \x01(\tR\acharset\"d\n" +
 	"\fResponseList\x12\x12\n" +
 	"\x04code\x18\x01 \x01(\x05R\x04code\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12&\n" +

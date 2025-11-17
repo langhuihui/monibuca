@@ -43,6 +43,8 @@ func (task *registerHandlerTask) getDevicePassword(device *Device) string {
 }
 
 func (task *registerHandlerTask) Run() (err error) {
+	task.SetDescription("OnRegister,deviceid:", task.req.From().Address.User)
+	task.SetDescription("starttime", time.Now().Format("2006-01-02 15:04:05"))
 	var password string
 	var device *Device
 	var recover = false
@@ -311,7 +313,7 @@ func (task *registerHandlerTask) RecoverDevice(d *Device, req *sip.Request) {
 	d.channels.L = new(sync.RWMutex)
 	d.catalogReqs.L = new(sync.RWMutex)
 	d.plugin = task.gb
-	d.plugin.Info("RecoverDevice", "source", source, "desc", desc, "device.SipIp", myLanIP, "device.WanIP", myWanIP, "recipient", req.Recipient, "myPort", myPort, "deviceid", d.DeviceId)
+	d.Info("RecoverDevice end before catalog", "source", source, "desc", desc, "device.SipIp", myLanIP, "device.WanIP", myWanIP, "recipient", req.Recipient, "myPort", myPort, "deviceid", d.DeviceId)
 
 	if task.gb.DB != nil {
 		//var existing Device
@@ -323,7 +325,7 @@ func (task *registerHandlerTask) RecoverDevice(d *Device, req *sip.Request) {
 		//}
 		task.gb.DB.Save(d)
 	}
-	d.catalog()
+	go d.catalog()
 	return
 }
 
