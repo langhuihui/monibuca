@@ -8,7 +8,7 @@ import (
 
 	sipgo "github.com/emiago/sipgo"
 	"github.com/emiago/sipgo/sip"
-	"github.com/langhuihui/gotask"
+	task "github.com/langhuihui/gotask"
 	m7s "m7s.live/v5"
 	"m7s.live/v5/pkg/util"
 	gb28181 "m7s.live/v5/plugin/gb28181/pkg"
@@ -269,9 +269,7 @@ func (d *ForwardDialog) Run() (err error) {
 		}
 	}
 	if d.session.InviteResponse.Contact() != nil {
-		if &d.session.InviteRequest.Recipient != &d.session.InviteResponse.Contact().Address {
-			d.session.InviteResponse.Contact().Address = d.session.InviteRequest.Recipient
-		}
+		d.session.InviteResponse.Contact().Address = d.session.InviteRequest.Recipient
 	}
 	err = d.session.Ack(d)
 	if err != nil {

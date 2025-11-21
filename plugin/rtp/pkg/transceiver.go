@@ -1,6 +1,7 @@
 package rtp
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -58,12 +59,12 @@ type Receiver struct {
 	*util.BufReader
 	ListenAddr string
 	net.Listener
-	StreamMode StreamMode
-	RTPMouth   chan []byte
-	SinglePort io.ReadCloser
-	rtpReader  *RTPPayloadReader // 保存 RTP 读取器引用
-	AllowedIP  string            // 允许连接的IP地址（为空则不限制）
-	started    bool              // 标记是否已经启动过
+	StreamMode   StreamMode
+	RTPMouth     chan []byte
+	SinglePort   io.ReadCloser
+	rtpReader    *RTPPayloadReader // 保存 RTP 读取器引用
+	ExpectedSSRC uint32            // 预期的SSRC（为0则不过滤）
+	started      bool              // 标记是否已经启动过
 }
 
 type PSReceiver struct {
@@ -111,8 +112,6 @@ func (p *PSReceiver) Run() error {
 
 	p.MpegPsDemuxer.Allocator = gomem.NewScalableMemoryAllocator(1 << gomem.MinPowerOf2)
 	p.Using(p.MpegPsDemuxer.Allocator)
-	// 确保回调已设置
-	p.MpegPsDemuxer.OnVideoPtsUpdate = p.UpdateVideoPts
 	return p.MpegPsDemuxer.Feed(p.BufReader)
 }
 
@@ -167,6 +166,11 @@ func (p *PSReceiver) IsPtsStable() bool {
 	return time.Since(p.lastPtsUpdate) > 2*time.Second
 }
 
+// GetLastPtsUpdateTime 获取最后一次 PTS 更新的时间
+func (p *PSReceiver) GetLastPtsUpdateTime() time.Time {
+	return p.lastPtsUpdate
+}
+
 func (p *Receiver) Start() (err error) {
 	// 如果已经启动过，直接返回
 	if p.started {
@@ -212,10 +216,6 @@ func (p *Receiver) Start() (err error) {
 		} else {
 			conn = p.SinglePort
 		}
-		if err != nil {
-			p.Error("accept", "err", err)
-			return err
-		}
 		p.OnStop(conn.Close)
 		rtpReader = NewRTPPayloadReader(NewRTPTCPReader(conn))
 		p.rtpReader = rtpReader
@@ -255,14 +255,72 @@ func (p *Receiver) Start() (err error) {
 
 func (p *Receiver) Run() error {
 	if p.Listener != nil {
-		conn, err := p.Accept()
-		if err != nil {
-			return err
+		// 循环Accept，支持SSRC过滤时拒绝不匹配的连接
+		for {
+			conn, err := p.Accept()
+			if err != nil {
+				return err
+			}
+
+			// 如果设置了ExpectedSSRC，验证第一个RTP包的SSRC
+			if p.ExpectedSSRC != 0 {
+				// TCP模式：RFC 4571格式，前2字节是长度，然后是RTP包
+				var buffer [14]byte // 2字节长度 + 12字节RTP header
+				conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+				_, err := io.ReadFull(conn, buffer[:])
+				conn.SetReadDeadline(time.Time{})
+
+				if err != nil {
+					p.Warn("failed to read RTP header for SSRC validation", "err", err, "remote", conn.RemoteAddr())
+					conn.Close()
+					continue
+				}
+
+				// 解析SSRC（跳过2字节长度前缀，RTP header的字节8-11）
+				ssrc := binary.BigEndian.Uint32(buffer[10:14])
+
+				if ssrc != p.ExpectedSSRC {
+					p.Warn("reject connection with wrong SSRC",
+						"expected", p.ExpectedSSRC,
+						"actual", ssrc,
+						"remote", conn.RemoteAddr())
+					conn.Close()
+					continue
+				}
+
+				p.Info("accept connection with correct SSRC", "ssrc", ssrc, "remote", conn.RemoteAddr())
+
+				// 创建带缓冲的连接，包含已读取的数据（2字节长度+12字节RTP header）
+				conn = &BufferedConn{
+					Conn:   conn,
+					buffer: buffer[:],
+				}
+			}
+
+			p.OnStop(conn.Close)
+			rtpReader := NewRTPPayloadReader(NewRTPTCPReader(conn))
+			p.rtpReader = rtpReader
+			p.BufReader = util.NewBufReader(rtpReader)
+			return nil
 		}
-		p.OnStop(conn.Close)
-		rtpReader := NewRTPPayloadReader(NewRTPTCPReader(conn))
-		p.rtpReader = rtpReader
-		p.BufReader = util.NewBufReader(rtpReader)
 	}
 	return nil
+}
+
+// BufferedConn 包装已读取的数据，用于SSRC验证后重新读取RTP header
+type BufferedConn struct {
+	net.Conn
+	buffer []byte
+	offset int
+}
+
+func (bc *BufferedConn) Read(p []byte) (n int, err error) {
+	// 先读取缓冲区中的数据
+	if bc.offset < len(bc.buffer) {
+		n = copy(p, bc.buffer[bc.offset:])
+		bc.offset += n
+		return n, nil
+	}
+	// 缓冲区读完后，从底层连接读取
+	return bc.Conn.Read(p)
 }

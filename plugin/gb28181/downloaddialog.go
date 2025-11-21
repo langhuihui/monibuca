@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -42,7 +43,7 @@ type DownloadDialog struct {
 	Progress    int    // 0-100
 	FilePath    string
 	DownloadUrl string // 下载链接
-	Error       string
+	ErrorString string
 	StartedAt   time.Time
 	CompletedAt time.Time
 }
@@ -87,6 +88,14 @@ func (d *DownloadDialog) setupReceiver(ps *mrtp.PSReceiver) {
 				reader.Close()
 				d.gb.singlePorts.Remove(reader)
 			})
+		} else {
+			// 多端口模式：根据SSRCCheck配置决定是否启用SSRC过滤
+			if d.device.SSRCCheck {
+				ps.ExpectedSSRC = d.SSRC
+				d.Info("multi-port mode, SSRC filtering enabled", "expectedSSRC", d.SSRC)
+			} else {
+				d.Info("multi-port mode, SSRC filtering disabled")
+			}
 		}
 		ps.ListenAddr = fmt.Sprintf(":%d", d.MediaPort)
 	case mrtp.StreamModeUDP:
@@ -107,6 +116,14 @@ func (d *DownloadDialog) setupReceiver(ps *mrtp.PSReceiver) {
 				reader.Close()
 				d.gb.singlePorts.Remove(reader)
 			})
+		} else {
+			// 多端口模式：根据SSRCCheck配置决定是否启用SSRC过滤
+			if d.device.SSRCCheck {
+				ps.ExpectedSSRC = d.SSRC
+				d.Info("multi-port mode, SSRC filtering enabled", "expectedSSRC", d.SSRC)
+			} else {
+				d.Info("multi-port mode, SSRC filtering disabled")
+			}
 		}
 		ps.ListenAddr = fmt.Sprintf(":%d", d.MediaPort)
 	}
@@ -128,8 +145,8 @@ func (d *DownloadDialog) Start() (err error) {
 	device, ok := d.gb.devices.Get(d.DeviceId)
 	if !ok {
 		d.Status = "failed"
-		d.Error = fmt.Sprintf("设备不存在: %s", d.DeviceId)
-		return errors.Join(fmt.Errorf("device not found"), errors.New(d.Error))
+		d.ErrorString = fmt.Sprintf("设备不存在: %s", d.DeviceId)
+		return errors.Join(fmt.Errorf("device not found"), errors.New(d.ErrorString))
 	}
 	d.device = device
 
@@ -137,8 +154,8 @@ func (d *DownloadDialog) Start() (err error) {
 	channel, ok := device.channels.Get(channelKey)
 	if !ok {
 		d.Status = "failed"
-		d.Error = fmt.Sprintf("通道不存在: %s", d.ChannelId)
-		return errors.Join(fmt.Errorf("channel not found"), errors.New(d.Error))
+		d.ErrorString = fmt.Sprintf("通道不存在: %s", d.ChannelId)
+		return errors.Join(fmt.Errorf("channel not found"), errors.New(d.ErrorString))
 	}
 	d.channel = channel
 
@@ -220,7 +237,7 @@ func (d *DownloadDialog) Start() (err error) {
 	// 添加下载速度属性（默认1倍速，避免丢帧）
 	downloadSpeed := d.DownloadSpeed
 	if downloadSpeed <= 0 || downloadSpeed > 4 {
-		downloadSpeed = 4 // 默认1倍速
+		downloadSpeed = 1 // 默认1倍速
 	}
 	sdpInfo = append(sdpInfo, fmt.Sprintf("a=downloadspeed:%d", downloadSpeed))
 
@@ -322,10 +339,10 @@ func (d *DownloadDialog) Start() (err error) {
 // Go 运行下载会话（异步执行，支持并发）
 func (d *DownloadDialog) Go() error {
 	var psReceiver mrtp.PSReceiver
-
+	psReceiver.Logger = d.gb.Logger.With("streamPath", d.DownloadId)
 	// 如果不是 BroadcastPushAfterAck 模式，提前创建监听器（多端口模式需要）
 	if !d.device.BroadcastPushAfterAck {
-		d.device.Info("creating listener before WaitAnswer", "broadcastPushAfterAck", false, "addr", d.MediaPort)
+		d.Info("creating listener before WaitAnswer", "broadcastPushAfterAck", false, "addr", d.MediaPort)
 		d.setupReceiver(&psReceiver)
 
 		// 提前启动监听器
@@ -335,18 +352,18 @@ func (d *DownloadDialog) Go() error {
 		}
 	}
 
-	d.device.Info("before WaitAnswer")
+	d.Info("before WaitAnswer")
 	err := d.session.WaitAnswer(d, sipgo.AnswerOptions{})
-	d.device.Info("after WaitAnswer")
+	d.Info("after WaitAnswer")
 	if err != nil {
 		d.Status = "failed"
-		d.Error = fmt.Sprintf("等待响应失败: %v", err)
+		d.ErrorString = fmt.Sprintf("等待响应失败: %v", err)
 		return errors.Join(errors.New("wait answer error"), err)
 	}
 
 	// 解析响应
 	inviteResponseBody := string(d.session.InviteResponse.Body())
-	d.device.Info("收到 INVITE 响应", "body", inviteResponseBody)
+	d.Info("收到 INVITE 响应", "body", inviteResponseBody)
 	// 添加响应信息到 Description
 	d.SetDescriptions(task.Description{
 		"responseStatus": d.session.InviteResponse.StatusCode,
@@ -388,16 +405,15 @@ func (d *DownloadDialog) Go() error {
 			}
 		}
 	}
-	// invite响应里的contact是域名的话，sip尝试去解析，可能失败，这时候用invite请求里的recipient
+	// 修复 Contact 地址：某些设备响应的 Contact 包含错误的域名，导致 ACK 发送失败
+	// 强制使用原始的 Recipient 地址确保 ACK 能正确发送到设备
 	if d.session.InviteResponse.Contact() != nil {
-		if &d.session.InviteRequest.Recipient != &d.session.InviteResponse.Contact().Address {
-			d.session.InviteResponse.Contact().Address = d.session.InviteRequest.Recipient
-		}
+		d.session.InviteResponse.Contact().Address = d.session.InviteRequest.Recipient
 	}
 
 	// 如果是 BroadcastPushAfterAck 模式，在 Ack 后创建监听器配置
 	if d.device.BroadcastPushAfterAck {
-		d.device.Info("setup receiver after Ack", "broadcastPushAfterAck", true)
+		d.Info("setup receiver after Ack", "broadcastPushAfterAck", true)
 		d.setupReceiver(&psReceiver)
 	}
 
@@ -405,10 +421,10 @@ func (d *DownloadDialog) Go() error {
 	err = d.session.Ack(d)
 	if err != nil {
 		// 与 dialog.Run 保持一致，仅记录错误，不直接 panic
-		d.device.Error("ack session", "err", err)
+		d.Error("ack session", "err", err)
 	}
 
-	d.gb.Info("下载会话已建立",
+	d.Info("下载会话已建立",
 		"ssrc", d.SSRC,
 		"targetIP", d.targetIP,
 		"targetPort", d.targetPort)
@@ -429,7 +445,7 @@ func (d *DownloadDialog) Go() error {
 	publisher, err := d.gb.PublishWithConfig(d, streamPath, pubConf)
 	if err != nil {
 		d.Status = "failed"
-		d.Error = fmt.Sprintf("创建 Publisher 失败: %v", err)
+		d.ErrorString = fmt.Sprintf("创建 Publisher 失败: %v", err)
 		return fmt.Errorf("创建 Publisher 失败: %w", err)
 	}
 
@@ -439,7 +455,7 @@ func (d *DownloadDialog) Go() error {
 	// 监听 Publisher 停止事件，主动停止 PSReceiver
 	// 避免 Publisher timeout 后 PSReceiver 仍在阻塞等待数据
 	publisher.OnStop(func() {
-		d.gb.Info("Publisher 已停止，主动停止 PSReceiver",
+		d.Info("Publisher 已停止，主动停止 PSReceiver",
 			"downloadId", d.DownloadId,
 			"progress", d.Progress)
 		psReceiver.Stop(io.EOF)
@@ -465,7 +481,7 @@ func (d *DownloadDialog) Go() error {
 		// 生成下载 URL
 		d.DownloadUrl = fmt.Sprintf("/gb28181/download?downloadId=%s", d.DownloadId)
 
-		d.gb.Info("MP4 录制器已创建",
+		d.Info("MP4 录制器已创建",
 			"streamPath", streamPath,
 			"storagePathPrefix", filePath,
 			"downloadUrl", d.DownloadUrl)
@@ -473,7 +489,7 @@ func (d *DownloadDialog) Go() error {
 		d.gb.Warn("MP4 插件未加载，无法录制")
 	}
 
-	d.gb.Info("开始接收 RTP 数据并录制", "streamPath", streamPath)
+	d.Info("开始接收 RTP 数据并录制", "streamPath", streamPath)
 
 	// 8. 设置进度更新回调（在 RTP 读取循环中触发，无需单独协程）
 	totalDuration := d.EndTime.Sub(d.StartTime).Seconds()
@@ -481,32 +497,93 @@ func (d *DownloadDialog) Go() error {
 		d.updateProgress(&psReceiver, totalDuration)
 	}
 
-	// 9. 使用 RunTask 运行 PSReceiver（会阻塞直到完成）
-	err = d.RunTask(&psReceiver)
+	// 9. 使用 RunTask 运行 PSReceiver，并添加数据接收超时监控
+	// 如果超过 30 秒没有收到新数据（PTS 不更新），则认为下载超时
+	dataTimeout := 30 * time.Second
+	errChan := make(chan error, 1)
+	go func() {
+		errChan <- d.RunTask(&psReceiver)
+	}()
+
+	// 监控数据接收超时
+	ticker := time.NewTicker(5 * time.Second) // 每 5 秒检查一次
+	defer ticker.Stop()
+
+	for {
+		select {
+		case err = <-errChan:
+			// PSReceiver 正常结束或出错
+			goto DOWNLOAD_COMPLETE
+		case <-ticker.C:
+			// 获取当前进度
+			elapsedSeconds := psReceiver.GetElapsedSeconds()
+			currentProgress := int((elapsedSeconds / totalDuration) * 100)
+
+			// 检查是否接近完成且 PTS 稳定
+			// 如果进度 >= 95% 且 PTS 已稳定（超过 2 秒无更新），认为下载完成
+			if currentProgress >= 95 && psReceiver.IsPtsStable() {
+				d.Info("下载接近完成且 PTS 已稳定，主动结束任务",
+					"downloadId", d.DownloadId,
+					"progress", currentProgress,
+					"elapsedSeconds", elapsedSeconds,
+					"totalDuration", totalDuration)
+				// 主动停止 PSReceiver，标记为正常完成
+				psReceiver.Stop(io.EOF)
+				err = <-errChan // 等待 RunTask 返回
+				goto DOWNLOAD_COMPLETE
+			}
+			// 检查是否超时：如果已经有数据但长时间无更新，则超时
+			if psReceiver.IsPtsStable() && time.Since(psReceiver.GetLastPtsUpdateTime()) > dataTimeout {
+				d.Warn("下载超时：超过 30 秒未收到新数据",
+					"downloadId", d.DownloadId,
+					"lastPtsUpdate", psReceiver.GetLastPtsUpdateTime(),
+					"timeout", dataTimeout)
+				// 主动停止 PSReceiver
+				psReceiver.Stop(fmt.Errorf("data receive timeout: no data for %v", dataTimeout))
+				err = <-errChan // 等待 RunTask 返回
+				goto DOWNLOAD_COMPLETE
+			}
+		}
+	}
+
+DOWNLOAD_COMPLETE:
 
 	// 10. 任务完成，更新状态
 	if err != nil {
-		// 判断是否为正常结束：EOF/timeout 且视频PTS已稳定（说明流真的结束了）
 		errStr := err.Error()
-		isNormalEnd := err == io.EOF ||
-			strings.Contains(errStr, "EOF") ||
-			strings.Contains(errStr, "timeout")
+
+		// 判断是否为数据接收超时（我们主动停止的）
+		isDataTimeout := strings.Contains(errStr, "data receive timeout")
+
+		// 判断是否为正常结束：EOF 且视频PTS已稳定（说明流真的结束了）
+		// 注意：不包括 "timeout"，因为那可能是我们主动停止的超时
+		isNormalEnd := err == io.EOF || strings.Contains(errStr, "EOF")
 
 		// PTS稳定说明设备已经停止发送数据，流真正结束了
 		ptsStable := psReceiver.IsPtsStable()
 
-		if isNormalEnd && ptsStable {
-			d.gb.Info("下载完成：视频 PTS 已稳定，视为成功",
+		if isDataTimeout {
+			// 数据接收超时，标记为失败
+			d.Status = "failed"
+			d.ErrorString = "下载超时：超过30秒未收到新数据"
+			d.Warn("下载超时失败",
+				"downloadId", d.DownloadId,
+				"progress", d.Progress,
+				"error", d.Error)
+		} else if isNormalEnd && ptsStable {
+			// EOF 且 PTS 稳定，视为正常完成
+			d.Info("下载完成：视频 PTS 已稳定，视为成功",
 				"downloadId", d.DownloadId,
 				"progress", d.Progress,
 				"error", errStr)
 			d.Status = "completed"
 			d.Progress = 100
-			d.Error = "" // 清除错误信息
+			d.ErrorString = "" // 清除错误信息
 		} else {
+			// 其他错误，标记为失败
 			d.Status = "failed"
-			d.Error = err.Error()
-			d.gb.Warn("下载失败",
+			d.ErrorString = err.Error()
+			d.Warn("下载失败",
 				"downloadId", d.DownloadId,
 				"progress", d.Progress,
 				"ptsStable", ptsStable,
@@ -518,84 +595,124 @@ func (d *DownloadDialog) Go() error {
 	}
 	d.CompletedAt = time.Now()
 
-	// 11. 延迟 5 秒后再返回，确保前端能轮询到 100% 状态
+	// 11. 查询完整的文件路径（成功时需要，失败时可选）
+	var actualFilePath string
+	if d.gb.DB != nil && d.FilePath != "" {
+		var record m7s.RecordStream
+		// 使用 LIKE 查询匹配存储路径前缀的记录
+		if err := d.gb.DB.Where("file_path LIKE ?", d.FilePath+"%").
+			Order("start_time DESC").First(&record).Error; err == nil {
+			actualFilePath = record.FilePath
+			d.FilePath = actualFilePath // 更新为完整路径
+			d.Info("找到完整文件路径",
+				"downloadId", d.DownloadId,
+				"filePath", actualFilePath)
+		} else {
+			d.Warn("未找到匹配的录制文件",
+				"downloadId", d.DownloadId,
+				"searchPath", d.FilePath,
+				"error", err)
+		}
+	}
+
+	// 12. 创建 CompletedDownloadDialog（无论成功还是失败都需要）
+	completed := &CompletedDownloadDialog{
+		DownloadId:  d.DownloadId,
+		DeviceId:    d.DeviceId,
+		ChannelId:   d.ChannelId,
+		Status:      d.Status,
+		Progress:    d.Progress,
+		FilePath:    d.FilePath,
+		DownloadUrl: d.DownloadUrl,
+		Error:       d.ErrorString,
+		StartedAt:   d.StartedAt,
+		CompletedAt: d.CompletedAt,
+	}
+	d.gb.completedDownloads.Set(completed)
+
+	// 13. 清理 RecordStream 记录（成功和失败都需要）
+	if d.gb.DB != nil {
+		if actualFilePath != "" {
+			// 有完整路径，使用精确匹配删除
+			if err := d.gb.DB.Where("file_path = ?", actualFilePath).Delete(&m7s.RecordStream{}).Error; err != nil {
+				d.Error("删除RecordStream记录失败",
+					"filePath", actualFilePath,
+					"error", err)
+			} else {
+				d.Info("已清理RecordStream记录",
+					"filePath", actualFilePath)
+			}
+		} else if d.FilePath != "" {
+			// 没有完整路径，使用模糊匹配删除
+			if err := d.gb.DB.Where("file_path LIKE ?", d.FilePath+"%").Delete(&m7s.RecordStream{}).Error; err != nil {
+				d.Error("删除RecordStream记录失败",
+					"searchPath", d.FilePath,
+					"error", err)
+			} else {
+				d.Info("已清理RecordStream记录",
+					"searchPath", d.FilePath)
+			}
+		}
+	}
+
+	// 14. 根据状态执行不同的后续操作
 	if d.Status == "completed" {
-		d.gb.Info("下载任务已完成，延迟 5 秒后释放资源（确保前端获取到 100% 状态）",
+		d.Info("下载任务已完成",
 			"downloadId", d.DownloadId,
 			"progress", d.Progress)
 
-		// 12. 从 RecordStream 表查询完整的文件路径（通过 LIKE 模糊匹配）
-		var actualFilePath string
-		if d.gb.DB != nil && d.FilePath != "" {
-			var record m7s.RecordStream
-			// 使用 LIKE 查询匹配存储路径前缀的记录
-			if err := d.gb.DB.Where("file_path LIKE ?", d.FilePath+"%").
-				Order("start_time DESC").First(&record).Error; err == nil {
-				actualFilePath = record.FilePath
-				d.FilePath = actualFilePath // 更新为完整路径
-				d.gb.Info("找到完整文件路径",
-					"downloadId", d.DownloadId,
-					"filePath", actualFilePath)
-			} else {
-				d.gb.Warn("未找到匹配的录制文件",
-					"downloadId", d.DownloadId,
-					"searchPath", d.FilePath,
-					"error", err)
-			}
-		}
-
-		completed := &CompletedDownloadDialog{
-			DownloadId:  d.DownloadId,
-			DeviceId:    d.DeviceId,
-			ChannelId:   d.ChannelId,
-			Status:      d.Status,
-			Progress:    d.Progress,
-			FilePath:    d.FilePath,
-			DownloadUrl: d.DownloadUrl,
-			Error:       d.Error,
-			StartedAt:   d.StartedAt,
-			CompletedAt: d.CompletedAt,
-		}
-		d.gb.completedDownloads.Set(completed)
-
-		// 13. 保存到 GB28181Record 缓存表并清理RecordStream记录
+		// 保存到 GB28181Record 缓存表
 		if d.gb.DB != nil && actualFilePath != "" {
 			record := &gb28181.GB28181Record{
 				DownloadId: d.DownloadId,
 				FilePath:   actualFilePath,
 				Status:     "completed",
 			}
-			// 使用 Save 方法，如果存在则更新，不存在则插入
 			if err := d.gb.DB.Save(record).Error; err != nil {
-				d.gb.Error("保存下载记录到缓存表失败",
+				d.Error("保存下载记录到缓存表失败",
 					"downloadId", d.DownloadId,
 					"error", err)
 			} else {
-				d.gb.Info("下载记录已保存到缓存表",
+				d.Info("下载记录已保存到缓存表",
 					"downloadId", d.DownloadId,
 					"filePath", actualFilePath)
-
-				// 清理MP4插件的RecordStream记录（通过完整路径）
-				if err := d.gb.DB.Where("file_path = ?", actualFilePath).Delete(&m7s.RecordStream{}).Error; err != nil {
-					d.gb.Error("删除RecordStream记录失败",
-						"filePath", actualFilePath,
-						"error", err)
-				} else {
-					d.gb.Info("已清理RecordStream记录",
-						"filePath", actualFilePath)
-				}
 			}
 		}
 	} else if d.Status == "failed" {
-		// 14. 下载失败时也需要清理RecordStream记录（通过 LIKE 模糊匹配）
-		if d.gb.DB != nil && d.FilePath != "" {
-			if err := d.gb.DB.Where("file_path LIKE ?", d.FilePath+"%").Delete(&m7s.RecordStream{}).Error; err != nil {
-				d.gb.Error("删除失败任务的RecordStream记录失败",
-					"searchPath", d.FilePath,
+		d.Warn("下载任务失败",
+			"downloadId", d.DownloadId,
+			"progress", d.Progress,
+			"error", d.Error)
+
+		// 删除失败任务的文件（避免垃圾文件累积）
+		if actualFilePath != "" {
+			// 优先使用从 RecordStream 查询到的完整路径
+			if err := os.Remove(actualFilePath); err == nil {
+				d.Info("已删除失败任务的文件",
+					"downloadId", d.DownloadId,
+					"filePath", actualFilePath)
+			} else if !os.IsNotExist(err) {
+				d.Warn("删除失败任务的文件失败",
+					"downloadId", d.DownloadId,
+					"filePath", actualFilePath,
 					"error", err)
-			} else {
-				d.gb.Info("已清理失败任务的RecordStream记录",
-					"searchPath", d.FilePath)
+			}
+		} else if d.FilePath != "" {
+			// 如果没有查询到 actualFilePath，使用 d.FilePath 并添加扩展名
+			filePath := d.FilePath
+			if !strings.HasSuffix(strings.ToLower(filePath), ".mp4") {
+				filePath += ".mp4"
+			}
+
+			if err := os.Remove(filePath); err == nil {
+				d.Info("已删除失败任务的文件",
+					"downloadId", d.DownloadId,
+					"filePath", filePath)
+			} else if !os.IsNotExist(err) {
+				d.Warn("删除失败任务的文件失败",
+					"downloadId", d.DownloadId,
+					"filePath", filePath,
+					"error", err)
 			}
 		}
 	}
@@ -617,7 +734,7 @@ func (d *DownloadDialog) updateProgress(psReceiver *mrtp.PSReceiver, totalDurati
 	}
 	d.Progress = progress
 
-	d.gb.Info("下载进度更新",
+	d.Info("下载进度更新",
 		"downloadId", d.DownloadId,
 		"elapsedSeconds", elapsedSeconds,
 		"totalDuration", totalDuration,
@@ -648,7 +765,7 @@ func (d *DownloadDialog) Dispose() {
 	}()
 
 	// 2. 记录日志
-	d.gb.Info("download dialog dispose",
+	d.Info("download dialog dispose",
 		"downloadId", d.DownloadId,
 		"ssrc", d.SSRC,
 		"mediaPort", d.MediaPort,
@@ -660,7 +777,7 @@ func (d *DownloadDialog) Dispose() {
 	if d.session != nil && d.session.InviteResponse != nil {
 		err := d.session.Bye(d)
 		if err != nil {
-			d.gb.Error("发送 BYE 失败", "error", err)
+			d.Error("发送 BYE 失败", "error", err)
 		}
 	}
 }

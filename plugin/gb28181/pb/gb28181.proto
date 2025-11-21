@@ -649,6 +649,7 @@ message Device {
   int32 port = 23;
   bool broadcastPushAfterAck =24;
   string charset =25;
+  bool ssrcCheck =26;
 }
 
 message ResponseList {

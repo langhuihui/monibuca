@@ -107,7 +107,7 @@ func (d *Dialog) Start() (err error) {
 
 	sss := strings.Split(d.pullCtx.RemoteURL, "/")
 	if len(sss) < 2 {
-		d.Channel.Device.Info("remote url is invalid", d.pullCtx.RemoteURL)
+		d.Info("remote url is invalid", d.pullCtx.RemoteURL)
 		d.pullCtx.Fail("remote url is invalid")
 		return
 	}
@@ -243,23 +243,18 @@ func (d *Dialog) Start() (err error) {
 	// 设置必需的头部
 	contentTypeHeader := sip.ContentTypeHeader("APPLICATION/SDP")
 	subjectHeader := sip.NewHeader("Subject", fmt.Sprintf("%s:%s,%s:0", channelId, ssrc, d.gb.Serial))
-	//allowHeader := sip.NewHeader("Allow", "INVITE, ACK, CANCEL, REGISTER, MESSAGE, NOTIFY, BYE")
-	//Toheader里需要放入目录通道的id
 	toHeader := sip.ToHeader{
 		Address: sip.Uri{User: channelId, Host: channelId[0:10]},
 	}
 	userAgentHeader := sip.NewHeader("User-Agent", "M7S/"+m7s.Version)
 
-	//customCallID := fmt.Sprintf("%s-%s-%d@%s", device.DeviceId, channelId, time.Now().Unix(), device.SipIp)
 	customCallID := fmt.Sprintf("%s@%s", GenerateCallID(32), device.MediaIp)
 	callID := sip.CallIDHeader(customCallID)
 	maxforward := sip.MaxForwardsHeader(70)
-	//contentLengthHeader := sip.ContentLengthHeader(len(strings.Join(sdpInfo, "\r\n") + "\r\n"))
 	csqHeader := sip.CSeqHeader{
 		SeqNo:      uint32(device.SN),
 		MethodName: "INVITE",
 	}
-	//request.AppendHeader(&contentLengthHeader)
 	contactHDR := sip.ContactHeader{
 		Address: sip.Uri{
 			User: d.gb.Serial,
@@ -355,6 +350,14 @@ func (d *Dialog) setupReceiver(pub *mrtp.PSReceiver) {
 				reader.Close()
 				d.gb.singlePorts.Remove(reader)
 			})
+		} else {
+			// 多端口模式：根据SSRCCheck配置决定是否启用SSRC过滤
+			if d.Channel.Device.SSRCCheck {
+				pub.ExpectedSSRC = d.SSRC
+				d.Info("multi-port mode, SSRC filtering enabled", "expectedSSRC", d.SSRC)
+			} else {
+				d.Info("multi-port mode, SSRC filtering disabled")
+			}
 		}
 		pub.ListenAddr = fmt.Sprintf(":%d", d.MediaPort)
 	case mrtp.StreamModeUDP:
@@ -384,10 +387,11 @@ func (d *Dialog) setupReceiver(pub *mrtp.PSReceiver) {
 func (d *Dialog) Run() (err error) {
 	var pub mrtp.PSReceiver
 	pub.Publisher = d.pullCtx.Publisher
+	pub.Logger = d.gb.Logger.With("streamPath", d.StreamPath)
 
 	// 如果不是 BroadcastPushAfterAck 模式，提前创建监听器（多端口模式需要）
 	if !d.Channel.Device.BroadcastPushAfterAck {
-		d.Channel.Device.Info("creating listener before WaitAnswer", "broadcastPushAfterAck", false, "addr", d.MediaPort)
+		d.Info("creating listener before WaitAnswer", "broadcastPushAfterAck", false, "addr", d.MediaPort)
 		d.setupReceiver(&pub)
 
 		// 提前启动监听器
@@ -398,15 +402,15 @@ func (d *Dialog) Run() (err error) {
 		}
 	}
 
-	d.Channel.Device.Info("before WaitAnswer")
+	d.Info("before WaitAnswer")
 	err = d.session.WaitAnswer(d, sipgo.AnswerOptions{})
-	d.Channel.Device.Info("after WaitAnswer")
+	d.Info("after WaitAnswer")
 	if err != nil {
 		d.pullCtx.Fail("等待响应错误: " + err.Error())
 		return errors.Join(errors.New("wait answer error"), err)
 	}
 	inviteResponseBody := string(d.session.InviteResponse.Body())
-	d.Channel.Device.Info("inviteResponse", "body", inviteResponseBody)
+	d.Info("inviteResponse", "body", inviteResponseBody)
 
 	// 添加响应信息到 Description
 	d.SetDescriptions(task.Description{
@@ -450,10 +454,10 @@ func (d *Dialog) Run() (err error) {
 			}
 		}
 	}
+	// 修复 Contact 地址：某些设备响应的 Contact 包含错误的域名，导致 ACK 发送失败
+	// 强制使用原始的 Recipient 地址确保 ACK 能正确发送到设备
 	if d.session.InviteResponse.Contact() != nil {
-		if &d.session.InviteRequest.Recipient != &d.session.InviteResponse.Contact().Address {
-			d.session.InviteResponse.Contact().Address = d.session.InviteRequest.Recipient
-		}
+		d.session.InviteResponse.Contact().Address = d.session.InviteRequest.Recipient
 	}
 
 	// 添加解析后的响应参数到 Description
@@ -466,19 +470,15 @@ func (d *Dialog) Run() (err error) {
 	// 移动到流数据接收步骤
 	d.pullCtx.GoToStepConst(pkg.StepStreaming)
 
-	// 设置允许连接的IP地址（从INVITE响应中解析）
-	pub.Receiver.AllowedIP = d.targetIP
-	d.Channel.Device.Info("set allowed IP for receiver", "allowedIP", d.targetIP)
-
 	// TCP-ACTIVE 模式需要在解析 targetIP 后设置连接地址
 	if d.StreamMode == mrtp.StreamModeTCPActive {
 		pub.ListenAddr = fmt.Sprintf("%s:%d", d.targetIP, d.targetPort)
-		d.Channel.Device.Info("set TCP-ACTIVE connect address", "addr", pub.ListenAddr)
+		d.Info("set TCP-ACTIVE connect address", "addr", pub.ListenAddr)
 	}
 
 	// 如果是 BroadcastPushAfterAck 模式，在 Ack 后创建监听器配置
 	if d.Channel.Device.BroadcastPushAfterAck {
-		d.Channel.Device.Info("setup receiver after Ack", "broadcastPushAfterAck", true)
+		d.Info("setup receiver after Ack", "broadcastPushAfterAck", true)
 		d.setupReceiver(&pub)
 	}
 

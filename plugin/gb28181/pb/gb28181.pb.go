@@ -943,6 +943,7 @@ type Device struct {
 	Port                  int32                  `protobuf:"varint,23,opt,name=port,proto3" json:"port,omitempty"`
 	BroadcastPushAfterAck bool                   `protobuf:"varint,24,opt,name=broadcastPushAfterAck,proto3" json:"broadcastPushAfterAck,omitempty"`
 	Charset               string                 `protobuf:"bytes,25,opt,name=charset,proto3" json:"charset,omitempty"`
+	SsrcCheck             bool                   `protobuf:"varint,26,opt,name=ssrcCheck,proto3" json:"ssrcCheck,omitempty"`
 	unknownFields         protoimpl.UnknownFields
 	sizeCache             protoimpl.SizeCache
 }
@@ -1150,6 +1151,13 @@ func (x *Device) GetCharset() string {
 		return x.Charset
 	}
 	return ""
+}
+
+func (x *Device) GetSsrcCheck() bool {
+	if x != nil {
+		return x.SsrcCheck
+	}
+	return false
 }
 
 type ResponseList struct {
@@ -7003,7 +7011,7 @@ func (x *StartDownloadRequest) GetDownloadSpeed() int32 {
 // StartDownloadData 下载任务数据
 type StartDownloadData struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	DownloadId    string                 `protobuf:"bytes,1,opt,name=downloadId,proto3" json:"downloadId,omitempty"`   // 下载任务ID（格式：startTime_endTime_deviceId_channelId）
+	DownloadId    string                 `protobuf:"bytes,1,opt,name=downloadId,proto3" json:"downloadId,omitempty"`   // 下载任务ID（格式：deviceId_channelId_startTime_endTime）
 	Status        string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`           // 初始状态（pending）
 	DownloadUrl   string                 `protobuf:"bytes,3,opt,name=downloadUrl,proto3" json:"downloadUrl,omitempty"` // 下载链接（完成后可直接访问）
 	unknownFields protoimpl.UnknownFields
@@ -7489,7 +7497,7 @@ const file_gb28181_proto_rawDesc = "" +
 	"\x06status\x18\x10 \x01(\tR\x06status\x124\n" +
 	"\agpsTime\x18\x11 \x01(\v2\x1a.google.protobuf.TimestampR\agpsTime\x12\x1c\n" +
 	"\tlongitude\x18\x12 \x01(\tR\tlongitude\x12\x1a\n" +
-	"\blatitude\x18\x13 \x01(\tR\blatitude\"\xef\x06\n" +
+	"\blatitude\x18\x13 \x01(\tR\blatitude\"\x8d\a\n" +
 	"\x06Device\x12\x1a\n" +
 	"\bdeviceId\x18\x01 \x01(\tR\bdeviceId\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\"\n" +
@@ -7520,7 +7528,8 @@ const file_gb28181_proto_rawDesc = "" +
 	"\x02ip\x18\x16 \x01(\tR\x02ip\x12\x12\n" +
 	"\x04port\x18\x17 \x01(\x05R\x04port\x124\n" +
 	"\x15broadcastPushAfterAck\x18\x18 \x01(\bR\x15broadcastPushAfterAck\x12\x18\n" +
-	"\acharset\x18\x19 \x01(\tR\acharset\"d\n" +
+	"\acharset\x18\x19 \x01(\tR\acharset\x12\x1c\n" +
+	"\tssrcCheck\x18\x1a \x01(\bR\tssrcCheck\"d\n" +
 	"\fResponseList\x12\x12\n" +
 	"\x04code\x18\x01 \x01(\x05R\x04code\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12&\n" +

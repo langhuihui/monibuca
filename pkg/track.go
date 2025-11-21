@@ -222,14 +222,19 @@ func (t *TsTamer) Tame(ts time.Duration, fps int, scale float64) (result time.Du
 		t.BaseTs -= ts
 	}
 	result = max(1*time.Millisecond, t.BaseTs+ts)
-	if fps > 0 {
+
+	// 突变检测：仅在 fps 合理的情况下启用
+	// 如果 fps > 100，说明是快速下载场景，接收速度远大于真实帧率，不应该做突变检测
+	if fps > 0 && fps <= 100 {
 		frameDur := float64(time.Second) / float64(fps)
-		if math.Abs(float64(result-t.LastTs)) > 10*frameDur*scale { //时间戳突变
-			// t.Warn("timestamp mutation", "fps", t.FPS, "lastTs", uint32(t.LastTs/time.Millisecond), "ts", uint32(frame.Timestamp/time.Millisecond), "frameDur", time.Duration(frameDur))
+		diff := math.Abs(float64(result - t.LastTs))
+		threshold := 10 * frameDur * scale
+		if diff > threshold { //时间戳突变
 			result = t.LastTs + time.Duration(frameDur)
 			t.BaseTs = result - ts
 		}
 	}
+
 	t.LastTs = result
 	if t.LastScale != scale {
 		t.BeforeScaleChangedTs = result

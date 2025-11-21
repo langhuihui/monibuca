@@ -34,7 +34,7 @@ func (gb *GB28181Plugin) List(ctx context.Context, req *pb.GetDevicesRequest) (*
 		// 应用筛选条件
 		if req.Query != "" {
 			// 检查设备ID或名称是否包含查询字符串
-			if !strings.Contains(device.DeviceId, req.Query) && !strings.Contains(device.Name, req.Query) {
+			if !strings.Contains(device.DeviceId, req.Query) && !strings.Contains(device.Name, req.Query) && !strings.Contains(device.CustomName, req.Query) {
 				return true // 继续遍历
 			}
 		}
@@ -138,6 +138,7 @@ func (gb *GB28181Plugin) List(ctx context.Context, req *pb.GetDevicesRequest) (*
 			SubscribeCatalog:      util.Conditional(d.SubscribeCatalog == 0, false, true),
 			SubscribePosition:     util.Conditional(d.SubscribePosition == 0, false, true),
 			SubscribeAlarm:        util.Conditional(d.SubscribeAlarm == 0, false, true),
+			SsrcCheck:             d.SSRCCheck,
 			Charset:               d.Charset,
 		})
 	}
@@ -518,6 +519,9 @@ func (gb *GB28181Plugin) UpdateDevice(ctx context.Context, req *pb.Device) (*pb.
 			d.BroadcastPushAfterAck = false
 		}
 
+		// 更新 SSRC 校验开关
+		d.SSRCCheck = req.SsrcCheck
+
 		d.UpdateTime = time.Now()
 
 		// 先停止设备任务
@@ -536,6 +540,7 @@ func (gb *GB28181Plugin) UpdateDevice(ctx context.Context, req *pb.Device) (*pb.
 			"subscribe_catalog":  d.SubscribeCatalog,
 			"subscribe_position": d.SubscribePosition,
 			"subscribe_alarm":    d.SubscribeAlarm,
+			"ssrc_check":         d.SSRCCheck,
 			"update_time":        d.UpdateTime,
 		}
 
@@ -668,6 +673,9 @@ func (gb *GB28181Plugin) UpdateDevice(ctx context.Context, req *pb.Device) (*pb.
 	} else {
 		updates["subscribe_position"] = 0 // 不订阅
 	}
+
+	// 更新 SSRC 校验开关
+	updates["ssrc_check"] = req.SsrcCheck
 
 	updates["update_time"] = time.Now()
 
@@ -3488,6 +3496,7 @@ func (gb *GB28181Plugin) StartDownload(ctx context.Context, req *pb.StartDownloa
 		Status:        "pending",
 		Progress:      0,
 	}
+	dialog.Logger = gb.Logger.With("streamPath", downloadId, "channelId", req.DeviceId+"_"+req.ChannelId)
 	dialog.Task.Context = ctx
 
 	// 10. 添加到下载对话集合（会自动调用 Start 方法）
@@ -3553,7 +3562,7 @@ func (gb *GB28181Plugin) GetDownloadProgress(ctx context.Context, req *pb.GetDow
 		Progress:    int32(dialog.Progress),
 		FilePath:    dialog.FilePath,
 		DownloadUrl: dialog.DownloadUrl,
-		Error:       dialog.Error,
+		Error:       dialog.ErrorString,
 		StartedAt:   timestamppb.New(dialog.StartedAt),
 	}
 	if !dialog.CompletedAt.IsZero() {
