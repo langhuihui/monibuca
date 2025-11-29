@@ -27,6 +27,8 @@ type StorageConfig interface {
 // Storage 存储接口
 type Storage interface {
 	CreateFile(ctx context.Context, path string) (File, error)
+	// OpenFile 以只读模式打开文件（不会上传修改）
+	OpenFile(ctx context.Context, path string) (File, error)
 	// Delete 删除文件
 	Delete(ctx context.Context, path string) error
 

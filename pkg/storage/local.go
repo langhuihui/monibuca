@@ -63,6 +63,15 @@ func (s *LocalStorage) CreateFile(ctx context.Context, path string) (File, error
 	return file, nil
 }
 
+func (s *LocalStorage) OpenFile(ctx context.Context, path string) (File, error) {
+	// 只读模式打开文件
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open file: %w", err)
+	}
+	return file, nil
+}
+
 func (s *LocalStorage) Delete(ctx context.Context, path string) error {
 	return os.Remove(path)
 }

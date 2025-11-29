@@ -20,6 +20,7 @@ import (
 	"m7s.live/v5/pb"
 	"m7s.live/v5/pkg"
 	"m7s.live/v5/pkg/config"
+	"m7s.live/v5/pkg/storage"
 	"m7s.live/v5/pkg/util"
 	mp4pb "m7s.live/v5/plugin/mp4/pb"
 	mp4 "m7s.live/v5/plugin/mp4/pkg"
@@ -27,22 +28,100 @@ import (
 )
 
 type ContentPart struct {
-	*os.File
+	file   storage.File
 	Start  int64
 	Size   int
 	boxies []box.IBox
 }
 
+func (c *ContentPart) Read(p []byte) (n int, err error) {
+	return c.file.Read(p)
+}
+
+func (c *ContentPart) Seek(offset int64, whence int) (int64, error) {
+	return c.file.Seek(offset, whence)
+}
+
+func (c *ContentPart) Close() error {
+	return c.file.Close()
+}
+
 func (p *MP4Plugin) downloadSingleFile(stream *m7s.RecordStream, flag mp4.Flag, w http.ResponseWriter, r *http.Request) {
-	if flag == 0 {
-		http.ServeFile(w, r, stream.FilePath)
-	} else if flag == mp4.FLAG_FRAGMENT {
-		file, err := os.Open(stream.FilePath)
+	// 获取文件（本地或远程）
+	var file storage.File
+	var err error
+
+	if stream.StorageType != "" && stream.StorageType != "local" {
+		// 远程存储：从 S3/OSS/COS 获取文件
+		var storageConfig map[string]any
+
+		// 遍历所有录像配置规则，查找包含该 storage 类型的配置
+		commonConf := p.GetCommonConf()
+		for _, recConf := range commonConf.OnPub.Record {
+			if recConf.Storage != nil {
+				if cfg, ok := recConf.Storage[stream.StorageType]; ok {
+					if cfgMap, ok := cfg.(map[string]any); ok {
+						storageConfig = cfgMap
+						break
+					}
+				}
+			}
+		}
+
+		if storageConfig == nil {
+			http.Error(w, "storage config not found", http.StatusInternalServerError)
+			p.Error("storage config not found", "storageType", stream.StorageType)
+			return
+		}
+
+		// 创建 storage 实例
+		storageInstance, err := storage.CreateStorage(stream.StorageType, storageConfig)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("failed to create storage: %v", err), http.StatusInternalServerError)
+			p.Error("failed to create storage", "err", err)
+			return
+		}
+
+		// 对于普通 MP4，直接重定向到预签名 URL
+		if flag == 0 {
+			url, err := storageInstance.GetURL(context.Background(), stream.FilePath)
+			if err != nil {
+				http.Error(w, fmt.Sprintf("failed to get URL: %v", err), http.StatusInternalServerError)
+				p.Error("failed to get URL", "err", err)
+				return
+			}
+			p.Info("redirect to storage URL", "storageType", stream.StorageType, "url", url)
+			http.Redirect(w, r, url, http.StatusFound)
+			return
+		}
+
+		// 对于 fmp4，需要读取文件进行转换（只读模式，不会上传）
+		file, err = storageInstance.OpenFile(context.Background(), stream.FilePath)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("failed to open remote file: %v", err), http.StatusInternalServerError)
+			p.Error("failed to open remote file", "err", err)
+			return
+		}
+		defer file.Close()
+		p.Info("reading remote file for fmp4 conversion", "storageType", stream.StorageType, "path", stream.FilePath)
+	} else {
+		// 本地存储
+		if flag == 0 {
+			http.ServeFile(w, r, stream.FilePath)
+			return
+		}
+		// 本地文件用于 fmp4 转换
+		file, err = os.Open(stream.FilePath)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		p.Info("read", "file", file.Name())
+		defer file.Close()
+	}
+
+	// fmp4 转换处理（本地和远程文件统一处理）
+	if flag == mp4.FLAG_FRAGMENT {
+		p.Info("converting to fmp4", "file", file.Name())
 		demuxer := mp4.NewDemuxer(file)
 		err = demuxer.Demux()
 		if err != nil {
@@ -62,7 +141,7 @@ func (p *MP4Plugin) downloadSingleFile(stream *m7s.RecordStream, flag mp4.Flag, 
 		for track, sample := range demuxer.RangeSample {
 			if part == nil {
 				part = &ContentPart{
-					File:  file,
+					file:  file,
 					Start: sample.Offset,
 				}
 				parts = append(parts, part)
@@ -319,7 +398,7 @@ func (p *MP4Plugin) download(w http.ResponseWriter, r *http.Request) {
 			// 创建内容片段
 			if part == nil {
 				part = &ContentPart{
-					File:  file,
+					file:  file,
 					Start: sample.Offset,
 				}
 			}
@@ -404,7 +483,7 @@ func (p *MP4Plugin) download(w http.ResponseWriter, r *http.Request) {
 		// 写入所有内容片段的数据
 		for _, part := range parts {
 			part.Seek(part.Start, io.SeekStart)
-			written, err = io.CopyN(w, part.File, int64(part.Size))
+			written, err = io.CopyN(w, part, int64(part.Size))
 			if err != nil {
 				return
 			}
@@ -612,14 +691,14 @@ func (p *MP4Plugin) Delete(ctx context.Context, req *mp4pb.ReqRecordDelete) (res
 // CreateTag 创建标签
 func (p *MP4Plugin) CreateTag(ctx context.Context, req *mp4pb.ReqCreateTag) (res *mp4pb.ResponseTag, err error) {
 	res = &mp4pb.ResponseTag{}
-	
+
 	// 检查数据库连接
 	if p.DB == nil {
 		res.Code = 500
 		res.Message = pkg.ErrNoDB.Error()
 		return res, pkg.ErrNoDB
 	}
-	
+
 	// 解析标签时间
 	tagTime, err := util.TimeQueryParse(req.TagTime)
 	if err != nil {
@@ -627,21 +706,21 @@ func (p *MP4Plugin) CreateTag(ctx context.Context, req *mp4pb.ReqCreateTag) (res
 		res.Message = "标签时间格式错误: " + err.Error()
 		return res, err
 	}
-	
+
 	// 创建标签记录
 	tag := &mp4.TagModel{
 		TagName:    req.TagName,
 		StreamPath: req.StreamPath,
 		TagTime:    tagTime,
 	}
-	
+
 	// 保存到数据库
 	if err = p.DB.Create(tag).Error; err != nil {
 		res.Code = 500
 		res.Message = "创建标签失败: " + err.Error()
 		return res, err
 	}
-	
+
 	// 返回成功结果
 	res.Code = 0
 	res.Message = "创建成功"
@@ -653,21 +732,21 @@ func (p *MP4Plugin) CreateTag(ctx context.Context, req *mp4pb.ReqCreateTag) (res
 		CreatedAt:  tag.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:  tag.UpdatedAt.Format(time.RFC3339),
 	}
-	
+
 	return res, nil
 }
 
 // UpdateTag 更新标签
 func (p *MP4Plugin) UpdateTag(ctx context.Context, req *mp4pb.ReqUpdateTag) (res *mp4pb.ResponseTag, err error) {
 	res = &mp4pb.ResponseTag{}
-	
+
 	// 检查数据库连接
 	if p.DB == nil {
 		res.Code = 500
 		res.Message = pkg.ErrNoDB.Error()
 		return res, pkg.ErrNoDB
 	}
-	
+
 	// 查询标签是否存在
 	var tag mp4.TagModel
 	if err = p.DB.First(&tag, req.Id).Error; err != nil {
@@ -675,7 +754,7 @@ func (p *MP4Plugin) UpdateTag(ctx context.Context, req *mp4pb.ReqUpdateTag) (res
 		res.Message = "标签不存在: " + err.Error()
 		return res, err
 	}
-	
+
 	// 更新字段
 	if req.TagName != "" {
 		tag.TagName = req.TagName
@@ -692,14 +771,14 @@ func (p *MP4Plugin) UpdateTag(ctx context.Context, req *mp4pb.ReqUpdateTag) (res
 		}
 		tag.TagTime = tagTime
 	}
-	
+
 	// 保存更新
 	if err = p.DB.Save(&tag).Error; err != nil {
 		res.Code = 500
 		res.Message = "更新标签失败: " + err.Error()
 		return res, err
 	}
-	
+
 	// 返回成功结果
 	res.Code = 0
 	res.Message = "更新成功"
@@ -711,49 +790,49 @@ func (p *MP4Plugin) UpdateTag(ctx context.Context, req *mp4pb.ReqUpdateTag) (res
 		CreatedAt:  tag.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:  tag.UpdatedAt.Format(time.RFC3339),
 	}
-	
+
 	return res, nil
 }
 
 // DeleteTag 删除标签（软删除）
 func (p *MP4Plugin) DeleteTag(ctx context.Context, req *mp4pb.ReqDeleteTag) (res *mp4pb.ResponseTag, err error) {
 	res = &mp4pb.ResponseTag{}
-	
+
 	// 检查数据库连接
 	if p.DB == nil {
 		res.Code = 500
 		res.Message = pkg.ErrNoDB.Error()
 		return res, pkg.ErrNoDB
 	}
-	
+
 	// 软删除标签
 	if err = p.DB.Delete(&mp4.TagModel{}, req.Id).Error; err != nil {
 		res.Code = 500
 		res.Message = "删除标签失败: " + err.Error()
 		return res, err
 	}
-	
+
 	// 返回成功结果
 	res.Code = 0
 	res.Message = "删除成功"
-	
+
 	return res, nil
 }
 
 // ListTag 查询标签列表
 func (p *MP4Plugin) ListTag(ctx context.Context, req *mp4pb.ReqListTag) (res *mp4pb.ResponseTagList, err error) {
 	res = &mp4pb.ResponseTagList{}
-	
+
 	// 检查数据库连接
 	if p.DB == nil {
 		res.Code = 500
 		res.Message = pkg.ErrNoDB.Error()
 		return res, pkg.ErrNoDB
 	}
-	
+
 	// 构建查询
 	query := p.DB.Model(&mp4.TagModel{})
-	
+
 	// 流路径过滤（默认模糊匹配）
 	if req.StreamPath != "" {
 		if strings.Contains(req.StreamPath, "*") {
@@ -762,7 +841,7 @@ func (p *MP4Plugin) ListTag(ctx context.Context, req *mp4pb.ReqListTag) (res *mp
 			query = query.Where("stream_path LIKE ?", "%"+req.StreamPath+"%")
 		}
 	}
-	
+
 	// 标签名称过滤（默认模糊匹配）
 	if req.TagName != "" {
 		if strings.Contains(req.TagName, "*") {
@@ -771,7 +850,7 @@ func (p *MP4Plugin) ListTag(ctx context.Context, req *mp4pb.ReqListTag) (res *mp
 			query = query.Where("tag_name LIKE ?", "%"+req.TagName+"%")
 		}
 	}
-	
+
 	// 时间范围过滤（只有当传入了时间参数时才进行过滤）
 	if req.Start != "" {
 		startTime, err := util.TimeQueryParse(req.Start)
@@ -785,7 +864,7 @@ func (p *MP4Plugin) ListTag(ctx context.Context, req *mp4pb.ReqListTag) (res *mp
 			query = query.Where("tag_time <= ?", endTime)
 		}
 	}
-	
+
 	// 分页
 	page := req.Page
 	count := req.Count
@@ -796,7 +875,7 @@ func (p *MP4Plugin) ListTag(ctx context.Context, req *mp4pb.ReqListTag) (res *mp
 		count = 10
 	}
 	offset := (page - 1) * count
-	
+
 	// 获取总数
 	var total int64
 	if err = query.Count(&total).Error; err != nil {
@@ -804,7 +883,7 @@ func (p *MP4Plugin) ListTag(ctx context.Context, req *mp4pb.ReqListTag) (res *mp
 		res.Message = "查询总数失败: " + err.Error()
 		return res, err
 	}
-	
+
 	// 查询数据
 	var tags []mp4.TagModel
 	if err = query.Order("tag_time DESC").Offset(int(offset)).Limit(int(count)).Find(&tags).Error; err != nil {
@@ -812,13 +891,13 @@ func (p *MP4Plugin) ListTag(ctx context.Context, req *mp4pb.ReqListTag) (res *mp
 		res.Message = "查询标签失败: " + err.Error()
 		return res, err
 	}
-	
+
 	// 转换为响应格式
 	res.Code = 0
 	res.Message = "查询成功"
 	res.Total = uint32(total)
 	res.List = make([]*mp4pb.TagInfo, 0, len(tags))
-	
+
 	for _, tag := range tags {
 		res.List = append(res.List, &mp4pb.TagInfo{
 			Id:         uint32(tag.ID),
@@ -829,6 +908,6 @@ func (p *MP4Plugin) ListTag(ctx context.Context, req *mp4pb.ReqListTag) (res *mp
 			UpdatedAt:  tag.UpdatedAt.Format(time.RFC3339),
 		})
 	}
-	
+
 	return res, nil
 }
