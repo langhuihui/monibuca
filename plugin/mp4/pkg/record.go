@@ -14,7 +14,10 @@ import (
 	"m7s.live/v5/pkg/codec"
 	"m7s.live/v5/pkg/config"
 	"m7s.live/v5/pkg/storage"
+	"m7s.live/v5/pkg/util"
 	"m7s.live/v5/plugin/mp4/pkg/box"
+
+	"github.com/langhuihui/gomem"
 )
 
 type WriteTrailerQueueTask struct {
@@ -121,8 +124,9 @@ func NewRecorder(conf config.Record) m7s.IRecorder {
 
 type Recorder struct {
 	m7s.DefaultRecorder
-	muxer *Muxer
-	file  storage.File
+	muxer           *Muxer
+	file            storage.File
+	firstVideoFrame bool // 标记是否是第一个视频帧
 }
 
 func (r *Recorder) writeTailer(end time.Time) {
@@ -176,6 +180,7 @@ func (r *Recorder) createStream(start time.Time) (err error) {
 		r.muxer = NewMuxerWithStreamPath(0, r.Event.StreamPath)
 	}
 
+	r.firstVideoFrame = true // 重置第一个视频帧标志
 	return r.muxer.WriteInitSegment(r.file)
 }
 
@@ -302,42 +307,97 @@ func (r *Recorder) Run() (err error) {
 				track.ICodecCtx = video.ICodecCtx
 			}
 		}
-		ctx := video.ICodecCtx.(pkg.IVideoCodecCtx)
-		if videoTrackCtx, ok := videoTrack.ICodecCtx.(pkg.IVideoCodecCtx); ok && videoTrackCtx != ctx {
-			width, height := uint32(ctx.Width()), uint32(ctx.Height())
-			oldWidth, oldHeight := uint32(videoTrackCtx.Width()), uint32(videoTrackCtx.Height())
-			r.Info("ctx  changed, restarting recording",
-				"old", fmt.Sprintf("%dx%d", oldWidth, oldHeight),
-				"new", fmt.Sprintf("%dx%d", width, height))
-			r.writeTailer(sub.VideoReader.Value.WriteTime)
-			err = r.createStream(sub.VideoReader.Value.WriteTime)
-			if err != nil {
-				return nil
-			}
-			at, vt = nil, nil
-			if vr := sub.VideoReader; vr != nil {
-				vr.ResetAbsTime()
-				vt = vr.Track
-				switch video.ICodecCtx.GetBase().(type) {
-				case *codec.H264Ctx:
-					track := r.muxer.AddTrack(box.MP4_CODEC_H264)
-					videoTrack = track
-					track.ICodecCtx = video.ICodecCtx
-				case *codec.H265Ctx:
-					track := r.muxer.AddTrack(box.MP4_CODEC_H265)
-					videoTrack = track
-					track.ICodecCtx = video.ICodecCtx
-				}
-			}
-			if ar := sub.AudioReader; ar != nil {
-				ar.ResetAbsTime()
-			}
-		}
+		//ctx := video.ICodecCtx.(pkg.IVideoCodecCtx)
+		//if videoTrackCtx, ok := videoTrack.ICodecCtx.(pkg.IVideoCodecCtx); ok && videoTrackCtx != ctx {
+		//	width, height := uint32(ctx.Width()), uint32(ctx.Height())
+		//	oldWidth, oldHeight := uint32(videoTrackCtx.Width()), uint32(videoTrackCtx.Height())
+		//	r.Info("ctx  changed, restarting recording",
+		//		"old", fmt.Sprintf("%dx%d", oldWidth, oldHeight),
+		//		"new", fmt.Sprintf("%dx%d", width, height))
+		//	r.writeTailer(sub.VideoReader.Value.WriteTime)
+		//	err = r.createStream(sub.VideoReader.Value.WriteTime)
+		//	if err != nil {
+		//		return nil
+		//	}
+		//	at, vt = nil, nil
+		//	if vr := sub.VideoReader; vr != nil {
+		//		vr.ResetAbsTime()
+		//		vt = vr.Track
+		//		switch video.ICodecCtx.GetBase().(type) {
+		//		case *codec.H264Ctx:
+		//			track := r.muxer.AddTrack(box.MP4_CODEC_H264)
+		//			videoTrack = track
+		//			track.ICodecCtx = video.ICodecCtx
+		//		case *codec.H265Ctx:
+		//			track := r.muxer.AddTrack(box.MP4_CODEC_H265)
+		//			videoTrack = track
+		//			track.ICodecCtx = video.ICodecCtx
+		//		}
+		//	}
+		//	if ar := sub.AudioReader; ar != nil {
+		//		ar.ResetAbsTime()
+		//	}
+		//}
 		sample := box.Sample{
 			Timestamp: sub.VideoReader.AbsTime,
 			KeyFrame:  video.IDR,
 			CTS:       video.GetCTS32(),
 			Memory:    video.Memory,
+		}
+		// 如果是第一个视频 I 帧，将参数集放在 I 帧前面一起写入
+		//if r.firstVideoFrame && video.IDR {
+		if video.IDR {
+			// 创建包含参数集的 Memory
+			var combinedMemory gomem.Memory
+			var naluSizeLen int = 4
+			var sps, pps, vps []byte
+
+			switch ctx := video.ICodecCtx.GetBase().(type) {
+			case *codec.H264Ctx:
+				naluSizeLen = int(ctx.RecordInfo.LengthSizeMinusOne) + 1
+				sps = ctx.SPS()
+				pps = ctx.PPS()
+				if len(sps) > 0 && len(pps) > 0 {
+					// 写入 SPS
+					sizeBuf := make([]byte, naluSizeLen)
+					util.PutBE(sizeBuf, uint32(len(sps)))
+					combinedMemory.Push(sizeBuf)
+					combinedMemory.Push(sps)
+					// 写入 PPS
+					sizeBuf = make([]byte, naluSizeLen)
+					util.PutBE(sizeBuf, uint32(len(pps)))
+					combinedMemory.Push(sizeBuf)
+					combinedMemory.Push(pps)
+				}
+			case *codec.H265Ctx:
+				naluSizeLen = int(ctx.RecordInfo.LengthSizeMinusOne) + 1
+				vps = ctx.VPS()
+				sps = ctx.SPS()
+				pps = ctx.PPS()
+				if len(vps) > 0 && len(sps) > 0 && len(pps) > 0 {
+					// 写入 VPS
+					sizeBuf := make([]byte, naluSizeLen)
+					util.PutBE(sizeBuf, uint32(len(vps)))
+					combinedMemory.Push(sizeBuf)
+					combinedMemory.Push(vps)
+					// 写入 SPS
+					sizeBuf = make([]byte, naluSizeLen)
+					util.PutBE(sizeBuf, uint32(len(sps)))
+					combinedMemory.Push(sizeBuf)
+					combinedMemory.Push(sps)
+					// 写入 PPS
+					sizeBuf = make([]byte, naluSizeLen)
+					util.PutBE(sizeBuf, uint32(len(pps)))
+					combinedMemory.Push(sizeBuf)
+					combinedMemory.Push(pps)
+				}
+			}
+			// 将原始视频帧数据追加到参数集后面
+			combinedMemory.Push(video.Memory.Buffers...)
+			sample.Memory = combinedMemory
+			r.firstVideoFrame = false
+		} else if r.firstVideoFrame {
+			r.firstVideoFrame = false
 		}
 		return r.muxer.WriteSample(r.file, videoTrack, sample)
 	})

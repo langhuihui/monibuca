@@ -65,7 +65,7 @@ func (plugin *HLSPlugin) queryRecordStreams(params *requestParams) ([]m7s.Record
 	var recordStreams []m7s.RecordStream
 
 	// 首先查询HLS记录 (ts)
-	query := plugin.DB.Model(&m7s.RecordStream{}).Where("stream_path = ? AND type = ?", params.streamPath, "hls")
+	query := plugin.DB.Model(&m7s.RecordStream{}).Where("stream_path = ? AND type = ?", params.streamPath, "ts")
 
 	// 添加时间范围查询条件
 	if !params.startTime.IsZero() && !params.endTime.IsZero() {
@@ -143,7 +143,7 @@ func (plugin *HLSPlugin) hasOnlyMp4Records(fileInfoList []*fileInfo) bool {
 	}
 
 	for _, info := range fileInfoList {
-		if info.recordType == "hls" {
+		if info.recordType == "ts" {
 			return false
 		}
 	}
@@ -155,7 +155,7 @@ func (plugin *HLSPlugin) filterTsFiles(fileInfoList []*fileInfo) []*fileInfo {
 	var filteredList []*fileInfo
 
 	for _, info := range fileInfoList {
-		if info.recordType == "hls" {
+		if info.recordType == "ts" {
 			filteredList = append(filteredList, info)
 		}
 	}

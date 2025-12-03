@@ -305,34 +305,18 @@ func (p *MP4Plugin) download(w http.ResponseWriter, r *http.Request) {
 				// 首次添加音频轨道
 				addAudioTrack(track)
 			} else if !bytes.Equal(lastAudioTrack.ExtraData, trackExtraData) {
-				// 音频编码参数发生变化，检查是否已存在相同参数的轨道
-				for _, history := range audioHistory {
-					if bytes.Equal(history.ExtraData, trackExtraData) {
-						// 找到相同参数的轨道，重用它
-						audioTrack = history.Track
-						audioTrack.Samplelist = audioHistory[len(audioHistory)-1].Track.Samplelist
-						return
-					}
-				}
-				// 创建新的音频轨道
-				addAudioTrack(track)
+				// 音频编码参数发生变化，不再创建新轨道，直接重用最后一个轨道
+				audioTrack = lastAudioTrack.Track
+				audioTrack.Samplelist = lastAudioTrack.Track.Samplelist
 			}
 		} else if track.Cid.IsVideo() {
 			if lastVideoTrack == nil {
 				// 首次添加视频轨道
 				addVideoTrack(track)
 			} else if !bytes.Equal(lastVideoTrack.ExtraData, trackExtraData) {
-				// 视频编码参数发生变化，检查是否已存在相同参数的轨道
-				for _, history := range videoHistory {
-					if bytes.Equal(history.ExtraData, trackExtraData) {
-						// 找到相同参数的轨道，重用它
-						videoTrack = history.Track
-						videoTrack.Samplelist = videoHistory[len(videoHistory)-1].Track.Samplelist
-						return
-					}
-				}
-				// 创建新的视频轨道
-				addVideoTrack(track)
+				// 视频编码参数发生变化，不再创建新轨道，直接重用最后一个轨道
+				videoTrack = lastVideoTrack.Track
+				videoTrack.Samplelist = lastVideoTrack.Track.Samplelist
 			}
 		}
 	}
@@ -355,21 +339,13 @@ func (p *MP4Plugin) download(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		trackCount := len(demuxer.Tracks)
+		//trackCount := len(demuxer.Tracks)
 
 		// 处理轨道信息
 		if i == 0 || flag == mp4.FLAG_FRAGMENT {
 			// 第一个文件或分片模式，添加所有轨道
 			for _, track := range demuxer.Tracks {
 				addTrack(track)
-			}
-		}
-
-		// 检查轨道数量是否发生变化
-		if trackCount != len(muxer.Tracks) {
-			if flag == mp4.FLAG_FRAGMENT {
-				// 分片模式下重新生成 MOOV box
-				moov = muxer.MakeMoov()
 			}
 		}
 
@@ -491,6 +467,15 @@ func (p *MP4Plugin) download(w http.ResponseWriter, r *http.Request) {
 			part.Close()
 		}
 	} else {
+
+		// 检查轨道数量是否发生变化
+		//if trackCount != len(muxer.Tracks) {
+		if flag == mp4.FLAG_FRAGMENT {
+			// 分片模式下重新生成 MOOV box
+			moov = muxer.MakeMoov()
+		}
+		//}
+
 		// 分片 MP4 模式：输出分片格式
 		var children []box.IBox
 		var totalSize uint64

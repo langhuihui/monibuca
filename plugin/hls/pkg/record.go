@@ -139,6 +139,7 @@ func (r *Recorder) Run() (err error) {
 		}
 		return
 	}, func(video *mpegts.VideoFrame) (err error) {
+		r.Event.Duration = uint32(video.Timestamp.Milliseconds() - r.lastTs.Milliseconds())
 		vr := r.RecordJob.Subscriber.VideoReader
 		if vr.Value.IDR {
 			if err = r.writeSegment(video.Timestamp, vr.Value.WriteTime); err != nil {
