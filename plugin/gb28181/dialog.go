@@ -326,6 +326,7 @@ func (d *Dialog) Start() (err error) {
 		"broadcastPushAfterAck": device.BroadcastPushAfterAck,
 	})
 	d.pullCtx.GoToStepConst(StepResponseWait)
+	d.gb.dialogs.Set(d)
 	return
 }
 
@@ -522,4 +523,5 @@ func (d *Dialog) Dispose() {
 			d.Error("listener dialog bye bye", " err", err)
 		}
 	}
+	d.gb.dialogs.Remove(d)
 }
