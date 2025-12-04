@@ -3110,7 +3110,7 @@ func (x *GetPlatformRequest) GetId() int32 {
 // 删除平台请求
 type DeletePlatformRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            int32                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3145,11 +3145,11 @@ func (*DeletePlatformRequest) Descriptor() ([]byte, []int) {
 	return file_gb28181_proto_rawDescGZIP(), []int{41}
 }
 
-func (x *DeletePlatformRequest) GetId() int32 {
+func (x *DeletePlatformRequest) GetId() string {
 	if x != nil {
 		return x.Id
 	}
-	return 0
+	return ""
 }
 
 // 平台列表请求
@@ -3288,7 +3288,7 @@ type PlatformsPageInfo struct {
 	Code          int32                  `protobuf:"varint,1,opt,name=code,proto3" json:"code,omitempty"`
 	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
 	Total         int32                  `protobuf:"varint,3,opt,name=total,proto3" json:"total,omitempty"`
-	List          []*Platform            `protobuf:"bytes,4,rep,name=list,proto3" json:"list,omitempty"`
+	Data          []*Platform            `protobuf:"bytes,4,rep,name=data,proto3" json:"data,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3344,9 +3344,9 @@ func (x *PlatformsPageInfo) GetTotal() int32 {
 	return 0
 }
 
-func (x *PlatformsPageInfo) GetList() []*Platform {
+func (x *PlatformsPageInfo) GetData() []*Platform {
 	if x != nil {
-		return x.List
+		return x.Data
 	}
 	return nil
 }
@@ -7696,7 +7696,7 @@ const file_gb28181_proto_rawDesc = "" +
 	"\x12GetPlatformRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x05R\x02id\"'\n" +
 	"\x15DeletePlatformRequest\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\x05R\x02id\"n\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"n\n" +
 	"\x14ListPlatformsRequest\x12\x12\n" +
 	"\x04page\x18\x01 \x01(\x05R\x04page\x12\x14\n" +
 	"\x05count\x18\x02 \x01(\x05R\x05count\x12\x14\n" +
@@ -7710,7 +7710,7 @@ const file_gb28181_proto_rawDesc = "" +
 	"\x04code\x18\x01 \x01(\x05R\x04code\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12\x14\n" +
 	"\x05total\x18\x03 \x01(\x05R\x05total\x12(\n" +
-	"\x04list\x18\x04 \x03(\v2\x14.gb28181pro.PlatformR\x04list\"\x8c\x01\n" +
+	"\x04data\x18\x04 \x03(\v2\x14.gb28181pro.PlatformR\x04data\"\x8c\x01\n" +
 	"\x12QueryRecordRequest\x12\x1a\n" +
 	"\bdeviceId\x18\x01 \x01(\tR\bdeviceId\x12\x1c\n" +
 	"\tchannelId\x18\x02 \x01(\tR\tchannelId\x12\x14\n" +
@@ -8086,7 +8086,7 @@ const file_gb28181_proto_rawDesc = "" +
 	"\x04code\x18\x01 \x01(\x05R\x04code\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12\x14\n" +
 	"\x05total\x18\x03 \x01(\x05R\x05total\x124\n" +
-	"\x04data\x18\x04 \x01(\v2 .gb28181pro.DownloadProgressDataR\x04data2\xf1E\n" +
+	"\x04data\x18\x04 \x01(\v2 .gb28181pro.DownloadProgressDataR\x04data2\xf8E\n" +
 	"\x03api\x12]\n" +
 	"\x04List\x12\x1d.gb28181pro.GetDevicesRequest\x1a\x1b.gb28181pro.DevicesPageInfo\"\x19\x82\xd3\xe4\x93\x02\x13\x12\x11/gb28181/api/list\x12n\n" +
 	"\tGetDevice\x12\x1c.gb28181pro.GetDeviceRequest\x1a\x1a.gb28181pro.DeviceResponse\"'\x82\xd3\xe4\x93\x02!\x12\x1f/gb28181/api/devices/{deviceId}\x12f\n" +
@@ -8115,8 +8115,8 @@ const file_gb28181_proto_rawDesc = "" +
 	"\rGetRawChannel\x12 .gb28181pro.GetRawChannelRequest\x1a\x13.gb28181pro.Channel\" \x82\xd3\xe4\x93\x02\x1a\x12\x18/gb28181/api/channel/raw\x12c\n" +
 	"\vAddPlatform\x12\x14.gb28181pro.Platform\x1a\x18.gb28181pro.BaseResponse\"$\x82\xd3\xe4\x93\x02\x1e:\x01*\"\x19/gb28181/api/platform/add\x12o\n" +
 	"\vGetPlatform\x12\x1e.gb28181pro.GetPlatformRequest\x1a\x1c.gb28181pro.PlatformResponse\"\"\x82\xd3\xe4\x93\x02\x1c\x12\x1a/gb28181/api/platform/{id}\x12i\n" +
-	"\x0eUpdatePlatform\x12\x14.gb28181pro.Platform\x1a\x18.gb28181pro.BaseResponse\"'\x82\xd3\xe4\x93\x02!:\x01*\"\x1c/gb28181/api/platform/update\x12q\n" +
-	"\x0eDeletePlatform\x12!.gb28181pro.DeletePlatformRequest\x1a\x18.gb28181pro.BaseResponse\"\"\x82\xd3\xe4\x93\x02\x1c*\x1a/gb28181/api/platform/{id}\x12t\n" +
+	"\x0eUpdatePlatform\x12\x14.gb28181pro.Platform\x1a\x18.gb28181pro.BaseResponse\"'\x82\xd3\xe4\x93\x02!:\x01*\"\x1c/gb28181/api/platform/update\x12x\n" +
+	"\x0eDeletePlatform\x12!.gb28181pro.DeletePlatformRequest\x1a\x18.gb28181pro.BaseResponse\")\x82\xd3\xe4\x93\x02#\"!/gb28181/api/platform/remove/{id}\x12t\n" +
 	"\rListPlatforms\x12 .gb28181pro.ListPlatformsRequest\x1a\x1d.gb28181pro.PlatformsPageInfo\"\"\x82\xd3\xe4\x93\x02\x1c\x12\x1a/gb28181/api/platform/list\x12\x83\x01\n" +
 	"\vQueryRecord\x12\x1e.gb28181pro.QueryRecordRequest\x1a\x1f.gb28181pro.QueryRecordResponse\"3\x82\xd3\xe4\x93\x02-\x12+/gb28181/api/records/{deviceId}/{channelId}\x12v\n" +
 	"\n" +
@@ -8301,7 +8301,7 @@ var file_gb28181_proto_depIdxs = []int32{
 	33,  // 13: gb28181pro.PlayResponse.stream_info:type_name -> gb28181pro.StreamInfo
 	37,  // 14: gb28181pro.SSRCListResponse.data:type_name -> gb28181pro.SSRCInfo
 	39,  // 15: gb28181pro.PlatformResponse.data:type_name -> gb28181pro.Platform
-	39,  // 16: gb28181pro.PlatformsPageInfo.list:type_name -> gb28181pro.Platform
+	39,  // 16: gb28181pro.PlatformsPageInfo.data:type_name -> gb28181pro.Platform
 	47,  // 17: gb28181pro.QueryRecordResponse.data:type_name -> gb28181pro.RecordItem
 	99,  // 18: gb28181pro.QueryRecordResponse.last_time:type_name -> google.protobuf.Timestamp
 	65,  // 19: gb28181pro.SearchAlarmsResponse.data:type_name -> gb28181pro.AlarmRecord

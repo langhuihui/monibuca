@@ -197,7 +197,7 @@ service api {
   // 删除平台信息
   rpc DeletePlatform (DeletePlatformRequest) returns (BaseResponse) {
     option (google.api.http) = {
-      delete: "/gb28181/api/platform/{id}"
+      post: "/gb28181/api/platform/remove/{id}"
     };
   }
 
@@ -858,7 +858,7 @@ message GetPlatformRequest {
 
 // 删除平台请求
 message DeletePlatformRequest {
-  int32 id = 1;
+  string id = 1;
 }
 
 // 平台列表请求
@@ -881,7 +881,7 @@ message PlatformsPageInfo {
   int32 code = 1;
   string message = 2;
   int32 total = 3;
-  repeated Platform list = 4;
+  repeated Platform data = 4;
 }
 
 message QueryRecordRequest {

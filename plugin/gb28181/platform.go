@@ -128,19 +128,25 @@ func NewPlatform(pm *gb28181.PlatformModel, plugin *GB28181Plugin, unRegister bo
 }
 
 func (p *Platform) Start() error {
-	if p.unRegister {
-		err := p.Unregister()
-		if err != nil {
-			p.Error("failed to unregister", "err", err)
-		}
-		p.unRegister = false
-	}
-	register := NewRegister(p, "firstRegister")
-	register.OnStart(func() {
-		register.Tick(nil)
+	p.SetDescriptions(task.Description{
+		"name":       p.PlatformModel.Name,
+		"serverGBID": p.PlatformModel.ServerGBID,
 	})
-	p.register = register
-	p.AddTask(register)
+	if p.PlatformModel.Enable {
+		if p.unRegister {
+			err := p.Unregister()
+			if err != nil {
+				p.Error("failed to unregister", "err", err)
+			}
+			p.unRegister = false
+		}
+		register := NewRegister(p, "firstRegister")
+		register.OnStart(func() {
+			register.Tick(nil)
+		})
+		p.register = register
+		p.AddTask(register)
+	}
 	return nil
 }
 
@@ -1542,4 +1548,12 @@ func (p *Platform) handlePresetQuery(req *sip.Request, tx sip.ServerTransaction,
 // GetKey 返回平台的唯一标识符
 func (p *Platform) GetKey() string {
 	return p.PlatformModel.ServerGBID
+}
+
+func (p *Platform) Dispose() {
+	if p.plugin.DB != nil {
+		if err := p.plugin.DB.Save(p.PlatformModel).Error; err != nil {
+			p.Error("保存平台数据出错", "error", err)
+		}
+	}
 }

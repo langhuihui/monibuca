@@ -552,7 +552,7 @@ func (gb *GB28181Plugin) checkPlatform() {
 
 	// 查询所有启用状态的平台
 	var platformModels []*gb28181.PlatformModel
-	platformModel := gb28181.PlatformModel{Enable: true}
+	platformModel := gb28181.PlatformModel{}
 	if err := gb.DB.Where(&platformModel).Find(&platformModels).Error; err != nil {
 		gb.Error("查询平台失败", "error", err.Error())
 		return

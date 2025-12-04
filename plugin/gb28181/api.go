@@ -1013,7 +1013,7 @@ func (gb *GB28181Plugin) UpdatePlatform(ctx context.Context, req *pb.Platform) (
 				oldPlatform.register.Tick(nil)
 				oldPlatform.register.platformKeepAliveTask.Ticker.Reset(time.Second * time.Duration(oldPlatform.PlatformModel.KeepTimeout))
 			}
-		} else {
+		} else if enableChanged {
 			// 如果平台被禁用，停止并移除旧的platform实例
 			oldPlatform.Unregister()
 			oldPlatform.register.Ticker.Reset(time.Hour * 999999)
@@ -1029,22 +1029,15 @@ func (gb *GB28181Plugin) UpdatePlatform(ctx context.Context, req *pb.Platform) (
 // DeletePlatform 实现删除平台信息
 func (gb *GB28181Plugin) DeletePlatform(ctx context.Context, req *pb.DeletePlatformRequest) (*pb.BaseResponse, error) {
 	resp := &pb.BaseResponse{}
+	if platform, ok := gb.platforms.Get(req.Id); ok {
+		platform.PlatformModel.DeletedAt = gorm.DeletedAt{Time: time.Now(), Valid: true}
+		platform.Stop(fmt.Errorf("device removed"))
+		platform.WaitStopped()
+		resp.Code = 0
+		resp.Message = "success"
+	} else {
 
-	if gb.DB == nil {
-		resp.Code = 500
-		resp.Message = "database not initialized"
-		return resp, nil
 	}
-
-	// 删除平台
-	if err := gb.DB.Delete(&gb28181.PlatformModel{}, req.Id).Error; err != nil {
-		resp.Code = 500
-		resp.Message = fmt.Sprintf("failed to delete platform: %v", err)
-		return resp, nil
-	}
-
-	resp.Code = 0
-	resp.Message = "success"
 	return resp, nil
 }
 
@@ -1058,6 +1051,7 @@ func (gb *GB28181Plugin) ListPlatforms(ctx context.Context, req *pb.ListPlatform
 
 	// 遍历内存中的平台集合
 	gb.platforms.Range(func(platform *Platform) bool {
+		gb.Info(platform.PlatformModel.Name)
 		// 应用筛选条件
 		if req.Query != "" {
 			// 检查平台名称、ServerGBID或DeviceGBID是否包含查询字符串
@@ -1099,7 +1093,7 @@ func (gb *GB28181Plugin) ListPlatforms(ctx context.Context, req *pb.ListPlatform
 			// 超出范围，返回空列表
 			resp.Code = 0
 			resp.Message = "success"
-			resp.List = pbPlatforms
+			resp.Data = pbPlatforms
 			return resp, nil
 		}
 
@@ -1157,7 +1151,7 @@ func (gb *GB28181Plugin) ListPlatforms(ctx context.Context, req *pb.ListPlatform
 		})
 	}
 
-	resp.List = pbPlatforms
+	resp.Data = pbPlatforms
 	resp.Code = 0
 	resp.Message = "success"
 	return resp, nil

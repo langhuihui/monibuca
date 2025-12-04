@@ -2,6 +2,7 @@
 package gb28181
 
 import (
+	"gorm.io/gorm"
 	"time"
 )
 
@@ -47,6 +48,7 @@ type PlatformModel struct {
 	RegisterWay             int                `gorm:"column:register_way;omitempty" json:"registerWay"`                  // RegisterWay表示注册方式(1:标准认证注册,2:口令认证,3:数字证书双向认证,4:数字证书单向认证)
 	Secrecy                 int                `gorm:"column:secrecy;omitempty" json:"secrecy"`                           // Secrecy表示保密属性(0:不涉密,1:涉密)
 	PlatformChannels        []*PlatformChannel `gorm:"-:all"`
+	DeletedAt               gorm.DeletedAt     `yaml:"-"`
 }
 
 // TableName 指定数据库表名
