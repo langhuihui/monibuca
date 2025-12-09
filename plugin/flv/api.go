@@ -96,7 +96,7 @@ func (plugin *FLVPlugin) Download_(w http.ResponseWriter, r *http.Request) {
 
 func (plugin *FLVPlugin) RegisterHandler() map[string]http.HandlerFunc {
 	return map[string]http.HandlerFunc{
-		"/jessica/{streamPath}": plugin.jessica,
+		"/jessica/{streamPath...}": plugin.jessica,
 	}
 }
 
