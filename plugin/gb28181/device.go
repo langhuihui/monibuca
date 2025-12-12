@@ -596,6 +596,7 @@ func (d *Device) queryDeviceStatus() (*sip.Response, error) {
 
 func (d *Device) subscribePosition(interval int) (*sip.Response, error) {
 	request := d.CreateRequest(sip.SUBSCRIBE, nil)
+	request.AppendHeader(sip.NewHeader("Event", "MobilePosition"))
 	request.AppendHeader(sip.NewHeader("Expires", strconv.Itoa(d.SubscribePosition)))
 	request.SetBody(gb28181.BuildDevicePositionXML(d.SN, d.DeviceId, interval))
 	return d.send(request)

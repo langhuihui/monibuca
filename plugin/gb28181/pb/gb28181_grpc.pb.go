@@ -136,8 +136,8 @@ type ApiClient interface {
 	GetSnap(ctx context.Context, in *GetSnapRequest, opts ...grpc.CallOption) (*SnapResponse, error)
 	// 结束转码
 	StopConvert(ctx context.Context, in *ConvertStopRequest, opts ...grpc.CallOption) (*BaseResponse, error)
-	// 语音广播命令
-	StartBroadcast(ctx context.Context, in *BroadcastRequest, opts ...grpc.CallOption) (*BroadcastResponse, error)
+	// 启动语音广播
+	StartBroadcast(ctx context.Context, in *BroadcastRequest, opts ...grpc.CallOption) (*BaseResponse, error)
 	// 停止语音广播
 	StopBroadcast(ctx context.Context, in *BroadcastRequest, opts ...grpc.CallOption) (*BaseResponse, error)
 	// 获取所有的ssrc
@@ -434,9 +434,9 @@ func (c *apiClient) StopConvert(ctx context.Context, in *ConvertStopRequest, opt
 	return out, nil
 }
 
-func (c *apiClient) StartBroadcast(ctx context.Context, in *BroadcastRequest, opts ...grpc.CallOption) (*BroadcastResponse, error) {
+func (c *apiClient) StartBroadcast(ctx context.Context, in *BroadcastRequest, opts ...grpc.CallOption) (*BaseResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(BroadcastResponse)
+	out := new(BaseResponse)
 	err := c.cc.Invoke(ctx, Api_StartBroadcast_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -1014,8 +1014,8 @@ type ApiServer interface {
 	GetSnap(context.Context, *GetSnapRequest) (*SnapResponse, error)
 	// 结束转码
 	StopConvert(context.Context, *ConvertStopRequest) (*BaseResponse, error)
-	// 语音广播命令
-	StartBroadcast(context.Context, *BroadcastRequest) (*BroadcastResponse, error)
+	// 启动语音广播
+	StartBroadcast(context.Context, *BroadcastRequest) (*BaseResponse, error)
 	// 停止语音广播
 	StopBroadcast(context.Context, *BroadcastRequest) (*BaseResponse, error)
 	// 获取所有的ssrc
@@ -1186,7 +1186,7 @@ func (UnimplementedApiServer) GetSnap(context.Context, *GetSnapRequest) (*SnapRe
 func (UnimplementedApiServer) StopConvert(context.Context, *ConvertStopRequest) (*BaseResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StopConvert not implemented")
 }
-func (UnimplementedApiServer) StartBroadcast(context.Context, *BroadcastRequest) (*BroadcastResponse, error) {
+func (UnimplementedApiServer) StartBroadcast(context.Context, *BroadcastRequest) (*BaseResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StartBroadcast not implemented")
 }
 func (UnimplementedApiServer) StopBroadcast(context.Context, *BroadcastRequest) (*BaseResponse, error) {

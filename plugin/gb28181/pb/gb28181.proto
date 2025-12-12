@@ -143,17 +143,19 @@ service api {
     };
   }
 
-  // 语音广播命令
-  rpc StartBroadcast (BroadcastRequest) returns (BroadcastResponse) {
+  // 启动语音广播
+  rpc StartBroadcast (BroadcastRequest) returns (BaseResponse) {
     option (google.api.http) = {
-      post: "/gb28181/api/play/broadcast/{deviceId}/{channelId}"
+      post: "/gb28181/api/broadcast/start"
+      body: "*"
     };
   }
 
   // 停止语音广播
   rpc StopBroadcast (BroadcastRequest) returns (BaseResponse) {
     option (google.api.http) = {
-      post: "/gb28181/api/play/broadcast/stop/{deviceId}/{channelId}"
+      post: "/gb28181/api/broadcast/stop"
+      body: "*"
     };
   }
 
@@ -785,15 +787,6 @@ message ConvertStopRequest {
 message BroadcastRequest {
   string deviceId = 1;
   string channelId = 2;
-  int32 timeout = 3;
-  bool broadcastMode = 4;
-}
-
-message BroadcastResponse {
-  int32 code = 1;
-  string message = 2;
-  string streamId = 3;
-  string url = 4;
 }
 
 message SSRCInfo {

@@ -194,13 +194,22 @@ func (gb *GB28181Plugin) Start() (err error) {
 		gb.singlePorts.L = new(sync.RWMutex)
 		gb.clients.L = new(sync.RWMutex)
 		gb.completedDownloads.L = new(sync.RWMutex)
+		BroadcastSessions.L = new(sync.RWMutex)
 		gb.server, _ = sipgo.NewServer(gb.ua, sipgo.WithServerLogger(logger)) // Creating server handle for ua
 		gb.server.OnMessage(gb.OnMessage)
 		gb.server.OnRegister(gb.OnRegister)
 		gb.server.OnBye(gb.OnBye)
 		gb.server.OnInvite(gb.OnInvite)
-		gb.server.OnAck(gb.OnAck)
+		gb.server.OnAck(gb.OnAck) // OnAck 内部会检查是否是广播 ACK 并调用 OnBroadcastAck
 		gb.server.OnNotify(gb.OnNotify)
+		// 广播
+		// gb.server.OnMessage(gb.OnBroadcastMessage)
+		//gb.server.OnInvite(gb.OnBroadcastInvite)
+		// OnBroadcastAck 已在 OnAck 中通过 CallID 匹配调用，无需重复注册
+		gb.server.OnBye(gb.OnBroadcastBye)
+
+		// 初始化 RTP 负载大小（基于 MTU）
+		InitRTPPayloadSize()
 
 		if gb.MediaPort.Valid() {
 			gb.SetDescription("media port", fmt.Sprintf("%d-%d", gb.MediaPort[0], gb.MediaPort[1]))
@@ -923,8 +932,8 @@ func (gb *GB28181Plugin) OnInvite(req *sip.Request, tx sip.ServerTransaction) {
 	// 首先从数据库中查询平台
 	var platform *Platform
 	if platformTmp, platformFound := gb.platforms.Get(inviteInfo.RequesterId); !platformFound {
-		gb.Error("OnInvite", "error", "platform found in DB but not in runtime", "platformId", inviteInfo.RequesterId)
-		_ = tx.Respond(sip.NewResponseFromRequest(req, sip.StatusNotFound, "Platform Not Found In Runtime", nil))
+		gb.Info("OnInvite", "error", "platform found in DB but not in runtime", "platformId", inviteInfo.RequesterId)
+		gb.OnBroadcastInvite(req, tx)
 		return
 	} else {
 		platform = platformTmp
@@ -1070,6 +1079,7 @@ func (gb *GB28181Plugin) OnInvite(req *sip.Request, tx sip.ServerTransaction) {
 }
 
 func (gb *GB28181Plugin) OnAck(req *sip.Request, tx sip.ServerTransaction) {
+	gb.Info("OnAck", "callid", req.CallID().Value(), "req", req)
 	callID := req.CallID().Value()
 	if callID == "" {
 		gb.Error("OnAck", "error", "callid header not found")
@@ -1094,6 +1104,14 @@ func (gb *GB28181Plugin) OnAck(req *sip.Request, tx sip.ServerTransaction) {
 			go gb.sendPSToUpstream(forwardDialog)
 		}
 	} else {
+		// 检查是否是广播会话的 ACK
+		if _, ok := BroadcastSessions.Find(func(bs *BroadcastSession) bool {
+			return bs.CallID == callID
+		}); ok {
+			// 是广播会话的 ACK，调用广播 ACK 处理
+			gb.OnBroadcastAck(req, tx)
+			return
+		}
 		gb.Error("OnAck", "error", "forwardDialog not found", "callID", callID)
 		return
 	}

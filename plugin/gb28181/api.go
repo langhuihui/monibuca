@@ -3,7 +3,9 @@ package plugin_gb28181pro
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net/http"
 	"net/url"
 	"os"
 	"sort"
@@ -12,6 +14,7 @@ import (
 
 	"github.com/emiago/sipgo"
 	"github.com/emiago/sipgo/sip"
+	"github.com/gobwas/ws"
 	"gorm.io/gorm"
 	"m7s.live/v5"
 	"m7s.live/v5/pkg/util"
@@ -454,6 +457,8 @@ func (gb *GB28181Plugin) UpdateDevice(ctx context.Context, req *pb.Device) (*pb.
 		// 更新基本字段
 		if req.Name != "" {
 			d.CustomName = req.Name
+		} else {
+			d.CustomName = d.Name
 		}
 		if req.Manufacturer != "" {
 			d.Manufacturer = req.Manufacturer
@@ -2972,6 +2977,8 @@ func (gb *GB28181Plugin) UpdateChannel(ctx context.Context, req *pb.UpdateChanne
 	// 从请求中获取自定义名称
 	if req.Channel.Name != "" {
 		channel.DeviceChannel.CustomName = req.Channel.Name
+	} else {
+		channel.DeviceChannel.CustomName = channel.DeviceChannel.Name
 	}
 
 	// 记录日志
@@ -3564,4 +3571,120 @@ func (gb *GB28181Plugin) GetDownloadProgress(ctx context.Context, req *pb.GetDow
 	}
 
 	return resp, nil
+}
+
+// StartBroadcast 启动语音广播
+func (gb *GB28181Plugin) StartBroadcast(ctx context.Context, req *pb.BroadcastRequest) (*pb.BaseResponse, error) {
+	resp := &pb.BaseResponse{}
+
+	// 1. 验证参数
+	if req.DeviceId == "" || req.ChannelId == "" {
+		resp.Code = 400
+		resp.Message = "deviceId 和 channelId 不能为空"
+		return resp, nil
+	}
+
+	// 2. 获取设备
+	device, ok := gb.devices.Get(req.DeviceId)
+	if !ok {
+		resp.Code = 404
+		resp.Message = "设备不存在"
+		return resp, nil
+	}
+
+	// 3. 检查设备是否在线
+	if !device.Online {
+		resp.Code = 400
+		resp.Message = "设备离线"
+		return resp, nil
+	}
+
+	// 4. 检查会话是否已存在
+	if _, exists := BroadcastSessions.Get(req.ChannelId); exists {
+		resp.Code = 409
+		resp.Message = "广播会话已存在"
+		return resp, nil
+	}
+
+	// 5. 启动广播会话（会发送 SIP MESSAGE）
+	broadcastSession, err := device.StartBroadcast(req.ChannelId)
+	if err != nil {
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("启动广播失败: %v", err)
+		return resp, nil
+	}
+
+	// 6. 等待设备 INVITE（30秒超时）
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	if err := broadcastSession.WaitInvite(ctx); err != nil {
+		// 超时或失败，清理会话
+		broadcastSession.StopBroadcast()
+		if errors.Is(err, context.DeadlineExceeded) {
+			resp.Code = 504
+			resp.Message = "等待设备响应超时"
+		} else {
+			resp.Code = 500
+			resp.Message = fmt.Sprintf("等待设备响应失败: %v", err)
+		}
+		return resp, nil
+	}
+
+	resp.Code = 0
+	resp.Message = "广播启动成功"
+	return resp, nil
+}
+
+// StopBroadcast 停止语音广播
+func (gb *GB28181Plugin) StopBroadcast(ctx context.Context, req *pb.BroadcastRequest) (*pb.BaseResponse, error) {
+	resp := &pb.BaseResponse{}
+
+	// 1. 验证参数
+	if req.DeviceId == "" || req.ChannelId == "" {
+		resp.Code = 400
+		resp.Message = "deviceId 和 channelId 不能为空"
+		return resp, nil
+	}
+
+	// 2. 查找广播会话
+	broadcastSession, exists := BroadcastSessions.Get(req.ChannelId)
+	if !exists {
+		resp.Code = 404
+		resp.Message = "广播会话不存在"
+		return resp, nil
+	}
+
+	// 3. 停止广播
+	if err := broadcastSession.StopBroadcast(); err != nil {
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("停止广播失败: %v", err)
+		return resp, nil
+	}
+
+	resp.Code = 0
+	resp.Message = "广播停止成功"
+	return resp, nil
+}
+
+// API_talk_start WebSocket 接口，用于实时音频传输
+// 路径: /gb28181/api/talk/start
+func (gb *GB28181Plugin) API_talk_start(w http.ResponseWriter, r *http.Request) {
+	// Upgrade HTTP connection to WebSocket
+	conn, _, _, err := ws.UpgradeHTTP(r, w)
+	if err != nil {
+		gb.Error("WebSocket upgrade failed", "error", err)
+		return
+	}
+
+	// Create a new TalkWebsocketTask for this connection
+	talkTask := NewTalkWebsocketTask(gb, conn)
+
+	if err := gb.AddTask(talkTask).WaitStarted(); err != nil {
+		gb.Error("Failed to start talk websocket task", "error", err)
+		_ = conn.Close()
+		return
+	}
+
+	gb.Info("WebSocket talk session started", "taskId", talkTask.ID)
 }

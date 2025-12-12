@@ -760,35 +760,12 @@ func local_request_Api_StopConvert_0(ctx context.Context, marshaler runtime.Mars
 	return msg, metadata, err
 }
 
-var filter_Api_StartBroadcast_0 = &utilities.DoubleArray{Encoding: map[string]int{"deviceId": 0, "channelId": 1}, Base: []int{1, 1, 2, 0, 0}, Check: []int{0, 1, 1, 2, 3}}
-
 func request_Api_StartBroadcast_0(ctx context.Context, marshaler runtime.Marshaler, client ApiClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var (
 		protoReq BroadcastRequest
 		metadata runtime.ServerMetadata
-		err      error
 	)
-	io.Copy(io.Discard, req.Body)
-	val, ok := pathParams["deviceId"]
-	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "deviceId")
-	}
-	protoReq.DeviceId, err = runtime.String(val)
-	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "deviceId", err)
-	}
-	val, ok = pathParams["channelId"]
-	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "channelId")
-	}
-	protoReq.ChannelId, err = runtime.String(val)
-	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "channelId", err)
-	}
-	if err := req.ParseForm(); err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
-	}
-	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_Api_StartBroadcast_0); err != nil {
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 	msg, err := client.StartBroadcast(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
@@ -799,63 +776,20 @@ func local_request_Api_StartBroadcast_0(ctx context.Context, marshaler runtime.M
 	var (
 		protoReq BroadcastRequest
 		metadata runtime.ServerMetadata
-		err      error
 	)
-	val, ok := pathParams["deviceId"]
-	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "deviceId")
-	}
-	protoReq.DeviceId, err = runtime.String(val)
-	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "deviceId", err)
-	}
-	val, ok = pathParams["channelId"]
-	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "channelId")
-	}
-	protoReq.ChannelId, err = runtime.String(val)
-	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "channelId", err)
-	}
-	if err := req.ParseForm(); err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
-	}
-	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_Api_StartBroadcast_0); err != nil {
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 	msg, err := server.StartBroadcast(ctx, &protoReq)
 	return msg, metadata, err
 }
 
-var filter_Api_StopBroadcast_0 = &utilities.DoubleArray{Encoding: map[string]int{"deviceId": 0, "channelId": 1}, Base: []int{1, 1, 2, 0, 0}, Check: []int{0, 1, 1, 2, 3}}
-
 func request_Api_StopBroadcast_0(ctx context.Context, marshaler runtime.Marshaler, client ApiClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var (
 		protoReq BroadcastRequest
 		metadata runtime.ServerMetadata
-		err      error
 	)
-	io.Copy(io.Discard, req.Body)
-	val, ok := pathParams["deviceId"]
-	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "deviceId")
-	}
-	protoReq.DeviceId, err = runtime.String(val)
-	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "deviceId", err)
-	}
-	val, ok = pathParams["channelId"]
-	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "channelId")
-	}
-	protoReq.ChannelId, err = runtime.String(val)
-	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "channelId", err)
-	}
-	if err := req.ParseForm(); err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
-	}
-	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_Api_StopBroadcast_0); err != nil {
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 	msg, err := client.StopBroadcast(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
@@ -866,28 +800,8 @@ func local_request_Api_StopBroadcast_0(ctx context.Context, marshaler runtime.Ma
 	var (
 		protoReq BroadcastRequest
 		metadata runtime.ServerMetadata
-		err      error
 	)
-	val, ok := pathParams["deviceId"]
-	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "deviceId")
-	}
-	protoReq.DeviceId, err = runtime.String(val)
-	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "deviceId", err)
-	}
-	val, ok = pathParams["channelId"]
-	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "channelId")
-	}
-	protoReq.ChannelId, err = runtime.String(val)
-	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "channelId", err)
-	}
-	if err := req.ParseForm(); err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
-	}
-	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_Api_StopBroadcast_0); err != nil {
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 	msg, err := server.StopBroadcast(ctx, &protoReq)
@@ -3798,7 +3712,7 @@ func RegisterApiHandlerServer(ctx context.Context, mux *runtime.ServeMux, server
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/gb28181pro.Api/StartBroadcast", runtime.WithHTTPPathPattern("/gb28181/api/play/broadcast/{deviceId}/{channelId}"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/gb28181pro.Api/StartBroadcast", runtime.WithHTTPPathPattern("/gb28181/api/broadcast/start"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -3818,7 +3732,7 @@ func RegisterApiHandlerServer(ctx context.Context, mux *runtime.ServeMux, server
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/gb28181pro.Api/StopBroadcast", runtime.WithHTTPPathPattern("/gb28181/api/play/broadcast/stop/{deviceId}/{channelId}"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/gb28181pro.Api/StopBroadcast", runtime.WithHTTPPathPattern("/gb28181/api/broadcast/stop"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -5222,7 +5136,7 @@ func RegisterApiHandlerClient(ctx context.Context, mux *runtime.ServeMux, client
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/gb28181pro.Api/StartBroadcast", runtime.WithHTTPPathPattern("/gb28181/api/play/broadcast/{deviceId}/{channelId}"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/gb28181pro.Api/StartBroadcast", runtime.WithHTTPPathPattern("/gb28181/api/broadcast/start"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -5239,7 +5153,7 @@ func RegisterApiHandlerClient(ctx context.Context, mux *runtime.ServeMux, client
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/gb28181pro.Api/StopBroadcast", runtime.WithHTTPPathPattern("/gb28181/api/play/broadcast/stop/{deviceId}/{channelId}"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/gb28181pro.Api/StopBroadcast", runtime.WithHTTPPathPattern("/gb28181/api/broadcast/stop"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -6158,8 +6072,8 @@ var (
 	pattern_Api_GetSubscribeInfo_0                  = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"gb28181", "api", "deviceId", "subscribe_info"}, ""))
 	pattern_Api_GetSnap_0                           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 1, 0, 4, 1, 5, 4}, []string{"gb28181", "api", "snap", "deviceId", "channelId"}, ""))
 	pattern_Api_StopConvert_0                       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"gb28181", "api", "play", "convertStop", "key"}, ""))
-	pattern_Api_StartBroadcast_0                    = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 1, 0, 4, 1, 5, 4, 1, 0, 4, 1, 5, 5}, []string{"gb28181", "api", "play", "broadcast", "deviceId", "channelId"}, ""))
-	pattern_Api_StopBroadcast_0                     = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4, 1, 0, 4, 1, 5, 5, 1, 0, 4, 1, 5, 6}, []string{"gb28181", "api", "play", "broadcast", "stop", "deviceId", "channelId"}, ""))
+	pattern_Api_StartBroadcast_0                    = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"gb28181", "api", "broadcast", "start"}, ""))
+	pattern_Api_StopBroadcast_0                     = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"gb28181", "api", "broadcast", "stop"}, ""))
 	pattern_Api_GetAllSSRC_0                        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"gb28181", "api", "play", "ssrc"}, ""))
 	pattern_Api_GetRawChannel_0                     = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"gb28181", "api", "channel", "raw"}, ""))
 	pattern_Api_AddPlatform_0                       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"gb28181", "api", "platform", "add"}, ""))
