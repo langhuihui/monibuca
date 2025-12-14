@@ -103,7 +103,9 @@ func NewS3Storage(config *S3StorageConfig) (*S3Storage, error) {
 		downloader: s3manager.NewDownloader(sess),
 	}, nil
 }
-
+func (s *S3Storage) GetKey() string {
+	return "s3"
+}
 func (s *S3Storage) CreateFile(ctx context.Context, path string) (File, error) {
 	objectKey := s.getObjectKey(path)
 	return &S3File{

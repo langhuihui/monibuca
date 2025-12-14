@@ -2,11 +2,13 @@ package plugin_snap
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"image"
 	"image/color"
 	_ "image/jpeg"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
@@ -20,6 +22,7 @@ import (
 	"github.com/disintegration/imaging"
 	m7s "m7s.live/v5"
 	"m7s.live/v5/pkg"
+	"m7s.live/v5/pkg/storage"
 	"m7s.live/v5/pkg/util"
 	snap_pkg "m7s.live/v5/plugin/snap/pkg"
 	"m7s.live/v5/plugin/snap/pkg/watermark"
@@ -238,6 +241,7 @@ func (p *SnapPlugin) querySnap(rw http.ResponseWriter, r *http.Request) {
 		http.Error(rw, "database not initialized", http.StatusInternalServerError)
 		return
 	}
+	var err error
 
 	streamPath := r.PathValue("streamPath")
 	if streamPath == "" {
@@ -277,7 +281,26 @@ func (p *SnapPlugin) querySnap(rw http.ResponseWriter, r *http.Request) {
 	}
 
 	// 读取图片文件
-	imgData, err := os.ReadFile(record.SnapPath)
+	var imgData []byte
+	if st := p.Server.Storage; st != nil {
+		// 优先通过全局存储读取
+		if localStorage, ok := st.(*storage.LocalStorage); ok {
+			path := record.SnapPath
+			if !filepath.IsAbs(path) {
+				path = localStorage.GetFullPath(path, 1)
+			}
+			imgData, err = os.ReadFile(path)
+		} else {
+			var f storage.File
+			f, err = st.OpenFile(context.Background(), record.SnapPath)
+			if err == nil {
+				defer f.Close()
+				imgData, err = io.ReadAll(f)
+			}
+		}
+	} else {
+		imgData, err = os.ReadFile(record.SnapPath)
+	}
 	if err != nil {
 		http.Error(rw, "failed to read snapshot file", http.StatusNotFound)
 		return
@@ -641,11 +664,9 @@ func (p *SnapPlugin) batchPlayBack(rw http.ResponseWriter, r *http.Request) {
 		granularity = granularityVal
 	}
 
-	// 创建保存目录
+	// 保存路径前缀（相对路径），实际写入时使用全局存储解析
 	savePath := filepath.Join("snap", "playback", streamPath)
-	os.MkdirAll(savePath, 0755)
 	savePath = strings.ReplaceAll(savePath, "/", "_")
-	os.MkdirAll(savePath, 0755)
 
 	// 立即返回成功响应，表示任务已接收
 	response := BatchSnapResponse{
@@ -665,6 +686,14 @@ func (p *SnapPlugin) executePlayBackSnapTask(streamPath string, startTime, endTi
 	// 记录任务开始时间
 	taskStartTime := time.Now()
 	p.Info("playback snap task started", "streamPath", streamPath, "startTime", startTime, "endTime", endTime)
+
+	// 必须有全局存储且为本地存储，便于 ffmpeg 输出到文件系统
+	st := p.Server.Storage
+	localStorage, ok := st.(*storage.LocalStorage)
+	if !ok || st == nil {
+		p.Error("playback snap aborted: storage is not LocalStorage")
+		return
+	}
 
 	// 从数据库中查询指定时间范围内的MP4录像文件
 	var streams []m7s.RecordStream
@@ -688,17 +717,39 @@ func (p *SnapPlugin) executePlayBackSnapTask(streamPath string, startTime, endTi
 		return streams[i].StartTime.Before(streams[j].StartTime)
 	})
 
+	// 检查全局存储是否可用
+	if p.Server.Storage == nil {
+		p.Error("global storage not initialized")
+		return
+	}
+
 	// 全局截图时间点列表
 	var allSnapTimes []time.Time
-
 	// 如果颜粒度小于等于0，则对每个文件提取关键帧
 	if granularity <= 0 {
 		// 对每个文件分别提取关键帧
 		for _, stream := range streams {
 			// 检查文件是否存在
 			if _, err := os.Stat(stream.FilePath); os.IsNotExist(err) {
-				p.Warn("mp4 file not found", "path", stream.FilePath)
-				continue
+				// 如果文件不存在，尝试从全局存储获取完整路径
+				var absFilePath string
+				if localStorage, ok := p.Server.Storage.(*storage.LocalStorage); ok {
+					// 使用本地存储的方法根据存储级别获取完整路径
+					absFilePath = localStorage.GetFullPath(stream.FilePath, stream.StorageLevel)
+				} else {
+					// 非本地存储，尝试使用 GetURL 获取路径
+					url, err := p.Server.Storage.GetURL(context.Background(), stream.FilePath)
+					if err != nil {
+						p.Warn("failed to get file URL from storage", "path", stream.FilePath, "err", err)
+						continue
+					}
+					absFilePath = url
+				}
+				stream.FilePath = absFilePath
+				if _, err := os.Stat(stream.FilePath); os.IsNotExist(err) {
+					p.Warn("mp4 file not found", "path", stream.FilePath)
+					continue
+				}
 			}
 
 			// 计算此文件的有效时间范围（与请求时间范围的交集）
@@ -775,9 +826,26 @@ func (p *SnapPlugin) executePlayBackSnapTask(streamPath string, startTime, endTi
 
 		// 检查文件是否存在
 		if _, err := os.Stat(targetStream.FilePath); os.IsNotExist(err) {
-			p.Warn("mp4 file not found", "path", targetStream.FilePath)
-			failCount++
-			continue
+			// 如果文件不存在，尝试从全局存储获取完整路径
+			if localStorage, ok := p.Server.Storage.(*storage.LocalStorage); ok {
+				// 使用本地存储的方法根据存储级别获取完整路径
+				targetStream.FilePath = localStorage.GetFullPath(targetStream.FilePath, targetStream.StorageLevel)
+			} else {
+				// 非本地存储，尝试使用 GetURL 获取路径
+				url, err := p.Server.Storage.GetURL(context.Background(), targetStream.FilePath)
+				if err != nil {
+					p.Warn("mp4 file not found and failed to get URL", "path", targetStream.FilePath, "err", err)
+					failCount++
+					continue
+				}
+				targetStream.FilePath = url
+			}
+			// 再次检查文件是否存在
+			if _, err := os.Stat(targetStream.FilePath); os.IsNotExist(err) {
+				p.Warn("mp4 file not found", "path", targetStream.FilePath)
+				failCount++
+				continue
+			}
 		}
 
 		// 计算在文件中的时间偏移（毫秒）
@@ -824,10 +892,16 @@ func (p *SnapPlugin) executePlayBackSnapTask(streamPath string, startTime, endTi
 			snapTime.Format("20060102150405"),
 			granularityInfo)
 		filename = strings.ReplaceAll(filename, "/", "_")
-		filePath := filepath.Join(savePath, filename)
+		relPath := filepath.Join(savePath, filename)
+		fullPath := localStorage.GetFullPath(relPath, 1)
+		if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
+			p.Error("create snapshot directory failed", "err", err, "path", fullPath)
+			failCount++
+			continue
+		}
 
-		// 调用截图函数
-		err := p.snapFromMP4(targetStream.FilePath, filePath, timeOffset)
+		// 调用截图函数输出到本地完整路径
+		err := p.snapFromMP4(targetStream.FilePath, fullPath, timeOffset)
 		if err != nil {
 			p.Error("playback snap failed", "error", err.Error(), "time", snapTime.Format(time.RFC3339))
 			failCount++
@@ -840,7 +914,7 @@ func (p *SnapPlugin) executePlayBackSnapTask(streamPath string, startTime, endTi
 				StreamName: streamPath,
 				SnapMode:   4, // 回放截图模式
 				SnapTime:   snapTime,
-				SnapPath:   filePath,
+				SnapPath:   relPath,
 			}
 			if err := p.DB.Create(&record).Error; err != nil {
 				p.Error("save playback snapshot record failed", "error", err.Error())
@@ -913,18 +987,18 @@ func (p *SnapPlugin) extractKeyFrameTimes(mp4FilePath string, startTime, endTime
 	// 获取MP4文件的开始时间信息
 	// 注意：ffprobe返回的时间戳是相对于文件开始的秒数
 	// 我们需要将其转换为绝对时间
-	fileStartTimeUnix := time.Time{}
+	var fileStartTime time.Time
 	// 使用数据库中记录的文件开始时间
 	// 查询数据库获取文件信息
 	var fileInfo m7s.RecordStream
 	if err := p.DB.Where("file_path = ?", mp4FilePath).First(&fileInfo).Error; err == nil {
-		fileStartTimeUnix = fileInfo.StartTime
+		fileStartTime = fileInfo.StartTime
 	} else {
 		p.Warn("failed to get file start time from database, using request start time", "error", err.Error())
-		fileStartTimeUnix = startTime
+		fileStartTime = startTime
 	}
 
-	p.Info("file start time", "time", fileStartTimeUnix.Format(time.RFC3339))
+	p.Info("file start time", "time", fileStartTime.Format(time.RFC3339))
 
 	// 存储关键帧时间点
 	var keyFrameTimes []time.Time
@@ -944,7 +1018,7 @@ func (p *SnapPlugin) extractKeyFrameTimes(mp4FilePath string, startTime, endTime
 		}
 
 		// 计算实际时间：文件开始时间 + 偏移秒数
-		frameTime := fileStartTimeUnix.Add(time.Duration(timeOffsetSec * float64(time.Second)))
+		frameTime := fileStartTime.Add(time.Duration(timeOffsetSec * float64(time.Second)))
 
 		// 只保留在请求时间范围内的关键帧
 		if (frameTime.Equal(startTime) || frameTime.After(startTime)) &&

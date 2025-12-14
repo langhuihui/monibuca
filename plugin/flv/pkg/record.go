@@ -128,13 +128,13 @@ func writeMetaTag(file storage.File, suber *m7s.Subscriber, filepositions []uint
 	}
 	amf.GetBuffer().Reset()
 	marshals := amf.Marshals("onMetaData", metaData)
-	task := &writeMetaTagTask{
+	wrTask := &writeMetaTagTask{
 		file:     file,
 		flags:    flags,
 		metaData: marshals,
 	}
-	task.Logger = suber.Logger.With("file", file.Name())
-	writeMetaTagQueueTask.AddTask(task)
+	wrTask.Logger = suber.Logger.With("file", file.Name())
+	writeMetaTagQueueTask.AddTask(wrTask)
 }
 
 func NewRecorder(conf config.Record) m7s.IRecorder {
@@ -162,22 +162,17 @@ func (r *Recorder) createStream(start time.Time) (err error) {
 	}
 
 	// 获取存储实例
-	storage := r.RecordJob.GetStorage()
+	st := r.RecordJob.GetStorage()
 
-	if storage != nil {
-		// 使用存储抽象层
-		r.file, err = storage.CreateFile(context.Background(), r.Event.FilePath)
-		if err != nil {
-			return
-		}
-		r.writer = NewFlvWriter(r.file)
-	} else {
-		// 默认本地文件行为
-		if r.file, err = os.OpenFile(r.Event.FilePath, os.O_CREATE|os.O_RDWR, 0666); err != nil {
-			return
-		}
-		r.writer = NewFlvWriter(r.file)
+	if st == nil {
+		return fmt.Errorf("global storage is nil")
 	}
+	// 使用存储抽象层
+	r.file, err = st.CreateFile(context.Background(), r.Event.FilePath)
+	if err != nil {
+		return
+	}
+	r.writer = NewFlvWriter(r.file)
 
 	_, err = r.writer.Write(FLVHead)
 	if err != nil {

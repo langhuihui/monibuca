@@ -51,72 +51,128 @@ func (p *MP4Plugin) downloadSingleFile(stream *m7s.RecordStream, flag mp4.Flag, 
 	var file storage.File
 	var err error
 
-	if stream.StorageType != "" && stream.StorageType != "local" {
-		// 远程存储：从 S3/OSS/COS 获取文件
-		var storageConfig map[string]any
+	// 最高优先级：如果 FilePath 是绝对路径，直接使用，跳过所有 storage 处理
+	if filepath.IsAbs(stream.FilePath) {
+		if flag == 0 {
+			// 普通 MP4：直接 ServeFile
+			http.ServeFile(w, r, stream.FilePath)
+			return
+		}
+		// fMP4：直接打开文件
+		file, err = os.Open(stream.FilePath)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("failed to open file: %v", err), http.StatusInternalServerError)
+			p.Error("failed to open file", "err", err, "path", stream.FilePath)
+			return
+		}
+		defer file.Close()
+		p.Info("reading file for fmp4 conversion from absolute path", "path", stream.FilePath)
+		// 继续执行 fMP4 转换处理
+	} else {
+		// 相对路径：使用 storage 处理
+		// 检查全局存储是否存在且类型匹配
+		st := p.Server.Storage
+		var globalStorageType string
+		if st != nil {
+			globalStorageType = st.GetKey()
+		}
+		useGlobalStorage := st != nil && globalStorageType == stream.StorageType
+		isLocalStorage := stream.StorageType == string(storage.StorageTypeLocal) || stream.StorageType == ""
 
-		// 遍历所有录像配置规则，查找包含该 storage 类型的配置
-		commonConf := p.GetCommonConf()
-		for _, recConf := range commonConf.OnPub.Record {
-			if recConf.Storage != nil {
-				if cfg, ok := recConf.Storage[stream.StorageType]; ok {
-					if cfgMap, ok := cfg.(map[string]any); ok {
-						storageConfig = cfgMap
-						break
+		// 对于普通 MP4，优先直接获取存储URL或路径
+		if flag == 0 {
+			if useGlobalStorage {
+				if isLocalStorage {
+					// 本地存储：根据存储级别获取完整路径
+					if localStorage, ok := st.(*storage.LocalStorage); ok {
+						fullPath := localStorage.GetFullPath(stream.FilePath, stream.StorageLevel)
+						http.ServeFile(w, r, fullPath)
+					} else {
+						// 类型不匹配，使用 GetURL 作为兜底
+						url, err := st.GetURL(context.Background(), stream.FilePath)
+						if err != nil {
+							http.Error(w, fmt.Sprintf("failed to get URL: %v", err), http.StatusInternalServerError)
+							p.Error("failed to get URL", "err", err)
+							return
+						}
+						http.ServeFile(w, r, url)
 					}
+				} else {
+					// 其他存储类型，使用 GetURL 并重定向
+					url, err := st.GetURL(context.Background(), stream.FilePath)
+					if err != nil {
+						http.Error(w, fmt.Sprintf("failed to get URL: %v", err), http.StatusInternalServerError)
+						p.Error("failed to get URL", "err", err)
+						return
+					}
+					p.Info("redirect to storage URL", "storageType", stream.StorageType, "url", url)
+					http.Redirect(w, r, url, http.StatusFound)
+				}
+			} else {
+				// 兜底逻辑：直接使用 stream.FilePath
+				if isLocalStorage {
+					http.ServeFile(w, r, stream.FilePath)
+				} else {
+					http.Error(w, "storage type mismatch, cannot serve file", http.StatusInternalServerError)
+					p.Error("storage type mismatch", "streamType", stream.StorageType, "globalType", globalStorageType)
 				}
 			}
-		}
-
-		if storageConfig == nil {
-			http.Error(w, "storage config not found", http.StatusInternalServerError)
-			p.Error("storage config not found", "storageType", stream.StorageType)
-			return
-		}
-
-		// 创建 storage 实例
-		storageInstance, err := storage.CreateStorage(stream.StorageType, storageConfig)
-		if err != nil {
-			http.Error(w, fmt.Sprintf("failed to create storage: %v", err), http.StatusInternalServerError)
-			p.Error("failed to create storage", "err", err)
-			return
-		}
-
-		// 对于普通 MP4，直接重定向到预签名 URL
-		if flag == 0 {
-			url, err := storageInstance.GetURL(context.Background(), stream.FilePath)
-			if err != nil {
-				http.Error(w, fmt.Sprintf("failed to get URL: %v", err), http.StatusInternalServerError)
-				p.Error("failed to get URL", "err", err)
-				return
-			}
-			p.Info("redirect to storage URL", "storageType", stream.StorageType, "url", url)
-			http.Redirect(w, r, url, http.StatusFound)
 			return
 		}
 
 		// 对于 fmp4，需要读取文件进行转换（只读模式，不会上传）
-		file, err = storageInstance.OpenFile(context.Background(), stream.FilePath)
-		if err != nil {
-			http.Error(w, fmt.Sprintf("failed to open remote file: %v", err), http.StatusInternalServerError)
-			p.Error("failed to open remote file", "err", err)
-			return
+		if useGlobalStorage {
+			if isLocalStorage {
+				// 本地存储：根据存储级别获取完整路径后打开文件
+				if localStorage, ok := st.(*storage.LocalStorage); ok {
+					fullPath := localStorage.GetFullPath(stream.FilePath, stream.StorageLevel)
+					file, err = os.Open(fullPath)
+					if err != nil {
+						http.Error(w, fmt.Sprintf("failed to open local file: %v", err), http.StatusInternalServerError)
+						p.Error("failed to open local file", "err", err, "path", fullPath)
+						return
+					}
+					defer file.Close()
+					p.Info("reading file for fmp4 conversion from local storage", "storageLevel", stream.StorageLevel, "path", fullPath)
+				} else {
+					// 类型不匹配，使用 OpenFile 作为兜底
+					file, err = st.OpenFile(context.Background(), stream.FilePath)
+					if err != nil {
+						http.Error(w, fmt.Sprintf("failed to open file: %v", err), http.StatusInternalServerError)
+						p.Error("failed to open file", "err", err)
+						return
+					}
+					defer file.Close()
+					p.Info("reading file for fmp4 conversion from global storage", "storageType", stream.StorageType, "path", stream.FilePath)
+				}
+			} else {
+				// 其他存储类型，使用 OpenFile
+				file, err = st.OpenFile(context.Background(), stream.FilePath)
+				if err != nil {
+					http.Error(w, fmt.Sprintf("failed to open file: %v", err), http.StatusInternalServerError)
+					p.Error("failed to open file", "err", err)
+					return
+				}
+				defer file.Close()
+				p.Info("reading file for fmp4 conversion from global storage", "storageType", stream.StorageType, "path", stream.FilePath)
+			}
+		} else {
+			// 兜底逻辑：直接使用 stream.FilePath 作为本地文件
+			if isLocalStorage {
+				file, err = os.Open(stream.FilePath)
+				if err != nil {
+					http.Error(w, fmt.Sprintf("failed to open local file: %v", err), http.StatusInternalServerError)
+					p.Error("failed to open local file", "err", err)
+					return
+				}
+				defer file.Close()
+				p.Info("reading file for fmp4 conversion from local path", "path", stream.FilePath)
+			} else {
+				http.Error(w, "storage type mismatch, cannot open file", http.StatusInternalServerError)
+				p.Error("storage type mismatch", "streamType", stream.StorageType, "globalType", globalStorageType)
+				return
+			}
 		}
-		defer file.Close()
-		p.Info("reading remote file for fmp4 conversion", "storageType", stream.StorageType, "path", stream.FilePath)
-	} else {
-		// 本地存储
-		if flag == 0 {
-			http.ServeFile(w, r, stream.FilePath)
-			return
-		}
-		// 本地文件用于 fmp4 转换
-		file, err = os.Open(stream.FilePath)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		defer file.Close()
 	}
 
 	// fmp4 转换处理（本地和远程文件统一处理）

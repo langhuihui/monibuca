@@ -1,8 +1,6 @@
 package plugin_mp4
 
 import (
-	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,6 +10,7 @@ import (
 	"github.com/shirou/gopsutil/v4/disk"
 	"gorm.io/gorm"
 	"m7s.live/v5"
+	"m7s.live/v5/pkg/storage"
 )
 
 // mysql数据库里Exception 定义异常结构体
@@ -69,12 +68,12 @@ func (p *DeleteRecordTask) getDiskOutOfSpace(filePath string) bool {
 		return false
 	}
 	p.plugin.Debug("getDiskOutOfSpace", "current path", exePath, "disk UsedPercent", d.UsedPercent, "total disk space", d.Total,
-		"disk free", d.Free, "disk usage", d.Used, "AutoOverWriteDiskPercent", p.AutoOverWriteDiskPercent, "DiskMaxPercent", p.DiskMaxPercent)
-	return d.UsedPercent >= p.AutoOverWriteDiskPercent
+		"disk free", d.Free, "disk usage", d.Used, "OverwritePercent", p.OverwritePercent, "DiskMaxPercent", p.DiskMaxPercent)
+	return d.UsedPercent >= p.OverwritePercent
 }
 
 func (p *DeleteRecordTask) deleteOldestFile() {
-	//当当前磁盘使用量大于AutoOverWriteDiskPercent自动覆盖磁盘使用量配置时，自动删除最旧的文件
+	//当当前磁盘使用量大于OverwritePercent自动覆盖磁盘使用量配置时，自动删除最旧的文件
 	//连续录像删除最旧的文件
 	// 使用 map 去重，存储所有的 conf.FilePath
 	pathMap := make(map[string]bool)
@@ -86,9 +85,9 @@ func (p *DeleteRecordTask) deleteOldestFile() {
 					dirPath := filepath.Dir(conf.FilePath)
 					if _, exists := pathMap[dirPath]; !exists {
 						pathMap[dirPath] = true
-						p.Info("deleteOldestFile", "original filepath", conf.FilePath, "processed filepath", dirPath)
+						p.Info("deleteOldestFile", "action", "add path", "original", conf.FilePath, "processed", dirPath)
 					} else {
-						p.Debug("deleteOldestFile", "duplicate path ignored", "path", dirPath)
+						p.Debug("deleteOldestFile", "status", "duplicate path ignored", "path", dirPath)
 					}
 				}
 			}
@@ -101,13 +100,13 @@ func (p *DeleteRecordTask) deleteOldestFile() {
 	for path := range pathMap {
 		filePaths = append(filePaths, path)
 	}
-	p.Debug("deleteOldestFile", "after get onpub.record,filePaths.length", len(filePaths))
+	p.Debug("deleteOldestFile", "stage", "after onpub.record", "count", len(filePaths))
 	if p.plugin.EventRecordFilePath != "" {
 		// 同样处理EventRecordFilePath
 		dirPath := filepath.Dir(p.plugin.EventRecordFilePath)
 		filePaths = append(filePaths, dirPath)
 	}
-	p.Debug("deleteOldestFile", "after get eventrecordfilepath,filePaths.length", len(filePaths))
+	p.Debug("deleteOldestFile", "stage", "after get eventrecordfilepath", "count", len(filePaths))
 	for _, filePath := range filePaths {
 		for p.getDiskOutOfSpace(filePath) {
 			var recordStreams []m7s.RecordStream
@@ -117,43 +116,43 @@ func (p *DeleteRecordTask) deleteOldestFile() {
 			// 直接替换所有反斜杠，不需要判断是否包含
 			basePath = strings.Replace(basePath, "\\", "\\\\", -1)
 			searchPattern := basePath + "%"
-			p.Info("deleteOldestFile", "searching with path pattern", searchPattern)
+			p.Info("deleteOldestFile", "action", "searching", "pattern", searchPattern)
 
 			err := p.DB.Where(" record_level!='high' AND end_time IS NOT NULL").
 				Where("file_path LIKE ?", searchPattern).
 				Order("end_time ASC").Limit(1).Find(&recordStreams).Error
 			if err == nil {
 				if len(recordStreams) > 0 {
-					p.Info("deleteOldestFile", "found %d records", len(recordStreams))
+					p.Info("deleteOldestFile", "found", len(recordStreams), "unit", "records")
 					for _, record := range recordStreams {
-						p.Info("deleteOldestFile", "ready to delete oldestfile,ID", record.ID, "create time", record.EndTime, "filepath", record.FilePath)
+						p.Info("deleteOldestFile", "action", "deleting", "ID", record.ID, "endTime", record.EndTime, "filepath", record.FilePath)
 						err = os.Remove(record.FilePath)
 						if err != nil {
 							// 检查是否为文件不存在的错误
 							if os.IsNotExist(err) {
 								// 文件不存在，记录日志但视为删除成功
-								p.Warn("deleteOldestFile", "file does not exist, continuing with database deletion", record.FilePath)
+								p.Warn("deleteOldestFile", "status", "file not exist, continuing", "filepath", record.FilePath)
 								// 继续删除数据库记录
 								err = p.DB.Delete(&record).Error
 								if err != nil {
-									p.Error("deleteOldestFile", "delete record from db error", err)
+									p.Error("deleteOldestFile", "error", "delete record from db", "err", err)
 								}
 							} else {
 								// 其他错误，记录并跳过此记录
-								p.Error("deleteOldestFile", "delete file from disk error", err)
+								p.Error("deleteOldestFile", "error", "delete file from disk", "err", err)
 								continue
 							}
 						} else {
 							// 文件删除成功，继续删除数据库记录
 							err = p.DB.Delete(&record).Error
 							if err != nil {
-								p.Error("deleteOldestFile", "delete record from db error", err)
+								p.Error("deleteOldestFile", "error", "delete record from db", "err", err)
 							}
 						}
 					}
 				}
 			} else {
-				p.Error("deleteOldestFile", "search record from db error", err)
+				p.Error("deleteOldestFile", "error", "search record from db", "err", err)
 			}
 			time.Sleep(time.Second * 3)
 		}
@@ -162,12 +161,11 @@ func (p *DeleteRecordTask) deleteOldestFile() {
 
 type StorageManagementTask struct {
 	task.TickTask
-	DiskMaxPercent            float64
-	AutoOverWriteDiskPercent  float64
-	MigrationThresholdPercent float64
-	RecordFileExpireDays      int
-	DB                        *gorm.DB
-	plugin                    *MP4Plugin
+	DiskMaxPercent       float64
+	OverwritePercent     float64
+	RecordFileExpireDays int
+	DB                   *gorm.DB
+	plugin               *MP4Plugin
 }
 
 // 为了兼容性，保留 DeleteRecordTask 作为别名
@@ -178,248 +176,169 @@ func (t *DeleteRecordTask) GetTickInterval() time.Duration {
 }
 
 func (t *StorageManagementTask) Tick(any) {
-	t.Debug("StorageManagementTask", "tick started")
+	t.Debug("StorageManagementTask", "status", "tick started")
 
-	// 阶段1：文件迁移（优先级最高，释放主存储空间）
-	t.Debug("StorageManagementTask", "phase 1: file migration")
-	t.migrateFiles()
+	// 阶段1：LocalStorage 存储管理（迁移或删除）
+	t.Debug("StorageManagementTask", "phase", "1", "action", "local storage management")
+	t.manageLocalStorage()
 
 	// 阶段2：删除过期文件
-	t.Debug("StorageManagementTask", "phase 2: delete expired files")
+	t.Debug("StorageManagementTask", "phase", "2", "action", "delete expired files")
 	t.deleteExpiredFiles()
 
-	// 阶段3：删除最旧文件（兜底机制）
-	t.Debug("StorageManagementTask", "phase 3: delete oldest files")
-	t.deleteOldestFile()
+	// 注意：阶段3 deleteOldestFile 已被移除，因为阶段1的 manageLocalStorage 已经处理了磁盘空间管理
 
-	t.Debug("StorageManagementTask", "tick completed")
+	t.Debug("StorageManagementTask", "status", "tick completed")
 }
 
-// migrateFiles 将主存储中的文件迁移到次级存储
-func (t *StorageManagementTask) migrateFiles() {
-	// 只有配置了迁移阈值才执行迁移
-	if t.MigrationThresholdPercent <= 0 {
-		t.Debug("migrateFiles", "migration disabled", "threshold not configured or set to 0")
+// manageLocalStorage 管理本地存储（通过 LocalStorage 进行迁移或删除）
+func (t *StorageManagementTask) manageLocalStorage() {
+	t.Debug("manageLocalStorage", "status", "starting")
+
+	// 检查全局存储是否存在且为 LocalStorage 类型
+	st := t.plugin.Server.Storage
+	if st == nil {
+		t.Debug("manageLocalStorage", "status", "global storage not initialized, using fallback logic")
+		t.manageFallbackStorage()
 		return
 	}
 
-	t.Debug("migrateFiles", "starting migration check,threshold", t.MigrationThresholdPercent)
-
-	// 收集所有需要检查的路径（使用 map 去重）
-	pathMap := make(map[string]string) // primary path -> secondary path
-	if t.plugin.Server.Plugins.Length > 0 {
-		t.plugin.Server.Plugins.Range(func(plugin *m7s.Plugin) bool {
-			if len(plugin.GetCommonConf().OnPub.Record) > 0 {
-				for _, conf := range plugin.GetCommonConf().OnPub.Record {
-					// 只处理配置了次级路径的录像配置
-					if conf.SecondaryFilePath == "" {
-						t.Debug("migrateFiles", "skipping path without secondary storage,path", conf.FilePath)
-						continue
-					}
-					primaryPath := filepath.Dir(conf.FilePath)
-					secondaryPath := filepath.Dir(conf.SecondaryFilePath)
-
-					// 检查是否已存在
-					if existingSecondary, exists := pathMap[primaryPath]; exists {
-						if existingSecondary != secondaryPath {
-							t.Warn("migrateFiles", "duplicate primary path with different secondary paths",
-								"primary", primaryPath,
-								"existing secondary", existingSecondary,
-								"new secondary", secondaryPath)
-						} else {
-							t.Debug("migrateFiles", "duplicate path ignored,primary", primaryPath)
-						}
-						continue
-					}
-
-					pathMap[primaryPath] = secondaryPath
-					t.Debug("migrateFiles", "added path for migration check,primary", primaryPath, "secondary", secondaryPath)
-				}
-			}
-			return true
-		})
-	}
-
-	if len(pathMap) == 0 {
-		t.Debug("migrateFiles", "no secondary paths configured", "skipping migration")
+	localStorage, ok := st.(*storage.LocalStorage)
+	if !ok {
+		t.Debug("manageLocalStorage", "status", "global storage is not LocalStorage, using fallback logic")
+		t.manageFallbackStorage()
 		return
 	}
 
-	t.Debug("migrateFiles", "checking paths count", len(pathMap))
+	// 设置数据库连接和全局阈值
+	localStorage.SetDB(t.DB)
+	localStorage.SetGlobalThreshold(t.OverwritePercent)
 
-	// 遍历每个主存储路径
-	for primaryPath, secondaryPath := range pathMap {
-		usage := t.getDiskUsagePercent(primaryPath)
-		t.Debug("migrateFiles", "checking disk usage,path", primaryPath, "usage", usage, "threshold", t.MigrationThresholdPercent)
+	// 执行存储管理
+	if err := localStorage.CheckAndManageStorage(); err != nil {
+		t.Error("manageLocalStorage", "error", "check and manage storage failed", "err", err)
+	} else {
+		t.Debug("manageLocalStorage", "status", "success")
+	}
 
-		if usage < t.MigrationThresholdPercent {
-			t.Debug("migrateFiles", "usage below threshold,path", primaryPath, "skipping")
-			continue // 未达到迁移阈值，跳过
+	t.Debug("manageLocalStorage", "status", "completed")
+}
+
+// manageFallbackStorage 兜底逻辑：当全局存储不是 LocalStorage 时，使用全局配置管理磁盘空间
+func (t *StorageManagementTask) manageFallbackStorage() {
+	t.Debug("manageFallbackStorage", "status", "starting")
+
+	// 尝试从全局存储获取路径
+	var storagePath string
+	if st := t.plugin.Server.Storage; st != nil {
+		if localStorage, ok := st.(*storage.LocalStorage); ok {
+			// 使用主存储路径
+			storagePath = localStorage.GetStoragePath(1)
+		} else {
+			// 非本地存储，尝试使用 GetURL 获取路径（可能不适用）
+			t.Debug("manageFallbackStorage", "status", "global storage is not LocalStorage, cannot get path")
 		}
+	}
 
-		t.Info("migrateFiles", "migration triggered", "primary path", primaryPath, "secondary path", secondaryPath, "usage", usage, "threshold", t.MigrationThresholdPercent)
+	// 如果无法从全局存储获取路径，使用第一个录像配置的 filepath 目录
+	if storagePath == "" {
+		recordConfigs := t.plugin.GetCommonConf().OnPub.Record
+		if len(recordConfigs) > 0 {
+			// 遍历 map 获取第一个配置的 filepath 目录
+			for _, conf := range recordConfigs {
+				storagePath = filepath.Dir(conf.FilePath)
+				t.Debug("manageFallbackStorage", "action", "using first record config path", "path", storagePath)
+				break
+			}
+		} else {
+			t.Debug("manageFallbackStorage", "status", "no storage path found")
+			return
+		}
+	}
 
-		// 查找主存储中最旧的已完成录像（storage_level=1）
-		var recordStreams []m7s.RecordStream
-		basePath := strings.Replace(primaryPath, "\\", "\\\\", -1)
-		searchPattern := basePath + "%"
+	// 检查磁盘使用率（使用存储路径）
+	diskUsage := t.getDiskUsagePercent(storagePath)
+	t.Debug("manageFallbackStorage", "storagePath", storagePath, "diskUsage", diskUsage, "threshold", t.OverwritePercent)
 
-		// 每次迁移多个文件，提高效率
-		err := t.DB.Where("record_level!='high' AND end_time IS NOT NULL AND storage_level=1").
-			Where("file_path LIKE ?", searchPattern).
+	// 如果超过阈值，删除最旧的文件
+	for diskUsage >= t.OverwritePercent {
+		t.Info("manageFallbackStorage", "action", "disk usage exceeded", "storagePath", storagePath, "usage", diskUsage, "threshold", t.OverwritePercent)
+
+		// 查询最旧的文件
+		var record m7s.RecordStream
+		err := t.DB.Where("storage_type = ?", "local").
+			Where("type = ?", "mp4").
+			Where("storage_level = ?", 1).
+			Where("record_level != ?", "high").
+			Where("end_time IS NOT NULL").
 			Order("end_time ASC").
-			Limit(10). // 批量迁移10个文件
-			Find(&recordStreams).Error
+			First(&record).Error
 
 		if err != nil {
-			t.Error("migrateFiles", "query records error", err)
-			continue
-		}
-
-		if len(recordStreams) == 0 {
-			t.Debug("migrateFiles", "no files to migrate", "path", primaryPath)
-			continue
-		}
-
-		t.Info("migrateFiles", "found files to migrate", "count", len(recordStreams), "path", primaryPath)
-
-		for _, record := range recordStreams {
-			t.Debug("migrateFiles", "migrating file", "ID", record.ID, "filepath", record.FilePath, "endTime", record.EndTime)
-			if err := t.migrateFile(&record, primaryPath); err != nil {
-				t.Error("migrateFiles", "migrate file error", err, "ID", record.ID, "filepath", record.FilePath)
-			} else {
-				t.Info("migrateFiles", "file migrated successfully", "ID", record.ID, "from", record.FilePath, "to", record.FilePath)
+			if err == gorm.ErrRecordNotFound {
+				// 没有非重要录像，查询所有录像
+				err = t.DB.Where("storage_type = ?", "local").
+					Where("type = ?", "mp4").
+					Where("storage_level = ?", 1).
+					Where("end_time IS NOT NULL").
+					Order("end_time ASC").
+					First(&record).Error
+			}
+			if err != nil {
+				t.Error("manageFallbackStorage", "error", "query oldest record failed", "err", err, "storagePath", storagePath)
+				break
 			}
 		}
-	}
 
-	t.Debug("migrateFiles", "migration check completed")
-}
+		t.Info("manageFallbackStorage", "action", "deleting file", "ID", record.ID, "filePath", record.FilePath)
 
-// migrateFile 迁移单个文件到次级存储
-func (t *StorageManagementTask) migrateFile(record *m7s.RecordStream, primaryPath string) error {
-	// 获取次级存储路径
-	secondaryPath := t.getSecondaryPath(primaryPath)
-	if secondaryPath == "" {
-		t.Debug("migrateFile", "no secondary path found", "primaryPath", primaryPath)
-		return fmt.Errorf("no secondary path configured for %s", primaryPath)
-	}
-
-	// 构建目标路径（保持相对路径结构）
-	relativePath := strings.TrimPrefix(record.FilePath, primaryPath)
-	relativePath = strings.TrimPrefix(relativePath, string(filepath.Separator))
-	targetPath := filepath.Join(secondaryPath, relativePath)
-
-	t.Debug("migrateFile", "preparing migration", "from", record.FilePath, "to", targetPath)
-
-	// 创建目标目录
-	targetDir := filepath.Dir(targetPath)
-	if err := os.MkdirAll(targetDir, 0755); err != nil {
-		t.Error("migrateFile", "create target directory failed", err, "dir", targetDir)
-		return fmt.Errorf("create target directory failed: %w", err)
-	}
-
-	t.Debug("migrateFile", "target directory created", "dir", targetDir)
-
-	// 移动文件
-	if err := os.Rename(record.FilePath, targetPath); err != nil {
-		t.Debug("migrateFile", "rename failed, trying copy", "error", err)
-		// 如果跨磁盘移动失败，尝试复制后删除
-		if err := t.copyAndRemove(record.FilePath, targetPath); err != nil {
-			t.Error("migrateFile", "copy and remove failed", err)
-			return fmt.Errorf("move file failed: %w", err)
-		}
-		t.Debug("migrateFile", "file copied and removed")
-	} else {
-		t.Debug("migrateFile", "file renamed successfully")
-	}
-
-	// 更新数据库记录
-	oldPath := record.FilePath
-	record.FilePath = targetPath
-	record.StorageLevel = 2
-	if err := t.DB.Save(record).Error; err != nil {
-		t.Error("migrateFile", "database update failed, rolling back", err)
-		// 如果数据库更新失败，尝试回滚文件移动
-		if rollbackErr := os.Rename(targetPath, oldPath); rollbackErr != nil {
-			t.Error("migrateFile", "rollback failed", rollbackErr, "file may be in inconsistent state")
+		// 判断 file_path 是相对路径还是绝对路径
+		var absolutePath string
+		if filepath.IsAbs(record.FilePath) {
+			// 绝对路径，直接使用
+			absolutePath = record.FilePath
 		} else {
-			t.Debug("migrateFile", "rollback successful")
-		}
-		return fmt.Errorf("update database failed: %w", err)
-	}
-
-	t.Debug("migrateFile", "database updated", "storageLevel", 2, "newPath", targetPath)
-
-	return nil
-}
-
-// copyAndRemove 复制文件后删除原文件（用于跨磁盘移动）
-func (t *StorageManagementTask) copyAndRemove(src, dst string) error {
-	t.Debug("copyAndRemove", "starting cross-disk copy", "from", src, "to", dst)
-
-	// 获取源文件信息
-	srcInfo, err := os.Stat(src)
-	if err != nil {
-		return err
-	}
-	fileSize := srcInfo.Size()
-	t.Debug("copyAndRemove", "source file info", "size", fileSize)
-
-	// 打开源文件
-	srcFile, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer srcFile.Close()
-
-	// 创建目标文件
-	dstFile, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-	defer dstFile.Close()
-
-	// 复制文件内容
-	t.Debug("copyAndRemove", "copying file content")
-	copiedBytes, err := io.Copy(dstFile, srcFile)
-	if err != nil {
-		os.Remove(dst) // 复制失败，删除目标文件
-		t.Error("copyAndRemove", "copy failed", err, "copiedBytes", copiedBytes)
-		return err
-	}
-
-	t.Debug("copyAndRemove", "file copied", "bytes", copiedBytes)
-
-	// 同步到磁盘
-	if err := dstFile.Sync(); err != nil {
-		t.Error("copyAndRemove", "sync failed", err)
-		return err
-	}
-
-	t.Debug("copyAndRemove", "synced to disk, removing source file")
-
-	// 删除源文件
-	if err := os.Remove(src); err != nil {
-		t.Error("copyAndRemove", "remove source file failed", err)
-		return err
-	}
-
-	t.Debug("copyAndRemove", "source file removed successfully")
-	return nil
-}
-
-// getSecondaryPath 获取主路径对应的次级存储路径
-func (t *StorageManagementTask) getSecondaryPath(primaryPath string) string {
-	if len(t.plugin.GetCommonConf().OnPub.Record) > 0 {
-		for _, conf := range t.plugin.GetCommonConf().OnPub.Record {
-			dirPath := filepath.Dir(conf.FilePath)
-			if dirPath == primaryPath && conf.SecondaryFilePath != "" {
-				return filepath.Dir(conf.SecondaryFilePath)
+			// 相对路径，使用全局存储的 GetFullPath 方法
+			if st := t.plugin.Server.Storage; st != nil {
+				if localStorage, ok := st.(*storage.LocalStorage); ok {
+					absolutePath = localStorage.GetFullPath(record.FilePath, record.StorageLevel)
+				} else {
+					absolutePath = record.FilePath
+					t.Warn("manageFallbackStorage", "warning", "file_path is relative and storage is not LocalStorage", "filePath", record.FilePath)
+				}
+			} else {
+				absolutePath = record.FilePath
+				t.Warn("manageFallbackStorage", "warning", "file_path is relative and no global storage", "filePath", record.FilePath)
 			}
 		}
+
+		t.Debug("manageFallbackStorage", "action", "removing file", "absolutePath", absolutePath)
+
+		// 删除文件
+		fileDeleteErr := os.Remove(absolutePath)
+		if fileDeleteErr != nil && !os.IsNotExist(fileDeleteErr) {
+			// 文件删除失败，记录错误日志
+			t.Error("manageFallbackStorage", "error", "remove file failed", "err", fileDeleteErr, "filePath", absolutePath)
+		}
+
+		// 删除数据库记录（软删除）
+		// 即使文件删除失败，也要删除数据库记录，避免永远卡在这个文件上
+		if err := t.DB.Delete(&record).Error; err != nil {
+			t.Error("manageFallbackStorage", "error", "delete database record failed", "err", err, "ID", record.ID)
+			break
+		}
+
+		t.Info("manageFallbackStorage", "status", "file deleted successfully", "ID", record.ID)
+
+		// 重新检查磁盘使用率
+		diskUsage = t.getDiskUsagePercent(storagePath)
+		t.Debug("manageFallbackStorage", "status", "rechecking disk usage", "storagePath", storagePath, "usage", diskUsage)
+
+		// 避免无限循环，休眠一下
+		time.Sleep(time.Second)
 	}
-	return ""
+
+	t.Debug("manageFallbackStorage", "status", "completed")
 }
 
 // getDiskUsagePercent 获取磁盘使用率百分比
@@ -449,15 +368,15 @@ func (t *StorageManagementTask) deleteExpiredFiles() {
 			err = os.Remove(record.FilePath)
 			if err != nil {
 				if os.IsNotExist(err) {
-					t.Warn("deleteExpiredFiles", "file does not exist", record.FilePath)
+					t.Warn("deleteExpiredFiles", "status", "file not exist", "filepath", record.FilePath)
 				} else {
-					t.Error("deleteExpiredFiles", "delete file error", err)
+					t.Error("deleteExpiredFiles", "error", "delete file", "err", err)
 				}
 			}
 			// 无论文件是否存在，都删除数据库记录
 			err = t.DB.Delete(&record).Error
 			if err != nil {
-				t.Error("deleteExpiredFiles", "delete record from db error", err)
+				t.Error("deleteExpiredFiles", "error", "delete record from db", "err", err)
 			}
 		}
 	}

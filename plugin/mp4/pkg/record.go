@@ -157,21 +157,15 @@ func (r *Recorder) createStream(start time.Time) (err error) {
 	// 直接创建新文件并覆盖 r.file
 
 	// 获取存储实例
-	storage := r.RecordJob.GetStorage()
+	st := r.RecordJob.GetStorage()
 
-	if storage != nil {
-		// 使用存储抽象层
-		r.file, err = storage.CreateFile(context.Background(), r.Event.FilePath)
-		if err != nil {
-			return
-		}
-	} else {
-		// 默认本地文件行为
-		// 使用 OpenFile 以读写模式打开,因为 writeTrailerTask.Run() 需要读取文件内容
-		r.file, err = os.OpenFile(r.Event.FilePath, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0644)
-		if err != nil {
-			return
-		}
+	if st == nil {
+		return fmt.Errorf("global storage is nil")
+	}
+	// 使用存储抽象层
+	r.file, err = st.CreateFile(context.Background(), r.Event.FilePath)
+	if err != nil {
+		return
 	}
 
 	if r.Event.Type == "fmp4" {

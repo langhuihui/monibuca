@@ -84,6 +84,10 @@ func NewOSSStorage(config *OSSStorageConfig) (*OSSStorage, error) {
 	}, nil
 }
 
+func (s *OSSStorage) GetKey() string {
+	return "oss"
+}
+
 func (s *OSSStorage) CreateFile(ctx context.Context, path string) (File, error) {
 	objectKey := s.getObjectKey(path)
 	return &OSSFile{

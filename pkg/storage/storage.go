@@ -46,6 +46,8 @@ type Storage interface {
 
 	// Close 关闭存储连接
 	Close() error
+
+	GetKey() string
 }
 
 // Writer 写入器接口

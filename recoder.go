@@ -74,7 +74,10 @@ func (r *DefaultRecorder) CreateStream(start time.Time, customFileName func(*Rec
 	filePath := customFileName(recordJob)
 
 	var storageType string
-	recordJob.storage, storageType = r.createStorage(recordJob.RecConf.Storage)
+	recordJob.storage = recordJob.Plugin.Server.Storage
+	if recordJob.storage != nil {
+		storageType = recordJob.storage.GetKey()
+	}
 
 	if recordJob.storage == nil {
 		return fmt.Errorf("storage config is required")

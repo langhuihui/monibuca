@@ -87,6 +87,9 @@ func NewCOSStorage(config *COSStorageConfig) (*COSStorage, error) {
 	}, nil
 }
 
+func (s *COSStorage) GetKey() string {
+	return "cos"
+}
 func (s *COSStorage) CreateFile(ctx context.Context, path string) (File, error) {
 	objectKey := s.getObjectKey(path)
 	return &COSFile{
