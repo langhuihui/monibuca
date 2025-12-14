@@ -152,6 +152,12 @@ service api {
       get: "/api/config/formily/{name}"
     };
   }
+  rpc SetArming (SetArmingRequest) returns (SuccessResponse) {
+    option (google.api.http) = {
+      post: "/api/arming/set"
+      body: "*"
+    };
+  }
   rpc ModifyConfig (ModifyConfigRequest) returns (SuccessResponse) {
     option (google.api.http) = {
       post: "/api/config/modify"
@@ -512,6 +518,10 @@ message VideoTrackInfo {
 message SuccessResponse {
   int32 code = 1;
   string message = 2;
+}
+
+message SetArmingRequest {
+  bool armed = 1;  // true=布防（启用录像），false=撤防（禁用录像）
 }
 
 message RequestWithId {

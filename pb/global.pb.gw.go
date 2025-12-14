@@ -41,9 +41,7 @@ func request_Api_SysInfo_0(ctx context.Context, marshaler runtime.Marshaler, cli
 		protoReq emptypb.Empty
 		metadata runtime.ServerMetadata
 	)
-	if req.Body != nil {
-		_, _ = io.Copy(io.Discard, req.Body)
-	}
+	io.Copy(io.Discard, req.Body)
 	msg, err := client.SysInfo(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
 }
@@ -62,9 +60,7 @@ func request_Api_DisabledPlugins_0(ctx context.Context, marshaler runtime.Marsha
 		protoReq emptypb.Empty
 		metadata runtime.ServerMetadata
 	)
-	if req.Body != nil {
-		_, _ = io.Copy(io.Discard, req.Body)
-	}
+	io.Copy(io.Discard, req.Body)
 	msg, err := client.DisabledPlugins(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
 }
@@ -83,9 +79,7 @@ func request_Api_Summary_0(ctx context.Context, marshaler runtime.Marshaler, cli
 		protoReq emptypb.Empty
 		metadata runtime.ServerMetadata
 	)
-	if req.Body != nil {
-		_, _ = io.Copy(io.Discard, req.Body)
-	}
+	io.Copy(io.Discard, req.Body)
 	msg, err := client.Summary(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
 }
@@ -106,9 +100,7 @@ func request_Api_Shutdown_0(ctx context.Context, marshaler runtime.Marshaler, cl
 		protoReq RequestWithId
 		metadata runtime.ServerMetadata
 	)
-	if req.Body != nil {
-		_, _ = io.Copy(io.Discard, req.Body)
-	}
+	io.Copy(io.Discard, req.Body)
 	if err := req.ParseForm(); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
@@ -141,9 +133,7 @@ func request_Api_Restart_0(ctx context.Context, marshaler runtime.Marshaler, cli
 		protoReq RequestWithId
 		metadata runtime.ServerMetadata
 	)
-	if req.Body != nil {
-		_, _ = io.Copy(io.Discard, req.Body)
-	}
+	io.Copy(io.Discard, req.Body)
 	if err := req.ParseForm(); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
@@ -174,9 +164,7 @@ func request_Api_TaskTree_0(ctx context.Context, marshaler runtime.Marshaler, cl
 		protoReq emptypb.Empty
 		metadata runtime.ServerMetadata
 	)
-	if req.Body != nil {
-		_, _ = io.Copy(io.Discard, req.Body)
-	}
+	io.Copy(io.Discard, req.Body)
 	msg, err := client.TaskTree(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
 }
@@ -196,9 +184,7 @@ func request_Api_StopTask_0(ctx context.Context, marshaler runtime.Marshaler, cl
 		metadata runtime.ServerMetadata
 		err      error
 	)
-	if req.Body != nil {
-		_, _ = io.Copy(io.Discard, req.Body)
-	}
+	io.Copy(io.Discard, req.Body)
 	val, ok := pathParams["id"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "id")
@@ -235,9 +221,7 @@ func request_Api_RestartTask_0(ctx context.Context, marshaler runtime.Marshaler,
 		metadata runtime.ServerMetadata
 		err      error
 	)
-	if req.Body != nil {
-		_, _ = io.Copy(io.Discard, req.Body)
-	}
+	io.Copy(io.Discard, req.Body)
 	val, ok := pathParams["id"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "id")
@@ -275,9 +259,7 @@ func request_Api_StreamList_0(ctx context.Context, marshaler runtime.Marshaler, 
 		protoReq StreamListRequest
 		metadata runtime.ServerMetadata
 	)
-	if req.Body != nil {
-		_, _ = io.Copy(io.Discard, req.Body)
-	}
+	io.Copy(io.Discard, req.Body)
 	if err := req.ParseForm(); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
@@ -308,9 +290,7 @@ func request_Api_WaitList_0(ctx context.Context, marshaler runtime.Marshaler, cl
 		protoReq emptypb.Empty
 		metadata runtime.ServerMetadata
 	)
-	if req.Body != nil {
-		_, _ = io.Copy(io.Discard, req.Body)
-	}
+	io.Copy(io.Discard, req.Body)
 	msg, err := client.WaitList(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
 }
@@ -330,9 +310,7 @@ func request_Api_StreamInfo_0(ctx context.Context, marshaler runtime.Marshaler, 
 		metadata runtime.ServerMetadata
 		err      error
 	)
-	if req.Body != nil {
-		_, _ = io.Copy(io.Discard, req.Body)
-	}
+	io.Copy(io.Discard, req.Body)
 	val, ok := pathParams["streamPath"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "streamPath")
@@ -371,9 +349,6 @@ func request_Api_PauseStream_0(ctx context.Context, marshaler runtime.Marshaler,
 	)
 	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
-	}
-	if req.Body != nil {
-		_, _ = io.Copy(io.Discard, req.Body)
 	}
 	val, ok := pathParams["streamPath"]
 	if !ok {
@@ -417,9 +392,6 @@ func request_Api_ResumeStream_0(ctx context.Context, marshaler runtime.Marshaler
 	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
-	if req.Body != nil {
-		_, _ = io.Copy(io.Discard, req.Body)
-	}
 	val, ok := pathParams["streamPath"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "streamPath")
@@ -461,9 +433,6 @@ func request_Api_SetStreamSpeed_0(ctx context.Context, marshaler runtime.Marshal
 	)
 	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
-	}
-	if req.Body != nil {
-		_, _ = io.Copy(io.Discard, req.Body)
 	}
 	val, ok := pathParams["streamPath"]
 	if !ok {
@@ -507,9 +476,6 @@ func request_Api_SeekStream_0(ctx context.Context, marshaler runtime.Marshaler, 
 	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
-	if req.Body != nil {
-		_, _ = io.Copy(io.Discard, req.Body)
-	}
 	val, ok := pathParams["streamPath"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "streamPath")
@@ -551,9 +517,7 @@ func request_Api_GetSubscribers_0(ctx context.Context, marshaler runtime.Marshal
 		metadata runtime.ServerMetadata
 		err      error
 	)
-	if req.Body != nil {
-		_, _ = io.Copy(io.Discard, req.Body)
-	}
+	io.Copy(io.Discard, req.Body)
 	val, ok := pathParams["streamPath"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "streamPath")
@@ -602,9 +566,7 @@ func request_Api_AudioTrackSnap_0(ctx context.Context, marshaler runtime.Marshal
 		metadata runtime.ServerMetadata
 		err      error
 	)
-	if req.Body != nil {
-		_, _ = io.Copy(io.Discard, req.Body)
-	}
+	io.Copy(io.Discard, req.Body)
 	val, ok := pathParams["streamPath"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "streamPath")
@@ -641,9 +603,7 @@ func request_Api_VideoTrackSnap_0(ctx context.Context, marshaler runtime.Marshal
 		metadata runtime.ServerMetadata
 		err      error
 	)
-	if req.Body != nil {
-		_, _ = io.Copy(io.Discard, req.Body)
-	}
+	io.Copy(io.Discard, req.Body)
 	val, ok := pathParams["streamPath"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "streamPath")
@@ -682,9 +642,6 @@ func request_Api_ChangeSubscribe_0(ctx context.Context, marshaler runtime.Marsha
 	)
 	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
-	}
-	if req.Body != nil {
-		_, _ = io.Copy(io.Discard, req.Body)
 	}
 	val, ok := pathParams["id"]
 	if !ok {
@@ -740,9 +697,7 @@ func request_Api_GetStreamAlias_0(ctx context.Context, marshaler runtime.Marshal
 		protoReq emptypb.Empty
 		metadata runtime.ServerMetadata
 	)
-	if req.Body != nil {
-		_, _ = io.Copy(io.Discard, req.Body)
-	}
+	io.Copy(io.Discard, req.Body)
 	msg, err := client.GetStreamAlias(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
 }
@@ -763,9 +718,6 @@ func request_Api_SetStreamAlias_0(ctx context.Context, marshaler runtime.Marshal
 	)
 	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
-	}
-	if req.Body != nil {
-		_, _ = io.Copy(io.Discard, req.Body)
 	}
 	msg, err := client.SetStreamAlias(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
@@ -791,9 +743,6 @@ func request_Api_StopPublish_0(ctx context.Context, marshaler runtime.Marshaler,
 	)
 	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
-	}
-	if req.Body != nil {
-		_, _ = io.Copy(io.Discard, req.Body)
 	}
 	val, ok := pathParams["streamPath"]
 	if !ok {
@@ -837,9 +786,6 @@ func request_Api_StopSubscribe_0(ctx context.Context, marshaler runtime.Marshale
 	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
-	if req.Body != nil {
-		_, _ = io.Copy(io.Discard, req.Body)
-	}
 	val, ok := pathParams["id"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "id")
@@ -878,9 +824,7 @@ func request_Api_GetConfigFile_0(ctx context.Context, marshaler runtime.Marshale
 		protoReq emptypb.Empty
 		metadata runtime.ServerMetadata
 	)
-	if req.Body != nil {
-		_, _ = io.Copy(io.Discard, req.Body)
-	}
+	io.Copy(io.Discard, req.Body)
 	msg, err := client.GetConfigFile(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
 }
@@ -901,9 +845,6 @@ func request_Api_UpdateConfigFile_0(ctx context.Context, marshaler runtime.Marsh
 	)
 	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq.Content); err != nil && !errors.Is(err, io.EOF) {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
-	}
-	if req.Body != nil {
-		_, _ = io.Copy(io.Discard, req.Body)
 	}
 	msg, err := client.UpdateConfigFile(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
@@ -927,9 +868,7 @@ func request_Api_GetConfig_0(ctx context.Context, marshaler runtime.Marshaler, c
 		metadata runtime.ServerMetadata
 		err      error
 	)
-	if req.Body != nil {
-		_, _ = io.Copy(io.Discard, req.Body)
-	}
+	io.Copy(io.Discard, req.Body)
 	val, ok := pathParams["name"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "name")
@@ -966,9 +905,7 @@ func request_Api_GetFormily_0(ctx context.Context, marshaler runtime.Marshaler, 
 		metadata runtime.ServerMetadata
 		err      error
 	)
-	if req.Body != nil {
-		_, _ = io.Copy(io.Discard, req.Body)
-	}
+	io.Copy(io.Discard, req.Body)
 	val, ok := pathParams["name"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "name")
@@ -999,6 +936,30 @@ func local_request_Api_GetFormily_0(ctx context.Context, marshaler runtime.Marsh
 	return msg, metadata, err
 }
 
+func request_Api_SetArming_0(ctx context.Context, marshaler runtime.Marshaler, client ApiClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq SetArmingRequest
+		metadata runtime.ServerMetadata
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	msg, err := client.SetArming(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_Api_SetArming_0(ctx context.Context, marshaler runtime.Marshaler, server ApiServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq SetArmingRequest
+		metadata runtime.ServerMetadata
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	msg, err := server.SetArming(ctx, &protoReq)
+	return msg, metadata, err
+}
+
 func request_Api_ModifyConfig_0(ctx context.Context, marshaler runtime.Marshaler, client ApiClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var (
 		protoReq ModifyConfigRequest
@@ -1006,9 +967,6 @@ func request_Api_ModifyConfig_0(ctx context.Context, marshaler runtime.Marshaler
 	)
 	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
-	}
-	if req.Body != nil {
-		_, _ = io.Copy(io.Discard, req.Body)
 	}
 	msg, err := client.ModifyConfig(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
@@ -1031,9 +989,7 @@ func request_Api_GetPullProxyList_0(ctx context.Context, marshaler runtime.Marsh
 		protoReq emptypb.Empty
 		metadata runtime.ServerMetadata
 	)
-	if req.Body != nil {
-		_, _ = io.Copy(io.Discard, req.Body)
-	}
+	io.Copy(io.Discard, req.Body)
 	msg, err := client.GetPullProxyList(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
 }
@@ -1052,9 +1008,7 @@ func request_Api_GetPullProxyList_1(ctx context.Context, marshaler runtime.Marsh
 		protoReq emptypb.Empty
 		metadata runtime.ServerMetadata
 	)
-	if req.Body != nil {
-		_, _ = io.Copy(io.Discard, req.Body)
-	}
+	io.Copy(io.Discard, req.Body)
 	msg, err := client.GetPullProxyList(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
 }
@@ -1075,9 +1029,6 @@ func request_Api_AddPullProxy_0(ctx context.Context, marshaler runtime.Marshaler
 	)
 	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
-	}
-	if req.Body != nil {
-		_, _ = io.Copy(io.Discard, req.Body)
 	}
 	msg, err := client.AddPullProxy(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
@@ -1103,9 +1054,6 @@ func request_Api_AddPullProxy_1(ctx context.Context, marshaler runtime.Marshaler
 	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
-	if req.Body != nil {
-		_, _ = io.Copy(io.Discard, req.Body)
-	}
 	msg, err := client.AddPullProxy(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
 }
@@ -1130,9 +1078,6 @@ func request_Api_RemovePullProxy_0(ctx context.Context, marshaler runtime.Marsha
 	)
 	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
-	}
-	if req.Body != nil {
-		_, _ = io.Copy(io.Discard, req.Body)
 	}
 	val, ok := pathParams["id"]
 	if !ok {
@@ -1176,9 +1121,6 @@ func request_Api_RemovePullProxy_1(ctx context.Context, marshaler runtime.Marsha
 	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
-	if req.Body != nil {
-		_, _ = io.Copy(io.Discard, req.Body)
-	}
 	val, ok := pathParams["id"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "id")
@@ -1220,9 +1162,6 @@ func request_Api_UpdatePullProxy_0(ctx context.Context, marshaler runtime.Marsha
 	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
-	if req.Body != nil {
-		_, _ = io.Copy(io.Discard, req.Body)
-	}
 	msg, err := client.UpdatePullProxy(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
 }
@@ -1247,9 +1186,6 @@ func request_Api_UpdatePullProxy_1(ctx context.Context, marshaler runtime.Marsha
 	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
-	if req.Body != nil {
-		_, _ = io.Copy(io.Discard, req.Body)
-	}
 	msg, err := client.UpdatePullProxy(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
 }
@@ -1271,9 +1207,7 @@ func request_Api_GetPushProxyList_0(ctx context.Context, marshaler runtime.Marsh
 		protoReq emptypb.Empty
 		metadata runtime.ServerMetadata
 	)
-	if req.Body != nil {
-		_, _ = io.Copy(io.Discard, req.Body)
-	}
+	io.Copy(io.Discard, req.Body)
 	msg, err := client.GetPushProxyList(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
 }
@@ -1294,9 +1228,6 @@ func request_Api_AddPushProxy_0(ctx context.Context, marshaler runtime.Marshaler
 	)
 	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
-	}
-	if req.Body != nil {
-		_, _ = io.Copy(io.Discard, req.Body)
 	}
 	msg, err := client.AddPushProxy(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
@@ -1322,9 +1253,6 @@ func request_Api_RemovePushProxy_0(ctx context.Context, marshaler runtime.Marsha
 	)
 	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
-	}
-	if req.Body != nil {
-		_, _ = io.Copy(io.Discard, req.Body)
 	}
 	val, ok := pathParams["id"]
 	if !ok {
@@ -1367,9 +1295,6 @@ func request_Api_UpdatePushProxy_0(ctx context.Context, marshaler runtime.Marsha
 	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
-	if req.Body != nil {
-		_, _ = io.Copy(io.Discard, req.Body)
-	}
 	msg, err := client.UpdatePushProxy(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
 }
@@ -1391,9 +1316,7 @@ func request_Api_GetRecording_0(ctx context.Context, marshaler runtime.Marshaler
 		protoReq emptypb.Empty
 		metadata runtime.ServerMetadata
 	)
-	if req.Body != nil {
-		_, _ = io.Copy(io.Discard, req.Body)
-	}
+	io.Copy(io.Discard, req.Body)
 	msg, err := client.GetRecording(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
 }
@@ -1412,9 +1335,7 @@ func request_Api_GetTransformList_0(ctx context.Context, marshaler runtime.Marsh
 		protoReq emptypb.Empty
 		metadata runtime.ServerMetadata
 	)
-	if req.Body != nil {
-		_, _ = io.Copy(io.Discard, req.Body)
-	}
+	io.Copy(io.Discard, req.Body)
 	msg, err := client.GetTransformList(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
 }
@@ -1436,9 +1357,7 @@ func request_Api_GetRecordList_0(ctx context.Context, marshaler runtime.Marshale
 		metadata runtime.ServerMetadata
 		err      error
 	)
-	if req.Body != nil {
-		_, _ = io.Copy(io.Discard, req.Body)
-	}
+	io.Copy(io.Discard, req.Body)
 	val, ok := pathParams["type"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "type")
@@ -1505,9 +1424,7 @@ func request_Api_GetEventRecordList_0(ctx context.Context, marshaler runtime.Mar
 		metadata runtime.ServerMetadata
 		err      error
 	)
-	if req.Body != nil {
-		_, _ = io.Copy(io.Discard, req.Body)
-	}
+	io.Copy(io.Discard, req.Body)
 	val, ok := pathParams["type"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "type")
@@ -1572,9 +1489,7 @@ func request_Api_GetRecordCatalog_0(ctx context.Context, marshaler runtime.Marsh
 		metadata runtime.ServerMetadata
 		err      error
 	)
-	if req.Body != nil {
-		_, _ = io.Copy(io.Discard, req.Body)
-	}
+	io.Copy(io.Discard, req.Body)
 	val, ok := pathParams["type"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "type")
@@ -1613,9 +1528,6 @@ func request_Api_DeleteRecord_0(ctx context.Context, marshaler runtime.Marshaler
 	)
 	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
-	}
-	if req.Body != nil {
-		_, _ = io.Copy(io.Discard, req.Body)
 	}
 	val, ok := pathParams["type"]
 	if !ok {
@@ -1673,9 +1585,7 @@ func request_Api_GetAlarmList_0(ctx context.Context, marshaler runtime.Marshaler
 		protoReq AlarmListRequest
 		metadata runtime.ServerMetadata
 	)
-	if req.Body != nil {
-		_, _ = io.Copy(io.Discard, req.Body)
-	}
+	io.Copy(io.Discard, req.Body)
 	if err := req.ParseForm(); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
@@ -1707,9 +1617,7 @@ func request_Api_GetSubscriptionProgress_0(ctx context.Context, marshaler runtim
 		metadata runtime.ServerMetadata
 		err      error
 	)
-	if req.Body != nil {
-		_, _ = io.Copy(io.Discard, req.Body)
-	}
+	io.Copy(io.Discard, req.Body)
 	val, ok := pathParams["streamPath"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "streamPath")
@@ -1747,9 +1655,6 @@ func request_Api_StartPull_0(ctx context.Context, marshaler runtime.Marshaler, c
 	)
 	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
-	}
-	if req.Body != nil {
-		_, _ = io.Copy(io.Discard, req.Body)
 	}
 	msg, err := client.StartPull(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
@@ -2312,6 +2217,26 @@ func RegisterApiHandlerServer(ctx context.Context, mux *runtime.ServeMux, server
 			return
 		}
 		forward_Api_GetFormily_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodPost, pattern_Api_SetArming_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/global.Api/SetArming", runtime.WithHTTPPathPattern("/api/arming/set"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_Api_SetArming_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_Api_SetArming_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
 	mux.Handle(http.MethodPost, pattern_Api_ModifyConfig_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
@@ -3252,6 +3177,23 @@ func RegisterApiHandlerClient(ctx context.Context, mux *runtime.ServeMux, client
 		}
 		forward_Api_GetFormily_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
+	mux.Handle(http.MethodPost, pattern_Api_SetArming_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/global.Api/SetArming", runtime.WithHTTPPathPattern("/api/arming/set"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_Api_SetArming_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_Api_SetArming_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
 	mux.Handle(http.MethodPost, pattern_Api_ModifyConfig_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
@@ -3657,6 +3599,7 @@ var (
 	pattern_Api_UpdateConfigFile_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "config", "file", "update"}, ""))
 	pattern_Api_GetConfig_0               = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"api", "config", "get", "name"}, ""))
 	pattern_Api_GetFormily_0              = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"api", "config", "formily", "name"}, ""))
+	pattern_Api_SetArming_0               = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "arming", "set"}, ""))
 	pattern_Api_ModifyConfig_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "config", "modify"}, ""))
 	pattern_Api_GetPullProxyList_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"api", "proxy", "pull", "list"}, ""))
 	pattern_Api_GetPullProxyList_1        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"api", "device", "list"}, ""))
@@ -3709,6 +3652,7 @@ var (
 	forward_Api_UpdateConfigFile_0        = runtime.ForwardResponseMessage
 	forward_Api_GetConfig_0               = runtime.ForwardResponseMessage
 	forward_Api_GetFormily_0              = runtime.ForwardResponseMessage
+	forward_Api_SetArming_0               = runtime.ForwardResponseMessage
 	forward_Api_ModifyConfig_0            = runtime.ForwardResponseMessage
 	forward_Api_GetPullProxyList_0        = runtime.ForwardResponseMessage
 	forward_Api_GetPullProxyList_1        = runtime.ForwardResponseMessage
