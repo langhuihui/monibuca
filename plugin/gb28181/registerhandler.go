@@ -266,7 +266,7 @@ func (task *registerHandlerTask) RecoverDevice(d *Device, req *sip.Request) {
 			if sourceIPParse.IsPrivate() { // 源IP是内网IP
 				myWanIP = myLanIP // 使用内网IP作为外网IP
 			}
-		} else {                           // 目标地址是IP
+		} else { // 目标地址是IP
 			if sourceIPParse.IsPrivate() { // 源IP是内网IP
 				myLanIP, myWanIP = myIP, myIP // 使用目标IP作为内外网IP
 			}
@@ -384,7 +384,7 @@ func (task *registerHandlerTask) StoreDevice(deviceid string, req *sip.Request, 
 			if sourceIPParse.IsPrivate() { // 源IP是内网IP
 				myWanIP = myLanIP // 使用内网IP作为外网IP
 			}
-		} else {                           // 目标地址是IP
+		} else { // 目标地址是IP
 			if sourceIPParse.IsPrivate() { // 源IP是内网IP
 				myLanIP, myWanIP = myIP, myIP // 使用目标IP作为内外网IP
 			}
@@ -442,7 +442,6 @@ func (task *registerHandlerTask) StoreDevice(deviceid string, req *sip.Request, 
 	d.LocalPort = myPort
 
 	d.Logger = task.gb.Logger.With("deviceid", deviceid)
-	d.fromHDR.Params.Add("tag", sip.GenerateTagN(16))
 	// 根据设备访问的本地IP、端口和传输协议获取或创建对应的Client
 	client, err := task.gb.getOrCreateClient(d.SipIp, d.LocalPort, d.Transport)
 	if err != nil {

@@ -979,7 +979,7 @@ func (p *Platform) buildChannelItem(channel gb28181.DeviceChannel) string {
 		channel.RegisterWay, // 直接使用整数值
 		channel.Secrecy,     // 直接使用整数值
 		parentID,
-		channel.Parental,  // 直接使用整数值
+		channel.Parental, // 直接使用整数值
 		channel.SafetyWay) // 直接使用整数值
 }
 
@@ -1012,19 +1012,20 @@ func (p *Platform) handleDeviceControl(req *sip.Request, tx sip.ServerTransactio
 	}
 
 	// 创建转发请求
-	request := sip.NewRequest(sip.MESSAGE, device.Recipient)
-
-	// 设置From头部，使用平台信息
-	fromHeader := device.fromHDR
-	fromTag, _ := req.From().Params.Get("tag")
-	fromHeader.Params.Add("tag", fromTag)
-	request.AppendHeader(&fromHeader)
-
-	// 添加To头部，使用设备信息
-	toHeader := sip.ToHeader{
-		Address: device.Recipient,
-	}
-	request.AppendHeader(&toHeader)
+	request := device.CreateRequest(sip.MESSAGE, nil)
+	//request := sip.NewRequest(sip.MESSAGE, device.Recipient)
+	//
+	//// 设置From头部，使用平台信息
+	//fromHeader := device.fromHDR
+	//fromTag, _ := req.From().Params.Get("tag")
+	//fromHeader.Params.Add("tag", fromTag)
+	//request.AppendHeader(&fromHeader)
+	//
+	//// 添加To头部，使用设备信息
+	//toHeader := sip.ToHeader{
+	//	Address: device.Recipient,
+	//}
+	//request.AppendHeader(&toHeader)
 
 	// 添加Via头部
 	//viaHeader := sip.ViaHeader{
@@ -1039,8 +1040,8 @@ func (p *Platform) handleDeviceControl(req *sip.Request, tx sip.ServerTransactio
 	//request.AppendHeader(&viaHeader)
 
 	// 设置Content-Type
-	contentTypeHeader := sip.ContentTypeHeader("Application/MANSCDP+xml")
-	request.AppendHeader(&contentTypeHeader)
+	//contentTypeHeader := sip.ContentTypeHeader("Application/MANSCDP+xml")
+	//request.AppendHeader(&contentTypeHeader)
 
 	// 直接使用原始消息体
 	request.SetBody(req.Body())
@@ -1049,7 +1050,7 @@ func (p *Platform) handleDeviceControl(req *sip.Request, tx sip.ServerTransactio
 	request.SetTransport(strings.ToUpper(device.Transport))
 
 	// 发送请求
-	_, err = device.client.Do(p, request)
+	_, err = device.send(request)
 	if err != nil {
 		p.Error("发送控制命令失败", "error", err.Error())
 		return fmt.Errorf("send control command failed: %v", err)

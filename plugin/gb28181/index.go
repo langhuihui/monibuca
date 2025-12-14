@@ -438,7 +438,6 @@ func (gb *GB28181Plugin) checkDeviceExpire() (err error) {
 			},
 			Params: sip.NewParams(),
 		}
-		device.fromHDR.Params.Add("tag", sip.GenerateTagN(16))
 
 		// 设置接收者
 		device.Recipient = sip.Uri{

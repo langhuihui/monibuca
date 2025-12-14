@@ -17,7 +17,7 @@ import (
 
 	"github.com/emiago/sipgo"
 	"github.com/emiago/sipgo/sip"
-	"github.com/langhuihui/gotask"
+	task "github.com/langhuihui/gotask"
 	"m7s.live/v5/pkg/util"
 	gb28181 "m7s.live/v5/plugin/gb28181/pkg"
 	mrtp "m7s.live/v5/plugin/rtp/pkg"
@@ -114,7 +114,6 @@ type Device struct {
 	client                  *sipgo.Client
 	contactHDR              sip.ContactHeader
 	fromHDR                 sip.FromHeader
-	toHDR                   sip.ToHeader
 	plugin                  *GB28181Plugin `gorm:"-:all"`
 	LocalPort               int
 	CatalogSubscribeTask    *CatalogSubscribeTask    `gorm:"-:all"`
@@ -531,7 +530,13 @@ func (d *Device) CreateRequest(Method sip.RequestMethod, Recipient any) *sip.Req
 	} else {
 		req = sip.NewRequest(Method, d.Recipient)
 	}
-	fromHDR := d.fromHDR
+	// 创建新的 FromHeader 并克隆 Params，避免并发问题
+	// 因为 HeaderParams 是 map 类型，直接拷贝会共享同一个 map 引用
+	fromHDR := sip.FromHeader{
+		DisplayName: d.fromHDR.DisplayName,
+		Address:     d.fromHDR.Address,
+		Params:      d.fromHDR.Params.Clone(),
+	}
 	fromHDR.Params.Add("tag", sip.GenerateTagN(32))
 	req.AppendHeader(&fromHDR)
 	contentType := sip.ContentTypeHeader("Application/MANSCDP+xml")
