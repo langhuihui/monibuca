@@ -217,6 +217,8 @@ func (task *registerHandlerTask) Run() (err error) {
 				channel.Status = "OFF"
 				return true
 			})
+			d.DeviceKeepaliveTickTask.seconds = time.Minute * 1440
+			d.DeviceKeepaliveTickTask.Tick(nil)
 			//d.Stop(errors.New("unregister"))
 		}
 	} else {
@@ -264,7 +266,7 @@ func (task *registerHandlerTask) RecoverDevice(d *Device, req *sip.Request) {
 			if sourceIPParse.IsPrivate() { // 源IP是内网IP
 				myWanIP = myLanIP // 使用内网IP作为外网IP
 			}
-		} else { // 目标地址是IP
+		} else {                           // 目标地址是IP
 			if sourceIPParse.IsPrivate() { // 源IP是内网IP
 				myLanIP, myWanIP = myIP, myIP // 使用目标IP作为内外网IP
 			}
@@ -325,6 +327,8 @@ func (task *registerHandlerTask) RecoverDevice(d *Device, req *sip.Request) {
 		//}
 		task.gb.DB.Save(d)
 	}
+	d.DeviceKeepaliveTickTask.seconds = time.Second * 30
+	d.DeviceKeepaliveTickTask.Tick(nil)
 	go d.catalog()
 	return
 }
@@ -380,7 +384,7 @@ func (task *registerHandlerTask) StoreDevice(deviceid string, req *sip.Request, 
 			if sourceIPParse.IsPrivate() { // 源IP是内网IP
 				myWanIP = myLanIP // 使用内网IP作为外网IP
 			}
-		} else { // 目标地址是IP
+		} else {                           // 目标地址是IP
 			if sourceIPParse.IsPrivate() { // 源IP是内网IP
 				myLanIP, myWanIP = myIP, myIP // 使用目标IP作为内外网IP
 			}

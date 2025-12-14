@@ -44,6 +44,8 @@ func (d *DeviceKeepaliveTickTask) GetTickInterval() time.Duration {
 }
 
 func (d *DeviceKeepaliveTickTask) Tick(any) {
+	d.SetDescription("deviceid", d.device.DeviceId)
+	d.SetDescription("tick seconds", d.seconds)
 	keepaliveSeconds := 60
 	if d.device.KeepaliveInterval >= 5 {
 		keepaliveSeconds = d.device.KeepaliveInterval
@@ -58,6 +60,8 @@ func (d *DeviceKeepaliveTickTask) Tick(any) {
 			channel.Status = "OFF"
 			return true
 		})
+		d.seconds = time.Minute * 1440
+		//d.Stop(fmt.Errorf("device keeplive time out,deviceid is " + d.device.DeviceId))
 	}
 }
 
@@ -99,24 +103,25 @@ type Device struct {
 	// channels              []gb28181.DeviceChannel `gorm:"foreignKey:DeviceDBID;references:ID"` // 设备通道列表
 
 	// 保留原有字段
-	Status                DeviceStatus
-	SN                    int
-	Recipient             sip.Uri                               `gorm:"-:all"`
-	channels              util.Collection[string, *Channel]     `gorm:"-:all"`
-	catalogReqs           util.Collection[int, *CatalogRequest] `gorm:"-:all"`
-	MediaIp               string                                `desc:"收流IP"`
-	Longitude, Latitude   string                                // 经度,纬度
-	eventChan             chan any                              `gorm:"-:all"`
-	client                *sipgo.Client
-	contactHDR            sip.ContactHeader
-	fromHDR               sip.FromHeader
-	toHDR                 sip.ToHeader
-	plugin                *GB28181Plugin `gorm:"-:all"`
-	LocalPort             int
-	CatalogSubscribeTask  *CatalogSubscribeTask  `gorm:"-:all"`
-	PositionSubscribeTask *PositionSubscribeTask `gorm:"-:all"`
-	AlarmSubscribeTask    *AlarmSubscribeTask    `gorm:"-:all"`
-	Cataloging            bool                   `gorm:"-:all" default:"false"`
+	Status                  DeviceStatus
+	SN                      int
+	Recipient               sip.Uri                               `gorm:"-:all"`
+	channels                util.Collection[string, *Channel]     `gorm:"-:all"`
+	catalogReqs             util.Collection[int, *CatalogRequest] `gorm:"-:all"`
+	MediaIp                 string                                `desc:"收流IP"`
+	Longitude, Latitude     string                                // 经度,纬度
+	eventChan               chan any                              `gorm:"-:all"`
+	client                  *sipgo.Client
+	contactHDR              sip.ContactHeader
+	fromHDR                 sip.FromHeader
+	toHDR                   sip.ToHeader
+	plugin                  *GB28181Plugin `gorm:"-:all"`
+	LocalPort               int
+	CatalogSubscribeTask    *CatalogSubscribeTask    `gorm:"-:all"`
+	PositionSubscribeTask   *PositionSubscribeTask   `gorm:"-:all"`
+	AlarmSubscribeTask      *AlarmSubscribeTask      `gorm:"-:all"`
+	Cataloging              bool                     `gorm:"-:all" default:"false"`
+	DeviceKeepaliveTickTask *DeviceKeepaliveTickTask `gorm:"-:all" default:"false"`
 }
 
 func (d *Device) TableName() string {
@@ -514,6 +519,7 @@ func (d *Device) Go() (err error) {
 		seconds: time.Second * 30,
 		device:  d,
 	}
+	d.DeviceKeepaliveTickTask = deviceKeepaliveTickTask
 	d.AddTask(deviceKeepaliveTickTask)
 	return deviceKeepaliveTickTask.WaitStopped()
 }
