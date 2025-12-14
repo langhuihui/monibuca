@@ -428,9 +428,14 @@ func (t *WebHookTask) Go() error {
 			t.plugin.Error("保存告警到数据库失败", "error", err)
 		} else {
 			dbID = t.alarm.ID
-			t.plugin.Info(""+
-				"", "id", dbID)
+			t.plugin.Info("告警已保存到数据库", "id", dbID)
 		}
+	}
+
+	// 检查全局布防状态，撤防时不发送 HTTP 请求
+	if !t.plugin.Server.ServerConfig.Armed {
+		t.plugin.Debug("WebHook skipped due to disarmed state", "url", t.conf.URL, "dbID", dbID)
+		return task.ErrTaskComplete
 	}
 
 	req, err := http.NewRequest(t.conf.Method, t.conf.URL, bytes.NewBuffer(t.jsonData))
@@ -826,11 +831,11 @@ func (p *Plugin) getHookSender(hookType config.HookType) (sender func(webhook co
 			conf = p.config.Hook[config.HookDefault]
 		} else if p.Server.config.Hook != nil {
 			if _, ok := p.Server.config.Hook[hookType]; ok {
-				conf = p.config.Hook[hookType]
+				conf = p.Server.config.Hook[hookType]
 				sender = p.Server.SendWebhook
 			} else if _, ok := p.Server.config.Hook[config.HookDefault]; ok {
 				sender = p.Server.SendWebhook
-				conf = p.config.Hook[config.HookDefault]
+				conf = p.Server.config.Hook[config.HookDefault]
 			}
 		}
 	}
