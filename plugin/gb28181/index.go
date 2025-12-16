@@ -666,7 +666,7 @@ func (gb *GB28181Plugin) OnMessage(req *sip.Request, tx sip.ServerTransaction) {
 	// 使用正确的字符集解析消息内容
 	temp := &gb28181.Message{}
 	err := gb28181.DecodeXML(temp, req.Body(), charset)
-	gb.Debug("OnMessage debug", "message", temp.BasicParam.Expiration, "charset", charset)
+	gb.Debug("OnMessage debug", "message", temp, "charset", charset)
 	if err != nil {
 		gb.Error("OnMessage", "error", err.Error(), "charset", charset)
 		response := sip.NewResponseFromRequest(req, sip.StatusBadRequest, "Bad Request", nil)
