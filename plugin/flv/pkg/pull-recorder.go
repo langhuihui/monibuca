@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	m7s "m7s.live/v5"
 	"m7s.live/v5/pkg"
 	"m7s.live/v5/pkg/config"
+	"m7s.live/v5/pkg/storage"
 	"m7s.live/v5/pkg/util"
 	rtmp "m7s.live/v5/plugin/rtmp/pkg"
 )
@@ -74,7 +76,24 @@ func (p *RecordReader) Run() (err error) {
 			if p.File != nil {
 				p.File.Close()
 			}
-			p.File, err = os.Open(stream.FilePath)
+			// 解析存储路径：优先绝对路径，其次按 storage 配置拼完整路径
+			filePath := stream.FilePath
+			if !filepath.IsAbs(filePath) {
+				if st := pullJob.Plugin.Server.Storage; st != nil {
+					targetType := stream.StorageType
+					if targetType == "" {
+						targetType = string(storage.StorageTypeLocal)
+					}
+					if st.GetKey() == targetType {
+						if localStorage, ok := st.(*storage.LocalStorage); ok {
+							filePath = localStorage.GetFullPath(filePath, stream.StorageLevel)
+						}
+					} else {
+						p.Warn("storage type mismatch, fallback to relative path", "streamType", stream.StorageType, "globalType", st.GetKey(), "path", filePath)
+					}
+				}
+			}
+			p.File, err = os.Open(filePath)
 			if err != nil {
 				continue
 			}
@@ -184,6 +203,9 @@ func (p *RecordReader) Run() (err error) {
 					}
 				case FLV_TAG_TYPE_SCRIPT:
 					buf := allocator.Borrow(dataSize)
+					if err = p.reader.ReadNto(dataSize, buf); err != nil {
+						return err
+					}
 					amf := rtmp.AMF(buf)
 					var obj any
 					if obj, err = amf.Unmarshal(); err != nil {
