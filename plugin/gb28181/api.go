@@ -90,25 +90,28 @@ func (gb *GB28181Plugin) List(ctx context.Context, req *pb.GetDevicesRequest) (*
 				d.Info("channel", "id", channel.ID)
 			}
 			pbChannels = append(pbChannels, &pb.Channel{
-				Id:           channel.ID,
-				DeviceId:     channel.CustomChannelId,
-				ChannelId:    channel.CustomChannelId,
-				ParentId:     d.DeviceId,
-				Name:         channel.CustomName,
-				Manufacturer: channel.Manufacturer,
-				Model:        channel.Model,
-				Owner:        channel.Owner,
-				CivilCode:    channel.CivilCode,
-				Address:      channel.Address,
-				Port:         int32(channel.Port),
-				Parental:     int32(channel.Parental),
-				SafetyWay:    int32(channel.SafetyWay),
-				RegisterWay:  int32(channel.RegisterWay),
-				Secrecy:      int32(channel.Secrecy),
-				Status:       string(channel.Status),
-				Longitude:    fmt.Sprintf("%f", channel.GbLongitude),
-				Latitude:     fmt.Sprintf("%f", channel.GbLatitude),
-				GpsTime:      timestamppb.New(time.Now()),
+				Id:                channel.ID,
+				DeviceId:          channel.CustomChannelId,
+				ChannelId:         channel.CustomChannelId,
+				ParentId:          d.DeviceId,
+				Name:              util.Conditional(channel.CustomName == "", channel.Name, channel.CustomName),
+				CustomChannelId:   channel.CustomChannelId,
+				CustomChannelName: util.Conditional(channel.CustomName == "", channel.Name, channel.CustomName),
+				StreamPath:        channel.StreamPath,
+				Manufacturer:      channel.Manufacturer,
+				Model:             channel.Model,
+				Owner:             channel.Owner,
+				CivilCode:         channel.CivilCode,
+				Address:           channel.Address,
+				Port:              int32(channel.Port),
+				Parental:          int32(channel.Parental),
+				SafetyWay:         int32(channel.SafetyWay),
+				RegisterWay:       int32(channel.RegisterWay),
+				Secrecy:           int32(channel.Secrecy),
+				Status:            string(channel.Status),
+				Longitude:         fmt.Sprintf("%f", channel.GbLongitude),
+				Latitude:          fmt.Sprintf("%f", channel.GbLatitude),
+				GpsTime:           timestamppb.New(time.Now()),
 			})
 			return true
 		})
@@ -173,24 +176,27 @@ func (gb *GB28181Plugin) GetDevice(ctx context.Context, req *pb.GetDeviceRequest
 		var channels []*pb.Channel
 		for c := range d.channels.Range {
 			channels = append(channels, &pb.Channel{
-				DeviceId:     c.ChannelId,
-				ChannelId:    c.ChannelId,
-				ParentId:     d.DeviceId,
-				Name:         c.Name,
-				Manufacturer: c.Manufacturer,
-				Model:        c.Model,
-				Owner:        c.Owner,
-				CivilCode:    c.CivilCode,
-				Address:      c.Address,
-				Port:         int32(c.Port),
-				Parental:     int32(c.Parental),
-				SafetyWay:    int32(c.SafetyWay),
-				RegisterWay:  int32(c.RegisterWay),
-				Secrecy:      int32(c.Secrecy),
-				Status:       string(c.Status),
-				Longitude:    fmt.Sprintf("%f", c.GbLongitude),
-				Latitude:     fmt.Sprintf("%f", c.GbLatitude),
-				GpsTime:      timestamppb.New(time.Now()),
+				DeviceId:          c.ChannelId,
+				ChannelId:         c.ChannelId,
+				ParentId:          d.DeviceId,
+				Name:              c.Name,
+				Manufacturer:      c.Manufacturer,
+				Model:             c.Model,
+				Owner:             c.Owner,
+				CivilCode:         c.CivilCode,
+				Address:           c.Address,
+				Port:              int32(c.Port),
+				Parental:          int32(c.Parental),
+				SafetyWay:         int32(c.SafetyWay),
+				RegisterWay:       int32(c.RegisterWay),
+				Secrecy:           int32(c.Secrecy),
+				Status:            string(c.Status),
+				Longitude:         fmt.Sprintf("%f", c.GbLongitude),
+				Latitude:          fmt.Sprintf("%f", c.GbLatitude),
+				GpsTime:           timestamppb.New(time.Now()),
+				CustomChannelId:   c.CustomChannelId,
+				CustomChannelName: util.Conditional(c.CustomName == "", c.Name, c.CustomName),
+				StreamPath:        c.StreamPath,
 			})
 		}
 		resp.Data = &pb.Device{
@@ -347,24 +353,27 @@ func (gb *GB28181Plugin) GetChannels(ctx context.Context, req *pb.GetChannelsReq
 			if req.Page == 0 && req.Count == 0 {
 				// 不分页，添加所有符合条件的通道
 				channels = append(channels, &pb.Channel{
-					DeviceId:     c.ChannelId,
-					ChannelId:    c.ChannelId,
-					ParentId:     c.ParentId,
-					Name:         c.Name,
-					Manufacturer: c.Manufacturer,
-					Model:        c.Model,
-					Owner:        c.Owner,
-					CivilCode:    c.CivilCode,
-					Address:      c.Address,
-					Port:         int32(c.Port),
-					Parental:     int32(c.Parental),
-					SafetyWay:    int32(c.SafetyWay),
-					RegisterWay:  int32(c.RegisterWay),
-					Secrecy:      int32(c.Secrecy),
-					Status:       string(c.Status),
-					Longitude:    fmt.Sprintf("%f", c.GbLongitude),
-					Latitude:     fmt.Sprintf("%f", c.GbLatitude),
-					GpsTime:      timestamppb.New(time.Now()),
+					DeviceId:          c.ChannelId,
+					ChannelId:         c.ChannelId,
+					ParentId:          c.ParentId,
+					Name:              c.Name,
+					Manufacturer:      c.Manufacturer,
+					Model:             c.Model,
+					Owner:             c.Owner,
+					CivilCode:         c.CivilCode,
+					Address:           c.Address,
+					Port:              int32(c.Port),
+					Parental:          int32(c.Parental),
+					SafetyWay:         int32(c.SafetyWay),
+					RegisterWay:       int32(c.RegisterWay),
+					Secrecy:           int32(c.Secrecy),
+					Status:            string(c.Status),
+					Longitude:         fmt.Sprintf("%f", c.GbLongitude),
+					Latitude:          fmt.Sprintf("%f", c.GbLatitude),
+					GpsTime:           timestamppb.New(time.Now()),
+					CustomChannelId:   c.CustomChannelId,
+					CustomChannelName: util.Conditional(c.CustomName == "", c.Name, c.CustomName),
+					StreamPath:        c.StreamPath,
 				})
 			} else {
 				// 分页处理
@@ -397,7 +406,7 @@ func (gb *GB28181Plugin) GetChannels(ctx context.Context, req *pb.GetChannelsReq
 			}
 		}
 		resp.Total = int32(total)
-		resp.List = channels
+		resp.Data = channels
 		resp.Code = 0
 		resp.Message = "success"
 	} else {
@@ -880,6 +889,7 @@ func (gb *GB28181Plugin) GetPlatform(ctx context.Context, req *pb.GetPlatformReq
 		Address:                 platform.Address,
 		RegisterWay:             int32(platform.RegisterWay),
 		Secrecy:                 int32(platform.Secrecy),
+		ReadOnly:                platform.ReadOnly,
 	}
 
 	resp.Code = 0
@@ -1057,12 +1067,13 @@ func (gb *GB28181Plugin) ListPlatforms(ctx context.Context, req *pb.ListPlatform
 	// 遍历内存中的平台集合
 	gb.platforms.Range(func(platform *Platform) bool {
 		gb.Info(platform.PlatformModel.Name)
-		// 应用筛选条件
+		// 应用筛选条件（统一使用 req.Query，且不区分大小写）
 		if req.Query != "" {
-			// 检查平台名称、ServerGBID或DeviceGBID是否包含查询字符串
-			if !strings.Contains(platform.PlatformModel.Name, req.Query) &&
-				!strings.Contains(platform.PlatformModel.ServerGBID, req.Query) &&
-				!strings.Contains(platform.PlatformModel.DeviceGBID, req.Query) {
+			q := strings.ToLower(strings.TrimSpace(req.Query))
+			name := strings.ToLower(platform.PlatformModel.Name)
+			server := strings.ToLower(platform.PlatformModel.ServerGBID)
+			device := strings.ToLower(platform.PlatformModel.DeviceGBID)
+			if !strings.Contains(name, q) && !strings.Contains(server, q) && !strings.Contains(device, q) {
 				return true // 继续遍历
 			}
 		}
@@ -1153,6 +1164,7 @@ func (gb *GB28181Plugin) ListPlatforms(ctx context.Context, req *pb.ListPlatform
 			Address:                 p.PlatformModel.Address,
 			RegisterWay:             int32(p.PlatformModel.RegisterWay),
 			Secrecy:                 int32(p.PlatformModel.Secrecy),
+			ReadOnly:                p.PlatformModel.ReadOnly,
 		})
 	}
 
@@ -1170,6 +1182,11 @@ func (gb *GB28181Plugin) QueryRecord(ctx context.Context, req *pb.QueryRecordReq
 		Data:    []*pb.RecordItem{},
 	}
 	startTime, endTime, err := util.TimeRangeQueryParse(url.Values{"range": []string{req.Range}, "start": []string{req.Start}, "end": []string{req.End}})
+	if err != nil {
+		resp.Code = 400
+		resp.Message = err.Error()
+		return resp, nil
+	}
 	// 获取设备和通道
 	device, ok := gb.devices.Get(req.DeviceId)
 	if !ok {
@@ -1583,10 +1600,446 @@ func (gb *GB28181Plugin) AddPlatformChannel(ctx context.Context, req *pb.AddPlat
 				platform.channels.Set(channel)
 			}
 		}
+		platform.PlatformModel.ChannelCount = platform.channels.Length
 	}
 
 	resp.Code = 0
 	resp.Message = "success"
+	return resp, nil
+}
+
+// GetPlatformChannels 根据平台ID分页查询平台下的通道列表（支持已/未共享与模糊查询）
+func (gb *GB28181Plugin) GetPlatformChannels(ctx context.Context, req *pb.GetPlatformChannelsRequest) (*pb.PlatformChannelsResponse, error) {
+	resp := &pb.PlatformChannelsResponse{
+		Code:    0,
+		Message: "success",
+		Data:    []*pb.PlatformChannel{},
+	}
+
+	// 规范化查询参数
+	q := strings.ToLower(strings.TrimSpace(req.Query))
+	page := int(req.Page)
+	count := int(req.Count)
+
+	// 构建平台内已共享通道的集合（key 为通道的复合 ID）
+	platformChannelIDs := make(map[string]struct{})
+	var sharedList []*pb.PlatformChannel
+	platform, platformExists := gb.platforms.Get(req.PlatformId)
+	if platformExists {
+		for ch := range platform.channels.Range {
+			platformChannelIDs[ch.ID] = struct{}{}
+			// 判断查询匹配
+			if q != "" {
+				if !strings.Contains(strings.ToLower(ch.ChannelId), q) &&
+					!strings.Contains(strings.ToLower(ch.CustomChannelId), q) &&
+					!strings.Contains(strings.ToLower(ch.Name), q) &&
+					!strings.Contains(strings.ToLower(ch.CustomName), q) {
+					continue
+				}
+			}
+			// 获取设备名称（若有），channel 结构里含 Device 指针
+			deviceName := ""
+			if ch.Device != nil {
+				deviceName = ch.Device.Name
+			}
+			sharedList = append(sharedList, &pb.PlatformChannel{
+				Id: ch.ID,
+				// ChannelId 使用通道自身的 channelId 字段（前端列表显示）
+				ChannelId:         ch.ChannelId,
+				CustomChannelId:   ch.CustomChannelId,
+				ChannelName:       ch.Name,
+				CustomChannelName: util.Conditional(ch.CustomName == "", ch.Name, ch.CustomName),
+				DeviceId:          ch.DeviceId,
+				DeviceName:        deviceName,
+				StreamPath:        ch.StreamPath,
+				InPlatform:        true,
+				ChannelType: func() string {
+					if ch.Device != nil {
+						return "设备通道"
+					}
+					return "自定义通道"
+				}(),
+			})
+		}
+	}
+
+	// 构建未共享通道列表（所有在 gb.channels 但不在平台集合中的通道）
+	var unsharedList []*pb.PlatformChannel
+	for ch := range gb.channels.Range {
+		// 如果在平台集合内，则跳过（已共享）
+		if _, ok := platformChannelIDs[ch.ID]; ok {
+			continue
+		}
+		// 只显示状态为正常的通道（ChannelOnStatus）
+		if ch.Status != gb28181.ChannelOnStatus {
+			continue
+		}
+		// 根据 query 过滤
+		if q != "" {
+			if !strings.Contains(strings.ToLower(ch.ChannelId), q) &&
+				!strings.Contains(strings.ToLower(ch.CustomChannelId), q) &&
+				!strings.Contains(strings.ToLower(ch.Name), q) &&
+				!strings.Contains(strings.ToLower(ch.CustomName), q) {
+				continue
+			}
+		}
+		deviceName := ""
+		if ch.Device != nil {
+			deviceName = ch.Device.Name
+		}
+		unsharedList = append(unsharedList, &pb.PlatformChannel{
+			Id: ch.ID,
+			// ChannelId 使用通道自身的 channelId 字段（前端列表显示）
+			ChannelId:         ch.ChannelId,
+			CustomChannelId:   ch.CustomChannelId,
+			ChannelName:       ch.Name,
+			CustomChannelName: util.Conditional(ch.CustomName == "", ch.Name, ch.CustomName),
+			DeviceId:          ch.DeviceId,
+			DeviceName:        deviceName,
+			StreamPath:        ch.StreamPath,
+			InPlatform:        false,
+			ChannelType: func() string {
+				if ch.Device != nil {
+					return "设备通道"
+				}
+				return "自定义通道"
+			}(),
+		})
+	}
+
+	// 根据 req.Shared 决定返回哪一部分： -1 全部, 1 已共享, 0 未共享
+	var combined []*pb.PlatformChannel
+	switch req.Shared {
+	case 1:
+		combined = sharedList
+	case 0:
+		combined = unsharedList
+	default:
+		// -1 or other: return all, but ensure InPlatform flag set correctly
+		combined = append([]*pb.PlatformChannel{}, sharedList...)
+		combined = append(combined, unsharedList...)
+	}
+
+	// 排序：按 channelId 升序
+	sort.Slice(combined, func(i, j int) bool {
+		return combined[i].ChannelId < combined[j].ChannelId
+	})
+
+	// 总数
+	total := len(combined)
+	resp.Total = int32(total)
+
+	// 分页处理：当 page==0 && count==0 时视为不分页，返回全部
+	if page > 0 && count > 0 {
+		start := (page - 1) * count
+		if start >= total {
+			// 超出范围，返回空列表
+			resp.Data = []*pb.PlatformChannel{}
+			return resp, nil
+		}
+		end := start + count
+		if end > total {
+			end = total
+		}
+		resp.Data = combined[start:end]
+	} else {
+		resp.Data = combined
+	}
+
+	return resp, nil
+}
+
+// ChannelManageList 实现管理端的通道分页查询，数据来自内存 gb.channels，返回 ChannelsPageInfo（使用 pb.Channel）
+func (gb *GB28181Plugin) ChannelManageList(ctx context.Context, req *pb.GetChannelManageListRequest) (*pb.ChannelsPageInfo, error) {
+	resp := &pb.ChannelsPageInfo{
+		Code:    0,
+		Message: "success",
+		Data:    []*pb.Channel{},
+	}
+
+	q := strings.ToLower(strings.TrimSpace(req.Query))
+	var list []*pb.Channel
+
+	// 遍历内存中的所有通道
+	for ch := range gb.channels.Range {
+		// 过滤条件：query 匹配 channelId/customChannelId/name/customName
+		if q != "" {
+			if !strings.Contains(strings.ToLower(ch.ChannelId), q) &&
+				!strings.Contains(strings.ToLower(ch.CustomChannelId), q) &&
+				!strings.Contains(strings.ToLower(ch.Name), q) &&
+				!strings.Contains(strings.ToLower(ch.CustomName), q) {
+				continue
+			}
+		}
+
+		// 类型过滤：-1 全部，0 设备通道（ch.Device != nil），1 自定义通道（ch.Device == nil）
+		isDeviceChannel := ch.Device != nil
+		if req.Type == 0 && !isDeviceChannel {
+			continue
+		}
+		if req.Type == 1 && isDeviceChannel {
+			continue
+		}
+
+		// 构建 pb.Channel（使用 proto 中的 Channel 结构）
+		list = append(list, &pb.Channel{
+			Id: ch.ID,
+			DeviceId: func() string {
+				if ch.Device == nil {
+					return ""
+				}
+				return ch.DeviceId
+			}(),
+			ChannelId:         ch.ChannelId,
+			ParentId:          ch.ParentId,
+			Name:              ch.Name,
+			Manufacturer:      ch.Manufacturer,
+			Model:             ch.Model,
+			Owner:             ch.Owner,
+			CivilCode:         ch.CivilCode,
+			Address:           ch.Address,
+			Port:              int32(ch.Port),
+			Parental:          int32(ch.Parental),
+			SafetyWay:         int32(ch.SafetyWay),
+			RegisterWay:       int32(ch.RegisterWay),
+			Secrecy:           int32(ch.Secrecy),
+			Status:            string(ch.Status),
+			Longitude:         ch.Longitude,
+			Latitude:          ch.Latitude,
+			StreamPath:        ch.StreamPath,
+			CustomChannelId:   ch.CustomChannelId,
+			CustomChannelName: util.Conditional(ch.CustomName == "", ch.Name, ch.CustomName),
+		})
+	}
+
+	// 排序（按 ChannelId 升序）
+	sort.Slice(list, func(i, j int) bool {
+		return list[i].ChannelId < list[j].ChannelId
+	})
+
+	total := len(list)
+	resp.Total = int32(total)
+
+	// 分页处理：page/count 为 0 表示不分页
+	if req.Page > 0 && req.Count > 0 {
+		start := int((req.Page - 1) * req.Count)
+		if start >= total {
+			resp.Data = []*pb.Channel{}
+			return resp, nil
+		}
+		end := start + int(req.Count)
+		if end > total {
+			end = total
+		}
+		resp.Data = list[start:end]
+	} else {
+		resp.Data = list
+	}
+
+	return resp, nil
+}
+
+// AddChannel 在内存和数据库中新增通道（管理端）
+func (gb *GB28181Plugin) AddChannel(ctx context.Context, req *pb.AddChannelRequest) (*pb.BaseResponse, error) {
+	resp := &pb.BaseResponse{}
+
+	// 必填校验
+	if req.ChannelId == "" || req.ChannelName == "" || req.StreamPath == "" {
+		resp.Code = 400
+		resp.Message = "channelId、channelName、streamPath 为必填项"
+		return resp, nil
+	}
+
+	if gb.DB == nil {
+		resp.Code = 500
+		resp.Message = "database not initialized"
+		return resp, nil
+	}
+
+	// 生成复合ID：deviceId_channelId 或 channelId_channelId（如果 deviceId 为空）
+	baseDevice := req.DeviceId
+	if baseDevice == "" {
+		baseDevice = req.ChannelId
+	}
+	channelID := baseDevice + "_" + req.ChannelId
+
+	// 先在内存中检查是否已存在（以复合ID为主键）
+	if _, ok := gb.channels.Get(channelID); ok {
+		resp.Code = 409
+		resp.Message = "通道已存在"
+		return resp, nil
+	}
+
+	// 计算最终的自定义通道ID（用于唯一性校验）
+	finalCustomId := req.CustomChannelId
+	if finalCustomId == "" {
+		finalCustomId = req.ChannelId
+	}
+
+	// 在内存中检查 customChannelId 是否重复
+	hasConflict := false
+	gb.channels.Range(func(ch *Channel) bool {
+		if ch == nil || ch.DeviceChannel == nil {
+			return true
+		}
+		if ch.ID == channelID {
+			return true
+		}
+		if ch.DeviceChannel.CustomChannelId == finalCustomId {
+			hasConflict = true
+			return false
+		}
+		return true
+	})
+	if hasConflict {
+		resp.Code = 409
+		resp.Message = "自定义通道ID已存在，请使用其他ID"
+		return resp, nil
+	}
+
+	// 再在数据库中检查 id 与 custom_channel_id 是否重复（以防并发或 DB 中已有旧数据）
+	var existingById gb28181.DeviceChannel
+	if err := gb.DB.Where("id = ?", channelID).First(&existingById).Error; err == nil {
+		resp.Code = 409
+		resp.Message = "通道已存在"
+		return resp, nil
+	} else if err != gorm.ErrRecordNotFound {
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("查询通道失败: %v", err)
+		return resp, nil
+	}
+	var existingByCustom gb28181.DeviceChannel
+	if err := gb.DB.Where("custom_channel_id = ?", finalCustomId).First(&existingByCustom).Error; err == nil {
+		resp.Code = 409
+		resp.Message = "自定义通道ID已存在，请使用其他ID"
+		return resp, nil
+	} else if err != gorm.ErrRecordNotFound {
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("查询自定义通道ID失败: %v", err)
+		return resp, nil
+	}
+
+	now := time.Now().Format("2006-01-02 15:04:05")
+	deviceChannel := &gb28181.DeviceChannel{
+		ID:              channelID,
+		DeviceId:        baseDevice,
+		ChannelId:       req.ChannelId,
+		CustomChannelId: finalCustomId,
+		Name:            req.ChannelName,
+		CustomName: func() string {
+			if req.CustomChannelName != "" {
+				return req.CustomChannelName
+			}
+			return req.ChannelName
+		}(),
+		StreamPath: req.StreamPath,
+		CreateTime: now,
+		Status:     gb28181.ChannelOffStatus,
+	}
+
+	// 写入数据库
+	if err := gb.DB.Create(deviceChannel).Error; err != nil {
+		resp.Code = 500
+		resp.Message = fmt.Sprintf("保存通道失败: %v", err)
+		return resp, nil
+	}
+
+	// 加入内存集合（以数据库为准）
+	channel := &Channel{
+		DeviceChannel: deviceChannel,
+		Device:        nil,
+		Logger:        gb.Logger.With("channel", channelID),
+	}
+	gb.channels.Add(channel)
+
+	resp.Code = 0
+	resp.Message = "通道添加成功"
+	return resp, nil
+}
+
+// DeleteChannel 删除管理端通道（同时删除 DB 与内存）
+func (gb *GB28181Plugin) DeleteChannel(ctx context.Context, req *pb.DeleteChannelRequest) (*pb.BaseResponse, error) {
+	resp := &pb.BaseResponse{}
+	if req.Id == "" {
+		resp.Code = 400
+		resp.Message = "id 不能为空"
+		return resp, nil
+	}
+
+	// 从数据库删除（如果存在）
+	if gb.DB != nil {
+		if err := gb.DB.Where("id = ?", req.Id).Delete(&gb28181.DeviceChannel{}).Error; err != nil {
+			resp.Code = 500
+			resp.Message = fmt.Sprintf("删除通道失败: %v", err)
+			return resp, nil
+		}
+	}
+
+	// 从内存移除
+	if ch, ok := gb.channels.Get(req.Id); ok {
+		gb.channels.RemoveByKey(ch.ID)
+	}
+
+	resp.Code = 0
+	resp.Message = "通道删除成功"
+	return resp, nil
+}
+
+// RemovePlatformChannel 实现从平台移出共享通道
+func (gb *GB28181Plugin) RemovePlatformChannel(ctx context.Context, req *pb.RemovePlatformChannelRequest) (*pb.BaseResponse, error) {
+	resp := &pb.BaseResponse{}
+
+	// 参数校验
+	if req.PlatformId == "" || req.Id == "" {
+		resp.Code = 400
+		resp.Message = "platformId and id are required"
+		return resp, nil
+	}
+
+	// 只更新内存：如果平台已加载，移除其 channels 集合中的指定通道（使用复合主键 id）
+	if platform, ok := gb.platforms.Get(req.PlatformId); ok {
+		platform.channels.RemoveByKey(req.Id)
+		platform.PlatformModel.ChannelCount = platform.channels.Length
+		resp.Code = 0
+		resp.Message = "success"
+		return resp, nil
+	}
+
+	// 平台未加载于内存时，无需操作也视为成功（调用方可根据需要决定是否报错）
+	resp.Code = 0
+	resp.Message = "platform not loaded, nothing to do"
+	return resp, nil
+}
+
+// AddPlatformChannelShared 将已有通道加入平台的共享列表（仅更新内存）
+func (gb *GB28181Plugin) AddPlatformChannelShared(ctx context.Context, req *pb.AddPlatformChannelSharedRequest) (*pb.BaseResponse, error) {
+	resp := &pb.BaseResponse{}
+
+	// 参数校验
+	if req.PlatformId == "" || req.Id == "" {
+		resp.Code = 400
+		resp.Message = "platformId and id are required"
+		return resp, nil
+	}
+
+	// 平台已加载于内存则添加通道引用（使用复合主键 id 查找通道）
+	if platform, ok := gb.platforms.Get(req.PlatformId); ok {
+		if ch, ok := gb.channels.Get(req.Id); ok {
+			platform.channels.Set(ch)
+			platform.PlatformModel.ChannelCount = platform.channels.Length
+			resp.Code = 0
+			resp.Message = "success"
+			return resp, nil
+		}
+		// 通道未在内存中找到
+		resp.Code = 404
+		resp.Message = "channel not found in memory"
+		return resp, nil
+	}
+
+	// 平台未加载于内存时，不做 DB 操作，直接返回提示
+	resp.Code = 0
+	resp.Message = "platform not loaded, nothing to do"
 	return resp, nil
 }
 
@@ -2926,6 +3379,9 @@ func (gb *GB28181Plugin) UpdateChannel(ctx context.Context, req *pb.UpdateChanne
 		return resp, nil
 	}
 
+	// 打印接收到的 channel 用于调试前端传参问题
+	gb.Debug("UpdateChannel request", "id", req.Id, "channel", req.Channel.String())
+
 	// 直接使用 id 查找通道
 	parts := strings.Split(req.Id, "_")
 	if len(parts) != 2 {
@@ -2942,8 +3398,18 @@ func (gb *GB28181Plugin) UpdateChannel(ctx context.Context, req *pb.UpdateChanne
 		return resp, nil
 	}
 
-	// 从请求中获取自定义通道ID
-	customChannelId := req.Channel.ChannelId
+	// 详细调试信息，帮助确认前端字段映射
+	gb.Debug("UpdateChannel debug",
+		"req.Id", req.Id,
+		"req.Channel.CustomChannelId", req.Channel.CustomChannelId,
+		"req.Channel.CustomChannelName", req.Channel.CustomChannelName,
+		"req.Channel.StreamPath", req.Channel.StreamPath,
+		"memory.Channel.DeviceNil", channel.Device == nil,
+		"memory.Channel.DeviceChannel.StreamPath", channel.DeviceChannel.StreamPath,
+	)
+
+	// 从请求中获取自定义通道ID（使用 CustomChannelId 字段）
+	customChannelId := req.Channel.CustomChannelId
 	if customChannelId != "" && customChannelId != channel.DeviceChannel.CustomChannelId {
 		// 检查自定义通道ID是否已存在（全局唯一性检查）
 		hasConflict := false
@@ -2970,22 +3436,58 @@ func (gb *GB28181Plugin) UpdateChannel(ctx context.Context, req *pb.UpdateChanne
 			return resp, nil
 		}
 
-		// 更新自定义通道ID
+		// 更新自定义通道ID（内存）
 		channel.DeviceChannel.CustomChannelId = customChannelId
 	}
 
-	// 从请求中获取自定义名称
-	if req.Channel.Name != "" {
-		channel.DeviceChannel.CustomName = req.Channel.Name
+	// 从请求中获取自定义名称（使用 CustomChannelName 字段）
+	if req.Channel.CustomChannelName != "" {
+		channel.DeviceChannel.CustomName = req.Channel.CustomChannelName
 	} else {
 		channel.DeviceChannel.CustomName = channel.DeviceChannel.Name
+	}
+
+	// 处理 streamPath 更新：仅允许自定义通道（channel.Device == nil）更新 streamPath，且不能为空
+	if channel.Device == nil {
+		// 自定义通道，streamPath 必须存在且不可为空
+		if req.Channel.StreamPath == "" {
+			resp.Code = 400
+			resp.Message = "自定义通道的 streamPath 不能为空"
+			return resp, nil
+		}
+		if req.Channel.StreamPath != "" && req.Channel.StreamPath != channel.DeviceChannel.StreamPath {
+			channel.DeviceChannel.StreamPath = req.Channel.StreamPath
+		}
+	} else {
+		// 设备通道不允许填写 streamPath（防止误改）
+		if req.Channel.StreamPath != "" {
+			resp.Code = 400
+			resp.Message = "设备通道不允许修改 streamPath"
+			return resp, nil
+		}
+	}
+
+	// 持久化内存中的完整 DeviceChannel 到数据库（一次保存，避免部分覆盖问题）
+	if gb.DB != nil {
+		if err := gb.DB.Save(channel.DeviceChannel).Error; err != nil {
+			// 若为唯一索引冲突，可返回 409；否则返回 500
+			if strings.Contains(err.Error(), "duplicate") || strings.Contains(err.Error(), "重复") {
+				resp.Code = 409
+				resp.Message = "自定义通道ID已存在，请使用其他ID"
+				return resp, nil
+			}
+			resp.Code = 500
+			resp.Message = fmt.Sprintf("保存通道失败: %v", err)
+			return resp, nil
+		}
 	}
 
 	// 记录日志
 	gb.Debug("通道信息已更新",
 		"通道ID", req.Id,
 		"自定义通道ID", channel.DeviceChannel.CustomChannelId,
-		"自定义名称", channel.DeviceChannel.CustomName)
+		"自定义名称", channel.DeviceChannel.CustomName,
+		"streamPath", channel.DeviceChannel.StreamPath)
 
 	// 返回成功响应
 	resp.Code = 0

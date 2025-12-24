@@ -349,7 +349,7 @@ type ChannelsPageInfo struct {
 	Code          int32                  `protobuf:"varint,1,opt,name=code,proto3" json:"code,omitempty"`
 	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
 	Total         int32                  `protobuf:"varint,3,opt,name=total,proto3" json:"total,omitempty"`
-	List          []*Channel             `protobuf:"bytes,4,rep,name=list,proto3" json:"list,omitempty"`
+	Data          []*Channel             `protobuf:"bytes,4,rep,name=data,proto3" json:"data,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -405,9 +405,9 @@ func (x *ChannelsPageInfo) GetTotal() int32 {
 	return 0
 }
 
-func (x *ChannelsPageInfo) GetList() []*Channel {
+func (x *ChannelsPageInfo) GetData() []*Channel {
 	if x != nil {
-		return x.List
+		return x.Data
 	}
 	return nil
 }
@@ -729,28 +729,31 @@ func (x *GetSubChannelsRequest) GetChannelType() bool {
 }
 
 type Channel struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	DeviceId      string                 `protobuf:"bytes,2,opt,name=deviceId,proto3" json:"deviceId,omitempty"`
-	ChannelId     string                 `protobuf:"bytes,3,opt,name=channelId,proto3" json:"channelId,omitempty"`
-	ParentId      string                 `protobuf:"bytes,4,opt,name=parentId,proto3" json:"parentId,omitempty"`
-	Name          string                 `protobuf:"bytes,5,opt,name=name,proto3" json:"name,omitempty"`
-	Manufacturer  string                 `protobuf:"bytes,6,opt,name=manufacturer,proto3" json:"manufacturer,omitempty"`
-	Model         string                 `protobuf:"bytes,7,opt,name=model,proto3" json:"model,omitempty"`
-	Owner         string                 `protobuf:"bytes,8,opt,name=owner,proto3" json:"owner,omitempty"`
-	CivilCode     string                 `protobuf:"bytes,9,opt,name=civilCode,proto3" json:"civilCode,omitempty"`
-	Address       string                 `protobuf:"bytes,10,opt,name=address,proto3" json:"address,omitempty"`
-	Port          int32                  `protobuf:"varint,11,opt,name=port,proto3" json:"port,omitempty"`
-	Parental      int32                  `protobuf:"varint,12,opt,name=parental,proto3" json:"parental,omitempty"`
-	SafetyWay     int32                  `protobuf:"varint,13,opt,name=safetyWay,proto3" json:"safetyWay,omitempty"`
-	RegisterWay   int32                  `protobuf:"varint,14,opt,name=registerWay,proto3" json:"registerWay,omitempty"`
-	Secrecy       int32                  `protobuf:"varint,15,opt,name=secrecy,proto3" json:"secrecy,omitempty"`
-	Status        string                 `protobuf:"bytes,16,opt,name=status,proto3" json:"status,omitempty"`
-	GpsTime       *timestamppb.Timestamp `protobuf:"bytes,17,opt,name=gpsTime,proto3" json:"gpsTime,omitempty"`
-	Longitude     string                 `protobuf:"bytes,18,opt,name=longitude,proto3" json:"longitude,omitempty"`
-	Latitude      string                 `protobuf:"bytes,19,opt,name=latitude,proto3" json:"latitude,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	Id                string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	DeviceId          string                 `protobuf:"bytes,2,opt,name=deviceId,proto3" json:"deviceId,omitempty"`
+	ChannelId         string                 `protobuf:"bytes,3,opt,name=channelId,proto3" json:"channelId,omitempty"`
+	ParentId          string                 `protobuf:"bytes,4,opt,name=parentId,proto3" json:"parentId,omitempty"`
+	Name              string                 `protobuf:"bytes,5,opt,name=name,proto3" json:"name,omitempty"`
+	Manufacturer      string                 `protobuf:"bytes,6,opt,name=manufacturer,proto3" json:"manufacturer,omitempty"`
+	Model             string                 `protobuf:"bytes,7,opt,name=model,proto3" json:"model,omitempty"`
+	Owner             string                 `protobuf:"bytes,8,opt,name=owner,proto3" json:"owner,omitempty"`
+	CivilCode         string                 `protobuf:"bytes,9,opt,name=civilCode,proto3" json:"civilCode,omitempty"`
+	Address           string                 `protobuf:"bytes,10,opt,name=address,proto3" json:"address,omitempty"`
+	Port              int32                  `protobuf:"varint,11,opt,name=port,proto3" json:"port,omitempty"`
+	Parental          int32                  `protobuf:"varint,12,opt,name=parental,proto3" json:"parental,omitempty"`
+	SafetyWay         int32                  `protobuf:"varint,13,opt,name=safetyWay,proto3" json:"safetyWay,omitempty"`
+	RegisterWay       int32                  `protobuf:"varint,14,opt,name=registerWay,proto3" json:"registerWay,omitempty"`
+	Secrecy           int32                  `protobuf:"varint,15,opt,name=secrecy,proto3" json:"secrecy,omitempty"`
+	Status            string                 `protobuf:"bytes,16,opt,name=status,proto3" json:"status,omitempty"`
+	GpsTime           *timestamppb.Timestamp `protobuf:"bytes,17,opt,name=gpsTime,proto3" json:"gpsTime,omitempty"`
+	Longitude         string                 `protobuf:"bytes,18,opt,name=longitude,proto3" json:"longitude,omitempty"`
+	Latitude          string                 `protobuf:"bytes,19,opt,name=latitude,proto3" json:"latitude,omitempty"`
+	StreamPath        string                 `protobuf:"bytes,20,opt,name=streamPath,proto3" json:"streamPath,omitempty"`
+	CustomChannelId   string                 `protobuf:"bytes,21,opt,name=customChannelId,proto3" json:"customChannelId,omitempty"`
+	CustomChannelName string                 `protobuf:"bytes,22,opt,name=customChannelName,proto3" json:"customChannelName,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *Channel) Reset() {
@@ -912,6 +915,27 @@ func (x *Channel) GetLongitude() string {
 func (x *Channel) GetLatitude() string {
 	if x != nil {
 		return x.Latitude
+	}
+	return ""
+}
+
+func (x *Channel) GetStreamPath() string {
+	if x != nil {
+		return x.StreamPath
+	}
+	return ""
+}
+
+func (x *Channel) GetCustomChannelId() string {
+	if x != nil {
+		return x.CustomChannelId
+	}
+	return ""
+}
+
+func (x *Channel) GetCustomChannelName() string {
+	if x != nil {
+		return x.CustomChannelName
 	}
 	return ""
 }
@@ -2685,6 +2709,7 @@ type Platform struct {
 	Address                 string                 `protobuf:"bytes,35,opt,name=address,proto3" json:"address,omitempty"`                                  // 平台安装地址
 	RegisterWay             int32                  `protobuf:"varint,36,opt,name=registerWay,proto3" json:"registerWay,omitempty"`                         // 注册方式
 	Secrecy                 int32                  `protobuf:"varint,37,opt,name=secrecy,proto3" json:"secrecy,omitempty"`                                 // 保密属性
+	ReadOnly                bool                   `protobuf:"varint,38,opt,name=readOnly,proto3" json:"readOnly,omitempty"`
 	unknownFields           protoimpl.UnknownFields
 	sizeCache               protoimpl.SizeCache
 }
@@ -2976,6 +3001,13 @@ func (x *Platform) GetSecrecy() int32 {
 		return x.Secrecy
 	}
 	return 0
+}
+
+func (x *Platform) GetReadOnly() bool {
+	if x != nil {
+		return x.ReadOnly
+	}
+	return false
 }
 
 // 获取平台请求
@@ -5835,6 +5867,574 @@ func (x *GroupChannelsData) GetChannels() []*GroupChannel {
 	return nil
 }
 
+// 根据平台ID查询平台通道的请求（支持已/未共享与模糊查询）
+type GetPlatformChannelsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PlatformId    string                 `protobuf:"bytes,1,opt,name=platformId,proto3" json:"platformId,omitempty"` // 平台ID（路径参数）
+	Page          int32                  `protobuf:"varint,2,opt,name=page,proto3" json:"page,omitempty"`
+	Count         int32                  `protobuf:"varint,3,opt,name=count,proto3" json:"count,omitempty"`
+	Query         string                 `protobuf:"bytes,4,opt,name=query,proto3" json:"query,omitempty"`    // 用于匹配通道名称、自定义通道名称、通道编号、自定义通道编号
+	Shared        int32                  `protobuf:"varint,5,opt,name=shared,proto3" json:"shared,omitempty"` // -1: 全部, 0: 未共享, 1: 已共享
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetPlatformChannelsRequest) Reset() {
+	*x = GetPlatformChannelsRequest{}
+	mi := &file_gb28181_proto_msgTypes[81]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetPlatformChannelsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetPlatformChannelsRequest) ProtoMessage() {}
+
+func (x *GetPlatformChannelsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_gb28181_proto_msgTypes[81]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetPlatformChannelsRequest.ProtoReflect.Descriptor instead.
+func (*GetPlatformChannelsRequest) Descriptor() ([]byte, []int) {
+	return file_gb28181_proto_rawDescGZIP(), []int{81}
+}
+
+func (x *GetPlatformChannelsRequest) GetPlatformId() string {
+	if x != nil {
+		return x.PlatformId
+	}
+	return ""
+}
+
+func (x *GetPlatformChannelsRequest) GetPage() int32 {
+	if x != nil {
+		return x.Page
+	}
+	return 0
+}
+
+func (x *GetPlatformChannelsRequest) GetCount() int32 {
+	if x != nil {
+		return x.Count
+	}
+	return 0
+}
+
+func (x *GetPlatformChannelsRequest) GetQuery() string {
+	if x != nil {
+		return x.Query
+	}
+	return ""
+}
+
+func (x *GetPlatformChannelsRequest) GetShared() int32 {
+	if x != nil {
+		return x.Shared
+	}
+	return 0
+}
+
+// 平台通道项
+type PlatformChannel struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	Id                string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	ChannelId         string                 `protobuf:"bytes,2,opt,name=channelId,proto3" json:"channelId,omitempty"`
+	CustomChannelId   string                 `protobuf:"bytes,3,opt,name=customChannelId,proto3" json:"customChannelId,omitempty"`
+	ChannelName       string                 `protobuf:"bytes,4,opt,name=channelName,proto3" json:"channelName,omitempty"`
+	CustomChannelName string                 `protobuf:"bytes,5,opt,name=customChannelName,proto3" json:"customChannelName,omitempty"`
+	DeviceId          string                 `protobuf:"bytes,6,opt,name=deviceId,proto3" json:"deviceId,omitempty"`
+	DeviceName        string                 `protobuf:"bytes,7,opt,name=deviceName,proto3" json:"deviceName,omitempty"`
+	StreamPath        string                 `protobuf:"bytes,8,opt,name=streamPath,proto3" json:"streamPath,omitempty"`
+	InPlatform        bool                   `protobuf:"varint,9,opt,name=inPlatform,proto3" json:"inPlatform,omitempty"`   // 是否已加入到指定平台（true 表示已共享）
+	ChannelType       string                 `protobuf:"bytes,10,opt,name=channelType,proto3" json:"channelType,omitempty"` // 通道类型: "设备通道" 或 "自定义通道"
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *PlatformChannel) Reset() {
+	*x = PlatformChannel{}
+	mi := &file_gb28181_proto_msgTypes[82]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PlatformChannel) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PlatformChannel) ProtoMessage() {}
+
+func (x *PlatformChannel) ProtoReflect() protoreflect.Message {
+	mi := &file_gb28181_proto_msgTypes[82]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PlatformChannel.ProtoReflect.Descriptor instead.
+func (*PlatformChannel) Descriptor() ([]byte, []int) {
+	return file_gb28181_proto_rawDescGZIP(), []int{82}
+}
+
+func (x *PlatformChannel) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *PlatformChannel) GetChannelId() string {
+	if x != nil {
+		return x.ChannelId
+	}
+	return ""
+}
+
+func (x *PlatformChannel) GetCustomChannelId() string {
+	if x != nil {
+		return x.CustomChannelId
+	}
+	return ""
+}
+
+func (x *PlatformChannel) GetChannelName() string {
+	if x != nil {
+		return x.ChannelName
+	}
+	return ""
+}
+
+func (x *PlatformChannel) GetCustomChannelName() string {
+	if x != nil {
+		return x.CustomChannelName
+	}
+	return ""
+}
+
+func (x *PlatformChannel) GetDeviceId() string {
+	if x != nil {
+		return x.DeviceId
+	}
+	return ""
+}
+
+func (x *PlatformChannel) GetDeviceName() string {
+	if x != nil {
+		return x.DeviceName
+	}
+	return ""
+}
+
+func (x *PlatformChannel) GetStreamPath() string {
+	if x != nil {
+		return x.StreamPath
+	}
+	return ""
+}
+
+func (x *PlatformChannel) GetInPlatform() bool {
+	if x != nil {
+		return x.InPlatform
+	}
+	return false
+}
+
+func (x *PlatformChannel) GetChannelType() string {
+	if x != nil {
+		return x.ChannelType
+	}
+	return ""
+}
+
+// 平台通道查询响应
+type PlatformChannelsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Code          int32                  `protobuf:"varint,1,opt,name=code,proto3" json:"code,omitempty"`
+	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	Total         int32                  `protobuf:"varint,3,opt,name=total,proto3" json:"total,omitempty"`
+	Data          []*PlatformChannel     `protobuf:"bytes,4,rep,name=data,proto3" json:"data,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PlatformChannelsResponse) Reset() {
+	*x = PlatformChannelsResponse{}
+	mi := &file_gb28181_proto_msgTypes[83]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PlatformChannelsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PlatformChannelsResponse) ProtoMessage() {}
+
+func (x *PlatformChannelsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_gb28181_proto_msgTypes[83]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PlatformChannelsResponse.ProtoReflect.Descriptor instead.
+func (*PlatformChannelsResponse) Descriptor() ([]byte, []int) {
+	return file_gb28181_proto_rawDescGZIP(), []int{83}
+}
+
+func (x *PlatformChannelsResponse) GetCode() int32 {
+	if x != nil {
+		return x.Code
+	}
+	return 0
+}
+
+func (x *PlatformChannelsResponse) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+func (x *PlatformChannelsResponse) GetTotal() int32 {
+	if x != nil {
+		return x.Total
+	}
+	return 0
+}
+
+func (x *PlatformChannelsResponse) GetData() []*PlatformChannel {
+	if x != nil {
+		return x.Data
+	}
+	return nil
+}
+
+// 通道管理 - 分页查询请求（管理端）
+type GetChannelManageListRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Page          int32                  `protobuf:"varint,1,opt,name=page,proto3" json:"page,omitempty"`
+	Count         int32                  `protobuf:"varint,2,opt,name=count,proto3" json:"count,omitempty"`
+	Query         string                 `protobuf:"bytes,3,opt,name=query,proto3" json:"query,omitempty"` // 支持通道编号/自定义通道编号/通道名称/自定义通道名称的模糊匹配
+	Type          int32                  `protobuf:"varint,4,opt,name=type,proto3" json:"type,omitempty"`  // -1: 全部, 0: 设备通道, 1: 自定义通道
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetChannelManageListRequest) Reset() {
+	*x = GetChannelManageListRequest{}
+	mi := &file_gb28181_proto_msgTypes[84]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetChannelManageListRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetChannelManageListRequest) ProtoMessage() {}
+
+func (x *GetChannelManageListRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_gb28181_proto_msgTypes[84]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetChannelManageListRequest.ProtoReflect.Descriptor instead.
+func (*GetChannelManageListRequest) Descriptor() ([]byte, []int) {
+	return file_gb28181_proto_rawDescGZIP(), []int{84}
+}
+
+func (x *GetChannelManageListRequest) GetPage() int32 {
+	if x != nil {
+		return x.Page
+	}
+	return 0
+}
+
+func (x *GetChannelManageListRequest) GetCount() int32 {
+	if x != nil {
+		return x.Count
+	}
+	return 0
+}
+
+func (x *GetChannelManageListRequest) GetQuery() string {
+	if x != nil {
+		return x.Query
+	}
+	return ""
+}
+
+func (x *GetChannelManageListRequest) GetType() int32 {
+	if x != nil {
+		return x.Type
+	}
+	return 0
+}
+
+// 新增通道请求（管理端）
+type AddChannelRequest struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	DeviceId          string                 `protobuf:"bytes,1,opt,name=deviceId,proto3" json:"deviceId,omitempty"`
+	ChannelId         string                 `protobuf:"bytes,2,opt,name=channelId,proto3" json:"channelId,omitempty"`
+	CustomChannelId   string                 `protobuf:"bytes,3,opt,name=customChannelId,proto3" json:"customChannelId,omitempty"`
+	ChannelName       string                 `protobuf:"bytes,4,opt,name=channelName,proto3" json:"channelName,omitempty"`
+	CustomChannelName string                 `protobuf:"bytes,5,opt,name=customChannelName,proto3" json:"customChannelName,omitempty"`
+	StreamPath        string                 `protobuf:"bytes,6,opt,name=streamPath,proto3" json:"streamPath,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *AddChannelRequest) Reset() {
+	*x = AddChannelRequest{}
+	mi := &file_gb28181_proto_msgTypes[85]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AddChannelRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AddChannelRequest) ProtoMessage() {}
+
+func (x *AddChannelRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_gb28181_proto_msgTypes[85]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AddChannelRequest.ProtoReflect.Descriptor instead.
+func (*AddChannelRequest) Descriptor() ([]byte, []int) {
+	return file_gb28181_proto_rawDescGZIP(), []int{85}
+}
+
+func (x *AddChannelRequest) GetDeviceId() string {
+	if x != nil {
+		return x.DeviceId
+	}
+	return ""
+}
+
+func (x *AddChannelRequest) GetChannelId() string {
+	if x != nil {
+		return x.ChannelId
+	}
+	return ""
+}
+
+func (x *AddChannelRequest) GetCustomChannelId() string {
+	if x != nil {
+		return x.CustomChannelId
+	}
+	return ""
+}
+
+func (x *AddChannelRequest) GetChannelName() string {
+	if x != nil {
+		return x.ChannelName
+	}
+	return ""
+}
+
+func (x *AddChannelRequest) GetCustomChannelName() string {
+	if x != nil {
+		return x.CustomChannelName
+	}
+	return ""
+}
+
+func (x *AddChannelRequest) GetStreamPath() string {
+	if x != nil {
+		return x.StreamPath
+	}
+	return ""
+}
+
+// 删除通道请求（管理端）
+type DeleteChannelRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteChannelRequest) Reset() {
+	*x = DeleteChannelRequest{}
+	mi := &file_gb28181_proto_msgTypes[86]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteChannelRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteChannelRequest) ProtoMessage() {}
+
+func (x *DeleteChannelRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_gb28181_proto_msgTypes[86]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteChannelRequest.ProtoReflect.Descriptor instead.
+func (*DeleteChannelRequest) Descriptor() ([]byte, []int) {
+	return file_gb28181_proto_rawDescGZIP(), []int{86}
+}
+
+func (x *DeleteChannelRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+// 从平台移出共享通道的请求
+type RemovePlatformChannelRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PlatformId    string                 `protobuf:"bytes,1,opt,name=platformId,proto3" json:"platformId,omitempty"`
+	Id            string                 `protobuf:"bytes,2,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RemovePlatformChannelRequest) Reset() {
+	*x = RemovePlatformChannelRequest{}
+	mi := &file_gb28181_proto_msgTypes[87]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RemovePlatformChannelRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RemovePlatformChannelRequest) ProtoMessage() {}
+
+func (x *RemovePlatformChannelRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_gb28181_proto_msgTypes[87]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RemovePlatformChannelRequest.ProtoReflect.Descriptor instead.
+func (*RemovePlatformChannelRequest) Descriptor() ([]byte, []int) {
+	return file_gb28181_proto_rawDescGZIP(), []int{87}
+}
+
+func (x *RemovePlatformChannelRequest) GetPlatformId() string {
+	if x != nil {
+		return x.PlatformId
+	}
+	return ""
+}
+
+func (x *RemovePlatformChannelRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+// 添加共享通道请求（将已有通道加入平台共享）
+type AddPlatformChannelSharedRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PlatformId    string                 `protobuf:"bytes,1,opt,name=platformId,proto3" json:"platformId,omitempty"`
+	Id            string                 `protobuf:"bytes,2,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AddPlatformChannelSharedRequest) Reset() {
+	*x = AddPlatformChannelSharedRequest{}
+	mi := &file_gb28181_proto_msgTypes[88]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AddPlatformChannelSharedRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AddPlatformChannelSharedRequest) ProtoMessage() {}
+
+func (x *AddPlatformChannelSharedRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_gb28181_proto_msgTypes[88]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AddPlatformChannelSharedRequest.ProtoReflect.Descriptor instead.
+func (*AddPlatformChannelSharedRequest) Descriptor() ([]byte, []int) {
+	return file_gb28181_proto_rawDescGZIP(), []int{88}
+}
+
+func (x *AddPlatformChannelSharedRequest) GetPlatformId() string {
+	if x != nil {
+		return x.PlatformId
+	}
+	return ""
+}
+
+func (x *AddPlatformChannelSharedRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
 // 回放暂停请求
 type PlaybackPauseRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -5845,7 +6445,7 @@ type PlaybackPauseRequest struct {
 
 func (x *PlaybackPauseRequest) Reset() {
 	*x = PlaybackPauseRequest{}
-	mi := &file_gb28181_proto_msgTypes[81]
+	mi := &file_gb28181_proto_msgTypes[89]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5857,7 +6457,7 @@ func (x *PlaybackPauseRequest) String() string {
 func (*PlaybackPauseRequest) ProtoMessage() {}
 
 func (x *PlaybackPauseRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[81]
+	mi := &file_gb28181_proto_msgTypes[89]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5870,7 +6470,7 @@ func (x *PlaybackPauseRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlaybackPauseRequest.ProtoReflect.Descriptor instead.
 func (*PlaybackPauseRequest) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{81}
+	return file_gb28181_proto_rawDescGZIP(), []int{89}
 }
 
 func (x *PlaybackPauseRequest) GetStreamPath() string {
@@ -5890,7 +6490,7 @@ type PlaybackResumeRequest struct {
 
 func (x *PlaybackResumeRequest) Reset() {
 	*x = PlaybackResumeRequest{}
-	mi := &file_gb28181_proto_msgTypes[82]
+	mi := &file_gb28181_proto_msgTypes[90]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5902,7 +6502,7 @@ func (x *PlaybackResumeRequest) String() string {
 func (*PlaybackResumeRequest) ProtoMessage() {}
 
 func (x *PlaybackResumeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[82]
+	mi := &file_gb28181_proto_msgTypes[90]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5915,7 +6515,7 @@ func (x *PlaybackResumeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlaybackResumeRequest.ProtoReflect.Descriptor instead.
 func (*PlaybackResumeRequest) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{82}
+	return file_gb28181_proto_rawDescGZIP(), []int{90}
 }
 
 func (x *PlaybackResumeRequest) GetStreamPath() string {
@@ -5936,7 +6536,7 @@ type PlaybackSeekRequest struct {
 
 func (x *PlaybackSeekRequest) Reset() {
 	*x = PlaybackSeekRequest{}
-	mi := &file_gb28181_proto_msgTypes[83]
+	mi := &file_gb28181_proto_msgTypes[91]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5948,7 +6548,7 @@ func (x *PlaybackSeekRequest) String() string {
 func (*PlaybackSeekRequest) ProtoMessage() {}
 
 func (x *PlaybackSeekRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[83]
+	mi := &file_gb28181_proto_msgTypes[91]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5961,7 +6561,7 @@ func (x *PlaybackSeekRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlaybackSeekRequest.ProtoReflect.Descriptor instead.
 func (*PlaybackSeekRequest) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{83}
+	return file_gb28181_proto_rawDescGZIP(), []int{91}
 }
 
 func (x *PlaybackSeekRequest) GetStreamPath() string {
@@ -5989,7 +6589,7 @@ type PlaybackSpeedRequest struct {
 
 func (x *PlaybackSpeedRequest) Reset() {
 	*x = PlaybackSpeedRequest{}
-	mi := &file_gb28181_proto_msgTypes[84]
+	mi := &file_gb28181_proto_msgTypes[92]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6001,7 +6601,7 @@ func (x *PlaybackSpeedRequest) String() string {
 func (*PlaybackSpeedRequest) ProtoMessage() {}
 
 func (x *PlaybackSpeedRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[84]
+	mi := &file_gb28181_proto_msgTypes[92]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6014,7 +6614,7 @@ func (x *PlaybackSpeedRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlaybackSpeedRequest.ProtoReflect.Descriptor instead.
 func (*PlaybackSpeedRequest) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{84}
+	return file_gb28181_proto_rawDescGZIP(), []int{92}
 }
 
 func (x *PlaybackSpeedRequest) GetStreamPath() string {
@@ -6040,7 +6640,7 @@ type RemoveDeviceRequest struct {
 
 func (x *RemoveDeviceRequest) Reset() {
 	*x = RemoveDeviceRequest{}
-	mi := &file_gb28181_proto_msgTypes[85]
+	mi := &file_gb28181_proto_msgTypes[93]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6052,7 +6652,7 @@ func (x *RemoveDeviceRequest) String() string {
 func (*RemoveDeviceRequest) ProtoMessage() {}
 
 func (x *RemoveDeviceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[85]
+	mi := &file_gb28181_proto_msgTypes[93]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6065,7 +6665,7 @@ func (x *RemoveDeviceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveDeviceRequest.ProtoReflect.Descriptor instead.
 func (*RemoveDeviceRequest) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{85}
+	return file_gb28181_proto_rawDescGZIP(), []int{93}
 }
 
 func (x *RemoveDeviceRequest) GetId() string {
@@ -6090,7 +6690,7 @@ type AlarmInfoRequest struct {
 
 func (x *AlarmInfoRequest) Reset() {
 	*x = AlarmInfoRequest{}
-	mi := &file_gb28181_proto_msgTypes[86]
+	mi := &file_gb28181_proto_msgTypes[94]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6102,7 +6702,7 @@ func (x *AlarmInfoRequest) String() string {
 func (*AlarmInfoRequest) ProtoMessage() {}
 
 func (x *AlarmInfoRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[86]
+	mi := &file_gb28181_proto_msgTypes[94]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6115,7 +6715,7 @@ func (x *AlarmInfoRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AlarmInfoRequest.ProtoReflect.Descriptor instead.
 func (*AlarmInfoRequest) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{86}
+	return file_gb28181_proto_rawDescGZIP(), []int{94}
 }
 
 func (x *AlarmInfoRequest) GetServerInfo() string {
@@ -6205,7 +6805,7 @@ type AddChannelWithProxyRequest struct {
 
 func (x *AddChannelWithProxyRequest) Reset() {
 	*x = AddChannelWithProxyRequest{}
-	mi := &file_gb28181_proto_msgTypes[87]
+	mi := &file_gb28181_proto_msgTypes[95]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6217,7 +6817,7 @@ func (x *AddChannelWithProxyRequest) String() string {
 func (*AddChannelWithProxyRequest) ProtoMessage() {}
 
 func (x *AddChannelWithProxyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[87]
+	mi := &file_gb28181_proto_msgTypes[95]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6230,7 +6830,7 @@ func (x *AddChannelWithProxyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddChannelWithProxyRequest.ProtoReflect.Descriptor instead.
 func (*AddChannelWithProxyRequest) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{87}
+	return file_gb28181_proto_rawDescGZIP(), []int{95}
 }
 
 func (x *AddChannelWithProxyRequest) GetStreamPath() string {
@@ -6529,7 +7129,7 @@ type UpdateChannelWithProxyRequest struct {
 
 func (x *UpdateChannelWithProxyRequest) Reset() {
 	*x = UpdateChannelWithProxyRequest{}
-	mi := &file_gb28181_proto_msgTypes[88]
+	mi := &file_gb28181_proto_msgTypes[96]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6541,7 +7141,7 @@ func (x *UpdateChannelWithProxyRequest) String() string {
 func (*UpdateChannelWithProxyRequest) ProtoMessage() {}
 
 func (x *UpdateChannelWithProxyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[88]
+	mi := &file_gb28181_proto_msgTypes[96]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6554,7 +7154,7 @@ func (x *UpdateChannelWithProxyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateChannelWithProxyRequest.ProtoReflect.Descriptor instead.
 func (*UpdateChannelWithProxyRequest) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{88}
+	return file_gb28181_proto_rawDescGZIP(), []int{96}
 }
 
 func (x *UpdateChannelWithProxyRequest) GetChannelId() string {
@@ -6812,7 +7412,7 @@ type DeleteChannelWithProxyRequest struct {
 
 func (x *DeleteChannelWithProxyRequest) Reset() {
 	*x = DeleteChannelWithProxyRequest{}
-	mi := &file_gb28181_proto_msgTypes[89]
+	mi := &file_gb28181_proto_msgTypes[97]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6824,7 +7424,7 @@ func (x *DeleteChannelWithProxyRequest) String() string {
 func (*DeleteChannelWithProxyRequest) ProtoMessage() {}
 
 func (x *DeleteChannelWithProxyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[89]
+	mi := &file_gb28181_proto_msgTypes[97]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6837,7 +7437,7 @@ func (x *DeleteChannelWithProxyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteChannelWithProxyRequest.ProtoReflect.Descriptor instead.
 func (*DeleteChannelWithProxyRequest) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{89}
+	return file_gb28181_proto_rawDescGZIP(), []int{97}
 }
 
 func (x *DeleteChannelWithProxyRequest) GetChannelId() string {
@@ -6861,7 +7461,7 @@ type StartDownloadRequest struct {
 
 func (x *StartDownloadRequest) Reset() {
 	*x = StartDownloadRequest{}
-	mi := &file_gb28181_proto_msgTypes[90]
+	mi := &file_gb28181_proto_msgTypes[98]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6873,7 +7473,7 @@ func (x *StartDownloadRequest) String() string {
 func (*StartDownloadRequest) ProtoMessage() {}
 
 func (x *StartDownloadRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[90]
+	mi := &file_gb28181_proto_msgTypes[98]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6886,7 +7486,7 @@ func (x *StartDownloadRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StartDownloadRequest.ProtoReflect.Descriptor instead.
 func (*StartDownloadRequest) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{90}
+	return file_gb28181_proto_rawDescGZIP(), []int{98}
 }
 
 func (x *StartDownloadRequest) GetDeviceId() string {
@@ -6936,7 +7536,7 @@ type StartDownloadData struct {
 
 func (x *StartDownloadData) Reset() {
 	*x = StartDownloadData{}
-	mi := &file_gb28181_proto_msgTypes[91]
+	mi := &file_gb28181_proto_msgTypes[99]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6948,7 +7548,7 @@ func (x *StartDownloadData) String() string {
 func (*StartDownloadData) ProtoMessage() {}
 
 func (x *StartDownloadData) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[91]
+	mi := &file_gb28181_proto_msgTypes[99]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6961,7 +7561,7 @@ func (x *StartDownloadData) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StartDownloadData.ProtoReflect.Descriptor instead.
 func (*StartDownloadData) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{91}
+	return file_gb28181_proto_rawDescGZIP(), []int{99}
 }
 
 func (x *StartDownloadData) GetDownloadId() string {
@@ -6998,7 +7598,7 @@ type StartDownloadResponse struct {
 
 func (x *StartDownloadResponse) Reset() {
 	*x = StartDownloadResponse{}
-	mi := &file_gb28181_proto_msgTypes[92]
+	mi := &file_gb28181_proto_msgTypes[100]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7010,7 +7610,7 @@ func (x *StartDownloadResponse) String() string {
 func (*StartDownloadResponse) ProtoMessage() {}
 
 func (x *StartDownloadResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[92]
+	mi := &file_gb28181_proto_msgTypes[100]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7023,7 +7623,7 @@ func (x *StartDownloadResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StartDownloadResponse.ProtoReflect.Descriptor instead.
 func (*StartDownloadResponse) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{92}
+	return file_gb28181_proto_rawDescGZIP(), []int{100}
 }
 
 func (x *StartDownloadResponse) GetCode() int32 {
@@ -7064,7 +7664,7 @@ type GetDownloadProgressRequest struct {
 
 func (x *GetDownloadProgressRequest) Reset() {
 	*x = GetDownloadProgressRequest{}
-	mi := &file_gb28181_proto_msgTypes[93]
+	mi := &file_gb28181_proto_msgTypes[101]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7076,7 +7676,7 @@ func (x *GetDownloadProgressRequest) String() string {
 func (*GetDownloadProgressRequest) ProtoMessage() {}
 
 func (x *GetDownloadProgressRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[93]
+	mi := &file_gb28181_proto_msgTypes[101]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7089,7 +7689,7 @@ func (x *GetDownloadProgressRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetDownloadProgressRequest.ProtoReflect.Descriptor instead.
 func (*GetDownloadProgressRequest) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{93}
+	return file_gb28181_proto_rawDescGZIP(), []int{101}
 }
 
 func (x *GetDownloadProgressRequest) GetDownloadId() string {
@@ -7118,7 +7718,7 @@ type DownloadProgressData struct {
 
 func (x *DownloadProgressData) Reset() {
 	*x = DownloadProgressData{}
-	mi := &file_gb28181_proto_msgTypes[94]
+	mi := &file_gb28181_proto_msgTypes[102]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7130,7 +7730,7 @@ func (x *DownloadProgressData) String() string {
 func (*DownloadProgressData) ProtoMessage() {}
 
 func (x *DownloadProgressData) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[94]
+	mi := &file_gb28181_proto_msgTypes[102]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7143,7 +7743,7 @@ func (x *DownloadProgressData) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DownloadProgressData.ProtoReflect.Descriptor instead.
 func (*DownloadProgressData) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{94}
+	return file_gb28181_proto_rawDescGZIP(), []int{102}
 }
 
 func (x *DownloadProgressData) GetDownloadId() string {
@@ -7229,7 +7829,7 @@ type DownloadProgressResponse struct {
 
 func (x *DownloadProgressResponse) Reset() {
 	*x = DownloadProgressResponse{}
-	mi := &file_gb28181_proto_msgTypes[95]
+	mi := &file_gb28181_proto_msgTypes[103]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7241,7 +7841,7 @@ func (x *DownloadProgressResponse) String() string {
 func (*DownloadProgressResponse) ProtoMessage() {}
 
 func (x *DownloadProgressResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[95]
+	mi := &file_gb28181_proto_msgTypes[103]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7254,7 +7854,7 @@ func (x *DownloadProgressResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DownloadProgressResponse.ProtoReflect.Descriptor instead.
 func (*DownloadProgressResponse) Descriptor() ([]byte, []int) {
-	return file_gb28181_proto_rawDescGZIP(), []int{95}
+	return file_gb28181_proto_rawDescGZIP(), []int{103}
 }
 
 func (x *DownloadProgressResponse) GetCode() int32 {
@@ -7295,7 +7895,7 @@ type AddGroupChannelRequest_Channel struct {
 
 func (x *AddGroupChannelRequest_Channel) Reset() {
 	*x = AddGroupChannelRequest_Channel{}
-	mi := &file_gb28181_proto_msgTypes[97]
+	mi := &file_gb28181_proto_msgTypes[105]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7307,7 +7907,7 @@ func (x *AddGroupChannelRequest_Channel) String() string {
 func (*AddGroupChannelRequest_Channel) ProtoMessage() {}
 
 func (x *AddGroupChannelRequest_Channel) ProtoReflect() protoreflect.Message {
-	mi := &file_gb28181_proto_msgTypes[97]
+	mi := &file_gb28181_proto_msgTypes[105]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7369,7 +7969,7 @@ const file_gb28181_proto_rawDesc = "" +
 	"\x04code\x18\x01 \x01(\x05R\x04code\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12\x14\n" +
 	"\x05total\x18\x03 \x01(\x05R\x05total\x12'\n" +
-	"\x04list\x18\x04 \x03(\v2\x13.gb28181pro.ChannelR\x04list\"/\n" +
+	"\x04data\x18\x04 \x03(\v2\x13.gb28181pro.ChannelR\x04data\"/\n" +
 	"\x11SyncDeviceRequest\x12\x1a\n" +
 	"\bdeviceId\x18\x01 \x01(\tR\bdeviceId\"\x86\x01\n" +
 	"\n" +
@@ -7392,7 +7992,7 @@ const file_gb28181_proto_rawDesc = "" +
 	"\x05count\x18\x04 \x01(\x05R\x05count\x12\x14\n" +
 	"\x05query\x18\x05 \x01(\tR\x05query\x12\x16\n" +
 	"\x06online\x18\x06 \x01(\bR\x06online\x12 \n" +
-	"\vchannelType\x18\a \x01(\bR\vchannelType\"\x9d\x04\n" +
+	"\vchannelType\x18\a \x01(\bR\vchannelType\"\x95\x05\n" +
 	"\aChannel\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1a\n" +
 	"\bdeviceId\x18\x02 \x01(\tR\bdeviceId\x12\x1c\n" +
@@ -7413,7 +8013,12 @@ const file_gb28181_proto_rawDesc = "" +
 	"\x06status\x18\x10 \x01(\tR\x06status\x124\n" +
 	"\agpsTime\x18\x11 \x01(\v2\x1a.google.protobuf.TimestampR\agpsTime\x12\x1c\n" +
 	"\tlongitude\x18\x12 \x01(\tR\tlongitude\x12\x1a\n" +
-	"\blatitude\x18\x13 \x01(\tR\blatitude\"\x8d\a\n" +
+	"\blatitude\x18\x13 \x01(\tR\blatitude\x12\x1e\n" +
+	"\n" +
+	"streamPath\x18\x14 \x01(\tR\n" +
+	"streamPath\x12(\n" +
+	"\x0fcustomChannelId\x18\x15 \x01(\tR\x0fcustomChannelId\x12,\n" +
+	"\x11customChannelName\x18\x16 \x01(\tR\x11customChannelName\"\x8d\a\n" +
 	"\x06Device\x12\x1a\n" +
 	"\bdeviceId\x18\x01 \x01(\tR\bdeviceId\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\"\n" +
@@ -7550,7 +8155,7 @@ const file_gb28181_proto_rawDesc = "" +
 	"\x04code\x18\x01 \x01(\x05R\x04code\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12(\n" +
 	"\x04data\x18\x03 \x03(\v2\x14.gb28181pro.SSRCInfoR\x04data\x12\x14\n" +
-	"\x05count\x18\x04 \x01(\x05R\x05count\"\xd4\t\n" +
+	"\x05count\x18\x04 \x01(\x05R\x05count\"\xf0\t\n" +
 	"\bPlatform\x12\x16\n" +
 	"\x06enable\x18\x01 \x01(\bR\x06enable\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1e\n" +
@@ -7601,7 +8206,8 @@ const file_gb28181_proto_rawDesc = "" +
 	"\x05model\x18\" \x01(\tR\x05model\x12\x18\n" +
 	"\aaddress\x18# \x01(\tR\aaddress\x12 \n" +
 	"\vregisterWay\x18$ \x01(\x05R\vregisterWay\x12\x18\n" +
-	"\asecrecy\x18% \x01(\x05R\asecrecy\"$\n" +
+	"\asecrecy\x18% \x01(\x05R\asecrecy\x12\x1a\n" +
+	"\breadOnly\x18& \x01(\bR\breadOnly\"$\n" +
 	"\x12GetPlatformRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x05R\x02id\"'\n" +
 	"\x15DeletePlatformRequest\x12\x0e\n" +
@@ -7836,7 +8442,64 @@ const file_gb28181_proto_rawDesc = "" +
 	"\x04data\x18\x04 \x01(\v2\x1d.gb28181pro.GroupChannelsDataR\x04data\"w\n" +
 	"\x11GroupChannelsData\x12,\n" +
 	"\x04list\x18\x01 \x03(\v2\x18.gb28181pro.GroupChannelR\x04list\x124\n" +
-	"\bchannels\x18\x02 \x03(\v2\x18.gb28181pro.GroupChannelR\bchannels\"6\n" +
+	"\bchannels\x18\x02 \x03(\v2\x18.gb28181pro.GroupChannelR\bchannels\"\x94\x01\n" +
+	"\x1aGetPlatformChannelsRequest\x12\x1e\n" +
+	"\n" +
+	"platformId\x18\x01 \x01(\tR\n" +
+	"platformId\x12\x12\n" +
+	"\x04page\x18\x02 \x01(\x05R\x04page\x12\x14\n" +
+	"\x05count\x18\x03 \x01(\x05R\x05count\x12\x14\n" +
+	"\x05query\x18\x04 \x01(\tR\x05query\x12\x16\n" +
+	"\x06shared\x18\x05 \x01(\x05R\x06shared\"\xd7\x02\n" +
+	"\x0fPlatformChannel\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1c\n" +
+	"\tchannelId\x18\x02 \x01(\tR\tchannelId\x12(\n" +
+	"\x0fcustomChannelId\x18\x03 \x01(\tR\x0fcustomChannelId\x12 \n" +
+	"\vchannelName\x18\x04 \x01(\tR\vchannelName\x12,\n" +
+	"\x11customChannelName\x18\x05 \x01(\tR\x11customChannelName\x12\x1a\n" +
+	"\bdeviceId\x18\x06 \x01(\tR\bdeviceId\x12\x1e\n" +
+	"\n" +
+	"deviceName\x18\a \x01(\tR\n" +
+	"deviceName\x12\x1e\n" +
+	"\n" +
+	"streamPath\x18\b \x01(\tR\n" +
+	"streamPath\x12\x1e\n" +
+	"\n" +
+	"inPlatform\x18\t \x01(\bR\n" +
+	"inPlatform\x12 \n" +
+	"\vchannelType\x18\n" +
+	" \x01(\tR\vchannelType\"\x8f\x01\n" +
+	"\x18PlatformChannelsResponse\x12\x12\n" +
+	"\x04code\x18\x01 \x01(\x05R\x04code\x12\x18\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\x12\x14\n" +
+	"\x05total\x18\x03 \x01(\x05R\x05total\x12/\n" +
+	"\x04data\x18\x04 \x03(\v2\x1b.gb28181pro.PlatformChannelR\x04data\"q\n" +
+	"\x1bGetChannelManageListRequest\x12\x12\n" +
+	"\x04page\x18\x01 \x01(\x05R\x04page\x12\x14\n" +
+	"\x05count\x18\x02 \x01(\x05R\x05count\x12\x14\n" +
+	"\x05query\x18\x03 \x01(\tR\x05query\x12\x12\n" +
+	"\x04type\x18\x04 \x01(\x05R\x04type\"\xe7\x01\n" +
+	"\x11AddChannelRequest\x12\x1a\n" +
+	"\bdeviceId\x18\x01 \x01(\tR\bdeviceId\x12\x1c\n" +
+	"\tchannelId\x18\x02 \x01(\tR\tchannelId\x12(\n" +
+	"\x0fcustomChannelId\x18\x03 \x01(\tR\x0fcustomChannelId\x12 \n" +
+	"\vchannelName\x18\x04 \x01(\tR\vchannelName\x12,\n" +
+	"\x11customChannelName\x18\x05 \x01(\tR\x11customChannelName\x12\x1e\n" +
+	"\n" +
+	"streamPath\x18\x06 \x01(\tR\n" +
+	"streamPath\"&\n" +
+	"\x14DeleteChannelRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"N\n" +
+	"\x1cRemovePlatformChannelRequest\x12\x1e\n" +
+	"\n" +
+	"platformId\x18\x01 \x01(\tR\n" +
+	"platformId\x12\x0e\n" +
+	"\x02id\x18\x02 \x01(\tR\x02id\"Q\n" +
+	"\x1fAddPlatformChannelSharedRequest\x12\x1e\n" +
+	"\n" +
+	"platformId\x18\x01 \x01(\tR\n" +
+	"platformId\x12\x0e\n" +
+	"\x02id\x18\x02 \x01(\tR\x02id\"6\n" +
 	"\x14PlaybackPauseRequest\x12\x1e\n" +
 	"\n" +
 	"streamPath\x18\x01 \x01(\tR\n" +
@@ -7995,7 +8658,7 @@ const file_gb28181_proto_rawDesc = "" +
 	"\x04code\x18\x01 \x01(\x05R\x04code\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12\x14\n" +
 	"\x05total\x18\x03 \x01(\x05R\x05total\x124\n" +
-	"\x04data\x18\x04 \x01(\v2 .gb28181pro.DownloadProgressDataR\x04data2\xc5E\n" +
+	"\x04data\x18\x04 \x01(\v2 .gb28181pro.DownloadProgressDataR\x04data2\x8cL\n" +
 	"\x03api\x12]\n" +
 	"\x04List\x12\x1d.gb28181pro.GetDevicesRequest\x1a\x1b.gb28181pro.DevicesPageInfo\"\x19\x82\xd3\xe4\x93\x02\x13\x12\x11/gb28181/api/list\x12n\n" +
 	"\tGetDevice\x12\x1c.gb28181pro.GetDeviceRequest\x1a\x1a.gb28181pro.DeviceResponse\"'\x82\xd3\xe4\x93\x02!\x12\x1f/gb28181/api/devices/{deviceId}\x12f\n" +
@@ -8052,8 +8715,15 @@ const file_gb28181_proto_rawDesc = "" +
 	"\fWiperControl\x12\x1f.gb28181pro.WiperControlRequest\x1a\x18.gb28181pro.BaseResponse\"1\x82\xd3\xe4\x93\x02+\x12)/gb28181/api/wiper/{deviceId}/{channelId}\x12\x88\x01\n" +
 	"\x10AuxiliaryControl\x12#.gb28181pro.AuxiliaryControlRequest\x1a\x18.gb28181pro.BaseResponse\"5\x82\xd3\xe4\x93\x02/\x12-/gb28181/api/auxiliary/{deviceId}/{channelId}\x12`\n" +
 	"\aTestSip\x12\x1a.gb28181pro.TestSipRequest\x1a\x1b.gb28181pro.TestSipResponse\"\x1c\x82\xd3\xe4\x93\x02\x16\x12\x14/gb28181/api/testsip\x12y\n" +
-	"\fSearchAlarms\x12\x1f.gb28181pro.SearchAlarmsRequest\x1a .gb28181pro.SearchAlarmsResponse\"&\x82\xd3\xe4\x93\x02 \x12\x1e/gb28181/api/alarms/{deviceId}\x12\x83\x01\n" +
-	"\x12AddPlatformChannel\x12%.gb28181pro.AddPlatformChannelRequest\x1a\x18.gb28181pro.BaseResponse\",\x82\xd3\xe4\x93\x02&:\x01*\"!/gb28181/api/platform/channel/add\x12\x84\x01\n" +
+	"\fSearchAlarms\x12\x1f.gb28181pro.SearchAlarmsRequest\x1a .gb28181pro.SearchAlarmsResponse\"&\x82\xd3\xe4\x93\x02 \x12\x1e/gb28181/api/alarms/{deviceId}\x12\x90\x01\n" +
+	"\x12AddPlatformChannel\x12%.gb28181pro.AddPlatformChannelRequest\x1a\x18.gb28181pro.BaseResponse\"9\x82\xd3\xe4\x93\x023:\x01*\"./gb28181/api/platform/{platformId}/channel/add\x12\x98\x01\n" +
+	"\x13GetPlatformChannels\x12&.gb28181pro.GetPlatformChannelsRequest\x1a$.gb28181pro.PlatformChannelsResponse\"3\x82\xd3\xe4\x93\x02-\x12+/gb28181/api/platform/{platformId}/channels\x12\x99\x01\n" +
+	"\x15RemovePlatformChannel\x12(.gb28181pro.RemovePlatformChannelRequest\x1a\x18.gb28181pro.BaseResponse\"<\x82\xd3\xe4\x93\x026:\x01*\"1/gb28181/api/platform/{platformId}/channel/remove\x12\x9e\x01\n" +
+	"\x18AddPlatformChannelShared\x12+.gb28181pro.AddPlatformChannelSharedRequest\x1a\x18.gb28181pro.BaseResponse\";\x82\xd3\xe4\x93\x025:\x01*\"0/gb28181/api/platform/{platformId}/channel/share\x12}\n" +
+	"\x11ChannelManageList\x12'.gb28181pro.GetChannelManageListRequest\x1a\x1c.gb28181pro.ChannelsPageInfo\"!\x82\xd3\xe4\x93\x02\x1b\x12\x19/gb28181/api/channel/list\x12j\n" +
+	"\n" +
+	"AddChannel\x12\x1d.gb28181pro.AddChannelRequest\x1a\x18.gb28181pro.BaseResponse\"#\x82\xd3\xe4\x93\x02\x1d:\x01*\"\x18/gb28181/api/channel/add\x12u\n" +
+	"\rDeleteChannel\x12 .gb28181pro.DeleteChannelRequest\x1a\x18.gb28181pro.BaseResponse\"(\x82\xd3\xe4\x93\x02\"\" /gb28181/api/channel/delete/{id}\x12\x84\x01\n" +
 	"\tRecording\x12\x1c.gb28181pro.RecordingRequest\x1a\x18.gb28181pro.BaseResponse\"?\x82\xd3\xe4\x93\x029\x127/gb28181/api/recording/{cmdType}/{deviceId}/{channelId}\x12j\n" +
 	"\n" +
 	"UploadJpeg\x12\x1d.gb28181pro.UploadJpegRequest\x1a\x18.gb28181pro.BaseResponse\"#\x82\xd3\xe4\x93\x02\x1d:\x01*\"\x18/gb28181/api/snap/upload\x12~\n" +
@@ -8089,121 +8759,129 @@ func file_gb28181_proto_rawDescGZIP() []byte {
 	return file_gb28181_proto_rawDescData
 }
 
-var file_gb28181_proto_msgTypes = make([]protoimpl.MessageInfo, 98)
+var file_gb28181_proto_msgTypes = make([]protoimpl.MessageInfo, 106)
 var file_gb28181_proto_goTypes = []any{
-	(*BaseResponse)(nil),                   // 0: gb28181pro.BaseResponse
-	(*GetDeviceRequest)(nil),               // 1: gb28181pro.GetDeviceRequest
-	(*GetDevicesRequest)(nil),              // 2: gb28181pro.GetDevicesRequest
-	(*DevicesPageInfo)(nil),                // 3: gb28181pro.DevicesPageInfo
-	(*GetChannelsRequest)(nil),             // 4: gb28181pro.GetChannelsRequest
-	(*ChannelsPageInfo)(nil),               // 5: gb28181pro.ChannelsPageInfo
-	(*SyncDeviceRequest)(nil),              // 6: gb28181pro.SyncDeviceRequest
-	(*SyncStatus)(nil),                     // 7: gb28181pro.SyncStatus
-	(*DeleteDeviceRequest)(nil),            // 8: gb28181pro.DeleteDeviceRequest
-	(*DeleteDeviceResponse)(nil),           // 9: gb28181pro.DeleteDeviceResponse
-	(*GetSubChannelsRequest)(nil),          // 10: gb28181pro.GetSubChannelsRequest
-	(*Channel)(nil),                        // 11: gb28181pro.Channel
-	(*Device)(nil),                         // 12: gb28181pro.Device
-	(*ResponseList)(nil),                   // 13: gb28181pro.ResponseList
-	(*ChangeAudioRequest)(nil),             // 14: gb28181pro.ChangeAudioRequest
-	(*UpdateTransportRequest)(nil),         // 15: gb28181pro.UpdateTransportRequest
-	(*GetDeviceStatusRequest)(nil),         // 16: gb28181pro.GetDeviceStatusRequest
-	(*DeviceStatusResponse)(nil),           // 17: gb28181pro.DeviceStatusResponse
-	(*GetDeviceAlarmRequest)(nil),          // 18: gb28181pro.GetDeviceAlarmRequest
-	(*DeviceAlarmResponse)(nil),            // 19: gb28181pro.DeviceAlarmResponse
-	(*AlarmInfo)(nil),                      // 20: gb28181pro.AlarmInfo
-	(*UpdateChannelRequest)(nil),           // 21: gb28181pro.UpdateChannelRequest
-	(*GetSyncStatusRequest)(nil),           // 22: gb28181pro.GetSyncStatusRequest
-	(*GetSubscribeInfoRequest)(nil),        // 23: gb28181pro.GetSubscribeInfoRequest
-	(*SubscribeInfoResponse)(nil),          // 24: gb28181pro.SubscribeInfoResponse
-	(*GetSnapRequest)(nil),                 // 25: gb28181pro.GetSnapRequest
-	(*SnapResponse)(nil),                   // 26: gb28181pro.SnapResponse
-	(*GetRawChannelRequest)(nil),           // 27: gb28181pro.GetRawChannelRequest
-	(*DeviceResponse)(nil),                 // 28: gb28181pro.DeviceResponse
-	(*ChannelResponse)(nil),                // 29: gb28181pro.ChannelResponse
-	(*PlayRequest)(nil),                    // 30: gb28181pro.PlayRequest
-	(*PlaybackRequest)(nil),                // 31: gb28181pro.PlaybackRequest
-	(*PlayResponse)(nil),                   // 32: gb28181pro.PlayResponse
-	(*StreamInfo)(nil),                     // 33: gb28181pro.StreamInfo
-	(*ConvertStopRequest)(nil),             // 34: gb28181pro.ConvertStopRequest
-	(*BroadcastRequest)(nil),               // 35: gb28181pro.BroadcastRequest
-	(*SSRCInfo)(nil),                       // 36: gb28181pro.SSRCInfo
-	(*SSRCListResponse)(nil),               // 37: gb28181pro.SSRCListResponse
-	(*Platform)(nil),                       // 38: gb28181pro.Platform
-	(*GetPlatformRequest)(nil),             // 39: gb28181pro.GetPlatformRequest
-	(*DeletePlatformRequest)(nil),          // 40: gb28181pro.DeletePlatformRequest
-	(*ListPlatformsRequest)(nil),           // 41: gb28181pro.ListPlatformsRequest
-	(*PlatformResponse)(nil),               // 42: gb28181pro.PlatformResponse
-	(*PlatformsPageInfo)(nil),              // 43: gb28181pro.PlatformsPageInfo
-	(*QueryRecordRequest)(nil),             // 44: gb28181pro.QueryRecordRequest
-	(*QueryRecordResponse)(nil),            // 45: gb28181pro.QueryRecordResponse
-	(*RecordItem)(nil),                     // 46: gb28181pro.RecordItem
-	(*PtzControlRequest)(nil),              // 47: gb28181pro.PtzControlRequest
-	(*IrisControlRequest)(nil),             // 48: gb28181pro.IrisControlRequest
-	(*FocusControlRequest)(nil),            // 49: gb28181pro.FocusControlRequest
-	(*PresetRequest)(nil),                  // 50: gb28181pro.PresetRequest
-	(*PresetResponse)(nil),                 // 51: gb28181pro.PresetResponse
-	(*CruisePointRequest)(nil),             // 52: gb28181pro.CruisePointRequest
-	(*CruiseSpeedRequest)(nil),             // 53: gb28181pro.CruiseSpeedRequest
-	(*CruiseTimeRequest)(nil),              // 54: gb28181pro.CruiseTimeRequest
-	(*CruiseRequest)(nil),                  // 55: gb28181pro.CruiseRequest
-	(*ScanRequest)(nil),                    // 56: gb28181pro.ScanRequest
-	(*ScanSpeedRequest)(nil),               // 57: gb28181pro.ScanSpeedRequest
-	(*WiperControlRequest)(nil),            // 58: gb28181pro.WiperControlRequest
-	(*AuxiliaryControlRequest)(nil),        // 59: gb28181pro.AuxiliaryControlRequest
-	(*TestSipRequest)(nil),                 // 60: gb28181pro.TestSipRequest
-	(*TestSipResponse)(nil),                // 61: gb28181pro.TestSipResponse
-	(*SearchAlarmsRequest)(nil),            // 62: gb28181pro.SearchAlarmsRequest
-	(*SearchAlarmsResponse)(nil),           // 63: gb28181pro.SearchAlarmsResponse
-	(*AlarmRecord)(nil),                    // 64: gb28181pro.AlarmRecord
-	(*AddPlatformChannelRequest)(nil),      // 65: gb28181pro.AddPlatformChannelRequest
-	(*RecordingRequest)(nil),               // 66: gb28181pro.RecordingRequest
-	(*UploadJpegRequest)(nil),              // 67: gb28181pro.UploadJpegRequest
-	(*Group)(nil),                          // 68: gb28181pro.Group
-	(*GetGroupsRequest)(nil),               // 69: gb28181pro.GetGroupsRequest
-	(*DeleteGroupRequest)(nil),             // 70: gb28181pro.DeleteGroupRequest
-	(*GroupResponse)(nil),                  // 71: gb28181pro.GroupResponse
-	(*GroupsListResponse)(nil),             // 72: gb28181pro.GroupsListResponse
-	(*GroupsPageInfo)(nil),                 // 73: gb28181pro.GroupsPageInfo
-	(*ChannelInfo)(nil),                    // 74: gb28181pro.ChannelInfo
-	(*AddGroupChannelRequest)(nil),         // 75: gb28181pro.AddGroupChannelRequest
-	(*DeleteGroupChannelRequest)(nil),      // 76: gb28181pro.DeleteGroupChannelRequest
-	(*GetGroupChannelsRequest)(nil),        // 77: gb28181pro.GetGroupChannelsRequest
-	(*GroupChannel)(nil),                   // 78: gb28181pro.GroupChannel
-	(*GroupChannelsResponse)(nil),          // 79: gb28181pro.GroupChannelsResponse
-	(*GroupChannelsData)(nil),              // 80: gb28181pro.GroupChannelsData
-	(*PlaybackPauseRequest)(nil),           // 81: gb28181pro.PlaybackPauseRequest
-	(*PlaybackResumeRequest)(nil),          // 82: gb28181pro.PlaybackResumeRequest
-	(*PlaybackSeekRequest)(nil),            // 83: gb28181pro.PlaybackSeekRequest
-	(*PlaybackSpeedRequest)(nil),           // 84: gb28181pro.PlaybackSpeedRequest
-	(*RemoveDeviceRequest)(nil),            // 85: gb28181pro.RemoveDeviceRequest
-	(*AlarmInfoRequest)(nil),               // 86: gb28181pro.AlarmInfoRequest
-	(*AddChannelWithProxyRequest)(nil),     // 87: gb28181pro.AddChannelWithProxyRequest
-	(*UpdateChannelWithProxyRequest)(nil),  // 88: gb28181pro.UpdateChannelWithProxyRequest
-	(*DeleteChannelWithProxyRequest)(nil),  // 89: gb28181pro.DeleteChannelWithProxyRequest
-	(*StartDownloadRequest)(nil),           // 90: gb28181pro.StartDownloadRequest
-	(*StartDownloadData)(nil),              // 91: gb28181pro.StartDownloadData
-	(*StartDownloadResponse)(nil),          // 92: gb28181pro.StartDownloadResponse
-	(*GetDownloadProgressRequest)(nil),     // 93: gb28181pro.GetDownloadProgressRequest
-	(*DownloadProgressData)(nil),           // 94: gb28181pro.DownloadProgressData
-	(*DownloadProgressResponse)(nil),       // 95: gb28181pro.DownloadProgressResponse
-	nil,                                    // 96: gb28181pro.SubscribeInfoResponse.DialogStateEntry
-	(*AddGroupChannelRequest_Channel)(nil), // 97: gb28181pro.AddGroupChannelRequest.Channel
-	(*timestamppb.Timestamp)(nil),          // 98: google.protobuf.Timestamp
-	(*emptypb.Empty)(nil),                  // 99: google.protobuf.Empty
+	(*BaseResponse)(nil),                    // 0: gb28181pro.BaseResponse
+	(*GetDeviceRequest)(nil),                // 1: gb28181pro.GetDeviceRequest
+	(*GetDevicesRequest)(nil),               // 2: gb28181pro.GetDevicesRequest
+	(*DevicesPageInfo)(nil),                 // 3: gb28181pro.DevicesPageInfo
+	(*GetChannelsRequest)(nil),              // 4: gb28181pro.GetChannelsRequest
+	(*ChannelsPageInfo)(nil),                // 5: gb28181pro.ChannelsPageInfo
+	(*SyncDeviceRequest)(nil),               // 6: gb28181pro.SyncDeviceRequest
+	(*SyncStatus)(nil),                      // 7: gb28181pro.SyncStatus
+	(*DeleteDeviceRequest)(nil),             // 8: gb28181pro.DeleteDeviceRequest
+	(*DeleteDeviceResponse)(nil),            // 9: gb28181pro.DeleteDeviceResponse
+	(*GetSubChannelsRequest)(nil),           // 10: gb28181pro.GetSubChannelsRequest
+	(*Channel)(nil),                         // 11: gb28181pro.Channel
+	(*Device)(nil),                          // 12: gb28181pro.Device
+	(*ResponseList)(nil),                    // 13: gb28181pro.ResponseList
+	(*ChangeAudioRequest)(nil),              // 14: gb28181pro.ChangeAudioRequest
+	(*UpdateTransportRequest)(nil),          // 15: gb28181pro.UpdateTransportRequest
+	(*GetDeviceStatusRequest)(nil),          // 16: gb28181pro.GetDeviceStatusRequest
+	(*DeviceStatusResponse)(nil),            // 17: gb28181pro.DeviceStatusResponse
+	(*GetDeviceAlarmRequest)(nil),           // 18: gb28181pro.GetDeviceAlarmRequest
+	(*DeviceAlarmResponse)(nil),             // 19: gb28181pro.DeviceAlarmResponse
+	(*AlarmInfo)(nil),                       // 20: gb28181pro.AlarmInfo
+	(*UpdateChannelRequest)(nil),            // 21: gb28181pro.UpdateChannelRequest
+	(*GetSyncStatusRequest)(nil),            // 22: gb28181pro.GetSyncStatusRequest
+	(*GetSubscribeInfoRequest)(nil),         // 23: gb28181pro.GetSubscribeInfoRequest
+	(*SubscribeInfoResponse)(nil),           // 24: gb28181pro.SubscribeInfoResponse
+	(*GetSnapRequest)(nil),                  // 25: gb28181pro.GetSnapRequest
+	(*SnapResponse)(nil),                    // 26: gb28181pro.SnapResponse
+	(*GetRawChannelRequest)(nil),            // 27: gb28181pro.GetRawChannelRequest
+	(*DeviceResponse)(nil),                  // 28: gb28181pro.DeviceResponse
+	(*ChannelResponse)(nil),                 // 29: gb28181pro.ChannelResponse
+	(*PlayRequest)(nil),                     // 30: gb28181pro.PlayRequest
+	(*PlaybackRequest)(nil),                 // 31: gb28181pro.PlaybackRequest
+	(*PlayResponse)(nil),                    // 32: gb28181pro.PlayResponse
+	(*StreamInfo)(nil),                      // 33: gb28181pro.StreamInfo
+	(*ConvertStopRequest)(nil),              // 34: gb28181pro.ConvertStopRequest
+	(*BroadcastRequest)(nil),                // 35: gb28181pro.BroadcastRequest
+	(*SSRCInfo)(nil),                        // 36: gb28181pro.SSRCInfo
+	(*SSRCListResponse)(nil),                // 37: gb28181pro.SSRCListResponse
+	(*Platform)(nil),                        // 38: gb28181pro.Platform
+	(*GetPlatformRequest)(nil),              // 39: gb28181pro.GetPlatformRequest
+	(*DeletePlatformRequest)(nil),           // 40: gb28181pro.DeletePlatformRequest
+	(*ListPlatformsRequest)(nil),            // 41: gb28181pro.ListPlatformsRequest
+	(*PlatformResponse)(nil),                // 42: gb28181pro.PlatformResponse
+	(*PlatformsPageInfo)(nil),               // 43: gb28181pro.PlatformsPageInfo
+	(*QueryRecordRequest)(nil),              // 44: gb28181pro.QueryRecordRequest
+	(*QueryRecordResponse)(nil),             // 45: gb28181pro.QueryRecordResponse
+	(*RecordItem)(nil),                      // 46: gb28181pro.RecordItem
+	(*PtzControlRequest)(nil),               // 47: gb28181pro.PtzControlRequest
+	(*IrisControlRequest)(nil),              // 48: gb28181pro.IrisControlRequest
+	(*FocusControlRequest)(nil),             // 49: gb28181pro.FocusControlRequest
+	(*PresetRequest)(nil),                   // 50: gb28181pro.PresetRequest
+	(*PresetResponse)(nil),                  // 51: gb28181pro.PresetResponse
+	(*CruisePointRequest)(nil),              // 52: gb28181pro.CruisePointRequest
+	(*CruiseSpeedRequest)(nil),              // 53: gb28181pro.CruiseSpeedRequest
+	(*CruiseTimeRequest)(nil),               // 54: gb28181pro.CruiseTimeRequest
+	(*CruiseRequest)(nil),                   // 55: gb28181pro.CruiseRequest
+	(*ScanRequest)(nil),                     // 56: gb28181pro.ScanRequest
+	(*ScanSpeedRequest)(nil),                // 57: gb28181pro.ScanSpeedRequest
+	(*WiperControlRequest)(nil),             // 58: gb28181pro.WiperControlRequest
+	(*AuxiliaryControlRequest)(nil),         // 59: gb28181pro.AuxiliaryControlRequest
+	(*TestSipRequest)(nil),                  // 60: gb28181pro.TestSipRequest
+	(*TestSipResponse)(nil),                 // 61: gb28181pro.TestSipResponse
+	(*SearchAlarmsRequest)(nil),             // 62: gb28181pro.SearchAlarmsRequest
+	(*SearchAlarmsResponse)(nil),            // 63: gb28181pro.SearchAlarmsResponse
+	(*AlarmRecord)(nil),                     // 64: gb28181pro.AlarmRecord
+	(*AddPlatformChannelRequest)(nil),       // 65: gb28181pro.AddPlatformChannelRequest
+	(*RecordingRequest)(nil),                // 66: gb28181pro.RecordingRequest
+	(*UploadJpegRequest)(nil),               // 67: gb28181pro.UploadJpegRequest
+	(*Group)(nil),                           // 68: gb28181pro.Group
+	(*GetGroupsRequest)(nil),                // 69: gb28181pro.GetGroupsRequest
+	(*DeleteGroupRequest)(nil),              // 70: gb28181pro.DeleteGroupRequest
+	(*GroupResponse)(nil),                   // 71: gb28181pro.GroupResponse
+	(*GroupsListResponse)(nil),              // 72: gb28181pro.GroupsListResponse
+	(*GroupsPageInfo)(nil),                  // 73: gb28181pro.GroupsPageInfo
+	(*ChannelInfo)(nil),                     // 74: gb28181pro.ChannelInfo
+	(*AddGroupChannelRequest)(nil),          // 75: gb28181pro.AddGroupChannelRequest
+	(*DeleteGroupChannelRequest)(nil),       // 76: gb28181pro.DeleteGroupChannelRequest
+	(*GetGroupChannelsRequest)(nil),         // 77: gb28181pro.GetGroupChannelsRequest
+	(*GroupChannel)(nil),                    // 78: gb28181pro.GroupChannel
+	(*GroupChannelsResponse)(nil),           // 79: gb28181pro.GroupChannelsResponse
+	(*GroupChannelsData)(nil),               // 80: gb28181pro.GroupChannelsData
+	(*GetPlatformChannelsRequest)(nil),      // 81: gb28181pro.GetPlatformChannelsRequest
+	(*PlatformChannel)(nil),                 // 82: gb28181pro.PlatformChannel
+	(*PlatformChannelsResponse)(nil),        // 83: gb28181pro.PlatformChannelsResponse
+	(*GetChannelManageListRequest)(nil),     // 84: gb28181pro.GetChannelManageListRequest
+	(*AddChannelRequest)(nil),               // 85: gb28181pro.AddChannelRequest
+	(*DeleteChannelRequest)(nil),            // 86: gb28181pro.DeleteChannelRequest
+	(*RemovePlatformChannelRequest)(nil),    // 87: gb28181pro.RemovePlatformChannelRequest
+	(*AddPlatformChannelSharedRequest)(nil), // 88: gb28181pro.AddPlatformChannelSharedRequest
+	(*PlaybackPauseRequest)(nil),            // 89: gb28181pro.PlaybackPauseRequest
+	(*PlaybackResumeRequest)(nil),           // 90: gb28181pro.PlaybackResumeRequest
+	(*PlaybackSeekRequest)(nil),             // 91: gb28181pro.PlaybackSeekRequest
+	(*PlaybackSpeedRequest)(nil),            // 92: gb28181pro.PlaybackSpeedRequest
+	(*RemoveDeviceRequest)(nil),             // 93: gb28181pro.RemoveDeviceRequest
+	(*AlarmInfoRequest)(nil),                // 94: gb28181pro.AlarmInfoRequest
+	(*AddChannelWithProxyRequest)(nil),      // 95: gb28181pro.AddChannelWithProxyRequest
+	(*UpdateChannelWithProxyRequest)(nil),   // 96: gb28181pro.UpdateChannelWithProxyRequest
+	(*DeleteChannelWithProxyRequest)(nil),   // 97: gb28181pro.DeleteChannelWithProxyRequest
+	(*StartDownloadRequest)(nil),            // 98: gb28181pro.StartDownloadRequest
+	(*StartDownloadData)(nil),               // 99: gb28181pro.StartDownloadData
+	(*StartDownloadResponse)(nil),           // 100: gb28181pro.StartDownloadResponse
+	(*GetDownloadProgressRequest)(nil),      // 101: gb28181pro.GetDownloadProgressRequest
+	(*DownloadProgressData)(nil),            // 102: gb28181pro.DownloadProgressData
+	(*DownloadProgressResponse)(nil),        // 103: gb28181pro.DownloadProgressResponse
+	nil,                                     // 104: gb28181pro.SubscribeInfoResponse.DialogStateEntry
+	(*AddGroupChannelRequest_Channel)(nil),  // 105: gb28181pro.AddGroupChannelRequest.Channel
+	(*timestamppb.Timestamp)(nil),           // 106: google.protobuf.Timestamp
+	(*emptypb.Empty)(nil),                   // 107: google.protobuf.Empty
 }
 var file_gb28181_proto_depIdxs = []int32{
 	12,  // 0: gb28181pro.DevicesPageInfo.data:type_name -> gb28181pro.Device
-	11,  // 1: gb28181pro.ChannelsPageInfo.list:type_name -> gb28181pro.Channel
-	98,  // 2: gb28181pro.Channel.gpsTime:type_name -> google.protobuf.Timestamp
-	98,  // 3: gb28181pro.Device.registerTime:type_name -> google.protobuf.Timestamp
-	98,  // 4: gb28181pro.Device.updateTime:type_name -> google.protobuf.Timestamp
-	98,  // 5: gb28181pro.Device.keepAliveTime:type_name -> google.protobuf.Timestamp
+	11,  // 1: gb28181pro.ChannelsPageInfo.data:type_name -> gb28181pro.Channel
+	106, // 2: gb28181pro.Channel.gpsTime:type_name -> google.protobuf.Timestamp
+	106, // 3: gb28181pro.Device.registerTime:type_name -> google.protobuf.Timestamp
+	106, // 4: gb28181pro.Device.updateTime:type_name -> google.protobuf.Timestamp
+	106, // 5: gb28181pro.Device.keepAliveTime:type_name -> google.protobuf.Timestamp
 	11,  // 6: gb28181pro.Device.channels:type_name -> gb28181pro.Channel
 	12,  // 7: gb28181pro.ResponseList.data:type_name -> gb28181pro.Device
 	20,  // 8: gb28181pro.DeviceAlarmResponse.data:type_name -> gb28181pro.AlarmInfo
 	11,  // 9: gb28181pro.UpdateChannelRequest.channel:type_name -> gb28181pro.Channel
-	96,  // 10: gb28181pro.SubscribeInfoResponse.dialogState:type_name -> gb28181pro.SubscribeInfoResponse.DialogStateEntry
+	104, // 10: gb28181pro.SubscribeInfoResponse.dialogState:type_name -> gb28181pro.SubscribeInfoResponse.DialogStateEntry
 	12,  // 11: gb28181pro.DeviceResponse.data:type_name -> gb28181pro.Device
 	11,  // 12: gb28181pro.ChannelResponse.data:type_name -> gb28181pro.Channel
 	33,  // 13: gb28181pro.PlayResponse.stream_info:type_name -> gb28181pro.StreamInfo
@@ -8211,175 +8889,188 @@ var file_gb28181_proto_depIdxs = []int32{
 	38,  // 15: gb28181pro.PlatformResponse.data:type_name -> gb28181pro.Platform
 	38,  // 16: gb28181pro.PlatformsPageInfo.data:type_name -> gb28181pro.Platform
 	46,  // 17: gb28181pro.QueryRecordResponse.data:type_name -> gb28181pro.RecordItem
-	98,  // 18: gb28181pro.QueryRecordResponse.last_time:type_name -> google.protobuf.Timestamp
+	106, // 18: gb28181pro.QueryRecordResponse.last_time:type_name -> google.protobuf.Timestamp
 	64,  // 19: gb28181pro.SearchAlarmsResponse.data:type_name -> gb28181pro.AlarmRecord
-	98,  // 20: gb28181pro.AlarmRecord.alarmTime:type_name -> google.protobuf.Timestamp
-	98,  // 21: gb28181pro.AlarmRecord.createTime:type_name -> google.protobuf.Timestamp
-	98,  // 22: gb28181pro.Group.createTime:type_name -> google.protobuf.Timestamp
-	98,  // 23: gb28181pro.Group.updateTime:type_name -> google.protobuf.Timestamp
+	106, // 20: gb28181pro.AlarmRecord.alarmTime:type_name -> google.protobuf.Timestamp
+	106, // 21: gb28181pro.AlarmRecord.createTime:type_name -> google.protobuf.Timestamp
+	106, // 22: gb28181pro.Group.createTime:type_name -> google.protobuf.Timestamp
+	106, // 23: gb28181pro.Group.updateTime:type_name -> google.protobuf.Timestamp
 	68,  // 24: gb28181pro.Group.children:type_name -> gb28181pro.Group
 	78,  // 25: gb28181pro.Group.channels:type_name -> gb28181pro.GroupChannel
 	68,  // 26: gb28181pro.GroupResponse.data:type_name -> gb28181pro.Group
 	68,  // 27: gb28181pro.GroupsListResponse.data:type_name -> gb28181pro.Group
 	68,  // 28: gb28181pro.GroupsPageInfo.data:type_name -> gb28181pro.Group
-	97,  // 29: gb28181pro.AddGroupChannelRequest.channels:type_name -> gb28181pro.AddGroupChannelRequest.Channel
+	105, // 29: gb28181pro.AddGroupChannelRequest.channels:type_name -> gb28181pro.AddGroupChannelRequest.Channel
 	80,  // 30: gb28181pro.GroupChannelsResponse.data:type_name -> gb28181pro.GroupChannelsData
 	78,  // 31: gb28181pro.GroupChannelsData.list:type_name -> gb28181pro.GroupChannel
 	78,  // 32: gb28181pro.GroupChannelsData.channels:type_name -> gb28181pro.GroupChannel
-	98,  // 33: gb28181pro.AlarmInfoRequest.createAt:type_name -> google.protobuf.Timestamp
-	91,  // 34: gb28181pro.StartDownloadResponse.data:type_name -> gb28181pro.StartDownloadData
-	98,  // 35: gb28181pro.DownloadProgressData.startedAt:type_name -> google.protobuf.Timestamp
-	98,  // 36: gb28181pro.DownloadProgressData.completedAt:type_name -> google.protobuf.Timestamp
-	94,  // 37: gb28181pro.DownloadProgressResponse.data:type_name -> gb28181pro.DownloadProgressData
-	2,   // 38: gb28181pro.api.List:input_type -> gb28181pro.GetDevicesRequest
-	1,   // 39: gb28181pro.api.GetDevice:input_type -> gb28181pro.GetDeviceRequest
-	2,   // 40: gb28181pro.api.GetDevices:input_type -> gb28181pro.GetDevicesRequest
-	4,   // 41: gb28181pro.api.GetChannels:input_type -> gb28181pro.GetChannelsRequest
-	6,   // 42: gb28181pro.api.SyncDevice:input_type -> gb28181pro.SyncDeviceRequest
-	8,   // 43: gb28181pro.api.DeleteDevice:input_type -> gb28181pro.DeleteDeviceRequest
-	10,  // 44: gb28181pro.api.GetSubChannels:input_type -> gb28181pro.GetSubChannelsRequest
-	14,  // 45: gb28181pro.api.ChangeAudio:input_type -> gb28181pro.ChangeAudioRequest
-	11,  // 46: gb28181pro.api.UpdateChannelStreamIdentification:input_type -> gb28181pro.Channel
-	15,  // 47: gb28181pro.api.UpdateTransport:input_type -> gb28181pro.UpdateTransportRequest
-	12,  // 48: gb28181pro.api.AddDevice:input_type -> gb28181pro.Device
-	12,  // 49: gb28181pro.api.UpdateDevice:input_type -> gb28181pro.Device
-	16,  // 50: gb28181pro.api.GetDeviceStatus:input_type -> gb28181pro.GetDeviceStatusRequest
-	18,  // 51: gb28181pro.api.GetDeviceAlarm:input_type -> gb28181pro.GetDeviceAlarmRequest
-	22,  // 52: gb28181pro.api.GetSyncStatus:input_type -> gb28181pro.GetSyncStatusRequest
-	23,  // 53: gb28181pro.api.GetSubscribeInfo:input_type -> gb28181pro.GetSubscribeInfoRequest
-	25,  // 54: gb28181pro.api.GetSnap:input_type -> gb28181pro.GetSnapRequest
-	34,  // 55: gb28181pro.api.StopConvert:input_type -> gb28181pro.ConvertStopRequest
-	35,  // 56: gb28181pro.api.StartBroadcast:input_type -> gb28181pro.BroadcastRequest
-	35,  // 57: gb28181pro.api.StopBroadcast:input_type -> gb28181pro.BroadcastRequest
-	99,  // 58: gb28181pro.api.GetAllSSRC:input_type -> google.protobuf.Empty
-	27,  // 59: gb28181pro.api.GetRawChannel:input_type -> gb28181pro.GetRawChannelRequest
-	38,  // 60: gb28181pro.api.AddPlatform:input_type -> gb28181pro.Platform
-	39,  // 61: gb28181pro.api.GetPlatform:input_type -> gb28181pro.GetPlatformRequest
-	38,  // 62: gb28181pro.api.UpdatePlatform:input_type -> gb28181pro.Platform
-	40,  // 63: gb28181pro.api.DeletePlatform:input_type -> gb28181pro.DeletePlatformRequest
-	41,  // 64: gb28181pro.api.ListPlatforms:input_type -> gb28181pro.ListPlatformsRequest
-	44,  // 65: gb28181pro.api.QueryRecord:input_type -> gb28181pro.QueryRecordRequest
-	47,  // 66: gb28181pro.api.PtzControl:input_type -> gb28181pro.PtzControlRequest
-	48,  // 67: gb28181pro.api.IrisControl:input_type -> gb28181pro.IrisControlRequest
-	49,  // 68: gb28181pro.api.FocusControl:input_type -> gb28181pro.FocusControlRequest
-	50,  // 69: gb28181pro.api.QueryPreset:input_type -> gb28181pro.PresetRequest
-	50,  // 70: gb28181pro.api.AddPreset:input_type -> gb28181pro.PresetRequest
-	50,  // 71: gb28181pro.api.CallPreset:input_type -> gb28181pro.PresetRequest
-	50,  // 72: gb28181pro.api.DeletePreset:input_type -> gb28181pro.PresetRequest
-	52,  // 73: gb28181pro.api.AddCruisePoint:input_type -> gb28181pro.CruisePointRequest
-	52,  // 74: gb28181pro.api.DeleteCruisePoint:input_type -> gb28181pro.CruisePointRequest
-	53,  // 75: gb28181pro.api.SetCruiseSpeed:input_type -> gb28181pro.CruiseSpeedRequest
-	54,  // 76: gb28181pro.api.SetCruiseTime:input_type -> gb28181pro.CruiseTimeRequest
-	55,  // 77: gb28181pro.api.StartCruise:input_type -> gb28181pro.CruiseRequest
-	55,  // 78: gb28181pro.api.StopCruise:input_type -> gb28181pro.CruiseRequest
-	56,  // 79: gb28181pro.api.StartScan:input_type -> gb28181pro.ScanRequest
-	56,  // 80: gb28181pro.api.StopScan:input_type -> gb28181pro.ScanRequest
-	56,  // 81: gb28181pro.api.SetScanLeft:input_type -> gb28181pro.ScanRequest
-	56,  // 82: gb28181pro.api.SetScanRight:input_type -> gb28181pro.ScanRequest
-	57,  // 83: gb28181pro.api.SetScanSpeed:input_type -> gb28181pro.ScanSpeedRequest
-	58,  // 84: gb28181pro.api.WiperControl:input_type -> gb28181pro.WiperControlRequest
-	59,  // 85: gb28181pro.api.AuxiliaryControl:input_type -> gb28181pro.AuxiliaryControlRequest
-	60,  // 86: gb28181pro.api.TestSip:input_type -> gb28181pro.TestSipRequest
-	62,  // 87: gb28181pro.api.SearchAlarms:input_type -> gb28181pro.SearchAlarmsRequest
-	65,  // 88: gb28181pro.api.AddPlatformChannel:input_type -> gb28181pro.AddPlatformChannelRequest
-	66,  // 89: gb28181pro.api.Recording:input_type -> gb28181pro.RecordingRequest
-	67,  // 90: gb28181pro.api.UploadJpeg:input_type -> gb28181pro.UploadJpegRequest
-	21,  // 91: gb28181pro.api.UpdateChannel:input_type -> gb28181pro.UpdateChannelRequest
-	81,  // 92: gb28181pro.api.PlaybackPause:input_type -> gb28181pro.PlaybackPauseRequest
-	82,  // 93: gb28181pro.api.PlaybackResume:input_type -> gb28181pro.PlaybackResumeRequest
-	83,  // 94: gb28181pro.api.PlaybackSeek:input_type -> gb28181pro.PlaybackSeekRequest
-	84,  // 95: gb28181pro.api.PlaybackSpeed:input_type -> gb28181pro.PlaybackSpeedRequest
-	69,  // 96: gb28181pro.api.GetGroups:input_type -> gb28181pro.GetGroupsRequest
-	68,  // 97: gb28181pro.api.AddGroup:input_type -> gb28181pro.Group
-	68,  // 98: gb28181pro.api.UpdateGroup:input_type -> gb28181pro.Group
-	70,  // 99: gb28181pro.api.DeleteGroup:input_type -> gb28181pro.DeleteGroupRequest
-	75,  // 100: gb28181pro.api.AddGroupChannel:input_type -> gb28181pro.AddGroupChannelRequest
-	76,  // 101: gb28181pro.api.DeleteGroupChannel:input_type -> gb28181pro.DeleteGroupChannelRequest
-	77,  // 102: gb28181pro.api.GetGroupChannels:input_type -> gb28181pro.GetGroupChannelsRequest
-	85,  // 103: gb28181pro.api.RemoveDevice:input_type -> gb28181pro.RemoveDeviceRequest
-	86,  // 104: gb28181pro.api.ReceiveAlarm:input_type -> gb28181pro.AlarmInfoRequest
-	87,  // 105: gb28181pro.api.AddChannelWithProxy:input_type -> gb28181pro.AddChannelWithProxyRequest
-	88,  // 106: gb28181pro.api.UpdateChannelWithProxy:input_type -> gb28181pro.UpdateChannelWithProxyRequest
-	89,  // 107: gb28181pro.api.DeleteChannelWithProxy:input_type -> gb28181pro.DeleteChannelWithProxyRequest
-	90,  // 108: gb28181pro.api.StartDownload:input_type -> gb28181pro.StartDownloadRequest
-	93,  // 109: gb28181pro.api.GetDownloadProgress:input_type -> gb28181pro.GetDownloadProgressRequest
-	3,   // 110: gb28181pro.api.List:output_type -> gb28181pro.DevicesPageInfo
-	28,  // 111: gb28181pro.api.GetDevice:output_type -> gb28181pro.DeviceResponse
-	3,   // 112: gb28181pro.api.GetDevices:output_type -> gb28181pro.DevicesPageInfo
-	5,   // 113: gb28181pro.api.GetChannels:output_type -> gb28181pro.ChannelsPageInfo
-	7,   // 114: gb28181pro.api.SyncDevice:output_type -> gb28181pro.SyncStatus
-	9,   // 115: gb28181pro.api.DeleteDevice:output_type -> gb28181pro.DeleteDeviceResponse
-	5,   // 116: gb28181pro.api.GetSubChannels:output_type -> gb28181pro.ChannelsPageInfo
-	0,   // 117: gb28181pro.api.ChangeAudio:output_type -> gb28181pro.BaseResponse
-	0,   // 118: gb28181pro.api.UpdateChannelStreamIdentification:output_type -> gb28181pro.BaseResponse
-	0,   // 119: gb28181pro.api.UpdateTransport:output_type -> gb28181pro.BaseResponse
-	0,   // 120: gb28181pro.api.AddDevice:output_type -> gb28181pro.BaseResponse
-	0,   // 121: gb28181pro.api.UpdateDevice:output_type -> gb28181pro.BaseResponse
-	17,  // 122: gb28181pro.api.GetDeviceStatus:output_type -> gb28181pro.DeviceStatusResponse
-	19,  // 123: gb28181pro.api.GetDeviceAlarm:output_type -> gb28181pro.DeviceAlarmResponse
-	7,   // 124: gb28181pro.api.GetSyncStatus:output_type -> gb28181pro.SyncStatus
-	24,  // 125: gb28181pro.api.GetSubscribeInfo:output_type -> gb28181pro.SubscribeInfoResponse
-	26,  // 126: gb28181pro.api.GetSnap:output_type -> gb28181pro.SnapResponse
-	0,   // 127: gb28181pro.api.StopConvert:output_type -> gb28181pro.BaseResponse
-	0,   // 128: gb28181pro.api.StartBroadcast:output_type -> gb28181pro.BaseResponse
-	0,   // 129: gb28181pro.api.StopBroadcast:output_type -> gb28181pro.BaseResponse
-	37,  // 130: gb28181pro.api.GetAllSSRC:output_type -> gb28181pro.SSRCListResponse
-	11,  // 131: gb28181pro.api.GetRawChannel:output_type -> gb28181pro.Channel
-	0,   // 132: gb28181pro.api.AddPlatform:output_type -> gb28181pro.BaseResponse
-	42,  // 133: gb28181pro.api.GetPlatform:output_type -> gb28181pro.PlatformResponse
-	0,   // 134: gb28181pro.api.UpdatePlatform:output_type -> gb28181pro.BaseResponse
-	0,   // 135: gb28181pro.api.DeletePlatform:output_type -> gb28181pro.BaseResponse
-	43,  // 136: gb28181pro.api.ListPlatforms:output_type -> gb28181pro.PlatformsPageInfo
-	45,  // 137: gb28181pro.api.QueryRecord:output_type -> gb28181pro.QueryRecordResponse
-	0,   // 138: gb28181pro.api.PtzControl:output_type -> gb28181pro.BaseResponse
-	0,   // 139: gb28181pro.api.IrisControl:output_type -> gb28181pro.BaseResponse
-	0,   // 140: gb28181pro.api.FocusControl:output_type -> gb28181pro.BaseResponse
-	51,  // 141: gb28181pro.api.QueryPreset:output_type -> gb28181pro.PresetResponse
-	0,   // 142: gb28181pro.api.AddPreset:output_type -> gb28181pro.BaseResponse
-	0,   // 143: gb28181pro.api.CallPreset:output_type -> gb28181pro.BaseResponse
-	0,   // 144: gb28181pro.api.DeletePreset:output_type -> gb28181pro.BaseResponse
-	0,   // 145: gb28181pro.api.AddCruisePoint:output_type -> gb28181pro.BaseResponse
-	0,   // 146: gb28181pro.api.DeleteCruisePoint:output_type -> gb28181pro.BaseResponse
-	0,   // 147: gb28181pro.api.SetCruiseSpeed:output_type -> gb28181pro.BaseResponse
-	0,   // 148: gb28181pro.api.SetCruiseTime:output_type -> gb28181pro.BaseResponse
-	0,   // 149: gb28181pro.api.StartCruise:output_type -> gb28181pro.BaseResponse
-	0,   // 150: gb28181pro.api.StopCruise:output_type -> gb28181pro.BaseResponse
-	0,   // 151: gb28181pro.api.StartScan:output_type -> gb28181pro.BaseResponse
-	0,   // 152: gb28181pro.api.StopScan:output_type -> gb28181pro.BaseResponse
-	0,   // 153: gb28181pro.api.SetScanLeft:output_type -> gb28181pro.BaseResponse
-	0,   // 154: gb28181pro.api.SetScanRight:output_type -> gb28181pro.BaseResponse
-	0,   // 155: gb28181pro.api.SetScanSpeed:output_type -> gb28181pro.BaseResponse
-	0,   // 156: gb28181pro.api.WiperControl:output_type -> gb28181pro.BaseResponse
-	0,   // 157: gb28181pro.api.AuxiliaryControl:output_type -> gb28181pro.BaseResponse
-	61,  // 158: gb28181pro.api.TestSip:output_type -> gb28181pro.TestSipResponse
-	63,  // 159: gb28181pro.api.SearchAlarms:output_type -> gb28181pro.SearchAlarmsResponse
-	0,   // 160: gb28181pro.api.AddPlatformChannel:output_type -> gb28181pro.BaseResponse
-	0,   // 161: gb28181pro.api.Recording:output_type -> gb28181pro.BaseResponse
-	0,   // 162: gb28181pro.api.UploadJpeg:output_type -> gb28181pro.BaseResponse
-	0,   // 163: gb28181pro.api.UpdateChannel:output_type -> gb28181pro.BaseResponse
-	0,   // 164: gb28181pro.api.PlaybackPause:output_type -> gb28181pro.BaseResponse
-	0,   // 165: gb28181pro.api.PlaybackResume:output_type -> gb28181pro.BaseResponse
-	0,   // 166: gb28181pro.api.PlaybackSeek:output_type -> gb28181pro.BaseResponse
-	0,   // 167: gb28181pro.api.PlaybackSpeed:output_type -> gb28181pro.BaseResponse
-	72,  // 168: gb28181pro.api.GetGroups:output_type -> gb28181pro.GroupsListResponse
-	0,   // 169: gb28181pro.api.AddGroup:output_type -> gb28181pro.BaseResponse
-	0,   // 170: gb28181pro.api.UpdateGroup:output_type -> gb28181pro.BaseResponse
-	0,   // 171: gb28181pro.api.DeleteGroup:output_type -> gb28181pro.BaseResponse
-	0,   // 172: gb28181pro.api.AddGroupChannel:output_type -> gb28181pro.BaseResponse
-	0,   // 173: gb28181pro.api.DeleteGroupChannel:output_type -> gb28181pro.BaseResponse
-	79,  // 174: gb28181pro.api.GetGroupChannels:output_type -> gb28181pro.GroupChannelsResponse
-	0,   // 175: gb28181pro.api.RemoveDevice:output_type -> gb28181pro.BaseResponse
-	0,   // 176: gb28181pro.api.ReceiveAlarm:output_type -> gb28181pro.BaseResponse
-	0,   // 177: gb28181pro.api.AddChannelWithProxy:output_type -> gb28181pro.BaseResponse
-	0,   // 178: gb28181pro.api.UpdateChannelWithProxy:output_type -> gb28181pro.BaseResponse
-	0,   // 179: gb28181pro.api.DeleteChannelWithProxy:output_type -> gb28181pro.BaseResponse
-	92,  // 180: gb28181pro.api.StartDownload:output_type -> gb28181pro.StartDownloadResponse
-	95,  // 181: gb28181pro.api.GetDownloadProgress:output_type -> gb28181pro.DownloadProgressResponse
-	110, // [110:182] is the sub-list for method output_type
-	38,  // [38:110] is the sub-list for method input_type
-	38,  // [38:38] is the sub-list for extension type_name
-	38,  // [38:38] is the sub-list for extension extendee
-	0,   // [0:38] is the sub-list for field type_name
+	82,  // 33: gb28181pro.PlatformChannelsResponse.data:type_name -> gb28181pro.PlatformChannel
+	106, // 34: gb28181pro.AlarmInfoRequest.createAt:type_name -> google.protobuf.Timestamp
+	99,  // 35: gb28181pro.StartDownloadResponse.data:type_name -> gb28181pro.StartDownloadData
+	106, // 36: gb28181pro.DownloadProgressData.startedAt:type_name -> google.protobuf.Timestamp
+	106, // 37: gb28181pro.DownloadProgressData.completedAt:type_name -> google.protobuf.Timestamp
+	102, // 38: gb28181pro.DownloadProgressResponse.data:type_name -> gb28181pro.DownloadProgressData
+	2,   // 39: gb28181pro.api.List:input_type -> gb28181pro.GetDevicesRequest
+	1,   // 40: gb28181pro.api.GetDevice:input_type -> gb28181pro.GetDeviceRequest
+	2,   // 41: gb28181pro.api.GetDevices:input_type -> gb28181pro.GetDevicesRequest
+	4,   // 42: gb28181pro.api.GetChannels:input_type -> gb28181pro.GetChannelsRequest
+	6,   // 43: gb28181pro.api.SyncDevice:input_type -> gb28181pro.SyncDeviceRequest
+	8,   // 44: gb28181pro.api.DeleteDevice:input_type -> gb28181pro.DeleteDeviceRequest
+	10,  // 45: gb28181pro.api.GetSubChannels:input_type -> gb28181pro.GetSubChannelsRequest
+	14,  // 46: gb28181pro.api.ChangeAudio:input_type -> gb28181pro.ChangeAudioRequest
+	11,  // 47: gb28181pro.api.UpdateChannelStreamIdentification:input_type -> gb28181pro.Channel
+	15,  // 48: gb28181pro.api.UpdateTransport:input_type -> gb28181pro.UpdateTransportRequest
+	12,  // 49: gb28181pro.api.AddDevice:input_type -> gb28181pro.Device
+	12,  // 50: gb28181pro.api.UpdateDevice:input_type -> gb28181pro.Device
+	16,  // 51: gb28181pro.api.GetDeviceStatus:input_type -> gb28181pro.GetDeviceStatusRequest
+	18,  // 52: gb28181pro.api.GetDeviceAlarm:input_type -> gb28181pro.GetDeviceAlarmRequest
+	22,  // 53: gb28181pro.api.GetSyncStatus:input_type -> gb28181pro.GetSyncStatusRequest
+	23,  // 54: gb28181pro.api.GetSubscribeInfo:input_type -> gb28181pro.GetSubscribeInfoRequest
+	25,  // 55: gb28181pro.api.GetSnap:input_type -> gb28181pro.GetSnapRequest
+	34,  // 56: gb28181pro.api.StopConvert:input_type -> gb28181pro.ConvertStopRequest
+	35,  // 57: gb28181pro.api.StartBroadcast:input_type -> gb28181pro.BroadcastRequest
+	35,  // 58: gb28181pro.api.StopBroadcast:input_type -> gb28181pro.BroadcastRequest
+	107, // 59: gb28181pro.api.GetAllSSRC:input_type -> google.protobuf.Empty
+	27,  // 60: gb28181pro.api.GetRawChannel:input_type -> gb28181pro.GetRawChannelRequest
+	38,  // 61: gb28181pro.api.AddPlatform:input_type -> gb28181pro.Platform
+	39,  // 62: gb28181pro.api.GetPlatform:input_type -> gb28181pro.GetPlatformRequest
+	38,  // 63: gb28181pro.api.UpdatePlatform:input_type -> gb28181pro.Platform
+	40,  // 64: gb28181pro.api.DeletePlatform:input_type -> gb28181pro.DeletePlatformRequest
+	41,  // 65: gb28181pro.api.ListPlatforms:input_type -> gb28181pro.ListPlatformsRequest
+	44,  // 66: gb28181pro.api.QueryRecord:input_type -> gb28181pro.QueryRecordRequest
+	47,  // 67: gb28181pro.api.PtzControl:input_type -> gb28181pro.PtzControlRequest
+	48,  // 68: gb28181pro.api.IrisControl:input_type -> gb28181pro.IrisControlRequest
+	49,  // 69: gb28181pro.api.FocusControl:input_type -> gb28181pro.FocusControlRequest
+	50,  // 70: gb28181pro.api.QueryPreset:input_type -> gb28181pro.PresetRequest
+	50,  // 71: gb28181pro.api.AddPreset:input_type -> gb28181pro.PresetRequest
+	50,  // 72: gb28181pro.api.CallPreset:input_type -> gb28181pro.PresetRequest
+	50,  // 73: gb28181pro.api.DeletePreset:input_type -> gb28181pro.PresetRequest
+	52,  // 74: gb28181pro.api.AddCruisePoint:input_type -> gb28181pro.CruisePointRequest
+	52,  // 75: gb28181pro.api.DeleteCruisePoint:input_type -> gb28181pro.CruisePointRequest
+	53,  // 76: gb28181pro.api.SetCruiseSpeed:input_type -> gb28181pro.CruiseSpeedRequest
+	54,  // 77: gb28181pro.api.SetCruiseTime:input_type -> gb28181pro.CruiseTimeRequest
+	55,  // 78: gb28181pro.api.StartCruise:input_type -> gb28181pro.CruiseRequest
+	55,  // 79: gb28181pro.api.StopCruise:input_type -> gb28181pro.CruiseRequest
+	56,  // 80: gb28181pro.api.StartScan:input_type -> gb28181pro.ScanRequest
+	56,  // 81: gb28181pro.api.StopScan:input_type -> gb28181pro.ScanRequest
+	56,  // 82: gb28181pro.api.SetScanLeft:input_type -> gb28181pro.ScanRequest
+	56,  // 83: gb28181pro.api.SetScanRight:input_type -> gb28181pro.ScanRequest
+	57,  // 84: gb28181pro.api.SetScanSpeed:input_type -> gb28181pro.ScanSpeedRequest
+	58,  // 85: gb28181pro.api.WiperControl:input_type -> gb28181pro.WiperControlRequest
+	59,  // 86: gb28181pro.api.AuxiliaryControl:input_type -> gb28181pro.AuxiliaryControlRequest
+	60,  // 87: gb28181pro.api.TestSip:input_type -> gb28181pro.TestSipRequest
+	62,  // 88: gb28181pro.api.SearchAlarms:input_type -> gb28181pro.SearchAlarmsRequest
+	65,  // 89: gb28181pro.api.AddPlatformChannel:input_type -> gb28181pro.AddPlatformChannelRequest
+	81,  // 90: gb28181pro.api.GetPlatformChannels:input_type -> gb28181pro.GetPlatformChannelsRequest
+	87,  // 91: gb28181pro.api.RemovePlatformChannel:input_type -> gb28181pro.RemovePlatformChannelRequest
+	88,  // 92: gb28181pro.api.AddPlatformChannelShared:input_type -> gb28181pro.AddPlatformChannelSharedRequest
+	84,  // 93: gb28181pro.api.ChannelManageList:input_type -> gb28181pro.GetChannelManageListRequest
+	85,  // 94: gb28181pro.api.AddChannel:input_type -> gb28181pro.AddChannelRequest
+	86,  // 95: gb28181pro.api.DeleteChannel:input_type -> gb28181pro.DeleteChannelRequest
+	66,  // 96: gb28181pro.api.Recording:input_type -> gb28181pro.RecordingRequest
+	67,  // 97: gb28181pro.api.UploadJpeg:input_type -> gb28181pro.UploadJpegRequest
+	21,  // 98: gb28181pro.api.UpdateChannel:input_type -> gb28181pro.UpdateChannelRequest
+	89,  // 99: gb28181pro.api.PlaybackPause:input_type -> gb28181pro.PlaybackPauseRequest
+	90,  // 100: gb28181pro.api.PlaybackResume:input_type -> gb28181pro.PlaybackResumeRequest
+	91,  // 101: gb28181pro.api.PlaybackSeek:input_type -> gb28181pro.PlaybackSeekRequest
+	92,  // 102: gb28181pro.api.PlaybackSpeed:input_type -> gb28181pro.PlaybackSpeedRequest
+	69,  // 103: gb28181pro.api.GetGroups:input_type -> gb28181pro.GetGroupsRequest
+	68,  // 104: gb28181pro.api.AddGroup:input_type -> gb28181pro.Group
+	68,  // 105: gb28181pro.api.UpdateGroup:input_type -> gb28181pro.Group
+	70,  // 106: gb28181pro.api.DeleteGroup:input_type -> gb28181pro.DeleteGroupRequest
+	75,  // 107: gb28181pro.api.AddGroupChannel:input_type -> gb28181pro.AddGroupChannelRequest
+	76,  // 108: gb28181pro.api.DeleteGroupChannel:input_type -> gb28181pro.DeleteGroupChannelRequest
+	77,  // 109: gb28181pro.api.GetGroupChannels:input_type -> gb28181pro.GetGroupChannelsRequest
+	93,  // 110: gb28181pro.api.RemoveDevice:input_type -> gb28181pro.RemoveDeviceRequest
+	94,  // 111: gb28181pro.api.ReceiveAlarm:input_type -> gb28181pro.AlarmInfoRequest
+	95,  // 112: gb28181pro.api.AddChannelWithProxy:input_type -> gb28181pro.AddChannelWithProxyRequest
+	96,  // 113: gb28181pro.api.UpdateChannelWithProxy:input_type -> gb28181pro.UpdateChannelWithProxyRequest
+	97,  // 114: gb28181pro.api.DeleteChannelWithProxy:input_type -> gb28181pro.DeleteChannelWithProxyRequest
+	98,  // 115: gb28181pro.api.StartDownload:input_type -> gb28181pro.StartDownloadRequest
+	101, // 116: gb28181pro.api.GetDownloadProgress:input_type -> gb28181pro.GetDownloadProgressRequest
+	3,   // 117: gb28181pro.api.List:output_type -> gb28181pro.DevicesPageInfo
+	28,  // 118: gb28181pro.api.GetDevice:output_type -> gb28181pro.DeviceResponse
+	3,   // 119: gb28181pro.api.GetDevices:output_type -> gb28181pro.DevicesPageInfo
+	5,   // 120: gb28181pro.api.GetChannels:output_type -> gb28181pro.ChannelsPageInfo
+	7,   // 121: gb28181pro.api.SyncDevice:output_type -> gb28181pro.SyncStatus
+	9,   // 122: gb28181pro.api.DeleteDevice:output_type -> gb28181pro.DeleteDeviceResponse
+	5,   // 123: gb28181pro.api.GetSubChannels:output_type -> gb28181pro.ChannelsPageInfo
+	0,   // 124: gb28181pro.api.ChangeAudio:output_type -> gb28181pro.BaseResponse
+	0,   // 125: gb28181pro.api.UpdateChannelStreamIdentification:output_type -> gb28181pro.BaseResponse
+	0,   // 126: gb28181pro.api.UpdateTransport:output_type -> gb28181pro.BaseResponse
+	0,   // 127: gb28181pro.api.AddDevice:output_type -> gb28181pro.BaseResponse
+	0,   // 128: gb28181pro.api.UpdateDevice:output_type -> gb28181pro.BaseResponse
+	17,  // 129: gb28181pro.api.GetDeviceStatus:output_type -> gb28181pro.DeviceStatusResponse
+	19,  // 130: gb28181pro.api.GetDeviceAlarm:output_type -> gb28181pro.DeviceAlarmResponse
+	7,   // 131: gb28181pro.api.GetSyncStatus:output_type -> gb28181pro.SyncStatus
+	24,  // 132: gb28181pro.api.GetSubscribeInfo:output_type -> gb28181pro.SubscribeInfoResponse
+	26,  // 133: gb28181pro.api.GetSnap:output_type -> gb28181pro.SnapResponse
+	0,   // 134: gb28181pro.api.StopConvert:output_type -> gb28181pro.BaseResponse
+	0,   // 135: gb28181pro.api.StartBroadcast:output_type -> gb28181pro.BaseResponse
+	0,   // 136: gb28181pro.api.StopBroadcast:output_type -> gb28181pro.BaseResponse
+	37,  // 137: gb28181pro.api.GetAllSSRC:output_type -> gb28181pro.SSRCListResponse
+	11,  // 138: gb28181pro.api.GetRawChannel:output_type -> gb28181pro.Channel
+	0,   // 139: gb28181pro.api.AddPlatform:output_type -> gb28181pro.BaseResponse
+	42,  // 140: gb28181pro.api.GetPlatform:output_type -> gb28181pro.PlatformResponse
+	0,   // 141: gb28181pro.api.UpdatePlatform:output_type -> gb28181pro.BaseResponse
+	0,   // 142: gb28181pro.api.DeletePlatform:output_type -> gb28181pro.BaseResponse
+	43,  // 143: gb28181pro.api.ListPlatforms:output_type -> gb28181pro.PlatformsPageInfo
+	45,  // 144: gb28181pro.api.QueryRecord:output_type -> gb28181pro.QueryRecordResponse
+	0,   // 145: gb28181pro.api.PtzControl:output_type -> gb28181pro.BaseResponse
+	0,   // 146: gb28181pro.api.IrisControl:output_type -> gb28181pro.BaseResponse
+	0,   // 147: gb28181pro.api.FocusControl:output_type -> gb28181pro.BaseResponse
+	51,  // 148: gb28181pro.api.QueryPreset:output_type -> gb28181pro.PresetResponse
+	0,   // 149: gb28181pro.api.AddPreset:output_type -> gb28181pro.BaseResponse
+	0,   // 150: gb28181pro.api.CallPreset:output_type -> gb28181pro.BaseResponse
+	0,   // 151: gb28181pro.api.DeletePreset:output_type -> gb28181pro.BaseResponse
+	0,   // 152: gb28181pro.api.AddCruisePoint:output_type -> gb28181pro.BaseResponse
+	0,   // 153: gb28181pro.api.DeleteCruisePoint:output_type -> gb28181pro.BaseResponse
+	0,   // 154: gb28181pro.api.SetCruiseSpeed:output_type -> gb28181pro.BaseResponse
+	0,   // 155: gb28181pro.api.SetCruiseTime:output_type -> gb28181pro.BaseResponse
+	0,   // 156: gb28181pro.api.StartCruise:output_type -> gb28181pro.BaseResponse
+	0,   // 157: gb28181pro.api.StopCruise:output_type -> gb28181pro.BaseResponse
+	0,   // 158: gb28181pro.api.StartScan:output_type -> gb28181pro.BaseResponse
+	0,   // 159: gb28181pro.api.StopScan:output_type -> gb28181pro.BaseResponse
+	0,   // 160: gb28181pro.api.SetScanLeft:output_type -> gb28181pro.BaseResponse
+	0,   // 161: gb28181pro.api.SetScanRight:output_type -> gb28181pro.BaseResponse
+	0,   // 162: gb28181pro.api.SetScanSpeed:output_type -> gb28181pro.BaseResponse
+	0,   // 163: gb28181pro.api.WiperControl:output_type -> gb28181pro.BaseResponse
+	0,   // 164: gb28181pro.api.AuxiliaryControl:output_type -> gb28181pro.BaseResponse
+	61,  // 165: gb28181pro.api.TestSip:output_type -> gb28181pro.TestSipResponse
+	63,  // 166: gb28181pro.api.SearchAlarms:output_type -> gb28181pro.SearchAlarmsResponse
+	0,   // 167: gb28181pro.api.AddPlatformChannel:output_type -> gb28181pro.BaseResponse
+	83,  // 168: gb28181pro.api.GetPlatformChannels:output_type -> gb28181pro.PlatformChannelsResponse
+	0,   // 169: gb28181pro.api.RemovePlatformChannel:output_type -> gb28181pro.BaseResponse
+	0,   // 170: gb28181pro.api.AddPlatformChannelShared:output_type -> gb28181pro.BaseResponse
+	5,   // 171: gb28181pro.api.ChannelManageList:output_type -> gb28181pro.ChannelsPageInfo
+	0,   // 172: gb28181pro.api.AddChannel:output_type -> gb28181pro.BaseResponse
+	0,   // 173: gb28181pro.api.DeleteChannel:output_type -> gb28181pro.BaseResponse
+	0,   // 174: gb28181pro.api.Recording:output_type -> gb28181pro.BaseResponse
+	0,   // 175: gb28181pro.api.UploadJpeg:output_type -> gb28181pro.BaseResponse
+	0,   // 176: gb28181pro.api.UpdateChannel:output_type -> gb28181pro.BaseResponse
+	0,   // 177: gb28181pro.api.PlaybackPause:output_type -> gb28181pro.BaseResponse
+	0,   // 178: gb28181pro.api.PlaybackResume:output_type -> gb28181pro.BaseResponse
+	0,   // 179: gb28181pro.api.PlaybackSeek:output_type -> gb28181pro.BaseResponse
+	0,   // 180: gb28181pro.api.PlaybackSpeed:output_type -> gb28181pro.BaseResponse
+	72,  // 181: gb28181pro.api.GetGroups:output_type -> gb28181pro.GroupsListResponse
+	0,   // 182: gb28181pro.api.AddGroup:output_type -> gb28181pro.BaseResponse
+	0,   // 183: gb28181pro.api.UpdateGroup:output_type -> gb28181pro.BaseResponse
+	0,   // 184: gb28181pro.api.DeleteGroup:output_type -> gb28181pro.BaseResponse
+	0,   // 185: gb28181pro.api.AddGroupChannel:output_type -> gb28181pro.BaseResponse
+	0,   // 186: gb28181pro.api.DeleteGroupChannel:output_type -> gb28181pro.BaseResponse
+	79,  // 187: gb28181pro.api.GetGroupChannels:output_type -> gb28181pro.GroupChannelsResponse
+	0,   // 188: gb28181pro.api.RemoveDevice:output_type -> gb28181pro.BaseResponse
+	0,   // 189: gb28181pro.api.ReceiveAlarm:output_type -> gb28181pro.BaseResponse
+	0,   // 190: gb28181pro.api.AddChannelWithProxy:output_type -> gb28181pro.BaseResponse
+	0,   // 191: gb28181pro.api.UpdateChannelWithProxy:output_type -> gb28181pro.BaseResponse
+	0,   // 192: gb28181pro.api.DeleteChannelWithProxy:output_type -> gb28181pro.BaseResponse
+	100, // 193: gb28181pro.api.StartDownload:output_type -> gb28181pro.StartDownloadResponse
+	103, // 194: gb28181pro.api.GetDownloadProgress:output_type -> gb28181pro.DownloadProgressResponse
+	117, // [117:195] is the sub-list for method output_type
+	39,  // [39:117] is the sub-list for method input_type
+	39,  // [39:39] is the sub-list for extension type_name
+	39,  // [39:39] is the sub-list for extension extendee
+	0,   // [0:39] is the sub-list for field type_name
 }
 
 func init() { file_gb28181_proto_init() }
@@ -8393,7 +9084,7 @@ func file_gb28181_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_gb28181_proto_rawDesc), len(file_gb28181_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   98,
+			NumMessages:   106,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

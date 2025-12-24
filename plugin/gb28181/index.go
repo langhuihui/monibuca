@@ -504,9 +504,6 @@ func (gb *GB28181Plugin) checkDeviceExpire() (err error) {
 
 		// 初始化设备通道并更新到数据库
 		for _, channel := range channels {
-			if channel.CustomName == "" {
-				channel.CustomName = channel.Name
-			}
 			if channel.CustomChannelId == "" {
 				channel.CustomChannelId = channel.ChannelId
 			}
@@ -566,6 +563,10 @@ func (gb *GB28181Plugin) checkPlatform() {
 		return
 	}
 	if gb.Platforms != nil && len(gb.Platforms) > 0 {
+		// 将 gb.Platforms 中的平台设置为只读
+		for _, platform := range gb.Platforms {
+			platform.ReadOnly = true
+		}
 		platformModels = append(platformModels, gb.Platforms...)
 	}
 	gb.Info("找到启用状态的平台", "count", len(platformModels))
@@ -603,6 +604,7 @@ func (gb *GB28181Plugin) checkPlatform() {
 				}
 			}
 		}
+		platform.PlatformModel.ChannelCount = platform.channels.Length
 		// 添加到任务系统
 		gb.platforms.AddTask(platform)
 		gb.Info("平台初始化完成", "ID", platformModel.ServerGBID, "Name", platformModel.Name)
@@ -1065,7 +1067,7 @@ func (gb *GB28181Plugin) OnInvite(req *sip.Request, tx sip.ServerTransaction) {
 	}
 	forwardDialog.Logger = gb.Logger.With("ssrc", inviteInfo.SSRC, "platformid", platform.PlatformModel.ServerGBID, "deviceid", channel.ID)
 	gb.forwardDialogs.Set(forwardDialog)
-	gb.Info("OnInvite", "action", "sendRtpInfo created", "callId", req.CallID().Value())
+	gb.Info("OnInvite", "action", "sendRtpInfo created", "callId", req.CallID().Value(), "streamPath", channel.StreamPath)
 
 	if err := tx.Respond(response); err != nil {
 		gb.Error("OnInvite", "error", "send response failed", "err", err.Error())

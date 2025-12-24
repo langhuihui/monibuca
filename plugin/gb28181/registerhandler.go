@@ -327,8 +327,9 @@ func (task *registerHandlerTask) RecoverDevice(d *Device, req *sip.Request) {
 		//}
 		task.gb.DB.Save(d)
 	}
-	d.DeviceKeepaliveTickTask.seconds = time.Second * 30
-	d.DeviceKeepaliveTickTask.Tick(nil)
+	task.Info("task recoverdevice", "d.DeviceKeepaliveTickTask==nil", d.DeviceKeepaliveTickTask == nil)
+	//d.DeviceKeepaliveTickTask.seconds = time.Second * 30
+	//d.DeviceKeepaliveTickTask.Tick(nil)
 	go d.catalog()
 	return
 }

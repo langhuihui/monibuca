@@ -374,8 +374,47 @@ service api {
   // 添加平台通道
   rpc AddPlatformChannel (AddPlatformChannelRequest) returns (BaseResponse) {
     option (google.api.http) = {
-      post: "/gb28181/api/platform/channel/add"
+      post: "/gb28181/api/platform/{platformId}/channel/add"
       body: "*"
+    };
+  }
+  // 根据平台ID分页查询平台下的通道列表（支持已/未共享过滤和模糊搜索）
+  rpc GetPlatformChannels (GetPlatformChannelsRequest) returns (PlatformChannelsResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/platform/{platformId}/channels"
+    };
+  }
+  // 从平台移出共享通道
+  rpc RemovePlatformChannel (RemovePlatformChannelRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      post: "/gb28181/api/platform/{platformId}/channel/remove"
+      body: "*"
+    };
+  }
+  // 添加共享通道（将已有通道加入平台的共享列表）
+  rpc AddPlatformChannelShared (AddPlatformChannelSharedRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      post: "/gb28181/api/platform/{platformId}/channel/share"
+      body: "*"
+    };
+  }
+  // 通道管理 - 分页查询通道（管理端列表）
+  rpc ChannelManageList (GetChannelManageListRequest) returns (ChannelsPageInfo) {
+    option (google.api.http) = {
+      get: "/gb28181/api/channel/list"
+    };
+  }
+  // 新增通道（管理端）
+  rpc AddChannel (AddChannelRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      post: "/gb28181/api/channel/add"
+      body: "*"
+    };
+  }
+  // 删除通道（管理端）
+  rpc DeleteChannel (DeleteChannelRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      post: "/gb28181/api/channel/delete/{id}"
     };
   }
 
@@ -568,7 +607,7 @@ message ChannelsPageInfo {
   int32 code = 1;
   string message = 2;
   int32 total = 3;
-  repeated Channel list = 4;
+  repeated Channel data = 4;
 }
 
 message SyncDeviceRequest {
@@ -623,6 +662,9 @@ message Channel {
   google.protobuf.Timestamp gpsTime=17;
   string longitude = 18;
   string latitude = 19;
+  string streamPath = 20;
+  string customChannelId = 21;
+  string customChannelName = 22;
 }
 
 message Device {
@@ -842,6 +884,7 @@ message Platform {
   string address = 35;               // 平台安装地址
   int32 registerWay = 36;            // 注册方式
   int32 secrecy = 37;               // 保密属性
+  bool readOnly = 38;
 }
 
 // 获取平台请求
@@ -1162,6 +1205,72 @@ message GroupChannelsResponse {
 message GroupChannelsData {
   repeated GroupChannel list = 1;     // 分页后的通道列表
   repeated GroupChannel channels = 2;  // 当前组下的所有通道列表
+}
+
+// 根据平台ID查询平台通道的请求（支持已/未共享与模糊查询）
+message GetPlatformChannelsRequest {
+  string platformId = 1; // 平台ID（路径参数）
+  int32 page = 2;
+  int32 count = 3;
+  string query = 4; // 用于匹配通道名称、自定义通道名称、通道编号、自定义通道编号
+  int32 shared = 5; // -1: 全部, 0: 未共享, 1: 已共享
+}
+
+// 平台通道项
+message PlatformChannel {
+  string id = 1;
+  string channelId = 2;
+  string customChannelId = 3;
+  string channelName = 4;
+  string customChannelName = 5;
+  string deviceId = 6;
+  string deviceName = 7;
+  string streamPath = 8;
+  bool inPlatform = 9; // 是否已加入到指定平台（true 表示已共享）
+  string channelType = 10; // 通道类型: "设备通道" 或 "自定义通道"
+}
+
+// 平台通道查询响应
+message PlatformChannelsResponse {
+  int32 code = 1;
+  string message = 2;
+  int32 total = 3;
+  repeated PlatformChannel data = 4;
+}
+
+// 通道管理 - 分页查询请求（管理端）
+message GetChannelManageListRequest {
+  int32 page = 1;
+  int32 count = 2;
+  string query = 3; // 支持通道编号/自定义通道编号/通道名称/自定义通道名称的模糊匹配
+  int32 type = 4; // -1: 全部, 0: 设备通道, 1: 自定义通道
+}
+
+// 新增通道请求（管理端）
+message AddChannelRequest {
+  string deviceId = 1;
+  string channelId = 2;
+  string customChannelId = 3;
+  string channelName = 4;
+  string customChannelName = 5;
+  string streamPath = 6;
+}
+
+// 删除通道请求（管理端）
+message DeleteChannelRequest {
+  string id = 1;
+}
+
+// 从平台移出共享通道的请求
+message RemovePlatformChannelRequest {
+  string platformId = 1;
+  string id = 2;
+}
+
+// 添加共享通道请求（将已有通道加入平台共享）
+message AddPlatformChannelSharedRequest {
+  string platformId = 1;
+  string id = 2;
 }
 
 // 回放暂停请求

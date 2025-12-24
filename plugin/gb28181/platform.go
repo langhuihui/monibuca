@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/langhuihui/gotask"
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/simplifiedchinese"
 	"golang.org/x/text/transform"
@@ -19,6 +18,7 @@ import (
 	"github.com/emiago/sipgo"
 	"github.com/emiago/sipgo/sip"
 	"github.com/icholy/digest"
+	task "github.com/langhuihui/gotask"
 	gb28181 "m7s.live/v5/plugin/gb28181/pkg"
 )
 
@@ -473,6 +473,7 @@ func (k *PlatformKeepAliveTask) Tick(any) {
 			platform.register.Tick(nil)
 		}
 	} else {
+		k.platform.PlatformModel.Status = true
 		k.platform.KeepAliveReply = 0
 	}
 }
@@ -931,10 +932,16 @@ func (p *Platform) sendCatalogResponse(req *sip.Request, sn string, fromTag stri
 func (p *Platform) buildChannelItem(channel gb28181.DeviceChannel) string {
 	// 确保字符串字段不为空
 	deviceID := channel.ChannelId
+	if channel.CustomChannelId != "" {
+		deviceID = channel.CustomChannelId
+	}
 	if deviceID == "" {
 		deviceID = "unknown_device" // 如果没有设备ID，使用默认值
 	}
 	name := channel.Name
+	if channel.CustomName != "" {
+		name = channel.CustomName
+	}
 	if name == "" {
 		name = "未命名设备"
 	}
@@ -979,7 +986,7 @@ func (p *Platform) buildChannelItem(channel gb28181.DeviceChannel) string {
 		channel.RegisterWay, // 直接使用整数值
 		channel.Secrecy,     // 直接使用整数值
 		parentID,
-		channel.Parental, // 直接使用整数值
+		channel.Parental,  // 直接使用整数值
 		channel.SafetyWay) // 直接使用整数值
 }
 
@@ -1552,9 +1559,34 @@ func (p *Platform) GetKey() string {
 }
 
 func (p *Platform) Dispose() {
-	if p.plugin.DB != nil {
-		if err := p.plugin.DB.Save(p.PlatformModel).Error; err != nil {
-			p.Error("保存平台数据出错", "error", err)
+	if !p.PlatformModel.ReadOnly {
+		if p.plugin.DB != nil {
+			if err := p.plugin.DB.Save(p.PlatformModel).Error; err != nil {
+				p.Error("保存平台数据出错", "error", err)
+			}
+
+			// 将内存中的平台通道保存到数据库表 gb28181_platform_channel
+			// 仅保存两个字段：平台ID (PlatformServerGBID) 和 通道复合主键ID (ChannelDBID -> 即 ch.ID)
+			// 先删除该平台已有的映射，再批量插入当前内存中的通道列表
+			platformID := p.PlatformModel.ServerGBID
+			// 删除已有的记录（若有）
+			if del := p.plugin.DB.Where("platform_server_gb_id = ?", platformID).Delete(&gb28181.PlatformChannel{}); del.Error != nil {
+				p.Error("删除平台通道记录失败", "error", del.Error, "platform", platformID)
+			}
+
+			// 收集当前内存中的平台通道并插入
+			var records []gb28181.PlatformChannel
+			for ch := range p.channels.Range {
+				records = append(records, gb28181.PlatformChannel{
+					PlatformServerGBID: platformID,
+					ChannelDBID:        ch.ID,
+				})
+			}
+			if len(records) > 0 {
+				if err := p.plugin.DB.Create(&records).Error; err != nil {
+					p.Error("保存平台通道记录失败", "error", err, "platform", platformID)
+				}
+			}
 		}
 	}
 }

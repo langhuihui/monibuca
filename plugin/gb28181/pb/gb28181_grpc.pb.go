@@ -73,6 +73,12 @@ const (
 	Api_TestSip_FullMethodName                           = "/gb28181pro.api/TestSip"
 	Api_SearchAlarms_FullMethodName                      = "/gb28181pro.api/SearchAlarms"
 	Api_AddPlatformChannel_FullMethodName                = "/gb28181pro.api/AddPlatformChannel"
+	Api_GetPlatformChannels_FullMethodName               = "/gb28181pro.api/GetPlatformChannels"
+	Api_RemovePlatformChannel_FullMethodName             = "/gb28181pro.api/RemovePlatformChannel"
+	Api_AddPlatformChannelShared_FullMethodName          = "/gb28181pro.api/AddPlatformChannelShared"
+	Api_ChannelManageList_FullMethodName                 = "/gb28181pro.api/ChannelManageList"
+	Api_AddChannel_FullMethodName                        = "/gb28181pro.api/AddChannel"
+	Api_DeleteChannel_FullMethodName                     = "/gb28181pro.api/DeleteChannel"
 	Api_Recording_FullMethodName                         = "/gb28181pro.api/Recording"
 	Api_UploadJpeg_FullMethodName                        = "/gb28181pro.api/UploadJpeg"
 	Api_UpdateChannel_FullMethodName                     = "/gb28181pro.api/UpdateChannel"
@@ -202,6 +208,18 @@ type ApiClient interface {
 	SearchAlarms(ctx context.Context, in *SearchAlarmsRequest, opts ...grpc.CallOption) (*SearchAlarmsResponse, error)
 	// 添加平台通道
 	AddPlatformChannel(ctx context.Context, in *AddPlatformChannelRequest, opts ...grpc.CallOption) (*BaseResponse, error)
+	// 根据平台ID分页查询平台下的通道列表（支持已/未共享过滤和模糊搜索）
+	GetPlatformChannels(ctx context.Context, in *GetPlatformChannelsRequest, opts ...grpc.CallOption) (*PlatformChannelsResponse, error)
+	// 从平台移出共享通道
+	RemovePlatformChannel(ctx context.Context, in *RemovePlatformChannelRequest, opts ...grpc.CallOption) (*BaseResponse, error)
+	// 添加共享通道（将已有通道加入平台的共享列表）
+	AddPlatformChannelShared(ctx context.Context, in *AddPlatformChannelSharedRequest, opts ...grpc.CallOption) (*BaseResponse, error)
+	// 通道管理 - 分页查询通道（管理端列表）
+	ChannelManageList(ctx context.Context, in *GetChannelManageListRequest, opts ...grpc.CallOption) (*ChannelsPageInfo, error)
+	// 新增通道（管理端）
+	AddChannel(ctx context.Context, in *AddChannelRequest, opts ...grpc.CallOption) (*BaseResponse, error)
+	// 删除通道（管理端）
+	DeleteChannel(ctx context.Context, in *DeleteChannelRequest, opts ...grpc.CallOption) (*BaseResponse, error)
 	// 录制控制
 	Recording(ctx context.Context, in *RecordingRequest, opts ...grpc.CallOption) (*BaseResponse, error)
 	// 接收JPEG文件
@@ -764,6 +782,66 @@ func (c *apiClient) AddPlatformChannel(ctx context.Context, in *AddPlatformChann
 	return out, nil
 }
 
+func (c *apiClient) GetPlatformChannels(ctx context.Context, in *GetPlatformChannelsRequest, opts ...grpc.CallOption) (*PlatformChannelsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PlatformChannelsResponse)
+	err := c.cc.Invoke(ctx, Api_GetPlatformChannels_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *apiClient) RemovePlatformChannel(ctx context.Context, in *RemovePlatformChannelRequest, opts ...grpc.CallOption) (*BaseResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BaseResponse)
+	err := c.cc.Invoke(ctx, Api_RemovePlatformChannel_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *apiClient) AddPlatformChannelShared(ctx context.Context, in *AddPlatformChannelSharedRequest, opts ...grpc.CallOption) (*BaseResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BaseResponse)
+	err := c.cc.Invoke(ctx, Api_AddPlatformChannelShared_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *apiClient) ChannelManageList(ctx context.Context, in *GetChannelManageListRequest, opts ...grpc.CallOption) (*ChannelsPageInfo, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ChannelsPageInfo)
+	err := c.cc.Invoke(ctx, Api_ChannelManageList_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *apiClient) AddChannel(ctx context.Context, in *AddChannelRequest, opts ...grpc.CallOption) (*BaseResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BaseResponse)
+	err := c.cc.Invoke(ctx, Api_AddChannel_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *apiClient) DeleteChannel(ctx context.Context, in *DeleteChannelRequest, opts ...grpc.CallOption) (*BaseResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BaseResponse)
+	err := c.cc.Invoke(ctx, Api_DeleteChannel_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *apiClient) Recording(ctx context.Context, in *RecordingRequest, opts ...grpc.CallOption) (*BaseResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(BaseResponse)
@@ -1080,6 +1158,18 @@ type ApiServer interface {
 	SearchAlarms(context.Context, *SearchAlarmsRequest) (*SearchAlarmsResponse, error)
 	// 添加平台通道
 	AddPlatformChannel(context.Context, *AddPlatformChannelRequest) (*BaseResponse, error)
+	// 根据平台ID分页查询平台下的通道列表（支持已/未共享过滤和模糊搜索）
+	GetPlatformChannels(context.Context, *GetPlatformChannelsRequest) (*PlatformChannelsResponse, error)
+	// 从平台移出共享通道
+	RemovePlatformChannel(context.Context, *RemovePlatformChannelRequest) (*BaseResponse, error)
+	// 添加共享通道（将已有通道加入平台的共享列表）
+	AddPlatformChannelShared(context.Context, *AddPlatformChannelSharedRequest) (*BaseResponse, error)
+	// 通道管理 - 分页查询通道（管理端列表）
+	ChannelManageList(context.Context, *GetChannelManageListRequest) (*ChannelsPageInfo, error)
+	// 新增通道（管理端）
+	AddChannel(context.Context, *AddChannelRequest) (*BaseResponse, error)
+	// 删除通道（管理端）
+	DeleteChannel(context.Context, *DeleteChannelRequest) (*BaseResponse, error)
 	// 录制控制
 	Recording(context.Context, *RecordingRequest) (*BaseResponse, error)
 	// 接收JPEG文件
@@ -1284,6 +1374,24 @@ func (UnimplementedApiServer) SearchAlarms(context.Context, *SearchAlarmsRequest
 }
 func (UnimplementedApiServer) AddPlatformChannel(context.Context, *AddPlatformChannelRequest) (*BaseResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method AddPlatformChannel not implemented")
+}
+func (UnimplementedApiServer) GetPlatformChannels(context.Context, *GetPlatformChannelsRequest) (*PlatformChannelsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetPlatformChannels not implemented")
+}
+func (UnimplementedApiServer) RemovePlatformChannel(context.Context, *RemovePlatformChannelRequest) (*BaseResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RemovePlatformChannel not implemented")
+}
+func (UnimplementedApiServer) AddPlatformChannelShared(context.Context, *AddPlatformChannelSharedRequest) (*BaseResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AddPlatformChannelShared not implemented")
+}
+func (UnimplementedApiServer) ChannelManageList(context.Context, *GetChannelManageListRequest) (*ChannelsPageInfo, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ChannelManageList not implemented")
+}
+func (UnimplementedApiServer) AddChannel(context.Context, *AddChannelRequest) (*BaseResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AddChannel not implemented")
+}
+func (UnimplementedApiServer) DeleteChannel(context.Context, *DeleteChannelRequest) (*BaseResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DeleteChannel not implemented")
 }
 func (UnimplementedApiServer) Recording(context.Context, *RecordingRequest) (*BaseResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Recording not implemented")
@@ -2287,6 +2395,114 @@ func _Api_AddPlatformChannel_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Api_GetPlatformChannels_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetPlatformChannelsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).GetPlatformChannels(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_GetPlatformChannels_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).GetPlatformChannels(ctx, req.(*GetPlatformChannelsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Api_RemovePlatformChannel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RemovePlatformChannelRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).RemovePlatformChannel(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_RemovePlatformChannel_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).RemovePlatformChannel(ctx, req.(*RemovePlatformChannelRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Api_AddPlatformChannelShared_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddPlatformChannelSharedRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).AddPlatformChannelShared(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_AddPlatformChannelShared_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).AddPlatformChannelShared(ctx, req.(*AddPlatformChannelSharedRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Api_ChannelManageList_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetChannelManageListRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).ChannelManageList(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_ChannelManageList_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).ChannelManageList(ctx, req.(*GetChannelManageListRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Api_AddChannel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddChannelRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).AddChannel(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_AddChannel_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).AddChannel(ctx, req.(*AddChannelRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Api_DeleteChannel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteChannelRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).DeleteChannel(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_DeleteChannel_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).DeleteChannel(ctx, req.(*DeleteChannelRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Api_Recording_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RecordingRequest)
 	if err := dec(in); err != nil {
@@ -2875,6 +3091,30 @@ var Api_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "AddPlatformChannel",
 			Handler:    _Api_AddPlatformChannel_Handler,
+		},
+		{
+			MethodName: "GetPlatformChannels",
+			Handler:    _Api_GetPlatformChannels_Handler,
+		},
+		{
+			MethodName: "RemovePlatformChannel",
+			Handler:    _Api_RemovePlatformChannel_Handler,
+		},
+		{
+			MethodName: "AddPlatformChannelShared",
+			Handler:    _Api_AddPlatformChannelShared_Handler,
+		},
+		{
+			MethodName: "ChannelManageList",
+			Handler:    _Api_ChannelManageList_Handler,
+		},
+		{
+			MethodName: "AddChannel",
+			Handler:    _Api_AddChannel_Handler,
+		},
+		{
+			MethodName: "DeleteChannel",
+			Handler:    _Api_DeleteChannel_Handler,
 		},
 		{
 			MethodName: "Recording",

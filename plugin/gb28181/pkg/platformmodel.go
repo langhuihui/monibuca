@@ -2,8 +2,9 @@
 package gb28181
 
 import (
-	"gorm.io/gorm"
 	"time"
+
+	"gorm.io/gorm"
 )
 
 // PlatformModel 表示GB28181平台的配置信息。
@@ -23,7 +24,7 @@ type PlatformModel struct {
 	Password                string             `gorm:"column:password;omitempty" json:"password"`                         // Password表示SIP认证的密码
 	Expires                 int                `gorm:"column:expires;omitempty" json:"expires"`                           // Expires表示注册的过期时间，单位为秒
 	KeepTimeout             int                `gorm:"column:keep_timeout;omitempty" json:"keepTimeout"`                  // KeepTimeout表示心跳超时时间，单位为秒
-	Transport               string             `gorm:"column:transport;omitempty" json:"transport"`                       // Transport表示传输协议类型
+	Transport               string             `gorm:"column:transport;omitempty" json:"transport" default:"UDP"`         // Transport表示传输协议类型
 	CharacterSet            string             `gorm:"column:character_set;omitempty" json:"characterSet"`                // CharacterSet表示字符集编码
 	PTZ                     bool               `gorm:"column:ptz" json:"ptz"`                                             // PTZ表示是否允许云台控制
 	RTCP                    bool               `gorm:"column:rtcp" json:"rtcp"`                                           // RTCP表示是否启用RTCP流保活
@@ -49,6 +50,7 @@ type PlatformModel struct {
 	Secrecy                 int                `gorm:"column:secrecy;omitempty" json:"secrecy"`                           // Secrecy表示保密属性(0:不涉密,1:涉密)
 	PlatformChannels        []*PlatformChannel `gorm:"-:all"`
 	DeletedAt               gorm.DeletedAt     `yaml:"-"`
+	ReadOnly                bool               `gorm:"-:all" json:"readOnly" default:"false"` // ReadOnly表示是否只读
 }
 
 // TableName 指定数据库表名

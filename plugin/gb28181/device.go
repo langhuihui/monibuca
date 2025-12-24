@@ -120,7 +120,7 @@ type Device struct {
 	PositionSubscribeTask   *PositionSubscribeTask   `gorm:"-:all"`
 	AlarmSubscribeTask      *AlarmSubscribeTask      `gorm:"-:all"`
 	Cataloging              bool                     `gorm:"-:all" default:"false"`
-	DeviceKeepaliveTickTask *DeviceKeepaliveTickTask `gorm:"-:all" default:"false"`
+	DeviceKeepaliveTickTask *DeviceKeepaliveTickTask `gorm:"-:all"`
 }
 
 func (d *Device) TableName() string {
@@ -288,9 +288,6 @@ func (c *catalogHandlerTask) Run() (err error) {
 		channelItem.ID = d.DeviceId + "_" + channelItem.ChannelId
 		if channelItem.CustomChannelId == "" {
 			channelItem.CustomChannelId = channelItem.ChannelId
-		}
-		if channelItem.CustomName == "" {
-			channelItem.CustomName = channelItem.Name
 		}
 		// 使用 Save 进行 upsert 操作
 		d.Debug("ready to addOrUpdateChannel", "channel.ID is", channelItem.ID, "channel.Status is", channelItem.Status, "channel.Name", channelItem.Name, "channel.Owner", channelItem.Owner, "channel.Address", channelItem.Address)
