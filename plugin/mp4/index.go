@@ -21,7 +21,7 @@ type MP4Plugin struct {
 	AfterDuration        time.Duration `default:"30s" desc:"事件录像结束时长，不配置则默认30s"`
 	RecordFileExpireDays int           `desc:"录像自动删除的天数,0或未设置表示不自动删除"`
 	DiskMaxPercent       float64       `default:"90" desc:"硬盘使用百分之上限值，超上限后触发报警，并停止当前所有磁盘写入动作。"`
-	OverwritePercent     float64       `default:"80" desc:"全局磁盘使用率阈值，当 storage.local 的 overwritepercent 为 0 时使用此值作为全局兼底配置。超过阈值时自动迁移或删除最旧文件。"`
+	OverwritePercent     float64       `default:"0" desc:"全局磁盘使用率阈值，当 storage.local 的 overwritepercent 为 0 时使用此值作为全局兼底配置。超过阈值时自动迁移或删除最旧文件。"`
 	AutoRecovery         bool          `default:"false" desc:"是否自动恢复"`
 	ExceptionPostUrl     string        `desc:"第三方异常上报地址"`
 	EventRecordFilePath  string        `desc:"事件录像存放地址"`
