@@ -11,7 +11,8 @@ var _ = m7s.InstallPlugin[SnapPlugin](m7s.PluginMeta{
 
 type SnapPlugin struct {
 	m7s.Plugin
-	QueryTimeDelta int `default:"3" desc:"查询截图时允许的最大时间差（秒）"`
+	QueryTimeDelta int    `default:"3" desc:"查询截图时允许的最大时间差（秒）"`
+	FFMPEGPath     string `default:"ffmpeg" desc:"ffmpeg的路径，相对或绝对路径"`
 }
 
 // Start 在插件初始化时添加定时任务

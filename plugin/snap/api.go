@@ -59,7 +59,7 @@ func (p *SnapPlugin) snap(publisher *m7s.Publisher, watermarkConfig *snap_pkg.Wa
 
 	// 处理视频帧生成图片
 	buf := new(bytes.Buffer)
-	if err := snap_pkg.ProcessWithFFmpeg(annexb, buf); err != nil {
+	if err := snap_pkg.ProcessWithFFmpeg(annexb, buf, p.FFMPEGPath); err != nil {
 		return nil, err
 	}
 
@@ -941,7 +941,7 @@ func (p *SnapPlugin) snapFromMP4(mp4FilePath, outputPath string, timeOffsetMs in
 
 	// 构建ffmpeg命令
 	cmd := exec.Command(
-		"ffmpeg",
+		p.FFMPEGPath,
 		"-hide_banner",
 		"-ss", fmt.Sprintf("%f", timeOffsetSec), // 设置时间偏移
 		"-i", mp4FilePath, // 输入文件

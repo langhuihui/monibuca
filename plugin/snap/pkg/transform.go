@@ -64,7 +64,7 @@ func parseRGBA(rgbaStr string) (color.RGBA, error) {
 // 保存截图到文件
 func saveSnapshot(annexb []*format.AnnexB, savePath string, plugin *m7s.Plugin, streamPath string, snapMode int, watermarkConfig *WatermarkConfig) error {
 	var buf bytes.Buffer
-	if err := ProcessWithFFmpeg(annexb, &buf); err != nil {
+	if err := ProcessWithFFmpeg(annexb, &buf, ""); err != nil {
 		return fmt.Errorf("process with ffmpeg error: %w", err)
 	}
 
@@ -134,7 +134,7 @@ func (t *SnapTask) saveSnap(annexb []*format.AnnexB, snapMode int) error {
 
 	// 处理视频帧
 	var buf bytes.Buffer
-	if err := ProcessWithFFmpeg(annexb, &buf); err != nil {
+	if err := ProcessWithFFmpeg(annexb, &buf, ""); err != nil {
 		return fmt.Errorf("process with ffmpeg error: %w", err)
 	}
 

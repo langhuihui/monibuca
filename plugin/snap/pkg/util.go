@@ -43,9 +43,9 @@ func GetVideoFrame(publisher *m7s.Publisher, server *m7s.Server) ([]*format.Anne
 }
 
 // ProcessWithFFmpeg 使用 FFmpeg 处理视频帧并生成截图
-func ProcessWithFFmpeg(annexb []*format.AnnexB, output io.Writer) error {
+func ProcessWithFFmpeg(annexb []*format.AnnexB, output io.Writer, FFMPEGPath string) error {
 	// 创建ffmpeg命令，使用select过滤器选择最后一帧
-	cmd := exec.Command("ffmpeg", "-hide_banner", "-i", "pipe:0", "-vf", fmt.Sprintf("select='eq(n,%d)'", len(annexb)-1), "-vframes", "1", "-f", "mjpeg", "pipe:1")
+	cmd := exec.Command(FFMPEGPath, "-hide_banner", "-i", "pipe:0", "-vf", fmt.Sprintf("select='eq(n,%d)'", len(annexb)-1), "-vframes", "1", "-f", "mjpeg", "pipe:1")
 
 	// 获取输入和输出pipe
 	stdin, err := cmd.StdinPipe()
