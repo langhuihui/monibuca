@@ -3,6 +3,7 @@ package rtsp
 import (
 	"crypto/tls"
 	"encoding/binary"
+	"errors"
 	"net"
 	"net/url"
 	"runtime"
@@ -351,9 +352,17 @@ func (c *NetConnection) Receive(sendMode bool, onReceive func(byte, []byte) erro
 							c.MemoryAllocator.Free(buf)
 							return
 						} else if onReceive != nil {
-							if err := onReceive(channelID, buf); err != nil {
-								c.Error("onReceive", "error", err)
+							if recvErr := onReceive(channelID, buf); recvErr == nil {
+								// 内存被接管，不需要释放
+							} else if errors.Is(recvErr, pkg.ErrDiscard) || errors.Is(recvErr, pkg.ErrMuted) {
+								// 丢弃错误和静音错误，继续循环
+								if !errors.Is(recvErr, pkg.ErrDiscard) {
+									c.MemoryAllocator.Free(buf)
+								}
+							} else {
+								// 其他错误，终止循环
 								c.MemoryAllocator.Free(buf)
+								return recvErr
 							}
 						} else {
 							c.MemoryAllocator.Free(buf)
@@ -381,13 +390,16 @@ func (c *NetConnection) Receive(sendMode bool, onReceive func(byte, []byte) erro
 			var needToFree = true // 默认需要释放内存
 			if channelID&1 == 0 { // 偶数通道，RTP数据
 				if onReceive != nil {
-					err := onReceive(channelID, buf)
-					if err == nil {
+					if recvErr := onReceive(channelID, buf); recvErr == nil {
 						// 如果回调返回nil，表示内存被接管
 						needToFree = false
+					} else if errors.Is(recvErr, pkg.ErrDiscard) || errors.Is(recvErr, pkg.ErrMuted) {
+						// 丢弃错误和静音错误，继续循环
+						needToFree = !errors.Is(recvErr, pkg.ErrDiscard)
 					} else {
-						// 如果回调返回错误，检查是否是丢弃错误
-						needToFree = (err != pkg.ErrDiscard)
+						// 其他错误，终止循环
+						c.MemoryAllocator.Free(buf)
+						return recvErr
 					}
 				}
 			} else if onRTCP != nil { // 奇数通道，RTCP数据
