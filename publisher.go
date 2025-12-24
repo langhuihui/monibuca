@@ -181,7 +181,7 @@ func (p *Publisher) Go() error {
 			}
 			if p.PubVideo && p.VideoTrack.CheckTimeout(p.PublishTimeout) {
 				p.Error("video timeout", "writeTime", p.VideoTrack.LastValue.WriteTime)
-				if !p.HasAudioTrack() {
+				if !p.HasAudioTrack() && p.VideoTrack.LastValue.Sequence > 0 {
 					return ErrPublishTimeout
 				}
 				p.NoVideo()
