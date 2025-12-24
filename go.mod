@@ -40,6 +40,7 @@ require (
 	github.com/pion/webrtc/v4 v4.1.4
 	github.com/quic-go/qpack v0.5.1
 	github.com/quic-go/quic-go v0.56.0
+	github.com/getlantern/systray v1.2.2
 	github.com/samber/slog-common v0.17.1
 	github.com/shirou/gopsutil/v4 v4.24.8
 	github.com/stretchr/testify v1.10.0
