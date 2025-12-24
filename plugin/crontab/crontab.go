@@ -3,34 +3,38 @@ package plugin_crontab
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	task "github.com/langhuihui/gotask"
 	"m7s.live/v5/plugin/crontab/pkg"
 )
 
-// 计划时间段
+// TimeSlot describes a recording window
 type TimeSlot struct {
-	Start time.Time // 开始时间
-	End   time.Time // 结束时间
+	Start time.Time // start time
+	End   time.Time // end time
 }
 
-// Crontab 定时任务调度器
+// Crontab scheduler
 type Crontab struct {
-	task.Job
+	task.Work
 	ctp *CrontabPlugin
 	*pkg.RecordPlan
 	*pkg.RecordPlanStream
 
-	stop        chan struct{}
-	running     bool
-	location    *time.Location
-	timer       *time.Timer
-	currentSlot *TimeSlot // 当前执行的时间段
-	recording   bool      // 是否正在录制
+	stop           chan struct{}
+	running        bool
+	location       *time.Location
+	timer          *time.Timer
+	currentSlot    *TimeSlot // current slot
+	recording      bool      // currently recording
+	startAttempted bool      // startRecording already tried in this slot
+	retryTask      *RecordRetryTickTask
 }
 
 func (cron *Crontab) GetKey() string {
@@ -39,10 +43,7 @@ func (cron *Crontab) GetKey() string {
 
 // 初始化
 func (cron *Crontab) Start() (err error) {
-	cron.Info("crontab plugin start")
-	if cron.running {
-		return // 已经运行中，不重复启动
-	}
+	cron.Info("crontab", "event", "plugin start")
 
 	// 初始化必要字段
 	if cron.stop == nil {
@@ -54,304 +55,317 @@ func (cron *Crontab) Start() (err error) {
 
 	cron.running = true
 
+	cron.SetDescription("streampath", cron.StreamPath)
+	cron.SetDescription("planid", cron.PlanID)
+	cron.SetDescription("recording status", cron.recording)
 	return nil
 }
 
 // 阻塞运行
-func (cron *Crontab) Run() (err error) {
-	cron.Info("crontab plugin is running")
-	// 初始化必要字段
-	if cron.stop == nil {
-		cron.stop = make(chan struct{})
-	}
-	if cron.location == nil {
-		cron.location = time.Local
-	}
-
-	cron.Info("调度器启动")
+func (cron *Crontab) Go() (err error) {
+	cron.Info("crontab", "event", "plugin running")
+	cron.Info("crontab", "event", "scheduler start")
 
 	for {
-		// 获取当前时间
+		// get current time
 		now := time.Now().In(cron.location)
 
-		// 首先检查是否需要立即执行操作（如停止录制）
+		// immediate actions (e.g., stop)
 		if cron.recording && cron.currentSlot != nil &&
 			(now.Equal(cron.currentSlot.End) || now.After(cron.currentSlot.End)) {
 			cron.stopRecording()
 			continue
 		}
 
-		// 确定下一个事件
+		// determine next event
 		var nextEvent time.Time
-		var isStartEvent bool
 
 		if cron.recording {
-			// 如果正在录制，下一个事件是结束时间
+			// when recording, next is end
 			nextEvent = cron.currentSlot.End
-			isStartEvent = false
 		} else {
-			// 如果没有录制，计算下一个开始时间
-			nextSlot := cron.getNextTimeSlot()
-			if nextSlot == nil {
-				// 无法确定下次执行时间，使用默认间隔
-				cron.timer = time.NewTimer(1 * time.Hour)
-				cron.Info("无有效计划，等待1小时后重试")
+			// when idle, check if current slot is still valid
+			var nextSlot *TimeSlot
+			if cron.currentSlot != nil && now.After(cron.currentSlot.Start) && now.Before(cron.currentSlot.End) {
+				// current slot is still valid, reuse it
+				nextSlot = cron.currentSlot
+				cron.Debug("crontab", "msg", "reuse current slot", "start", nextSlot.Start.Format("2006-01-02 15:04:05"), "end", nextSlot.End.Format("2006-01-02 15:04:05"))
+				// ensure retryTask exists (may have been stopped for some reason)
+				cron.ensureRetryWatcher()
+			} else {
+				// current slot expired or not exists, find next start
+				nextSlot = cron.getNextTimeSlot()
+				if nextSlot == nil {
+					// no plan, wait 1h
+					cron.timer = time.NewTimer(1 * time.Hour)
+					cron.Info("crontab", "event", "no plan", "action", "wait 1h")
 
-				// 等待定时器或停止信号
-				select {
-				case <-cron.timer.C:
-					continue // 继续循环
-				case <-cron.stop:
-					// 停止调度器
-					if cron.timer != nil {
-						cron.timer.Stop()
+					// wait timer or stop
+					select {
+					case <-cron.timer.C:
+						continue
+					case <-cron.stop:
+						// stop scheduler
+						if cron.timer != nil {
+							cron.timer.Stop()
+						}
+						cron.Info("crontab", "event", "scheduler stop")
+						return
 					}
-					cron.Info("调度器停止")
-					return
+				}
+
+				// only update slot and restart retryTask when slot actually changed
+				if cron.currentSlot == nil || !nextSlot.Start.Equal(cron.currentSlot.Start) || !nextSlot.End.Equal(cron.currentSlot.End) {
+					cron.Info("crontab", "into cron.currentSlot == nil || !nextSlot.Start.Equal(cron.currentSlot.Start) || !nextSlot.End.Equal(cron.currentSlot.End)", "")
+					cron.currentSlot = nextSlot
+					// reset flags for new slot
+					cron.startAttempted = false
+					if cron.retryTask != nil {
+						cron.retryTask.Stop(errors.New("switch time slot"))
+						cron.retryTask = nil
+					}
+					//cron.ensureRetryWatcher()
 				}
 			}
 
-			cron.currentSlot = nextSlot
 			nextEvent = nextSlot.Start
-			isStartEvent = true
 
-			// 如果已过开始时间，立即开始录制
+			// if start already passed, start now
 			if now.Equal(nextEvent) || now.After(nextEvent) {
-				cron.startRecording()
+				if !cron.startAttempted {
+					cron.startRecording()
+				} else {
+					cron.Debug("crontab", "msg", "startRecording already attempted in this slot1")
+				}
 				continue
 			}
 		}
 
-		// 计算等待时间
+		// wait duration
 		waitDuration := nextEvent.Sub(now)
 
-		// 如果等待时间为负，立即执行
+		// negative wait => execute now
 		if waitDuration <= 0 {
-			if isStartEvent {
-				cron.startRecording()
+			if !cron.recording {
+				if !cron.startAttempted {
+					cron.startRecording()
+				} else {
+					cron.Debug("crontab", "msg", "startRecording already attempted in this slot2")
+				}
 			} else {
 				cron.stopRecording()
 			}
 			continue
 		}
 
-		// 设置定时器
+		// set timer
 		timer := time.NewTimer(waitDuration)
 
-		if isStartEvent {
-			cron.Info("下次开始时间: ", nextEvent, "等待时间:", waitDuration)
+		if !cron.recording {
+			cron.Info("crontab", "next_start", nextEvent, "wait", waitDuration)
+			cron.SetDescription("current step", "wait next start "+nextEvent.Format("2006-01-02 15:04:05"))
 		} else {
-			cron.Info("下次结束时间: ", nextEvent, " 等待时间:", waitDuration)
+			cron.Info("crontab", "next_end", nextEvent, "wait", waitDuration)
+			cron.SetDescription("current step", "wait next stop "+nextEvent.Format("2006-01-02 15:04:05"))
 		}
 
-		// 等待定时器或停止信号
+		// wait timer or stop
 		select {
-		case now = <-timer.C:
-			// 更新当前时间为定时器触发时间
-			now = now.In(cron.location)
-
-			// 执行任务
-			if isStartEvent {
-				cron.startRecording()
+		case <-timer.C:
+			// execute
+			if !cron.recording {
+				if !cron.startAttempted {
+					cron.startRecording()
+				} else {
+					cron.Debug("crontab", "msg", "startRecording already attempted in this slot3")
+				}
 			} else {
 				cron.stopRecording()
 			}
 
 		case <-cron.stop:
-			// 停止调度器
+			// stop scheduler
 			timer.Stop()
-			cron.Info("调度器停止")
+			cron.Info("crontab", "event", "scheduler stop")
 			return
 		}
 	}
 }
 
 // 停止
-func (cron *Crontab) Dispose() (err error) {
-	if cron.running {
-		cron.stop <- struct{}{}
-		cron.running = false
-		if cron.timer != nil {
-			cron.timer.Stop()
-		}
-
-		// 如果还在录制，停止录制
-		if cron.recording {
-			cron.stopRecording()
-		}
+func (cron *Crontab) Dispose() {
+	//if cron.running {
+	//cron.stop <- struct{}{}
+	close(cron.stop) // 关闭通道会触发 <-cron.stop
+	cron.running = false
+	if cron.timer != nil {
+		cron.timer.Stop()
 	}
-	return
+	if cron.retryTask != nil {
+		cron.retryTask.Stop(errors.New("crontab disposed"))
+		cron.retryTask = nil
+	}
+
+	// 如果还在录制，停止录制
+	if cron.recording {
+		cron.stopRecording()
+	}
+	//}
 }
 
 // 获取下一个时间段
 func (cron *Crontab) getNextTimeSlot() *TimeSlot {
 	if cron.RecordPlan == nil || !cron.RecordPlan.Enable || cron.RecordPlan.Plan == "" {
-		return nil // 无有效计划
+		return nil // no valid plan
 	}
-
 	plan := cron.RecordPlan.Plan
 	if len(plan) != 168 {
-		cron.Error("无效的计划格式: %s, 长度应为168", plan)
+		cron.Error("crontab", "err", "invalid plan format", "plan", plan)
 		return nil
 	}
 
-	// 使用当地时间
 	now := time.Now().In(cron.location)
-	cron.Debug("当前本地时间: %v, 星期%d, 小时%d", now.Format("2006-01-02 15:04:05"), now.Weekday(), now.Hour())
+	start, end, ok := nextSlotRange(plan, now, cron.location)
+	if !ok {
+		cron.Debug("crontab", "msg", "no valid slot found")
+		return nil
+	}
 
-	// 当前小时
-	currentWeekday := int(now.Weekday())
-	currentHour := now.Hour()
+	cron.Debug("crontab", "msg", "next slot", "start", start.Format("2006-01-02 15:04:05"), "end", end.Format("2006-01-02 15:04:05"))
+	return &TimeSlot{
+		Start: start,
+		End:   end,
+	}
+}
 
-	// 检查是否在整点边界附近(前后30秒)
-	isNearHourBoundary := now.Minute() == 59 && now.Second() >= 30 || now.Minute() == 0 && now.Second() <= 30
+// nextSlotRange 是 crontab 内部使用的核心时间段计算逻辑。
+// 入参为 168 位计划字符串（周日0点开始），返回从 now 起最近的一个连续录制时间段（支持跨天）。
+// 规则与 api_test.go 中的单元测试一致。
+func nextSlotRange(plan string, now time.Time, loc *time.Location) (time.Time, time.Time, bool) {
+	if len(plan) != 168 {
+		return time.Time{}, time.Time{}, false
+	}
 
-	// 首先检查当前时间是否在某个时间段内
-	dayOffset := currentWeekday * 24
-	if currentHour < 24 && plan[dayOffset+currentHour] == '1' {
-		// 找到当前小时所在的完整时间段
-		startHour := currentHour
-		// 向前查找时间段的开始
-		for h := currentHour - 1; h >= 0; h-- {
-			if plan[dayOffset+h] == '1' {
-				startHour = h
-			} else {
+	localNow := now.In(loc)
+
+	// 特殊情况：整周全为 '1'，视为 7x24 小时永远录制。
+	// 这里返回 [now, now+100年]，等价于“当前起长期有效”，避免在 0 点等边界强行 stop。
+	if !strings.Contains(plan, "0") {
+		return localNow, localNow.AddDate(100, 0, 0), true
+	}
+
+	currentWeekday := int(localNow.Weekday()) // 0=Sunday
+	currentHour := localNow.Hour()
+
+	currentIndex := currentWeekday*24 + currentHour // [0,167]
+	currentHourStart := time.Date(
+		localNow.Year(), localNow.Month(), localNow.Day(),
+		currentHour, 0, 0, 0, loc,
+	)
+
+	// 安全取模
+	mod := func(i int) int {
+		i %= 168
+		if i < 0 {
+			i += 168
+		}
+		return i
+	}
+
+	// 找到包含 idx 的最大连续 1 段 [startIdx, endIdx)
+	findRun := func(idx int) (startIdx, endIdx int) {
+		startIdx, endIdx = idx, idx+1
+
+		// 向前扩展，最多一周
+		for j := idx - 1; j >= idx-167; j-- {
+			if plan[mod(j)] != '1' {
+				break
+			}
+			startIdx--
+			if endIdx-startIdx >= 168 {
 				break
 			}
 		}
-
-		// 向后查找时间段的结束
-		endHour := currentHour + 1
-		for h := endHour; h < 24; h++ {
-			if plan[dayOffset+h] == '1' {
-				endHour = h + 1
-			} else {
+		// 向后扩展，最多一周
+		for j := idx + 1; j < idx+168 && j-startIdx < 168; j++ {
+			if plan[mod(j)] != '1' {
 				break
 			}
+			endIdx++
+		}
+		return
+	}
+
+	// 1. 当前小时在某个录制段内
+	if plan[mod(currentIndex)] == '1' {
+		startIdx, endIdx := findRun(currentIndex)
+		startTime := currentHourStart.Add(time.Duration(startIdx-currentIndex) * time.Hour).In(loc)
+		endTime := currentHourStart.Add(time.Duration(endIdx-currentIndex) * time.Hour).In(loc)
+
+		// 如果距离结束还有 30 秒以上，则返回当前整段
+		if localNow.Before(endTime.Add(-30 * time.Second)) {
+			return startTime, endTime, true
 		}
 
-		// 检查我们是否已经接近当前时间段的结束
-		isNearEndOfTimeSlot := currentHour == endHour-1 && now.Minute() == 59 && now.Second() >= 30
-
-		// 如果我们靠近时间段结束且在小时边界附近，我们跳过此时间段，找下一个
-		if isNearEndOfTimeSlot && isNearHourBoundary {
-			cron.Debug("接近当前时间段结束，准备查找下一个时间段")
-		} else {
-			// 创建时间段
-			startTime := time.Date(now.Year(), now.Month(), now.Day(), startHour, 0, 0, 0, cron.location)
-			endTime := time.Date(now.Year(), now.Month(), now.Day(), endHour, 0, 0, 0, cron.location)
-
-			// 如果当前时间已经接近或超过了结束时间，调整结束时间
-			if now.After(endTime.Add(-30*time.Second)) || now.Equal(endTime) {
-				cron.Debug("当前时间已接近或超过结束时间，尝试查找下一个时间段")
-			} else {
-				cron.Debug("当前已在有效时间段内: 开始=%v, 结束=%v",
-					startTime.Format("2006-01-02 15:04:05"), endTime.Format("2006-01-02 15:04:05"))
-
-				return &TimeSlot{
-					Start: startTime,
-					End:   endTime,
-				}
+		// 否则跳过当前段，从 endIdx 之后开始找下一段
+		searchFrom := endIdx
+		for offset := 0; offset < 168; offset++ {
+			idx := searchFrom + offset
+			if plan[mod(idx)] == '1' && plan[mod(idx-1)] != '1' {
+				s, e := findRun(idx)
+				ns := currentHourStart.Add(time.Duration(s-currentIndex) * time.Hour).In(loc)
+				ne := currentHourStart.Add(time.Duration(e-currentIndex) * time.Hour).In(loc)
+				return ns, ne, true
 			}
+		}
+		return time.Time{}, time.Time{}, false
+	}
+
+	// 2. 当前不在录制段内：从下一小时开始扫描
+	searchFrom := currentIndex + 1
+	for offset := 0; offset < 168; offset++ {
+		idx := searchFrom + offset
+		if plan[mod(idx)] == '1' && plan[mod(idx-1)] != '1' {
+			startIdx, endIdx := findRun(idx)
+			startTime := currentHourStart.Add(time.Duration(startIdx-currentIndex) * time.Hour).In(loc)
+			endTime := currentHourStart.Add(time.Duration(endIdx-currentIndex) * time.Hour).In(loc)
+			return startTime, endTime, true
 		}
 	}
 
-	// 查找下一个时间段
-	// 先查找当天剩余时间
-	for h := currentHour + 1; h < 24; h++ {
-		if plan[dayOffset+h] == '1' {
-			// 找到开始小时
-			startHour := h
-			// 查找结束小时
-			endHour := h + 1
-			for j := h + 1; j < 24; j++ {
-				if plan[dayOffset+j] == '1' {
-					endHour = j + 1
-				} else {
-					break
-				}
-			}
-
-			// 创建时间段
-			startTime := time.Date(now.Year(), now.Month(), now.Day(), startHour, 0, 0, 0, cron.location)
-			endTime := time.Date(now.Year(), now.Month(), now.Day(), endHour, 0, 0, 0, cron.location)
-
-			cron.Debug("找到今天的有效时间段: 开始=%v, 结束=%v",
-				startTime.Format("2006-01-02 15:04:05"), endTime.Format("2006-01-02 15:04:05"))
-
-			return &TimeSlot{
-				Start: startTime,
-				End:   endTime,
-			}
-		}
-	}
-
-	// 如果当天没有找到，则查找后续日期
-	for d := 1; d <= 7; d++ {
-		nextDay := (currentWeekday + d) % 7
-		dayOffset := nextDay * 24
-
-		for h := 0; h < 24; h++ {
-			if plan[dayOffset+h] == '1' {
-				// 找到开始小时
-				startHour := h
-				// 查找结束小时
-				endHour := h + 1
-				for j := h + 1; j < 24; j++ {
-					if plan[dayOffset+j] == '1' {
-						endHour = j + 1
-					} else {
-						break
-					}
-				}
-
-				// 计算日期
-				nextDate := now.AddDate(0, 0, d)
-
-				// 创建时间段
-				startTime := time.Date(nextDate.Year(), nextDate.Month(), nextDate.Day(), startHour, 0, 0, 0, cron.location)
-				endTime := time.Date(nextDate.Year(), nextDate.Month(), nextDate.Day(), endHour, 0, 0, 0, cron.location)
-
-				cron.Debug("找到未来有效时间段: 开始=%v, 结束=%v",
-					startTime.Format("2006-01-02 15:04:05"), endTime.Format("2006-01-02 15:04:05"))
-
-				return &TimeSlot{
-					Start: startTime,
-					End:   endTime,
-				}
-			}
-		}
-	}
-
-	cron.Debug("未找到有效的时间段")
-	return nil
+	return time.Time{}, time.Time{}, false
 }
 
 // 开始录制
 func (cron *Crontab) startRecording() {
+	cron.Debug("crontab", "startRecording recording", cron.recording)
 	if cron.recording {
-		return // 已经在录制了
+		return // already recording
 	}
 
+	// mark attempt in current slot
+
+	cron.startAttempted = false
+	cron.Debug("crontab", "before send record post,set cron.startAttempted", cron.startAttempted)
 	now := time.Now().In(cron.location)
-	cron.Info("开始录制任务: %s, 时间: %v, 计划结束时间: %v",
-		cron.RecordPlan.Name, now, cron.currentSlot.End)
+	cron.Info("crontab", "event", "start recording", "plan", cron.RecordPlan.Name, "time", now, "plan_end", cron.currentSlot.End)
 
 	// 构造请求体
 	reqBody := map[string]string{
 		"fragment": cron.Fragment,
 		"filePath": cron.FilePath,
+		"mode":     "auto",
 	}
 	jsonBody, err := json.Marshal(reqBody)
 	if err != nil {
-		cron.Error("构造请求体失败: %v", err)
+		cron.Error("crontab", "err", "build request body failed", "detail", err)
 		return
 	}
 
-	// 获取 HTTP 地址
+	// resolve HTTP address
 	addr := cron.ctp.Plugin.GetCommonConf().HTTP.ListenAddr
 	if addr == "" {
-		addr = ":8080" // 使用默认端口
+		addr = ":8080" // default port
 	}
 	if addr[0] == ':' {
 		addr = "localhost" + addr
@@ -359,43 +373,57 @@ func (cron *Crontab) startRecording() {
 
 	// 发送开始录制请求
 	resp, err := http.Post(fmt.Sprintf("http://%s/mp4/api/start/%s", addr, cron.StreamPath), "application/json", bytes.NewBuffer(jsonBody))
-	cron.Debug("record request", "url is ", fmt.Sprintf("http://%s/mp4/api/start/%s", addr, cron.StreamPath), "jsonBody is ", string(jsonBody))
+	cron.Debug("crontab", "record_request_url", fmt.Sprintf("http://%s/mp4/api/start/%s", addr,
+		cron.StreamPath), "body", string(jsonBody))
 	if err != nil {
 		time.Sleep(time.Second)
-		cron.Error("开始录制失败: %v", err)
+		cron.Error("crontab", "err", "start recording failed", "detail", err)
 		return
 	}
 	defer resp.Body.Close()
+	respJSON, _ := json.Marshal(resp.Body)
+	cron.SetDescription("response.Body", string(respJSON))
+	cron.SetDescription("response.StatusCode", resp.StatusCode)
 
 	if resp.StatusCode != http.StatusOK {
 		time.Sleep(time.Second)
-		cron.Error("开始录制失败，HTTP状态码: %d", resp.StatusCode)
+		cron.Error("crontab", "err", "start recording failed", "status", resp.StatusCode)
 		return
 	}
-
+	cron.startAttempted = true
+	cron.Debug("crontab", "set cron.startAttempted", cron.startAttempted)
 	cron.recording = true
+	cron.SetDescription("recording status", cron.recording)
+	cron.SetDescription("startAttempted", cron.startAttempted)
+	cron.ensureRetryWatcher()
 }
 
 // 停止录制
 func (cron *Crontab) stopRecording() {
+	cron.Debug("crontab", "stopRecording", "")
 	if !cron.recording {
-		return // 没有在录制
+		return // not recording
 	}
 
 	// 立即记录当前时间并重置状态，避免重复调用
 	now := time.Now().In(cron.location)
-	cron.Info("停止录制任务: %s, 时间: %v", cron.RecordPlan.Name, now)
+	cron.Info("crontab", "event", "stop recording", "plan", cron.RecordPlan.Name, "time", now)
 
 	// 先重置状态，避免循环中重复检测到停止条件
 	wasRecording := cron.recording
 	cron.recording = false
 	savedSlot := cron.currentSlot
 	cron.currentSlot = nil
+	cron.startAttempted = false
+	if cron.retryTask != nil {
+		cron.retryTask.Stop(errors.New("stop recording"))
+		cron.retryTask = nil
+	}
 
-	// 获取 HTTP 地址
+	// resolve HTTP address
 	addr := cron.ctp.Plugin.GetCommonConf().HTTP.ListenAddr
 	if addr == "" {
-		addr = ":8080" // 使用默认端口
+		addr = ":8080" // default port
 	}
 	if addr[0] == ':' {
 		addr = "localhost" + addr
@@ -404,7 +432,7 @@ func (cron *Crontab) stopRecording() {
 	// 发送停止录制请求
 	resp, err := http.Post(fmt.Sprintf("http://%s/mp4/api/stop/%s", addr, cron.StreamPath), "application/json", nil)
 	if err != nil {
-		cron.Error("停止录制失败: %v", err)
+		cron.Error("crontab", "err", "stop recording failed", "detail", err)
 		// 如果请求失败，恢复状态以便下次重试
 		if wasRecording {
 			cron.recording = true
@@ -415,11 +443,29 @@ func (cron *Crontab) stopRecording() {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		cron.Error("停止录制失败，HTTP状态码: %d", resp.StatusCode)
+		cron.Error("crontab", "err", "stop recording failed", "status", resp.StatusCode)
 		// 如果请求失败，恢复状态以便下次重试
 		if wasRecording {
 			cron.recording = true
 			cron.currentSlot = savedSlot
 		}
 	}
+	cron.SetDescription("recording status", cron.recording)
+	cron.SetDescription("startAttempted", cron.startAttempted)
+}
+
+// ensureRetryWatcher ensures retry task started
+func (cron *Crontab) ensureRetryWatcher() {
+	if cron.retryTask != nil {
+		return
+	}
+	cron.retryTask = &RecordRetryTickTask{
+		cron:     cron,
+		interval: 10 * time.Second,
+	}
+	cron.retryTask.OnStop(func() {
+		cron.retryTask = nil
+	})
+	// start as sub task of current cron to avoid cross-plugin registration
+	cron.AddTask(cron.retryTask)
 }

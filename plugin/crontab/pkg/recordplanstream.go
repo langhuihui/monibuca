@@ -13,9 +13,8 @@ type RecordPlanStream struct {
 	FilePath   string `json:"file_path" gorm:"type:varchar(255)"`
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
-	DeletedAt  gorm.DeletedAt `gorm:"index"`
-	Enable     bool           `json:"enable" gorm:"default:false"` // 是否启用
-	RecordType string         `json:"record_type" gorm:"type:varchar(255)"`
+	Enable     bool   `json:"enable" gorm:"default:false"` // 是否启用
+	RecordType string `json:"record_type" gorm:"type:varchar(255)"`
 }
 
 // TableName 设置表名

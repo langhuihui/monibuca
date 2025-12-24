@@ -201,17 +201,18 @@ func (ct *CrontabPlugin) Update(ctx context.Context, req *cronpb.Plan) (*cronpb.
 						RecordPlan:       &existingPlan,
 						RecordPlanStream: &stream,
 					}
-					crontab.OnStart(func() {
-						ct.crontabs.Set(crontab)
-					})
-					ct.AddTask(crontab)
+					crontab.Logger = ct.Logger.With("streamPath", crontab.StreamPath)
+					//crontab.OnStart(func() {
+					//	ct.crontabs.Set(crontab)
+					//})
+					ct.crontabs.AddTask(crontab)
 				}
 			}
 		} else {
 			// 从 true 变为 false，需要停止相关的定时任务
 			ct.crontabs.Range(func(crontab *Crontab) bool {
 				if crontab.RecordPlan.ID == existingPlan.ID {
-					crontab.Stop(nil)
+					crontab.Stop(errors.New("plan disabled"))
 				}
 				return true
 			})
@@ -244,7 +245,7 @@ func (ct *CrontabPlugin) Remove(ctx context.Context, req *cronpb.DeleteRequest) 
 	// 先停止所有相关的定时任务
 	ct.crontabs.Range(func(crontab *Crontab) bool {
 		if crontab.RecordPlan.ID == existingPlan.ID {
-			crontab.Stop(nil)
+			crontab.Stop(errors.New("plan stream removed"))
 		}
 		return true
 	})
@@ -376,7 +377,7 @@ func (ct *CrontabPlugin) AddRecordPlanStream(ctx context.Context, req *cronpb.Pl
 	}
 
 	stream := &pkg.RecordPlanStream{
-		PlanID:     uint(req.PlanId),
+		PlanID:     uint(planId),
 		StreamPath: req.StreamPath,
 		Fragment:   fragment,
 		FilePath:   req.FilePath,
@@ -398,10 +399,11 @@ func (ct *CrontabPlugin) AddRecordPlanStream(ctx context.Context, req *cronpb.Pl
 			RecordPlan:       plan,
 			RecordPlanStream: stream,
 		}
-		crontab.OnStart(func() {
-			ct.crontabs.Set(crontab)
-		})
-		ct.AddTask(crontab)
+		crontab.Logger = ct.Logger.With("streamPath", crontab.StreamPath)
+		//crontab.OnStart(func() {
+		//	ct.crontabs.Set(crontab)
+		//})
+		ct.crontabs.AddTask(crontab)
 	}
 
 	return &cronpb.Response{
@@ -483,10 +485,11 @@ func (ct *CrontabPlugin) UpdateRecordPlanStream(ctx context.Context, req *cronpb
 				RecordPlan:       plan,
 				RecordPlanStream: &stream,
 			}
-			crontab.OnStart(func() {
-				ct.crontabs.Set(crontab)
-			})
-			ct.AddTask(crontab)
+			crontab.Logger = ct.Logger.With("streamPath", crontab.StreamPath)
+			//crontab.OnStart(func() {
+			//	ct.crontabs.Set(crontab)
+			//})
+			ct.crontabs.AddTask(crontab)
 		}
 	}
 
@@ -645,136 +648,29 @@ func calculateTimeSlots(plan string, now time.Time, location *time.Location) ([]
 	return slots, nil
 }
 
-// 获取下一个时间段
+// 获取下一个时间段（API 使用版），内部复用 crontab 的 nextSlotRange 逻辑。
+// 这样 ParsePlanTime 和实际调度看到的“下一执行时间”是一致的。
 func getNextTimeSlotFromNow(plan string, now time.Time, location *time.Location) (*cronpb.TimeSlotInfo, error) {
 	if len(plan) != 168 {
 		return nil, fmt.Errorf("invalid plan format: length should be 168")
 	}
 
-	// 将当前时间转换为本地时间
-	localNow := now.In(location)
-	currentWeekday := int(localNow.Weekday())
-	currentHour := localNow.Hour()
-
-	// 检查是否在整点边界附近(前后30秒)
-	isNearHourBoundary := localNow.Minute() == 59 && localNow.Second() >= 30 || localNow.Minute() == 0 && localNow.Second() <= 30
-
-	// 首先检查当前时间是否在某个时间段内
-	dayOffset := currentWeekday * 24
-	if currentHour < 24 && plan[dayOffset+currentHour] == '1' {
-		// 找到当前小时所在的完整时间段
-		startHour := currentHour
-		// 向前查找时间段的开始
-		for h := currentHour - 1; h >= 0; h-- {
-			if plan[dayOffset+h] == '1' {
-				startHour = h
-			} else {
-				break
-			}
-		}
-
-		// 向后查找时间段的结束
-		endHour := currentHour + 1
-		for h := endHour; h < 24; h++ {
-			if plan[dayOffset+h] == '1' {
-				endHour = h + 1
-			} else {
-				break
-			}
-		}
-
-		// 检查是否已经接近当前时间段的结束
-		isNearEndOfTimeSlot := currentHour == endHour-1 && localNow.Minute() >= 59 && localNow.Second() >= 30
-
-		// 如果我们靠近时间段结束且在小时边界附近，我们跳过此时间段，找下一个
-		if isNearEndOfTimeSlot && isNearHourBoundary {
-			// 继续查找下一个时间段
-		} else {
-			// 创建时间段
-			startTime := time.Date(localNow.Year(), localNow.Month(), localNow.Day(), startHour, 0, 0, 0, location)
-			endTime := time.Date(localNow.Year(), localNow.Month(), localNow.Day(), endHour, 0, 0, 0, location)
-
-			// 如果当前时间已经接近或超过了结束时间，调整结束时间
-			if localNow.After(endTime.Add(-30*time.Second)) || localNow.Equal(endTime) {
-				// 继续查找下一个时间段
-			} else {
-				// 返回当前时间段
-				return &cronpb.TimeSlotInfo{
-					Start:     timestamppb.New(startTime.UTC()),
-					End:       timestamppb.New(endTime.UTC()),
-					Weekday:   getWeekdayName(currentWeekday),
-					TimeRange: fmt.Sprintf("%02d:00-%02d:00", startHour, endHour),
-				}, nil
-			}
-		}
+	start, end, ok := nextSlotRange(plan, now, location)
+	if !ok {
+		return nil, nil
 	}
 
-	// 查找下一个时间段
-	// 先查找当天剩余时间
-	for h := currentHour + 1; h < 24; h++ {
-		if plan[dayOffset+h] == '1' {
-			// 找到开始小时
-			startHour := h
-			// 查找结束小时
-			endHour := h + 1
-			for j := h + 1; j < 24; j++ {
-				if plan[dayOffset+j] == '1' {
-					endHour = j + 1
-				} else {
-					break
-				}
-			}
+	// Weekday 与 TimeRange 使用本地时间表示，更贴近用户理解
+	localStart := start.In(location)
+	localEnd := end.In(location)
+	weekday := int(localStart.Weekday())
 
-			// 创建时间段
-			startTime := time.Date(localNow.Year(), localNow.Month(), localNow.Day(), startHour, 0, 0, 0, location)
-			endTime := time.Date(localNow.Year(), localNow.Month(), localNow.Day(), endHour, 0, 0, 0, location)
-
-			return &cronpb.TimeSlotInfo{
-				Start:     timestamppb.New(startTime.UTC()),
-				End:       timestamppb.New(endTime.UTC()),
-				Weekday:   getWeekdayName(currentWeekday),
-				TimeRange: fmt.Sprintf("%02d:00-%02d:00", startHour, endHour),
-			}, nil
-		}
-	}
-
-	// 如果当天没有找到，则查找后续日期
-	for d := 1; d <= 7; d++ {
-		nextDay := (currentWeekday + d) % 7
-		dayOffset := nextDay * 24
-
-		for h := 0; h < 24; h++ {
-			if plan[dayOffset+h] == '1' {
-				// 找到开始小时
-				startHour := h
-				// 查找结束小时
-				endHour := h + 1
-				for j := h + 1; j < 24; j++ {
-					if plan[dayOffset+j] == '1' {
-						endHour = j + 1
-					} else {
-						break
-					}
-				}
-
-				// 计算日期
-				nextDate := localNow.AddDate(0, 0, d)
-
-				// 创建时间段
-				startTime := time.Date(nextDate.Year(), nextDate.Month(), nextDate.Day(), startHour, 0, 0, 0, location)
-				endTime := time.Date(nextDate.Year(), nextDate.Month(), nextDate.Day(), endHour, 0, 0, 0, location)
-
-				return &cronpb.TimeSlotInfo{
-					Start:     timestamppb.New(startTime.UTC()),
-					End:       timestamppb.New(endTime.UTC()),
-					Weekday:   getWeekdayName(nextDay),
-					TimeRange: fmt.Sprintf("%02d:00-%02d:00", startHour, endHour),
-				}, nil
-			}
-		}
-	}
-
-	return nil, nil
+	return &cronpb.TimeSlotInfo{
+		Start:     timestamppb.New(start.UTC()),
+		End:       timestamppb.New(end.UTC()),
+		Weekday:   getWeekdayName(weekday),
+		TimeRange: fmt.Sprintf("%02d:00-%02d:00", localStart.Hour(), localEnd.Hour()),
+	}, nil
 }
 
 func (ct *CrontabPlugin) ParsePlanTime(ctx context.Context, req *cronpb.ParsePlanRequest) (*cronpb.ParsePlanResponse, error) {

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestCalculateTimeSlots(t *testing.T) {
@@ -241,4 +242,94 @@ func TestUserProvidedPlanString2(t *testing.T) {
 	} else {
 		t.Log("没有找到下一个时间段")
 	}
+}
+
+// 构造 168 位计划字符串的辅助方法，hours 是一周内按小时索引的开启位置（0=周日0点）。
+func buildPlanWithOnHours(hours ...int) string {
+	const total = 168
+	b := make([]byte, total)
+	for i := 0; i < total; i++ {
+		b[i] = '0'
+	}
+	for _, h := range hours {
+		if h >= 0 && h < total {
+			b[h] = '1'
+		}
+	}
+	return string(b)
+}
+
+// ============================
+// nextSlotRange 行为测试
+// ============================
+
+// 测试：同一天内的连续时间段计算
+func TestNextSlotRange_SameDay(t *testing.T) {
+	// 周一 10:00-12:00 开启（即 10:00-11:00、11:00-12:00 两个小时）
+	plan := buildPlanWithOnHours(1*24+10, 1*24+11)
+	loc := time.Local
+
+	// 周一 09:30 -> 期望下一个时间段是 10:00-12:00
+	now := time.Date(2023, 5, 1, 9, 30, 0, 0, loc) // 2023-05-01 是周一
+	start, end, ok := nextSlotRange(plan, now, loc)
+	require.True(t, ok)
+	assert.Equal(t, time.Date(2023, 5, 1, 10, 0, 0, 0, loc), start)
+	assert.Equal(t, time.Date(2023, 5, 1, 12, 0, 0, 0, loc), end)
+
+	// 周一 10:30 -> 仍应返回同一时间段 10:00-12:00
+	now2 := time.Date(2023, 5, 1, 10, 30, 0, 0, loc)
+	start2, end2, ok2 := nextSlotRange(plan, now2, loc)
+	require.True(t, ok2)
+	assert.Equal(t, start, start2)
+	assert.Equal(t, end, end2)
+}
+
+// 测试：跨天连续时间段（例如周一 22:00 到 周二 01:00），应视为一个连续时间段
+func TestNextSlotRange_CrossDay(t *testing.T) {
+	// 周一 22:00-23:00、23:00-00:00，周二 00:00-01:00 全为 1
+	// 周日=0, 周一=1, 周二=2
+	hours := []int{
+		1*24 + 22, // 周一 22:00-23:00
+		1*24 + 23, // 周一 23:00-00:00
+		2 * 24,    // 周二 00:00-01:00
+	}
+	plan := buildPlanWithOnHours(hours...)
+	loc := time.Local
+
+	// 周一 21:30，期望下一个时间段为 周一 22:00 ~ 周二 01:00
+	now := time.Date(2023, 5, 1, 21, 30, 0, 0, loc) // 2023-05-01 周一
+	start, end, ok := nextSlotRange(plan, now, loc)
+	require.True(t, ok)
+	assert.Equal(t, time.Date(2023, 5, 1, 22, 0, 0, 0, loc), start)
+	assert.Equal(t, time.Date(2023, 5, 2, 1, 0, 0, 0, loc), end)
+
+	// 周一 23:30，仍应认为处于同一个跨天时间段
+	now2 := time.Date(2023, 5, 1, 23, 30, 0, 0, loc)
+	start2, end2, ok2 := nextSlotRange(plan, now2, loc)
+	require.True(t, ok2)
+	assert.Equal(t, start, start2)
+	assert.Equal(t, end, end2)
+}
+
+// 测试：使用自定义 168 位计划字符串，方便手动验证具体案例。
+// 你可以根据需要修改 plan 字符串和 now 时间，观察 nextSlotRange 的实际输出。
+func TestNextSlotRange_Custom(t *testing.T) {
+	// TODO: 在这里把 plan 替换成你要测试的 168 位字符串
+	plan := "111111110000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000111111111111111111111111111111111111111111111111111111111"
+	loc := time.Local
+
+	// TODO: 在这里设置你要测试的当前时间
+	now := time.Date(2025, 12, 18, 0, 0, 0, 0, loc)
+
+	start, end, ok := nextSlotRange(plan, now, loc)
+	t.Logf("plan len=%d, now=%s", len(plan), now.Format("2006-01-02 15:04:05"))
+	if !ok {
+		t.Log("未找到下一个时间段")
+		return
+	}
+
+	t.Logf("下一个时间段: %s ~ %s",
+		start.Format("2006-01-02 15:04:05"),
+		end.Format("2006-01-02 15:04:05"),
+	)
 }
