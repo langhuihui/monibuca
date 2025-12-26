@@ -17,6 +17,7 @@ import (
 	pkg "m7s.live/v5/pkg"
 	"m7s.live/v5/pkg/config"
 	"m7s.live/v5/pkg/format"
+	"m7s.live/v5/pkg/storage"
 	"m7s.live/v5/pkg/util"
 )
 
@@ -57,7 +58,7 @@ type (
 		PullJob                    PullJob
 		PullStartTime, PullEndTime time.Time
 		Streams                    []RecordStream
-		File                       *os.File
+		File                       storage.File
 		MaxTS                      int64
 		seekChan                   chan time.Time
 		Type                       string

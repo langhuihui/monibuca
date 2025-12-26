@@ -178,6 +178,29 @@ func (r *Recorder) createStream(start time.Time) (err error) {
 	if err != nil {
 		return
 	}
+	// 写入序列头（如果已知）以保证每个分片可独立回放
+	// 优先使用 Subscriber 的 VideoReader/AudioReader 的 codec context 的 sequence frame
+	sub := r.RecordJob.Subscriber
+	if sub != nil {
+		// 视频序列头
+		if sub.VideoReader != nil && sub.VideoReader.Track != nil && sub.VideoReader.Track.ICodecCtx != nil {
+			if seqCtx, ok := sub.VideoReader.Track.ICodecCtx.(pkg.ISequenceCodecCtx[*rtmp.VideoFrame]); ok {
+				seq := seqCtx.GetSequenceFrame()
+				if seq != nil && seq.Size > 0 {
+					_ = r.writer.WriteTag(FLV_TAG_TYPE_VIDEO, 0, uint32(seq.Size), seq.Buffers...)
+				}
+			}
+		}
+		// 音频序列头
+		if sub.AudioReader != nil && sub.AudioReader.Track != nil && sub.AudioReader.Track.ICodecCtx != nil {
+			if seqCtx, ok := sub.AudioReader.Track.ICodecCtx.(pkg.ISequenceCodecCtx[*rtmp.AudioFrame]); ok {
+				seq := seqCtx.GetSequenceFrame()
+				if seq != nil && seq.Size > 0 {
+					_ = r.writer.WriteTag(FLV_TAG_TYPE_AUDIO, 0, uint32(seq.Size), seq.Buffers...)
+				}
+			}
+		}
+	}
 	return
 }
 

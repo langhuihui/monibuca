@@ -24,6 +24,12 @@ service api {
       body: "*"
     };
   }
+  rpc StartRecord (ReqStartRecord) returns (ResponseStartRecord) {
+    option (google.api.http) = {
+      post: "/flv/api/start/{streamPath=**}"
+      body: "*"
+    };
+  }
 }
 
 message ReqRecordList {
@@ -42,4 +48,16 @@ message ReqRecordDelete {
   string startTime = 3;
   string endTime = 4;
   string range = 5;
-} 
+}
+
+message ReqStartRecord {
+  string streamPath = 1;
+  google.protobuf.Duration fragment = 2;
+  string filePath = 3;
+}
+
+message ResponseStartRecord {
+  int32 code = 1;
+  string message = 2;
+  uint64 data = 3;
+}

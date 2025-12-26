@@ -87,15 +87,26 @@ func (p *RecordReader) Run() (err error) {
 					if st.GetKey() == targetType {
 						if localStorage, ok := st.(*storage.LocalStorage); ok {
 							filePath = localStorage.GetFullPath(filePath, stream.StorageLevel)
+							p.File, err = os.Open(filePath)
+							if err != nil {
+								continue
+							}
+						} else {
+							filePath, err = st.GetURL(p, stream.StreamPath)
+							if err != nil {
+								continue
+							}
+							p.File, err = st.OpenFile(p, filePath)
 						}
-					} else {
-						p.Warn("storage type mismatch, fallback to relative path", "streamType", stream.StorageType, "globalType", st.GetKey(), "path", filePath)
 					}
 				}
 			}
-			p.File, err = os.Open(filePath)
-			if err != nil {
-				continue
+			// 如果 storage 已经通过 OpenFile 打开了文件（storage.File），则直接使用；否则尝试本地打开路径
+			if p.File == nil {
+				p.File, err = os.Open(filePath)
+				if err != nil {
+					continue
+				}
 			}
 			if p.reader != nil {
 				p.reader.Recycle()

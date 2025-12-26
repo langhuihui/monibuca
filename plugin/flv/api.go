@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	task "github.com/langhuihui/gotask"
+	"m7s.live/v5/pkg"
+	"m7s.live/v5/pkg/config"
 	"net"
 	"net/http"
 	"time"
@@ -148,4 +151,50 @@ func (plugin *FLVPlugin) jessica(rw http.ResponseWriter, r *http.Request) {
 	}, func(video *rtmp.VideoFrame) (err error) {
 		return write(2, video.GetTS32(), video.Memory)
 	})
+}
+
+func (p *FLVPlugin) StartRecord(ctx context.Context, req *flvpb.ReqStartRecord) (res *flvpb.ResponseStartRecord, err error) {
+	var recordExists bool
+	var filePath = "."
+	var fragment = time.Minute
+	if req.Fragment != nil {
+		fragment = req.Fragment.AsDuration()
+	}
+	if req.FilePath != "" {
+		filePath = req.FilePath
+	}
+	res = &flvpb.ResponseStartRecord{}
+	_, recordExists = p.Server.Records.Find(func(job *m7s.RecordJob) bool {
+		return job.StreamPath == req.StreamPath && job.RecConf.FilePath == req.FilePath
+	})
+	if recordExists {
+		err = pkg.ErrRecordExists
+		return
+	}
+
+	recordConf := config.Record{
+		Append:   false,
+		Fragment: fragment,
+		FilePath: filePath,
+		Type:     "flv",
+	}
+	var stream *m7s.Publisher
+	var ok bool
+	if stream, ok = p.Server.Streams.SafeGet(req.StreamPath); !ok {
+		var sub *m7s.Subscriber
+		sub, err = p.Subscribe(ctx, req.StreamPath)
+		if err != nil || sub == nil {
+			err = pkg.ErrNotFound
+			return
+		}
+		defer sub.Stop(task.ErrAutoStop)
+		if stream, ok = p.Server.Streams.SafeGet(req.StreamPath); !ok {
+			err = pkg.ErrNotFound
+			return
+		}
+	}
+	job := p.Record(stream, recordConf, nil)
+	res.Data = uint64(job.GetTaskPointer())
+	err = job.WaitStarted()
+	return
 }

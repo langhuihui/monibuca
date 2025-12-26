@@ -21,9 +21,10 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	Api_List_FullMethodName    = "/flv.api/List"
-	Api_Catalog_FullMethodName = "/flv.api/Catalog"
-	Api_Delete_FullMethodName  = "/flv.api/Delete"
+	Api_List_FullMethodName        = "/flv.api/List"
+	Api_Catalog_FullMethodName     = "/flv.api/Catalog"
+	Api_Delete_FullMethodName      = "/flv.api/Delete"
+	Api_StartRecord_FullMethodName = "/flv.api/StartRecord"
 )
 
 // ApiClient is the client API for Api service.
@@ -33,6 +34,7 @@ type ApiClient interface {
 	List(ctx context.Context, in *ReqRecordList, opts ...grpc.CallOption) (*pb.RecordResponseList, error)
 	Catalog(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*pb.ResponseCatalog, error)
 	Delete(ctx context.Context, in *ReqRecordDelete, opts ...grpc.CallOption) (*pb.ResponseDelete, error)
+	StartRecord(ctx context.Context, in *ReqStartRecord, opts ...grpc.CallOption) (*ResponseStartRecord, error)
 }
 
 type apiClient struct {
@@ -73,6 +75,16 @@ func (c *apiClient) Delete(ctx context.Context, in *ReqRecordDelete, opts ...grp
 	return out, nil
 }
 
+func (c *apiClient) StartRecord(ctx context.Context, in *ReqStartRecord, opts ...grpc.CallOption) (*ResponseStartRecord, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ResponseStartRecord)
+	err := c.cc.Invoke(ctx, Api_StartRecord_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ApiServer is the server API for Api service.
 // All implementations must embed UnimplementedApiServer
 // for forward compatibility.
@@ -80,6 +92,7 @@ type ApiServer interface {
 	List(context.Context, *ReqRecordList) (*pb.RecordResponseList, error)
 	Catalog(context.Context, *emptypb.Empty) (*pb.ResponseCatalog, error)
 	Delete(context.Context, *ReqRecordDelete) (*pb.ResponseDelete, error)
+	StartRecord(context.Context, *ReqStartRecord) (*ResponseStartRecord, error)
 	mustEmbedUnimplementedApiServer()
 }
 
@@ -98,6 +111,9 @@ func (UnimplementedApiServer) Catalog(context.Context, *emptypb.Empty) (*pb.Resp
 }
 func (UnimplementedApiServer) Delete(context.Context, *ReqRecordDelete) (*pb.ResponseDelete, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Delete not implemented")
+}
+func (UnimplementedApiServer) StartRecord(context.Context, *ReqStartRecord) (*ResponseStartRecord, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StartRecord not implemented")
 }
 func (UnimplementedApiServer) mustEmbedUnimplementedApiServer() {}
 func (UnimplementedApiServer) testEmbeddedByValue()             {}
@@ -174,6 +190,24 @@ func _Api_Delete_Handler(srv interface{}, ctx context.Context, dec func(interfac
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Api_StartRecord_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReqStartRecord)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).StartRecord(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_StartRecord_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).StartRecord(ctx, req.(*ReqStartRecord))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Api_ServiceDesc is the grpc.ServiceDesc for Api service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -192,6 +226,10 @@ var Api_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Delete",
 			Handler:    _Api_Delete_Handler,
+		},
+		{
+			MethodName: "StartRecord",
+			Handler:    _Api_StartRecord_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
