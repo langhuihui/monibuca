@@ -370,9 +370,11 @@ func (cron *Crontab) startRecording() {
 	if addr[0] == ':' {
 		addr = "localhost" + addr
 	}
-
+	client := &http.Client{
+		Timeout: 10 * time.Second, // 设置总超时时间
+	}
 	// 发送开始录制请求
-	resp, err := http.Post(fmt.Sprintf("http://%s/mp4/api/start/%s", addr, cron.StreamPath), "application/json", bytes.NewBuffer(jsonBody))
+	resp, err := client.Post(fmt.Sprintf("http://%s/%s/api/start/%s", addr, cron.RecordType, cron.StreamPath), "application/json", bytes.NewBuffer(jsonBody))
 	cron.Debug("crontab", "record_request_url", fmt.Sprintf("http://%s/mp4/api/start/%s", addr,
 		cron.StreamPath), "body", string(jsonBody))
 	if err != nil {
