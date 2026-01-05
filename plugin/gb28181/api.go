@@ -91,8 +91,8 @@ func (gb *GB28181Plugin) List(ctx context.Context, req *pb.GetDevicesRequest) (*
 			}
 			pbChannels = append(pbChannels, &pb.Channel{
 				Id:                channel.ID,
-				DeviceId:          channel.CustomChannelId,
-				ChannelId:         channel.CustomChannelId,
+				DeviceId:          channel.ChannelId,
+				ChannelId:         channel.ChannelId,
 				ParentId:          d.DeviceId,
 				Name:              util.Conditional(channel.CustomName == "", channel.Name, channel.CustomName),
 				CustomChannelId:   channel.CustomChannelId,

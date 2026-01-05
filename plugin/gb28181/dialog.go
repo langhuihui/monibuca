@@ -497,7 +497,7 @@ func (d *Dialog) GetKey() string {
 
 func (d *Dialog) Dispose() {
 	go func() {
-		time.Sleep(90 * time.Second)
+		time.Sleep(time.Minute * 3)
 		switch d.StreamMode {
 		case mrtp.StreamModeUDP:
 			if d.gb.udpPort == 0 { //多端口模式
