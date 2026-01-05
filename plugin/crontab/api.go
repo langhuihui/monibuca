@@ -261,6 +261,13 @@ func (ct *CrontabPlugin) Remove(ctx context.Context, req *cronpb.DeleteRequest) 
 	// 从内存中移除
 	ct.recordPlans.RemoveByKey(existingPlan.ID)
 
+	if err := ct.DB.Where("plan_id = ?", req.Id).Delete(&pkg.RecordPlanStream{}).Error; err != nil {
+		return &cronpb.Response{
+			Code:    500,
+			Message: err.Error(),
+		}, nil
+	}
+
 	return &cronpb.Response{
 		Code:    0,
 		Message: "success",
@@ -333,6 +340,10 @@ func (ct *CrontabPlugin) AddRecordPlanStream(ctx context.Context, req *cronpb.Pl
 	if req.PlanId > 0 {
 		planId = int(req.PlanId)
 	}
+	recordType := "mp4"
+	if req.RecordType != "" {
+		recordType = req.RecordType
+	}
 
 	if strings.TrimSpace(req.StreamPath) == "" {
 		return &cronpb.Response{
@@ -355,6 +366,7 @@ func (ct *CrontabPlugin) AddRecordPlanStream(ctx context.Context, req *cronpb.Pl
 	searchModel := pkg.RecordPlanStream{
 		PlanID:     uint(planId),
 		StreamPath: req.StreamPath,
+		RecordType: recordType,
 	}
 	if err := ct.DB.Model(&searchModel).Where(&searchModel).Count(&count).Error; err != nil {
 		return &cronpb.Response{
@@ -425,11 +437,16 @@ func (ct *CrontabPlugin) UpdateRecordPlanStream(ctx context.Context, req *cronpb
 		}, nil
 	}
 
+	if strings.TrimSpace(req.RecordType) == "" {
+		req.RecordType = "mp4"
+	}
+
 	// 检查记录是否存在
 	var existingStream pkg.RecordPlanStream
 	searchModel := pkg.RecordPlanStream{
 		PlanID:     uint(planId),
 		StreamPath: req.StreamPath,
+		RecordType: req.RecordType,
 	}
 	if err := ct.DB.Where(&searchModel).First(&existingStream).Error; err != nil {
 		return &cronpb.Response{
@@ -453,15 +470,19 @@ func (ct *CrontabPlugin) UpdateRecordPlanStream(ctx context.Context, req *cronpb
 
 	// 停止当前流相关的所有任务
 	ct.crontabs.Range(func(crontab *Crontab) bool {
-		if crontab.RecordPlanStream.StreamPath == req.StreamPath {
-			crontab.Stop(nil)
+		if crontab.RecordPlanStream.StreamPath == req.StreamPath && crontab.RecordType == req.RecordType && crontab.PlanID == uint(planId) {
+			crontab.Stop(errors.New("record plan changed"))
 		}
 		return true
 	})
 
 	// 查询所有关联此流的记录
 	var streams []pkg.RecordPlanStream
-	if err := ct.DB.Where("stream_path = ?", req.StreamPath).Find(&streams).Error; err != nil {
+	if err := ct.DB.Where(&pkg.RecordPlanStream{
+		PlanID:     uint(req.PlanId),
+		StreamPath: req.StreamPath,
+		RecordType: req.RecordType,
+	}).Find(&streams).Error; err != nil {
 		ct.Error("query record plan streams error: %v", err)
 		return &cronpb.Response{
 			Code:    500,
@@ -514,11 +535,19 @@ func (ct *CrontabPlugin) RemoveRecordPlanStream(ctx context.Context, req *cronpb
 		}, nil
 	}
 
+	if strings.TrimSpace(req.RecordType) == "" {
+		return &cronpb.Response{
+			Code:    400,
+			Message: "recordType is required",
+		}, nil
+	}
+
 	// 检查记录是否存在
 	var existingStream pkg.RecordPlanStream
 	searchModel := pkg.RecordPlanStream{
 		PlanID:     uint(req.PlanId),
 		StreamPath: req.StreamPath,
+		RecordType: req.RecordType,
 	}
 	if err := ct.DB.Where(&searchModel).First(&existingStream).Error; err != nil {
 		return &cronpb.Response{
@@ -529,7 +558,7 @@ func (ct *CrontabPlugin) RemoveRecordPlanStream(ctx context.Context, req *cronpb
 
 	// 停止所有相关的定时任务
 	ct.crontabs.Range(func(crontab *Crontab) bool {
-		if crontab.RecordPlanStream.StreamPath == req.StreamPath && crontab.RecordPlan.ID == uint(req.PlanId) {
+		if crontab.RecordPlanStream.StreamPath == req.StreamPath && crontab.RecordPlan.ID == uint(req.PlanId) && crontab.RecordPlanStream.RecordType == req.RecordType {
 			crontab.Stop(errors.New("remove record plan"))
 		}
 		return true

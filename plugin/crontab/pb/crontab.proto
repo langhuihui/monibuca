@@ -132,6 +132,7 @@ message RecordPlanStreamResponseList {
 message DeletePlanStreamRequest {
   uint32 planId = 1;
   string streamPath = 2;
+  string recordType = 3;
 }
 
 // 解析计划请求

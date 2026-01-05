@@ -596,6 +596,7 @@ type DeletePlanStreamRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	PlanId        uint32                 `protobuf:"varint,1,opt,name=planId,proto3" json:"planId,omitempty"`
 	StreamPath    string                 `protobuf:"bytes,2,opt,name=streamPath,proto3" json:"streamPath,omitempty"`
+	RecordType    string                 `protobuf:"bytes,3,opt,name=recordType,proto3" json:"recordType,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -640,6 +641,13 @@ func (x *DeletePlanStreamRequest) GetPlanId() uint32 {
 func (x *DeletePlanStreamRequest) GetStreamPath() string {
 	if x != nil {
 		return x.StreamPath
+	}
+	return ""
+}
+
+func (x *DeletePlanStreamRequest) GetRecordType() string {
+	if x != nil {
+		return x.RecordType
 	}
 	return ""
 }
@@ -1161,12 +1169,15 @@ const file_crontab_proto_rawDesc = "" +
 	"totalCount\x12\x18\n" +
 	"\apageNum\x18\x04 \x01(\rR\apageNum\x12\x1a\n" +
 	"\bpageSize\x18\x05 \x01(\rR\bpageSize\x12'\n" +
-	"\x04data\x18\x06 \x03(\v2\x13.crontab.PlanStreamR\x04data\"Q\n" +
+	"\x04data\x18\x06 \x03(\v2\x13.crontab.PlanStreamR\x04data\"q\n" +
 	"\x17DeletePlanStreamRequest\x12\x16\n" +
 	"\x06planId\x18\x01 \x01(\rR\x06planId\x12\x1e\n" +
 	"\n" +
 	"streamPath\x18\x02 \x01(\tR\n" +
-	"streamPath\"&\n" +
+	"streamPath\x12\x1e\n" +
+	"\n" +
+	"recordType\x18\x03 \x01(\tR\n" +
+	"recordType\"&\n" +
 	"\x10ParsePlanRequest\x12\x12\n" +
 	"\x04plan\x18\x01 \x01(\tR\x04plan\"\xa7\x01\n" +
 	"\fTimeSlotInfo\x120\n" +

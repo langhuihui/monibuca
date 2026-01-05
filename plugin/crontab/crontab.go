@@ -38,7 +38,7 @@ type Crontab struct {
 }
 
 func (cron *Crontab) GetKey() string {
-	return strconv.Itoa(int(cron.PlanID)) + "_" + cron.StreamPath
+	return strconv.Itoa(int(cron.PlanID)) + "_" + cron.StreamPath + "_" + cron.RecordType
 }
 
 // 初始化
@@ -432,7 +432,7 @@ func (cron *Crontab) stopRecording() {
 	}
 
 	// 发送停止录制请求
-	resp, err := http.Post(fmt.Sprintf("http://%s/mp4/api/stop/%s", addr, cron.StreamPath), "application/json", nil)
+	resp, err := http.Post(fmt.Sprintf("http://%s/%s/api/stop/%s", addr, cron.RecordType, cron.StreamPath), "application/json", nil)
 	if err != nil {
 		cron.Error("crontab", "err", "stop recording failed", "detail", err)
 		// 如果请求失败，恢复状态以便下次重试

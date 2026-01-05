@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	task "github.com/langhuihui/gotask"
@@ -92,11 +93,11 @@ func (r *RecordRetryTickTask) Tick(any) {
 	// recording list check: match filePath/mode if provided
 	if len(info.Data.Recording) > 0 {
 		type recStatus struct {
-			FilePath string `json:"filePath"`
-			Mode     string `json:"mode"`
+			FilePath   string `json:"filePath"`
+			PluginName string `json:"pluginName"`
 		}
 		expectedPath := r.cron.FilePath
-		expectedMode := r.cron.RecordType
+		expectedRecordType := r.cron.RecordType
 		foundMatch := false
 
 		for _, raw := range info.Data.Recording {
@@ -105,8 +106,8 @@ func (r *RecordRetryTickTask) Tick(any) {
 				continue
 			}
 			pathOK := expectedPath == "" || rec.FilePath == expectedPath
-			//modeOK := expectedMode == "" || rec.Mode == expectedMode
-			if pathOK {
+			recordTypeOK := expectedRecordType == "" || strings.ToLower(rec.PluginName) == strings.ToLower(expectedRecordType)
+			if pathOK && recordTypeOK {
 				foundMatch = true
 				break
 			}
@@ -117,14 +118,14 @@ func (r *RecordRetryTickTask) Tick(any) {
 			r.cron.recording = true
 			r.cron.startAttempted = false
 			r.SetDescription("current step", "foundMatch and set recording=true,startAttempted=false")
-			r.cron.Info("RecordRetryTickTask", "event", "recording detected", "stream", r.cron.StreamPath, "filePath", expectedPath, "mode", expectedMode)
+			r.cron.Info("RecordRetryTickTask", "event", "recording detected", "stream", r.cron.StreamPath, "filePath", expectedPath, "expectedRecordType", expectedRecordType)
 			return
 		}
 
 		// recording present but params mismatch -> treat as not matched
 		if r.cron.recording {
 			r.cron.recording = false
-			r.cron.Info("RecordRetryTickTask", "event", "recording mismatch, reset", "stream", r.cron.StreamPath, "filePath", expectedPath, "mode", expectedMode)
+			r.cron.Info("RecordRetryTickTask", "event", "recording mismatch, reset", "stream", r.cron.StreamPath, "filePath", expectedPath, "expectedRecordType", expectedRecordType)
 		}
 	}
 

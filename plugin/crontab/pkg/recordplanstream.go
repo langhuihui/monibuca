@@ -14,7 +14,7 @@ type RecordPlanStream struct {
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
 	Enable     bool   `json:"enable" gorm:"default:false"` // 是否启用
-	RecordType string `json:"record_type" gorm:"type:varchar(255)"`
+	RecordType string `json:"record_type" gorm:"primaryKey;type:varchar(255)"`
 }
 
 // TableName 设置表名
