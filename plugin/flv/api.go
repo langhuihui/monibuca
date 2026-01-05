@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"time"
+	"unsafe"
 
 	"github.com/gobwas/ws"
 	"github.com/langhuihui/gomem"
@@ -196,5 +197,21 @@ func (p *FLVPlugin) StartRecord(ctx context.Context, req *flvpb.ReqStartRecord) 
 	job := p.Record(stream, recordConf, nil)
 	res.Data = uint64(job.GetTaskPointer())
 	err = job.WaitStarted()
+	return
+}
+
+func (p *FLVPlugin) StopRecord(ctx context.Context, req *flvpb.ReqStopRecord) (res *flvpb.ResponseStopRecord, err error) {
+	res = &flvpb.ResponseStopRecord{}
+	var recordJob *m7s.RecordJob
+	recordJob, _ = p.Server.Records.Find(func(job *m7s.RecordJob) bool {
+		return job.StreamPath == req.StreamPath
+	})
+	if recordJob != nil {
+		t := recordJob.GetTask()
+		if t != nil {
+			res.Data = uint64(uintptr(unsafe.Pointer(t)))
+			t.Stop(task.ErrStopByUser)
+		}
+	}
 	return
 }

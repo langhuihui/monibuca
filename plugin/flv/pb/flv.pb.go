@@ -12,7 +12,6 @@ import (
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	durationpb "google.golang.org/protobuf/types/known/durationpb"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
-	_ "google.golang.org/protobuf/types/known/timestamppb"
 	pb "m7s.live/v5/pb"
 	reflect "reflect"
 	sync "sync"
@@ -25,6 +24,110 @@ const (
 	// Verify that runtime/protoimpl is sufficiently up-to-date.
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
+
+type ReqStopRecord struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	StreamPath    string                 `protobuf:"bytes,1,opt,name=streamPath,proto3" json:"streamPath,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReqStopRecord) Reset() {
+	*x = ReqStopRecord{}
+	mi := &file_flv_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReqStopRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReqStopRecord) ProtoMessage() {}
+
+func (x *ReqStopRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_flv_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReqStopRecord.ProtoReflect.Descriptor instead.
+func (*ReqStopRecord) Descriptor() ([]byte, []int) {
+	return file_flv_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *ReqStopRecord) GetStreamPath() string {
+	if x != nil {
+		return x.StreamPath
+	}
+	return ""
+}
+
+type ResponseStopRecord struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Code          int32                  `protobuf:"varint,1,opt,name=code,proto3" json:"code,omitempty"`
+	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	Data          uint64                 `protobuf:"varint,3,opt,name=data,proto3" json:"data,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ResponseStopRecord) Reset() {
+	*x = ResponseStopRecord{}
+	mi := &file_flv_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResponseStopRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResponseStopRecord) ProtoMessage() {}
+
+func (x *ResponseStopRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_flv_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResponseStopRecord.ProtoReflect.Descriptor instead.
+func (*ResponseStopRecord) Descriptor() ([]byte, []int) {
+	return file_flv_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *ResponseStopRecord) GetCode() int32 {
+	if x != nil {
+		return x.Code
+	}
+	return 0
+}
+
+func (x *ResponseStopRecord) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+func (x *ResponseStopRecord) GetData() uint64 {
+	if x != nil {
+		return x.Data
+	}
+	return 0
+}
 
 type ReqRecordList struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -41,7 +144,7 @@ type ReqRecordList struct {
 
 func (x *ReqRecordList) Reset() {
 	*x = ReqRecordList{}
-	mi := &file_flv_proto_msgTypes[0]
+	mi := &file_flv_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -53,7 +156,7 @@ func (x *ReqRecordList) String() string {
 func (*ReqRecordList) ProtoMessage() {}
 
 func (x *ReqRecordList) ProtoReflect() protoreflect.Message {
-	mi := &file_flv_proto_msgTypes[0]
+	mi := &file_flv_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -66,7 +169,7 @@ func (x *ReqRecordList) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReqRecordList.ProtoReflect.Descriptor instead.
 func (*ReqRecordList) Descriptor() ([]byte, []int) {
-	return file_flv_proto_rawDescGZIP(), []int{0}
+	return file_flv_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *ReqRecordList) GetStreamPath() string {
@@ -131,7 +234,7 @@ type ReqRecordDelete struct {
 
 func (x *ReqRecordDelete) Reset() {
 	*x = ReqRecordDelete{}
-	mi := &file_flv_proto_msgTypes[1]
+	mi := &file_flv_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -143,7 +246,7 @@ func (x *ReqRecordDelete) String() string {
 func (*ReqRecordDelete) ProtoMessage() {}
 
 func (x *ReqRecordDelete) ProtoReflect() protoreflect.Message {
-	mi := &file_flv_proto_msgTypes[1]
+	mi := &file_flv_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -156,7 +259,7 @@ func (x *ReqRecordDelete) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReqRecordDelete.ProtoReflect.Descriptor instead.
 func (*ReqRecordDelete) Descriptor() ([]byte, []int) {
-	return file_flv_proto_rawDescGZIP(), []int{1}
+	return file_flv_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *ReqRecordDelete) GetStreamPath() string {
@@ -205,7 +308,7 @@ type ReqStartRecord struct {
 
 func (x *ReqStartRecord) Reset() {
 	*x = ReqStartRecord{}
-	mi := &file_flv_proto_msgTypes[2]
+	mi := &file_flv_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -217,7 +320,7 @@ func (x *ReqStartRecord) String() string {
 func (*ReqStartRecord) ProtoMessage() {}
 
 func (x *ReqStartRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_flv_proto_msgTypes[2]
+	mi := &file_flv_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -230,7 +333,7 @@ func (x *ReqStartRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReqStartRecord.ProtoReflect.Descriptor instead.
 func (*ReqStartRecord) Descriptor() ([]byte, []int) {
-	return file_flv_proto_rawDescGZIP(), []int{2}
+	return file_flv_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *ReqStartRecord) GetStreamPath() string {
@@ -265,7 +368,7 @@ type ResponseStartRecord struct {
 
 func (x *ResponseStartRecord) Reset() {
 	*x = ResponseStartRecord{}
-	mi := &file_flv_proto_msgTypes[3]
+	mi := &file_flv_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -277,7 +380,7 @@ func (x *ResponseStartRecord) String() string {
 func (*ResponseStartRecord) ProtoMessage() {}
 
 func (x *ResponseStartRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_flv_proto_msgTypes[3]
+	mi := &file_flv_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -290,7 +393,7 @@ func (x *ResponseStartRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResponseStartRecord.ProtoReflect.Descriptor instead.
 func (*ResponseStartRecord) Descriptor() ([]byte, []int) {
-	return file_flv_proto_rawDescGZIP(), []int{3}
+	return file_flv_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *ResponseStartRecord) GetCode() int32 {
@@ -318,7 +421,15 @@ var File_flv_proto protoreflect.FileDescriptor
 
 const file_flv_proto_rawDesc = "" +
 	"\n" +
-	"\tflv.proto\x12\x03flv\x1a\x1cgoogle/api/annotations.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1egoogle/protobuf/duration.proto\x1a\fglobal.proto\"\xb7\x01\n" +
+	"\tflv.proto\x12\x03flv\x1a\x1cgoogle/api/annotations.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1egoogle/protobuf/duration.proto\x1a\fglobal.proto\"/\n" +
+	"\rReqStopRecord\x12\x1e\n" +
+	"\n" +
+	"streamPath\x18\x01 \x01(\tR\n" +
+	"streamPath\"V\n" +
+	"\x12ResponseStopRecord\x12\x12\n" +
+	"\x04code\x18\x01 \x01(\x05R\x04code\x12\x18\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\x12\x12\n" +
+	"\x04data\x18\x03 \x01(\x04R\x04data\"\xb7\x01\n" +
 	"\rReqRecordList\x12\x1e\n" +
 	"\n" +
 	"streamPath\x18\x01 \x01(\tR\n" +
@@ -346,12 +457,14 @@ const file_flv_proto_rawDesc = "" +
 	"\x13ResponseStartRecord\x12\x12\n" +
 	"\x04code\x18\x01 \x01(\x05R\x04code\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12\x12\n" +
-	"\x04data\x18\x03 \x01(\x04R\x04data2\x87\x03\n" +
+	"\x04data\x18\x03 \x01(\x04R\x04data2\xec\x03\n" +
 	"\x03api\x12]\n" +
 	"\x04List\x12\x12.flv.ReqRecordList\x1a\x1a.global.RecordResponseList\"%\x82\xd3\xe4\x93\x02\x1f\x12\x1d/flv/api/list/{streamPath=**}\x12T\n" +
 	"\aCatalog\x12\x16.google.protobuf.Empty\x1a\x17.global.ResponseCatalog\"\x18\x82\xd3\xe4\x93\x02\x12\x12\x10/flv/api/catalog\x12b\n" +
 	"\x06Delete\x12\x14.flv.ReqRecordDelete\x1a\x16.global.ResponseDelete\"*\x82\xd3\xe4\x93\x02$:\x01*\"\x1f/flv/api/delete/{streamPath=**}\x12g\n" +
-	"\vStartRecord\x12\x13.flv.ReqStartRecord\x1a\x18.flv.ResponseStartRecord\")\x82\xd3\xe4\x93\x02#:\x01*\"\x1e/flv/api/start/{streamPath=**}B\x1bZ\x19m7s.live/v5/plugin/flv/pbb\x06proto3"
+	"\vStartRecord\x12\x13.flv.ReqStartRecord\x1a\x18.flv.ResponseStartRecord\")\x82\xd3\xe4\x93\x02#:\x01*\"\x1e/flv/api/start/{streamPath=**}\x12c\n" +
+	"\n" +
+	"StopRecord\x12\x12.flv.ReqStopRecord\x1a\x17.flv.ResponseStopRecord\"(\x82\xd3\xe4\x93\x02\":\x01*\"\x1d/flv/api/stop/{streamPath=**}B\x1bZ\x19m7s.live/v5/plugin/flv/pbb\x06proto3"
 
 var (
 	file_flv_proto_rawDescOnce sync.Once
@@ -365,33 +478,37 @@ func file_flv_proto_rawDescGZIP() []byte {
 	return file_flv_proto_rawDescData
 }
 
-var file_flv_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_flv_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_flv_proto_goTypes = []any{
-	(*ReqRecordList)(nil),         // 0: flv.ReqRecordList
-	(*ReqRecordDelete)(nil),       // 1: flv.ReqRecordDelete
-	(*ReqStartRecord)(nil),        // 2: flv.ReqStartRecord
-	(*ResponseStartRecord)(nil),   // 3: flv.ResponseStartRecord
-	(*durationpb.Duration)(nil),   // 4: google.protobuf.Duration
-	(*emptypb.Empty)(nil),         // 5: google.protobuf.Empty
-	(*pb.RecordResponseList)(nil), // 6: global.RecordResponseList
-	(*pb.ResponseCatalog)(nil),    // 7: global.ResponseCatalog
-	(*pb.ResponseDelete)(nil),     // 8: global.ResponseDelete
+	(*ReqStopRecord)(nil),         // 0: flv.ReqStopRecord
+	(*ResponseStopRecord)(nil),    // 1: flv.ResponseStopRecord
+	(*ReqRecordList)(nil),         // 2: flv.ReqRecordList
+	(*ReqRecordDelete)(nil),       // 3: flv.ReqRecordDelete
+	(*ReqStartRecord)(nil),        // 4: flv.ReqStartRecord
+	(*ResponseStartRecord)(nil),   // 5: flv.ResponseStartRecord
+	(*durationpb.Duration)(nil),   // 6: google.protobuf.Duration
+	(*emptypb.Empty)(nil),         // 7: google.protobuf.Empty
+	(*pb.RecordResponseList)(nil), // 8: global.RecordResponseList
+	(*pb.ResponseCatalog)(nil),    // 9: global.ResponseCatalog
+	(*pb.ResponseDelete)(nil),     // 10: global.ResponseDelete
 }
 var file_flv_proto_depIdxs = []int32{
-	4, // 0: flv.ReqStartRecord.fragment:type_name -> google.protobuf.Duration
-	0, // 1: flv.api.List:input_type -> flv.ReqRecordList
-	5, // 2: flv.api.Catalog:input_type -> google.protobuf.Empty
-	1, // 3: flv.api.Delete:input_type -> flv.ReqRecordDelete
-	2, // 4: flv.api.StartRecord:input_type -> flv.ReqStartRecord
-	6, // 5: flv.api.List:output_type -> global.RecordResponseList
-	7, // 6: flv.api.Catalog:output_type -> global.ResponseCatalog
-	8, // 7: flv.api.Delete:output_type -> global.ResponseDelete
-	3, // 8: flv.api.StartRecord:output_type -> flv.ResponseStartRecord
-	5, // [5:9] is the sub-list for method output_type
-	1, // [1:5] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	6,  // 0: flv.ReqStartRecord.fragment:type_name -> google.protobuf.Duration
+	2,  // 1: flv.api.List:input_type -> flv.ReqRecordList
+	7,  // 2: flv.api.Catalog:input_type -> google.protobuf.Empty
+	3,  // 3: flv.api.Delete:input_type -> flv.ReqRecordDelete
+	4,  // 4: flv.api.StartRecord:input_type -> flv.ReqStartRecord
+	0,  // 5: flv.api.StopRecord:input_type -> flv.ReqStopRecord
+	8,  // 6: flv.api.List:output_type -> global.RecordResponseList
+	9,  // 7: flv.api.Catalog:output_type -> global.ResponseCatalog
+	10, // 8: flv.api.Delete:output_type -> global.ResponseDelete
+	5,  // 9: flv.api.StartRecord:output_type -> flv.ResponseStartRecord
+	1,  // 10: flv.api.StopRecord:output_type -> flv.ResponseStopRecord
+	6,  // [6:11] is the sub-list for method output_type
+	1,  // [1:6] is the sub-list for method input_type
+	1,  // [1:1] is the sub-list for extension type_name
+	1,  // [1:1] is the sub-list for extension extendee
+	0,  // [0:1] is the sub-list for field type_name
 }
 
 func init() { file_flv_proto_init() }
@@ -405,7 +522,7 @@ func file_flv_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_flv_proto_rawDesc), len(file_flv_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   4,
+			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

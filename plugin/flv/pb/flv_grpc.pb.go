@@ -25,6 +25,7 @@ const (
 	Api_Catalog_FullMethodName     = "/flv.api/Catalog"
 	Api_Delete_FullMethodName      = "/flv.api/Delete"
 	Api_StartRecord_FullMethodName = "/flv.api/StartRecord"
+	Api_StopRecord_FullMethodName  = "/flv.api/StopRecord"
 )
 
 // ApiClient is the client API for Api service.
@@ -35,6 +36,7 @@ type ApiClient interface {
 	Catalog(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*pb.ResponseCatalog, error)
 	Delete(ctx context.Context, in *ReqRecordDelete, opts ...grpc.CallOption) (*pb.ResponseDelete, error)
 	StartRecord(ctx context.Context, in *ReqStartRecord, opts ...grpc.CallOption) (*ResponseStartRecord, error)
+	StopRecord(ctx context.Context, in *ReqStopRecord, opts ...grpc.CallOption) (*ResponseStopRecord, error)
 }
 
 type apiClient struct {
@@ -85,6 +87,16 @@ func (c *apiClient) StartRecord(ctx context.Context, in *ReqStartRecord, opts ..
 	return out, nil
 }
 
+func (c *apiClient) StopRecord(ctx context.Context, in *ReqStopRecord, opts ...grpc.CallOption) (*ResponseStopRecord, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ResponseStopRecord)
+	err := c.cc.Invoke(ctx, Api_StopRecord_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ApiServer is the server API for Api service.
 // All implementations must embed UnimplementedApiServer
 // for forward compatibility.
@@ -93,6 +105,7 @@ type ApiServer interface {
 	Catalog(context.Context, *emptypb.Empty) (*pb.ResponseCatalog, error)
 	Delete(context.Context, *ReqRecordDelete) (*pb.ResponseDelete, error)
 	StartRecord(context.Context, *ReqStartRecord) (*ResponseStartRecord, error)
+	StopRecord(context.Context, *ReqStopRecord) (*ResponseStopRecord, error)
 	mustEmbedUnimplementedApiServer()
 }
 
@@ -114,6 +127,9 @@ func (UnimplementedApiServer) Delete(context.Context, *ReqRecordDelete) (*pb.Res
 }
 func (UnimplementedApiServer) StartRecord(context.Context, *ReqStartRecord) (*ResponseStartRecord, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StartRecord not implemented")
+}
+func (UnimplementedApiServer) StopRecord(context.Context, *ReqStopRecord) (*ResponseStopRecord, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StopRecord not implemented")
 }
 func (UnimplementedApiServer) mustEmbedUnimplementedApiServer() {}
 func (UnimplementedApiServer) testEmbeddedByValue()             {}
@@ -208,6 +224,24 @@ func _Api_StartRecord_Handler(srv interface{}, ctx context.Context, dec func(int
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Api_StopRecord_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReqStopRecord)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).StopRecord(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_StopRecord_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).StopRecord(ctx, req.(*ReqStopRecord))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Api_ServiceDesc is the grpc.ServiceDesc for Api service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -230,6 +264,10 @@ var Api_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "StartRecord",
 			Handler:    _Api_StartRecord_Handler,
+		},
+		{
+			MethodName: "StopRecord",
+			Handler:    _Api_StopRecord_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
