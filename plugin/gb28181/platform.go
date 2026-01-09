@@ -24,7 +24,7 @@ import (
 
 // Platform 表示GB28181平台的运行时实例
 type Platform struct {
-	task.Job      `gorm:"-:all"` // 使用TickTask，并且排除 gorm 序列化
+	task.Work     `gorm:"-:all"` // 使用TickTask，并且排除 gorm 序列化
 	PlatformModel *gb28181.PlatformModel
 
 	// SIP相关字段，不存储到数据库
@@ -129,21 +129,31 @@ func NewPlatform(pm *gb28181.PlatformModel, plugin *GB28181Plugin, unRegister bo
 
 func (p *Platform) Start() error {
 	p.SetDescriptions(task.Description{
-		"name":       p.PlatformModel.Name,
-		"serverGBID": p.PlatformModel.ServerGBID,
+		"name":             p.PlatformModel.Name,
+		"serverGBID":       p.PlatformModel.ServerGBID,
+		"maxTimeoutCount":  p.PlatformModel.MaxTimeoutCount,
+		"registerInterval": p.PlatformModel.RegisterInterval,
+		"keepTimeout":      p.PlatformModel.KeepTimeout,
+		"expires":          p.PlatformModel.Expires,
+		"serverIP":         p.PlatformModel.ServerIP,
+		"serverPort":       p.PlatformModel.ServerPort,
+		"enable":           p.PlatformModel.Enable,
 	})
 	if p.PlatformModel.Enable {
 		if p.unRegister {
-			err := p.Unregister()
-			if err != nil {
-				p.Error("failed to unregister", "err", err)
-			}
-			p.unRegister = false
+			go func() {
+				err := p.Unregister()
+				if err != nil {
+					p.Error("failed to unregister", "err", err)
+				}
+				p.unRegister = false
+			}()
 		}
 		register := NewRegister(p, "firstRegister")
 		register.OnStart(func() {
 			register.Tick(nil)
 		})
+		register.Logger = p.plugin.Logger.With("platform_server_gb_id", p.PlatformModel.ServerGBID)
 		p.register = register
 		p.AddTask(register)
 	}
@@ -168,6 +178,8 @@ func (p *Platform) Keepalive() (*sipgo.DialogClientSession, error) {
 	customCallID := fmt.Sprintf("%s-%d@%s", p.PlatformModel.DeviceGBID, time.Now().Unix(), p.PlatformModel.ServerIP)
 	callID := sip.CallIDHeader(customCallID)
 	req.AppendHeader(&callID)
+	contentTypeHeader := sip.ContentTypeHeader("Application/MANSCDP+xml")
+	req.AppendHeader(&contentTypeHeader)
 
 	csqHeader := sip.CSeqHeader{
 		SeqNo:      uint32(p.SN),
@@ -210,7 +222,7 @@ func (p *Platform) Keepalive() (*sipgo.DialogClientSession, error) {
 	req.AppendHeader(&p.MaxForwardsHDR)
 
 	// 添加Contact头部
-	req.AppendHeader(p.ContactHDR)
+	//req.AppendHeader(p.ContactHDR)
 
 	req.AppendHeader(p.UserAgentHDR)
 
@@ -461,7 +473,7 @@ func (k *PlatformKeepAliveTask) Tick(any) {
 	if err != nil {
 		k.platform.KeepAliveReply++
 		k.Error("keepalive", "error", err.Error())
-		if k.platform.KeepAliveReply >= 3 {
+		if k.platform.KeepAliveReply >= k.platform.PlatformModel.MaxTimeoutCount {
 			k.platform.PlatformModel.Status = false
 			// 重新启动注册任务
 			//k.platform.Start()
@@ -961,10 +973,10 @@ func (p *Platform) buildChannelItem(channel gb28181.DeviceChannel) string {
 	if address == "" {
 		address = "未知地址"
 	}
-	parentID := channel.ParentId
-	if parentID == "" {
-		parentID = p.PlatformModel.DeviceGBID // 使用平台ID作为父ID
-	}
+	//parentID := channel.ParentId
+	//if parentID == "" {
+	parentID := p.PlatformModel.DeviceGBID // 使用平台ID作为父ID
+	//}
 
 	return fmt.Sprintf(`<Item>
 <DeviceID>%s</DeviceID>
@@ -1570,7 +1582,7 @@ func (p *Platform) Dispose() {
 			// 先删除该平台已有的映射，再批量插入当前内存中的通道列表
 			platformID := p.PlatformModel.ServerGBID
 			// 删除已有的记录（若有）
-			if del := p.plugin.DB.Where("platform_server_gb_id = ?", platformID).Delete(&gb28181.PlatformChannel{}); del.Error != nil {
+			if del := p.plugin.DB.Debug().Where("platform_server_gb_id = ?", platformID).Delete(&gb28181.PlatformChannel{}); del.Error != nil {
 				p.Error("删除平台通道记录失败", "error", del.Error, "platform", platformID)
 			}
 

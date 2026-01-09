@@ -48,7 +48,7 @@ type GB28181Plugin struct {
 	pb.UnimplementedApiServer
 	m7s.Plugin
 	Serial         string `default:"34020000002000000001" desc:"sip 服务 id"` //sip 服务器 id, 默认 34020000002000000001
-	Realm          string `default:"3402000000" desc:"sip 服务域"`             //sip 服务器域，默认 3402000000
+	Realm          string `default:"3402000000" desc:"sip 服务域"`            //sip 服务器域，默认 3402000000
 	Password       string
 	Sip            SipConfig
 	MediaPort      util.Range[uint16] `default:"10001-20000" desc:"媒体端口范围"` //媒体端口范围
@@ -605,6 +605,7 @@ func (gb *GB28181Plugin) checkPlatform() {
 			}
 		}
 		platform.PlatformModel.ChannelCount = platform.channels.Length
+		platform.Logger = gb.Logger.With("platform_server_gb_id", platformModel.ServerGBID)
 		// 添加到任务系统
 		gb.platforms.AddTask(platform)
 		gb.Info("平台初始化完成", "ID", platformModel.ServerGBID, "Name", platformModel.Name)
@@ -948,8 +949,17 @@ func (gb *GB28181Plugin) OnInvite(req *sip.Request, tx sip.ServerTransaction) {
 		}
 		return true
 	})
+	if channel == nil {
+		gb.Debug("OnInvite", "error", "channel not found", "channel", inviteInfo.TargetChannelId, "find channel from req.to", req.To().Address.User)
+		platform.channels.Range(func(channelTmp *Channel) bool {
+			if channelTmp.CustomChannelId == req.To().Address.User {
+				channel = channelTmp
+			}
+			return true
+		})
+	}
 
-	gb.Info("OnInvite", "action", "channel found", "channel.ChannelId", channel.ChannelId, "channel.CustomChannelId", channel.CustomChannelId, "channelName", channel.Name)
+	gb.Info("OnInvite", "action", "channel found", "channel.ChannelId", channel.ChannelId, "channelName", channel.Name)
 
 	// 通道存在，发送100 Trying响应
 	tryingResp := sip.NewResponseFromRequest(req, sip.StatusTrying, "Trying", nil)
@@ -1031,6 +1041,14 @@ func (gb *GB28181Plugin) OnInvite(req *sip.Request, tx sip.ServerTransaction) {
 	response := sip.NewResponseFromRequest(req, sip.StatusOK, "OK", nil)
 	contentType := sip.ContentTypeHeader("application/sdp")
 	response.AppendHeader(&contentType)
+	contactHDR := sip.ContactHeader{
+		Address: sip.Uri{
+			User: gb.Serial,
+			Host: platform.PlatformModel.DeviceIP,
+			Port: platform.PlatformModel.DevicePort,
+		},
+	}
+	response.AppendHeader(&contactHDR)
 	response.SetBody([]byte(strings.Join(content, "\r\n") + "\r\n"))
 	var ip = ""
 	var streamMode mrtp.StreamMode

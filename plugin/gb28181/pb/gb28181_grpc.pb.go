@@ -94,6 +94,7 @@ const (
 	Api_DeleteGroupChannel_FullMethodName                = "/gb28181pro.api/DeleteGroupChannel"
 	Api_GetGroupChannels_FullMethodName                  = "/gb28181pro.api/GetGroupChannels"
 	Api_RemoveDevice_FullMethodName                      = "/gb28181pro.api/RemoveDevice"
+	Api_GetServerConfig_FullMethodName                   = "/gb28181pro.api/GetServerConfig"
 	Api_ReceiveAlarm_FullMethodName                      = "/gb28181pro.api/ReceiveAlarm"
 	Api_AddChannelWithProxy_FullMethodName               = "/gb28181pro.api/AddChannelWithProxy"
 	Api_UpdateChannelWithProxy_FullMethodName            = "/gb28181pro.api/UpdateChannelWithProxy"
@@ -250,6 +251,8 @@ type ApiClient interface {
 	GetGroupChannels(ctx context.Context, in *GetGroupChannelsRequest, opts ...grpc.CallOption) (*GroupChannelsResponse, error)
 	// 删除设备
 	RemoveDevice(ctx context.Context, in *RemoveDeviceRequest, opts ...grpc.CallOption) (*BaseResponse, error)
+	// 获取服务器基本配置
+	GetServerConfig(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*ServerConfigResponse, error)
 	// 接收报警信息
 	ReceiveAlarm(ctx context.Context, in *AlarmInfoRequest, opts ...grpc.CallOption) (*BaseResponse, error)
 	// 添加通道并关联拉流代理
@@ -992,6 +995,16 @@ func (c *apiClient) RemoveDevice(ctx context.Context, in *RemoveDeviceRequest, o
 	return out, nil
 }
 
+func (c *apiClient) GetServerConfig(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*ServerConfigResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ServerConfigResponse)
+	err := c.cc.Invoke(ctx, Api_GetServerConfig_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *apiClient) ReceiveAlarm(ctx context.Context, in *AlarmInfoRequest, opts ...grpc.CallOption) (*BaseResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(BaseResponse)
@@ -1200,6 +1213,8 @@ type ApiServer interface {
 	GetGroupChannels(context.Context, *GetGroupChannelsRequest) (*GroupChannelsResponse, error)
 	// 删除设备
 	RemoveDevice(context.Context, *RemoveDeviceRequest) (*BaseResponse, error)
+	// 获取服务器基本配置
+	GetServerConfig(context.Context, *emptypb.Empty) (*ServerConfigResponse, error)
 	// 接收报警信息
 	ReceiveAlarm(context.Context, *AlarmInfoRequest) (*BaseResponse, error)
 	// 添加通道并关联拉流代理
@@ -1437,6 +1452,9 @@ func (UnimplementedApiServer) GetGroupChannels(context.Context, *GetGroupChannel
 }
 func (UnimplementedApiServer) RemoveDevice(context.Context, *RemoveDeviceRequest) (*BaseResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RemoveDevice not implemented")
+}
+func (UnimplementedApiServer) GetServerConfig(context.Context, *emptypb.Empty) (*ServerConfigResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetServerConfig not implemented")
 }
 func (UnimplementedApiServer) ReceiveAlarm(context.Context, *AlarmInfoRequest) (*BaseResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ReceiveAlarm not implemented")
@@ -2773,6 +2791,24 @@ func _Api_RemoveDevice_Handler(srv interface{}, ctx context.Context, dec func(in
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Api_GetServerConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(emptypb.Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ApiServer).GetServerConfig(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Api_GetServerConfig_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ApiServer).GetServerConfig(ctx, req.(*emptypb.Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Api_ReceiveAlarm_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(AlarmInfoRequest)
 	if err := dec(in); err != nil {
@@ -3175,6 +3211,10 @@ var Api_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RemoveDevice",
 			Handler:    _Api_RemoveDevice_Handler,
+		},
+		{
+			MethodName: "GetServerConfig",
+			Handler:    _Api_GetServerConfig_Handler,
 		},
 		{
 			MethodName: "ReceiveAlarm",

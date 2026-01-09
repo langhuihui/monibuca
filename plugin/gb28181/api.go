@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -19,6 +20,7 @@ import (
 	"m7s.live/v5"
 	"m7s.live/v5/pkg/util"
 
+	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"m7s.live/v5/plugin/gb28181/pb"
 	gb28181 "m7s.live/v5/plugin/gb28181/pkg"
@@ -760,6 +762,12 @@ func (gb *GB28181Plugin) AddPlatform(ctx context.Context, req *pb.Platform) (*pb
 	if req.KeepTimeout <= 0 {
 		req.KeepTimeout = 60 // 默认60秒
 	}
+	if req.RegisterInterval <= 0 {
+		req.RegisterInterval = 60 // 默认60秒
+	}
+	if req.MaxTimeoutCount <= 0 {
+		req.MaxTimeoutCount = 3 // 默认3次
+	}
 	if req.Transport == "" {
 		req.Transport = "UDP" // 默认UDP
 	}
@@ -781,6 +789,7 @@ func (gb *GB28181Plugin) AddPlatform(ctx context.Context, req *pb.Platform) (*pb
 		ServerIP:                req.ServerIp,
 		ServerPort:              int(req.ServerPort),
 		DeviceGBID:              req.DeviceGBId,
+		DeviceGBDomain:          req.DeviceGBDomain,
 		DeviceIP:                req.DeviceIp,
 		DevicePort:              int(req.DevicePort),
 		Username:                req.Username,
@@ -811,6 +820,8 @@ func (gb *GB28181Plugin) AddPlatform(ctx context.Context, req *pb.Platform) (*pb
 		Address:                 req.Address,
 		RegisterWay:             int(req.RegisterWay),
 		Secrecy:                 int(req.Secrecy),
+		RegisterInterval:        int(req.RegisterInterval),
+		MaxTimeoutCount:         int(req.MaxTimeoutCount),
 	}
 
 	// 保存到数据库
@@ -825,6 +836,7 @@ func (gb *GB28181Plugin) AddPlatform(ctx context.Context, req *pb.Platform) (*pb
 		// 创建Platform实例
 		platform := NewPlatform(platformModel, gb, false)
 		// 添加到任务系统
+		platform.Logger = gb.Logger.With("platform_server_gb_id", platformModel.ServerGBID)
 		gb.platforms.AddTask(platform)
 	}
 
@@ -859,12 +871,15 @@ func (gb *GB28181Plugin) GetPlatform(ctx context.Context, req *pb.GetPlatformReq
 		ServerIp:                platform.ServerIP,
 		ServerPort:              int32(platform.ServerPort),
 		DeviceGBId:              platform.DeviceGBID,
+		DeviceGBDomain:          platform.DeviceGBDomain,
 		DeviceIp:                platform.DeviceIP,
 		DevicePort:              int32(platform.DevicePort),
 		Username:                platform.Username,
 		Password:                platform.Password,
 		Expires:                 int32(platform.Expires),
+		RegisterInterval:        int32(platform.RegisterInterval),
 		KeepTimeout:             int32(platform.KeepTimeout),
+		MaxTimeoutCount:         int32(platform.MaxTimeoutCount),
 		Transport:               platform.Transport,
 		CharacterSet:            platform.CharacterSet,
 		Ptz:                     platform.PTZ,
@@ -917,6 +932,8 @@ func (gb *GB28181Plugin) UpdatePlatform(ctx context.Context, req *pb.Platform) (
 		oldEnable := oldPlatform.PlatformModel.Enable
 		oldExpires := oldPlatform.PlatformModel.Expires
 		oldKeepTimeout := oldPlatform.PlatformModel.KeepTimeout
+		oldServerIp := oldPlatform.PlatformModel.ServerIP
+		oldServerPort := int32(oldPlatform.PlatformModel.ServerPort)
 
 		// 更新oldPlatform中的字段
 		if req.Name != "" {
@@ -934,6 +951,9 @@ func (gb *GB28181Plugin) UpdatePlatform(ctx context.Context, req *pb.Platform) (
 		if req.DeviceGBId != "" {
 			oldPlatform.PlatformModel.DeviceGBID = req.DeviceGBId
 		}
+		if req.DeviceGBDomain != "" {
+			oldPlatform.PlatformModel.DeviceGBDomain = req.DeviceGBDomain
+		}
 		if req.DeviceIp != "" {
 			oldPlatform.PlatformModel.DeviceIP = req.DeviceIp
 		}
@@ -949,8 +969,14 @@ func (gb *GB28181Plugin) UpdatePlatform(ctx context.Context, req *pb.Platform) (
 		if req.Expires > 0 {
 			oldPlatform.PlatformModel.Expires = int(req.Expires)
 		}
+		if req.RegisterInterval > 0 {
+			oldPlatform.PlatformModel.RegisterInterval = int(req.RegisterInterval)
+		}
 		if req.KeepTimeout > 0 {
 			oldPlatform.PlatformModel.KeepTimeout = int(req.KeepTimeout)
+		}
+		if req.MaxTimeoutCount > 0 {
+			oldPlatform.PlatformModel.MaxTimeoutCount = int(req.MaxTimeoutCount)
 		}
 		if req.Transport != "" {
 			oldPlatform.PlatformModel.Transport = req.Transport
@@ -1018,11 +1044,13 @@ func (gb *GB28181Plugin) UpdatePlatform(ctx context.Context, req *pb.Platform) (
 		enableChanged := oldEnable != oldPlatform.PlatformModel.Enable
 		expiresChanged := oldExpires != oldPlatform.PlatformModel.Expires
 		keepTimeoutChanged := oldKeepTimeout != oldPlatform.PlatformModel.KeepTimeout
+		serverIpChanged := oldServerIp != oldPlatform.PlatformModel.ServerIP
+		serverPortChanged := oldServerPort != int32(oldPlatform.PlatformModel.ServerPort)
 
 		// 处理平台启用状态变化
 		if oldPlatform.PlatformModel.Enable {
 			// 如果平台被启用或关键参数变化，需要更新注册和心跳任务
-			if enableChanged || expiresChanged || keepTimeoutChanged {
+			if enableChanged || expiresChanged || keepTimeoutChanged || serverIpChanged || serverPortChanged {
 				oldPlatform.Unregister()
 				oldPlatform.register.Ticker.Reset(time.Second * time.Duration(oldPlatform.PlatformModel.Expires))
 				oldPlatform.register.Tick(nil)
@@ -1134,12 +1162,15 @@ func (gb *GB28181Plugin) ListPlatforms(ctx context.Context, req *pb.ListPlatform
 			ServerIp:                p.PlatformModel.ServerIP,
 			ServerPort:              int32(p.PlatformModel.ServerPort),
 			DeviceGBId:              p.PlatformModel.DeviceGBID,
+			DeviceGBDomain:          p.PlatformModel.DeviceGBDomain,
 			DeviceIp:                p.PlatformModel.DeviceIP,
 			DevicePort:              int32(p.PlatformModel.DevicePort),
 			Username:                p.PlatformModel.Username,
 			Password:                p.PlatformModel.Password,
 			Expires:                 int32(p.PlatformModel.Expires),
+			RegisterInterval:        int32(p.PlatformModel.RegisterInterval),
 			KeepTimeout:             int32(p.PlatformModel.KeepTimeout),
+			MaxTimeoutCount:         int32(p.PlatformModel.MaxTimeoutCount),
 			Transport:               p.PlatformModel.Transport,
 			CharacterSet:            p.PlatformModel.CharacterSet,
 			Ptz:                     p.PlatformModel.PTZ,
@@ -1320,6 +1351,72 @@ func (gb *GB28181Plugin) PtzControl(ctx context.Context, req *pb.PtzControlReque
 	resp.Code = 0
 	resp.Message = "success"
 	return resp, nil
+}
+
+// GetServerConfig 实现获取服务器基本配置功能
+func (gb *GB28181Plugin) GetServerConfig(ctx context.Context, req *emptypb.Empty) (*pb.ServerConfigResponse, error) {
+	resp := &pb.ServerConfigResponse{
+		Code:    0,
+		Message: "success",
+		Data:    &pb.ServerConfigData{},
+	}
+
+	// 获取本地IP列表
+	localIPs, err := gb.getLocalIPs()
+	if err != nil {
+		gb.Error("Failed to get local IPs", "error", err)
+		// 不返回错误，继续返回其他配置
+	} else {
+		resp.Data.LocalIPs = localIPs
+	}
+
+	// 获取设备国标编号和域
+	resp.Data.DeviceGBId = gb.Serial
+	resp.Data.DeviceGBDomain = gb.Realm
+
+	// 获取本地端口
+	resp.Data.LocalPort = int32(gb.defaultSipPort)
+
+	return resp, nil
+}
+
+// getLocalIPs 获取本地所有网络接口的IP地址
+func (gb *GB28181Plugin) getLocalIPs() ([]string, error) {
+	var ips []string
+
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		return nil, err
+	}
+
+	for _, iface := range interfaces {
+		// 跳过down状态和loopback接口
+		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+
+		for _, addr := range addrs {
+			var ip net.IP
+			switch v := addr.(type) {
+			case *net.IPNet:
+				ip = v.IP
+			case *net.IPAddr:
+				ip = v.IP
+			}
+
+			// 只获取IPv4地址，且不是回环地址
+			if ip != nil && ip.To4() != nil && !ip.IsLoopback() {
+				ips = append(ips, ip.String())
+			}
+		}
+	}
+
+	return ips, nil
 }
 
 // TestSip 实现测试SIP连接功能
@@ -1786,9 +1883,9 @@ func (gb *GB28181Plugin) ChannelManageList(ctx context.Context, req *pb.GetChann
 			Id: ch.ID,
 			DeviceId: func() string {
 				if ch.Device == nil {
-					return ""
+					return ch.DeviceId
 				}
-				return ch.DeviceId
+				return ch.Device.DeviceId
 			}(),
 			ChannelId:         ch.ChannelId,
 			ParentId:          ch.ParentId,
@@ -1934,7 +2031,7 @@ func (gb *GB28181Plugin) AddChannel(ctx context.Context, req *pb.AddChannelReque
 		}(),
 		StreamPath: req.StreamPath,
 		CreateTime: now,
-		Status:     gb28181.ChannelOffStatus,
+		Status:     gb28181.ChannelOnStatus,
 	}
 
 	// 写入数据库
@@ -1957,7 +2054,7 @@ func (gb *GB28181Plugin) AddChannel(ctx context.Context, req *pb.AddChannelReque
 	return resp, nil
 }
 
-// DeleteChannel 删除管理端通道（同时删除 DB 与内存）
+// DeleteChannel 删除管理端通道（同时删除 DB 与内存，以及平台关联）
 func (gb *GB28181Plugin) DeleteChannel(ctx context.Context, req *pb.DeleteChannelRequest) (*pb.BaseResponse, error) {
 	resp := &pb.BaseResponse{}
 	if req.Id == "" {
@@ -1966,8 +2063,15 @@ func (gb *GB28181Plugin) DeleteChannel(ctx context.Context, req *pb.DeleteChanne
 		return resp, nil
 	}
 
-	// 从数据库删除（如果存在）
+	// 从数据库删除平台通道关联关系
 	if gb.DB != nil {
+		if err := gb.DB.Where("channel_db_id = ?", req.Id).Delete(&gb28181.PlatformChannel{}).Error; err != nil {
+			resp.Code = 500
+			resp.Message = fmt.Sprintf("删除平台通道关联失败: %v", err)
+			return resp, nil
+		}
+
+		// 从数据库删除通道记录
 		if err := gb.DB.Where("id = ?", req.Id).Delete(&gb28181.DeviceChannel{}).Error; err != nil {
 			resp.Code = 500
 			resp.Message = fmt.Sprintf("删除通道失败: %v", err)
@@ -1975,7 +2079,14 @@ func (gb *GB28181Plugin) DeleteChannel(ctx context.Context, req *pb.DeleteChanne
 		}
 	}
 
-	// 从内存移除
+	// 从所有平台的内存集合中移除该通道
+	for p := range gb.platforms.Range {
+		p.channels.RemoveByKey(req.Id)
+		// 更新平台通道数量
+		p.PlatformModel.ChannelCount = p.channels.Length
+	}
+
+	// 从全局通道内存集合中移除
 	if ch, ok := gb.channels.Get(req.Id); ok {
 		gb.channels.RemoveByKey(ch.ID)
 	}

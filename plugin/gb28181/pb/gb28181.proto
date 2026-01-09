@@ -529,6 +529,13 @@ service api {
     };
   }
 
+  // 获取服务器基本配置
+  rpc GetServerConfig (google.protobuf.Empty) returns (ServerConfigResponse) {
+    option (google.api.http) = {
+      get: "/gb28181/api/server/config"
+    };
+  }
+
   // 接收报警信息
   rpc ReceiveAlarm (AlarmInfoRequest) returns (BaseResponse) {
     option (google.api.http) = {
@@ -854,12 +861,15 @@ message Platform {
   string serverIp = 5;               // SIP服务IP
   int32 serverPort = 6;              // SIP服务端口
   string deviceGBId = 7;             // 设备国标编号
+  string deviceGBDomain = 39;        // 设备国标域
   string deviceIp = 8;               // 设备ip
   int32 devicePort = 9;             // 设备端口
   string username = 10;              // SIP认证用户名
   string password = 11;              // SIP认证密码
   int32 expires = 12;                // 注册周期(秒)
+  int32 registerInterval = 40;       // 注册间隔(秒)
   int32 keepTimeout = 13;            // 心跳周期(秒)
+  int32 maxTimeoutCount = 41;        // 最大心跳超时次数
   string transport = 14;             // 传输协议
   string characterSet = 15;          // 字符集
   bool ptz = 16;                     // 允许云台控制
@@ -1442,5 +1452,20 @@ message DownloadProgressResponse {
   string message = 2;               // 响应消息
   int32 total = 3;                  // 总数（统一格式，这里为0）
   DownloadProgressData data = 4;    // 下载进度数据
+}
+
+// 获取服务器基本配置响应
+message ServerConfigResponse {
+  int32 code = 1;                   // 响应代码
+  string message = 2;               // 响应消息
+  ServerConfigData data = 3;        // 服务器配置数据
+}
+
+// 服务器配置数据
+message ServerConfigData {
+  repeated string localIPs = 1;     // 本地IP列表
+  int32 localPort = 2;              // 本地端口
+  string deviceGBId = 3;            // 设备国标编号
+  string deviceGBDomain = 4;        // 设备国标域
 }
 
