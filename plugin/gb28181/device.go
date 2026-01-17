@@ -347,10 +347,21 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 		catalogHandlerQueueTask.AddTask(catalogHandler)
 	case "RecordInfo":
 		if channel, ok := d.channels.Get(d.DeviceId + "_" + msg.DeviceID); ok {
-			if req, ok := channel.RecordReqs.Get(msg.SN); ok {
-				// 添加响应并检查是否完成
-				if req.AddResponse(*msg) {
-					req.Resolve()
+			// 检查是否有上级平台映射（用于转发）
+			if platform, found := d.plugin.platforms.Find(func(p *Platform) bool {
+				_, exists := p.recordRequests.Get(msg.SN)
+				return exists
+			}); found {
+				// 直接转发响应给上级平台
+				platform.forwardRecordInfoResponse(msg.SN, *msg)
+				// 不return，继续执行到结尾回复OK
+			} else {
+				// 原有的promise处理逻辑
+				if req, ok := channel.RecordReqs.Get(msg.SN); ok {
+					// 添加响应并检查是否完成
+					if req.AddResponse(*msg) {
+						req.Resolve()
+					}
 				}
 			}
 		}

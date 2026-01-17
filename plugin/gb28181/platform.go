@@ -22,6 +22,17 @@ import (
 	gb28181 "m7s.live/v5/plugin/gb28181/pkg"
 )
 
+// RecordForwardRequest 录像转发请求信息
+type RecordForwardRequest struct {
+	DownstreamSN int
+	UpstreamSN   int
+	Req          *sip.Request
+}
+
+func (r *RecordForwardRequest) GetKey() int {
+	return r.DownstreamSN
+}
+
 // Platform 表示GB28181平台的运行时实例
 type Platform struct {
 	task.Work     `gorm:"-:all"` // 使用TickTask，并且排除 gorm 序列化
@@ -39,6 +50,9 @@ type Platform struct {
 	KeepAliveReply int    `gorm:"-" json:"keepAliveReply"` // KeepAliveReply表示心跳未回复次数
 	RegisterCallID string `gorm:"-" json:"registerCallID"` // CallID表示SIP会话的标识符
 	SN             int
+
+	// 录像查询请求映射
+	recordRequests util.Collection[int, *RecordForwardRequest] `gorm:"-"` // 下级SN -> 请求信息映射
 
 	// 插件配置
 	plugin     *GB28181Plugin
@@ -497,6 +511,8 @@ func (p *Platform) OnMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb
 
 	// 根据消息类型处理不同的消息
 	switch msg.CmdType {
+	case "RecordInfo":
+		return p.handleRecordInfo(req, tx, msg)
 	case "Catalog":
 		// 处理目录请求
 		return p.handleCatalog(req, tx, msg)
@@ -562,6 +578,261 @@ func (p *Platform) handleCatalog(req *sip.Request, tx sip.ServerTransaction, msg
 	// 发送目录响应，无论是否有通道
 	p.plugin.Info("get channels success", "channels", channels)
 	return p.sendCatalogResponse(req, sn, fromTag, channels)
+}
+
+// handleRecordInfo 处理录像回放列表请求
+func (p *Platform) handleRecordInfo(req *sip.Request, tx sip.ServerTransaction, msg *gb28181.Message) error {
+	// 回复 200 OK
+	err := tx.Respond(sip.NewResponseFromRequest(req, http.StatusOK, "OK", nil))
+	if err != nil {
+		return err
+	}
+
+	// 获取上级平台的 SN
+	upstreamSN := msg.SN
+	p.plugin.Info("record info from upstream", "upstreamSN", upstreamSN)
+
+	// 使用上级平台发送的开始结束时间
+	var startTime, endTime time.Time
+	if msg.StartTime != "" {
+		var err error
+		startTime, err = time.Parse("2006-01-02T15:04:05", msg.StartTime)
+		if err != nil {
+			p.plugin.Error("parse start time failed", "error", err, "startTime", msg.StartTime)
+			startTime = time.Now().AddDate(0, 0, -1) // 默认查询最近1天的录像
+		}
+	} else {
+		startTime = time.Now().AddDate(0, 0, -1) // 默认查询最近1天的录像
+	}
+
+	if msg.EndTime != "" {
+		var err error
+		endTime, err = time.Parse("2006-01-02T15:04:05", msg.EndTime)
+		if err != nil {
+			p.plugin.Error("parse end time failed", "error", err, "endTime", msg.EndTime)
+			endTime = time.Now() // 默认查询到当前时间
+		}
+	} else {
+		endTime = time.Now() // 默认查询到当前时间
+	}
+
+	p.plugin.Info("record info query", "startTime", startTime, "endTime", endTime, "channelID", msg.DeviceID)
+
+	// 获取请求的通道ID（上级平台查询的通道）
+	channelID := msg.DeviceID
+	if channelID == "" {
+		// 如果没有指定通道ID，直接返回（不发送响应，等待超时）
+		p.plugin.Info("no channel ID specified in record info query")
+		return nil
+	}
+
+	// 启动录像查询并建立SN映射
+	return p.startRecordInfoQuery(req, upstreamSN, channelID, startTime, endTime)
+}
+
+// startRecordInfoQuery 启动录像查询并建立SN映射
+func (p *Platform) startRecordInfoQuery(req *sip.Request, upstreamSN int, channelID string, startTime, endTime time.Time) error {
+	// 通过 channelID 找到对应的设备
+	var deviceId string
+	if tmpChannel, ok := p.plugin.channels.Find(func(c *Channel) bool {
+		return c.ChannelId == channelID
+	}); ok {
+		deviceId = tmpChannel.DeviceId
+	} else {
+		p.plugin.Info("channel not found for record query", "channelID", channelID)
+		// 不返回错误，直接返回nil，等待超时处理
+		return nil
+	}
+
+	// 从devices集合中获取设备实例
+	_, ok := p.plugin.devices.Get(deviceId)
+	if !ok {
+		p.plugin.Error("device not found for record query", "deviceId", deviceId)
+		// 不返回错误，直接返回nil，等待超时处理
+		return nil
+	}
+
+	p.plugin.Info("starting record query for channel", "channelID", channelID, "deviceID", deviceId)
+
+	// 生成新的 SN 向下级设备发送
+	downstreamSN := int(time.Now().UnixNano() / 1e6 % 1000000)
+
+	// 存储请求信息，用于响应转发（包含上下级SN映射）
+	p.recordRequests.Set(&RecordForwardRequest{
+		DownstreamSN: downstreamSN,
+		UpstreamSN:   upstreamSN,
+		Req:          req,
+	})
+
+	// 使用插件的 RecordInfoQuery 方法查询录像（异步，不等待结果）
+	_, err := p.plugin.RecordInfoQuery(deviceId, channelID, startTime, endTime, downstreamSN)
+	if err != nil {
+		p.plugin.Error("record info query failed", "error", err, "channelID", channelID)
+		// 清理映射
+		p.recordRequests.RemoveByKey(downstreamSN)
+		// 不返回错误，直接返回nil，等待超时处理
+		return nil
+	}
+
+	p.plugin.Info("record query started", "channelID", channelID, "upstreamSN", upstreamSN, "downstreamSN", downstreamSN)
+	return nil
+}
+
+// forwardRecordInfoResponse 转发录像信息响应给上级平台
+func (p *Platform) forwardRecordInfoResponse(downstreamSN int, response gb28181.Message) {
+	// 获取请求信息（包含上下级SN映射）
+	requestInfo, hasRequest := p.recordRequests.Get(downstreamSN)
+	if !hasRequest {
+		p.plugin.Error("no request info found", "downstreamSN", downstreamSN)
+		return
+	}
+
+	upstreamSN := requestInfo.UpstreamSN
+
+	p.plugin.Info("forwarding record response", "downstreamSN", downstreamSN, "upstreamSN", upstreamSN, "recordCount", len(response.RecordList.Item))
+
+	// 构建转发请求
+	request := p.CreateRequest("MESSAGE")
+
+	// 设置From头部（使用中间平台的身份）
+	fromHeader := sip.FromHeader{
+		Address: sip.Uri{
+			User: p.PlatformModel.DeviceGBID,
+			Host: p.PlatformModel.ServerGBDomain,
+		},
+		Params: sip.NewParams(),
+	}
+	// 生成新的tag，完全靠SN来判断同一会话
+	fromHeader.Params.Add("tag", fmt.Sprintf("record-%d", upstreamSN))
+	request.AppendHeader(&fromHeader)
+
+	// 添加To头部（回复给上级平台）
+	toHeader := sip.ToHeader{
+		Address: sip.Uri{
+			User: p.PlatformModel.ServerGBID,
+			Host: p.PlatformModel.ServerGBDomain,
+		},
+	}
+	request.AppendHeader(&toHeader)
+
+	request.SetTransport(requestInfo.Req.Transport())
+
+	// 根据平台配置的字符集进行编码
+	charset := p.PlatformModel.CharacterSet
+	if charset == "" {
+		charset = "GB2312" // 默认使用GB2312
+	}
+
+	// 构建录像列表XML（使用上级平台的SN）
+	xmlContent := fmt.Sprintf(`<?xml version="1.0" encoding="%s"?>
+<Response>
+<CmdType>RecordInfo</CmdType>
+<SN>%d</SN>
+<DeviceID>%s</DeviceID>
+<Name>%s</Name>
+<SumNum>%d</SumNum>
+<RecordList Num="%d">`, charset, upstreamSN, response.DeviceID, p.PlatformModel.Name, response.SumNum, response.RecordList.Num)
+
+	// 添加录像记录项
+	for _, record := range response.RecordList.Item {
+		xmlContent += fmt.Sprintf(`
+<Item>
+<DeviceID>%s</DeviceID>
+<Name>%s</Name>
+<FilePath>%s</FilePath>
+<Address>%s</Address>
+<StartTime>%s</StartTime>
+<EndTime>%s</EndTime>
+<Secrecy>%d</Secrecy>
+<Type>%s</Type>
+<RecorderID>%s</RecorderID>
+</Item>`, record.DeviceID, record.Name, record.FilePath, record.Address,
+			record.StartTime, record.EndTime, record.Secrecy, record.Type, record.RecorderID)
+	}
+
+	xmlContent += `
+</RecordList>
+</Response>`
+
+	encodedContent, actualCharset, err := EncodeToCharset(xmlContent, charset)
+	if err != nil {
+		p.Error("forwardRecordInfoResponse 编码转换失败", "error", err.Error(), "charset", charset)
+		request.SetBody([]byte(xmlContent))
+		actualCharset = "UTF-8" // 失败时使用UTF-8
+	} else {
+		request.SetBody(encodedContent)
+	}
+	request.AppendHeader(sip.NewHeader("Content-Type", fmt.Sprintf("Application/MANSCDP+xml;charset=%s", actualCharset)))
+
+	// 创建事务并发送
+	tx, err := p.Client.TransactionRequest(p, request)
+	if err != nil {
+		p.Error("forwardRecordInfoResponse", "error", err.Error())
+		return
+	}
+	defer tx.Terminate()
+
+	// 获取响应
+	res, err := p.getResponse(tx)
+	if err != nil {
+		p.Error("forwardRecordInfoResponse", "error", err.Error())
+		return
+	}
+
+	// 处理401未授权响应
+	if res.StatusCode == 401 {
+		// 获取WWW-Authenticate头部
+		wwwAuth := res.GetHeader("WWW-Authenticate")
+		if wwwAuth == nil {
+			p.Error("forwardRecordInfoResponse", "error", "no auth challenge")
+			return
+		}
+
+		// 解析认证质询
+		chal, err := digest.ParseChallenge(wwwAuth.Value())
+		if err != nil {
+			p.Error("forwardRecordInfoResponse", "error", err.Error())
+			return
+		}
+
+		p.plugin.Debug("received auth challenge",
+			"realm", chal.Realm,
+			"nonce", chal.Nonce,
+			"opaque", chal.Opaque,
+			"qop", chal.QOP)
+
+		// 生成认证响应
+		cred, err := digest.Digest(chal, digest.Options{
+			Method:   "MESSAGE",
+			URI:      request.Recipient.String(),
+			Username: p.PlatformModel.ServerGBID,
+			Password: p.PlatformModel.Password,
+		})
+		if err != nil {
+			p.Error("forwardRecordInfoResponse", "error", err.Error())
+			return
+		}
+
+		// 添加Authorization头部
+		request.AppendHeader(sip.NewHeader("Authorization", cred.String()))
+
+		// 重新发送请求
+		tx2, err := p.Client.TransactionRequest(p, request)
+		if err != nil {
+			p.Error("forwardRecordInfoResponse", "error", err.Error())
+			return
+		}
+		defer tx2.Terminate()
+
+		// 获取最终响应
+		_, err = p.getResponse(tx2)
+		if err != nil {
+			p.Error("forwardRecordInfoResponse", "error", err.Error())
+			return
+		}
+	}
+
+	// 简化处理：每个响应包都转发，暂时保留映射（可以考虑添加超时清理）
 }
 
 // CreateRequest 创建 SIP 请求

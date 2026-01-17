@@ -170,6 +170,10 @@ type (
 		CmdType      string
 		SN           int // 请求序列号，一般用于对应 request 和 response
 		DeviceID     string
+		StartTime    string `xml:"StartTime"`    // 查询开始时间
+		EndTime      string `xml:"EndTime"`      // 查询结束时间
+		Secrecy      int    `xml:"Secrecy"`      // 保密属性
+		Type         string `xml:"Type"`         // 录像类型
 		Longitude    string // 经度
 		Latitude     string // 纬度
 		DeviceName   string
