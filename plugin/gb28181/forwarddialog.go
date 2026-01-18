@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	sipgo "github.com/emiago/sipgo"
 	"github.com/emiago/sipgo/sip"
@@ -77,24 +78,46 @@ func (d *ForwardDialog) Start() (err error) {
 	// 注册对话到集合，使用类型转换
 	d.MediaPort = uint16(0)
 
-	d.Debug("ForwardDialog端口分配", "device.StreamMode", device.StreamMode, "StreamModeTCPActive", mrtp.StreamModeTCPActive)
+	streamMode := d.ForwardConfig.Target.Mode // ForwardDialog使用Target的Mode作为StreamMode
 
-	if device.StreamMode != mrtp.StreamModeTCPActive {
-		if d.gb.MediaPort.Valid() {
-			d.Debug("ForwardDialog端口分配路径", "path", "tcpPB.Allocate()", "MediaPort.Valid", true)
-			var ok bool
-			d.MediaPort, ok = d.gb.tcpPB.Allocate()
-			if !ok {
-				return fmt.Errorf("no available tcp port")
-			}
-			d.Debug("ForwardDialog端口分配成功", "allocatedPort", d.MediaPort)
+	switch streamMode {
+	case mrtp.StreamModeTCPPassive:
+		if d.gb.tcpPort > 0 {
+			d.MediaPort = d.gb.tcpPort
 		} else {
-			d.Debug("ForwardDialog端口分配路径", "path", "MediaPort[0]", "MediaPort.Valid", false)
-			d.MediaPort = d.gb.MediaPort[0]
-			d.Debug("ForwardDialog端口分配成功", "defaultPort", d.MediaPort)
+			if d.gb.MediaPort.Valid() {
+				var ok bool
+				d.MediaPort, ok = d.gb.tcpPB.Allocate()
+				if !ok {
+					d.Error("[PORT_ALLOCATE_FAILED] TCP端口分配失败 - 无可用端口 (ForwardDialog)", "platformId", d.platformCallId, "channelId", d.channel.ChannelId)
+					return fmt.Errorf("no available tcp port")
+				}
+				d.Info("[PORT_ALLOCATE_SUCCESS] TCP端口分配成功 (ForwardDialog)", "port", d.MediaPort, "platformId", d.platformCallId, "channelId", d.channel.ChannelId, "streamMode", streamMode)
+				d.gb.updatePortStats()
+			} else {
+				d.MediaPort = d.gb.MediaPort[0]
+			}
 		}
-	} else {
-		d.Debug("ForwardDialog端口分配", "path", "StreamModeTCPActive，不分配端口", "MediaPort", d.MediaPort)
+	case mrtp.StreamModeUDP:
+		if d.gb.udpPort > 0 {
+			d.MediaPort = d.gb.udpPort
+		} else {
+			if d.gb.MediaPort.Valid() {
+				var ok bool
+				d.MediaPort, ok = d.gb.udpPB.Allocate()
+				if !ok {
+					d.Error("[PORT_ALLOCATE_FAILED] UDP端口分配失败 - 无可用端口 (ForwardDialog)", "platformId", d.platformCallId, "channelId", d.channel.ChannelId)
+					return fmt.Errorf("no available udp port")
+				}
+				d.Info("[PORT_ALLOCATE_SUCCESS] UDP端口分配成功 (ForwardDialog)", "port", d.MediaPort, "platformId", d.platformCallId, "channelId", d.channel.ChannelId, "streamMode", streamMode)
+				d.gb.updatePortStats()
+			} else {
+				d.MediaPort = d.gb.MediaPort[0]
+			}
+		}
+	case mrtp.StreamModeTCPActive:
+		// TCP Active 模式不需要分配端口
+		d.Debug("ForwardDialog端口分配", "path", "StreamModeTCPActive，不分配端口", "streamMode", streamMode)
 	}
 
 	// 使用上级平台的SSRC（如果有）或者设备的CreateSSRC方法
@@ -224,6 +247,30 @@ func (d *ForwardDialog) Start() (err error) {
 
 	// Via头部必须是第一个参数！
 	d.session, err = dialogClientCache.Invite(d, recipient, []byte(strings.Join(sdpInfo, "\r\n")+"\r\n"), viaHeader, &fromHDR, &toHeader, subjectHeader, &contentTypeHeader)
+
+	d.SetDescriptions(task.Description{
+		"streamMode": d.ForwardConfig.Target.Mode,
+		"mediaPort":  d.MediaPort,
+		"mediaIP":    device.MediaIp,
+		"sipIP":      device.SipIp,
+		"transport":  device.Transport,
+		"ssrc":       d.SSRC,
+		"callID":     d.platformCallId,
+		"deviceID":   device.DeviceId,
+		"channelID":  d.channel.ChannelId,
+		"deviceIP":   device.IP,
+		"devicePort": device.Port,
+		"localPort":  device.LocalPort,
+		"startTime":  time.Now(),
+		"from":       fromHDR.Address.String(),
+		"to":         toHeader.Address.String(),
+		"contact":    device.contactHDR.Address.String(),
+		"subject":    subject,
+		"recipient":  recipient.String(),
+		"sdp":        strings.Join(sdpInfo, "\r\n"),
+		"via":        viaHeader.String(),
+		"viaBranch":  func() string { v, _ := viaHeader.Params.Get("branch"); return v }(),
+	})
 	return
 }
 
@@ -296,12 +343,35 @@ func (d *ForwardDialog) Run() (err error) {
 
 // Dispose 释放会话资源
 func (d *ForwardDialog) Dispose() {
-	// 回收端口（如果是多端口模式）
-	if d.MediaPort > 0 && d.gb.tcpPort == 0 {
-		if !d.gb.tcpPB.Release(d.MediaPort) {
-			d.Warn("port already released or not allocated", "port", d.MediaPort, "type", "tcp")
+	go func() {
+		time.Sleep(time.Second * 90) // 延迟90秒回收端口
+		streamMode := d.ForwardConfig.Target.Mode
+
+		switch streamMode {
+		case mrtp.StreamModeUDP:
+			if d.gb.udpPort == 0 { // 多端口模式
+				// 回收端口，防止重复回收
+				if !d.gb.udpPB.Release(d.MediaPort) {
+					d.Warn("[PORT_RELEASE_FAILED] UDP端口回收失败 - 端口已被释放或未分配 (ForwardDialog)", "port", d.MediaPort, "platformId", d.platformCallId, "channelId", d.channel.ChannelId, "streamMode", streamMode)
+				} else {
+					d.Info("[PORT_RELEASE_SUCCESS] UDP端口回收成功 (ForwardDialog)", "port", d.MediaPort, "platformId", d.platformCallId, "channelId", d.channel.ChannelId, "streamMode", streamMode)
+					d.gb.updatePortStats()
+				}
+			}
+		case mrtp.StreamModeTCPPassive:
+			if d.gb.tcpPort == 0 { // 多端口模式
+				// 回收端口，防止重复回收
+				if !d.gb.tcpPB.Release(d.MediaPort) {
+					d.Warn("[PORT_RELEASE_FAILED] TCP端口回收失败 - 端口已被释放或未分配 (ForwardDialog)", "port", d.MediaPort, "platformId", d.platformCallId, "channelId", d.channel.ChannelId, "streamMode", streamMode)
+				} else {
+					d.Info("[PORT_RELEASE_SUCCESS] TCP端口回收成功 (ForwardDialog)", "port", d.MediaPort, "platformId", d.platformCallId, "channelId", d.channel.ChannelId, "streamMode", streamMode)
+					d.gb.updatePortStats()
+				}
+			}
 		}
-	}
+		d.Info("ForwardDialog listener port release", "port", d.MediaPort)
+	}()
+
 	if d.session != nil && d.session.InviteResponse != nil {
 		err := d.session.Bye(d)
 		if err != nil {

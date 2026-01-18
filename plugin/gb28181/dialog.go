@@ -145,8 +145,11 @@ func (d *Dialog) Start() (err error) {
 				d.MediaPort, ok = d.gb.tcpPB.Allocate()
 				if !ok {
 					d.pullCtx.Fail("no available tcp port")
+					d.Error("[PORT_ALLOCATE_FAILED] TCP端口分配失败 - 无可用端口", "deviceId", d.Channel.DeviceId, "channelId", d.Channel.ChannelId)
 					return errors.Join(fmt.Errorf("no available tcp port"))
 				}
+				d.Info("[PORT_ALLOCATE_SUCCESS] TCP端口分配成功", "port", d.MediaPort, "deviceId", d.Channel.DeviceId, "channelId", d.Channel.ChannelId, "streamMode", d.StreamMode)
+				d.gb.updatePortStats()
 			} else {
 				d.MediaPort = d.gb.MediaPort[0]
 			}
@@ -160,8 +163,11 @@ func (d *Dialog) Start() (err error) {
 				d.MediaPort, ok = d.gb.udpPB.Allocate()
 				if !ok {
 					d.pullCtx.Fail("no available udp port")
+					d.Error("[PORT_ALLOCATE_FAILED] UDP端口分配失败 - 无可用端口", "deviceId", d.Channel.DeviceId, "channelId", d.Channel.ChannelId)
 					return fmt.Errorf("no available udp port")
 				}
+				d.Info("[PORT_ALLOCATE_SUCCESS] UDP端口分配成功", "port", d.MediaPort, "deviceId", d.Channel.DeviceId, "channelId", d.Channel.ChannelId, "streamMode", d.StreamMode)
+				d.gb.updatePortStats()
 			} else {
 				d.MediaPort = d.gb.MediaPort[0]
 			}
@@ -497,20 +503,26 @@ func (d *Dialog) GetKey() string {
 
 func (d *Dialog) Dispose() {
 	go func() {
-		time.Sleep(time.Minute * 3)
+		time.Sleep(time.Second * 90)
 		switch d.StreamMode {
 		case mrtp.StreamModeUDP:
 			if d.gb.udpPort == 0 { //多端口模式
 				// 回收端口，防止重复回收
 				if !d.gb.udpPB.Release(d.MediaPort) {
-					d.Warn("port already released or not allocated", "port", d.MediaPort, "type", "udp")
+					d.Warn("[PORT_RELEASE_FAILED] UDP端口回收失败 - 端口已被释放或未分配", "port", d.MediaPort, "deviceId", d.Channel.DeviceId, "channelId", d.Channel.ChannelId, "streamMode", d.StreamMode)
+				} else {
+					d.Info("[PORT_RELEASE_SUCCESS] UDP端口回收成功", "port", d.MediaPort, "deviceId", d.Channel.DeviceId, "channelId", d.Channel.ChannelId, "streamMode", d.StreamMode)
+					d.gb.updatePortStats()
 				}
 			}
 		case mrtp.StreamModeTCPPassive:
 			if d.gb.tcpPort == 0 { //多端口模式
 				// 回收端口，防止重复回收
 				if !d.gb.tcpPB.Release(d.MediaPort) {
-					d.Warn("port already released or not allocated", "port", d.MediaPort, "type", "tcp")
+					d.Warn("[PORT_RELEASE_FAILED] TCP端口回收失败 - 端口已被释放或未分配", "port", d.MediaPort, "deviceId", d.Channel.DeviceId, "channelId", d.Channel.ChannelId, "streamMode", d.StreamMode)
+				} else {
+					d.Info("[PORT_RELEASE_SUCCESS] TCP端口回收成功", "port", d.MediaPort, "deviceId", d.Channel.DeviceId, "channelId", d.Channel.ChannelId, "streamMode", d.StreamMode)
+					d.gb.updatePortStats()
 				}
 			}
 		}

@@ -85,4 +85,50 @@ func (pb *PortBitmap) Release(port uint16) bool {
 	}
 }
 
+// GetAvailablePorts 返回当前可用的端口数量
+func (pb *PortBitmap) GetAvailablePorts() int {
+	if pb.size == 0 || len(pb.bitmap) == 0 {
+		return 0
+	}
+	used := 0
+	for i := 0; i < len(pb.bitmap); i++ {
+		used += bits.OnesCount64(atomic.LoadUint64(&pb.bitmap[i]))
+	}
+	return int(pb.size) - used
+}
+
+// GetUsedPorts 返回当前已使用的端口数量
+func (pb *PortBitmap) GetUsedPorts() int {
+	if pb.size == 0 || len(pb.bitmap) == 0 {
+		return 0
+	}
+	used := 0
+	for i := 0; i < len(pb.bitmap); i++ {
+		used += bits.OnesCount64(atomic.LoadUint64(&pb.bitmap[i]))
+	}
+	return used
+}
+
+// GetUsedPortList 返回当前被占用的端口列表
+func (pb *PortBitmap) GetUsedPortList() []uint16 {
+	if pb.size == 0 || len(pb.bitmap) == 0 {
+		return nil
+	}
+	var usedPorts []uint16
+	for i := 0; i < len(pb.bitmap); i++ {
+		bitmap := atomic.LoadUint64(&pb.bitmap[i])
+		if bitmap != 0 {
+			for j := 0; j < 64; j++ {
+				if bitmap&(1<<j) != 0 {
+					port := pb.base + uint16(i*64+j)
+					if port < pb.base+pb.size {
+						usedPorts = append(usedPorts, port)
+					}
+				}
+			}
+		}
+	}
+	return usedPorts
+}
+
 

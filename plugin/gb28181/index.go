@@ -48,7 +48,7 @@ type GB28181Plugin struct {
 	pb.UnimplementedApiServer
 	m7s.Plugin
 	Serial         string `default:"34020000002000000001" desc:"sip 服务 id"` //sip 服务器 id, 默认 34020000002000000001
-	Realm          string `default:"3402000000" desc:"sip 服务域"`            //sip 服务器域，默认 3402000000
+	Realm          string `default:"3402000000" desc:"sip 服务域"`             //sip 服务器域，默认 3402000000
 	Password       string
 	Sip            SipConfig
 	MediaPort      util.Range[uint16] `default:"10001-20000" desc:"媒体端口范围"` //媒体端口范围
@@ -212,8 +212,8 @@ func (gb *GB28181Plugin) Start() (err error) {
 		InitRTPPayloadSize()
 
 		if gb.MediaPort.Valid() {
-			gb.SetDescription("media port", fmt.Sprintf("%d-%d", gb.MediaPort[0], gb.MediaPort[1]))
 			if gb.MediaPort.Size() == 0 {
+				gb.SetDescription("media port", fmt.Sprintf("%d-%d (单端口模式)", gb.MediaPort[0], gb.MediaPort[1]))
 				gb.tcpPort = gb.MediaPort[0]
 				gb.AddTask(&gb28181.SinglePortTCP{
 					Port:       gb.tcpPort,
@@ -228,6 +228,14 @@ func (gb *GB28181Plugin) Start() (err error) {
 				// 初始化位图
 				gb.tcpPB.Init(gb.MediaPort[0], uint16(gb.MediaPort.Size()))
 				gb.udpPB.Init(gb.MediaPort[0], uint16(gb.MediaPort.Size()))
+				// 显示端口范围和剩余数量
+				tcpAvailable := gb.tcpPB.GetAvailablePorts()
+				udpAvailable := gb.udpPB.GetAvailablePorts()
+				tcpUsed := gb.tcpPB.GetUsedPorts()
+				udpUsed := gb.udpPB.GetUsedPorts()
+				gb.SetDescription("media port", fmt.Sprintf("%d-%d (多端口模式)", gb.MediaPort[0], gb.MediaPort[1]))
+				gb.SetDescription("tcp ports", fmt.Sprintf("可用:%d/已用:%d", tcpAvailable, tcpUsed))
+				gb.SetDescription("udp ports", fmt.Sprintf("可用:%d/已用:%d", udpAvailable, udpUsed))
 			}
 		} else {
 			gb.SetDescription("tcp", fmt.Sprintf("%d", gb.MediaPort[0]))
@@ -562,7 +570,7 @@ func (gb *GB28181Plugin) checkPlatform() {
 		gb.Error("查询平台失败", "error", err.Error())
 		return
 	}
-	if gb.Platforms != nil && len(gb.Platforms) > 0 {
+	if len(gb.Platforms) > 0 {
 		// 将 gb.Platforms 中的平台设置为只读
 		for _, platform := range gb.Platforms {
 			platform.ReadOnly = true
@@ -575,7 +583,7 @@ func (gb *GB28181Plugin) checkPlatform() {
 		// 创建Platform实例
 		platform := NewPlatform(platformModel, gb, true)
 
-		if platformModel.PlatformChannels != nil && len(platformModel.PlatformChannels) > 0 {
+		if len(platformModel.PlatformChannels) > 0 {
 			for i := range platformModel.PlatformChannels {
 				channelDbId := platformModel.PlatformChannels[i].ChannelDBID
 				if channelDbId != "" {
@@ -595,7 +603,7 @@ func (gb *GB28181Plugin) checkPlatform() {
 					Find(&channels).Error; err != nil {
 					gb.Error("<UNK>", "error", err.Error())
 				}
-				if channels != nil && len(channels) > 0 {
+				if len(channels) > 0 {
 					for i := range channels {
 						if channel, ok := gb.channels.Get(channels[i].ID); ok {
 							platform.channels.Set(channel)
@@ -982,11 +990,12 @@ func (gb *GB28181Plugin) OnInvite(req *sip.Request, tx sip.ServerTransaction) {
 			var ok bool
 			mediaPort, ok = gb.tcpPB.Allocate()
 			if !ok {
-				gb.Error("OnInvite", "error", "no available port")
+				gb.Error("[PORT_ALLOCATE_FAILED] TCP端口分配失败 - 无可用端口 (OnInvite)", "platformId", inviteInfo.RequesterId, "channelId", inviteInfo.TargetChannelId)
 				_ = tx.Respond(sip.NewResponseFromRequest(req, sip.StatusServiceUnavailable, "No Available Port", nil))
 				return
 			}
-			gb.Debug("OnInvite", "action", "allocate port", "port", mediaPort)
+			gb.Info("[PORT_ALLOCATE_SUCCESS] TCP端口分配成功 (OnInvite)", "port", mediaPort, "platformId", inviteInfo.RequesterId, "channelId", inviteInfo.TargetChannelId)
+			gb.updatePortStats()
 		} else {
 			mediaPort = gb.MediaPort[0]
 			gb.Debug("OnInvite", "action", "use default port", "port", mediaPort)
@@ -1094,7 +1103,6 @@ func (gb *GB28181Plugin) OnInvite(req *sip.Request, tx sip.ServerTransaction) {
 
 	gb.Info("OnInvite", "action", "complete", "platformId", inviteInfo.RequesterId, "channelId", channel.ChannelId,
 		"ip", inviteInfo.IP, "port", inviteInfo.Port, "StreamMode", inviteInfo.StreamMode)
-	return
 }
 
 func (gb *GB28181Plugin) OnAck(req *sip.Request, tx sip.ServerTransaction) {
@@ -1264,4 +1272,40 @@ func (gb *GB28181Plugin) sendPSToUpstream(forwardDialog *ForwardDialog) {
 	muxer.Mux(writeRTP)
 
 	gb.Info("sendPSToUpstream", "action", "stream ended", "streamPath", streamPath)
+}
+
+// updatePortStats 更新端口使用统计信息
+func (gb *GB28181Plugin) updatePortStats() {
+	if gb.MediaPort.Valid() && gb.MediaPort.Size() > 0 {
+		tcpAvailable := gb.tcpPB.GetAvailablePorts()
+		udpAvailable := gb.udpPB.GetAvailablePorts()
+		tcpUsed := gb.tcpPB.GetUsedPorts()
+		udpUsed := gb.udpPB.GetUsedPorts()
+		gb.SetDescription("tcp ports", fmt.Sprintf("可用:%d/已用:%d", tcpAvailable, tcpUsed))
+		gb.SetDescription("udp ports", fmt.Sprintf("可用:%d/已用:%d", udpAvailable, udpUsed))
+
+		// 显示被占用的端口详情（限制显示前20个）
+		tcpUsedPorts := gb.tcpPB.GetUsedPortList()
+		udpUsedPorts := gb.udpPB.GetUsedPortList()
+
+		if len(tcpUsedPorts) > 0 {
+			displayPorts := tcpUsedPorts
+			if len(displayPorts) > 20 {
+				displayPorts = displayPorts[:20]
+			}
+			gb.SetDescription("tcp used ports", fmt.Sprintf("%v... (共%d个)", displayPorts, len(tcpUsedPorts)))
+		} else {
+			gb.SetDescription("tcp used ports", "无")
+		}
+
+		if len(udpUsedPorts) > 0 {
+			displayPorts := udpUsedPorts
+			if len(displayPorts) > 20 {
+				displayPorts = displayPorts[:20]
+			}
+			gb.SetDescription("udp used ports", fmt.Sprintf("%v... (共%d个)", displayPorts, len(udpUsedPorts)))
+		} else {
+			gb.SetDescription("udp used ports", "无")
+		}
+	}
 }
