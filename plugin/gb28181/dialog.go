@@ -135,6 +135,7 @@ func (d *Dialog) Start() (err error) {
 	d.pullCtx.GoToStepConst(StepSIPPrepare)
 
 	//defer d.gb.dialogs.Remove(d)
+	d.MediaPort = d.gb.MediaPort[0]
 	switch d.StreamMode {
 	case mrtp.StreamModeTCPPassive:
 		if d.gb.tcpPort > 0 {
@@ -303,6 +304,8 @@ func (d *Dialog) Start() (err error) {
 	// 最后添加Content-Length头部
 	if err != nil {
 		d.pullCtx.Fail("dialog invite error: " + err.Error())
+		// SIP邀请失败时释放已分配的端口
+		d.releaseAllocatedPort()
 		return errors.Join(fmt.Errorf("dialog invite error:%s", err.Error()))
 	}
 
@@ -501,32 +504,37 @@ func (d *Dialog) GetKey() string {
 	return d.GetCallID()
 }
 
+// releaseAllocatedPort 释放已分配的端口（用于启动失败时的清理）
+func (d *Dialog) releaseAllocatedPort() {
+	switch d.StreamMode {
+	case mrtp.StreamModeUDP:
+		if d.gb.udpPort == 0 { //多端口模式
+			// 回收端口，防止重复回收
+			if !d.gb.udpPB.Release(d.MediaPort) {
+				d.Warn("[PORT_RELEASE_FAILED] UDP端口回收失败 - 端口已被释放或未分配", "port", d.MediaPort, "deviceId", d.Channel.DeviceId, "channelId", d.Channel.ChannelId, "streamMode", d.StreamMode)
+			} else {
+				d.Info("[PORT_RELEASE_SUCCESS] UDP端口回收成功", "port", d.MediaPort, "deviceId", d.Channel.DeviceId, "channelId", d.Channel.ChannelId, "streamMode", d.StreamMode)
+				d.gb.updatePortStats()
+			}
+		}
+	case mrtp.StreamModeTCPPassive:
+		if d.gb.tcpPort == 0 { //多端口模式
+			// 回收端口，防止重复回收
+			if !d.gb.tcpPB.Release(d.MediaPort) {
+				d.Warn("[PORT_RELEASE_FAILED] TCP端口回收失败 - 端口已被释放或未分配", "port", d.MediaPort, "deviceId", d.Channel.DeviceId, "channelId", d.Channel.ChannelId, "streamMode", d.StreamMode)
+			} else {
+				d.Info("[PORT_RELEASE_SUCCESS] TCP端口回收成功", "port", d.MediaPort, "deviceId", d.Channel.DeviceId, "channelId", d.Channel.ChannelId, "streamMode", d.StreamMode)
+				d.gb.updatePortStats()
+			}
+		}
+	}
+	d.Info("listener port release", "port", d.MediaPort)
+}
+
 func (d *Dialog) Dispose() {
 	go func() {
 		time.Sleep(time.Second * 90)
-		switch d.StreamMode {
-		case mrtp.StreamModeUDP:
-			if d.gb.udpPort == 0 { //多端口模式
-				// 回收端口，防止重复回收
-				if !d.gb.udpPB.Release(d.MediaPort) {
-					d.Warn("[PORT_RELEASE_FAILED] UDP端口回收失败 - 端口已被释放或未分配", "port", d.MediaPort, "deviceId", d.Channel.DeviceId, "channelId", d.Channel.ChannelId, "streamMode", d.StreamMode)
-				} else {
-					d.Info("[PORT_RELEASE_SUCCESS] UDP端口回收成功", "port", d.MediaPort, "deviceId", d.Channel.DeviceId, "channelId", d.Channel.ChannelId, "streamMode", d.StreamMode)
-					d.gb.updatePortStats()
-				}
-			}
-		case mrtp.StreamModeTCPPassive:
-			if d.gb.tcpPort == 0 { //多端口模式
-				// 回收端口，防止重复回收
-				if !d.gb.tcpPB.Release(d.MediaPort) {
-					d.Warn("[PORT_RELEASE_FAILED] TCP端口回收失败 - 端口已被释放或未分配", "port", d.MediaPort, "deviceId", d.Channel.DeviceId, "channelId", d.Channel.ChannelId, "streamMode", d.StreamMode)
-				} else {
-					d.Info("[PORT_RELEASE_SUCCESS] TCP端口回收成功", "port", d.MediaPort, "deviceId", d.Channel.DeviceId, "channelId", d.Channel.ChannelId, "streamMode", d.StreamMode)
-					d.gb.updatePortStats()
-				}
-			}
-		}
-		d.Info("listener port release", "port", d.MediaPort)
+		d.releaseAllocatedPort()
 	}()
 	d.Info("dialog dispose", "ssrc", d.SSRC, "listener", d.MediaPort, "streamMode", d.StreamMode, "deviceId", d.Channel.DeviceId, "channelId", d.Channel.ChannelId)
 	if d.session != nil && d.session.InviteResponse != nil {

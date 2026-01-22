@@ -12,15 +12,13 @@ import (
 	task "github.com/langhuihui/gotask"
 	m7s "m7s.live/v5"
 	"m7s.live/v5/pkg/util"
-	gb28181 "m7s.live/v5/plugin/gb28181/pkg"
 	mrtp "m7s.live/v5/plugin/rtp/pkg"
 )
 
 // ForwardDialog 是用于转发RTP流的会话结构体
 type ForwardDialog struct {
 	task.Job
-	channel *Channel
-	gb28181.InviteOptions
+	channel   *Channel
 	gb        *GB28181Plugin
 	session   *sipgo.DialogClientSession
 	pullCtx   m7s.PullJob
@@ -46,7 +44,7 @@ func (d *ForwardDialog) GetPullJob() *m7s.PullJob {
 
 // GetKey 获取会话标识符
 func (d *ForwardDialog) GetKey() uint32 {
-	return d.SSRC
+	return d.platformSSRC
 }
 
 // Start 启动会话
@@ -57,7 +55,7 @@ func (d *ForwardDialog) Start() (err error) {
 		isLive = false
 		d.pullCtx.PublishConfig.PubType = m7s.PublishTypeVod
 	}
-	//err = d.pullCtx.Publish()
+	err = d.pullCtx.Publish()
 	if err != nil {
 		return
 	}
@@ -76,57 +74,47 @@ func (d *ForwardDialog) Start() (err error) {
 	}
 
 	// 注册对话到集合，使用类型转换
-	d.MediaPort = uint16(0)
 
-	streamMode := d.ForwardConfig.Target.Mode // ForwardDialog使用Target的Mode作为StreamMode
+	streamMode := d.ForwardConfig.Source.Mode // ForwardDialog使用Target的Mode作为StreamMode
 
 	switch streamMode {
 	case mrtp.StreamModeTCPPassive:
 		if d.gb.tcpPort > 0 {
-			d.MediaPort = d.gb.tcpPort
+			d.ForwardConfig.Source.Port = d.gb.tcpPort
 		} else {
 			if d.gb.MediaPort.Valid() {
 				var ok bool
-				d.MediaPort, ok = d.gb.tcpPB.Allocate()
+				d.ForwardConfig.Source.Port, ok = d.gb.tcpPB.Allocate()
 				if !ok {
 					d.Error("[PORT_ALLOCATE_FAILED] TCP端口分配失败 - 无可用端口 (ForwardDialog)", "platformId", d.platformCallId, "channelId", d.channel.ChannelId)
 					return fmt.Errorf("no available tcp port")
 				}
-				d.Info("[PORT_ALLOCATE_SUCCESS] TCP端口分配成功 (ForwardDialog)", "port", d.MediaPort, "platformId", d.platformCallId, "channelId", d.channel.ChannelId, "streamMode", streamMode)
+				d.Info("[PORT_ALLOCATE_SUCCESS] TCP端口分配成功 (ForwardDialog)", "port", d.ForwardConfig.Source.Port, "platformId", d.platformCallId, "channelId", d.channel.ChannelId, "streamMode", streamMode)
 				d.gb.updatePortStats()
 			} else {
-				d.MediaPort = d.gb.MediaPort[0]
+				d.ForwardConfig.Source.Port = d.gb.MediaPort[0]
 			}
 		}
 	case mrtp.StreamModeUDP:
 		if d.gb.udpPort > 0 {
-			d.MediaPort = d.gb.udpPort
+			d.ForwardConfig.Source.Port = d.gb.udpPort
 		} else {
 			if d.gb.MediaPort.Valid() {
 				var ok bool
-				d.MediaPort, ok = d.gb.udpPB.Allocate()
+				d.ForwardConfig.Source.Port, ok = d.gb.udpPB.Allocate()
 				if !ok {
 					d.Error("[PORT_ALLOCATE_FAILED] UDP端口分配失败 - 无可用端口 (ForwardDialog)", "platformId", d.platformCallId, "channelId", d.channel.ChannelId)
 					return fmt.Errorf("no available udp port")
 				}
-				d.Info("[PORT_ALLOCATE_SUCCESS] UDP端口分配成功 (ForwardDialog)", "port", d.MediaPort, "platformId", d.platformCallId, "channelId", d.channel.ChannelId, "streamMode", streamMode)
+				d.Info("[PORT_ALLOCATE_SUCCESS] UDP端口分配成功 (ForwardDialog)", "port", d.ForwardConfig.Source.Port, "platformId", d.platformCallId, "channelId", d.channel.ChannelId, "streamMode", streamMode)
 				d.gb.updatePortStats()
 			} else {
-				d.MediaPort = d.gb.MediaPort[0]
+				d.ForwardConfig.Source.Port = d.gb.MediaPort[0]
 			}
 		}
 	case mrtp.StreamModeTCPActive:
 		// TCP Active 模式不需要分配端口
 		d.Debug("ForwardDialog端口分配", "path", "StreamModeTCPActive，不分配端口", "streamMode", streamMode)
-	}
-
-	// 使用上级平台的SSRC（如果有）或者设备的CreateSSRC方法
-	if d.platformSSRC != 0 {
-		// 使用上级平台的SSRC
-		d.SSRC = d.platformSSRC
-	} else {
-		// 使用设备的CreateSSRC方法
-		d.SSRC = device.CreateSSRC(d.gb.Serial)
 	}
 
 	// 构建 SDP 内容
@@ -154,13 +142,13 @@ func (d *ForwardDialog) Start() (err error) {
 
 	// 添加媒体行和相关属性
 	var mediaLine string
-	switch device.StreamMode {
+	switch streamMode {
 	case mrtp.StreamModeTCPPassive, mrtp.StreamModeTCPActive:
-		mediaLine = fmt.Sprintf("m=video %d TCP/RTP/AVP 96", d.MediaPort)
+		mediaLine = fmt.Sprintf("m=video %d TCP/RTP/AVP 96", d.ForwardConfig.Source.Port)
 	case mrtp.StreamModeUDP:
-		mediaLine = fmt.Sprintf("m=video %d RTP/AVP 96", d.MediaPort)
+		mediaLine = fmt.Sprintf("m=video %d RTP/AVP 96", d.ForwardConfig.Source.Port)
 	default:
-		mediaLine = fmt.Sprintf("m=video %d TCP/RTP/AVP 96", d.MediaPort)
+		mediaLine = fmt.Sprintf("m=video %d TCP/RTP/AVP 96", d.ForwardConfig.Source.Port)
 	}
 
 	sdpInfo = append(sdpInfo, mediaLine)
@@ -193,7 +181,7 @@ func (d *ForwardDialog) Start() (err error) {
 	}
 
 	// 将SSRC转换为字符串格式
-	ssrcStr := strconv.FormatUint(uint64(d.SSRC), 10)
+	ssrcStr := strconv.FormatUint(uint64(d.platformSSRC), 10)
 	sdpInfo = append(sdpInfo, fmt.Sprintf("y=%s", ssrcStr))
 
 	// 创建INVITE请求
@@ -229,7 +217,6 @@ func (d *ForwardDialog) Start() (err error) {
 
 	// 创建会话 - 使用device的dialogClient创建
 	dialogClientCache := sipgo.NewDialogClientCache(device.client, device.contactHDR)
-	d.Info("start to invite", "recipient:", recipient, " fromHDR:", fromHDR, " toHeader:", toHeader, " device.contactHDR:", device.contactHDR, "contactHDR:", device.contactHDR)
 
 	// 创建Via头部，使用设备的Transport协议
 	// Via头部必须放在第一个位置
@@ -244,32 +231,42 @@ func (d *ForwardDialog) Start() (err error) {
 	viaHeader.Params.Add("branch", sip.GenerateBranchN(16))
 
 	d.Info("ForwardDialog发送INVITE使用Transport", "transport", device.Transport, "via", viaHeader)
-
+	d.Info("start to invite", "recipient:", recipient, " fromHDR:", fromHDR, " toHeader:", toHeader, " device.contactHDR:", device.contactHDR, "contactHDR:",
+		device.contactHDR, "sdpInfo:", strings.Join(sdpInfo, "|||"), "viaHeader:", viaHeader, "transport", device.Transport)
 	// Via头部必须是第一个参数！
 	d.session, err = dialogClientCache.Invite(d, recipient, []byte(strings.Join(sdpInfo, "\r\n")+"\r\n"), viaHeader, &fromHDR, &toHeader, subjectHeader, &contentTypeHeader)
 
+	if err != nil {
+		d.Error("ForwardDialog invite error: " + err.Error())
+		// SIP邀请失败时释放已分配的端口
+		d.releaseAllocatedSourcePort()
+		return err
+	}
+
 	d.SetDescriptions(task.Description{
-		"streamMode": d.ForwardConfig.Target.Mode,
-		"mediaPort":  d.MediaPort,
-		"mediaIP":    device.MediaIp,
-		"sipIP":      device.SipIp,
-		"transport":  device.Transport,
-		"ssrc":       d.SSRC,
-		"callID":     d.platformCallId,
-		"deviceID":   device.DeviceId,
-		"channelID":  d.channel.ChannelId,
-		"deviceIP":   device.IP,
-		"devicePort": device.Port,
-		"localPort":  device.LocalPort,
-		"startTime":  time.Now(),
-		"from":       fromHDR.Address.String(),
-		"to":         toHeader.Address.String(),
-		"contact":    device.contactHDR.Address.String(),
-		"subject":    subject,
-		"recipient":  recipient.String(),
-		"sdp":        strings.Join(sdpInfo, "\r\n"),
-		"via":        viaHeader.String(),
-		"viaBranch":  func() string { v, _ := viaHeader.Params.Get("branch"); return v }(),
+		"targetStreamMode": d.ForwardConfig.Target.Mode,
+		"targetMediaPort":  d.ForwardConfig.Target.Port,
+		"sourceStreamMode": d.ForwardConfig.Source.Mode,
+		"sourceMediaPort":  d.ForwardConfig.Source.Port,
+		"mediaIP":          device.MediaIp,
+		"sipIP":            device.SipIp,
+		"transport":        device.Transport,
+		"ssrc":             d.platformSSRC,
+		"callID":           d.platformCallId,
+		"deviceID":         device.DeviceId,
+		"channelID":        d.channel.ChannelId,
+		"deviceIP":         device.IP,
+		"devicePort":       device.Port,
+		"localPort":        device.LocalPort,
+		"startTime":        time.Now(),
+		"from":             fromHDR.Address.String(),
+		"to":               toHeader.Address.String(),
+		"contact":          device.contactHDR.Address.String(),
+		"subject":          subject,
+		"recipient":        recipient.String(),
+		"sdp":              strings.Join(sdpInfo, "\r\n"),
+		"via":              viaHeader.String(),
+		"viaBranch":        func() string { v, _ := viaHeader.Params.Get("branch"); return v }(),
 	})
 	return
 }
@@ -289,7 +286,7 @@ func (d *ForwardDialog) Run() (err error) {
 			case "y":
 				if len(ls[1]) > 0 {
 					if _ssrc, err := strconv.ParseInt(ls[1], 10, 0); err == nil {
-						d.SSRC = uint32(_ssrc)
+						d.ForwardConfig.Source.SSRC = uint32(_ssrc)
 					} else {
 						d.gb.Error("read invite response y ", "err", err)
 					}
@@ -309,8 +306,6 @@ func (d *ForwardDialog) Run() (err error) {
 							d.ForwardConfig.Source.Port = uint16(port)
 						}
 					}
-				} else {
-					d.ForwardConfig.Source.Port = d.MediaPort
 				}
 			}
 		}
@@ -323,9 +318,6 @@ func (d *ForwardDialog) Run() (err error) {
 		d.Error("ack session err", err)
 		d.Stop(errors.New("ack session err" + err.Error()))
 	}
-
-	// 更新 ForwardConfig 中的 SSRC
-	d.ForwardConfig.Source.SSRC = d.SSRC
 	// 创建新的 Forwarder
 	d.forwarder = mrtp.NewForwarder(&d.ForwardConfig)
 
@@ -341,35 +333,70 @@ func (d *ForwardDialog) Run() (err error) {
 	return d.forwarder.Forward(d)
 }
 
+// releaseAllocatedSourcePort 释放已分配的Source端口（用于启动失败时的清理）
+func (d *ForwardDialog) releaseAllocatedSourcePort() {
+	streamMode := d.ForwardConfig.Source.Mode // 使用Source.Mode，因为这是我们在OnInvite中设置的模式
+	sourcePort := d.ForwardConfig.Source.Port // 使用分配的端口
+
+	switch streamMode {
+	case mrtp.StreamModeTCPPassive:
+		if d.gb.tcpPort == 0 && sourcePort > 0 { // 多端口模式且分配了端口
+			// 回收端口，防止重复回收
+			if !d.gb.tcpPB.Release(sourcePort) {
+				d.Warn("[PORT_RELEASE_FAILED] Source TCP端口回收失败 - 端口已被释放或未分配 (ForwardDialog)", "port", sourcePort, "platformId", d.platformCallId, "channelId", d.channel.ChannelId, "streamMode", streamMode)
+			} else {
+				d.Info("[PORT_RELEASE_SUCCESS] Source TCP端口回收成功 (ForwardDialog)", "port", sourcePort, "platformId", d.platformCallId, "channelId", d.channel.ChannelId, "streamMode", streamMode)
+				d.gb.updatePortStats()
+			}
+		}
+	case mrtp.StreamModeUDP:
+		if d.gb.udpPort == 0 && sourcePort > 0 { // 多端口模式且分配了端口
+			// 回收端口，防止重复回收
+			if !d.gb.udpPB.Release(sourcePort) {
+				d.Warn("[PORT_RELEASE_FAILED] Source UDP端口回收失败 - 端口已被释放或未分配 (ForwardDialog)", "port", sourcePort, "platformId", d.platformCallId, "channelId", d.channel.ChannelId, "streamMode", streamMode)
+			} else {
+				d.Info("[PORT_RELEASE_SUCCESS] Source UDP端口回收成功 (ForwardDialog)", "port", sourcePort, "platformId", d.platformCallId, "channelId", d.channel.ChannelId, "streamMode", streamMode)
+				d.gb.updatePortStats()
+			}
+		}
+	case mrtp.StreamModeTCPActive:
+		// TCP Active 模式：设备会连接我们，我们没有分配端口，无需回收
+		d.Debug("ForwardDialog Dispose", "Source TCP Active模式，无需回收端口", "streamMode", streamMode)
+	}
+
+	d.Info("ForwardDialog source port release", "sourcePort", sourcePort)
+}
+
 // Dispose 释放会话资源
 func (d *ForwardDialog) Dispose() {
 	go func() {
 		time.Sleep(time.Second * 90) // 延迟90秒回收端口
-		streamMode := d.ForwardConfig.Target.Mode
+		d.releaseAllocatedSourcePort()
 
-		switch streamMode {
-		case mrtp.StreamModeUDP:
-			if d.gb.udpPort == 0 { // 多端口模式
+		// 回收 Target 端口（上级平台，如果是在 OnInvite 中分配的）
+		targetMode := d.ForwardConfig.Target.Mode
+		targetPort := d.ForwardConfig.Target.Port
+
+		switch targetMode {
+		case mrtp.StreamModeTCPActive:
+			if d.gb.tcpPort == 0 && targetPort > 0 { // 多端口模式且分配了端口
 				// 回收端口，防止重复回收
-				if !d.gb.udpPB.Release(d.MediaPort) {
-					d.Warn("[PORT_RELEASE_FAILED] UDP端口回收失败 - 端口已被释放或未分配 (ForwardDialog)", "port", d.MediaPort, "platformId", d.platformCallId, "channelId", d.channel.ChannelId, "streamMode", streamMode)
+				if !d.gb.tcpPB.Release(targetPort) {
+					d.Warn("[PORT_RELEASE_FAILED] Target TCP端口回收失败 - 端口已被释放或未分配 (ForwardDialog)", "port", targetPort, "platformId", d.platformCallId, "channelId", d.channel.ChannelId, "streamMode", targetMode)
 				} else {
-					d.Info("[PORT_RELEASE_SUCCESS] UDP端口回收成功 (ForwardDialog)", "port", d.MediaPort, "platformId", d.platformCallId, "channelId", d.channel.ChannelId, "streamMode", streamMode)
+					d.Info("[PORT_RELEASE_SUCCESS] Target TCP端口回收成功 (ForwardDialog)", "port", targetPort, "platformId", d.platformCallId, "channelId", d.channel.ChannelId, "streamMode", targetMode)
 					d.gb.updatePortStats()
 				}
 			}
 		case mrtp.StreamModeTCPPassive:
-			if d.gb.tcpPort == 0 { // 多端口模式
-				// 回收端口，防止重复回收
-				if !d.gb.tcpPB.Release(d.MediaPort) {
-					d.Warn("[PORT_RELEASE_FAILED] TCP端口回收失败 - 端口已被释放或未分配 (ForwardDialog)", "port", d.MediaPort, "platformId", d.platformCallId, "channelId", d.channel.ChannelId, "streamMode", streamMode)
-				} else {
-					d.Info("[PORT_RELEASE_SUCCESS] TCP端口回收成功 (ForwardDialog)", "port", d.MediaPort, "platformId", d.platformCallId, "channelId", d.channel.ChannelId, "streamMode", streamMode)
-					d.gb.updatePortStats()
-				}
-			}
+			// TCP Passive 模式：在 OnInvite 中没有分配端口，无需回收
+			d.Debug("ForwardDialog Dispose", "Target TCP Passive模式，无需回收端口", "streamMode", targetMode)
+		case mrtp.StreamModeUDP:
+			// UDP 模式：在 OnInvite 中没有分配端口，无需回收
+			d.Debug("ForwardDialog Dispose", "Target UDP模式，无需回收端口", "streamMode", targetMode)
 		}
-		d.Info("ForwardDialog listener port release", "port", d.MediaPort)
+
+		d.Info("ForwardDialog target port release", "targetPort", targetPort)
 	}()
 
 	if d.session != nil && d.session.InviteResponse != nil {

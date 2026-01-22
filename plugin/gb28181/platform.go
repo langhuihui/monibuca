@@ -352,6 +352,7 @@ func (p *Platform) Register(isUnregister bool) error {
 	tx, err := p.Client.TransactionRequest(p, req)
 	if err != nil {
 		p.plugin.Error(logTag, "error", err.Error())
+		p.PlatformModel.Status = false
 		return fmt.Errorf("创建事务失败: %v", err)
 	}
 	defer tx.Terminate()
@@ -360,6 +361,7 @@ func (p *Platform) Register(isUnregister bool) error {
 	res, err := p.getResponse(tx)
 	if err != nil {
 		p.plugin.Error(logTag, "error", err.Error())
+		p.PlatformModel.Status = false
 		return err
 	}
 
@@ -369,6 +371,7 @@ func (p *Platform) Register(isUnregister bool) error {
 		wwwAuth := res.GetHeader("WWW-Authenticate")
 		if wwwAuth == nil {
 			p.plugin.Error(logTag, "error", "no auth challenge")
+			p.PlatformModel.Status = false
 			return fmt.Errorf("no auth challenge")
 		}
 
@@ -376,6 +379,7 @@ func (p *Platform) Register(isUnregister bool) error {
 		chal, err := digest.ParseChallenge(wwwAuth.Value())
 		if err != nil {
 			p.plugin.Error(logTag, "error", err.Error())
+			p.PlatformModel.Status = false
 			return err
 		}
 
@@ -398,6 +402,7 @@ func (p *Platform) Register(isUnregister bool) error {
 		cred, err := digest.Digest(chal, opts)
 		if err != nil {
 			p.plugin.Error("calculating digest failed", "error", err.Error())
+			p.PlatformModel.Status = false
 			return err
 		}
 
@@ -435,6 +440,7 @@ func (p *Platform) Register(isUnregister bool) error {
 		tx, err = p.Client.TransactionRequest(p, newReq)
 		if err != nil {
 			p.plugin.Error(logTag, "error", err.Error())
+			p.PlatformModel.Status = false
 			return err
 		}
 		defer tx.Terminate()
@@ -443,6 +449,7 @@ func (p *Platform) Register(isUnregister bool) error {
 		res, err = p.getResponse(tx)
 		if err != nil {
 			p.plugin.Error(logTag, "error", err.Error())
+			p.PlatformModel.Status = false
 			return err
 		}
 	}
@@ -450,6 +457,7 @@ func (p *Platform) Register(isUnregister bool) error {
 	// 检查最终响应状态
 	if res.StatusCode != 200 {
 		p.plugin.Error(logTag, "status", res.StatusCode)
+		p.PlatformModel.Status = false
 		return fmt.Errorf("%s失败，状态码: %d", logTag, res.StatusCode)
 	}
 

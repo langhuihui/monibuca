@@ -985,20 +985,31 @@ func (gb *GB28181Plugin) OnInvite(req *sip.Request, tx sip.ServerTransaction) {
 
 	// 获取媒体信息
 	mediaPort := uint16(0)
-	if inviteInfo.StreamMode != mrtp.StreamModeTCPPassive {
-		if gb.MediaPort.Valid() {
-			var ok bool
-			mediaPort, ok = gb.tcpPB.Allocate()
-			if !ok {
-				gb.Error("[PORT_ALLOCATE_FAILED] TCP端口分配失败 - 无可用端口 (OnInvite)", "platformId", inviteInfo.RequesterId, "channelId", inviteInfo.TargetChannelId)
-				_ = tx.Respond(sip.NewResponseFromRequest(req, sip.StatusServiceUnavailable, "No Available Port", nil))
-				return
-			}
-			gb.Info("[PORT_ALLOCATE_SUCCESS] TCP端口分配成功 (OnInvite)", "port", mediaPort, "platformId", inviteInfo.RequesterId, "channelId", inviteInfo.TargetChannelId)
-			gb.updatePortStats()
+	switch inviteInfo.StreamMode {
+	case mrtp.StreamModeTCPPassive:
+		// TCP Passive 模式：我们主动连接上级平台，无需分配端口
+		// mediaPort 保持为 0
+	case mrtp.StreamModeUDP:
+		// UDP 模式：我们直接将设备的数据转发给上级平台的UDP地址，无需分配端口
+		// mediaPort 保持为 0
+	case mrtp.StreamModeTCPActive:
+		// TCP Active 模式：上级平台会连接我们，需要分配TCP端口
+		if gb.tcpPort > 0 {
+			mediaPort = gb.tcpPort
 		} else {
-			mediaPort = gb.MediaPort[0]
-			gb.Debug("OnInvite", "action", "use default port", "port", mediaPort)
+			if gb.MediaPort.Valid() {
+				var ok bool
+				mediaPort, ok = gb.tcpPB.Allocate()
+				if !ok {
+					gb.Error("[PORT_ALLOCATE_FAILED] TCP端口分配失败 - 无可用端口 (OnInvite)", "platformId", inviteInfo.RequesterId, "channelId", inviteInfo.TargetChannelId)
+					_ = tx.Respond(sip.NewResponseFromRequest(req, sip.StatusServiceUnavailable, "No Available Port", nil))
+					return
+				}
+				gb.Info("[PORT_ALLOCATE_SUCCESS] TCP端口分配成功 (OnInvite)", "port", mediaPort, "platformId", inviteInfo.RequesterId, "channelId", inviteInfo.TargetChannelId, "streamMode", inviteInfo.StreamMode)
+				gb.updatePortStats()
+			} else {
+				mediaPort = gb.MediaPort[0]
+			}
 		}
 	}
 
@@ -1060,12 +1071,21 @@ func (gb *GB28181Plugin) OnInvite(req *sip.Request, tx sip.ServerTransaction) {
 	response.AppendHeader(&contactHDR)
 	response.SetBody([]byte(strings.Join(content, "\r\n") + "\r\n"))
 	var ip = ""
-	var streamMode mrtp.StreamMode
 	if channel.StreamPath == "" {
 		ip = channel.Device.MediaIp
-		streamMode = channel.Device.StreamMode
 	}
 	// 创建并保存SendRtpInfo，以供OnAck方法使用
+	// 根据上级平台的传输模式决定回复给上级平台的端口
+	targetPort := inviteInfo.Port // 默认使用上级平台指定的端口
+	switch inviteInfo.StreamMode {
+	case mrtp.StreamModeTCPPassive:
+		targetPort = inviteInfo.Port // TCP被动模式：我们连接上级平台，使用上级平台的端口
+	case mrtp.StreamModeTCPActive:
+		targetPort = mediaPort // TCP主动模式：上级平台连接我们，使用我们分配的端口
+	case mrtp.StreamModeUDP:
+		targetPort = inviteInfo.Port // UDP模式：我们发送数据到上级平台的端口
+	}
+
 	forwardDialog := &ForwardDialog{
 		gb:             gb,
 		platformCallId: req.CallID().Value(),
@@ -1078,15 +1098,15 @@ func (gb *GB28181Plugin) OnInvite(req *sip.Request, tx sip.ServerTransaction) {
 			Source: mrtp.ConnectionConfig{
 				//IP:   util.Conditional(channel.StreamPath != "", "", channel.Device.MediaIp),    // 将在 Run 方法中从 SDP 响应中获取
 				IP:   ip, // 将在 Run 方法中从 SDP 响应中获取
-				Port: 0,  // 将在 Run 方法中从 SDP 响应中获取
+				Port: 0,  // 将在 Run 方法中从设备SDP响应解析
 				//Mode: util.Conditional(channel.StreamPath != "", "", channel.Device.StreamMode), // 默认值，将在 Run 方法中根据 StreamMode 更新
-				Mode: streamMode, // 默认值，将在 Run 方法中根据 StreamMode 更新
-				SSRC: 0,          // 将在 Start 方法中设置
+				Mode: channel.Device.StreamMode, // 使用下级设备的传输模式
+				SSRC: 0,                         // 将在 Start 方法中设置
 			},
 			Target: mrtp.ConnectionConfig{
 				IP:   inviteInfo.IP,
-				Port: inviteInfo.Port,
-				Mode: inviteInfo.StreamMode, // 默认值，将在 Run 方法中根据 StreamMode 更新
+				Port: targetPort,            // 根据上级平台模式决定端口
+				Mode: inviteInfo.StreamMode, // 使用上级平台的传输模式
 				SSRC: inviteInfo.SSRC,       // 将在 Run 方法中从 platformSSRC 解析
 			},
 			Relay: false,
