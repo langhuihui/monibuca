@@ -5,7 +5,6 @@ package systray
 
 import (
 	"context"
-	"log"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -136,27 +135,27 @@ func WaitForSystrayQuit() <-chan struct{} {
 // redirectStdIO 将标准输出/错误重定向到 logs/m7s.log（追加写入）
 func redirectStdIO(execDir string) {
 	redirectOnce.Do(func() {
-		if execDir == "" {
-			return
-		}
-		logDir := filepath.Join(execDir, "logs")
-		logFile := filepath.Join(logDir, "m7s.log")
-
-		// 确保日志目录存在
-		_ = os.MkdirAll(logDir, 0o755)
-
-		// 追加方式打开日志文件
-		f, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
-		if err != nil {
-			return
-		}
-
-		// 启动 stdout/stderr 管道，去除 ANSI 颜色后写入同一个日志文件
-		startPipeRedirect(f, windows.STD_OUTPUT_HANDLE, "/dev/stdout")
-		startPipeRedirect(f, windows.STD_ERROR_HANDLE, "/dev/stderr")
-
-		// slog 默认使用 log 包输出错误，保持一致
-		log.SetOutput(f)
+		//if execDir == "" {
+		//	return
+		//}
+		//logDir := filepath.Join(execDir, "logs")
+		//logFile := filepath.Join(logDir, "m7s.log")
+		//
+		//// 确保日志目录存在
+		//_ = os.MkdirAll(logDir, 0o755)
+		//
+		//// 追加方式打开日志文件
+		//f, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+		//if err != nil {
+		//	return
+		//}
+		//
+		//// 启动 stdout/stderr 管道，去除 ANSI 颜色后写入同一个日志文件
+		//startPipeRedirect(f, windows.STD_OUTPUT_HANDLE, "/dev/stdout")
+		//startPipeRedirect(f, windows.STD_ERROR_HANDLE, "/dev/stderr")
+		//
+		//// slog 默认使用 log 包输出错误，保持一致
+		//log.SetOutput(f)
 	})
 }
 
