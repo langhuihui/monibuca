@@ -125,15 +125,14 @@ func (p *MP4Plugin) downloadSingleFile(stream *m7s.RecordStream, flag mp4.Flag, 
 			if isLocalStorage {
 				// 本地存储：根据存储级别获取完整路径后打开文件
 				if localStorage, ok := st.(*storage.LocalStorage); ok {
-					fullPath := localStorage.GetFullPath(stream.FilePath, stream.StorageLevel)
-					file, err = os.Open(fullPath)
+					file, err = localStorage.OpenFileFromStorageLevel(p, stream.FilePath, stream.StorageLevel)
 					if err != nil {
 						http.Error(w, fmt.Sprintf("failed to open local file: %v", err), http.StatusInternalServerError)
-						p.Error("failed to open local file", "err", err, "path", fullPath)
+						p.Error("failed to open local file", "err", err, "path", stream.FilePath, "storageLevel", stream.StorageLevel)
 						return
 					}
 					defer file.Close()
-					p.Info("reading file for fmp4 conversion from local storage", "storageLevel", stream.StorageLevel, "path", fullPath)
+					p.Info("reading file for fmp4 conversion from local storage", "storageLevel", stream.StorageLevel, "path", stream.FilePath)
 				} else {
 					// 类型不匹配，使用 OpenFile 作为兜底
 					file, err = st.OpenFile(context.Background(), stream.FilePath)

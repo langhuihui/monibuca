@@ -3,8 +3,10 @@ package mp4
 import (
 	"context"
 	"log/slog"
+	"m7s.live/v5/pkg/storage"
 	"net"
 	"os"
+	"path/filepath"
 	"reflect"
 	"time"
 
@@ -21,23 +23,71 @@ type DemuxerRange struct {
 	AudioCodec, VideoCodec codec.ICodecCtx
 	OnAudio, OnVideo       func(box.Sample) error
 	OnCodec                func(codec.ICodecCtx, codec.ICodecCtx)
+	storage                storage.Storage
 }
 
 func (d *DemuxerRange) Demux(ctx context.Context) error {
 	var ts, tsOffset int64
 	var audioInitialized, videoInitialized bool
+	st := d.storage
+	var globalStorageType string
+	var file storage.File
+	var err error
+	if st != nil {
+		globalStorageType = st.GetKey()
+	}
 	for _, stream := range d.Streams {
 		// 检查流的时间范围是否在指定范围内
 		if stream.EndTime.Before(d.StartTime) || stream.StartTime.After(d.EndTime) {
 			continue
 		}
+		if filepath.IsAbs(stream.FilePath) {
+			file, err = os.Open(stream.FilePath)
+			if err != nil {
+				continue
+			}
+		} else {
+			useGlobalStorage := st != nil && globalStorageType == stream.StorageType
+			isLocalStorage := stream.StorageType == string(storage.StorageTypeLocal) || stream.StorageType == ""
+			if useGlobalStorage {
+				if isLocalStorage {
+					if localStorage, ok := st.(*storage.LocalStorage); ok {
+						fullPath := localStorage.GetFullPath(stream.FilePath, stream.StorageLevel)
+						file, err = os.Open(fullPath)
+						if err != nil {
+							continue
+						}
+					} else {
+						// 类型不匹配，使用 OpenFile 作为兜底
+						file, err = st.OpenFile(ctx, stream.FilePath)
+						if err != nil {
+							continue
+						}
+					}
+				} else {
+					filePath, err := st.GetURL(ctx, stream.FilePath)
+					if err != nil || filePath == "" {
+						continue
+					}
+					file, err = st.OpenFile(ctx, filePath)
+					if err != nil {
+						continue
+					}
+				}
+			} else {
+				file, err = os.Open(stream.FilePath)
+				if err != nil {
+					continue
+				}
+			}
+		}
 
 		// 保存上一个文件的最后时间戳，用于跨文件连续
 		baseOffset := ts
-		file, err := os.Open(stream.FilePath)
-		if err != nil {
-			continue
-		}
+		//file, err := os.Open(stream.FilePath)
+		//if err != nil {
+		//	continue
+		//}
 		defer file.Close()
 
 		demuxer := NewDemuxer(file)

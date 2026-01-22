@@ -64,6 +64,7 @@ func (p *RecordReader) Run() (err error) {
 				writer.PublishVideoWriter = m7s.NewPublishVideoWriter[*VideoFrame](publisher, allocator)
 			}
 		},
+		storage: pullJob.Plugin.Server.Storage,
 	}
 	demuxerRange.OnAudio = func(a box.Sample) error {
 		if publisher.Paused != nil {

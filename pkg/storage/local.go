@@ -202,6 +202,18 @@ func (s *LocalStorage) CreateFile(ctx context.Context, path string) (File, error
 	return file, nil
 }
 
+func (s *LocalStorage) OpenFileFromStorageLevel(ctx context.Context, path string, storageLevel int) (File, error) {
+	if storageLevel == 0 {
+		storageLevel = 1
+	}
+	fullPath := filepath.Join(s.GetStoragePath(storageLevel), path)
+	file, err := os.Open(fullPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open file: %w", err)
+	}
+	return file, nil
+}
+
 func (s *LocalStorage) OpenFile(ctx context.Context, path string) (File, error) {
 	// 选择存储路径
 	basePath, err := s.selectStoragePath()
