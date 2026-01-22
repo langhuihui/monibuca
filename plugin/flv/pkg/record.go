@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"time"
@@ -15,6 +16,27 @@ import (
 	"m7s.live/v5/pkg/storage"
 	rtmp "m7s.live/v5/plugin/rtmp/pkg"
 )
+
+// MetaData 结构体保存 writeMetaTag 需要的编解码器元数据
+type MetaData struct {
+	// 音频相关
+	HasAudio        bool
+	AudioCodecID    int
+	AudioSampleRate int
+	AudioSampleSize int
+	AudioChannels   int
+
+	// 视频相关
+	HasVideo     bool
+	VideoCodecID int
+	VideoWidth   int
+	VideoHeight  int
+	VideoFPS     int
+	VideoBPS     int
+
+	// 日志记录器
+	Logger *slog.Logger
+}
 
 type WriteFlvMetaTagQueueTask struct {
 	task.Work
@@ -39,6 +61,9 @@ func (task *writeMetaTagTask) Start() (err error) {
 		err = task.file.Close()
 		if info, err := task.file.Stat(); err == nil && info.Size() == 0 {
 			err = os.Remove(info.Name())
+			if err != nil {
+				task.Error("writeMetaTagTask", "remove file err", err)
+			}
 		}
 	}()
 	var tempFile *os.File
@@ -78,9 +103,8 @@ func (task *writeMetaTagTask) Start() (err error) {
 	}
 }
 
-func writeMetaTag(file storage.File, suber *m7s.Subscriber, filepositions []uint64, times []float64, duration *int64) {
-	ar, vr := suber.AudioReader, suber.VideoReader
-	hasAudio, hasVideo := ar != nil, vr != nil
+func writeMetaTag(file storage.File, metadata *MetaData, filepositions []uint64, times []float64, duration *int64) {
+	hasAudio, hasVideo := metadata.HasAudio, metadata.HasVideo
 	var amf rtmp.AMF
 	metaData := rtmp.EcmaArray{
 		"MetaDataCreator": "m7s/" + m7s.Version,
@@ -94,21 +118,19 @@ func writeMetaTag(file storage.File, suber *m7s.Subscriber, filepositions []uint
 	}
 	var flags byte
 	if hasAudio {
-		ctx := ar.Track.ICodecCtx.GetBase().(pkg.IAudioCodecCtx)
 		flags |= (1 << 2)
-		metaData["audiocodecid"] = int(rtmp.ParseAudioCodec(ctx.FourCC()))
-		metaData["audiosamplerate"] = ctx.GetSampleRate()
-		metaData["audiosamplesize"] = ctx.GetSampleSize()
-		metaData["stereo"] = ctx.GetChannels() == 2
+		metaData["audiocodecid"] = metadata.AudioCodecID
+		metaData["audiosamplerate"] = metadata.AudioSampleRate
+		metaData["audiosamplesize"] = metadata.AudioSampleSize
+		metaData["stereo"] = metadata.AudioChannels == 2
 	}
 	if hasVideo {
-		ctx := vr.Track.ICodecCtx.GetBase().(pkg.IVideoCodecCtx)
 		flags |= 1
-		metaData["videocodecid"] = int(rtmp.ParseVideoCodec(ctx.FourCC()))
-		metaData["width"] = ctx.Width()
-		metaData["height"] = ctx.Height()
-		metaData["framerate"] = vr.Track.FPS
-		metaData["videodatarate"] = vr.Track.BPS
+		metaData["videocodecid"] = metadata.VideoCodecID
+		metaData["width"] = metadata.VideoWidth
+		metaData["height"] = metadata.VideoHeight
+		metaData["framerate"] = metadata.VideoFPS
+		metaData["videodatarate"] = metadata.VideoBPS
 		metaData["keyframes"] = map[string]any{
 			"filepositions": filepositions,
 			"times":         times,
@@ -133,7 +155,7 @@ func writeMetaTag(file storage.File, suber *m7s.Subscriber, filepositions []uint
 		flags:    flags,
 		metaData: marshals,
 	}
-	wrTask.Logger = suber.Logger.With("file", file.Name())
+	wrTask.Logger = metadata.Logger.With("file", file.Name())
 	writeMetaTagQueueTask.AddTask(wrTask)
 }
 
@@ -143,8 +165,9 @@ func NewRecorder(conf config.Record) m7s.IRecorder {
 
 type Recorder struct {
 	m7s.DefaultRecorder
-	writer *FlvWriter
-	file   storage.File
+	writer   *FlvWriter
+	file     storage.File
+	metadata *MetaData // 保存编解码器元数据，避免在OnStop回调时指针失效
 }
 
 var CustomFileName = func(job *m7s.RecordJob) string {
@@ -178,29 +201,6 @@ func (r *Recorder) createStream(start time.Time) (err error) {
 	if err != nil {
 		return
 	}
-	// 写入序列头（如果已知）以保证每个分片可独立回放
-	// 优先使用 Subscriber 的 VideoReader/AudioReader 的 codec context 的 sequence frame
-	sub := r.RecordJob.Subscriber
-	if sub != nil {
-		// 视频序列头
-		if sub.VideoReader != nil && sub.VideoReader.Track != nil && sub.VideoReader.Track.ICodecCtx != nil {
-			if seqCtx, ok := sub.VideoReader.Track.ICodecCtx.(pkg.ISequenceCodecCtx[*rtmp.VideoFrame]); ok {
-				seq := seqCtx.GetSequenceFrame()
-				if seq != nil && seq.Size > 0 {
-					_ = r.writer.WriteTag(FLV_TAG_TYPE_VIDEO, 0, uint32(seq.Size), seq.Buffers...)
-				}
-			}
-		}
-		// 音频序列头
-		if sub.AudioReader != nil && sub.AudioReader.Track != nil && sub.AudioReader.Track.ICodecCtx != nil {
-			if seqCtx, ok := sub.AudioReader.Track.ICodecCtx.(pkg.ISequenceCodecCtx[*rtmp.AudioFrame]); ok {
-				seq := seqCtx.GetSequenceFrame()
-				if seq != nil && seq.Size > 0 {
-					_ = r.writer.WriteTag(FLV_TAG_TYPE_AUDIO, 0, uint32(seq.Size), seq.Buffers...)
-				}
-			}
-		}
-	}
 	return
 }
 
@@ -230,10 +230,14 @@ func (r *Recorder) Run() (err error) {
 	var duration int64
 	ctx := &r.RecordJob
 	suber := ctx.Subscriber
+
 	noFragment := ctx.RecConf.Fragment == 0 || ctx.RecConf.Append
+	suber.OnStop(func() {
+		writeMetaTag(r.file, r.metadata, filepositions, times, &duration)
+	})
 	checkFragment := func(absTime uint32, writeTime time.Time) {
 		if duration = int64(absTime); time.Duration(duration)*time.Millisecond >= ctx.RecConf.Fragment {
-			writeMetaTag(r.file, suber, filepositions, times, &duration)
+			writeMetaTag(r.file, r.metadata, filepositions, times, &duration)
 			r.writeTailer(writeTime)
 			filepositions = []uint64{0}
 			times = []float64{0}
@@ -259,6 +263,21 @@ func (r *Recorder) Run() (err error) {
 	}
 
 	return m7s.PlayBlock(ctx.Subscriber, func(audio *rtmp.AudioFrame) (err error) {
+		// 初始化元数据结构体（如果还没有）
+		if r.metadata == nil {
+			r.metadata = &MetaData{Logger: suber.Logger}
+		}
+
+		// 如果还没有设置音频参数，并且当前有音频流，则设置音频参数
+		if !r.metadata.HasAudio && suber.AudioReader != nil {
+			r.metadata.HasAudio = true
+			audioCtx := suber.AudioReader.Track.ICodecCtx.GetBase().(pkg.IAudioCodecCtx)
+			r.metadata.AudioCodecID = int(rtmp.ParseAudioCodec(audioCtx.FourCC()))
+			r.metadata.AudioSampleRate = audioCtx.GetSampleRate()
+			r.metadata.AudioSampleSize = audioCtx.GetSampleSize()
+			r.metadata.AudioChannels = audioCtx.GetChannels()
+		}
+
 		if suber.VideoReader == nil && !noFragment {
 			checkFragment(suber.AudioReader.AbsTime, suber.AudioReader.Value.WriteTime)
 		}
@@ -266,11 +285,27 @@ func (r *Recorder) Run() (err error) {
 		offset += int64(audio.Size + 15)
 		return
 	}, func(video *rtmp.VideoFrame) (err error) {
+		// 初始化元数据结构体（如果还没有）
+		if r.metadata == nil {
+			r.metadata = &MetaData{Logger: suber.Logger}
+		}
+
 		if r.Event.StartTime.IsZero() {
 			err = r.createStream(suber.VideoReader.Value.WriteTime)
 			if err != nil {
 				return err
 			}
+		}
+
+		// 如果还没有设置视频参数，并且当前有视频流，则设置视频参数
+		if !r.metadata.HasVideo && suber.VideoReader != nil {
+			r.metadata.HasVideo = true
+			videoCtx := suber.VideoReader.Track.ICodecCtx.GetBase().(pkg.IVideoCodecCtx)
+			r.metadata.VideoCodecID = int(rtmp.ParseVideoCodec(videoCtx.FourCC()))
+			r.metadata.VideoWidth = videoCtx.Width()
+			r.metadata.VideoHeight = videoCtx.Height()
+			r.metadata.VideoFPS = suber.VideoReader.Track.FPS
+			r.metadata.VideoBPS = suber.VideoReader.Track.BPS
 		}
 		if suber.VideoReader.Value.IDR {
 			filepositions = append(filepositions, uint64(offset))
