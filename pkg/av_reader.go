@@ -56,8 +56,19 @@ func (r *AVRingReader) readFrame(mode int) (err error) {
 	if err = r.ReadNext(); err != nil {
 		return
 	}
-	// 超过一半的缓冲区大小，说明Reader太慢，需要丢帧
-	if mode != SUBMODE_BUFFER && r.State == READSTATE_NORMAL && r.Track.LastValue.Sequence-r.Value.Sequence > uint32(r.Track.Size/2) {
+	// 根据倍速调整跳跃阈值，避免倍速播放时的不必要跳跃
+	speed := r.Track.GetSpeed()
+	var jumpThreshold uint32
+	if speed <= 2 {
+		jumpThreshold = uint32(r.Track.Size / 2) // 正常速度：一半缓冲区
+	} else if speed <= 8 {
+		jumpThreshold = uint32(r.Track.Size * 3 / 4) // 中等倍速：3/4缓冲区，更宽容
+	} else {
+		jumpThreshold = uint32(r.Track.Size * 7 / 8) // 高倍速：7/8缓冲区，非常宽容
+	}
+
+	// 超过阈值，说明Reader太慢，需要跳跃
+	if mode != SUBMODE_BUFFER && r.State == READSTATE_NORMAL && r.Track.LastValue.Sequence-r.Value.Sequence > jumpThreshold {
 		if idr := r.Track.GetIDR(); idr != nil && idr.Value.Sequence > r.Value.Sequence {
 			r.Warn("reader too slow", "lastSeq", r.Track.LastValue.Sequence, "seq", r.Value.Sequence)
 			return r.Read(idr)

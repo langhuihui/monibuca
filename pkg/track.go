@@ -40,11 +40,14 @@ type (
 		LastScale                            float64
 	}
 	SpeedController struct {
-		speed          float64
-		pausedTime     time.Duration
-		beginTime      time.Time
-		beginTimestamp time.Duration
-		Delta          time.Duration
+		speed           float64
+		pausedTime      time.Duration
+		beginTime       time.Time
+		beginTimestamp  time.Duration // 记录开始播放时的第一个时间戳
+		Delta           time.Duration
+		speedFrameCount int64         // 倍速控制帧计数，用于性能监控
+		lastAdjustTime  time.Time     // 上次调整时间
+		lastTimestamp   time.Duration // 上一个时间戳，用于检测重置
 	}
 	DropController struct {
 		acceptFrameCount    int
@@ -146,16 +149,30 @@ func (t *AVTrack) changeDropFrameLevel(newLevel int) {
 	t.LastDropLevelChange = time.Now()
 }
 
-func (t *AVTrack) CheckIfNeedDropFrame(maxFPS int) (drop bool) {
+func (t *AVTrack) CheckIfNeedDropFrame(maxFPS int, speed float64) (drop bool) {
 	drop = maxFPS > 0 && (t.accpetFPS > maxFPS)
+
+	// 根据倍速调整丢帧策略，避免过度丢帧导致播放不均匀
+	if speed > 2 && speed <= 4 {
+		// 4倍速：非常保守，只在极端情况下才丢帧
+		drop = drop && (t.accpetFPS > maxFPS*3)
+	} else if speed > 4 && speed <= 8 {
+		// 5-8倍速：保守策略
+		drop = drop && (t.accpetFPS > maxFPS*2)
+	} else if speed > 16 {
+		// 极高倍速：激进策略
+		drop = drop || (t.accpetFPS > maxFPS/2)
+	}
+	// 正常倍速(<=2倍)和慢放(speed<1)保持原有逻辑
+
 	if drop {
 		defer func() {
-			if time.Since(t.LastDropLevelChange) > time.Second && t.DropFrameLevel > 0 {
+			if time.Since(t.LastDropLevelChange) > time.Second && t.DropFrameLevel < DROP_FRAME_LEVEL_DROP_ALL {
 				t.changeDropFrameLevel(t.DropFrameLevel + 1)
 			}
 		}()
 	}
-	// Enhanced frame dropping strategy based on DropFrameLevel
+
 	switch t.DropFrameLevel {
 	case DROP_FRAME_LEVEL_NODROP:
 		if drop {
@@ -252,28 +269,120 @@ func (t *AVTrack) AddPausedTime(d time.Duration) {
 	t.pausedTime += d
 }
 
+// GetSpeed 返回当前的播放倍速
+func (t *AVTrack) GetSpeed() float64 {
+	return t.speed
+}
+
+// ResetSpeedController 重置倍速控制器的状态，用于避免状态冲突
+func (t *AVTrack) ResetSpeedController() {
+	t.speed = 1.0 // 重置为正常速度
+	t.beginTime = time.Time{}
+	t.beginTimestamp = 0
+	t.Delta = 0
+	t.speedFrameCount = 0
+	t.lastAdjustTime = time.Time{}
+	t.lastTimestamp = 0
+	t.Info("speed controller reset")
+}
+
 func (t *AVTrack) speedControl(speed float64, ts time.Duration) {
+	now := time.Now()
+
 	if speed != t.speed || t.beginTime.IsZero() {
+		// 倍速改变或首次调用，重新初始化
 		t.speed = speed
-		t.beginTime = time.Now()
+		t.beginTime = now
+		t.beginTimestamp = ts // 记录开始播放时的第一个时间戳
+		t.pausedTime = 0
+		t.Delta = 0
+		t.speedFrameCount = 0
+		return
+	}
+
+	if speed == 0 {
+		// 暂停模式
+		return
+	}
+
+	// 检测时间戳重置（视频循环播放时）
+	if t.lastTimestamp != 0 && ts < t.lastTimestamp-100*time.Millisecond {
+		// 时间戳大幅倒退，重置倍速控制状态
+		t.Info("timestamp reset detected, reinitializing speed control", "last_ts", t.lastTimestamp.Milliseconds(), "current_ts", ts.Milliseconds())
+		t.beginTime = now
 		t.beginTimestamp = ts
 		t.pausedTime = 0
+		t.Delta = 0
+		t.speedFrameCount = 0
+		return
+	}
+	t.lastTimestamp = ts
+
+	elapsed := now.Sub(t.beginTime) - t.pausedTime
+	t.speedFrameCount++
+
+	// 正确的倍速控制算法：
+	// 视频时间戳是按正常速度编码的，要倍速播放就需要按比例压缩播放时间
+	// 理论播放时间 = (当前时间戳 - 开始时间戳) / 倍速
+	theoreticalElapsed := time.Duration(float64(ts-t.beginTimestamp) / speed)
+
+	// 计算需要休眠的时间：理论时间 - 实际时间
+	t.Delta = theoreticalElapsed - elapsed
+
+	// 限制Delta在合理范围内
+	if t.Delta > 500*time.Millisecond {
+		t.Delta = 500 * time.Millisecond
+	} else if t.Delta < -500*time.Millisecond {
+		t.Delta = -500 * time.Millisecond
+	}
+
+	// 动态负载保护：较短时间后激活，防止超时
+	if elapsed > 2*time.Minute && t.speedFrameCount%200 == 0 {
+		// 如果Delta太小（休眠时间太短），增加休眠时间保护系统
+		if t.Delta < 5*time.Millisecond {
+			t.Delta = 5 * time.Millisecond
+			if t.Logger.Enabled(t.ready, task.TraceLevel) {
+				t.Trace("load protection activated", "elapsed_min", elapsed.Minutes(), "forced_delta_ms", t.Delta.Milliseconds())
+			}
+		}
+	}
+
+	// 限制Delta在合理范围内，避免极端情况
+	if t.Delta > 500*time.Millisecond {
+		t.Delta = 500 * time.Millisecond
+	} else if t.Delta < -500*time.Millisecond {
+		t.Delta = -500 * time.Millisecond
+	}
+
+	// 根据倍速调整控制参数
+	var controlThreshold, maxSleep time.Duration
+	if speed <= 2 {
+		controlThreshold = 1 * time.Millisecond // 低倍速更精确控制
+		maxSleep = 200 * time.Millisecond
+	} else if speed <= 8 {
+		controlThreshold = 1 * time.Millisecond // 中等倍速也要精确控制
+		maxSleep = 100 * time.Millisecond
 	} else {
-		elapsed := time.Since(t.beginTime) - t.pausedTime
-		if speed == 0 {
-			t.Delta = ts - elapsed
-			if t.Logger.Enabled(t.ready, task.TraceLevel) {
-				t.Trace("speed 0", "ts", ts, "elapsed", elapsed, "delta", t.Delta)
-			}
-			return
-		}
-		should := time.Duration(float64(ts-t.beginTimestamp) / speed)
-		t.Delta = should - elapsed
-		if t.Delta > threshold {
-			if t.Logger.Enabled(t.ready, task.TraceLevel) {
-				t.Trace("speed control", "speed", speed, "elapsed", elapsed, "should", should, "delta", t.Delta)
-			}
-			time.Sleep(min(t.Delta, time.Millisecond*500))
-		}
+		controlThreshold = 1 * time.Millisecond // 高倍速也需要控制
+		maxSleep = 50 * time.Millisecond
+	}
+
+	// 移除定期重新同步，避免播放速度突然改变
+	// 系统会自然适应，不需要强制重新同步
+
+	// 只有当需要休眠的时间超过阈值时才进行休眠
+	if t.Delta > controlThreshold {
+		sleepTime := min(t.Delta, maxSleep)
+		// 计算实际倍速：(当前时间戳 - 开始时间戳) / 播放经过时间
+		actualSpeedRatio := float64(ts.Milliseconds()-t.beginTimestamp.Milliseconds()) / float64(elapsed.Milliseconds())
+		t.Trace("SPEED_CONTROL", "speed", speed, "elapsed_ms", elapsed.Milliseconds(),
+			"current_ts_ms", ts.Milliseconds(), "begin_ts_ms", t.beginTimestamp.Milliseconds(),
+			"delta_ms", t.Delta.Milliseconds(), "sleep_ms", sleepTime.Milliseconds(),
+			"actual_speed_ratio", actualSpeedRatio)
+		time.Sleep(sleepTime)
+	} else {
+		// 记录所有SpeedControl调用，即使不休眠
+		t.Trace("SPEED_CONTROL_NO_SLEEP", "speed", speed, "elapsed_ms", elapsed.Milliseconds(),
+			"current_ts_ms", ts.Milliseconds(), "delta_ms", t.Delta.Milliseconds(), "threshold_ms", controlThreshold.Milliseconds())
 	}
 }

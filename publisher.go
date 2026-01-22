@@ -395,8 +395,10 @@ func (p *Publisher) nextVideo() (err error) {
 	var idr *util.Ring[AVFrame]
 	if t.IDRingList.Len() > 0 {
 		idr = t.IDRingList.Back().Value
-		if p.Speed != 1 && t.CheckIfNeedDropFrame(p.MaxFPS) {
+		if p.Speed != 1 && t.CheckIfNeedDropFrame(p.MaxFPS, p.Speed) {
 			p.dropAfterTs = t.LastTs
+			t.Trace("FRAME_DROP", "speed", p.Speed, "max_fps", p.MaxFPS,
+				"drop_level", t.DropFrameLevel, "stream_path", p.StreamPath)
 			return ErrSkip
 		} else {
 			p.dropAfterTs = 0
@@ -696,7 +698,19 @@ func NewPublishVideoWriter[V IAVFrame](puber *Publisher, allocator *gomem.Scalab
 		return nil
 	}
 	if puber.VideoTrack.AVTrack != nil {
-		panic("video track already exists")
+		// Video track already exists, create a wrapper for the existing track
+		puber.Warn("video track already exists, creating wrapper")
+		pw := &PublishVideoWriter[V]{
+			Publisher:               puber,
+			ScalableMemoryAllocator: allocator,
+			videoTrack:              puber.VideoTrack.AVTrack,
+		}
+		// Reset SpeedController state for the reused track to prevent state conflicts
+		pw.videoTrack.ResetSpeedController()
+		// Also reset Publisher speed to normal for video loop playback
+		puber.Speed = 1.0
+		pw.VideoFrame = pw.getVideoFrameToWrite()
+		return pw
 	}
 	pw := &PublishVideoWriter[V]{
 		Publisher:               puber,
