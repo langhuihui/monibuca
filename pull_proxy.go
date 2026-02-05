@@ -62,8 +62,9 @@ type (
 	}
 	BasePullProxy struct {
 		*PullProxyConfig
-		Plugin  *Plugin
-		PullJob *PullJob
+		Plugin      *Plugin
+		PullJob     *PullJob
+		pullStarted bool // 标记是否已经首次拉流成功，避免断线重连时重复创建任务
 	}
 	HTTPPullProxy struct {
 		TCPPullProxy
@@ -104,11 +105,13 @@ func (d *BasePullProxy) ChangeStatus(status byte) {
 		return
 	}
 	from := d.Status
-	d.Plugin.Info("device status changed", "from", from, "to", status)
+	d.Plugin.Info("device status changed", "streamPath", d.StreamPath, "from", from, "to", status)
 	d.Status = status
 	switch status {
 	case PullProxyStatusOnline:
-		if d.PullOnStart && (from == PullProxyStatusOffline) {
+		// 只有首次拉流成功后才设置 pullStarted，断线重连时不触发自动拉流
+		// 由 Dispose() 中调用 PullJob.Stop() 来停止旧任务
+		if d.PullOnStart && !d.pullStarted && (from == PullProxyStatusOffline) {
 			d.Pull()
 		}
 	}
@@ -117,8 +120,12 @@ func (d *BasePullProxy) ChangeStatus(status byte) {
 func (d *BasePullProxy) Dispose() {
 	d.ChangeStatus(PullProxyStatusOffline)
 	if d.PullJob != nil {
+		d.PullJob.Debug("ready to stop pulljob", "d.PullJob.StreamPath", d.PullJob.StreamPath,
+			"d.streamPath", d.StreamPath, "d.ID", d.ID, "d.pull", d.PullJob.GetTaskID())
 		d.PullJob.Stop(task.ErrStopByUser)
 	}
+	// 重置 pullStarted 标志，允许设备重新上线时再次自动拉流
+	d.pullStarted = false
 }
 
 func (d *PullProxyConfig) InitializeWithServer(s *Server) {
@@ -155,7 +162,20 @@ func (d *BasePullProxy) Pull() {
 	var pubConf = d.Plugin.config.Publish
 	pubConf.PubAudio = d.Audio
 	pubConf.DelayCloseTimeout = util.Conditional(d.StopOnIdle, time.Second*5, 0)
-	d.PullJob, _ = d.Plugin.handler.Pull(d.GetStreamPath(), d.PullProxyConfig.Pull, &pubConf)
+	job, err := d.Plugin.handler.Pull(d.GetStreamPath(), d.PullProxyConfig.Pull, &pubConf)
+	if err != nil {
+		d.Plugin.Warn("pull failed", "streamPath", d.GetStreamPath(), "error", err)
+		return
+	}
+	d.PullJob = job
+	d.pullStarted = true // 标记首次拉流成功
+
+	// 监听 PullJob 停止事件，当 PullJob 自己停止时重置 pullStarted 标志
+	// 这样设备重新上线时可以再次自动拉流
+	job.OnDispose(func() {
+		d.pullStarted = false
+		d.Plugin.Debug("pull job disposed, reset pullStarted flag", "streamPath", d.GetStreamPath())
+	})
 }
 
 func (d *HTTPPullProxy) Start() (err error) {
@@ -249,6 +269,7 @@ func (s *Server) createPullProxy(conf *PullProxyConfig) (pullProxy IPullProxy, e
 	base.PullProxyConfig = conf
 	base.Plugin = plugin
 	s.PullProxies.AddTask(pullProxy, plugin.Logger.With("pullProxyId", conf.ID, "pullProxyType", conf.Type, "pullProxyName", conf.Name))
+	pullProxy.SetDescription("streamPath", pullProxy.GetStreamPath())
 	return
 }
 
@@ -549,6 +570,7 @@ func (s *Server) RemovePullProxy(ctx context.Context, req *pb.RequestWithId) (re
 		})
 		err = tx.Error
 		if device, ok := s.PullProxies.Get(uint(req.Id)); ok {
+			s.Debug("remove pull proxy", "id", req.Id, "device.StreamPath", device.GetStreamPath())
 			device.Stop(task.ErrStopByUser)
 		}
 		return
@@ -560,6 +582,7 @@ func (s *Server) RemovePullProxy(ctx context.Context, req *pb.RequestWithId) (re
 				tx := s.DB.Delete(&PullProxyConfig{}, device.ID)
 				err = tx.Error
 				if device, ok := s.PullProxies.Get(uint(device.ID)); ok {
+					s.Debug("remove pull proxy", "id", req.Id, "device.StreamPath", device.GetStreamPath())
 					device.Stop(task.ErrStopByUser)
 				}
 			}
