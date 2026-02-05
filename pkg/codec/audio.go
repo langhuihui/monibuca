@@ -36,7 +36,7 @@ func NewAACCtxFromRecord(record []byte) (ret *AACCtx, err error) {
 func NewPCMACtx() *PCMACtx {
 	return &PCMACtx{
 		AudioCtx: AudioCtx{
-			SampleRate: 90000,
+			SampleRate: 8000, // G.711 A-law 采样率为 8000Hz
 			Channels:   1,
 			SampleSize: 16,
 		},
@@ -46,7 +46,7 @@ func NewPCMACtx() *PCMACtx {
 func NewPCMUCtx() *PCMUCtx {
 	return &PCMUCtx{
 		AudioCtx: AudioCtx{
-			SampleRate: 90000,
+			SampleRate: 8000, // G.711 U-law 采样率为 8000Hz
 			Channels:   1,
 			SampleSize: 16,
 		},
