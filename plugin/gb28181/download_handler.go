@@ -46,7 +46,7 @@ func (gb *GB28181Plugin) handleDownloadFile(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	filePath := record.FilePath
+	filePath, _ := gb.Server.Storage.GetURL(gb, record.FilePath)
 	filename := filepath.Base(filePath)
 
 	gb.Info("从缓存记录获取文件路径",
