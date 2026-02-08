@@ -302,7 +302,7 @@ func (p *Platform) Register(isUnregister bool) error {
 	fromHdr := sip.FromHeader{
 		Address: sip.Uri{
 			User: p.PlatformModel.DeviceGBID,
-			Host: p.PlatformModel.ServerGBDomain,
+			Host: p.PlatformModel.DeviceGBDomain,
 		},
 		Params: sip.NewParams(),
 	}
