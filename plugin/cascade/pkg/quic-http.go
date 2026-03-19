@@ -3,6 +3,8 @@ package cascade
 import (
 	"bufio"
 	"context"
+	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -67,6 +69,25 @@ func (task *ReceiveRequestTask) Go() (err error) {
 					return err
 				}
 			}
+			// 保存 subscriber 引用，用于手动停止
+			subscriber := live.Subscriber
+			// 启动 goroutine 监听停止命令
+			go func() {
+				stopReader := bufio.NewReader(task.Stream)
+				for {
+					line, _, err := stopReader.ReadLine()
+					if err != nil {
+						break
+					}
+					if strings.HasPrefix(string(line), "STOPFLV") {
+						fmt.Printf("[cascade] 收到 STOPFLV: %s\n", line)
+						// 直接调用 subscriber.Stop() 停止订阅者
+						subscriber.Stop(errors.New("stop by STOPFLV command"))
+						cancel()
+						break
+					}
+				}
+			}()
 			return live.Run()
 		}
 		req, err = http.NewRequestWithContext(ctx, reqLine[0], reqLine[1], reader)

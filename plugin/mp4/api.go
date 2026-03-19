@@ -51,8 +51,57 @@ func (p *MP4Plugin) downloadSingleFile(stream *m7s.RecordStream, flag mp4.Flag, 
 	var file storage.File
 	var err error
 
-	// 最高优先级：如果 FilePath 是绝对路径，直接使用，跳过所有 storage 处理
-	if filepath.IsAbs(stream.FilePath) {
+	// 最高优先级：如果 FilePath 是 HTTP/HTTPS URL，直接读取
+	if strings.HasPrefix(stream.FilePath, "http://") || strings.HasPrefix(stream.FilePath, "https://") {
+		if flag == 0 {
+			// 普通 MP4：重定向到 URL，让客户端直接从源获取
+			p.Info("redirecting to http URL", "url", stream.FilePath)
+			http.Redirect(w, r, stream.FilePath, http.StatusFound)
+			return
+		}
+		// fMP4：下载文件到临时文件后处理
+		resp, err := http.Get(stream.FilePath)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("failed to download file: %v", err), http.StatusInternalServerError)
+			p.Error("failed to download file from URL", "err", err, "url", stream.FilePath)
+			return
+		}
+		defer resp.Body.Close()
+
+		// 创建临时文件
+		tmpFile, err := os.CreateTemp("", "mp4-*.tmp")
+		if err != nil {
+			http.Error(w, fmt.Sprintf("failed to create temp file: %v", err), http.StatusInternalServerError)
+			p.Error("failed to create temp file", "err", err)
+			return
+		}
+		tmpPath := tmpFile.Name()
+
+		// 复制内容到临时文件
+		_, err = io.Copy(tmpFile, resp.Body)
+		tmpFile.Close()
+		if err != nil {
+			os.Remove(tmpPath)
+			http.Error(w, fmt.Sprintf("failed to save downloaded file: %v", err), http.StatusInternalServerError)
+			p.Error("failed to save downloaded file", "err", err)
+			return
+		}
+
+		// 打开临时文件进行 fMP4 转换
+		file, err = os.Open(tmpPath)
+		if err != nil {
+			os.Remove(tmpPath)
+			http.Error(w, fmt.Sprintf("failed to open downloaded file: %v", err), http.StatusInternalServerError)
+			p.Error("failed to open downloaded file", "err", err)
+			return
+		}
+		defer func() {
+			file.Close()
+			os.Remove(tmpPath)
+		}()
+		p.Info("reading downloaded file for fmp4 conversion from URL", "url", stream.FilePath)
+		// 继续执行 fMP4 转换处理
+	} else if filepath.IsAbs(stream.FilePath) {
 		if flag == 0 {
 			// 普通 MP4：直接 ServeFile
 			http.ServeFile(w, r, stream.FilePath)

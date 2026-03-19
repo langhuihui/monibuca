@@ -746,6 +746,12 @@ message RecordFile {
   string streamPath = 3;
   google.protobuf.Timestamp startTime = 4;
   google.protobuf.Timestamp endTime = 5;
+  string filename = 6;
+  string type = 7;
+  uint32 duration = 8;
+  string audioCodec = 9;
+  string videoCodec = 10;
+  google.protobuf.Timestamp createdAt = 11;
 }
 
 message EventRecordFile {

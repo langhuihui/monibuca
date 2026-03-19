@@ -50,7 +50,7 @@ func (task *ListenQuicWork) Start() (err error) {
 		return
 	}
 	task.OnStop(task.Listener.Close)
-	task.Info("listen quic on", task.ListenAddr)
+	task.Info("quic start", "listen quic on", task.ListenAddr)
 	return
 }
 
