@@ -5899,6 +5899,7 @@ type GetPlatformChannelsRequest struct {
 	Count         int32                  `protobuf:"varint,3,opt,name=count,proto3" json:"count,omitempty"`
 	Query         string                 `protobuf:"bytes,4,opt,name=query,proto3" json:"query,omitempty"`    // 用于匹配通道名称、自定义通道名称、通道编号、自定义通道编号
 	Shared        int32                  `protobuf:"varint,5,opt,name=shared,proto3" json:"shared,omitempty"` // -1: 全部, 0: 未共享, 1: 已共享
+	Status        int32                  `protobuf:"varint,6,opt,name=status,proto3" json:"status,omitempty"` // -1: 全部, 0: 离线, 1: 在线
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -5968,6 +5969,13 @@ func (x *GetPlatformChannelsRequest) GetShared() int32 {
 	return 0
 }
 
+func (x *GetPlatformChannelsRequest) GetStatus() int32 {
+	if x != nil {
+		return x.Status
+	}
+	return 0
+}
+
 // 平台通道项
 type PlatformChannel struct {
 	state             protoimpl.MessageState `protogen:"open.v1"`
@@ -5981,6 +5989,7 @@ type PlatformChannel struct {
 	StreamPath        string                 `protobuf:"bytes,8,opt,name=streamPath,proto3" json:"streamPath,omitempty"`
 	InPlatform        bool                   `protobuf:"varint,9,opt,name=inPlatform,proto3" json:"inPlatform,omitempty"`   // 是否已加入到指定平台（true 表示已共享）
 	ChannelType       string                 `protobuf:"bytes,10,opt,name=channelType,proto3" json:"channelType,omitempty"` // 通道类型: "设备通道" 或 "自定义通道"
+	Status            string                 `protobuf:"bytes,11,opt,name=status,proto3" json:"status,omitempty"`           //通道状态ON或OFF
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -6081,6 +6090,13 @@ func (x *PlatformChannel) GetInPlatform() bool {
 func (x *PlatformChannel) GetChannelType() string {
 	if x != nil {
 		return x.ChannelType
+	}
+	return ""
+}
+
+func (x *PlatformChannel) GetStatus() string {
+	if x != nil {
+		return x.Status
 	}
 	return ""
 }
@@ -8600,7 +8616,7 @@ const file_gb28181_proto_rawDesc = "" +
 	"\x04data\x18\x04 \x01(\v2\x1d.gb28181pro.GroupChannelsDataR\x04data\"w\n" +
 	"\x11GroupChannelsData\x12,\n" +
 	"\x04list\x18\x01 \x03(\v2\x18.gb28181pro.GroupChannelR\x04list\x124\n" +
-	"\bchannels\x18\x02 \x03(\v2\x18.gb28181pro.GroupChannelR\bchannels\"\x94\x01\n" +
+	"\bchannels\x18\x02 \x03(\v2\x18.gb28181pro.GroupChannelR\bchannels\"\xac\x01\n" +
 	"\x1aGetPlatformChannelsRequest\x12\x1e\n" +
 	"\n" +
 	"platformId\x18\x01 \x01(\tR\n" +
@@ -8608,7 +8624,8 @@ const file_gb28181_proto_rawDesc = "" +
 	"\x04page\x18\x02 \x01(\x05R\x04page\x12\x14\n" +
 	"\x05count\x18\x03 \x01(\x05R\x05count\x12\x14\n" +
 	"\x05query\x18\x04 \x01(\tR\x05query\x12\x16\n" +
-	"\x06shared\x18\x05 \x01(\x05R\x06shared\"\xd7\x02\n" +
+	"\x06shared\x18\x05 \x01(\x05R\x06shared\x12\x16\n" +
+	"\x06status\x18\x06 \x01(\x05R\x06status\"\xef\x02\n" +
 	"\x0fPlatformChannel\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1c\n" +
 	"\tchannelId\x18\x02 \x01(\tR\tchannelId\x12(\n" +
@@ -8626,7 +8643,8 @@ const file_gb28181_proto_rawDesc = "" +
 	"inPlatform\x18\t \x01(\bR\n" +
 	"inPlatform\x12 \n" +
 	"\vchannelType\x18\n" +
-	" \x01(\tR\vchannelType\"\x8f\x01\n" +
+	" \x01(\tR\vchannelType\x12\x16\n" +
+	"\x06status\x18\v \x01(\tR\x06status\"\x8f\x01\n" +
 	"\x18PlatformChannelsResponse\x12\x12\n" +
 	"\x04code\x18\x01 \x01(\x05R\x04code\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12\x14\n" +

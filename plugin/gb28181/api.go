@@ -1054,13 +1054,17 @@ func (gb *GB28181Plugin) UpdatePlatform(ctx context.Context, req *pb.Platform) (
 				oldPlatform.Unregister()
 				oldPlatform.register.Ticker.Reset(time.Second * time.Duration(oldPlatform.PlatformModel.Expires))
 				oldPlatform.register.Tick(nil)
-				oldPlatform.register.platformKeepAliveTask.Ticker.Reset(time.Second * time.Duration(oldPlatform.PlatformModel.KeepTimeout))
+				if oldPlatform.register.platformKeepAliveTask != nil {
+					oldPlatform.register.platformKeepAliveTask.Ticker.Reset(time.Second * time.Duration(oldPlatform.PlatformModel.KeepTimeout))
+				}
 			}
 		} else if enableChanged {
 			// 如果平台被禁用，停止并移除旧的platform实例
 			oldPlatform.Unregister()
 			oldPlatform.register.Ticker.Reset(time.Hour * 999999)
-			oldPlatform.register.platformKeepAliveTask.Ticker.Reset(time.Hour * 999999)
+			if oldPlatform.register.platformKeepAliveTask != nil {
+				oldPlatform.register.platformKeepAliveTask.Ticker.Reset(time.Hour * 999999)
+			}
 		}
 	}
 
@@ -1727,10 +1731,19 @@ func (gb *GB28181Plugin) GetPlatformChannels(ctx context.Context, req *pb.GetPla
 			platformChannelIDs[ch.ID] = struct{}{}
 			// 判断查询匹配
 			if q != "" {
-				if !strings.Contains(strings.ToLower(ch.ChannelId), q) &&
+				if !strings.Contains(strings.ToLower(ch.ID), q) &&
 					!strings.Contains(strings.ToLower(ch.CustomChannelId), q) &&
 					!strings.Contains(strings.ToLower(ch.Name), q) &&
 					!strings.Contains(strings.ToLower(ch.CustomName), q) {
+					continue
+				}
+			}
+			// 根据 status 过滤：-1 全部, 0 离线, 1 在线
+			if req.Status != -1 {
+				// 自定义通道：检查通道状态
+				isOnline := ch.Status == gb28181.ChannelOnStatus
+				// 如果需要在线但实际离线，或者需要离线但实际在线，则跳过
+				if (req.Status == 1 && !isOnline) || (req.Status == 0 && isOnline) {
 					continue
 				}
 			}
@@ -1750,6 +1763,7 @@ func (gb *GB28181Plugin) GetPlatformChannels(ctx context.Context, req *pb.GetPla
 				DeviceName:        deviceName,
 				StreamPath:        ch.StreamPath,
 				InPlatform:        true,
+				Status:            string(ch.Status),
 				ChannelType: func() string {
 					if ch.Device != nil {
 						return "设备通道"
@@ -1768,8 +1782,16 @@ func (gb *GB28181Plugin) GetPlatformChannels(ctx context.Context, req *pb.GetPla
 			continue
 		}
 		// 只显示状态为正常的通道（ChannelOnStatus）
-		if ch.Status != gb28181.ChannelOnStatus {
-			continue
+		//if ch.Status != gb28181.ChannelOnStatus {
+		//	continue
+		//}
+		// 根据 status 过滤：-1 全部, 0 离线, 1 在线
+		if req.Status != -1 {
+			isOnline := ch.Status == gb28181.ChannelOnStatus
+			// 如果需要在线但实际离线，或者需要离线但实际在线，则跳过
+			if (req.Status == 1 && !isOnline) || (req.Status == 0 && isOnline) {
+				continue
+			}
 		}
 		// 根据 query 过滤
 		if q != "" {
@@ -1795,6 +1817,7 @@ func (gb *GB28181Plugin) GetPlatformChannels(ctx context.Context, req *pb.GetPla
 			DeviceName:        deviceName,
 			StreamPath:        ch.StreamPath,
 			InPlatform:        false,
+			Status:            string(ch.Status),
 			ChannelType: func() string {
 				if ch.Device != nil {
 					return "设备通道"
@@ -1864,7 +1887,8 @@ func (gb *GB28181Plugin) ChannelManageList(ctx context.Context, req *pb.GetChann
 			if !strings.Contains(strings.ToLower(ch.ChannelId), q) &&
 				!strings.Contains(strings.ToLower(ch.CustomChannelId), q) &&
 				!strings.Contains(strings.ToLower(ch.Name), q) &&
-				!strings.Contains(strings.ToLower(ch.CustomName), q) {
+				!strings.Contains(strings.ToLower(ch.CustomName), q) &&
+				!strings.Contains(strings.ToLower(ch.DeviceId), q) {
 				continue
 			}
 		}
@@ -2111,6 +2135,8 @@ func (gb *GB28181Plugin) RemovePlatformChannel(ctx context.Context, req *pb.Remo
 	if platform, ok := gb.platforms.Get(req.PlatformId); ok {
 		platform.channels.RemoveByKey(req.Id)
 		platform.PlatformModel.ChannelCount = platform.channels.Length
+		platformChannel := &gb28181.PlatformChannel{PlatformServerGBID: platform.PlatformModel.ServerGBID, ChannelDBID: req.Id}
+		gb.DB.Delete(platformChannel)
 		resp.Code = 0
 		resp.Message = "success"
 		return resp, nil
@@ -2138,6 +2164,8 @@ func (gb *GB28181Plugin) AddPlatformChannelShared(ctx context.Context, req *pb.A
 		if ch, ok := gb.channels.Get(req.Id); ok {
 			platform.channels.Set(ch)
 			platform.PlatformModel.ChannelCount = platform.channels.Length
+			platformChannel := &gb28181.PlatformChannel{PlatformServerGBID: platform.PlatformModel.ServerGBID, ChannelDBID: req.Id}
+			gb.DB.Create(platformChannel)
 			resp.Code = 0
 			resp.Message = "success"
 			return resp, nil

@@ -1224,6 +1224,7 @@ message GetPlatformChannelsRequest {
   int32 count = 3;
   string query = 4; // 用于匹配通道名称、自定义通道名称、通道编号、自定义通道编号
   int32 shared = 5; // -1: 全部, 0: 未共享, 1: 已共享
+  int32 status = 6; // -1: 全部, 0: 离线, 1: 在线
 }
 
 // 平台通道项
@@ -1238,6 +1239,7 @@ message PlatformChannel {
   string streamPath = 8;
   bool inPlatform = 9; // 是否已加入到指定平台（true 表示已共享）
   string channelType = 10; // 通道类型: "设备通道" 或 "自定义通道"
+  string status = 11;//通道状态ON或OFF
 }
 
 // 平台通道查询响应

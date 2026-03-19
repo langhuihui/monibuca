@@ -48,7 +48,7 @@ type GB28181Plugin struct {
 	pb.UnimplementedApiServer
 	m7s.Plugin
 	Serial         string `default:"34020000002000000001" desc:"sip 服务 id"` //sip 服务器 id, 默认 34020000002000000001
-	Realm          string `default:"3402000000" desc:"sip 服务域"`             //sip 服务器域，默认 3402000000
+	Realm          string `default:"3402000000" desc:"sip 服务域"`            //sip 服务器域，默认 3402000000
 	Password       string
 	Sip            SipConfig
 	MediaPort      util.Range[uint16] `default:"10001-20000" desc:"媒体端口范围"` //媒体端口范围
@@ -596,10 +596,10 @@ func (gb *GB28181Plugin) checkPlatform() {
 			// 查询通道列表
 			var channels []gb28181.DeviceChannel
 			if gb.DB != nil {
-				if err := gb.DB.Table("gb28181_channel gc").
+				if err := gb.DB.Table("gb28181_channel gc").Debug().
 					Select(`gc.*`).
 					Joins("left join gb28181_platform_channel gpc on gc.id=gpc.channel_db_id").
-					Where("gpc.platform_server_gb_id = ? and gc.status='ON'", platformModel.ServerGBID).
+					Where("gpc.platform_server_gb_id = ?", platformModel.ServerGBID).
 					Find(&channels).Error; err != nil {
 					gb.Error("<UNK>", "error", err.Error())
 				}

@@ -1269,7 +1269,9 @@ func (p *Platform) buildChannelItem(channel gb28181.DeviceChannel) string {
 <ParentID>%s</ParentID>
 <Parental>%d</Parental>
 <SafetyWay>%d</SafetyWay>
-<Status>ON</Status>
+<Status>%s</Status>
+<IPAddress>%s</IPAddress>
+<CivilCode>%s</CivilCode>
 <Info>
 </Info>
 </Item>`, deviceID, name, manufacturer, model,
@@ -1277,8 +1279,11 @@ func (p *Platform) buildChannelItem(channel gb28181.DeviceChannel) string {
 		channel.RegisterWay, // 直接使用整数值
 		channel.Secrecy,     // 直接使用整数值
 		parentID,
-		channel.Parental,  // 直接使用整数值
-		channel.SafetyWay) // 直接使用整数值
+		channel.Parental, // 直接使用整数值
+		channel.SafetyWay,
+		channel.Status,
+		channel.IPAddress,
+		channel.CivilCode) // 直接使用整数值
 }
 
 // handleDeviceControl 处理设备控制请求
