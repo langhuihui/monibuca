@@ -49,17 +49,3 @@ func (p *Puller) Dispose() {
 		p.ReadCloser = nil
 	}
 }
-
-// Dispose 发送 STOPFLV 命令，然后关闭 Stream
-func (p *Puller) Dispose() {
-	if p.ReadCloser != nil {
-		// 先发送停止命令
-		if w, ok := p.ReadCloser.(interface{ Write([]byte) (int, error) }); ok {
-			fmt.Fprintf(w, "STOPFLV %s\r\n", p.PullJob.Publisher.StreamPath)
-			fmt.Printf("[cascade] 发送 STOPFLV: %s\n", p.PullJob.Publisher.StreamPath)
-		}
-		// 关闭 Stream
-		p.ReadCloser.Close()
-		p.ReadCloser = nil
-	}
-}

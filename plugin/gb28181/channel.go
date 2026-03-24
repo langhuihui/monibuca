@@ -66,6 +66,8 @@ type PullProxy struct {
 }
 
 func NewPullProxy() m7s.IPullProxy {
+	p := &PullProxy{}
+	p.SetDescription("start", "aaa")
 	return &PullProxy{}
 }
 
@@ -74,7 +76,7 @@ func (p *PullProxy) GetKey() uint {
 }
 
 func (p *PullProxy) Start() error {
-	streamPaths := strings.Split(p.GetStreamPath(), "/")
+	streamPaths := strings.Split(p.PullProxyConfig.Pull.URL, "/")
 	p.deviceId, p.channelId = streamPaths[0], streamPaths[1]
 	p.devices = &p.Plugin.GetHandler().(*GB28181Plugin).devices
 	return p.TickTask.Start()
@@ -88,4 +90,8 @@ func (p *PullProxy) Tick(any) {
 		}
 	}
 	p.ChangeStatus(m7s.PullProxyStatusOffline)
+}
+
+func (p *PullProxy) GetTickInterval() time.Duration {
+	return time.Second * 20
 }

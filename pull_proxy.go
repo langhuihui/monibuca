@@ -270,6 +270,8 @@ func (s *Server) createPullProxy(conf *PullProxyConfig) (pullProxy IPullProxy, e
 	base.Plugin = plugin
 	s.PullProxies.AddTask(pullProxy, plugin.Logger.With("pullProxyId", conf.ID, "pullProxyType", conf.Type, "pullProxyName", conf.Name))
 	pullProxy.SetDescription("streamPath", pullProxy.GetStreamPath())
+	pullProxy.SetDescription("pullUrl", conf.URL)
+	pullProxy.SetDescription("type", conf.Type)
 	return
 }
 
