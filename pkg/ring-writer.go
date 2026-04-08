@@ -212,6 +212,19 @@ func (rb *RingWriter) Step() (normal bool) {
 		rb.PushIDR()
 	}
 	if rb.IDRingList.Len() > 0 {
+		// Proactively remove old IDR entries that the ring has grown past.
+		// Without this, after a glow() call the ring expands beyond the oldest
+		// IDR position, so the "next == oldIDR.Value" condition below is never
+		// true again and old IDR nodes (plus all frames they reference) leak.
+		for oldIDR := rb.IDRingList.Front(); oldIDR != nil && rb.IDRingList.Len() > 1; oldIDR = rb.IDRingList.Front() {
+			nextOld := oldIDR.Next()
+			if nextOld != nil && rb.durationFrom(nextOld.Value) > rb.BufferRange[0] {
+				rb.SLogger.Log(nil, task.TraceLevel, "remove stale idr")
+				rb.IDRingList.Remove(oldIDR)
+			} else {
+				break
+			}
+		}
 		oldIDR := rb.IDRingList.Front()
 		rb.BufferRange[1] = rb.durationFrom(oldIDR.Value)
 		// do not remove only idr

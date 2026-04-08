@@ -517,6 +517,12 @@ func (r *Receiver) Receive() (err error) {
 			audioClockRate = ctx.RTPCodecParameters.ClockRate
 			writer.AudioFrame.ICodecCtx = &ctx
 		}
+		// Recycle stale state left by a previous dropped connection.
+		// On the first call the frame is already clean (no-op).
+		// On reconnect this releases accumulated Packets entries and
+		// RecyclableMemory refs that were never published, preventing
+		// ReuseArray unbounded growth and allowing buf GC.
+		writer.AudioFrame.Recycle()
 		audioPacket = writer.AudioFrame.Packets.GetNextPointer()
 	}
 	if r.VideoCodecParameters != nil && r.PubVideo {
@@ -579,6 +585,9 @@ func (r *Receiver) Receive() (err error) {
 			}
 			writer.VideoFrame.ICodecCtx = ctx
 		}
+		// Same as audio: recycle before reuse to clear any stale packets
+		// and memory refs from a previous dropped connection.
+		writer.VideoFrame.Recycle()
 		videoPacket = writer.VideoFrame.Packets.GetNextPointer()
 	}
 	return r.NetConnection.Receive(false, func(channelID byte, buf []byte) error {

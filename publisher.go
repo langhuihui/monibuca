@@ -503,6 +503,7 @@ func (p *Publisher) Dispose() {
 	p.AudioTrack.Dispose()
 	p.VideoTrack.Dispose()
 	p.Info("unpublish", "remain", s.Streams.Length, "reason", p.StopReason())
+	DetachLogger(p.Logger)
 	p.State = PublisherStateDisposed
 	p.processPullProxyOnDispose()
 }
