@@ -2071,7 +2071,7 @@ func (gb *GB28181Plugin) AddChannel(ctx context.Context, req *pb.AddChannelReque
 		Device:        nil,
 		Logger:        gb.Logger.With("channel", channelID),
 	}
-	gb.channels.Add(channel)
+	gb.channels.Set(channel)
 
 	resp.Code = 0
 	resp.Message = "通道添加成功"
@@ -3756,7 +3756,7 @@ func (gb *GB28181Plugin) AddChannelWithProxy(ctx context.Context, req *pb.AddCha
 		Device:        nil, // 这是虚拟设备通道，不关联真实GB设备
 		Logger:        gb.Logger.With("channel", channelID),
 	}
-	gb.channels.Add(channel)
+	gb.channels.Set(channel)
 
 	// 10. 记录日志
 	gb.Info("添加通道成功",

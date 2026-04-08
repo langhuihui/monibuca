@@ -48,7 +48,7 @@ type GB28181Plugin struct {
 	pb.UnimplementedApiServer
 	m7s.Plugin
 	Serial         string `default:"34020000002000000001" desc:"sip 服务 id"` //sip 服务器 id, 默认 34020000002000000001
-	Realm          string `default:"3402000000" desc:"sip 服务域"`            //sip 服务器域，默认 3402000000
+	Realm          string `default:"3402000000" desc:"sip 服务域"`             //sip 服务器域，默认 3402000000
 	Password       string
 	Sip            SipConfig
 	MediaPort      util.Range[uint16] `default:"10001-20000" desc:"媒体端口范围"` //媒体端口范围
@@ -607,6 +607,20 @@ func (gb *GB28181Plugin) checkPlatform() {
 					for i := range channels {
 						if channel, ok := gb.channels.Get(channels[i].ID); ok {
 							platform.channels.Set(channel)
+						} else {
+							getChannel := channels[i]
+							var channelTmp = &Channel{
+								DeviceChannel: &getChannel,
+								Device:        nil,
+								Logger:        gb.Logger.With("channel", getChannel.ID),
+							}
+							if device, ok := gb.devices.Get(getChannel.DeviceId); ok {
+								channelTmp.Device = device
+								channelTmp.Logger = device.Logger.With("channel", getChannel.ID)
+							}
+							channelTmp.Status = gb28181.ChannelOffStatus
+							platform.channels.Set(channelTmp)
+							gb.channels.Set(channelTmp)
 						}
 					}
 				}
@@ -965,6 +979,11 @@ func (gb *GB28181Plugin) OnInvite(req *sip.Request, tx sip.ServerTransaction) {
 			}
 			return true
 		})
+	}
+	if channel == nil || channel.Status == gb28181.ChannelOffStatus {
+		gb.Debug("OnInvite", "error", "channel offline", "channel", inviteInfo.TargetChannelId, "find channel from req.to", req.To().Address.User)
+		_ = tx.Respond(sip.NewResponseFromRequest(req, sip.StatusBadRequest, "channel offline", nil))
+		return
 	}
 
 	gb.Info("OnInvite", "action", "channel found", "channel.ChannelId", channel.ChannelId, "channelName", channel.Name)
