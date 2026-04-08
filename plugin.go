@@ -724,6 +724,13 @@ func (p *Plugin) Pull(streamPath string, conf config.Pull, pubConf *config.Publi
 	}
 	job = puller.GetPullJob()
 	job.Init(puller, p, streamPath, conf, pubConf)
+	// If AddTask rejected the job (e.g. ExistTaskError — a PullJob for this
+	// streamPath is already active), propagate the error so callers don't
+	// store a stopped job reference and lose track of the real active job.
+	if job.IsStopped() {
+		err = job.StopReason()
+		job = nil
+	}
 	return
 }
 
