@@ -1,11 +1,13 @@
 package rtmp
 
 import (
+	"context"
 	"crypto/tls"
 	"errors"
 	"net"
 	"net/url"
 	"strings"
+	"time"
 
 	task "github.com/langhuihui/gotask"
 	pkg "m7s.live/v5/pkg"
@@ -37,7 +39,9 @@ func (c *Client) GetPushJob() *m7s.PushJob {
 	return nil
 }
 
-func (c *Client) commonStart(addr string) (err error) {
+const dialTimeout = 30 * time.Second
+
+func (c *Client) commonStart(ctx context.Context, addr string) (err error) {
 	c.u, err = url.Parse(addr)
 	if err != nil {
 		return
@@ -56,14 +60,15 @@ func (c *Client) commonStart(addr string) (err error) {
 		}
 	}
 	var conn net.Conn
+	dialer := &net.Dialer{Timeout: dialTimeout}
 	if isRtmps {
-		var tlsconn *tls.Conn
-		tlsconn, err = tls.Dial("tcp", c.u.Host, &tls.Config{
-			InsecureSkipVerify: true,
-		})
-		conn = tlsconn
+		tlsDialer := &tls.Dialer{
+			NetDialer: dialer,
+			Config:    &tls.Config{InsecureSkipVerify: true},
+		}
+		conn, err = tlsDialer.DialContext(ctx, "tcp", c.u.Host)
 	} else {
-		conn, err = net.Dial("tcp", c.u.Host)
+		conn, err = dialer.DialContext(ctx, "tcp", c.u.Host)
 	}
 	if err != nil {
 		return err
@@ -154,7 +159,7 @@ func (p *Puller) Start() (err error) {
 
 	p.pullCtx.GoToStepConst(pkg.StepURLParsing)
 
-	err = p.commonStart(addr)
+	err = p.commonStart(p.pullCtx.Context, addr)
 	if err != nil {
 		p.pullCtx.Fail(err.Error())
 		return
@@ -205,7 +210,7 @@ func (p *Pusher) GetPushJob() *m7s.PushJob {
 }
 
 func (p *Pusher) Start() (err error) {
-	return p.commonStart(p.pushCtx.Connection.RemoteURL)
+	return p.commonStart(p.pushCtx.Context, p.pushCtx.Connection.RemoteURL)
 }
 
 func (p *Pusher) Run() (err error) {

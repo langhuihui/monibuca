@@ -50,7 +50,7 @@ func (d *RTSPPushProxy) Start() (err error) {
 func (d *RTSPPushProxy) Tick(any) {
 	switch d.Status {
 	case m7s.PushProxyStatusOffline:
-		err := d.conn.Connect(d.URL.String())
+		err := d.conn.Connect(d.Context, d.URL.String())
 		if err != nil {
 			return
 		}

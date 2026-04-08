@@ -62,7 +62,7 @@ func (c *Stream) Do(req *util.Request) (*util.Response, error) {
 			c.Dispose()
 
 			// 使用新的 URL 重新建立连接
-			if err = c.Connect(req.URL.String()); err != nil {
+			if err = c.Connect(c.Context, req.URL.String()); err != nil {
 				return nil, fmt.Errorf("failed to connect to new host: %w", err)
 			}
 		}

@@ -64,14 +64,14 @@ func (d *RTSPPullProxy) Tick(any) {
 	var err error
 	switch d.Status {
 	case m7s.PullProxyStatusOffline:
-		err = d.conn.Connect(d.PullProxyConfig.URL)
+		err = d.conn.Connect(d.Context, d.PullProxyConfig.URL)
 		if err != nil {
 			return
 		}
 		d.ChangeStatus(m7s.PullProxyStatusOnline)
 	case m7s.PullProxyStatusOnline, m7s.PullProxyStatusPulling:
 		if d.conn.Conn == nil {
-			err = d.conn.Connect(d.PullProxyConfig.URL)
+			err = d.conn.Connect(d.Context, d.PullProxyConfig.URL)
 		} else {
 			t := time.Now()
 			err = d.conn.Options()
