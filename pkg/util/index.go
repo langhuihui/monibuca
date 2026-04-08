@@ -103,6 +103,10 @@ func (s ReuseArray[T]) RangePoint(f func(yield *T) bool) {
 }
 
 func (s *ReuseArray[T]) Reset() {
+	// clear() nils-out any pointer/slice fields in each element so GC can
+	// collect the memory those fields referenced (e.g. rtp.Packet.Payload
+	// sub-slices that keep allocator child slabs alive).
+	clear(*s)
 	*s = (*s)[:0]
 }
 

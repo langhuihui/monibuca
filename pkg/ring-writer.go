@@ -160,6 +160,13 @@ func (rb *RingWriter) Dispose() {
 	if rb.status.Add(-1) == -1 { // normal dispose
 		rb.Value.Unlock()
 	}
+	// Recycle all ring nodes to release gomem SMA allocations back to the free pool.
+	// Without this, disconnecting publishers leave AVFrame.Wraps[].RecyclableMemory
+	// permanently locked in the SMA, forcing it to allocate new mmap children.
+	// Discard() is safe to call with active readers (same pattern as reduce()).
+	rb.Ring.Do(func(frame *AVFrame) {
+		frame.Discard()
+	})
 }
 
 func (rb *RingWriter) GetIDR() *util.Ring[AVFrame] {

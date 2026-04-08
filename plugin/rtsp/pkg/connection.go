@@ -1,6 +1,7 @@
 package rtsp
 
 import (
+	"context"
 	"crypto/tls"
 	"encoding/binary"
 	"errors"
@@ -26,7 +27,7 @@ func NewNetConnection(conn net.Conn) *NetConnection {
 	c := &NetConnection{
 		Conn:            conn,
 		BufReader:       util.NewBufReader(conn),
-		MemoryAllocator: gomem.NewScalableMemoryAllocator(1 << 12),
+		MemoryAllocator: gomem.NewScalableMemoryAllocator(1 << 22), // 4MB 起始，避免多次 children 扩容
 		UserAgent:       "monibuca" + m7s.Version,
 	}
 	c.BufReader.SetTimeout(Timeout)
@@ -118,7 +119,7 @@ const (
 	StatePlay
 )
 
-func (c *NetConnection) Connect(remoteURL string) (err error) {
+func (c *NetConnection) Connect(ctx context.Context, remoteURL string) (err error) {
 	rtspURL, err := url.Parse(remoteURL)
 	if err != nil {
 		return
@@ -132,14 +133,15 @@ func (c *NetConnection) Connect(remoteURL string) (err error) {
 		}
 	}
 	var conn net.Conn
+	dialer := &net.Dialer{Timeout: Timeout}
 	if istls {
-		var tlsconn *tls.Conn
-		tlsconn, err = tls.Dial("tcp", rtspURL.Host, &tls.Config{
-			InsecureSkipVerify: true,
-		})
-		conn = tlsconn
+		tlsDialer := &tls.Dialer{
+			NetDialer: dialer,
+			Config:    &tls.Config{InsecureSkipVerify: true},
+		}
+		conn, err = tlsDialer.DialContext(ctx, "tcp", rtspURL.Host)
 	} else {
-		conn, err = net.Dial("tcp", rtspURL.Host)
+		conn, err = dialer.DialContext(ctx, "tcp", rtspURL.Host)
 	}
 	if err != nil {
 		return
@@ -153,7 +155,12 @@ func (c *NetConnection) Connect(remoteURL string) (err error) {
 	c.URL = rtspURL
 	c.URL.User = nil
 	c.SetDescription("remoteAddr", conn.RemoteAddr().String())
-	c.MemoryAllocator = gomem.NewScalableMemoryAllocator(1 << 12)
+	if c.MemoryAllocator != nil {
+		// 重连时旧 allocator 可能还有 in-flight 帧引用，不能立即 Recycle，
+		// 让其自然被 GC 回收；但创建新 allocator 前先置 nil 断开引用。
+		c.MemoryAllocator = nil
+	}
+	c.MemoryAllocator = gomem.NewScalableMemoryAllocator(1 << 22) // 从 4KB 改为 4MB，避免多次 children 扩容
 	// c.Backchannel = true
 	return
 }
@@ -349,25 +356,19 @@ func (c *NetConnection) Receive(sendMode bool, onReceive func(byte, []byte) erro
 						magic[2], err = c.ReadByte()
 						magic[3], err = c.ReadByte()
 						size = int(binary.BigEndian.Uint16(magic[2:]))
-						buf := c.MemoryAllocator.Malloc(size)
+						// 使用 make 而非 SMA Malloc，避免音视频包交错导致 SMA 碎片化
+						buf := make([]byte, size)
 						if err = c.ReadNto(size, buf); err != nil {
-							c.MemoryAllocator.Free(buf)
 							return
 						} else if onReceive != nil {
 							if recvErr := onReceive(channelID, buf); recvErr == nil {
 								// 内存被接管，不需要释放
 							} else if errors.Is(recvErr, pkg.ErrDiscard) || errors.Is(recvErr, pkg.ErrMuted) {
-								// 丢弃错误和静音错误，继续循环
-								if !errors.Is(recvErr, pkg.ErrDiscard) {
-									c.MemoryAllocator.Free(buf)
-								}
+								// 丢弃错误和静音错误，继续循环（make buf 由 GC 回收）
 							} else {
 								// 其他错误，终止循环
-								c.MemoryAllocator.Free(buf)
 								return recvErr
 							}
-						} else {
-							c.MemoryAllocator.Free(buf)
 						}
 						break
 					}
@@ -383,34 +384,26 @@ func (c *NetConnection) Receive(sendMode bool, onReceive func(byte, []byte) erro
 			if err = c.Skip(4); err != nil {
 				return
 			}
-			buf := c.MemoryAllocator.Malloc(size)
+			// 使用 make 而非 SMA Malloc，避免音视频包交错导致 SMA 碎片化；
+			// GC 负责回收未被 AddRecycleBytes 接管的短生命周期包。
+			buf := make([]byte, size)
 			if err = c.ReadNto(size, buf); err != nil {
-				c.MemoryAllocator.Free(buf)
 				return
 			}
 
-			var needToFree = true // 默认需要释放内存
 			if channelID&1 == 0 { // 偶数通道，RTP数据
 				if onReceive != nil {
 					if recvErr := onReceive(channelID, buf); recvErr == nil {
-						// 如果回调返回nil，表示内存被接管
-						needToFree = false
+						// 内存被接管（AddRecycleBytes），不需要额外释放
 					} else if errors.Is(recvErr, pkg.ErrDiscard) || errors.Is(recvErr, pkg.ErrMuted) {
-						// 丢弃错误和静音错误，继续循环
-						needToFree = !errors.Is(recvErr, pkg.ErrDiscard)
+						// 丢弃/静音，buf 由 GC 回收
 					} else {
 						// 其他错误，终止循环
-						c.MemoryAllocator.Free(buf)
 						return recvErr
 					}
 				}
 			} else if onRTCP != nil { // 奇数通道，RTCP数据
-				onRTCP(channelID, buf) // 处理RTCP数据,及时释放内存
-			}
-
-			// 如果需要释放内存，则释放
-			if needToFree {
-				c.MemoryAllocator.Free(buf)
+				onRTCP(channelID, buf) // buf 由 GC 回收
 			}
 		}
 

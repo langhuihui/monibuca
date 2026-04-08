@@ -131,6 +131,7 @@ func (s *Subscriber) Start() (err error) {
 func (s *Subscriber) Dispose() {
 	s.Plugin.Server.Subscribers.Remove(s)
 	s.Info("unsubscribe", "reason", s.StopReason())
+	DetachLogger(s.Logger)
 	if s.waitingPublish() {
 		s.Plugin.Server.Waiting.Leave(s)
 	} else {
