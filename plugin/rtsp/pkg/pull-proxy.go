@@ -69,7 +69,7 @@ func (d *RTSPPullProxy) Tick(any) {
 			return
 		}
 		d.ChangeStatus(m7s.PullProxyStatusOnline)
-	case m7s.PullProxyStatusOnline, m7s.PullProxyStatusPulling:
+	case m7s.PullProxyStatusOnline:
 		if d.conn.Conn == nil {
 			err = d.conn.Connect(d.Context, d.PullProxyConfig.URL)
 		} else {
@@ -79,6 +79,19 @@ func (d *RTSPPullProxy) Tick(any) {
 		}
 		if err != nil {
 			d.ChangeStatus(m7s.PullProxyStatusOffline)
+		}
+	case m7s.PullProxyStatusPulling:
+		// When Pulling, the active PullJob manages the RTSP connection.
+		// Only perform a passive heartbeat; do NOT reset to Offline on
+		// failure, as that would corrupt the Pulling→Online lifecycle
+		// used by processPullProxyOnDispose/OnStart to track recording state.
+		if d.conn.Conn != nil {
+			t := time.Now()
+			err = d.conn.Options()
+			d.RTT = time.Since(t)
+			if err != nil {
+				d.Info("pull proxy heartbeat failed while pulling (ignored)", "error", err)
+			}
 		}
 	}
 }

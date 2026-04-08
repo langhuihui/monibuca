@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/langhuihui/gotask"
+	task "github.com/langhuihui/gotask"
 	"github.com/mcuadros/go-defaults"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -228,7 +228,11 @@ func (p *Publisher) processPullProxyOnStart() {
 		return pullProxy.GetStreamPath() == p.StreamPath
 	}); ok {
 		p.PullProxyConfig = pullProxy.GetConfig()
-		if p.PullProxyConfig.Status == PullProxyStatusOnline {
+		prevStatus := p.PullProxyConfig.Status
+		// 只在设备已确认可达时（Online 或 Pulling 重连竞态）才更新状态并启动录制。
+		// Offline 时 PullJob(MaxRetry=-1) 的盲重试不应触发 ChangeStatus 或 RecordJob，
+		// 否则会导致 Offline→Pulling→Online 死循环，以及无效录制不断启停。
+		if prevStatus == PullProxyStatusOnline || prevStatus == PullProxyStatusPulling {
 			pullProxy.ChangeStatus(PullProxyStatusPulling)
 			if mp4Plugin, ok := s.Plugins.Get("MP4"); ok && p.PullProxyConfig.FilePath != "" {
 				mp4Plugin.Record(p, p.PullProxyConfig.Record, nil)

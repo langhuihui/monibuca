@@ -108,6 +108,9 @@ func (r *DefaultRecorder) CreateStream(start time.Time, customFileName func(*Rec
 			recordJob.Plugin.DB.Save(&r.Event.RecordStream)
 		}
 	}
+	recordJob.SetDescription("streamPath", recordJob.StreamPath)
+	recordJob.SetDescription("fileName", filePath)
+	recordJob.SetDescription("startTime", start.Format("2006-01-02 15:04:05"))
 	return
 }
 

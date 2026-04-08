@@ -112,6 +112,8 @@ type Publisher struct {
 	PullProxyConfig        *PullProxyConfig
 	dropAfterTs            time.Duration
 	bufferTimeCounts       map[time.Duration]int
+	serverSubCount         int
+	vodSubCount            int
 }
 
 type PublishParam struct {
@@ -181,13 +183,19 @@ func (p *Publisher) Go() error {
 			}
 			if p.PubVideo && p.VideoTrack.CheckTimeout(p.PublishTimeout) {
 				p.Error("video timeout", "writeTime", p.VideoTrack.LastValue.WriteTime)
-				if !p.HasAudioTrack() && p.VideoTrack.LastValue.Sequence > 0 {
+				if p.VideoTrack.LastValue.Sequence > 0 {
+					return ErrPublishTimeout
+				}
+				if !p.HasAudioTrack() {
 					return ErrPublishTimeout
 				}
 				p.NoVideo()
 			}
 			if p.PubAudio && p.AudioTrack.CheckTimeout(p.PublishTimeout) {
 				p.Error("audio timeout", "writeTime", p.AudioTrack.LastValue.WriteTime)
+				if p.AudioTrack.LastValue.Sequence > 0 {
+					return ErrPublishTimeout
+				}
 				if !p.HasVideoTrack() {
 					return ErrPublishTimeout
 				}
@@ -225,7 +233,13 @@ func (p *Publisher) RemoveSubscriber(subscriber *Subscriber) {
 	}
 	p.AudioTrack.SetMinBuffer(p.BufferTime)
 	p.VideoTrack.SetMinBuffer(p.BufferTime)
-	if p.State == PublisherStateSubscribed && p.Subscribers.Length == 0 {
+	if subscriber.Type == SubscribeTypeServer {
+		p.serverSubCount--
+	}
+	if subscriber.Type == SubscribeTypeVod {
+		p.vodSubCount--
+	}
+	if p.State == PublisherStateSubscribed && p.serverSubCount == 0 && p.vodSubCount == 0 {
 		p.State = PublisherStateWaitSubscriber
 		if p.DelayCloseTimeout > 0 {
 			p.TimeoutTimer.Reset(p.DelayCloseTimeout)
@@ -247,6 +261,12 @@ func (p *Publisher) AddSubscriber(subscriber *Subscriber) {
 	}
 	subscriber.waitStartTime = time.Time{}
 	if p.Subscribers.AddUnique(subscriber) {
+		if subscriber.Type == SubscribeTypeServer {
+			p.serverSubCount++
+		}
+		if subscriber.Type == SubscribeTypeVod {
+			p.vodSubCount++
+		}
 		p.bufferTimeCounts[subscriber.BufferTime]++
 		p.Info("subscriber +1", "count", p.Subscribers.Length)
 		if subscriber.BufferTime > p.BufferTime {

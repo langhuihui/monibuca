@@ -125,6 +125,7 @@ func (r *RecordRetryTickTask) Tick(any) {
 		// recording present but params mismatch -> treat as not matched
 		if r.cron.recording {
 			r.cron.recording = false
+			r.cron.startAttempted = false
 			r.cron.Info("RecordRetryTickTask", "event", "recording mismatch, reset", "stream", r.cron.StreamPath, "filePath", expectedPath, "expectedRecordType", expectedRecordType)
 		}
 	}
@@ -132,6 +133,11 @@ func (r *RecordRetryTickTask) Tick(any) {
 	// no recording: if previously recording, reset state
 	if r.cron.recording {
 		r.cron.recording = false
+		// Also reset startAttempted so the next tick can immediately retry.
+		// Without this, if foundMatch never ran to reset startAttempted, a
+		// publisher reconnect after video-timeout keeps startAttempted=true
+		// forever and recording never resumes.
+		r.cron.startAttempted = false
 		r.cron.Info("RecordRetryTickTask", "event", "recording stopped", "stream", r.cron.StreamPath)
 	}
 
