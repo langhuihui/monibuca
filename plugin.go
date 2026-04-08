@@ -680,6 +680,14 @@ func (p *Plugin) SubscribeWithConfig(ctx context.Context, streamPath string, con
 	}
 	err = p.Server.Streams.AddTask(subscriber, ctx).WaitStarted()
 	if err == nil {
+		// Use a self-timeout to prevent the subscriber from waiting forever
+		// if CheckSubWaitTimeout is not running (e.g., its Tick panicked and
+		// crashed the Streams event loop). The external checkTimeout is a
+		// secondary safety net; this select timeout is the primary one.
+		waitTimeout := conf.WaitTimeout
+		if waitTimeout <= 0 {
+			waitTimeout = 10 * time.Second
+		}
 		select {
 		case <-subscriber.waitPublishDone:
 			waitAudio := conf.WaitTrack == "all" || strings.Contains(conf.WaitTrack, "audio")
@@ -687,6 +695,9 @@ func (p *Plugin) SubscribeWithConfig(ctx context.Context, streamPath string, con
 			err = subscriber.Publisher.WaitTrack(waitAudio, waitVideo)
 		case <-subscriber.Done():
 			err = subscriber.StopReason()
+		case <-time.After(waitTimeout):
+			subscriber.Stop(ErrSubscribeTimeout)
+			err = ErrSubscribeTimeout
 		}
 	}
 	if err == nil {

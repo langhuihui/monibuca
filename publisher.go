@@ -520,10 +520,20 @@ func (p *Publisher) Dispose() {
 		p.Paused.Reject(p.StopReason())
 	}
 	p.processAliasOnDispose()
+	// Set disposed state BEFORE track disposal. processAliasOnDispose may
+	// have moved subscribers to Waiting or another publisher, and clears
+	// p.Subscribers. Setting the state here ensures subscriber goroutines
+	// detect disposal via checkPublishChanged even if track disposal panics
+	// (gotask silently catches panics via recover in the event loop).
+	p.State = PublisherStateDisposed
 	p.AudioTrack.Dispose()
 	p.VideoTrack.Dispose()
 	p.Info("unpublish", "remain", s.Streams.Length, "reason", p.StopReason())
 	DetachLogger(p.Logger)
+	// Stop any remaining subscribers (typically empty after processAliasOnDispose).
+	for subscriber := range p.SubscriberRange {
+		subscriber.Stop(ErrLost)
+	}
 	p.State = PublisherStateDisposed
 	p.processPullProxyOnDispose()
 }
@@ -539,6 +549,7 @@ func (p *Publisher) TransferSubscribers(newPublisher *Publisher) {
 		}
 	}
 	p.Subscribers = remain
+	p.serverSubCount = 0
 	p.BufferTime = p.Plugin.GetCommonConf().Publish.BufferTime
 	p.AudioTrack.SetMinBuffer(p.BufferTime)
 	p.VideoTrack.SetMinBuffer(p.BufferTime)

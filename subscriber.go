@@ -134,7 +134,7 @@ func (s *Subscriber) Dispose() {
 	DetachLogger(s.Logger)
 	if s.waitingPublish() {
 		s.Plugin.Server.Waiting.Leave(s)
-	} else {
+	} else if s.Publisher != nil && s.Publisher.State != PublisherStateDisposed {
 		s.Publisher.RemoveSubscriber(s)
 	}
 }
@@ -264,13 +264,42 @@ func (handler *SubscribeHandler[A, V]) clearReader() {
 
 func (handler *SubscribeHandler[A, V]) checkPublishChanged() {
 	s := handler.s
-	if s.waitingPublish() {
-		handler.clearReader()
-	}
+	// Check publisher change FIRST. processAliasOnDispose may have redirected
+	// this subscriber to a different publisher; we must detect that before
+	// the disposed-state check (which would incorrectly stop the subscriber).
 	if handler.p != s.Publisher {
 		handler.clearReader()
 		handler.createReaders()
 		handler.p = s.Publisher
+		return
+	}
+	if s.waitingPublish() {
+		handler.clearReader()
+		// Block while waiting for a new publisher. Use a self-deadline so
+		// we don't rely on CheckSubWaitTimeout (which may have crashed):
+		// wait up to WaitTimeout, then stop ourselves.
+		waitTimeout := s.Subscribe.WaitTimeout
+		if waitTimeout <= 0 {
+			waitTimeout = 10 * time.Second
+		}
+		deadline := time.Now().Add(waitTimeout)
+		for s.waitingPublish() {
+			if time.Now().After(deadline) {
+				s.Stop(ErrSubscribeTimeout)
+				return
+			}
+			select {
+			case <-s.Done():
+				return
+			case <-time.After(200 * time.Millisecond):
+			}
+		}
+	} else if handler.p != nil && handler.p.State == PublisherStateDisposed {
+		// Publisher was disposed — stop the subscriber so the Run loop exits
+		// cleanly. External retry mechanisms will create new subscribers.
+		handler.clearReader()
+		s.Stop(ErrLost)
+		return
 	}
 	runtime.Gosched()
 }
@@ -386,6 +415,7 @@ func (handler *SubscribeHandler[A, V]) Run() (err error) {
 					handler.videoFrame = &vr.Value
 					err = s.Err()
 				} else if errors.Is(err, ErrDiscard) {
+					s.Info("subscriber received ErrDiscard", "seq", vr.Value.Sequence)
 					s.VideoReader = nil
 					break
 				} else {
@@ -446,6 +476,7 @@ func (handler *SubscribeHandler[A, V]) Run() (err error) {
 					handler.audioFrame = &ar.Value
 					err = s.Err()
 				} else if errors.Is(err, ErrDiscard) {
+					s.Info("subscriber received ErrDiscard", "seq", ar.Value.Sequence)
 					s.AudioReader = nil
 					break
 				} else {
@@ -477,6 +508,17 @@ func (handler *SubscribeHandler[A, V]) Run() (err error) {
 			}
 		} else {
 			handler.createAudioReader()
+		}
+		// Defensive: if both readers are nil (publisher gone, tracks disposed),
+		// sleep briefly to prevent busy-spinning. This covers timing gaps where
+		// PublisherStateDisposed or waitStartTime are not yet visible due to
+		// cross-goroutine memory ordering.
+		if s.AudioReader == nil && s.VideoReader == nil {
+			select {
+			case <-s.Done():
+				return s.StopReason()
+			case <-time.After(100 * time.Millisecond):
+			}
 		}
 		handler.checkPublishChanged()
 	}
