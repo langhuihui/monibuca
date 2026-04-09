@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"reflect"
 	"regexp"
 	"runtime"
@@ -1178,12 +1180,58 @@ func (s *Server) DeleteRecord(ctx context.Context, req *pb.ReqRecordDelete) (res
 		}
 		s.DB.Find(&result, "stream_path=? AND type=? AND start_time>=? AND end_time<=?", req.StreamPath, req.Type, startTime, endTime)
 	}
-	err = s.DB.Delete(result).Error
+	// deletePhysicalFile 删除单条记录对应的实体文件
+	deletePhysicalFile := func(recordFile *RecordStream) error {
+		filePath := recordFile.FilePath
+		if strings.HasPrefix(filePath, "http://") || strings.HasPrefix(filePath, "https://") {
+			s.Error("cannot delete remote HTTP file", "url", filePath)
+			return fmt.Errorf("文件 %s 为网络资源，无法删除", filePath)
+		} else if filepath.IsAbs(filePath) {
+			return os.Remove(filePath)
+		} else {
+			st := s.Storage
+			var globalStorageType string
+			if st != nil {
+				globalStorageType = st.GetKey()
+			}
+			isLocalStorage := recordFile.StorageType == string(storage.StorageTypeLocal) || recordFile.StorageType == ""
+			useGlobalStorage := st != nil && globalStorageType == recordFile.StorageType
+			if useGlobalStorage {
+				if isLocalStorage {
+					if localStorage, ok := st.(*storage.LocalStorage); ok {
+						fullPath := localStorage.GetFullPath(filePath, recordFile.StorageLevel)
+						return os.Remove(fullPath)
+					}
+					return st.Delete(ctx, filePath)
+				}
+				return st.Delete(ctx, filePath)
+			}
+			if isLocalStorage {
+				return os.Remove(filePath)
+			}
+			s.Error("storage type mismatch, cannot delete file", "streamType", recordFile.StorageType, "globalType", globalStorageType)
+			return fmt.Errorf("storage type mismatch: stream=%s, global=%s", recordFile.StorageType, globalStorageType)
+		}
+	}
+
+	// 先校验所有实体文件均可删除，再开启事务，保证原子性
+	tx := s.DB.Begin()
+	if tx.Error != nil {
+		err = tx.Error
+		return
+	}
+	err = tx.Delete(result).Error
 	if err != nil {
+		tx.Rollback()
 		return
 	}
 	var apiResult []*pb.RecordFile
 	for _, recordFile := range result {
+		if fileErr := deletePhysicalFile(recordFile); fileErr != nil {
+			tx.Rollback()
+			err = fileErr
+			return
+		}
 		apiResult = append(apiResult, &pb.RecordFile{
 			Id:         uint32(recordFile.ID),
 			StartTime:  timestamppb.New(recordFile.StartTime),
@@ -1191,10 +1239,9 @@ func (s *Server) DeleteRecord(ctx context.Context, req *pb.ReqRecordDelete) (res
 			FilePath:   recordFile.FilePath,
 			StreamPath: recordFile.StreamPath,
 		})
-		err = os.Remove(recordFile.FilePath)
-		if err != nil {
-			return
-		}
+	}
+	if err = tx.Commit().Error; err != nil {
+		return
 	}
 	resp = &pb.ResponseDelete{
 		Data: apiResult,
