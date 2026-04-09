@@ -10,7 +10,6 @@ import (
 	"sync"
 	"time"
 
-	task "github.com/langhuihui/gotask"
 	"m7s.live/v5"
 	"m7s.live/v5/pkg/codec"
 	"m7s.live/v5/pkg/format"
@@ -63,6 +62,13 @@ func (w *HLSWriter) checkNoBodyRead() bool {
 }
 
 func (w *HLSWriter) Run() (err error) {
+	// 每次（重）启动时重置状态，避免 retry 后因残留 lastReadTime 立刻超时退出
+	w.lastReadTime = time.Time{}
+	w.hls_segment_count = 0
+	w.hls_playlist_count = 0
+	w.write_time = 0
+	w.memoryTs = sync.Map{}
+	w.M3u8.Reset()
 	if conf, ok := w.TransformJob.Config.Input.(string); ok {
 		ss := strings.Split(conf, "x")
 		if len(ss) != 2 {
@@ -88,10 +94,10 @@ func (w *HLSWriter) Run() (err error) {
 	}
 	MemoryTs.Store(w.TransformJob.StreamPath, w)
 	var audioCodec, videoCodec codec.FourCC
-	if subscriber.Publisher.HasAudioTrack() {
+	if subscriber.Publisher.HasAudioTrack() && subscriber.Publisher.AudioTrack.AVTrack != nil && subscriber.Publisher.AudioTrack.ICodecCtx != nil {
 		audioCodec = subscriber.Publisher.AudioTrack.FourCC()
 	}
-	if subscriber.Publisher.HasVideoTrack() {
+	if subscriber.Publisher.HasVideoTrack() && subscriber.Publisher.VideoTrack.AVTrack != nil && subscriber.Publisher.VideoTrack.ICodecCtx != nil {
 		videoCodec = subscriber.Publisher.VideoTrack.FourCC()
 	}
 	w.ts = &TsInMemory{}
@@ -100,12 +106,12 @@ func (w *HLSWriter) Run() (err error) {
 	return m7s.PlayBlock(subscriber, func(audio *format.Mpeg2Audio) error {
 		pesAudio.Pts = uint64(subscriber.AudioReader.AbsTime) * 90
 		if w.checkNoBodyRead() {
-			return errors.Join(ErrNoBodyRead, task.ErrStopByUser)
+			return ErrNoBodyRead
 		}
 		return pesAudio.WritePESPacket(audio.Memory, &w.ts.RecyclableMemory)
 	}, func(video *mpegts.VideoFrame) (err error) {
 		if w.checkNoBodyRead() {
-			return errors.Join(ErrNoBodyRead, task.ErrStopByUser)
+			return ErrNoBodyRead
 		}
 		vr := w.TransformJob.Subscriber.VideoReader
 		if vr.Value.IDR {

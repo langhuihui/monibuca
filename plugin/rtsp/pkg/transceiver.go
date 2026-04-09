@@ -415,7 +415,7 @@ func (r *Receiver) SetMedia(medias []*Media) (err error) {
 			}
 			hasVideo = true // 标记找到视频
 		} else {
-			r.Stream.Warn("media kind not support", "kind", codec.Kind())
+			r.Stream.Warn("media codec not supported, will be skipped", "kind", codec.Kind(), "codecName", codec.Name, "payloadType", codec.PayloadType, "clockRate", codec.ClockRate)
 		}
 	}
 
