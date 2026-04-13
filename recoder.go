@@ -2,6 +2,7 @@ package m7s
 
 import (
 	"fmt"
+	"path/filepath"
 	"time"
 
 	"gorm.io/gorm"
@@ -72,6 +73,7 @@ func (r *DefaultRecorder) CreateStream(start time.Time, customFileName func(*Rec
 
 	// 生成文件路径
 	filePath := customFileName(recordJob)
+	fileName := filepath.Base(filePath)
 
 	var storageType string
 	recordJob.storage = recordJob.Plugin.Server.Storage
@@ -87,6 +89,7 @@ func (r *DefaultRecorder) CreateStream(start time.Time, customFileName func(*Rec
 		StartTime:    start,
 		StreamPath:   sub.StreamPath,
 		FilePath:     filePath,
+		Filename:     fileName,
 		Type:         recordJob.RecConf.Type,
 		StorageLevel: 1, // 默认为主存储
 		StorageType:  storageType,
@@ -98,6 +101,7 @@ func (r *DefaultRecorder) CreateStream(start time.Time, customFileName func(*Rec
 	if sub.Publisher.HasVideoTrack() {
 		r.Event.VideoCodec = sub.Publisher.VideoTrack.ICodecCtx.String()
 	}
+
 	if recordJob.Plugin.DB != nil && recordJob.RecConf.Mode != config.RecordModeTest {
 		if recordJob.Event != nil {
 			r.Event.RecordEvent = recordJob.Event

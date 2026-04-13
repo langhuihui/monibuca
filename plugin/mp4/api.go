@@ -434,7 +434,6 @@ func (p *MP4Plugin) download(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return
 		}
-		p.Info("read", "file", file.Name())
 
 		// 创建解复用器并解析文件
 		demuxer := mp4.NewDemuxer(file)
@@ -606,6 +605,7 @@ func (p *MP4Plugin) download(w http.ResponseWriter, r *http.Request) {
 func (p *MP4Plugin) StartRecord(ctx context.Context, req *mp4pb.ReqStartRecord) (res *mp4pb.ResponseStartRecord, err error) {
 	var recordExists bool
 	var filePath = "."
+	var fileName = ""
 	var fragment = time.Minute
 	if req.Fragment != nil {
 		fragment = req.Fragment.AsDuration()
@@ -613,9 +613,14 @@ func (p *MP4Plugin) StartRecord(ctx context.Context, req *mp4pb.ReqStartRecord) 
 	if req.FilePath != "" {
 		filePath = req.FilePath
 	}
+	if req.FileName != "" {
+		fileName = req.FileName
+	}
+
+	p.Debug("mp4 plugin start record", "streamPath", req.StreamPath, "filePath", filePath, "fileName", fileName, "fragment", fragment)
 	res = &mp4pb.ResponseStartRecord{}
 	_, recordExists = p.Server.Records.Find(func(job *m7s.RecordJob) bool {
-		return job.StreamPath == req.StreamPath && job.RecConf.FilePath == req.FilePath
+		return job.StreamPath == req.StreamPath && job.RecConf.FilePath == req.FilePath && job.RecConf.FileName == req.FileName
 	})
 	if recordExists {
 		err = pkg.ErrRecordExists
@@ -626,7 +631,9 @@ func (p *MP4Plugin) StartRecord(ctx context.Context, req *mp4pb.ReqStartRecord) 
 		Append:   false,
 		Fragment: fragment,
 		FilePath: filePath,
+		FileName: fileName,
 	}
+
 	var stream *m7s.Publisher
 	var ok bool
 	if stream, ok = p.Server.Streams.SafeGet(req.StreamPath); !ok {
@@ -643,6 +650,7 @@ func (p *MP4Plugin) StartRecord(ctx context.Context, req *mp4pb.ReqStartRecord) 
 		}
 	}
 	job := p.Record(stream, recordConf, nil)
+	p.Debug("mp4 record job", "taskPtr", uint64(job.GetTaskPointer()))
 	res.Data = uint64(job.GetTaskPointer())
 	err = job.WaitStarted()
 	return

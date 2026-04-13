@@ -6,9 +6,11 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	task "github.com/langhuihui/gotask"
+	"gorm.io/gorm"
 	m7s "m7s.live/v5"
 	"m7s.live/v5/pkg"
 	"m7s.live/v5/pkg/codec"
@@ -28,12 +30,17 @@ var writeTrailerQueueTask WriteTrailerQueueTask
 
 type writeTrailerTask struct {
 	task.Task
-	muxer    *Muxer
-	file     storage.File
-	filePath string
+	muxer         *Muxer
+	file          storage.File
+	filePath      string
+	recordID      uint           // 录像记录ID
+	targetStorage map[string]any // 目标存储配置
+	deleteLocal   bool           // 上传成功后是否删除本地文件
+	db            *gorm.DB       // 数据库连接
 }
 
 func (task *writeTrailerTask) Start() (err error) {
+	task.Info("write trailer start")
 	err = task.muxer.WriteTrailer(task.file)
 	if err != nil {
 		task.Error("write trailer", "err", err)
@@ -148,6 +155,15 @@ func (r *Recorder) writeTailer(end time.Time) {
 }
 
 var CustomFileName = func(job *m7s.RecordJob) string {
+	// 如果指定了文件名，使用指定的文件名
+	if fn := job.RecConf.FileName; fn != "" {
+		// 确保文件名包含 .mp4 扩展名
+		if !strings.HasSuffix(strings.ToLower(fn), ".mp4") {
+			fn = fn + ".mp4"
+		}
+		return filepath.Join(job.RecConf.FilePath, fn)
+	}
+	// 否则使用时间戳生成文件名
 	now := time.Now()
 	return filepath.Join(job.RecConf.FilePath, fmt.Sprintf("%s_%09d.mp4", time.Now().Local().Format("2006-01-02-15-04-05"), now.Nanosecond()))
 }

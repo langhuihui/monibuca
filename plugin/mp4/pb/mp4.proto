@@ -106,6 +106,7 @@ message ReqStartRecord {
   string streamPath = 1;
   google.protobuf.Duration fragment = 2;
   string filePath = 3;
+  string fileName = 4;
 }
 
 message ResponseStartRecord {

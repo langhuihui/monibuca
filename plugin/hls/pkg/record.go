@@ -1,10 +1,11 @@
 package hls
 
 import (
-	"context"
-	"fmt"
-	"path/filepath"
-	"time"
+    "context"
+    "fmt"
+    "strings"
+    "path/filepath"
+    "time"
 
 	"m7s.live/v5"
 	"m7s.live/v5/pkg/codec"
@@ -28,15 +29,26 @@ type Recorder struct {
 }
 
 var CustomFileName = func(job *m7s.RecordJob) string {
-	if job.RecConf.Fragment == 0 || job.RecConf.Append {
-		return fmt.Sprintf("%s/%s.ts", job.RecConf.FilePath, time.Now().Format("20060102150405"))
-	}
-	return filepath.Join(job.RecConf.FilePath, time.Now().Format("20060102150405")+".ts")
+    if fn := job.RecConf.FileName; fn != "" {
+        if !strings.HasSuffix(strings.ToLower(fn), ".ts") {
+            fn = fn + ".ts"
+        }
+        return filepath.Join(job.RecConf.FilePath, fn)
+    }
+    if job.RecConf.Fragment == 0 || job.RecConf.Append {
+        return fmt.Sprintf("%s/%s.ts", job.RecConf.FilePath, time.Now().Format("20060102150405"))
+    }
+    return filepath.Join(job.RecConf.FilePath, time.Now().Format("20060102150405")+".ts")
 }
 
 func (r *Recorder) createStream(start time.Time) (err error) {
-	r.RecordJob.RecConf.Type = "ts"
-	return r.CreateStream(start, CustomFileName)
+    r.RecordJob.RecConf.Type = "ts"
+    err = r.CreateStream(start, CustomFileName)
+    if err != nil {
+        return err
+    }
+    r.Debug("ts create file", "filePath", r.Event.FilePath)
+    return nil
 }
 
 func (r *Recorder) writeTailer(end time.Time) {

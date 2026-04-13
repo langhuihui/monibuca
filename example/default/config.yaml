@@ -1,11 +1,25 @@
 global:
+  http:
+    listenaddr: :8080
   location:
     "^/hdl/(.*)": "/flv/$1" # 兼容 v4
     "^/stress/api/(.*)": "/test/api/stress/$1" # 5.0.x
     "^/monitor/(.*)": "/debug/$1" # 5.0.x
-  loglevel: debug
+  loglevel: info
   admin:
     enablelogin: false
+  # S3存储配置示例（需要时取消注释并填写实际值）
+  # storage:
+  #   s3:
+  #     endpoint: "s3.amazonaws.com"          # S3服务端点
+  #     region: "us-east-1"                   # AWS区域
+  #     accessKeyID: "your-access-key-id"     # 访问密钥ID
+  #     secretAccessKey: "your-secret-access-key" # 秘密访问密钥
+  #     bucket: "your-bucket-name"            # 存储桶名称
+  #     pathPrefix: "monibuca/recordings"     # 文件路径前缀
+  #     forcePathStyle: false                 # 强制路径样式（MinIO需要设为true）
+  #     useSSL: true                          # 是否使用SSL
+  #     timeout: "30s"                        # 上传超时时间
   # pullproxy:
   #   - id: 1                        # 唯一ID标识，必须大于0
   #     name: "camera-1"             # 拉流代理名称
@@ -57,23 +71,23 @@ gb28181:
         - platformservergbid: "34020000002000000002" #上级平台GBID
           channeldbid: "34020000001110000003_34020000001320000005" #通道DBID,格式为设备ID_通道ID
 mp4:
-  # enable: false
+  enable: true
   # publish:
   #   delayclosetimeout: 3s
   # onpub:
   #   record:
-  #     ^live/.+:
-  #         fragment: 10s
-  #         filepath: record/$0
-  #         storage:
-  #           s3:
-  #             endpoint: "storage-dev.xiding.tech"
-  #             accessKeyId: "xidinguser"
-  #             secretAccessKey: "U2FsdGVkX1/7uyvj0trCzSNFsfDZ66dMSAEZjNlvW1c="
-  #             bucket: "vidu-media-bucket"
-  #             pathPrefix: ""
-  #             forcePathStyle: true
-  #             useSSL: true
+  #     ^live/(.+)$:
+  #       filepath: s3rec/$0
+  #       filename: $0.mp4
+  #       storage:
+  #         s3:
+  #           endpoint: "storage-dev.xiding.tech"
+  #           accessKeyId: "xidinguser"
+  #           secretAccessKey: "U2FsdGVkX1/7uyvj0trCzSNFsfDZ66dMSAEZjNlvW1c="
+  #           bucket: "vidu-media-bucket"
+  #           pathPrefix: "recordings"
+  #           forcePathStyle: true
+  #           useSSL: true
   # pull:
   #   live/test: /Users/dexter/Movies/1744963190.mp4
   onsub:
@@ -90,8 +104,16 @@ flv:
   # onpub:
   #   record:
   #     ^live/.+:
-  #         fragment: 1m
   #         filepath: record/$0
+  #         storage:
+  #           s3:
+  #             endpoint: "s3.amazonaws.com"
+  #             accessKeyId: "your-access-key-id"
+  #             secretAccessKey: "your-secret-access-key"
+  #             bucket: "your-bucket-name"
+  #             pathPrefix: "flv-recordings"
+  #             forcePathStyle: false
+  #             useSSL: true
   publish:
     delayclosetimeout: 3s
   onsub:

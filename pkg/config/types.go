@@ -123,8 +123,9 @@ type (
 	}
 	Record struct {
 		Mode              RecordMode     `json:"mode" desc:"事件类型,auto=连续录像模式，event=事件录像模式" gorm:"type:varchar(255);comment:事件类型,auto=连续录像模式，event=事件录像模式;default:'auto'"`
-		Type              string         `desc:"录制类型"`                         // 录制类型 mp4、flv、hls、hlsv7
-		FilePath          string         `desc:"录制文件路径"`                       // 录制文件路径
+		Type              string         `desc:"录制类型"`   // 录制类型 mp4、flv、hls、hlsv7
+		FilePath          string         `desc:"录制文件路径"` // 录制文件路径
+		FileName          string         `json:"fileName" desc:"录制文件名" gorm:"-"`
 		Fragment          time.Duration  `desc:"分片时长"`                         // 分片时长
 		RealTime          bool           `desc:"是否实时录制"`                       // 是否实时录制
 		Append            bool           `desc:"是否追加录制"`                       // 是否追加录制
