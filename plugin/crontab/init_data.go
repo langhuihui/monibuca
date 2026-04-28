@@ -89,6 +89,32 @@ func (ct *CrontabPlugin) InitDefaultPlans() {
 	} else {
 		ct.Info("已存在相同内容的周末录制计划，跳过创建")
 	}
+
+	// 创建无录制计划（全天不录制）的计划字符串
+	nonePlayStr := buildPlanString(false, false, false, false, false, false, false)
+
+	// 检查是否已存在相同内容的工作日录制计划
+	if err := ct.DB.Model(&pkg.RecordPlan{}).Where("plan = ?", nonePlayStr).Count(&count).Error; err != nil {
+		ct.Error("检查无录制计划失败: %v", err)
+	} else if count == 0 {
+		// 不存在相同内容的计划，创建新计划
+		nonePlan := &pkg.RecordPlan{
+			Model:  gorm.Model{ID: 4},
+			Name:   "无录制计划",
+			Plan:   nonePlayStr,
+			Enable: true,
+		}
+
+		if err := ct.DB.Create(nonePlan).Error; err != nil {
+			ct.Error("创建无录制计划失败: %v", err)
+		} else {
+			ct.Info("成功无录制计划计划")
+			// 添加到内存中
+			ct.recordPlans.Add(nonePlan)
+		}
+	} else {
+		ct.Info("已存在相同内容的无录制计划，跳过创建")
+	}
 }
 
 // buildPlanString 构建计划字符串
