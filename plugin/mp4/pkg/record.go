@@ -139,12 +139,15 @@ type Recorder struct {
 }
 
 func (r *Recorder) writeTailer(end time.Time) {
-	r.WriteTail(end, &writeTrailerQueueTask)
+	// WriteTailDeferred 仅设置 EndTime 并返回延迟 DB 写入闭包，不立即写库。
+	// DB 写入将在 writeTrailerTask.Run() 成功后执行，确保文件可播放后才入库。
+	dbWrite := r.WriteTailDeferred(end)
 	writeTrailerQueueTask.AddTask(&writeTrailerTask{
 		muxer:    r.muxer,
 		file:     r.file,
 		filePath: r.Event.FilePath,
-	}, r.Logger)
+		dbWrite:  dbWrite,
+	}, r.Logger.With("filePath", r.Event.FilePath, "streamPath", r.Event.StreamPath))
 }
 
 var CustomFileName = func(job *m7s.RecordJob) string {
