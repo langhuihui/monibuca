@@ -151,6 +151,15 @@ func (m *Muxer) WriteSample(w io.Writer, t *Track, sample Sample) (err error) {
 		return
 	}
 	m.CurrentOffset += int64(sample.Size)
+	// 数据已写入磁盘，立即释放 Buffers 引用。
+	// Samplelist 只需要元数据（Timestamp/Offset/Size/Duration/CTS/KeyFrame），
+	// 不需要 Buffers 中存储的原始载荷字节切片。
+	// 长 fragment（如 1 小时）期间 Samplelist 会积累大量 Sample，
+	// 若保留 Buffers，其中的 []byte 切片头指向原始 RTP 包缓冲区，
+	// 使 GC 堆目标持续升高、GC 频率降低，导致 make([]byte,size)
+	// 分配的 buf（位于 NetConnection.Receive 调用栈）长期无法被回收，
+	// 进而造成严重的内存泄漏。
+	sample.Buffers = nil
 	t.AddSampleEntry(sample)
 	return
 }
