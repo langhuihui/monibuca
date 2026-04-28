@@ -359,6 +359,8 @@ func (t *WebHookTask) Start() error {
 	if t.conf.URL == "" {
 		return task.ErrTaskComplete
 	}
+	t.SetDescription("url", t.conf.URL)
+	t.SetDescription("method", t.conf.Method)
 
 	// 处理AlarmInfo数据
 	if t.data != nil {
@@ -412,71 +414,127 @@ func (t *WebHookTask) Start() error {
 
 		t.jsonData = jsonData
 		t.alarm = alarmInfo
-	}
-
-	t.SetRetry(t.conf.RetryTimes, t.conf.RetryInterval)
-	return nil
-}
-
-func (t *WebHookTask) Go() error {
-	// 检查是否需要保存告警到数据库
-	var dbID uint
-	if t.conf.SaveAlarm && t.plugin.DB != nil {
-		// 默认 IsSent 为 false
-		t.alarm.IsSent = false
-		if err := t.plugin.DB.Create(&t.alarm).Error; err != nil {
-			t.plugin.Error("保存告警到数据库失败", "error", err)
-		} else {
-			dbID = t.alarm.ID
-			t.plugin.Info("告警已保存到数据库", "id", dbID)
+		t.SetDescription("alarmType", fmt.Sprintf("0x%x", alarmInfo.AlarmType))
+		t.SetDescription("alarmName", alarmInfo.AlarmName)
+		if alarmInfo.StreamPath != "" {
+			t.SetDescription("stream", alarmInfo.StreamPath)
 		}
 	}
 
-	// 检查全局布防状态，撤防时不发送 HTTP 请求
-	if !t.plugin.Server.ServerConfig.Armed {
-		t.plugin.Debug("WebHook skipped due to disarmed state", "url", t.conf.URL, "dbID", dbID)
-		return task.ErrTaskComplete
-	}
+	// 禁用 gotask 自动重试：自动重试的 sleep 发生在 EventLoop goroutine 内，
+	// 会导致 EventLoop 阻塞，使后续所有任务堆积在 INIT 状态。
+	// 重试逻辑已移入 Go()，在任务自己的 goroutine 里执行，不影响 EventLoop。
+	t.SetRetry(0, 0)
+	return nil
+}
 
+// doHTTPRequest 执行一次 HTTP webhook 请求，成功返回 nil
+func (t *WebHookTask) doHTTPRequest(dbID uint) error {
 	req, err := http.NewRequest(t.conf.Method, t.conf.URL, bytes.NewBuffer(t.jsonData))
 	if err != nil {
 		return err
 	}
-
 	req.Header.Set("Content-Type", "application/json")
 	for k, v := range t.conf.Headers {
 		req.Header.Set(k, v)
 	}
-
-	client := &http.Client{
-		Timeout: time.Duration(t.conf.TimeoutSeconds) * time.Second,
+	httpTimeout := time.Duration(t.conf.TimeoutSeconds) * time.Second
+	if httpTimeout <= 0 {
+		httpTimeout = 5 * time.Second
 	}
-
+	client := &http.Client{Timeout: httpTimeout}
 	resp, err := client.Do(req)
 	if err != nil {
 		t.plugin.Error("webhook请求失败", "error", err)
 		return err
 	}
 	defer resp.Body.Close()
-
-	// 如果发送成功且已保存到数据库，则更新IsSent字段为true
-	if resp.StatusCode >= 200 && resp.StatusCode < 300 && t.conf.SaveAlarm && t.plugin.DB != nil && dbID > 0 {
-		t.alarm.IsSent = true
-		if err := t.plugin.DB.Model(&AlarmInfo{}).Where("id = ?", dbID).Update("is_sent", true).Error; err != nil {
-			t.plugin.Error("更新告警发送状态失败", "error", err)
-		} else {
-			t.plugin.Info("告警发送状态已更新", "id", dbID, "is_sent", true)
-		}
-		return task.ErrTaskComplete
-	}
-
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		if t.conf.SaveAlarm && t.plugin.DB != nil && dbID > 0 {
+			t.alarm.IsSent = true
+			dbTimeout := httpTimeout
+			dbCtx, dbCancel := context.WithTimeout(context.Background(), dbTimeout)
+			if err := t.plugin.DB.WithContext(dbCtx).Model(&AlarmInfo{}).Where("id = ?", dbID).Update("is_sent", true).Error; err != nil {
+				t.plugin.Error("更新告警发送状态失败", "error", err)
+			} else {
+				t.plugin.Info("告警发送状态已更新", "id", dbID, "is_sent", true)
+			}
+			dbCancel()
+		}
+		return nil
+	}
+	return fmt.Errorf("webhook响应状态码：%d", resp.StatusCode)
+}
+
+func (t *WebHookTask) Go() error {
+	// 检查全局布防状态，撤防时不发送
+	if !t.plugin.Server.ServerConfig.Armed {
+		t.plugin.Debug("WebHook skipped due to disarmed state", "url", t.conf.URL)
 		return task.ErrTaskComplete
 	}
 
-	err = fmt.Errorf("webhook请求失败，状态码：%d", resp.StatusCode)
-	t.plugin.Error("webhook响应错误", "状态码", resp.StatusCode)
-	return err
+	// 仅首次保存告警到数据库（有超时保护）
+	var dbID uint
+	if t.conf.SaveAlarm && t.plugin.DB != nil {
+		t.alarm.IsSent = false
+		dbTimeout := time.Duration(t.conf.TimeoutSeconds) * time.Second
+		if dbTimeout <= 0 {
+			dbTimeout = 5 * time.Second
+		}
+		t.SetDescription("phase", "db")
+		dbCtx, dbCancel := context.WithTimeout(context.Background(), dbTimeout)
+		if err := t.plugin.DB.WithContext(dbCtx).Create(&t.alarm).Error; err != nil {
+			t.plugin.Error("保存告警到数据库失败", "error", err)
+			t.SetDescription("dbErr", err.Error())
+		} else {
+			dbID = t.alarm.ID
+			t.plugin.Info("告警已保存到数据库", "id", dbID)
+			t.SetDescription("dbID", fmt.Sprintf("%d", dbID))
+		}
+		dbCancel()
+	}
+
+	// 在本 goroutine 内做重试，sleep 不会阻塞 EventLoop
+	maxRetry := t.conf.RetryTimes
+	if maxRetry < 0 {
+		maxRetry = 0
+	}
+	retryInterval := t.conf.RetryInterval
+	if retryInterval <= 0 {
+		retryInterval = time.Second
+	}
+
+	var lastErr error
+	for attempt := 0; attempt <= maxRetry; attempt++ {
+		if attempt > 0 {
+			delay := retryInterval
+			if attempt > 1 {
+				if exp := attempt - 1; exp < 30 {
+					delay = retryInterval * time.Duration(1<<exp)
+				}
+			}
+			t.SetDescription("phase", fmt.Sprintf("retry %d/%d (wait %s)", attempt, maxRetry, delay))
+			select {
+			case <-time.After(delay):
+			case <-t.Context.Done():
+				return task.ErrTaskComplete
+			}
+			t.plugin.Warn("webhook重试", "attempt", attempt, "maxRetry", maxRetry, "error", lastErr)
+		} else {
+			t.SetDescription("phase", "http")
+		}
+		lastErr = t.doHTTPRequest(dbID)
+		if lastErr == nil {
+			t.SetDescription("phase", "done")
+			return task.ErrTaskComplete
+		}
+		t.SetDescription("lastErr", lastErr.Error())
+	}
+	if lastErr != nil && maxRetry > 0 {
+		t.plugin.Error("webhook达到最大重试次数", "maxRetry", maxRetry, "error", lastErr)
+	}
+	t.SetDescription("phase", "failed")
+	return task.ErrTaskComplete
 }
 
 func (p *Plugin) SendWebhook(conf config.Webhook, data any) *task.Task {
