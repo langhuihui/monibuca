@@ -1034,11 +1034,12 @@ func (s *Server) GetRecordList(ctx context.Context, req *pb.ReqRecordList) (resp
 	}
 	startTime, endTime, err := util.TimeRangeQueryParse(url.Values{"range": []string{req.Range}, "start": []string{req.Start}, "end": []string{req.End}})
 	if err == nil {
+		// 区间重叠条件：文件区间与搜索区间有交集，即 end_time > searchStart AND start_time < searchEnd
 		if !startTime.IsZero() {
-			query = query.Where("start_time >= ?", startTime)
+			query = query.Where("end_time > ?", startTime)
 		}
 		if !endTime.IsZero() {
-			query = query.Where("end_time <= ?", endTime)
+			query = query.Where("start_time < ?", endTime)
 		}
 	}
 
@@ -1096,11 +1097,12 @@ func (s *Server) GetEventRecordList(ctx context.Context, req *pb.ReqRecordList) 
 	}
 	startTime, endTime, err := util.TimeRangeQueryParse(url.Values{"range": []string{req.Range}, "start": []string{req.Start}, "end": []string{req.End}})
 	if err == nil {
+		// 区间重叠条件：文件区间与搜索区间有交集，即 start_time < searchEnd AND end_time > searchStart
 		if !startTime.IsZero() {
-			query = query.Where("start_time >= ?", startTime)
+			query = query.Where("end_time > ?", startTime)
 		}
 		if !endTime.IsZero() {
-			query = query.Where("end_time <= ?", endTime)
+			query = query.Where("start_time < ?", endTime)
 		}
 	}
 	if req.EventLevel != "" {
@@ -1178,7 +1180,8 @@ func (s *Server) DeleteRecord(ctx context.Context, req *pb.ReqRecordDelete) (res
 		if err != nil {
 			return nil, err
 		}
-		s.DB.Find(&result, "stream_path=? AND type=? AND start_time>=? AND end_time<=?", req.StreamPath, req.Type, startTime, endTime)
+		// 区间重叠条件：文件区间与搜索区间有交集，即 end_time > searchStart AND start_time < searchEnd
+		s.DB.Find(&result, "stream_path=? AND type=? AND end_time>? AND start_time<?", req.StreamPath, req.Type, startTime, endTime)
 	}
 	// deletePhysicalFile 删除单条记录对应的实体文件
 	deletePhysicalFile := func(recordFile *RecordStream) error {
