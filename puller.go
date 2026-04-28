@@ -360,8 +360,10 @@ func (p *RecordFilePuller) Start() (err error) {
 	p.seekChan = make(chan time.Time, 1)
 	loop := p.PullJob.Connection.Args.Get(util.LoopKey)
 	p.Loop, err = strconv.Atoi(loop)
-	if err != nil || p.Loop < 0 {
-		p.Loop = math.MaxInt32
+	if err != nil {
+		p.Loop = 1 // 未指定 loop 参数时，默认只播放一次
+	} else if p.Loop < 0 {
+		p.Loop = math.MaxInt32 // loop=-1 表示无限循环
 	}
 	publisher := p.PullJob.Publisher
 	if publisher != nil {
