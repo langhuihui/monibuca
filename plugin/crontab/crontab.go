@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -38,7 +37,7 @@ type Crontab struct {
 }
 
 func (cron *Crontab) GetKey() string {
-	return strconv.Itoa(int(cron.PlanID)) + "_" + cron.StreamPath + "_" + cron.RecordType
+	return cron.StreamPath + "_" + cron.RecordType
 }
 
 // 初始化

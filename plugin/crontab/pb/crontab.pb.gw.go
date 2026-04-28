@@ -266,21 +266,21 @@ func request_Api_RemoveRecordPlanStream_0(ctx context.Context, marshaler runtime
 	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
-	val, ok := pathParams["planId"]
-	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "planId")
-	}
-	protoReq.PlanId, err = runtime.Uint32(val)
-	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "planId", err)
-	}
-	val, ok = pathParams["streamPath"]
+	val, ok := pathParams["streamPath"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "streamPath")
 	}
 	protoReq.StreamPath, err = runtime.String(val)
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "streamPath", err)
+	}
+	val, ok = pathParams["recordType"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "recordType")
+	}
+	protoReq.RecordType, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "recordType", err)
 	}
 	msg, err := client.RemoveRecordPlanStream(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
@@ -295,21 +295,21 @@ func local_request_Api_RemoveRecordPlanStream_0(ctx context.Context, marshaler r
 	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
-	val, ok := pathParams["planId"]
-	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "planId")
-	}
-	protoReq.PlanId, err = runtime.Uint32(val)
-	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "planId", err)
-	}
-	val, ok = pathParams["streamPath"]
+	val, ok := pathParams["streamPath"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "streamPath")
 	}
 	protoReq.StreamPath, err = runtime.String(val)
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "streamPath", err)
+	}
+	val, ok = pathParams["recordType"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "recordType")
+	}
+	protoReq.RecordType, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "recordType", err)
 	}
 	msg, err := server.RemoveRecordPlanStream(ctx, &protoReq)
 	return msg, metadata, err
@@ -537,7 +537,7 @@ func RegisterApiHandlerServer(ctx context.Context, mux *runtime.ServeMux, server
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/crontab.Api/RemoveRecordPlanStream", runtime.WithHTTPPathPattern("/planstream/api/remove/{planId}/{streamPath=**}"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/crontab.Api/RemoveRecordPlanStream", runtime.WithHTTPPathPattern("/planstream/api/remove/{streamPath=**}/{recordType}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -754,7 +754,7 @@ func RegisterApiHandlerClient(ctx context.Context, mux *runtime.ServeMux, client
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/crontab.Api/RemoveRecordPlanStream", runtime.WithHTTPPathPattern("/planstream/api/remove/{planId}/{streamPath=**}"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/crontab.Api/RemoveRecordPlanStream", runtime.WithHTTPPathPattern("/planstream/api/remove/{streamPath=**}/{recordType}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -812,7 +812,7 @@ var (
 	pattern_Api_ListRecordPlanStreams_0  = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"planstream", "api", "list"}, ""))
 	pattern_Api_AddRecordPlanStream_0    = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"planstream", "api", "add"}, ""))
 	pattern_Api_UpdateRecordPlanStream_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"planstream", "api", "update"}, ""))
-	pattern_Api_RemoveRecordPlanStream_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 3, 0, 4, 1, 5, 4}, []string{"planstream", "api", "remove", "planId", "streamPath"}, ""))
+	pattern_Api_RemoveRecordPlanStream_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 3, 0, 4, 1, 5, 3, 1, 0, 4, 1, 5, 4}, []string{"planstream", "api", "remove", "streamPath", "recordType"}, ""))
 	pattern_Api_ParsePlanTime_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 0}, []string{"plan", "api", "parse"}, ""))
 	pattern_Api_GetCrontabStatus_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"crontab", "api", "status"}, ""))
 )

@@ -49,7 +49,7 @@ service api {
   }
   rpc RemoveRecordPlanStream (DeletePlanStreamRequest) returns (Response) {
     option (google.api.http) = {
-      post: "/planstream/api/remove/{planId}/{streamPath=**}"
+      post: "/planstream/api/remove/{streamPath=**}/{recordType}"
       body: "*"
     };
   }
@@ -130,9 +130,8 @@ message RecordPlanStreamResponseList {
 }
 
 message DeletePlanStreamRequest {
-  uint32 planId = 1;
-  string streamPath = 2;
-  string recordType = 3;
+  string streamPath = 1;
+  string recordType = 2;
 }
 
 // 解析计划请求

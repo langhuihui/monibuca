@@ -594,9 +594,8 @@ func (x *RecordPlanStreamResponseList) GetData() []*PlanStream {
 
 type DeletePlanStreamRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	PlanId        uint32                 `protobuf:"varint,1,opt,name=planId,proto3" json:"planId,omitempty"`
-	StreamPath    string                 `protobuf:"bytes,2,opt,name=streamPath,proto3" json:"streamPath,omitempty"`
-	RecordType    string                 `protobuf:"bytes,3,opt,name=recordType,proto3" json:"recordType,omitempty"`
+	StreamPath    string                 `protobuf:"bytes,1,opt,name=streamPath,proto3" json:"streamPath,omitempty"`
+	RecordType    string                 `protobuf:"bytes,2,opt,name=recordType,proto3" json:"recordType,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -629,13 +628,6 @@ func (x *DeletePlanStreamRequest) ProtoReflect() protoreflect.Message {
 // Deprecated: Use DeletePlanStreamRequest.ProtoReflect.Descriptor instead.
 func (*DeletePlanStreamRequest) Descriptor() ([]byte, []int) {
 	return file_crontab_proto_rawDescGZIP(), []int{8}
-}
-
-func (x *DeletePlanStreamRequest) GetPlanId() uint32 {
-	if x != nil {
-		return x.PlanId
-	}
-	return 0
 }
 
 func (x *DeletePlanStreamRequest) GetStreamPath() string {
@@ -1169,14 +1161,13 @@ const file_crontab_proto_rawDesc = "" +
 	"totalCount\x12\x18\n" +
 	"\apageNum\x18\x04 \x01(\rR\apageNum\x12\x1a\n" +
 	"\bpageSize\x18\x05 \x01(\rR\bpageSize\x12'\n" +
-	"\x04data\x18\x06 \x03(\v2\x13.crontab.PlanStreamR\x04data\"q\n" +
-	"\x17DeletePlanStreamRequest\x12\x16\n" +
-	"\x06planId\x18\x01 \x01(\rR\x06planId\x12\x1e\n" +
+	"\x04data\x18\x06 \x03(\v2\x13.crontab.PlanStreamR\x04data\"Y\n" +
+	"\x17DeletePlanStreamRequest\x12\x1e\n" +
 	"\n" +
-	"streamPath\x18\x02 \x01(\tR\n" +
+	"streamPath\x18\x01 \x01(\tR\n" +
 	"streamPath\x12\x1e\n" +
 	"\n" +
-	"recordType\x18\x03 \x01(\tR\n" +
+	"recordType\x18\x02 \x01(\tR\n" +
 	"recordType\"&\n" +
 	"\x10ParsePlanRequest\x12\x12\n" +
 	"\x04plan\x18\x01 \x01(\tR\x04plan\"\xa7\x01\n" +
@@ -1220,7 +1211,7 @@ const file_crontab_proto_rawDesc = "" +
 	"\n" +
 	"next_tasks\x18\x04 \x03(\v2\x18.crontab.CrontabTaskInfoR\tnextTasks\x12#\n" +
 	"\rtotal_running\x18\x05 \x01(\rR\ftotalRunning\x12#\n" +
-	"\rtotal_planned\x18\x06 \x01(\rR\ftotalPlanned2\xe0\a\n" +
+	"\rtotal_planned\x18\x06 \x01(\rR\ftotalPlanned2\xe4\a\n" +
 	"\x03api\x12O\n" +
 	"\x04List\x12\x14.crontab.ReqPlanList\x1a\x19.crontab.PlanResponseList\"\x16\x82\xd3\xe4\x93\x02\x10\x12\x0e/plan/api/list\x12A\n" +
 	"\x03Add\x12\r.crontab.Plan\x1a\x11.crontab.Response\"\x18\x82\xd3\xe4\x93\x02\x12:\x01*\"\r/plan/api/add\x12L\n" +
@@ -1228,8 +1219,8 @@ const file_crontab_proto_rawDesc = "" +
 	"\x06Remove\x12\x16.crontab.DeleteRequest\x1a\x11.crontab.Response\" \x82\xd3\xe4\x93\x02\x1a:\x01*\"\x15/plan/api/remove/{id}\x12x\n" +
 	"\x15ListRecordPlanStreams\x12\x1a.crontab.ReqPlanStreamList\x1a%.crontab.RecordPlanStreamResponseList\"\x1c\x82\xd3\xe4\x93\x02\x16\x12\x14/planstream/api/list\x12]\n" +
 	"\x13AddRecordPlanStream\x12\x13.crontab.PlanStream\x1a\x11.crontab.Response\"\x1e\x82\xd3\xe4\x93\x02\x18:\x01*\"\x13/planstream/api/add\x12c\n" +
-	"\x16UpdateRecordPlanStream\x12\x13.crontab.PlanStream\x1a\x11.crontab.Response\"!\x82\xd3\xe4\x93\x02\x1b:\x01*\"\x16/planstream/api/update\x12\x89\x01\n" +
-	"\x16RemoveRecordPlanStream\x12 .crontab.DeletePlanStreamRequest\x1a\x11.crontab.Response\":\x82\xd3\xe4\x93\x024:\x01*\"//planstream/api/remove/{planId}/{streamPath=**}\x12f\n" +
+	"\x16UpdateRecordPlanStream\x12\x13.crontab.PlanStream\x1a\x11.crontab.Response\"!\x82\xd3\xe4\x93\x02\x1b:\x01*\"\x16/planstream/api/update\x12\x8d\x01\n" +
+	"\x16RemoveRecordPlanStream\x12 .crontab.DeletePlanStreamRequest\x1a\x11.crontab.Response\">\x82\xd3\xe4\x93\x028:\x01*\"3/planstream/api/remove/{streamPath=**}/{recordType}\x12f\n" +
 	"\rParsePlanTime\x12\x19.crontab.ParsePlanRequest\x1a\x1a.crontab.ParsePlanResponse\"\x1e\x82\xd3\xe4\x93\x02\x18\x12\x16/plan/api/parse/{plan}\x12n\n" +
 	"\x10GetCrontabStatus\x12\x1d.crontab.CrontabStatusRequest\x1a\x1e.crontab.CrontabStatusResponse\"\x1b\x82\xd3\xe4\x93\x02\x15\x12\x13/crontab/api/statusB\x1fZ\x1dm7s.live/v5/plugin/crontab/pbb\x06proto3"
 

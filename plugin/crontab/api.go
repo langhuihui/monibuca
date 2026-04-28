@@ -322,6 +322,7 @@ func (ct *CrontabPlugin) ListRecordPlanStreams(ctx context.Context, req *cronpb.
 			CreatedAt:  timestamppb.New(stream.CreatedAt),
 			UpdatedAt:  timestamppb.New(stream.UpdatedAt),
 			Enable:     stream.Enable,
+			RecordType: stream.RecordType,
 		})
 	}
 
@@ -342,10 +343,10 @@ func (ct *CrontabPlugin) AddRecordPlanStream(ctx context.Context, req *cronpb.Pl
 	}
 	recordType := "mp4"
 	if req.RecordType != "" {
-		recordType = req.RecordType
+		recordType = strings.ToLower(strings.TrimSpace(req.RecordType))
 	}
-
-	if strings.TrimSpace(req.StreamPath) == "" {
+	streamPath := strings.TrimSpace(req.StreamPath)
+	if streamPath == "" {
 		return &cronpb.Response{
 			Code:    400,
 			Message: "stream_path is required",
@@ -361,14 +362,9 @@ func (ct *CrontabPlugin) AddRecordPlanStream(ctx context.Context, req *cronpb.Pl
 		}, nil
 	}
 
-	// 检查是否已存在相同的记录
+	// 以 stream_path + record_type 为唯一键，检查是否已存在
 	var count int64
-	searchModel := pkg.RecordPlanStream{
-		PlanID:     uint(planId),
-		StreamPath: req.StreamPath,
-		RecordType: recordType,
-	}
-	if err := ct.DB.Model(&searchModel).Where(&searchModel).Count(&count).Error; err != nil {
+	if err := ct.DB.Model(&pkg.RecordPlanStream{}).Where("stream_path = ? AND record_type = ?", streamPath, recordType).Count(&count).Error; err != nil {
 		return &cronpb.Response{
 			Code:    500,
 			Message: err.Error(),
@@ -378,23 +374,22 @@ func (ct *CrontabPlugin) AddRecordPlanStream(ctx context.Context, req *cronpb.Pl
 	if count > 0 {
 		return &cronpb.Response{
 			Code:    400,
-			Message: "record already exists",
+			Message: "stream_path+record_type already exists",
 		}, nil
 	}
 
 	fragment := "60s"
-
 	if req.Fragment != "" {
 		fragment = req.Fragment
 	}
 
 	stream := &pkg.RecordPlanStream{
+		StreamPath: streamPath,
 		PlanID:     uint(planId),
-		StreamPath: req.StreamPath,
 		Fragment:   fragment,
 		FilePath:   req.FilePath,
 		Enable:     req.Enable,
-		RecordType: req.RecordType,
+		RecordType: recordType,
 	}
 
 	if err := ct.DB.Create(stream).Error; err != nil {
@@ -425,41 +420,42 @@ func (ct *CrontabPlugin) AddRecordPlanStream(ctx context.Context, req *cronpb.Pl
 }
 
 func (ct *CrontabPlugin) UpdateRecordPlanStream(ctx context.Context, req *cronpb.PlanStream) (*cronpb.Response, error) {
-	planId := 1
-	if req.PlanId > 0 {
-		planId = int(req.PlanId)
-	}
-
-	if strings.TrimSpace(req.StreamPath) == "" {
+	streamPath := strings.TrimSpace(req.StreamPath)
+	if streamPath == "" {
 		return &cronpb.Response{
 			Code:    400,
 			Message: "stream_path is required",
 		}, nil
 	}
 
-	if strings.TrimSpace(req.RecordType) == "" {
-		req.RecordType = "mp4"
+	recordType := strings.ToLower(strings.TrimSpace(req.RecordType))
+	if recordType == "" {
+		return &cronpb.Response{
+			Code:    400,
+			Message: "record_type is required",
+		}, nil
 	}
 
-	// 检查记录是否存在
+	// 以 stream_path + record_type 为复合键查找记录
 	var existingStream pkg.RecordPlanStream
-	searchModel := pkg.RecordPlanStream{
-		PlanID:     uint(planId),
-		StreamPath: req.StreamPath,
-		RecordType: req.RecordType,
-	}
-	if err := ct.DB.Where(&searchModel).First(&existingStream).Error; err != nil {
+	if err := ct.DB.Where("stream_path = ? AND record_type = ?", streamPath, recordType).First(&existingStream).Error; err != nil {
 		return &cronpb.Response{
 			Code:    404,
 			Message: "record not found",
 		}, nil
 	}
 
-	// 更新记录
-	existingStream.Fragment = req.Fragment
-	existingStream.FilePath = req.FilePath
+	// 只更新非空字段
+	if req.PlanId > 0 {
+		existingStream.PlanID = uint(req.PlanId)
+	}
+	if req.Fragment != "" {
+		existingStream.Fragment = req.Fragment
+	}
+	if req.FilePath != "" {
+		existingStream.FilePath = req.FilePath
+	}
 	existingStream.Enable = req.Enable
-	existingStream.RecordType = req.RecordType
 
 	if err := ct.DB.Save(&existingStream).Error; err != nil {
 		return &cronpb.Response{
@@ -468,50 +464,35 @@ func (ct *CrontabPlugin) UpdateRecordPlanStream(ctx context.Context, req *cronpb
 		}, nil
 	}
 
-	// 停止当前流相关的所有任务
+	// 停止当前流相关的定时任务
 	ct.crontabs.Range(func(crontab *Crontab) bool {
-		if crontab.RecordPlanStream.StreamPath == req.StreamPath && crontab.RecordType == req.RecordType && crontab.PlanID == uint(planId) {
-			crontab.Stop(errors.New("record plan changed"))
+		if crontab.StreamPath == streamPath && crontab.RecordType == recordType {
+			crontab.Stop(errors.New("record plan stream updated"))
 		}
 		return true
 	})
 
-	// 查询所有关联此流的记录
-	var streams []pkg.RecordPlanStream
-	if err := ct.DB.Where(&pkg.RecordPlanStream{
-		PlanID:     uint(req.PlanId),
-		StreamPath: req.StreamPath,
-		RecordType: req.RecordType,
-	}).Find(&streams).Error; err != nil {
-		ct.Error("query record plan streams error: %v", err)
+	// 从内存中获取对应的计划，如果计划和流均启用则重建定时任务
+	plan, ok := ct.recordPlans.Get(existingStream.PlanID)
+	if !ok {
+		ct.Error("record plan not found in memory: %d", existingStream.PlanID)
 		return &cronpb.Response{
-			Code:    500,
-			Message: err.Error(),
+			Code:    0,
+			Message: "success",
 		}, nil
 	}
 
-	// 为每个启用的计划创建新的定时任务
-	for _, stream := range streams {
-		// 从内存中获取对应的计划
-		plan, ok := ct.recordPlans.Get(stream.PlanID)
-		if !ok {
-			ct.Error("record plan not found in memory: %d", stream.PlanID)
-			continue
+	if plan.Enable && existingStream.Enable {
+		crontab := &Crontab{
+			ctp:              ct,
+			RecordPlan:       plan,
+			RecordPlanStream: &existingStream,
 		}
-
-		// 如果计划是启用状态，创建并启动定时任务
-		if plan.Enable && stream.Enable {
-			crontab := &Crontab{
-				ctp:              ct,
-				RecordPlan:       plan,
-				RecordPlanStream: &stream,
-			}
-			crontab.Logger = ct.Logger.With("streamPath", crontab.StreamPath)
-			//crontab.OnStart(func() {
-			//	ct.crontabs.Set(crontab)
-			//})
-			ct.crontabs.AddTask(crontab)
-		}
+		crontab.Logger = ct.Logger.With("streamPath", crontab.StreamPath)
+		//crontab.OnStart(func() {
+		//	ct.crontabs.Set(crontab)
+		//})
+		ct.crontabs.AddTask(crontab)
 	}
 
 	return &cronpb.Response{
@@ -521,45 +502,35 @@ func (ct *CrontabPlugin) UpdateRecordPlanStream(ctx context.Context, req *cronpb
 }
 
 func (ct *CrontabPlugin) RemoveRecordPlanStream(ctx context.Context, req *cronpb.DeletePlanStreamRequest) (*cronpb.Response, error) {
-	if req.PlanId == 0 {
-		return &cronpb.Response{
-			Code:    400,
-			Message: "record_plan_id is required",
-		}, nil
-	}
-
-	if strings.TrimSpace(req.StreamPath) == "" {
+	streamPath := strings.TrimSpace(req.StreamPath)
+	if streamPath == "" {
 		return &cronpb.Response{
 			Code:    400,
 			Message: "stream_path is required",
 		}, nil
 	}
 
-	if strings.TrimSpace(req.RecordType) == "" {
+	recordType := strings.ToLower(strings.TrimSpace(req.RecordType))
+	if recordType == "" {
 		return &cronpb.Response{
 			Code:    400,
-			Message: "recordType is required",
+			Message: "record_type is required",
 		}, nil
 	}
 
-	// 检查记录是否存在
+	// 以 stream_path + record_type 为复合键查找记录
 	var existingStream pkg.RecordPlanStream
-	searchModel := pkg.RecordPlanStream{
-		PlanID:     uint(req.PlanId),
-		StreamPath: req.StreamPath,
-		RecordType: req.RecordType,
-	}
-	if err := ct.DB.Where(&searchModel).First(&existingStream).Error; err != nil {
+	if err := ct.DB.Where("stream_path = ? AND record_type = ?", streamPath, recordType).First(&existingStream).Error; err != nil {
 		return &cronpb.Response{
 			Code:    404,
 			Message: "record not found",
 		}, nil
 	}
 
-	// 停止所有相关的定时任务
+	// 停止相关的定时任务
 	ct.crontabs.Range(func(crontab *Crontab) bool {
-		if crontab.RecordPlanStream.StreamPath == req.StreamPath && crontab.RecordPlan.ID == uint(req.PlanId) && crontab.RecordPlanStream.RecordType == req.RecordType {
-			crontab.Stop(errors.New("remove record plan"))
+		if crontab.StreamPath == streamPath && crontab.RecordType == recordType {
+			crontab.Stop(errors.New("record plan stream removed"))
 		}
 		return true
 	})
