@@ -1,7 +1,7 @@
 package mp4
 
 import (
-	"context"
+	"bufio"
 	"fmt"
 	"io"
 	"os"
@@ -31,6 +31,8 @@ type writeTrailerTask struct {
 	muxer    *Muxer
 	file     storage.File
 	filePath string
+	// dbWrite 在文件完整写入后执行数据库更新，为 nil 时跳过（无 DB 或测试模式）。
+	dbWrite func(tailJob task.IJob)
 }
 
 func (task *writeTrailerTask) Start() (err error) {
@@ -48,25 +50,41 @@ func (task *writeTrailerTask) Start() (err error) {
 
 const BeforeMdatData = 16 // free box + mdat box header or big mdat box header
 // 将 moov 从末尾移动到前方
-// 将 ftyp + free(optional) + moov + mdat 写入临时文件, 然后替换原文件
+// 将 ftyp + free(optional) + moov + mdat 写入临时文件, 然后原子重命名替换原文件
+// 优化：临时文件建在与原文件同一目录，写完后用 os.Rename 原子替换，
+// 避免将整个临时文件再回写一遍（节省约 1/3 的磁盘 IO）。
 func (t *writeTrailerTask) Run() (err error) {
 	t.Info("write trailer")
+
+	// 在与原文件相同目录创建临时文件，确保与目标在同一文件系统，支持原子 rename
+	actualPath := t.file.Name()
 	var temp *os.File
-	temp, err = os.CreateTemp("", "*.mp4")
+	temp, err = os.CreateTemp(filepath.Dir(actualPath), "*.mp4.tmp")
 	if err != nil {
 		t.Error("create temp file", "err", err)
 		return
 	}
+	tempName := temp.Name()
 
-	defer os.Remove(temp.Name())
+	// 默认清理临时文件；rename 成功后将 committed 置 true 跳过删除
+	committed := false
+	defer func() {
+		if !committed {
+			os.Remove(tempName)
+		}
+	}()
 
 	_, err = t.file.Seek(0, io.SeekStart)
 	if err != nil {
 		t.Error("seek file", "err", err)
 		return
 	}
-	// 复制 mdat box之前的内容
-	_, err = io.CopyN(temp, t.file, int64(t.muxer.mdatOffset)-BeforeMdatData)
+
+	// 使用带缓冲的 writer 减少写入 syscall（moov 由大量小块组成）
+	bw := bufio.NewWriterSize(temp, 1<<20) // 1 MB write buffer
+
+	// 复制 mdat box 之前的内容
+	_, err = io.CopyN(bw, t.file, int64(t.muxer.mdatOffset)-BeforeMdatData)
 	if err != nil {
 		t.Error("copy file", "err", err)
 		return
@@ -76,31 +94,22 @@ func (t *writeTrailerTask) Run() (err error) {
 			track.Samplelist[i].Offset += int64(t.muxer.moov.Size())
 		}
 	}
-	err = t.muxer.WriteMoov(temp)
+	err = t.muxer.WriteMoov(bw)
 	if err != nil {
 		t.Error("rewrite with moov", "err", err)
 		return
 	}
 	// 复制 mdat box
-	_, err = io.CopyN(temp, t.file, int64(t.muxer.mdatSize)+BeforeMdatData)
-
+	_, err = io.CopyN(bw, t.file, int64(t.muxer.mdatSize)+BeforeMdatData)
 	if err != nil {
 		if err == pkg.ErrSkip {
 			return task.ErrTaskComplete
 		}
-		t.Error("rewrite with moov", "err", err)
+		t.Error("rewrite with mdat", "err", err)
 		return
 	}
-	if _, err = t.file.Seek(0, io.SeekStart); err != nil {
-		t.Error("seek file", "err", err)
-		return
-	}
-	if _, err = temp.Seek(0, io.SeekStart); err != nil {
-		t.Error("seek temp file", "err", err)
-		return
-	}
-	if _, err = io.Copy(t.file, temp); err != nil {
-		t.Error("copy file", "err", err)
+	if err = bw.Flush(); err != nil {
+		t.Error("flush temp file", "err", err)
 		return
 	}
 	if err = t.file.Close(); err != nil {
@@ -109,8 +118,18 @@ func (t *writeTrailerTask) Run() (err error) {
 	}
 	if err = temp.Close(); err != nil {
 		t.Error("close temp file", "err", err)
+		return
 	}
-
+	// 原子重命名替换原文件，避免将临时文件整体回写（节省约 1/3 的磁盘 IO）
+	if err = os.Rename(tempName, actualPath); err != nil {
+		t.Error("rename temp file", "err", err)
+		return
+	}
+	committed = true
+	// 文件已完整写入（moov 在头部），此时才将记录写入数据库。
+	if t.dbWrite != nil {
+		t.dbWrite(&writeTrailerQueueTask)
+	}
 	return
 }
 
