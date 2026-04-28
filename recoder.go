@@ -1,6 +1,7 @@
 package m7s
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -63,7 +64,8 @@ func (r *DefaultRecorder) GetRecordJob() *RecordJob {
 }
 
 func (r *DefaultRecorder) Start() (err error) {
-	return r.RecordJob.Subscribe()
+	err = r.RecordJob.Subscribe()
+	return
 }
 
 func (r *DefaultRecorder) CreateStream(start time.Time, customFileName func(*RecordJob) string) (err error) {
@@ -99,15 +101,35 @@ func (r *DefaultRecorder) CreateStream(start time.Time, customFileName func(*Rec
 		r.Event.VideoCodec = sub.Publisher.VideoTrack.ICodecCtx.String()
 	}
 	if recordJob.Plugin.DB != nil && recordJob.RecConf.Mode != config.RecordModeTest {
+		dbCtx, dbCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer dbCancel()
 		if recordJob.Event != nil {
 			r.Event.RecordEvent = recordJob.Event
 			r.Event.RecordLevel = recordJob.Event.EventLevel
-			recordJob.Plugin.DB.Save(&r.Event.RecordStream)
-			recordJob.Plugin.DB.Save(&r.Event)
+			r.Info("db save RecordStream begin", "filePath", r.Event.FilePath)
+			if result := recordJob.Plugin.DB.WithContext(dbCtx).Save(&r.Event.RecordStream); result.Error != nil {
+				r.Warn("db save RecordStream failed", "filePath", r.Event.FilePath, "err", result.Error)
+			} else {
+				r.Info("db save RecordStream ok", "filePath", r.Event.FilePath)
+			}
+			r.Info("db save RecordEvent begin", "filePath", r.Event.FilePath)
+			if result := recordJob.Plugin.DB.WithContext(dbCtx).Save(&r.Event); result.Error != nil {
+				r.Warn("db save RecordEvent failed", "filePath", r.Event.FilePath, "err", result.Error)
+			} else {
+				r.Info("db save RecordEvent ok", "filePath", r.Event.FilePath)
+			}
 		} else {
-			recordJob.Plugin.DB.Save(&r.Event.RecordStream)
+			r.Info("db save RecordStream begin", "filePath", r.Event.FilePath)
+			if result := recordJob.Plugin.DB.WithContext(dbCtx).Save(&r.Event.RecordStream); result.Error != nil {
+				r.Warn("db save RecordStream failed", "filePath", r.Event.FilePath, "err", result.Error)
+			} else {
+				r.Info("db save RecordStream ok", "filePath", r.Event.FilePath)
+			}
 		}
 	}
+	recordJob.SetDescription("streamPath", recordJob.StreamPath)
+	recordJob.SetDescription("fileName", filePath)
+	recordJob.SetDescription("startTime", start.Format("2006-01-02 15:04:05"))
 	recordJob.SetDescription("streamPath", recordJob.StreamPath)
 	recordJob.SetDescription("fileName", filePath)
 	recordJob.SetDescription("startTime", start.Format("2006-01-02 15:04:05"))
@@ -138,12 +160,29 @@ func (r *DefaultRecorder) createStorage(storageConfig map[string]any) (storage.S
 func (r *DefaultRecorder) WriteTail(end time.Time, tailJob task.IJob) {
 	r.Event.EndTime = end
 	if r.RecordJob.Plugin.DB != nil && r.RecordJob.RecConf.Mode != config.RecordModeTest {
+		dbCtx, dbCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer dbCancel()
 		// 将事件和录像记录关联
 		if r.RecordJob.Event != nil {
-			r.RecordJob.Plugin.DB.Save(&r.Event)
-			r.RecordJob.Plugin.DB.Save(&r.Event.RecordStream)
+			r.Info("db save RecordEvent (WriteTail) begin", "filePath", r.Event.FilePath)
+			if result := r.RecordJob.Plugin.DB.WithContext(dbCtx).Save(&r.Event); result.Error != nil {
+				r.Warn("db save RecordEvent (WriteTail) failed", "filePath", r.Event.FilePath, "err", result.Error)
+			} else {
+				r.Info("db save RecordEvent (WriteTail) ok", "filePath", r.Event.FilePath)
+			}
+			r.Info("db save RecordStream (WriteTail) begin", "filePath", r.Event.FilePath)
+			if result := r.RecordJob.Plugin.DB.WithContext(dbCtx).Save(&r.Event.RecordStream); result.Error != nil {
+				r.Warn("db save RecordStream (WriteTail) failed", "filePath", r.Event.FilePath, "err", result.Error)
+			} else {
+				r.Info("db save RecordStream (WriteTail) ok", "filePath", r.Event.FilePath)
+			}
 		} else {
-			r.RecordJob.Plugin.DB.Save(&r.Event.RecordStream)
+			r.Info("db save RecordStream (WriteTail) begin", "filePath", r.Event.FilePath)
+			if result := r.RecordJob.Plugin.DB.WithContext(dbCtx).Save(&r.Event.RecordStream); result.Error != nil {
+				r.Warn("db save RecordStream (WriteTail) failed", "filePath", r.Event.FilePath, "err", result.Error)
+			} else {
+				r.Info("db save RecordStream (WriteTail) ok", "filePath", r.Event.FilePath)
+			}
 		}
 		if tailJob == nil {
 			return
@@ -238,6 +277,7 @@ func (p *RecordJob) Init(recorder IRecorder, plugin *Plugin, streamPath string, 
 		"fragment":   conf.Fragment,
 	})
 	recorder.SetRetry(-1, time.Second)
+	recorder.GetTask().SetMaxRetryInterval(2 * time.Second)
 	if sender, webhook := plugin.getHookSender(config.HookOnRecordStart); sender != nil {
 		recorder.OnStart(func() {
 			alarmInfo := AlarmInfo{

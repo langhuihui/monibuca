@@ -197,7 +197,7 @@ func (r *Recorder) createStream(start time.Time) (err error) {
 	}
 	t1 := time.Now()
 	// 使用存储抽象层
-	r.file, err = st.CreateFile(context.Background(), r.Event.FilePath)
+	r.file, err = st.CreateFile(r.Context, r.Event.FilePath)
 	r.Info("createStream step2 CreateFile", "elapsed", time.Since(t1), "path", r.Event.FilePath)
 	if err != nil {
 		return
