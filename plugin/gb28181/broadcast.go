@@ -6,6 +6,7 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/emiago/sipgo"
@@ -39,11 +40,15 @@ type BroadcastSession struct {
 	PayloadType    uint8
 	TranscodePCMA  bool
 	inviteCh       chan struct{}
-	audioChan      chan []byte // 音频数据通道，用于接收 WebSocket 数据
-	ready          bool        // 标记会话是否已准备好（ACK 已收到）
-	isTCP          bool        // 是否使用 TCP 传输
+	audioChan      chan []byte   // 音频数据通道，用于接收 WebSocket 数据
+	readyCh        chan struct{} // closed when ACK received — replaces busy-poll
+	readyOnce      sync.Once     // guards close(readyCh), prevents double-close and nil-channel deadlock
+	stopOnce       sync.Once     // guards StopBroadcast cleanup
+	idleTimer      *time.Timer   // fires StopBroadcast after 30s of inactivity
+	isTCP          bool          // 是否使用 TCP 传输
+	tcpActiveMode  bool          // true=我方主动连接对端，false=我方监听等待对端连接
 	rtpConn        *net.UDPConn
-	tcpListener    net.Listener // TCP 监听器
+	tcpListener    net.Listener // TCP 监听器（被动模式）
 	tcpConn        net.Conn     // TCP 连接
 	sequenceNumber uint16
 	timestamp      uint32
@@ -53,10 +58,19 @@ type BroadcastSession struct {
 // 全局会话管理
 var BroadcastSessions util.Collection[string, *BroadcastSession]
 
-// GetKey 实现 util.Collection 接口
+// broadcastKeyLocks 提供按 "deviceId_channelId" 粒度的互斥锁，
+// 确保同一通道的"查找+创建"是原子操作，同时不阻塞其他通道的并发创建。
+var broadcastKeyLocks sync.Map // key → *sync.Mutex
+
+func getBroadcastLock(key string) *sync.Mutex {
+	mu, _ := broadcastKeyLocks.LoadOrStore(key, &sync.Mutex{})
+	return mu.(*sync.Mutex)
+}
+
+// GetKey 实现 util.Collection 接口，主键为 "deviceId_channelId"
 func (bs *BroadcastSession) GetKey() string {
-	if bs.Channel != nil {
-		return bs.Channel.ChannelId
+	if bs.Device != nil && bs.Channel != nil {
+		return bs.Device.DeviceId + "_" + bs.Channel.ChannelId
 	}
 	return ""
 }
@@ -147,7 +161,7 @@ func (d *Device) StartBroadcast(channelId string) (*BroadcastSession, error) {
 		gb:        d.plugin,
 		inviteCh:  make(chan struct{}),
 		audioChan: make(chan []byte, 100), // 缓冲 100 个音频包
-		ready:     false,
+		readyCh:   make(chan struct{}),
 	}
 
 	// 生成 SSRC
@@ -269,55 +283,45 @@ func (bs *BroadcastSession) notifyInvite() {
 
 // startAudioSender 启动音频发送 goroutine
 func (bs *BroadcastSession) startAudioSender() {
-	bs.gb.Info("startAudioSender: goroutine started", "channelId", bs.Channel.ChannelId, "isTCP", bs.isTCP, "time", time.Now().Format("15:04:05.000"))
+	bs.gb.Info("startAudioSender: goroutine started", "channelId", bs.Channel.ChannelId, "isTCP", bs.isTCP, "tcpActiveMode", bs.tcpActiveMode, "time", time.Now().Format("15:04:05.000"))
 
-	// 如果是 TCP 模式，先等待设备连接
-	if bs.isTCP && bs.tcpListener != nil {
-		bs.gb.Info("startAudioSender: waiting for TCP connection...")
-
-		// 设置超时
-		if tcpListener, ok := bs.tcpListener.(*net.TCPListener); ok {
-			tcpListener.SetDeadline(time.Now().Add(30 * time.Second))
+	if bs.isTCP {
+		if bs.tcpActiveMode {
+			// 主动模式：先等待 ACK（SIP 对话建立），再主动连接对端 RTP 端口
+			<-bs.readyCh
+			addr := fmt.Sprintf("%s:%d", bs.RTPPeerIP, bs.RTPPeerPort)
+			bs.gb.Info("startAudioSender: TCP active, dialing device", "addr", addr, "time", time.Now().Format("15:04:05.000"))
+			conn, err := net.DialTimeout("tcp", addr, 30*time.Second)
+			if err != nil {
+				bs.gb.Error("startAudioSender: TCP dial failed", "addr", addr, "error", err)
+				return
+			}
+			bs.tcpConn = conn
+			bs.gb.Info("startAudioSender: TCP active connection established", "remoteAddr", conn.RemoteAddr().String(), "time", time.Now().Format("15:04:05.000"))
+		} else {
+			// 被动模式：先等待设备连接，再等待 ACK
+			bs.gb.Info("startAudioSender: TCP passive, waiting for device connection...")
+			if tcpListener, ok := bs.tcpListener.(*net.TCPListener); ok {
+				tcpListener.SetDeadline(time.Now().Add(30 * time.Second))
+			}
+			conn, err := bs.tcpListener.Accept()
+			if err != nil {
+				bs.gb.Error("startAudioSender: TCP accept failed", "error", err)
+				return
+			}
+			bs.tcpConn = conn
+			bs.gb.Info("startAudioSender: TCP passive connection established", "remoteAddr", conn.RemoteAddr().String(), "time", time.Now().Format("15:04:05.000"))
+			<-bs.readyCh
 		}
-
-		conn, err := bs.tcpListener.Accept()
-		if err != nil {
-			bs.gb.Error("startAudioSender: TCP accept failed", "error", err)
-			return
-		}
-
-		bs.tcpConn = conn
-		bs.gb.Info("startAudioSender: TCP connection established", "remoteAddr", conn.RemoteAddr().String(), "time", time.Now().Format("15:04:05.000"))
+	} else {
+		// 等待 ACK（readyCh 关闭即可继续）
+		<-bs.readyCh
 	}
+	bs.gb.Info("startAudioSender: session ready, starting audio loop", "channelId", bs.Channel.ChannelId)
 
 	for audioData := range bs.audioChan {
-		receiveTime := time.Now()
-		bs.gb.Info("startAudioSender: received audio from channel",
-			"dataLen", len(audioData),
-			"ready", bs.ready,
-			"time", receiveTime.Format("15:04:05.000"))
-
-		// 等待 ACK（ready 标志）
-		waitStart := time.Now()
-		for !bs.ready {
-			time.Sleep(50 * time.Millisecond)
-		}
-		waitDuration := time.Since(waitStart)
-		if waitDuration > 0 {
-			bs.gb.Info("startAudioSender: waited for ready", "duration", waitDuration)
-		}
-
-		// 发送音频数据
-		sendStart := time.Now()
 		if err := bs.sendAudioDataInternal(audioData); err != nil {
-			bs.gb.Error("startAudioSender: send failed", "error", err, "time", time.Now().Format("15:04:05.000"))
-		} else {
-			sendDuration := time.Since(sendStart)
-			bs.gb.Info("startAudioSender: sent RTP packet",
-				"dataLen", len(audioData),
-				"sendDuration", sendDuration,
-				"totalDuration", time.Since(receiveTime),
-				"time", time.Now().Format("15:04:05.000"))
+			bs.gb.Error("startAudioSender: send failed", "error", err)
 		}
 	}
 
@@ -326,42 +330,43 @@ func (bs *BroadcastSession) startAudioSender() {
 
 // SendAudioData 接收来自 WebSocket 的音频数据，放入通道
 func (bs *BroadcastSession) SendAudioData(data []byte) error {
-	queueTime := time.Now()
+	if bs.audioChan == nil {
+		return fmt.Errorf("broadcast session already stopped")
+	}
 	select {
 	case bs.audioChan <- data:
-		bs.gb.Debug("SendAudioData: queued to channel",
-			"dataLen", len(data),
-			"queueLen", len(bs.audioChan),
-			"time", queueTime.Format("15:04:05.000"))
 		return nil
 	default:
-		bs.gb.Error("SendAudioData: channel full",
-			"dataLen", len(data),
-			"time", queueTime.Format("15:04:05.000"))
+		bs.gb.Error("SendAudioData: channel full", "dataLen", len(data))
 		return fmt.Errorf("audio channel full")
 	}
 }
 
 // sendAudioDataInternal 实际发送音频数据到设备
 func (bs *BroadcastSession) sendAudioDataInternal(data []byte) error {
-	if bs.rtpConn == nil {
-		return fmt.Errorf("RTP connection not established")
-	}
-
-	if bs.RTPPeerIP == "" || bs.RTPPeerPort == 0 {
-		return fmt.Errorf("RTP peer information not available")
+	var remoteAddr *net.UDPAddr
+	if bs.isTCP {
+		if bs.tcpConn == nil {
+			return fmt.Errorf("TCP connection not established")
+		}
+	} else {
+		if bs.rtpConn == nil {
+			return fmt.Errorf("RTP connection not established")
+		}
+		if bs.RTPPeerIP == "" || bs.RTPPeerPort == 0 {
+			return fmt.Errorf("RTP peer information not available")
+		}
+		var err error
+		remoteAddr, err = net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", bs.RTPPeerIP, bs.RTPPeerPort))
+		if err != nil {
+			return fmt.Errorf("failed to resolve remote UDP address: %w", err)
+		}
 	}
 
 	// 解析 SSRC
 	ssrcUint64, err := strconv.ParseUint(bs.SSRC, 10, 64)
 	if err != nil {
 		return fmt.Errorf("invalid SSRC: %w", err)
-	}
-
-	// 解析远程地址
-	remoteAddr, err := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", bs.RTPPeerIP, bs.RTPPeerPort))
-	if err != nil {
-		return fmt.Errorf("failed to resolve remote UDP address: %w", err)
 	}
 
 	// 追加到缓冲区
@@ -469,12 +474,44 @@ func (bs *BroadcastSession) FlushAudioBuffer() error {
 	return nil
 }
 
+// Attach 附着一个新 WebSocket 到已存在的会话（取消空闲计时器）
+func (bs *BroadcastSession) Attach() {
+	if bs.idleTimer != nil {
+		bs.idleTimer.Stop()
+		bs.idleTimer = nil
+	}
+	bs.gb.Info("BroadcastSession: WS attached, idle timer cancelled", "channelId", bs.Channel.ChannelId)
+}
+
+// Detach 断开 WebSocket，启动 30s 空闲计时器
+func (bs *BroadcastSession) Detach() {
+	bs.gb.Info("BroadcastSession: WS detached, starting 30s idle timer", "channelId", bs.Channel.ChannelId)
+	bs.idleTimer = time.AfterFunc(30*time.Second, func() {
+		bs.gb.Info("BroadcastSession: idle timer fired, stopping session", "channelId", bs.Channel.ChannelId)
+		_ = bs.StopBroadcast()
+	})
+}
+
 // StopBroadcast 停止广播
 func (bs *BroadcastSession) StopBroadcast() error {
+	var firstStop bool
+	bs.stopOnce.Do(func() {
+		firstStop = true
+	})
+	if !firstStop {
+		return nil // already stopped
+	}
+
+	// 取消空闲计时器
+	if bs.idleTimer != nil {
+		bs.idleTimer.Stop()
+		bs.idleTimer = nil
+	}
+
 	// 从会话列表移除
 	BroadcastSessions.Remove(bs)
 
-	// 关闭音频通道
+	// 关闭音频通道（让 startAudioSender goroutine 退出）
 	if bs.audioChan != nil {
 		close(bs.audioChan)
 		bs.audioChan = nil
@@ -635,7 +672,33 @@ func (gb *GB28181Plugin) OnBroadcastInvite(req *sip.Request, tx sip.ServerTransa
 	sdpBody = string(req.Body())
 	hasPCMA := strings.Contains(sdpBody, "rtpmap:8 PCMA")
 	hasPCMU := strings.Contains(sdpBody, "rtpmap:0 PCMU")
-	isTCP := strings.Contains(sdpBody, "TCP/RTP/AVP") || strings.Contains(sdpBody, "RTP/AVP/TCP")
+
+	// 逐行解析 SDP：传输模式、方向属性、setup 角色、f= 参数
+	var isTCP bool
+	var deviceDirection string // 对端方向：recvonly / sendonly / sendrecv
+	var deviceSetup string     // 对端 setup 角色：active / passive
+	var fLine string           // 原始 f= 值，从 INVITE 中提取后原样返回
+	for _, sdpLine := range strings.Split(sdpBody, "\n") {
+		sdpLine = strings.TrimRight(sdpLine, "\r")
+		switch {
+		case strings.HasPrefix(sdpLine, "m="):
+			parts := strings.Fields(sdpLine)
+			if len(parts) >= 3 {
+				proto := strings.ToUpper(parts[2])
+				isTCP = proto == "TCP/RTP/AVP" || proto == "RTP/AVP/TCP"
+			}
+		case sdpLine == "a=recvonly":
+			deviceDirection = "recvonly"
+		case sdpLine == "a=sendonly":
+			deviceDirection = "sendonly"
+		case sdpLine == "a=sendrecv":
+			deviceDirection = "sendrecv"
+		case strings.HasPrefix(sdpLine, "a=setup:"):
+			deviceSetup = strings.TrimPrefix(sdpLine, "a=setup:")
+		case strings.HasPrefix(sdpLine, "f="):
+			fLine = strings.TrimPrefix(sdpLine, "f=")
+		}
+	}
 
 	if hasPCMA {
 		broadcastSession.PayloadType = 8
@@ -651,16 +714,30 @@ func (gb *GB28181Plugin) OnBroadcastInvite(req *sip.Request, tx sip.ServerTransa
 
 	broadcastSession.isTCP = isTCP
 
+	// 确定我方 TCP setup 角色：对端 active → 我方 passive；对端 passive → 我方 active
+	ourSetup := "passive"
+	if strings.EqualFold(deviceSetup, "passive") {
+		ourSetup = "active"
+	}
+	broadcastSession.tcpActiveMode = isTCP && strings.EqualFold(ourSetup, "active")
+
 	var mediaPort int
 	if isTCP {
-		// TCP 模式：创建 TCP Listener，等待设备连接
-		gb.Info("OnBroadcastInvite: using TCP/RTP", "deviceId", deviceID)
-		if err := broadcastSession.prepareTCPListener(); err != nil {
-			gb.Error("OnBroadcastInvite: prepare tcp listener failed", "error", err)
-			tx.Respond(sip.NewResponseFromRequest(req, sip.StatusServiceUnavailable, "Create TCP Listener Failed", nil))
-			return
+		if broadcastSession.tcpActiveMode {
+			// 主动模式：我方发起连接，无需本地监听；端口按 RFC 4145 填 9
+			gb.Info("OnBroadcastInvite: TCP active mode, will dial device after ACK",
+				"deviceId", deviceID, "peerIP", broadcastSession.RTPPeerIP, "peerPort", broadcastSession.RTPPeerPort)
+			mediaPort = 9
+		} else {
+			// 被动模式：创建 TCP Listener，等待设备连接
+			gb.Info("OnBroadcastInvite: TCP passive mode, listening for device", "deviceId", deviceID)
+			if err := broadcastSession.prepareTCPListener(); err != nil {
+				gb.Error("OnBroadcastInvite: prepare tcp listener failed", "error", err)
+				tx.Respond(sip.NewResponseFromRequest(req, sip.StatusServiceUnavailable, "Create TCP Listener Failed", nil))
+				return
+			}
+			mediaPort = broadcastSession.tcpListener.Addr().(*net.TCPAddr).Port
 		}
-		mediaPort = broadcastSession.tcpListener.Addr().(*net.TCPAddr).Port
 	} else {
 		// UDP 模式
 		gb.Info("OnBroadcastInvite: using UDP/RTP", "deviceId", deviceID)
@@ -693,15 +770,27 @@ func (gb *GB28181Plugin) OnBroadcastInvite(req *sip.Request, tx sip.ServerTransa
 		"t=0 0",
 	}
 
-	// 根据传输模式添加媒体行
+	// 根据传输模式和对端属性添加媒体行
 	if isTCP {
 		sdpLines = append(sdpLines, fmt.Sprintf("m=audio %d TCP/RTP/AVP %d", mediaPort, broadcastSession.PayloadType))
-		sdpLines = append(sdpLines, "a=sendrecv")
-		//sdpLines = append(sdpLines, "a=setup:passive") // 我们是被动方，等待设备连接
-		//sdpLines = append(sdpLines, "a=connection:new")
+		// 方向：对端 recvonly → 我方 sendonly；对端 sendonly → 我方 recvonly；默认 sendonly
+		ourDirection := "sendonly"
+		if strings.EqualFold(deviceDirection, "sendonly") {
+			ourDirection = "recvonly"
+		}
+		sdpLines = append(sdpLines, "a="+ourDirection)
+		sdpLines = append(sdpLines, "a=setup:"+ourSetup)
+		sdpLines = append(sdpLines, "a=connection:new")
 	} else {
 		sdpLines = append(sdpLines, fmt.Sprintf("m=audio %d RTP/AVP %d", mediaPort, broadcastSession.PayloadType))
-		sdpLines = append(sdpLines, "a=sendrecv")
+		// UDP 模式：根据对端方向决定我方方向
+		if strings.EqualFold(deviceDirection, "recvonly") {
+			sdpLines = append(sdpLines, "a=sendonly")
+		} else if strings.EqualFold(deviceDirection, "sendonly") {
+			sdpLines = append(sdpLines, "a=recvonly")
+		} else {
+			sdpLines = append(sdpLines, "a=sendrecv")
+		}
 	}
 	if broadcastSession.PayloadType == 8 {
 		sdpLines = append(sdpLines, "a=rtpmap:8 PCMA/8000")
@@ -712,7 +801,8 @@ func (gb *GB28181Plugin) OnBroadcastInvite(req *sip.Request, tx sip.ServerTransa
 	if broadcastSession.SSRC != "" {
 		sdpLines = append(sdpLines, fmt.Sprintf("y=%s", broadcastSession.SSRC))
 	}
-	sdpLines = append(sdpLines, "f=v/2/0/0/0/0a/0/0/0")
+	// 原样返回对端的 f= 参数
+	sdpLines = append(sdpLines, "f="+fLine)
 
 	okResp := sip.NewResponseFromRequest(req, sip.StatusOK, "OK", nil)
 	contentType := sip.ContentTypeHeader("application/sdp")
@@ -755,14 +845,16 @@ func (gb *GB28181Plugin) OnBroadcastAck(req *sip.Request, tx sip.ServerTransacti
 		"deviceId", deviceID,
 		"time", ackTime.Format("15:04:05.000"))
 
-	// 查找会话并标记为 ready
+	// 查找会话并通知 readyCh
 	if bs, ok := BroadcastSessions.Find(func(bs *BroadcastSession) bool {
 		return bs.Device != nil && bs.Device.DeviceId == deviceID
 	}); ok {
-		bs.ready = true
+		// readyOnce 保证 readyCh 只被关闭一次，且关闭后该 channel 始终可读（不会再变成 nil）
+		bs.readyOnce.Do(func() {
+			close(bs.readyCh)
+		})
 		gb.Info("OnBroadcastAck: session ready for audio",
 			"deviceId", deviceID,
-			"queuedAudioPackets", len(bs.audioChan),
 			"time", time.Now().Format("15:04:05.000"))
 	}
 }

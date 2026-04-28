@@ -152,6 +152,57 @@ func (r *DefaultRecorder) WriteTail(end time.Time, tailJob task.IJob) {
 	}
 }
 
+// WriteTailDeferred 设置结束时间，并返回一个延迟执行的 DB 写入函数。
+// 与 WriteTail 不同，它不立即写库，而是将写库操作包装成闭包返回。
+// 调用方应在 MP4 文件完整写入（moov 移到头部）后再调用该闭包，
+// 以保证数据库记录在文件可播放之后才更新 EndTime。
+func (r *DefaultRecorder) WriteTailDeferred(end time.Time) func(tailJob task.IJob) {
+	r.Event.EndTime = end
+	if r.RecordJob.Plugin.DB == nil || r.RecordJob.RecConf.Mode == config.RecordModeTest {
+		return nil
+	}
+	db := r.RecordJob.Plugin.DB
+	streamType := r.Event.Type
+	streamPath := r.Event.StreamPath
+	filePath := r.Event.FilePath
+	if r.RecordJob.Event != nil {
+		eventSnap := r.Event // 值拷贝：捕获正确的 EndTime 和 RecordStream.ID，RecordEvent 指针稳定
+		return func(tailJob task.IJob) {
+			dbCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			r.Info("db save RecordEvent (deferred) begin", "filePath", filePath)
+			if result := db.WithContext(dbCtx).Save(&eventSnap); result.Error != nil {
+				r.Warn("db save RecordEvent (deferred) failed", "filePath", filePath, "err", result.Error)
+			} else {
+				r.Info("db save RecordEvent (deferred) ok", "filePath", filePath)
+			}
+			r.Info("db save RecordStream (deferred) begin", "filePath", filePath)
+			if result := db.WithContext(dbCtx).Save(&eventSnap.RecordStream); result.Error != nil {
+				r.Warn("db save RecordStream (deferred) failed", "filePath", filePath, "err", result.Error)
+			} else {
+				r.Info("db save RecordStream (deferred) ok", "filePath", filePath)
+			}
+			if tailJob != nil {
+				tailJob.AddTask(NewEventRecordCheck(streamType, streamPath, db))
+			}
+		}
+	}
+	streamSnap := r.Event.RecordStream // 值拷贝
+	return func(tailJob task.IJob) {
+		dbCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		r.Info("db save RecordStream (deferred) begin", "filePath", filePath)
+		if result := db.WithContext(dbCtx).Save(&streamSnap); result.Error != nil {
+			r.Warn("db save RecordStream (deferred) failed", "filePath", filePath, "err", result.Error)
+		} else {
+			r.Info("db save RecordStream (deferred) ok", "filePath", filePath)
+		}
+		if tailJob != nil {
+			tailJob.AddTask(NewEventRecordCheck(streamType, streamPath, db))
+		}
+	}
+}
+
 func (p *RecordJob) GetKey() string {
 	return p.RecConf.FilePath
 }

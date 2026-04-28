@@ -4241,7 +4241,7 @@ func (gb *GB28181Plugin) StartBroadcast(ctx context.Context, req *pb.BroadcastRe
 	}
 
 	// 4. 检查会话是否已存在
-	if _, exists := BroadcastSessions.Get(req.ChannelId); exists {
+	if _, exists := BroadcastSessions.Get(req.DeviceId + "_" + req.ChannelId); exists {
 		resp.Code = 409
 		resp.Message = "广播会话已存在"
 		return resp, nil
@@ -4289,7 +4289,7 @@ func (gb *GB28181Plugin) StopBroadcast(ctx context.Context, req *pb.BroadcastReq
 	}
 
 	// 2. 查找广播会话
-	broadcastSession, exists := BroadcastSessions.Get(req.ChannelId)
+	broadcastSession, exists := BroadcastSessions.Get(req.DeviceId + "_" + req.ChannelId)
 	if !exists {
 		resp.Code = 404
 		resp.Message = "广播会话不存在"
@@ -4310,16 +4310,35 @@ func (gb *GB28181Plugin) StopBroadcast(ctx context.Context, req *pb.BroadcastReq
 
 // API_talk_start WebSocket 接口，用于实时音频传输
 // 路径: /gb28181/api/talk/start
+// 参数: ?deviceId=X&channelId=Y
 func (gb *GB28181Plugin) API_talk_start(w http.ResponseWriter, r *http.Request) {
-	// Upgrade HTTP connection to WebSocket
+	// 解析query参数（必须在WS升级之前，升级后无法读取HTTP请求）
+	deviceId := r.URL.Query().Get("deviceId")
+	channelId := r.URL.Query().Get("channelId")
+	if deviceId == "" || channelId == "" {
+		http.Error(w, "deviceId and channelId are required", http.StatusBadRequest)
+		return
+	}
+
+	// 校验设备存在且在线
+	device, ok := gb.devices.Get(deviceId)
+	if !ok {
+		http.Error(w, "device not found", http.StatusNotFound)
+		return
+	}
+	if !device.Online {
+		http.Error(w, "device offline", http.StatusServiceUnavailable)
+		return
+	}
+
+	// 升级为 WebSocket
 	conn, _, _, err := ws.UpgradeHTTP(r, w)
 	if err != nil {
 		gb.Error("WebSocket upgrade failed", "error", err)
 		return
 	}
 
-	// Create a new TalkWebsocketTask for this connection
-	talkTask := NewTalkWebsocketTask(gb, conn)
+	talkTask := NewTalkWebsocketTask(gb, conn, deviceId, channelId)
 
 	if err := gb.AddTask(talkTask).WaitStarted(); err != nil {
 		gb.Error("Failed to start talk websocket task", "error", err)
@@ -4327,5 +4346,5 @@ func (gb *GB28181Plugin) API_talk_start(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	gb.Info("WebSocket talk session started", "taskId", talkTask.ID)
+	gb.Info("WebSocket talk session started", "taskId", talkTask.ID, "deviceId", deviceId, "channelId", channelId)
 }
