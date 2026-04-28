@@ -108,13 +108,16 @@ func (m *MultiLogHandler) Enabled(_ context.Context, l slog.Level) bool {
 }
 
 // Handle implements slog.Handler.
+// All registered handlers are called regardless of individual errors,
+// so a failing handler (e.g. stdout in Windows GUI mode) never blocks others.
 func (m *MultiLogHandler) Handle(ctx context.Context, rec slog.Record) error {
+	var lastErr error
 	for _, h := range m.handlers {
 		if err := h.Handle(ctx, rec); err != nil {
-			return err
+			lastErr = err
 		}
 	}
-	return nil
+	return lastErr
 }
 
 // WithAttrs implements slog.Handler.

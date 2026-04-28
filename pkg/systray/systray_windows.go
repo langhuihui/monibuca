@@ -7,12 +7,9 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"regexp"
-	"sync"
 	"time"
 
 	"github.com/getlantern/systray"
-	"golang.org/x/sys/windows"
 )
 
 var (
@@ -23,23 +20,12 @@ var (
 	serverCancel  context.CancelFunc
 	// execDir 程序执行目录
 	execDir string
-	// 确保重定向只执行一次
-	redirectOnce sync.Once
-	// ANSI 转义序列清理
-	ansiRe = regexp.MustCompile(`\x1b\[[0-9;]*[A-Za-z]|\x1b\][^\a]*\a`)
-	// 日志文件写锁
-	logMu sync.Mutex
 )
 
 func init() {
 	// 禁用彩色输出，避免日志文件出现 ANSI 控制字符
 	_ = os.Setenv("NO_COLOR", "1")
 	_ = os.Setenv("CLICOLOR", "0")
-
-	// 尝试在包初始化时就重定向，防止早期日志写入无效句柄
-	if exe, err := os.Executable(); err == nil {
-		redirectStdIO(filepath.Dir(exe))
-	}
 }
 
 // StartSystray 启动系统托盘（仅在 Windows 且启用 systray tag 时）
@@ -49,9 +35,6 @@ func StartSystray(ctx context.Context, cancel context.CancelFunc, execDirPath st
 	serverCancel = cancel
 	execDir = execDirPath
 	systrayQuit = make(chan struct{})
-
-	// 在托盘启动前将 stdout/stderr 重定向到文件，避免 GUI 模式下看不到日志
-	redirectStdIO(execDir)
 
 	// 在 goroutine 中运行托盘
 	go systray.Run(onReady, onExit)
@@ -130,67 +113,4 @@ func WaitForSystrayQuit() <-chan struct{} {
 		return ch
 	}
 	return systrayQuit
-}
-
-// redirectStdIO 将标准输出/错误重定向到 logs/m7s.log（追加写入）
-func redirectStdIO(execDir string) {
-	redirectOnce.Do(func() {
-		//if execDir == "" {
-		//	return
-		//}
-		//logDir := filepath.Join(execDir, "logs")
-		//logFile := filepath.Join(logDir, "m7s.log")
-		//
-		//// 确保日志目录存在
-		//_ = os.MkdirAll(logDir, 0o755)
-		//
-		//// 追加方式打开日志文件
-		//f, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
-		//if err != nil {
-		//	return
-		//}
-		//
-		//// 启动 stdout/stderr 管道，去除 ANSI 颜色后写入同一个日志文件
-		//startPipeRedirect(f, windows.STD_OUTPUT_HANDLE, "/dev/stdout")
-		//startPipeRedirect(f, windows.STD_ERROR_HANDLE, "/dev/stderr")
-		//
-		//// slog 默认使用 log 包输出错误，保持一致
-		//log.SetOutput(f)
-	})
-}
-
-// startPipeRedirect 创建管道，将句柄重定向到管道写端，读端去除 ANSI 后写入日志文件
-func startPipeRedirect(logFile *os.File, stdHandle uint32, name string) {
-	r, w, err := os.Pipe()
-	if err != nil {
-		return
-	}
-
-	// 设置底层句柄为管道写端
-	_ = windows.SetStdHandle(stdHandle, windows.Handle(w.Fd()))
-
-	// 更新 os.Stdout/os.Stderr 指向管道写端
-	if stdHandle == windows.STD_OUTPUT_HANDLE {
-		os.Stdout = w
-	} else if stdHandle == windows.STD_ERROR_HANDLE {
-		os.Stderr = w
-	}
-
-	// 后台 goroutine 读管道，清理 ANSI，再写日志文件
-	go func() {
-		defer r.Close()
-		buf := make([]byte, 4096)
-		for {
-			n, err := r.Read(buf)
-			if n > 0 {
-				clean := ansiRe.ReplaceAll(buf[:n], []byte{})
-				logMu.Lock()
-				_, _ = logFile.Write(clean)
-				logMu.Unlock()
-			}
-			if err != nil {
-				return
-			}
-		}
-	}()
 }
