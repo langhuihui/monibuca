@@ -139,11 +139,11 @@ func (p *Publisher) Start() (err error) {
 	p.bufferTimeCounts = make(map[time.Duration]int)
 	p.Info("publish")
 	p.processPullProxyOnStart()
-	p.audioReady = util.NewPromiseWithTimeout(p, p.PublishTimeout)
+	p.audioReady = util.NewPromise(p)
 	if !p.PubAudio {
 		p.audioReady.Reject(ErrMuted)
 	}
-	p.videoReady = util.NewPromiseWithTimeout(p, p.PublishTimeout)
+	p.videoReady = util.NewPromise(p)
 	if !p.PubVideo {
 		p.videoReady.Reject(ErrMuted)
 	}
@@ -512,6 +512,22 @@ func (p *Publisher) HasAudioTrack() bool {
 
 func (p *Publisher) HasVideoTrack() bool {
 	return p.PubVideo && p.VideoTrack.Length > 0
+}
+
+// PreDispose is called by the gotask framework before waiting for subscriber
+// child tasks to stop. Disposing the ring buffers here releases the write lock
+// that subscriber goroutines may be blocked on in RingReader.StartRead(),
+// preventing the following deadlock:
+//
+//	waitChildrenDispose() blocks waiting for subscriber tasks to stop
+//	  ↓ subscriber goroutines stuck on RLock() waiting for write lock
+//	    ↓ write lock released only in RingWriter.Dispose()
+//	      ↓ RingWriter.Dispose() called only after waitChildrenDispose()
+//
+// AVTracks.Dispose() is idempotent, so the subsequent call from Dispose() is safe.
+func (p *Publisher) PreDispose() {
+	p.AudioTrack.Dispose()
+	p.VideoTrack.Dispose()
 }
 
 func (p *Publisher) Dispose() {
