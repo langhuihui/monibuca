@@ -42,6 +42,7 @@ func (task *ListenQuicWork) Start() (err error) {
 	if err != nil {
 		return
 	}
+	ltsc.NextProtos = []string{"monibuca"}
 	task.Listener, err = quic.ListenAddr(task.ListenAddr, ltsc, &quic.Config{
 		EnableDatagrams: true,
 	})
