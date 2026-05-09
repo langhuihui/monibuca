@@ -106,7 +106,13 @@ func (c *Client) Run() (err error) {
 					return
 				}
 			default:
-				c.Warn("media kind not support", "kind", media.Kind)
+				codecNames := make([]string, len(media.Codecs))
+				for i, codec := range media.Codecs {
+					if codec != nil {
+						codecNames[i] = codec.Name
+					}
+				}
+				c.Warn("media kind not supported, will be skipped", "kind", media.Kind, "direction", media.Direction, "id", media.ID, "codecs", codecNames)
 			}
 		}
 
@@ -139,7 +145,13 @@ func (c *Client) Run() (err error) {
 					return
 				}
 			default:
-				c.Warn("media kind not support", "kind", media.Kind)
+				codecNames := make([]string, len(media.Codecs))
+				for i, codec := range media.Codecs {
+					if codec != nil {
+						codecNames[i] = codec.Name
+					}
+				}
+				c.Warn("media kind not supported, will be skipped", "kind", media.Kind, "direction", media.Direction, "id", media.ID, "codecs", codecNames)
 			}
 		}
 		if err = c.Record(); err != nil {

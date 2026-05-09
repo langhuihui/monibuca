@@ -122,6 +122,7 @@ type SnapTask struct {
 	config          SnapConfig
 	job             *m7s.TransformJob
 	watermarkConfig *WatermarkConfig
+	ffmpegPath      string
 }
 
 // saveSnap 保存截图
@@ -134,7 +135,11 @@ func (t *SnapTask) saveSnap(annexb []*format.AnnexB, snapMode int) error {
 
 	// 处理视频帧
 	var buf bytes.Buffer
-	if err := ProcessWithFFmpeg(annexb, &buf, ""); err != nil {
+	ffmpegPath := t.ffmpegPath
+	if ffmpegPath == "" {
+		ffmpegPath = "ffmpeg"
+	}
+	if err := ProcessWithFFmpeg(annexb, &buf, ffmpegPath); err != nil {
 		return fmt.Errorf("process with ffmpeg error: %w", err)
 	}
 
@@ -242,16 +247,23 @@ func NewTransform() m7s.ITransformer {
 
 func (t *Transformer) Start() (err error) {
 	// 为每个输出配置创建一个截图任务
-	for _, output := range t.TransformJob.Config.Output {
+	t.Info("snap transform starting", "output_count", len(t.TransformJob.Config.Output))
+	for i, output := range t.TransformJob.Config.Output {
 		var task task.ITask
 		var snapConfig SnapConfig
 		if output.Conf != nil {
+			t.Info("output conf found", "index", i, "type", fmt.Sprintf("%T", output.Conf))
 			switch v := output.Conf.(type) {
 			case SnapConfig:
 				snapConfig = v
+				t.Info("parsed as SnapConfig", "timeinterval", snapConfig.TimeInterval, "iframeinterval", snapConfig.IFrameInterval, "savepath", snapConfig.SavePath)
 			case map[string]any:
+				t.Info("parsing as map[string]any", "content", v)
 				config.Parse(&snapConfig, v)
+				t.Info("parsed from map", "timeinterval", snapConfig.TimeInterval, "iframeinterval", snapConfig.IFrameInterval, "savepath", snapConfig.SavePath)
 			}
+		} else {
+			t.Warn("output.Conf is nil", "index", i)
 		}
 
 		// 初始化水印配置
