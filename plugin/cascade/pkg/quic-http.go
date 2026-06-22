@@ -56,7 +56,7 @@ func (task *ReceiveRequestTask) Go() (err error) {
 	line0, _, err := reader.ReadLine()
 	reqLine := strings.Split(string(line0), " ")
 	var req *http.Request
-	task.SetDescription("request", line0)
+	task.SetDescription("request", string(line0))
 	if err == nil {
 		ctx, cancel := context.WithCancel(task.Stream.Context())
 		defer cancel()
