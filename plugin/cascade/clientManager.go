@@ -97,6 +97,7 @@ type ClientManager struct {
 	// {{ AURA-X: M3.3 - 拉流代理同步 }}
 	syncInterval      time.Duration // 拉流代理同步间隔
 	cachedProxies     []PullProxy   // 缓存的拉流代理列表（从当前运行服务器同步）
+	migratedProxies   []PullProxy   // 从主机迁移到备机的代理列表（用于主机恢复时移回）
 	httpClient        *http.Client  // HTTP客户端
 	wasPrimaryRunning bool          // 主机之前是否在运行
 
@@ -630,7 +631,7 @@ func (cm *ClientManager) getServerConfigByAddr(addr string) *ServerConfig {
 }
 
 // {{ AURA-X: transferProxiesToBackup 将拉流代理迁移到备机 }}
-// 当主机失效时，用缓存的拉流代理列表在备机上添加
+// 当主机失效时，用缓存的拉流代理列表在备机上追加（不清空备机已有代理）
 func (cm *ClientManager) transferProxiesToBackup(backupAddr string) {
 	if len(cm.cachedProxies) == 0 {
 		cm.plugin.Info("transferProxiesToBackup: no cached proxies to transfer")
@@ -646,10 +647,11 @@ func (cm *ClientManager) transferProxiesToBackup(backupAddr string) {
 
 	httpAddr := backupCfg.GetHttpAddr()
 
-	// 1. 清空备机所有拉流代理
-	cm.clearAllProxies(httpAddr)
+	// 记录迁移的代理列表，用于主机恢复时移回
+	cm.migratedProxies = make([]PullProxy, len(cm.cachedProxies))
+	copy(cm.migratedProxies, cm.cachedProxies)
 
-	// 2. 逐个添加拉流代理
+	// 直接追加到备机，不清空备机已有代理（保留备机原有的456等代理）
 	for _, proxy := range cm.cachedProxies {
 		if err := cm.addPullProxy(httpAddr, &proxy); err != nil {
 			cm.plugin.Error("transferProxiesToBackup: failed to add proxy", "streamPath", proxy.StreamPath, "error", err)
@@ -660,9 +662,20 @@ func (cm *ClientManager) transferProxiesToBackup(backupAddr string) {
 }
 
 // {{ AURA-X: pushProxiesToPrimary 将拉流代理推送到主机 }}
-// 当主机恢复时，获取备机拉流代理列表推送到主机，并清空备机
+// 当主机恢复时，只将当初从主机迁移过来的代理移回主机，备机原有代理保持不动
 func (cm *ClientManager) pushProxiesToPrimary(primaryAddr string) {
-	// 获取备机地址（当前运行的不是主机的那个）
+	// 使用 migratedProxies（当初从主机迁移过来的代理），而不是备机全量列表
+	if len(cm.migratedProxies) == 0 {
+		cm.plugin.Info("pushProxiesToPrimary: no migrated proxies to move back")
+		return
+	}
+
+	primaryCfg := cm.getServerConfigByAddr(primaryAddr)
+	if primaryCfg == nil {
+		cm.plugin.Error("pushProxiesToPrimary: primary server config not found")
+		return
+	}
+
 	backupAddr := cm.getBackupServerAddr(primaryAddr)
 	if backupAddr == "" {
 		cm.plugin.Warn("pushProxiesToPrimary: no backup server found")
@@ -675,32 +688,34 @@ func (cm *ClientManager) pushProxiesToPrimary(primaryAddr string) {
 		return
 	}
 
-	// 1. 获取备机拉流代理列表
-	backupProxies := cm.getPullProxyList(backupCfg.GetHttpAddr())
-	if len(backupProxies) == 0 {
-		cm.plugin.Info("pushProxiesToPrimary: no proxies on backup server")
-		return
+	// 1. 获取主机现有代理列表，构建去重集合，避免重复添加
+	existingOnPrimary := make(map[string]bool)
+	for _, p := range cm.getPullProxyList(primaryCfg.GetHttpAddr()) {
+		existingOnPrimary[p.StreamPath] = true
 	}
 
-	// 2. 清空主机所有拉流代理
-	primaryCfg := cm.getServerConfigByAddr(primaryAddr)
-	if primaryCfg == nil {
-		cm.plugin.Error("pushProxiesToPrimary: primary server config not found")
-		return
-	}
-	cm.clearAllProxies(primaryCfg.GetHttpAddr())
-
-	// 3. 推送到主机
-	for _, proxy := range backupProxies {
+	// 2. 将迁移过来的代理推回主机（跳过主机已有的 streamPath）
+	for _, proxy := range cm.migratedProxies {
+		if existingOnPrimary[proxy.StreamPath] {
+			cm.plugin.Info("pushProxiesToPrimary: proxy already exists on primary, skip", "streamPath", proxy.StreamPath)
+			continue
+		}
 		if err := cm.addPullProxy(primaryCfg.GetHttpAddr(), &proxy); err != nil {
 			cm.plugin.Error("pushProxiesToPrimary: failed to add proxy", "streamPath", proxy.StreamPath, "error", err)
 		}
 	}
 
-	// 4. 清空备机
-	cm.clearAllProxies(backupCfg.GetHttpAddr())
+	// 3. 从备机上只删除当初迁移过去的代理（保留备机原有的456等代理）
+	for _, proxy := range cm.migratedProxies {
+		if err := cm.removePullProxy(backupCfg.GetHttpAddr(), proxy.StreamPath); err != nil {
+			cm.plugin.Error("pushProxiesToPrimary: failed to remove proxy from backup", "streamPath", proxy.StreamPath, "error", err)
+		}
+	}
 
-	cm.plugin.Info("pushed proxies to primary", "count", len(backupProxies), "primary", primaryAddr)
+	cm.plugin.Info("pushed proxies back to primary", "count", len(cm.migratedProxies), "primary", primaryAddr)
+
+	// 4. 清空迁移记录
+	cm.migratedProxies = nil
 }
 
 // {{ AURA-X: getBackupServerAddr 获取备机地址（完整的QUIC地址） }}
