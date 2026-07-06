@@ -796,9 +796,16 @@ func (s *Server) OnSubscribe(streamPath string, args url.Values) {
 	for pullProxy := range s.PullProxies.Range {
 		conf := pullProxy.GetConfig()
 		if conf.Status == PullProxyStatusOnline && pullProxy.GetStreamPath() == streamPath {
-			pullProxy.Pull()
+			existingJob := pullProxy.GetPullJob()
+			if existingJob == nil || existingJob.IsStopped() {
+				pullProxy.Pull()
+			} else {
+				s.Debug("[fix5] OnSubscribe: skip Pull(), existingJob still active", "streamPath", streamPath, "jobId", existingJob.ID)
+			}
 			if w, ok := s.Waiting.Get(streamPath); ok {
-				pullProxy.GetPullJob().Progress = &w.Progress
+				if job := pullProxy.GetPullJob(); job != nil {
+					job.Progress = &w.Progress
+				}
 			}
 		}
 	}

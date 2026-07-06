@@ -119,10 +119,14 @@ func (d *BasePullProxy) ChangeStatus(status byte) {
 
 func (d *BasePullProxy) Dispose() {
 	d.ChangeStatus(PullProxyStatusOffline)
-	if d.PullJob != nil {
-		d.PullJob.Debug("ready to stop pulljob", "d.PullJob.StreamPath", d.PullJob.StreamPath,
-			"d.streamPath", d.StreamPath, "d.ID", d.ID, "d.pull", d.PullJob.GetTaskID())
-		d.PullJob.Stop(task.ErrStopByUser)
+	// Lifecycle invariant: when a PullProxy is disposed, its PullJob must be stopped.
+	// Use WorkCollection (Server.Pulls) as the authoritative source rather than d.PullJob,
+	// which may be stale if Plugin.Pull() previously returned a phantom rejected job.
+	if d.Plugin != nil && d.Plugin.Server != nil {
+		if runningJob, ok := d.Plugin.Server.Pulls.Get(d.GetStreamPath()); ok {
+			d.Plugin.Info("[fix2] Dispose: stopping real PullJob via WorkCollection", "streamPath", d.GetStreamPath(), "jobId", runningJob.ID)
+			runningJob.Stop(task.ErrStopByUser)
+		}
 	}
 	// 重置 pullStarted 标志，允许设备重新上线时再次自动拉流
 	d.pullStarted = false
@@ -172,7 +176,7 @@ func (d *BasePullProxy) Pull() {
 
 	// 监听 PullJob 停止事件，当 PullJob 自己停止时重置 pullStarted 标志
 	// 这样设备重新上线时可以再次自动拉流
-	job.OnDispose(func() {
+	d.PullJob.OnDispose(func() {
 		d.pullStarted = false
 		d.Plugin.Debug("pull job disposed, reset pullStarted flag", "streamPath", d.GetStreamPath())
 	})

@@ -798,6 +798,7 @@ func (p *Plugin) Pull(streamPath string, conf config.Pull, pubConf *config.Publi
 	// store a stopped job reference and lose track of the real active job.
 	if job.IsStopped() {
 		err = job.StopReason()
+		p.Warn("[fix3] Plugin.Pull: AddTask rejected phantom job, blocking caller from overwriting real job", "streamPath", streamPath, "reason", err)
 		job = nil
 	}
 	return
