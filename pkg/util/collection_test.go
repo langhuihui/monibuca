@@ -177,3 +177,23 @@ func TestCollection_ConcurrentAccess(t *testing.T) {
 		t.Errorf("Expected 100 items, got %d", c.Length)
 	}
 }
+
+func TestCollection_SetConcurrentWithClear(t *testing.T) {
+	c := &Collection[string, TestItem]{L: &sync.RWMutex{}}
+	for i := 0; i < 10; i++ {
+		c.Set(TestItem{ID: fmt.Sprintf("%d", i), Data: "v"})
+	}
+	var wg sync.WaitGroup
+	for i := 0; i < 50; i++ {
+		wg.Add(2)
+		go func(n int) {
+			defer wg.Done()
+			c.Set(TestItem{ID: fmt.Sprintf("%d", n%10), Data: "updated"})
+		}(i)
+		go func() {
+			defer wg.Done()
+			c.Clear()
+		}()
+	}
+	wg.Wait()
+}

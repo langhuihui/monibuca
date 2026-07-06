@@ -3,6 +3,7 @@ package plugin_gb28181pro
 import (
 	"errors"
 	"fmt"
+	"io"
 	"math/rand"
 	"net/url"
 	"strconv"
@@ -495,6 +496,19 @@ func (d *Dialog) Run() (err error) {
 	err = d.session.Ack(d)
 	if err != nil {
 		d.Error("ack session err", err)
+	}
+
+	// Publisher delay close 时会在 Streams 事件循环内执行 PreDispose；
+	// 若 PSReceiver 仍在 Feed 写帧，会与 AVTracks.Dispose 争锁导致事件循环永久卡死。
+	// 在 Publisher.Stop 阶段（早于 PreDispose）主动停止 PSReceiver，与 DownloadDialog 保持一致。
+	if publisher := d.pullCtx.Publisher; publisher != nil {
+		publisher.OnStop(func() {
+			d.Info("Publisher 已停止，主动停止 PSReceiver",
+				"streamPath", d.pullCtx.StreamPath,
+				"deviceId", d.Channel.DeviceId,
+				"channelId", d.Channel.ChannelId)
+			pub.Stop(io.EOF)
+		})
 	}
 
 	return d.RunTask(&pub)
