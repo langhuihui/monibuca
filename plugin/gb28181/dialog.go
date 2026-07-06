@@ -63,6 +63,12 @@ type Dialog struct {
 	stream=streamMode:main;stream=streamMode:sub
 	*/
 	stream string
+
+	// inviteFunc 封装了所有 INVITE 参数的闭包。
+	// 仅在 Start() 中构建，在 Run() 中被调用（不在 Start() 里直接调用）。
+	// 这样若 Run() 被 gotask 跳过（task 在 Start→Run 窗口内被停止），
+	// INVITE 就永不会发出，不会留下无人消费 tx.responses 的孤立 ClientTx。
+	inviteFunc func() (*sipgo.DialogClientSession, error)
 }
 
 func (d *Dialog) GetCallID() string {
@@ -342,31 +348,30 @@ func (d *Dialog) Start() (err error) {
 
 	dialogClientCache := sipgo.NewDialogClientCache(device.client, contactHDR)
 
-	d.pullCtx.GoToStepConst(StepInviteSend)
+	// 预先记录调试信息（Invite 尚未发出）
+	d.Info("prepare to invite", "recipient:", recipient, " fromHDR:", fromHDR, " toHeader:", toHeader,
+		"contactHDR:", contactHDR, "sdpInfo:", strings.Join(sdpInfo, "|||"), "transport", device.Transport)
 
-	// 创建Via头部，使用设备的Transport协议
-	// Via头部必须放在第一个位置，这样AppendHeader时Via会在最前面
-	viaHeader := &sip.ViaHeader{
-		ProtocolName:    "SIP",
-		ProtocolVersion: "2.0",
-		Transport:       device.Transport, // 使用设备注册时的Transport
-		Host:            device.SipIp,
-		Port:            device.LocalPort,
-		Params:          sip.HeaderParams(sip.NewParams()),
-	}
-	viaHeader.Params.Add("branch", sip.GenerateBranchN(16))
+	sdpBytes := []byte(strings.Join(sdpInfo, "\r\n") + "\r\n")
 
-	d.Info("start to invite", "recipient:", recipient, " fromHDR:", fromHDR, " toHeader:", toHeader, " device.contactHDR:",
-		device.contactHDR, "contactHDR:", contactHDR, "sdpInfo:", strings.Join(sdpInfo, "|||"), "viaHeader:", viaHeader, "transport", device.Transport)
-	// Via头部必须是第一个参数！这样即使用AppendHeader，Via也会在最前面
-	// 这样Client检查req.Via()时就能找到我们的Via头部，不会再创建默认的UDP Via
-	d.session, err = dialogClientCache.Invite(d, recipient, []byte(strings.Join(sdpInfo, "\r\n")+"\r\n"), viaHeader, &callID, &csqHeader, &fromHDR, &toHeader, &maxforward, userAgentHeader, subjectHeader, &contentTypeHeader)
-	// 最后添加Content-Length头部
-	if err != nil {
-		d.pullCtx.Fail("dialog invite error: " + err.Error())
-		// SIP邀请失败时释放已分配的端口
-		d.releaseAllocatedPort()
-		return errors.Join(fmt.Errorf("dialog invite error:%s", err.Error()))
+	// 将 INVITE 所需的全部参数封装为闭包，由 Run() 在合适时机调用。
+	// 目的：若 gotask 在 Start() 返回后、Run() 执行前停止了该 task（IsStopped() 检查），
+	// Invite() 永远不会被调用，不会产生无人消费 tx.responses 的孤立 SIP ClientTx。
+	d.inviteFunc = func() (*sipgo.DialogClientSession, error) {
+		// 每次调用重新生成 branch，避免重试时 Via 重复
+		vh := &sip.ViaHeader{
+			ProtocolName:    "SIP",
+			ProtocolVersion: "2.0",
+			Transport:       device.Transport,
+			Host:            device.SipIp,
+			Port:            device.LocalPort,
+			Params:          sip.HeaderParams(sip.NewParams()),
+		}
+		vh.Params.Add("branch", sip.GenerateBranchN(16))
+		d.Info("start to invite", "viaHeader:", vh.String())
+		return dialogClientCache.Invite(d, recipient, sdpBytes,
+			vh, &callID, &csqHeader, &fromHDR, &toHeader, &maxforward,
+			userAgentHeader, subjectHeader, &contentTypeHeader)
 	}
 
 	d.SetDescriptions(task.Description{
@@ -390,12 +395,8 @@ func (d *Dialog) Start() (err error) {
 		"subject":               fmt.Sprintf("%s:%s,%s:0", channelId, ssrc, d.gb.Serial),
 		"recipient":             recipient.String(),
 		"sdp":                   strings.Join(sdpInfo, "\r\n"),
-		"via":                   viaHeader.String(),
-		"viaBranch":             func() string { v, _ := viaHeader.Params.Get("branch"); return v }(),
 		"broadcastPushAfterAck": device.BroadcastPushAfterAck,
 	})
-	d.pullCtx.GoToStepConst(StepResponseWait)
-	d.gb.dialogs.Set(d)
 	return
 }
 
@@ -459,21 +460,49 @@ func (d *Dialog) Run() (err error) {
 	pub.Publisher = d.pullCtx.Publisher
 	pub.Logger = d.gb.Logger.With("streamPath", d.StreamPath)
 
-	// 如果不是 BroadcastPushAfterAck 模式，提前创建监听器（多端口模式需要）
+	// 非 BroadcastPushAfterAck 模式：先启动监听器再发 INVITE。
+	// 若监听器启动失败，INVITE 永远不会发出，不会产生孤立的 SIP ClientTx。
 	if !d.Channel.Device.BroadcastPushAfterAck {
-		d.Info("creating listener before WaitAnswer", "broadcastPushAfterAck", false, "addr", d.MediaPort)
+		d.Info("creating listener before INVITE", "broadcastPushAfterAck", false, "addr", d.MediaPort)
 		d.setupReceiver(&pub)
-
-		// 提前启动监听器
 		err = pub.Receiver.Start()
 		if err != nil {
-			d.Error("start listener before WaitAnswer failed", "err", err)
+			d.Error("start listener before INVITE failed", "err", err)
 			return err
 		}
 	}
 
+	// 在 Run() 中发送 INVITE，而不是 Start()。
+	// 这样：
+	// (1) 若 gotask 在 Start()→Run() 窗口内因 IsStopped() 跳过 Run()，
+	//     INVITE 不会发出，不存在孤立的 ClientTx；
+	// (2) 若监听器启动失败（上面提前返回），INVITE 同样不会发出；
+	// (3) Invite() 与 WaitAnswer() 处于同一执行路径，WaitAnswer 一定会被调用。
+	d.pullCtx.GoToStepConst(StepInviteSend)
+	d.session, err = d.inviteFunc()
+	if err != nil {
+		d.pullCtx.Fail("dialog invite error: " + err.Error())
+		d.releaseAllocatedPort()
+		return errors.Join(fmt.Errorf("dialog invite error:%s", err.Error()))
+	}
+	d.gb.dialogs.Set(d)
+
 	d.Info("before WaitAnswer")
-	err = d.session.WaitAnswer(d, sipgo.AnswerOptions{})
+	// WaitAnswer 内部发送 CANCEL 时使用 context.Background()，若设备不响应会永久阻塞，
+	// 导致 PullJob 事件循环 goroutine 卡死，进而阻塞 WorkCollection 无法启动新任务。
+	// 用带 WaitAnswerForceCancelErr cause 的包装 context：ctx.Done() 触发时立即返回，
+	// 跳过可能永久阻塞的 CANCEL 等待流程。
+	waitCtx, waitCancel := context.WithCancelCause(context.Background())
+	defer waitCancel(nil)
+	go func() {
+		select {
+		case <-d.Done():
+			waitCancel(sipgo.WaitAnswerForceCancelErr)
+		case <-waitCtx.Done():
+		}
+	}()
+	d.pullCtx.GoToStepConst(StepResponseWait)
+	err = d.session.WaitAnswer(waitCtx, sipgo.AnswerOptions{})
 	d.Info("after WaitAnswer")
 	if err != nil {
 		d.pullCtx.Fail("等待响应错误: " + err.Error())
