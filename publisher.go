@@ -201,6 +201,14 @@ func (p *Publisher) Go() error {
 				}
 				p.NoAudio()
 			}
+			// 有订阅者但从未收到任何音视频数据（AVTrack 为 nil），超过 PublishTimeout 则终止
+			if p.State == PublisherStateSubscribed &&
+				p.PublishTimeout > 0 &&
+				time.Since(p.StartTime) > p.PublishTimeout &&
+				!p.HasAudioTrack() && !p.HasVideoTrack() {
+				p.Error("publish timeout: subscribed but no audio/video data received")
+				return ErrPublishTimeout
+			}
 		case <-p.Done():
 			return p.Err()
 		}

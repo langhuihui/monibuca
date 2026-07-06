@@ -88,15 +88,34 @@ func (w *HLSWriter) Run() (err error) {
 	}
 	MemoryTs.Store(w.TransformJob.StreamPath, w)
 	var audioCodec, videoCodec codec.FourCC
-	if subscriber.Publisher.HasAudioTrack() {
-		audioCodec = subscriber.Publisher.AudioTrack.FourCC()
-	}
-	if subscriber.Publisher.HasVideoTrack() {
-		videoCodec = subscriber.Publisher.VideoTrack.FourCC()
+	if pub := subscriber.Publisher; pub != nil {
+		if t := pub.AudioTrack.AVTrack; t != nil && t.ICodecCtx != nil {
+			audioCodec = t.FourCC()
+		}
+		if t := pub.VideoTrack.AVTrack; t != nil && t.ICodecCtx != nil {
+			videoCodec = t.FourCC()
+		}
 	}
 	w.ts = &TsInMemory{}
 	pesAudio, pesVideo := mpegts.CreatePESWriters()
 	w.ts.WritePMTPacket(audioCodec, videoCodec)
+	// 独立定时器检查 no-body-read，不依赖音视频帧回调触发
+	// 当没有任何数据时回调永远不执行，需要用这个定时器兜底
+	go func() {
+		ticker := time.NewTicker(time.Second * 5)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-w.Done():
+				return
+			case <-ticker.C:
+				if w.checkNoBodyRead() {
+					w.Stop(errors.Join(ErrNoBodyRead, task.ErrStopByUser))
+					return
+				}
+			}
+		}
+	}()
 	return m7s.PlayBlock(subscriber, func(audio *format.Mpeg2Audio) error {
 		pesAudio.Pts = uint64(subscriber.AudioReader.AbsTime) * 90
 		if w.checkNoBodyRead() {
