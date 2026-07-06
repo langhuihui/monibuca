@@ -112,6 +112,9 @@ func (s *ReuseArray[T]) Reset() {
 
 func (s *ReuseArray[T]) Reduce() {
 	ss := *s
+	if len(ss) == 0 {
+		return
+	}
 	*s = ss[:len(ss)-1]
 }
 
