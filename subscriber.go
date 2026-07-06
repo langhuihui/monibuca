@@ -227,6 +227,7 @@ type SubscribeHandler[A IAVFrame, V IAVFrame] struct {
 	awi, vwi                     int
 	lastBPSTime                  time.Time
 	bytesRead                    uint32
+	audioNotAvailable            bool // true when publisher has no audio track and never will
 }
 
 //func Play[A any, V any](s *Subscriber, onAudio func(A) error, onVideo func(V) error) {
@@ -260,6 +261,7 @@ func (handler *SubscribeHandler[A, V]) clearReader() {
 		s.VideoReader.StopRead()
 		s.VideoReader = nil
 	}
+	handler.audioNotAvailable = false
 }
 
 func (handler *SubscribeHandler[A, V]) checkPublishChanged() {
@@ -448,7 +450,7 @@ func (handler *SubscribeHandler[A, V]) Run() (err error) {
 				if !s.IFrameOnly || handler.videoFrame.IDR {
 					err = handler.sendVideoFrame()
 				}
-				if ar == nil {
+				if ar == nil && !handler.audioNotAvailable {
 					break
 				}
 			}
@@ -507,7 +509,19 @@ func (handler *SubscribeHandler[A, V]) Run() (err error) {
 				}
 			}
 		} else {
-			handler.createAudioReader()
+			if !handler.audioNotAvailable {
+				handler.createAudioReader()
+				// If still no audio reader after trying, check if audio will ever come.
+				// For video-only streams: AudioTrack.AVTrack is nil (no audio data arrived)
+				// and PubAudio never becomes false (CheckTimeout always returns false when
+				// AVTrack==nil). Detect this by waiting PublishTimeout after stream start.
+				if s.AudioReader == nil && handler.p != nil {
+					p := handler.p
+					if !p.PubAudio || (!p.HasAudioTrack() && p.PublishTimeout > 0 && time.Since(p.StartTime) > p.PublishTimeout) {
+						handler.audioNotAvailable = true
+					}
+				}
+			}
 		}
 		// Defensive: if both readers are nil (publisher gone, tracks disposed),
 		// sleep briefly to prevent busy-spinning. This covers timing gaps where
