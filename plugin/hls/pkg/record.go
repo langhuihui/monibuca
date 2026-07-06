@@ -125,11 +125,13 @@ func (r *Recorder) Run() (err error) {
 	r.firstSegment = true
 
 	var audioCodec, videoCodec codec.FourCC
-	if suber.Publisher.HasAudioTrack() {
-		audioCodec = suber.Publisher.AudioTrack.FourCC()
-	}
-	if suber.Publisher.HasVideoTrack() {
-		videoCodec = suber.Publisher.VideoTrack.FourCC()
+	if pub := suber.Publisher; pub != nil {
+		if t := pub.AudioTrack.AVTrack; t != nil && t.ICodecCtx != nil {
+			audioCodec = t.FourCC()
+		}
+		if t := pub.VideoTrack.AVTrack; t != nil && t.ICodecCtx != nil {
+			videoCodec = t.FourCC()
+		}
 	}
 	r.WritePMTPacket(audioCodec, videoCodec)
 	if ctx.RecConf.RealTime {

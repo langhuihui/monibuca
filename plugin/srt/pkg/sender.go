@@ -20,11 +20,13 @@ type Sender struct {
 
 func (s *Sender) Start() error {
 	var audioCodec, videoCodec codec.FourCC
-	if s.Subscriber.Publisher.HasAudioTrack() {
-		audioCodec = s.Subscriber.Publisher.AudioTrack.FourCC()
-	}
-	if s.Subscriber.Publisher.HasVideoTrack() {
-		videoCodec = s.Subscriber.Publisher.VideoTrack.FourCC()
+	if pub := s.Subscriber.Publisher; pub != nil {
+		if t := pub.AudioTrack.AVTrack; t != nil && t.ICodecCtx != nil {
+			audioCodec = t.FourCC()
+		}
+		if t := pub.VideoTrack.AVTrack; t != nil && t.ICodecCtx != nil {
+			videoCodec = t.FourCC()
+		}
 	}
 	s.SetAllocator(gomem.NewScalableMemoryAllocator(1 << gomem.MinPowerOf2))
 	s.Using(s.GetAllocator(), s.Subscriber)

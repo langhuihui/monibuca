@@ -213,12 +213,16 @@ func (task *registerHandlerTask) Run() (err error) {
 		if d, ok := task.gb.devices.Get(deviceid); ok {
 			d.Online = false
 			d.Status = DeviceOfflineStatus
+			d.ensureCollectionMutex()
 			d.channels.Range(func(channel *Channel) bool {
 				channel.Status = "OFF"
 				return true
 			})
-			d.DeviceKeepaliveTickTask.seconds = time.Minute * 1440
-			d.DeviceKeepaliveTickTask.Tick(nil)
+			// DeviceKeepaliveTickTask 仅在 catalog() 完成后创建；注销时可能尚未建连
+			if d.DeviceKeepaliveTickTask != nil {
+				d.DeviceKeepaliveTickTask.seconds = time.Minute * 1440
+				d.DeviceKeepaliveTickTask.Tick(nil)
+			}
 			//d.Stop(errors.New("unregister"))
 		}
 	} else {
