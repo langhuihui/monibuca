@@ -1695,7 +1695,7 @@ func (gb *GB28181Plugin) AddPlatformChannel(ctx context.Context, req *pb.AddPlat
 		resp.Message = fmt.Sprintf("提交事务失败: %v", err)
 		return resp, nil
 	}
-	if platform, ok := gb.platforms.Get(req.PlatformId); !ok {
+	if platform, ok := gb.platforms.Get(req.PlatformId); ok {
 		for _, channelId := range req.ChannelIds {
 			if channel, ok := gb.channels.Get(channelId); ok {
 				platform.channels.Set(channel)
