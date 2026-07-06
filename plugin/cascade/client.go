@@ -116,8 +116,10 @@ func (task *CascadeClient) Start() (err error) {
 		NextProtos:         []string{"monibuca"},
 	}
 	// {{ AURA-X: 复用 QUIC KeepAlive (10秒) }}
+	// {{ AURA-X: M5 - 添加 MaxIdleTimeout (25秒)，加快对端非正常关闭的检测 }}
 	task.Conn, err = quic.DialAddr(task.cfg.Context, task.serverAddr, tlsConf, &quic.Config{
 		KeepAlivePeriod: time.Second * 10,
+		MaxIdleTimeout:  time.Second * 2,
 		EnableDatagrams: true,
 	})
 	if err != nil {
