@@ -132,7 +132,7 @@ func (r *AVRingReader) ReadFrame(conf *config.Subscribe) (err error) {
 		r.FirstSeq = r.Value.Sequence
 		r.Info("first frame read", "firstTs", r.FirstTs, "firstSeq", r.FirstSeq)
 	case READSTATE_FIRST:
-		if idr := r.Track.GetIDR(); idr.Value.Sequence != r.FirstSeq {
+		if idr := r.Track.GetIDR(); idr != nil && idr.Value.Sequence != r.FirstSeq {
 			if err = r.Read(idr); err != nil {
 				return
 			}
