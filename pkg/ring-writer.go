@@ -323,19 +323,25 @@ func (rb *RingWriter) Step() (normal bool) {
 			}
 		}
 		rb.Value.Sequence = nextSeq
-		if rb.status.Add(-1) == 0 {
+		switch rb.status.Add(-1) {
+		case 0:
+			// Normal completion: no Dispose raced. Make LastValue readable.
 			rb.LastValue.Ready()
-		} else {
-			// Dispose() ran concurrently during Step(): it couldn't unlock LastValue
-			// (status was 1→0), so it skipped Unlock. We must release it here to
-			// unblock readers blocked on RLock(LastValue) — sync.RWMutex.RLock does
-			// not respect context cancellation.
+		case -1:
+			// Exactly ONE Dispose() raced during Step:
+			//   Dispose saw status 1→0 (result=0), so it did NOT call Value.Unlock().
+			//   Step's Add(-1) now sees 0→-1.
+			// We must release BOTH write locks:
+			//   LastValue: previously-written slot (write lock held from prior Step).
+			//   Value:     newly-claimed slot (write lock held by StartWrite above).
+			// Without releasing Value, readers blocked on RLock(Value) deadlock forever.
 			rb.LastValue.Unlock()
-			// rb.Value.Unlock() is NOT here: it is already handled by Dispose()
-			// (which unlocks Value when status reaches -1). Keeping it would cause
-			// a double-unlock panic when Dispose() is called multiple times:
-			//   Step(): status 1→0 → else Unlock(Value) (1st)
-			//   Dispose(): status 0→-1 → Dispose Unlock(Value) (2nd) → panic
+			rb.Value.Unlock()
+		default:
+			// TWO or more Dispose() calls raced during Step.
+			// The 2nd Dispose saw status 0→-1 (result=-1) and already called Value.Unlock().
+			// Only release LastValue here to avoid a double-unlock panic on Value.
+			rb.LastValue.Unlock()
 		}
 	}
 	return
