@@ -12,7 +12,6 @@ import (
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/simplifiedchinese"
 	"golang.org/x/text/transform"
-	"m7s.live/v5"
 	"m7s.live/v5/pkg/util"
 
 	"github.com/emiago/sipgo"
@@ -112,7 +111,7 @@ func NewPlatform(pm *gb28181.PlatformModel, plugin *GB28181Plugin, unRegister bo
 		return nil
 	}
 	p.Client = client
-	userAgentHeader := sip.NewHeader("User-Agent", "M7S/"+m7s.Version)
+	userAgentHeader := sip.NewHeader("User-Agent", "M7S/V5.0.1_20260527")
 	p.UserAgentHDR = userAgentHeader
 
 	// 创建注册请求的目标URI，使用上级平台的信息
@@ -192,7 +191,7 @@ func (p *Platform) Keepalive() (*sipgo.DialogClientSession, error) {
 	customCallID := fmt.Sprintf("%s-%d@%s", p.PlatformModel.DeviceGBID, time.Now().Unix(), p.PlatformModel.ServerIP)
 	callID := sip.CallIDHeader(customCallID)
 	req.AppendHeader(&callID)
-	contentTypeHeader := sip.ContentTypeHeader("Application/MANSCDP+xml")
+	contentTypeHeader := sip.ContentTypeHeader("application/MANSCDP+xml")
 	req.AppendHeader(&contentTypeHeader)
 
 	csqHeader := sip.CSeqHeader{
@@ -206,7 +205,8 @@ func (p *Platform) Keepalive() (*sipgo.DialogClientSession, error) {
 	fromHeader := sip.FromHeader{
 		Address: sip.Uri{
 			User: p.PlatformModel.DeviceGBID,
-			Host: p.PlatformModel.ServerGBDomain,
+			Host: p.PlatformModel.DeviceIP,
+			Port: p.PlatformModel.DevicePort,
 		},
 		Params: sip.NewParams(),
 	}
@@ -217,7 +217,8 @@ func (p *Platform) Keepalive() (*sipgo.DialogClientSession, error) {
 	toHeader := sip.ToHeader{
 		Address: sip.Uri{
 			User: p.PlatformModel.ServerGBID,
-			Host: p.PlatformModel.ServerGBDomain,
+			Host: p.PlatformModel.ServerIP,
+			Port: p.PlatformModel.ServerPort,
 		},
 	}
 	req.AppendHeader(&toHeader)
@@ -762,15 +763,15 @@ func (p *Platform) forwardRecordInfoResponse(downstreamSN int, response gb28181.
 </RecordList>
 </Response>`
 
-	encodedContent, actualCharset, err := EncodeToCharset(xmlContent, charset)
+	encodedContent, _, err := EncodeToCharset(xmlContent, charset)
 	if err != nil {
 		p.Error("forwardRecordInfoResponse 编码转换失败", "error", err.Error(), "charset", charset)
 		request.SetBody([]byte(xmlContent))
-		actualCharset = "UTF-8" // 失败时使用UTF-8
+		//actualCharset = "UTF-8" // 失败时使用UTF-8
 	} else {
 		request.SetBody(encodedContent)
 	}
-	request.AppendHeader(sip.NewHeader("Content-Type", fmt.Sprintf("Application/MANSCDP+xml;charset=%s", actualCharset)))
+	request.AppendHeader(sip.NewHeader("Content-Type", fmt.Sprintf("application/MANSCDP+xml")))
 
 	// 创建事务并发送
 	tx, err := p.Client.TransactionRequest(p, request)
@@ -872,12 +873,13 @@ func (p *Platform) sendCatalogResponse(req *sip.Request, sn string, fromTag stri
 	// 如果没有通道，发送一个空的目录列表
 	if len(channels) == 0 {
 		request := p.CreateRequest("MESSAGE")
-
+		request.AppendHeader(p.UserAgentHDR)
 		// 设置From头部
 		fromHeader := sip.FromHeader{
 			Address: sip.Uri{
 				User: p.PlatformModel.DeviceGBID,
-				Host: p.PlatformModel.ServerGBDomain,
+				Host: p.PlatformModel.DeviceIP,
+				Port: p.PlatformModel.DevicePort,
 			},
 			Params: sip.NewParams(),
 		}
@@ -888,7 +890,8 @@ func (p *Platform) sendCatalogResponse(req *sip.Request, sn string, fromTag stri
 		toHeader := sip.ToHeader{
 			Address: sip.Uri{
 				User: p.PlatformModel.ServerGBID,
-				Host: p.PlatformModel.ServerGBDomain,
+				Host: p.PlatformModel.SendStreamIp,
+				Port: p.PlatformModel.DevicePort,
 			},
 		}
 		request.AppendHeader(&toHeader)
@@ -924,15 +927,15 @@ func (p *Platform) sendCatalogResponse(req *sip.Request, sn string, fromTag stri
 </DeviceList>
 </Response>`, charset, sn, p.PlatformModel.DeviceGBID)
 
-		encodedContent, actualCharset, err := EncodeToCharset(xmlContent, charset)
+		encodedContent, _, err := EncodeToCharset(xmlContent, charset)
 		if err != nil {
 			p.Error("sendCatalogResponse 编码转换失败", "error", err.Error(), "charset", charset)
 			request.SetBody([]byte(xmlContent))
-			actualCharset = "UTF-8" // 失败时使用UTF-8
+			//actualCharset = "UTF-8" // 失败时使用UTF-8
 		} else {
 			request.SetBody(encodedContent)
 		}
-		request.AppendHeader(sip.NewHeader("Content-Type", fmt.Sprintf("Application/MANSCDP+xml;charset=%s", actualCharset)))
+		request.AppendHeader(sip.NewHeader("Content-Type", fmt.Sprintf("application/MANSCDP+xml")))
 
 		// 修正：使用TransactionRequest替代Do
 		tx, err := p.Client.TransactionRequest(p, request)
@@ -1040,15 +1043,18 @@ func (p *Platform) sendCatalogResponse(req *sip.Request, sn string, fromTag stri
 		return nil
 	}
 
+	var needSendRoot = true
 	// 有通道时，为每个通道单独发送一个XML
 	for i, channel := range channels {
 		request := p.CreateRequest("MESSAGE")
+		request.AppendHeader(p.UserAgentHDR)
 
 		// 设置From头部
 		fromHeader := sip.FromHeader{
 			Address: sip.Uri{
 				User: p.PlatformModel.DeviceGBID,
-				Host: p.PlatformModel.ServerGBDomain,
+				Host: p.PlatformModel.DeviceIP,
+				Port: p.PlatformModel.DevicePort,
 			},
 			Params: sip.NewParams(),
 		}
@@ -1059,7 +1065,8 @@ func (p *Platform) sendCatalogResponse(req *sip.Request, sn string, fromTag stri
 		toHeader := sip.ToHeader{
 			Address: sip.Uri{
 				User: p.PlatformModel.ServerGBID,
-				Host: p.PlatformModel.ServerGBDomain,
+				Host: p.PlatformModel.ServerIP,
+				Port: p.PlatformModel.ServerPort,
 			},
 		}
 		request.AppendHeader(&toHeader)
@@ -1084,9 +1091,27 @@ func (p *Platform) sendCatalogResponse(req *sip.Request, sn string, fromTag stri
 			charset = "GB2312" // 默认使用GB2312
 		}
 
-		// 为单个通道创建XML
-		channelXML := p.buildChannelItem(channel)
-		xmlContent := fmt.Sprintf(`<?xml version="1.0" encoding="%s"?>
+		var xmlContent string
+		if needSendRoot {
+			xmlContent = fmt.Sprintf(`<?xml version="1.0" encoding="%s"?>
+<Response>
+<CmdType>Catalog</CmdType>
+<SN>%s</SN>
+<DeviceID>%s</DeviceID>
+<SumNum>%d</SumNum>
+<DeviceList Num="1">
+<Item>
+<DeviceID>%s</DeviceID>
+<ParentID>%s</ParentID>
+<Name>%s</Name>
+</Item>
+</DeviceList>
+</Response>`, charset, sn, p.PlatformModel.DeviceGBID, len(channels), p.PlatformModel.DeviceGBID, p.PlatformModel.DeviceGBID, p.PlatformModel.Name)
+			needSendRoot = false
+		} else {
+			// 为单个通道创建XML
+			channelXML := p.buildChannelItem(channel)
+			xmlContent = fmt.Sprintf(`<?xml version="1.0" encoding="%s"?>
 <Response>
 <CmdType>Catalog</CmdType>
 <SN>%s</SN>
@@ -1096,16 +1121,17 @@ func (p *Platform) sendCatalogResponse(req *sip.Request, sn string, fromTag stri
 %s
 </DeviceList>
 </Response>`, charset, sn, p.PlatformModel.DeviceGBID, len(channels), channelXML)
+		}
 
-		encodedContent, actualCharset, err := EncodeToCharset(xmlContent, charset)
+		encodedContent, _, err := EncodeToCharset(xmlContent, charset)
 		if err != nil {
 			p.Error("sendCatalogResponse 编码转换失败", "error", err.Error(), "charset", charset, "channel_index", i)
 			request.SetBody([]byte(xmlContent))
-			actualCharset = "UTF-8" // 失败时使用UTF-8
+			//actualCharset = "UTF-8" // 失败时使用UTF-8
 		} else {
 			request.SetBody(encodedContent)
 		}
-		request.AppendHeader(sip.NewHeader("Content-Type", fmt.Sprintf("Application/MANSCDP+xml;charset=%s", actualCharset)))
+		request.AppendHeader(sip.NewHeader("Content-Type", fmt.Sprintf("application/MANSCDP+xml")))
 
 		// 修正：使用TransactionRequest替代Do
 		tx, err := p.Client.TransactionRequest(p, request)
@@ -1259,6 +1285,7 @@ func (p *Platform) buildChannelItem(channel gb28181.DeviceChannel) string {
 
 	return fmt.Sprintf(`<Item>
 <DeviceID>%s</DeviceID>
+<BusinessGroupID>%s</BusinessGroupID>
 <Name>%s</Name>
 <Manufacturer>%s</Manufacturer>
 <Model>%s</Model>
@@ -1274,7 +1301,7 @@ func (p *Platform) buildChannelItem(channel gb28181.DeviceChannel) string {
 <CivilCode>%s</CivilCode>
 <Info>
 </Info>
-</Item>`, deviceID, name, manufacturer, model,
+</Item>`, deviceID, parentID, name, manufacturer, model,
 		owner, address,
 		channel.RegisterWay, // 直接使用整数值
 		channel.Secrecy,     // 直接使用整数值
@@ -1449,7 +1476,7 @@ func (p *Platform) sendDeviceStatusResponse(req *sip.Request, device *Device, sn
 	//request.AppendHeader(&viaHeader)
 
 	// 设置Content-Type
-	contentTypeHeader := sip.ContentTypeHeader("Application/MANSCDP+xml")
+	contentTypeHeader := sip.ContentTypeHeader("application/MANSCDP+xml")
 	request.AppendHeader(&contentTypeHeader)
 
 	// 获取当前时间，格式化为设备时间
@@ -1595,7 +1622,7 @@ func (p *Platform) sendDeviceInfoResponse(req *sip.Request, device *Device, sn s
 	//}
 	//viaHeader.Params.Add("branch", sip.GenerateBranchN(16)).Add("rport", "")
 	//request.AppendHeader(&viaHeader)
-	contentTypeHeader := sip.ContentTypeHeader("Application/MANSCDP+xml")
+	contentTypeHeader := sip.ContentTypeHeader("application/MANSCDP+xml")
 	request.AppendHeader(&contentTypeHeader)
 
 	// 构建响应XML
@@ -1635,15 +1662,15 @@ func (p *Platform) sendDeviceInfoResponse(req *sip.Request, device *Device, sn s
 	if charset == "" {
 		charset = "GB2312" // 默认使用GB2312
 	}
-	encodedContent, actualCharset, err := EncodeToCharset(xmlContent, charset)
+	encodedContent, _, err := EncodeToCharset(xmlContent, charset)
 	if err != nil {
 		p.Error("sendDeviceInfoResponse 编码转换失败", "error", err.Error(), "charset", charset)
 		request.SetBody([]byte(xmlContent))
-		actualCharset = "UTF-8" // 失败时使用UTF-8
+		//actualCharset = "UTF-8" // 失败时使用UTF-8
 	} else {
 		request.SetBody(encodedContent)
 	}
-	request.AppendHeader(sip.NewHeader("Content-Type", fmt.Sprintf("Application/MANSCDP+xml;charset=%s", actualCharset)))
+	request.AppendHeader(sip.NewHeader("Content-Type", fmt.Sprintf("application/MANSCDP+xml")))
 
 	// 修正：使用正确的上下文参数
 	tx, err := p.Client.TransactionRequest(p, request)
@@ -1830,7 +1857,7 @@ func (p *Platform) handlePresetQuery(req *sip.Request, tx sip.ServerTransaction,
 	//request.AppendHeader(&viaHeader)
 
 	// 设置Content-Type
-	contentTypeHeader := sip.ContentTypeHeader("Application/MANSCDP+xml")
+	contentTypeHeader := sip.ContentTypeHeader("application/MANSCDP+xml")
 	request.AppendHeader(&contentTypeHeader)
 
 	// 直接使用原始消息体

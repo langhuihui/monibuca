@@ -350,7 +350,7 @@ func (gb *GB28181Plugin) getOrCreateClient(hostname string, port int, transport 
 		key:    key,
 	}
 	gb.clients.Set(wrapper)
-	gb.Info("创建新Client", "hostname", hostname, "port", port, "key", key)
+	gb.Info("创建新Client", "hostname", hostname, "port", port, "key", key, "useragent", gb.ua)
 
 	return client, nil
 }
