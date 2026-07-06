@@ -1,6 +1,7 @@
 package plugin_gb28181pro
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -70,6 +71,64 @@ func (d *Dialog) GetCallID() string {
 	} else {
 		return ""
 	}
+}
+
+// ackSession builds the ACK request with Via pre-populated and calls WriteAck.
+//
+// The root cause of the data race (index out of range in sipgo's PrependHeader):
+//
+//	sipgo.WriteAck first registers the 200-retransmission callback, then calls
+//	WriteRequest which lazily adds the Via header via PrependHeader.  If a 200
+//	retransmit fires in another goroutine before Via is added, both goroutines
+//	race on the same request's headerOrder slice.
+//
+// By pre-adding Via here (before WriteAck), requestValidate sees Via != nil and
+// never calls PrependHeader — eliminating the race without touching sipgo.
+func (d *Dialog) ackSession(ctx context.Context) error {
+	invReq := d.session.InviteRequest
+	invResp := d.session.InviteResponse
+
+	// Replicate sipgo's internal newAckRequestUAC using public API.
+	recipient := &invReq.Recipient
+	if contact := invResp.Contact(); contact != nil {
+		recipient = &contact.Address
+	}
+	ack := sip.NewRequest(sip.ACK, *recipient.Clone())
+	ack.SipVersion = invReq.SipVersion
+
+	if len(invReq.GetHeaders("Route")) > 0 {
+		sip.CopyHeaders("Route", invReq, ack)
+	}
+	if h := invReq.From(); h != nil {
+		ack.AppendHeader(sip.HeaderClone(h))
+	}
+	if h := invResp.To(); h != nil {
+		ack.AppendHeader(sip.HeaderClone(h))
+	}
+	if h := invReq.CallID(); h != nil {
+		ack.AppendHeader(sip.HeaderClone(h))
+	}
+	if h := invReq.CSeq(); h != nil {
+		ack.AppendHeader(sip.HeaderClone(h))
+	}
+	if cseq := ack.CSeq(); cseq != nil {
+		cseq.MethodName = sip.ACK
+	}
+	maxFwd := sip.MaxForwardsHeader(70)
+	ack.AppendHeader(&maxFwd)
+	if h := invReq.Contact(); h != nil {
+		ack.AppendHeader(sip.HeaderClone(h))
+	}
+	ack.SetTransport(invReq.Transport())
+	ack.SetSource(invReq.Source())
+
+	// Pre-add Via so sipgo's requestValidate skips PrependHeader entirely,
+	// preventing the concurrent-PrependHeader data race on retransmission.
+	if err := sipgo.ClientRequestAddVia(d.session.UA.Client, ack); err != nil {
+		return err
+	}
+
+	return d.session.WriteAck(ctx, ack)
 }
 
 func (d *Dialog) GetPullJob() *m7s.PullJob {
@@ -493,7 +552,7 @@ func (d *Dialog) Run() (err error) {
 		d.setupReceiver(&pub)
 	}
 
-	err = d.session.Ack(d)
+	err = d.ackSession(d)
 	if err != nil {
 		d.Error("ack session err", err)
 	}

@@ -1,6 +1,7 @@
 package plugin_gb28181pro
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strconv"
@@ -49,15 +50,12 @@ func (d *ForwardDialog) GetKey() uint32 {
 
 // Start 启动会话
 func (d *ForwardDialog) Start() (err error) {
-	// 处理时间范围
+	// 级联 RTP 透传经 Forwarder 直接转发，不经过 PSReceiver 写入 Publisher 轨道。
+	// 此处不能调用 pullCtx.Publish()：会创建空 Publisher 并触发 HLS Transform 订阅，
+	// 在 PublishTimeout 后因无音视频轨被误杀，导致上级点播约 20s 断流（commit 78b91a44 误恢复）。
 	isLive := true
 	if d.start > 0 && d.end > 0 {
 		isLive = false
-		d.pullCtx.PublishConfig.PubType = m7s.PublishTypeVod
-	}
-	err = d.pullCtx.Publish()
-	if err != nil {
-		return
 	}
 	sss := strings.Split(d.pullCtx.RemoteURL, "/")
 	deviceId, channelId := sss[0], sss[1]
@@ -273,7 +271,19 @@ func (d *ForwardDialog) Start() (err error) {
 
 // Run 运行会话
 func (d *ForwardDialog) Run() (err error) {
-	err = d.session.WaitAnswer(d, sipgo.AnswerOptions{})
+	// WaitAnswer 内部发送 CANCEL 时使用 context.Background()，若设备不响应会永久阻塞。
+	// 此处创建一个包装 context：当任务上下文取消时，以 WaitAnswerForceCancelErr 为 cause
+	// 触发取消，WaitAnswer 检测到该 cause 后立即返回，跳过阻塞的 CANCEL 等待流程。
+	waitCtx, waitCancel := context.WithCancelCause(context.Background())
+	defer waitCancel(nil)
+	go func() {
+		select {
+		case <-d.Done():
+			waitCancel(sipgo.WaitAnswerForceCancelErr)
+		case <-waitCtx.Done():
+		}
+	}()
+	err = d.session.WaitAnswer(waitCtx, sipgo.AnswerOptions{})
 	if err != nil {
 		return
 	}
