@@ -131,6 +131,13 @@ func (c *Client) commonRun(handler func(commander Commander) error) (err error) 
 						return err
 					}
 				}
+			// Confirmed via 寸止: fe5d31ad 拆分 commonRun 时漏转发，导致 Pusher 收不到 Publish.Start
+			case *ResponsePublishMessage:
+				if handler != nil {
+					if err = handler(commander); err != nil {
+						return err
+					}
+				}
 			}
 		}
 	}
