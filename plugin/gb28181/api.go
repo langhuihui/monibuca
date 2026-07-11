@@ -2480,12 +2480,27 @@ func (gb *GB28181Plugin) GetGroupChannels(ctx context.Context, req *pb.GetGroupC
 	// 准备结果集
 	var results []*pb.GroupChannel
 	var filteredChannels []*Channel
+	// Confirmed via 寸止: FE-002 通道管理搜索，模糊匹配通道编号/名称、设备编号/名称
+	q := strings.ToLower(strings.TrimSpace(req.Query))
 
 	// 从内存中获取所有通道
 	for channel := range gb.channels.Range {
 		// 如果有设备ID过滤条件，则只处理匹配的设备
 		if req.DeviceId != "" && channel.DeviceId != req.DeviceId {
 			continue
+		}
+		// query 模糊匹配：通道编号、通道名称、设备编号、设备名称
+		if q != "" {
+			deviceName := ""
+			if device, ok := gb.devices.Get(channel.DeviceId); ok {
+				deviceName = device.Name
+			}
+			if !strings.Contains(strings.ToLower(channel.ChannelId), q) &&
+				!strings.Contains(strings.ToLower(channel.Name), q) &&
+				!strings.Contains(strings.ToLower(channel.DeviceId), q) &&
+				!strings.Contains(strings.ToLower(deviceName), q) {
+				continue
+			}
 		}
 		filteredChannels = append(filteredChannels, channel)
 	}
