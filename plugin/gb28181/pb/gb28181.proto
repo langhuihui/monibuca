@@ -1189,6 +1189,8 @@ message GetGroupChannelsRequest {
   int32 page = 2;           // 页码
   int32 count = 3;          // 每页数量
   string deviceId = 4;      // 可选，按设备ID筛选
+  // Confirmed via 寸止: FE-002 通道管理搜索
+  string query = 5;         // 可选，模糊匹配通道编号/通道名称/设备编号/设备名称
 }
 
 // 分组通道关联信息

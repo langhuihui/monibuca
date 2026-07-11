@@ -5594,11 +5594,13 @@ func (x *DeleteGroupChannelRequest) GetDeviceId() string {
 
 // 获取分组下的通道列表请求
 type GetGroupChannelsRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	GroupId       int32                  `protobuf:"varint,1,opt,name=groupId,proto3" json:"groupId,omitempty"`  // 分组ID，从URL路径中获取
-	Page          int32                  `protobuf:"varint,2,opt,name=page,proto3" json:"page,omitempty"`        // 页码
-	Count         int32                  `protobuf:"varint,3,opt,name=count,proto3" json:"count,omitempty"`      // 每页数量
-	DeviceId      string                 `protobuf:"bytes,4,opt,name=deviceId,proto3" json:"deviceId,omitempty"` // 可选，按设备ID筛选
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	GroupId  int32                  `protobuf:"varint,1,opt,name=groupId,proto3" json:"groupId,omitempty"`  // 分组ID，从URL路径中获取
+	Page     int32                  `protobuf:"varint,2,opt,name=page,proto3" json:"page,omitempty"`        // 页码
+	Count    int32                  `protobuf:"varint,3,opt,name=count,proto3" json:"count,omitempty"`      // 每页数量
+	DeviceId string                 `protobuf:"bytes,4,opt,name=deviceId,proto3" json:"deviceId,omitempty"` // 可选，按设备ID筛选
+	// Confirmed via 寸止: FE-002 通道管理搜索
+	Query         string `protobuf:"bytes,5,opt,name=query,proto3" json:"query,omitempty"` // 可选，模糊匹配通道编号/通道名称/设备编号/设备名称
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -5657,6 +5659,13 @@ func (x *GetGroupChannelsRequest) GetCount() int32 {
 func (x *GetGroupChannelsRequest) GetDeviceId() string {
 	if x != nil {
 		return x.DeviceId
+	}
+	return ""
+}
+
+func (x *GetGroupChannelsRequest) GetQuery() string {
+	if x != nil {
+		return x.Query
 	}
 	return ""
 }
@@ -8588,12 +8597,13 @@ const file_gb28181_proto_rawDesc = "" +
 	"\x02id\x18\x01 \x01(\x05R\x02id\x12\x18\n" +
 	"\agroupId\x18\x02 \x01(\x05R\agroupId\x12\x1c\n" +
 	"\tchannelId\x18\x03 \x01(\tR\tchannelId\x12\x1a\n" +
-	"\bdeviceId\x18\x04 \x01(\tR\bdeviceId\"y\n" +
+	"\bdeviceId\x18\x04 \x01(\tR\bdeviceId\"\x8f\x01\n" +
 	"\x17GetGroupChannelsRequest\x12\x18\n" +
 	"\agroupId\x18\x01 \x01(\x05R\agroupId\x12\x12\n" +
 	"\x04page\x18\x02 \x01(\x05R\x04page\x12\x14\n" +
 	"\x05count\x18\x03 \x01(\x05R\x05count\x12\x1a\n" +
-	"\bdeviceId\x18\x04 \x01(\tR\bdeviceId\"\x86\x02\n" +
+	"\bdeviceId\x18\x04 \x01(\tR\bdeviceId\x12\x14\n" +
+	"\x05query\x18\x05 \x01(\tR\x05query\"\x86\x02\n" +
 	"\fGroupChannel\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x05R\x02id\x12\x18\n" +
 	"\agroupId\x18\x04 \x01(\x05R\agroupId\x12\x1c\n" +
