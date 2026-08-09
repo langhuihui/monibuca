@@ -122,6 +122,8 @@ type Device struct {
 	AlarmSubscribeTask      *AlarmSubscribeTask      `gorm:"-:all"`
 	Cataloging              bool                     `gorm:"-:all" default:"false"`
 	DeviceKeepaliveTickTask *DeviceKeepaliveTickTask `gorm:"-:all"`
+	// catalogMu 串行化 Catalog 处理（队列消费与 AddTask 失败时的同步回退共用）
+	catalogMu sync.Mutex `gorm:"-:all"`
 }
 
 func (d *Device) TableName() string {
@@ -175,12 +177,13 @@ func (d *Device) ensureCollectionMutex() {
 }
 
 // CatalogRequest 目录请求结构体
-// 注意：由于 catalogHandlerTask.Run() 在 Work 的串行协程中执行，
-// 所有对 CatalogRequest 字段的访问都是串行的，不需要锁保护
+// 访问需在 Device.catalogMu 保护下（队列 Run 与同步回退、超时定时器共用）
 type CatalogRequest struct {
 	SN, SumNum, TotalCount int
 	FirstResponse          bool      // 是否为第一个响应
 	CreateTime             time.Time // 创建时间，用于超时检测
+	timeoutTimer           *time.Timer
+	finished               bool // 已完成收尾（complete 或 timeout），防重复
 	*util.Promise
 }
 
@@ -223,8 +226,79 @@ type catalogHandlerTask struct {
 	msg *gb28181.Message
 }
 
+// finishCatalogLocked 结束一次 Catalog 收尾并落库。调用方必须持有 d.catalogMu。
+func (d *Device) finishCatalogLocked(catalogReq *CatalogRequest, timedOut bool) {
+	if catalogReq == nil || catalogReq.finished {
+		return
+	}
+	catalogReq.finished = true
+	if catalogReq.timeoutTimer != nil {
+		catalogReq.timeoutTimer.Stop()
+		catalogReq.timeoutTimer = nil
+	}
+	if timedOut {
+		d.Warn("Catalog请求超时",
+			"SN", catalogReq.SN,
+			"SumNum", catalogReq.SumNum,
+			"TotalCount", catalogReq.TotalCount,
+			"已等待", time.Since(catalogReq.CreateTime))
+		// #region agent log
+		d.Warn("AGENT_DEBUG", "sessionId", "1d2dbd", "hypothesisId", "C", "location", "finishCatalogLocked/timeout",
+			"msg", "timeout_branch", "sn", catalogReq.SN, "sumNum", catalogReq.SumNum,
+			"totalCount", catalogReq.TotalCount, "waitMs", time.Since(catalogReq.CreateTime).Milliseconds())
+		// #endregion
+		if !catalogReq.IsComplete() {
+			catalogReq.TotalCount = catalogReq.SumNum
+		}
+	} else {
+		d.Info("Catalog响应接收完成",
+			"SN", catalogReq.SN,
+			"SumNum", catalogReq.SumNum,
+			"TotalCount", catalogReq.TotalCount,
+			"耗时", time.Since(catalogReq.CreateTime))
+		// #region agent log
+		d.Warn("AGENT_DEBUG", "sessionId", "1d2dbd", "hypothesisId", "C", "location", "finishCatalogLocked/complete",
+			"msg", "complete_branch", "sn", catalogReq.SN, "sumNum", catalogReq.SumNum,
+			"totalCount", catalogReq.TotalCount, "elapsedMs", time.Since(catalogReq.CreateTime).Milliseconds())
+		// #endregion
+	}
+	catalogReq.Resolve()
+	d.catalogReqs.RemoveByKey(catalogReq.SN)
+	d.Cataloging = false
+	if d.plugin != nil && d.plugin.DB != nil {
+		d.channels.Range(func(channel *Channel) bool {
+			d.plugin.DB.Save(channel.DeviceChannel)
+			return true
+		})
+	}
+}
+
+// startCatalogTimeoutLocked 启动独立超时（不依赖后续 handler 是否还能入队）。调用方持有 catalogMu。
+func (d *Device) startCatalogTimeoutLocked(catalogReq *CatalogRequest) {
+	if catalogReq == nil || catalogReq.timeoutTimer != nil {
+		return
+	}
+	sn := catalogReq.SN
+	catalogReq.timeoutTimer = time.AfterFunc(10*time.Second, func() {
+		d.catalogMu.Lock()
+		defer d.catalogMu.Unlock()
+		req, ok := d.catalogReqs.Get(sn)
+		if !ok || req.finished {
+			return
+		}
+		d.finishCatalogLocked(req, true)
+	})
+}
+
 func (c *catalogHandlerTask) Run() (err error) {
-	// 处理目录信息
+	d := c.d
+	d.catalogMu.Lock()
+	defer d.catalogMu.Unlock()
+	return c.runLocked()
+}
+
+func (c *catalogHandlerTask) runLocked() (err error) {
+	// 处理目录信息（调用方已持有 d.catalogMu）
 	d := c.d
 	d.ensureCollectionMutex()
 	d.Cataloging = true
@@ -233,6 +307,17 @@ func (c *catalogHandlerTask) Run() (err error) {
 	// 获取当前消息实际解析的通道数量
 	actualChannelCount := len(msg.DeviceList.DeviceChannelList)
 	deviceNum := msg.DeviceList.DeviceNum
+
+	// #region agent log
+	// Confirmed via 寸止: 服务器复现，埋点走现有日志（AGENT_DEBUG），勿写本机路径
+	chID := ""
+	if actualChannelCount > 0 {
+		chID = msg.DeviceList.DeviceChannelList[0].DeviceId
+	}
+	d.Warn("AGENT_DEBUG", "sessionId", "1d2dbd", "hypothesisId", "B", "location", "catalogHandlerTask.Run",
+		"msg", "run_enter", "sn", msg.SN, "sumNum", msg.SumNum,
+		"actualChannelCount", actualChannelCount, "channelId", chID)
+	// #endregion
 
 	// 验证DeviceNum和实际解析的通道数是否一致
 	// 注意：设备可能分多次发送Catalog响应，每次可能只包含部分通道
@@ -258,8 +343,13 @@ func (c *catalogHandlerTask) Run() (err error) {
 			Promise:       util.NewPromise(context.Background()),
 		}
 		d.catalogReqs.Set(catalogReq)
+		d.startCatalogTimeoutLocked(catalogReq)
 		d.Debug("创建新的Catalog请求", "SN", msg.SN, "SumNum", msg.SumNum)
 	} else {
+		if catalogReq.finished {
+			d.Warn("Catalog响应在收尾后到达，已忽略", "SN", msg.SN, "SumNum", msg.SumNum)
+			return nil
+		}
 		// 验证SumNum是否一致（不同响应的SumNum应该相同）
 		if catalogReq.SumNum != msg.SumNum {
 			d.Warn("Catalog响应SumNum不一致",
@@ -269,25 +359,16 @@ func (c *catalogHandlerTask) Run() (err error) {
 		}
 	}
 
-	// 检查超时
-	if catalogReq.IsTimeout() {
-		d.Warn("Catalog请求超时",
-			"SN", msg.SN,
-			"SumNum", catalogReq.SumNum,
-			"TotalCount", catalogReq.TotalCount,
-			"已等待", time.Since(catalogReq.CreateTime))
-		// 超时后强制完成
-		if !catalogReq.IsComplete() {
-			catalogReq.TotalCount = catalogReq.SumNum // 强制设置为完成
-		}
-	}
-
 	// 添加响应并获取是否是第一个响应
 	isFirst := catalogReq.AddResponse()
 
 	// 更新设备信息到数据库
 	// 如果是第一个响应，先清空原有通道，并记录期望的总通道数
 	if isFirst {
+		// #region agent log
+		d.Warn("AGENT_DEBUG", "sessionId", "1d2dbd", "hypothesisId", "D", "location", "catalogHandlerTask.Run/clear",
+			"msg", "isFirst_clear", "sn", msg.SN, "sumNum", msg.SumNum)
+		// #endregion
 		d.channels.Clear()
 		d.ChannelCount = msg.SumNum
 		d.Debug("清空通道列表，开始接收Catalog响应", "SN", msg.SN, "SumNum", msg.SumNum)
@@ -321,22 +402,70 @@ func (c *catalogHandlerTask) Run() (err error) {
 		"是否第一个响应", isFirst)
 	d.UpdateTime = time.Now()
 
-	// 在所有通道都添加完成后，检查是否完成接收
+	// 独立定时器为主；此处兼容处理过程中已超时或收齐的收尾
+	if catalogReq.IsTimeout() {
+		d.finishCatalogLocked(catalogReq, true)
+		return nil
+	}
 	if catalogReq.IsComplete() {
-		d.Info("Catalog响应接收完成",
-			"SN", msg.SN,
-			"SumNum", catalogReq.SumNum,
-			"TotalCount", catalogReq.TotalCount,
-			"耗时", time.Since(catalogReq.CreateTime))
-		catalogReq.Resolve()
-		d.catalogReqs.RemoveByKey(msg.SN)
-		d.Cataloging = false
-		d.channels.Range(func(channel *Channel) bool {
-			d.plugin.DB.Save(channel.DeviceChannel)
-			return true
-		})
+		d.finishCatalogLocked(catalogReq, false)
 	}
 	return
+}
+
+// submitCatalogHandler 投递 Catalog 处理；gotask EventLoop 缓冲满导致 AddTask 拒绝时同步回退。
+// Confirmed via 寸止: 方案4
+func (d *Device) submitCatalogHandler(msg *gb28181.Message) {
+	catalogHandler := &catalogHandlerTask{
+		d:   d,
+		msg: msg,
+	}
+	// #region agent log
+	sizeBefore := catalogHandlerQueueTask.Size.Load()
+	chID := ""
+	if len(msg.DeviceList.DeviceChannelList) > 0 {
+		chID = msg.DeviceList.DeviceChannelList[0].DeviceId
+	}
+	// #endregion
+	added := catalogHandlerQueueTask.AddTask(catalogHandler)
+	// #region agent log
+	sizeAfter := catalogHandlerQueueTask.Size.Load()
+	droppedHint := sizeAfter <= sizeBefore
+	d.Warn("AGENT_DEBUG", "sessionId", "1d2dbd", "hypothesisId", "A", "location", "onMessage/Catalog/AddTask",
+		"msg", "addtask_result", "sn", msg.SN, "sumNum", msg.SumNum, "channelId", chID,
+		"sizeBefore", sizeBefore, "sizeAfter", sizeAfter, "dropped", droppedHint,
+		"addedNil", added == nil, "deviceListLen", len(msg.DeviceList.DeviceChannelList))
+	// #endregion
+
+	// Size 仅作提示：真正失败时 startup 会立刻 Reject，WaitStarted 立即返回 err。
+	// 若只是 Size 竞态误报，WaitStarted 会阻塞在队列中，短超时后放弃回退，避免重复处理/乱序。
+	if added == nil {
+		d.Warn("Catalog AddTask 返回 nil，同步 Run", "SN", msg.SN)
+		_ = catalogHandler.Run()
+		return
+	}
+	if !droppedHint {
+		return
+	}
+	done := make(chan error, 1)
+	go func() {
+		done <- added.WaitStarted()
+	}()
+	select {
+	case err := <-done:
+		if err != nil {
+			d.Warn("Catalog AddTask 被拒绝，同步 Run 回退",
+				"SN", msg.SN, "err", err, "channelId", chID,
+				"sizeBefore", sizeBefore, "sizeAfter", sizeAfter)
+			// #region agent log
+			d.Warn("AGENT_DEBUG", "sessionId", "1d2dbd", "hypothesisId", "A", "location", "submitCatalogHandler/fallback",
+				"msg", "sync_fallback", "sn", msg.SN, "err", err.Error(), "channelId", chID)
+			// #endregion
+			_ = catalogHandler.Run()
+		}
+	case <-time.After(2 * time.Millisecond):
+		// 已在队列中等待执行，非拒绝
+	}
 }
 
 func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28181.Message) (err error) {
@@ -357,11 +486,7 @@ func (d *Device) onMessage(req *sip.Request, tx sip.ServerTransaction, msg *gb28
 	case "Keepalive":
 		d.KeepaliveTime = time.Now()
 	case "Catalog":
-		catalogHandler := &catalogHandlerTask{
-			d:   d,
-			msg: msg,
-		}
-		catalogHandlerQueueTask.AddTask(catalogHandler)
+		d.submitCatalogHandler(msg)
 	case "RecordInfo":
 		if channel, ok := d.channels.Get(d.DeviceId + "_" + msg.DeviceID); ok {
 			// 检查是否有上级平台映射（用于转发）
@@ -788,6 +913,11 @@ func (d *Device) addOrUpdateChannel(c gb28181.DeviceChannel) {
 			Logger:        d.Logger.With("channel", c.ID),
 			DeviceChannel: &c,
 		}
+		// #region agent log
+		// 仅抽样记录新建路径，避免 783 行「无日志」误判；大批量时用 Debug 级避免刷屏
+		d.Debug("AGENT_DEBUG", "sessionId", "1d2dbd", "hypothesisId", "E", "location", "addOrUpdateChannel/create",
+			"msg", "create_new", "channelId", c.ID, "status", string(c.Status))
+		// #endregion
 	}
 	d.channels.Set(resultChannel)
 	d.plugin.channels.Set(resultChannel)
