@@ -615,9 +615,18 @@ func (s *Server) GetSubscriptionProgress(ctx context.Context, req *pb.StreamSnap
 				}
 				res.Data.Steps = append(res.Data.Steps, pbStep)
 			}
-		} else {
-			err = pkg.ErrNotFound
+			return
 		}
+		// Confirmed via 寸止：流已 publish（不在 Waiting）时返回成功完成态，避免前端轮询打出 500
+		if _, ok := s.Streams.Get(req.StreamPath); ok {
+			res = &pb.SubscriptionProgressResponse{
+				Code:    0,
+				Message: "success",
+				Data:    &pb.SubscriptionProgressData{},
+			}
+			return
+		}
+		err = pkg.ErrNotFound
 	})
 	return
 }
