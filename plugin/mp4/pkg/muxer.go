@@ -31,6 +31,7 @@ type (
 		mdatSize     uint64
 		StreamPath   string    // Added to store the stream path
 		Metadata     *Metadata // 添加元数据支持
+		moovWritten  bool      // FMP4：moov 是否已写入（须在首个 moof 之前）
 	}
 )
 
@@ -130,6 +131,7 @@ func (m *Muxer) CreateFlagment(t *Track, sample Sample) (moof IBox, mdat IBox) {
 			Duration: lastSample.Duration,
 			FirstTs:  uint64(lastSample.Timestamp),
 			LastTs:   uint64(sample.Timestamp),
+			KeyFrame: lastSample.KeyFrame,
 		})
 		t.Samplelist[0] = sample
 	} else {
@@ -140,7 +142,18 @@ func (m *Muxer) CreateFlagment(t *Track, sample Sample) (moof IBox, mdat IBox) {
 
 func (m *Muxer) WriteSample(w io.Writer, t *Track, sample Sample) (err error) {
 	if m.isFragment() {
+		// 首个 sample 只缓存，CreateFlagment 返回 nil,nil；等下一帧才写 moof/mdat
 		moof, mdat := m.CreateFlagment(t, sample)
+		if moof == nil {
+			return nil
+		}
+		// 可播 FMP4 要求 moov(含 mvex) 在首个 moof 之前
+		if !m.moovWritten {
+			if err = m.WriteMoov(w); err != nil {
+				return
+			}
+			m.moovWritten = true
+		}
 		_, err = WriteTo(w, moof, mdat)
 		return
 	}
@@ -258,18 +271,39 @@ func (m *Muxer) WriteMoov(w io.Writer) (err error) {
 	var n int64
 	n, err = WriteTo(w, m.MakeMoov())
 	m.CurrentOffset += n
+	m.moovWritten = true
 	return
 }
 
 func (m *Muxer) WriteTrailer(file storage.Writer) (err error) {
 	if m.isFragment() {
-		// Flush any remaining samples
-		// if err = m.flushFragment(file); err != nil {
-		// 	return err
-		// }
+		// 刷出各轨 Samplelist 中尚未形成 moof 的最后一个 sample
+		for i := uint32(1); i < m.nextTrackId; i++ {
+			track := m.Tracks[i]
+			if track == nil || len(track.Samplelist) == 0 {
+				continue
+			}
+			last := &track.Samplelist[0]
+			dur := last.Duration
+			if dur == 0 {
+				dur = 33 // timescale=1000 时约 30fps
+			}
+			moof, mdat := m.CreateFlagment(track, Sample{Timestamp: last.Timestamp + dur})
+			if moof == nil {
+				continue
+			}
+			if !m.moovWritten {
+				if err = m.WriteMoov(file); err != nil {
+					return
+				}
+			}
+			if _, err = WriteTo(file, moof, mdat); err != nil {
+				return
+			}
+			track.Samplelist = track.Samplelist[:0]
+		}
 		var mfraChildren []IBox
 		var mfraSize uint32 = 0
-		// Write mfra box
 		tfras := make([]*TrackFragmentRandomAccessBox, len(m.Tracks))
 		for i := uint32(1); i < m.nextTrackId; i++ {
 			if track := m.Tracks[i]; track != nil && len(track.fragments) > 0 {
@@ -278,8 +312,6 @@ func (m *Muxer) WriteTrailer(file storage.Writer) (err error) {
 				mfraSize += uint32(tfras[i-1].Size())
 			}
 		}
-
-		// Only write mfra if we have fragments
 		if mfraSize > 0 {
 			mfraChildren = append(mfraChildren, CreateMfroBox(uint32(mfraSize)+16))
 			mfra := CreateContainerBox(TypeMFRA, mfraChildren...)
@@ -288,14 +320,6 @@ func (m *Muxer) WriteTrailer(file storage.Writer) (err error) {
 				return err
 			}
 		}
-		// Clean up any remaining buffers
-		// for i := uint32(1); i < m.nextTrackId; i++ {
-		// 	if track := m.Tracks[i]; track != nil && track.writer != nil {
-		// 		if ws, ok := track.writer.(*Fmp4WriterSeeker); ok {
-		// 			ws.Buffer = nil
-		// 		}
-		// 	}
-		// }
 	} else {
 		if err = m.reWriteMdatSize(file); err != nil {
 			return err
