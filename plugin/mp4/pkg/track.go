@@ -46,6 +46,7 @@ type (
 		Duration uint32
 		FirstTs  uint64
 		LastTs   uint64
+		KeyFrame bool // 是否为随机访问点（视频 IDR）；供 tfra 过滤
 	}
 )
 
@@ -77,7 +78,7 @@ func (track *Track) makeElstBox() *EditListBox {
 	firstTimestamp := track.Samplelist[0].Timestamp
 	firstCTS := track.Samplelist[0].CTS
 	mediaTime := int64(firstTimestamp) + int64(firstCTS)
-	
+
 	entrys[entryCount-1].SegmentDuration = uint64(track.Duration)
 	// MediaTime应该是第一个sample的PTS (DTS + CTS)
 	entrys[entryCount-1].MediaTime = mediaTime
@@ -228,9 +229,11 @@ func (track *Track) MakeMoof(fragmentId uint32) *ContainerBox {
 }
 
 func (track *Track) makeTfhdBox(moofOffset uint64) *TrackFragmentHeaderBox {
+	// data_offset 按「相对本 moof 起始」计算（MakeMoof 里 = moofSize+8）。
+	// 必须置 default-base-is-moof，否则部分播放器（如 VLC）在 seek 后按文件头为 base，
+	// 把 data_offset=108 当成绝对偏移，读到 moov 内垃圾 → 画面冻结。 Confirmed via 寸止.
 	tfFlags := uint32(0)
-	// tfFlags |= TF_FLAG_DEFAULT_BASE_IS_MOOF
-	// tfFlags |= TF_FLAG_DEFAULT_SAMPLE_FLAGS_PRESENT
+	tfFlags |= TF_FLAG_DEFAULT_BASE_IS_MOOF
 	tfhd := CreateTrackFragmentHeaderBox(track.TrackId, tfFlags)
 	tfhd.BaseDataOffset = moofOffset
 	// Calculate default sample duration
@@ -278,8 +281,12 @@ func (track *Track) makeStssBox() *STSSBox {
 }
 
 func (track *Track) makeTfraBox() *TrackFragmentRandomAccessBox {
+	// ISO：TFRA 只登记随机访问点。视频轨若写入全部 P 帧分片，播放器 seek 落到非 IDR → 画面冻结。
 	return CreateTrackFragmentRandomAccessBox(track.TrackId, slices.Collect(func(yield func(TFRAEntry) bool) {
 		for _, f := range track.fragments {
+			if track.Cid.IsVideo() && !f.KeyFrame {
+				continue
+			}
 			if !yield(TFRAEntry{
 				Time:         f.FirstTs,
 				MoofOffset:   f.Offset,
