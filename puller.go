@@ -328,10 +328,17 @@ func (p *RecordFilePuller) queryRecordStreams(startTime, endTime time.Time) (err
 	if p.PullJob.Plugin.DB == nil {
 		return pkg.ErrNoDB
 	}
-	queryRecord := RecordStream{
-		Type: p.Type,
+	// Confirmed via 寸止: REQ-MP4-001 — mp4 点播同时命中 type=mp4 与 type=fmp4（边录边播走 fmp4）
+	tx := p.PullJob.Plugin.DB.Where("end_time>=? AND start_time<=? AND stream_path=?", startTime, endTime, p.PullJob.RemoteURL)
+	switch p.Type {
+	case "mp4":
+		tx = tx.Where("type IN ?", []string{"mp4", "fmp4"})
+	case "":
+		// 不按类型过滤
+	default:
+		tx = tx.Where("type = ?", p.Type)
 	}
-	tx := p.PullJob.Plugin.DB.Where(&queryRecord).Find(&p.Streams, "end_time>=? AND start_time<=? AND stream_path=?", startTime, endTime, p.PullJob.RemoteURL)
+	tx = tx.Find(&p.Streams)
 	if tx.Error != nil {
 		return tx.Error
 	}
