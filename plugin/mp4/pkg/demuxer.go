@@ -63,6 +63,87 @@ func NewDemuxer(r io.ReadSeeker) *Demuxer {
 	}
 }
 
+// appendMoofSamples 将 moof/traf/trun 解析为绝对文件偏移的 Sample，追加到对应 Track。
+// Confirmed via 寸止: REQ-MP4-001 方案 B / M2 — 支持完整与进行中的 fmp4 点播
+func (d *Demuxer) appendMoofSamples(moofOffset uint64, moof *MovieFragmentBox) {
+	for _, traf := range moof.TRAFs {
+		if traf == nil || traf.TFHD == nil || traf.TRUN == nil {
+			continue
+		}
+		trackID := traf.TFHD.TrackID
+		if trackID == 0 || int(trackID) > len(d.Tracks) {
+			continue
+		}
+		track := d.Tracks[trackID-1]
+		tfFlags := uint32(traf.TFHD.Flags[0])<<16 | uint32(traf.TFHD.Flags[1])<<8 | uint32(traf.TFHD.Flags[2])
+		var baseDataOffset uint64
+		switch {
+		case tfFlags&TF_FLAG_BASE_DATA_OFFSET_PRESENT != 0:
+			baseDataOffset = traf.TFHD.BaseDataOffset
+		case tfFlags&TF_FLAG_DEFAULT_BASE_IS_MOOF != 0:
+			baseDataOffset = moofOffset
+		default:
+			// 与本仓库 muxer 默认一致：相对 moof 起始
+			baseDataOffset = moofOffset
+		}
+		trunFlags := uint32(traf.TRUN.Flags[0])<<16 | uint32(traf.TRUN.Flags[1])<<8 | uint32(traf.TRUN.Flags[2])
+		dataOffset := baseDataOffset
+		if trunFlags&TR_FLAG_DATA_OFFSET != 0 {
+			dataOffset = uint64(int64(baseDataOffset) + int64(traf.TRUN.DataOffset))
+		}
+		var dts uint64
+		if traf.TFDT != nil {
+			dts = traf.TFDT.BaseMediaDecodeTime
+		}
+		for i := uint32(0); i < traf.TRUN.SampleCount; i++ {
+			var entry TrunEntry
+			if int(i) < len(traf.TRUN.Entries) {
+				entry = traf.TRUN.Entries[i]
+			}
+			size := entry.SampleSize
+			if size == 0 {
+				size = traf.TFHD.DefaultSampleSize
+				if size == 0 {
+					size = track.defaultSize
+				}
+			}
+			dur := entry.SampleDuration
+			if dur == 0 {
+				dur = traf.TFHD.DefaultSampleDuration
+				if dur == 0 {
+					dur = track.defaultDuration
+				}
+			}
+			flags := entry.SampleFlags
+			if i == 0 && trunFlags&TR_FLAG_DATA_FIRST_SAMPLE_FLAGS != 0 {
+				flags = traf.TRUN.FirstSampleFlags
+			}
+			if flags == 0 {
+				flags = traf.TFHD.DefaultSampleFlags
+			}
+			// depends_on==2（SAMPLE_FLAG_DEPENDS_ON_NO）视为关键帧；置了 non-sync 则否
+			keyFrame := flags&SAMPLE_FLAG_DEPENDS_ON_NO != 0 && flags&MOV_FRAG_SAMPLE_FLAG_IS_NON_SYNC == 0
+			cts := uint32(0)
+			if entry.SampleCompositionTimeOffset > 0 {
+				cts = uint32(entry.SampleCompositionTimeOffset)
+			}
+			sample := Sample{
+				Offset:    int64(dataOffset),
+				Timestamp: uint32(dts),
+				CTS:       cts,
+				Duration:  dur,
+				KeyFrame:  keyFrame,
+			}
+			sample.Size = int(size)
+			track.Samplelist = append(track.Samplelist, sample)
+			dataOffset += uint64(size)
+			dts += uint64(dur)
+		}
+		track.defaultSize = traf.TFHD.DefaultSampleSize
+		track.defaultDuration = traf.TFHD.DefaultSampleDuration
+	}
+}
+
 func (d *Demuxer) Demux() (err error) {
 
 	// decodeVisualSampleEntry := func() (offset int, err error) {
@@ -102,26 +183,40 @@ func (d *Demuxer) Demux() (err error) {
 	for {
 		b, err = box.ReadFrom(d.reader)
 		if err != nil {
-			if err == io.EOF {
+			// 进行中 fmp4：文件末尾可能截断在半个 box，已解析样本仍可用
+			if err == io.EOF || err == io.ErrUnexpectedEOF {
 				break
+			}
+			if d.IsFragment {
+				hasSamples := false
+				for _, t := range d.Tracks {
+					if len(t.Samplelist) > 0 {
+						hasSamples = true
+						break
+					}
+				}
+				if hasSamples {
+					break
+				}
 			}
 			return err
 		}
+		boxStart := offset
 		offset += b.Size()
-		switch box := b.(type) {
+		switch boxItem := b.(type) {
 		case *FileTypeBox:
-			if slices.Contains(box.CompatibleBrands, [4]byte{'q', 't', ' ', ' '}) {
+			if slices.Contains(boxItem.CompatibleBrands, [4]byte{'q', 't', ' ', ' '}) {
 				d.QuicTime = true
 			}
 		case *FreeBox:
 		case *MediaDataBox:
-			d.mdat = box
-			d.mdatOffset = offset - b.Size() + uint64(box.HeaderSize())
+			d.mdat = boxItem
+			d.mdatOffset = boxStart + uint64(boxItem.HeaderSize())
 		case *MoovBox:
-			if box.MVEX != nil {
+			if boxItem.MVEX != nil {
 				d.IsFragment = true
 			}
-			for _, trak := range box.Tracks {
+			for _, trak := range boxItem.Tracks {
 				track := &Track{}
 				track.TrackId = trak.TKHD.TrackID
 				track.Duration = uint32(trak.TKHD.Duration)
@@ -183,22 +278,13 @@ func (d *Demuxer) Demux() (err error) {
 				}
 				d.Tracks = append(d.Tracks, track)
 			}
-			d.moov = box
+			d.moov = boxItem
 		case *MovieFragmentBox:
-			for _, traf := range box.TRAFs {
-				track := d.Tracks[traf.TFHD.TrackID-1]
-				track.defaultSize = traf.TFHD.DefaultSampleSize
-				track.defaultDuration = traf.TFHD.DefaultSampleDuration
-			}
+			d.IsFragment = true
+			d.appendMoofSamples(boxStart, boxItem)
 		}
 	}
 	d.ReadSampleIdx = make([]uint32, len(d.Tracks))
-	// for _, track := range d.Tracks {
-	// 	if len(track.Samplelist) > 0 {
-	// 		track.StartDts = uint64(track.Samplelist[0].DTS) * 1000 / uint64(track.Timescale)
-	// 		track.EndDts = uint64(track.Samplelist[len(track.Samplelist)-1].DTS) * 1000 / uint64(track.Timescale)
-	// 	}
-	// }
 	return nil
 }
 

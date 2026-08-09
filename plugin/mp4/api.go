@@ -339,11 +339,8 @@ func (p *MP4Plugin) download(w http.ResponseWriter, r *http.Request) {
 	// 设置合并下载的文件名，包含时间范围
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s_%s_%s.mp4", streamPath, startTime.Format("20060102150405"), endTime.Format("20060102150405")))
 
-	// 构建查询条件，查找指定时间范围内的录制记录
-	queryRecord := m7s.RecordStream{
-		Type: "mp4",
-	}
-	p.DB.Where(&queryRecord).Find(&streams, "end_time>? AND start_time<? AND stream_path=?", startTime, endTime, streamPath)
+	// Confirmed via 寸止: REQ-MP4-001 — download 同时匹配 mp4 / fmp4
+	p.DB.Where("type IN ? AND end_time>? AND start_time<? AND stream_path=?", []string{"mp4", "fmp4"}, startTime, endTime, streamPath).Find(&streams)
 
 	// 创建 MP4 混合器
 	muxer := mp4.NewMuxer(flag)

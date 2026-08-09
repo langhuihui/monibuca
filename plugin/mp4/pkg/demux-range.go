@@ -187,13 +187,30 @@ func (d *DemuxerRange) Demux(ctx context.Context) error {
 				break
 			}
 
-			// 计算样本数据偏移和读取数据
-			sampleOffset := int(sample.Offset) - int(demuxer.mdatOffset)
-			if sampleOffset < 0 || sampleOffset+sample.Size > len(demuxer.mdat.Data) {
-				continue
+			// Confirmed via 寸止: REQ-MP4-001 M2/M3 —
+			// fmp4：Sample.Offset 为文件绝对偏移，按 Seek 读取（支持多 moof/mdat 与进行中文件）
+			// 普通 mp4：仍从 demux 时载入的单块 mdat.Data 切片
+			if demuxer.IsFragment {
+				if sample.Size <= 0 {
+					continue
+				}
+				data := make([]byte, sample.Size)
+				if _, seekErr := file.Seek(sample.Offset, io.SeekStart); seekErr != nil {
+					continue
+				}
+				if _, readErr := io.ReadFull(file, data); readErr != nil {
+					// 进行中文件末尾可能半截 sample，停在上一完整帧
+					break
+				}
+				sample.Buffers = net.Buffers{data}
+			} else {
+				sampleOffset := int(sample.Offset) - int(demuxer.mdatOffset)
+				if sampleOffset < 0 || demuxer.mdat == nil || sampleOffset+sample.Size > len(demuxer.mdat.Data) {
+					continue
+				}
+				data := demuxer.mdat.Data[sampleOffset : sampleOffset+sample.Size]
+				sample.Buffers = net.Buffers{data}
 			}
-			data := demuxer.mdat.Data[sampleOffset : sampleOffset+sample.Size]
-			sample.Buffers = net.Buffers{data}
 
 			// 计算时间戳
 			if int64(sample.Timestamp)+tsOffset < 0 {
