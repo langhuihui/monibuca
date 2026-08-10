@@ -615,9 +615,18 @@ func (s *Server) GetSubscriptionProgress(ctx context.Context, req *pb.StreamSnap
 				}
 				res.Data.Steps = append(res.Data.Steps, pbStep)
 			}
-		} else {
-			err = pkg.ErrNotFound
+			return
 		}
+		// Confirmed via 寸止：流已 publish（不在 Waiting）时返回成功完成态，避免前端轮询打出 500
+		if _, ok := s.Streams.Get(req.StreamPath); ok {
+			res = &pb.SubscriptionProgressResponse{
+				Code:    0,
+				Message: "success",
+				Data:    &pb.SubscriptionProgressData{},
+			}
+			return
+		}
+		err = pkg.ErrNotFound
 	})
 	return
 }
@@ -1030,7 +1039,12 @@ func (s *Server) GetRecordList(ctx context.Context, req *pb.ReqRecordList) (resp
 		query = query.Where("stream_path = ?", req.StreamPath)
 	}
 	if req.Type != "" {
-		query = query.Where("type = ?", req.Type)
+		// Confirmed via 寸止: REQ-MP4-001 — type=mp4 时同时列出 fmp4（边录边播）
+		if req.Type == "mp4" {
+			query = query.Where("type IN ?", []string{"mp4", "fmp4"})
+		} else {
+			query = query.Where("type = ?", req.Type)
+		}
 	}
 	startTime, endTime, err := util.TimeRangeQueryParse(url.Values{"range": []string{req.Range}, "start": []string{req.Start}, "end": []string{req.End}})
 	if err == nil {
@@ -1149,7 +1163,12 @@ func (s *Server) GetRecordCatalog(ctx context.Context, req *pb.ReqRecordCatalog)
 	}
 	query := s.DB.Model(&RecordStream{})
 	if req.Type != "" {
-		query = query.Where("type = ?", req.Type)
+		// Confirmed via 寸止: REQ-MP4-001 — catalog 的 type=mp4 含 fmp4
+		if req.Type == "mp4" {
+			query = query.Where("type IN ?", []string{"mp4", "fmp4"})
+		} else {
+			query = query.Where("type = ?", req.Type)
+		}
 	}
 	err = query.Select("stream_path,count(id) as count,min(start_time) as start_time,max(end_time) as end_time").Group("stream_path").Find(&result).Error
 	if err != nil {

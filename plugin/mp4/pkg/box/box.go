@@ -185,7 +185,14 @@ func (b *FullBox) HeaderSize() uint32 { return FullBoxLen }
 func WriteTo(w io.Writer, box ...IBox) (n int64, err error) {
 	var n1, n2 int64
 	for _, b := range box {
-		if reflect.ValueOf(b).IsNil() {
+		// 裸 nil interface（如 CreateFlagment 首 sample 返回值）与
+		// 接口内 typed nil 指针（如 makeTrak 可选 edts）都需跳过。
+		// 仅用 reflect.ValueOf(b).IsNil() 会在裸 nil 上对 zero Value panic
+		// （回归自 e37b244c fix: mp4 download）。 Confirmed via 寸止.
+		if b == nil {
+			continue
+		}
+		if v := reflect.ValueOf(b); v.Kind() == reflect.Ptr && v.IsNil() {
 			continue
 		}
 		n1, err = b.HeaderWriteTo(w)

@@ -72,6 +72,9 @@ func (box *TrackFragmentBox) Unmarshal(buf []byte) (IBox, error) {
 		switch b := b.(type) {
 		case *TrackFragmentHeaderBox:
 			box.TFHD = b
+		case *TrackFragmentBaseMediaDecodeTimeBox:
+			// Confirmed via 寸止: REQ-MP4-001 M2 — traf 内必须解析 tfdt，否则 fragment 时间基丢失
+			box.TFDT = b
 		case *TrackRunBox:
 			box.TRUN = b
 		}
