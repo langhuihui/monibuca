@@ -1,0 +1,25 @@
+syntax = "proto3";
+import "google/api/annotations.proto";
+package rtsp;
+option go_package="m7s.live/v5/plugin/rtsp/pb";
+
+// 基础响应
+message BaseResponse {
+  int32 code = 1;
+  string message = 2;
+}
+
+service api {
+  // RTSP 回放倍速：对运行中的拉流会话二次 PLAY 注入 Scale
+  // Confirmed via 寸止(REQ-RTSP-002)
+  rpc PlaybackSpeed (PlaybackSpeedRequest) returns (BaseResponse) {
+    option (google.api.http) = {
+      get: "/rtsp/api/playback/speed/{streamPath=**}"
+    };
+  }
+}
+
+message PlaybackSpeedRequest {
+  string streamPath = 1; // 回放/拉流路径（URL path）
+  double speed = 2;      // 倍速：0.25、0.5、1、2、4、8…（query；2^n）
+}
