@@ -105,6 +105,8 @@ type (
 		Header        HTTPValues
 		Args          HTTPValues `gorm:"-:all"`              // 拉流参数
 		TestMode      int        `desc:"测试模式,0:关闭,1:只拉流不发布"` // 测试模式
+		// Confirmed via 寸止: RTSP 鉴权失败立即停重试；默认 false 兼容现网
+		StopRetryOnAuthFail bool `desc:"鉴权失败时停止重试"`
 	}
 	Push struct {
 		URL           string        `desc:"推送地址"`                    // 推送地址

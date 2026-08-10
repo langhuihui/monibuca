@@ -600,6 +600,8 @@ message PullProxyInfo {
   uint32 rtt = 15; // 平均RTT
   string streamPath = 16; // 流路径
   google.protobuf.Duration checkInterval = 17; // 检查间隔
+  // REQ-RTSP-001: 鉴权失败时停止重连（主要用于 RTSP，默认 false）
+  bool stopRetryOnAuthFail = 18;
 }
 
 message UpdatePullProxyRequest {
@@ -617,6 +619,8 @@ message UpdatePullProxyRequest {
   optional google.protobuf.Duration recordFragment = 12; // 录制片段长度
   optional string streamPath = 13; // 流路径
   optional google.protobuf.Duration checkInterval = 14; // 检查间隔
+  // REQ-RTSP-001: 鉴权失败时停止重连（主要用于 RTSP）
+  optional bool stopRetryOnAuthFail = 15;
 }
 
 message PushProxyInfo {

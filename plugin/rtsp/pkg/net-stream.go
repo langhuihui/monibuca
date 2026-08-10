@@ -1,13 +1,13 @@
 package rtsp
 
 import (
-	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 
+	pkg "m7s.live/v5/pkg"
 	"m7s.live/v5/pkg/util"
 )
 
@@ -35,13 +35,17 @@ func (c *Stream) Do(req *util.Request) (*util.Response, error) {
 			if c.Auth.ReadNone(res) {
 				return c.Do(req)
 			}
-			return nil, errors.New("user/pass not provided")
+			// {{ AURA-X: Modify - 无凭据收到 401，归为鉴权失败哨兵. Confirmed via 寸止. }}
+			return nil, pkg.ErrInvalidCredentials
 		case util.AuthUnknown:
 			if c.Auth.Read(res) {
 				return c.Do(req)
 			}
+			// {{ AURA-X: Modify - 挑战解析失败也视为鉴权失败，避免继续重试. Confirmed via 寸止. }}
+			return nil, pkg.ErrInvalidCredentials
 		default:
-			return nil, errors.New("wrong user/pass")
+			// 已带凭据后仍 401：协议层鉴权失败（非厂商文案匹配）
+			return nil, pkg.ErrInvalidCredentials
 		}
 	case http.StatusFound, http.StatusMovedPermanently:
 		oldHost := ""

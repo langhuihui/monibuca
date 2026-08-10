@@ -2,6 +2,7 @@ package m7s
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/url"
@@ -65,6 +66,8 @@ type (
 		Plugin      *Plugin
 		PullJob     *PullJob
 		pullStarted bool // 标记是否已经首次拉流成功，避免断线重连时重复创建任务
+		// authFailed REQ-RTSP-001：鉴权失败停重试后置位，避免探活/再上线继续带错误凭据打设备
+		authFailed bool
 	}
 	HTTPPullProxy struct {
 		TCPPullProxy
@@ -79,6 +82,11 @@ type (
 
 func (b *BasePullProxy) GetBase() *BasePullProxy {
 	return b
+}
+
+// IsAuthFailed 是否因鉴权失败已停止重试（供 RTSP 探活等跨包读取）
+func (b *BasePullProxy) IsAuthFailed() bool {
+	return b.authFailed
 }
 
 func NewHTTPPullPorxy() IPullProxy {
@@ -112,6 +120,11 @@ func (d *BasePullProxy) ChangeStatus(status byte) {
 		// 只有首次拉流成功后才设置 pullStarted，断线重连时不触发自动拉流
 		// 由 Dispose() 中调用 PullJob.Stop() 来停止旧任务
 		if d.PullOnStart && !d.pullStarted && (from == PullProxyStatusOffline) {
+			// {{ AURA-X: Modify - 鉴权失败停重试后禁止因 Offline→Online 再次自动拉流. Confirmed via 寸止. }}
+			if d.StopRetryOnAuthFail && d.authFailed {
+				d.Plugin.Warn("skip auto pull after auth fail", "streamPath", d.StreamPath, "pullProxyId", d.ID)
+				return
+			}
 			d.Pull()
 		}
 	}
@@ -166,6 +179,8 @@ func (d *BasePullProxy) Pull() {
 	var pubConf = d.Plugin.config.Publish
 	pubConf.PubAudio = d.Audio
 	pubConf.DelayCloseTimeout = util.Conditional(d.StopOnIdle, time.Second*5, 0)
+	// 主动再次拉流时清除鉴权失败标记（例如用户修正密码后 Update/手动拉流）
+	d.authFailed = false
 	job, err := d.Plugin.handler.Pull(d.GetStreamPath(), d.PullProxyConfig.Pull, &pubConf)
 	if err != nil {
 		d.Plugin.Warn("pull failed", "streamPath", d.GetStreamPath(), "error", err)
@@ -178,6 +193,11 @@ func (d *BasePullProxy) Pull() {
 	// 这样设备重新上线时可以再次自动拉流
 	d.PullJob.OnDispose(func() {
 		d.pullStarted = false
+		// {{ AURA-X: Add - 记录鉴权失败，阻断后续探活与自动重拉. Confirmed via 寸止. }}
+		if d.StopRetryOnAuthFail && d.PullJob != nil && errors.Is(d.PullJob.StopReason(), pkg.ErrInvalidCredentials) {
+			d.authFailed = true
+			d.Plugin.Warn("auth failed, stop retry", "streamPath", d.GetStreamPath(), "pullProxyId", d.ID, "error", d.PullJob.StopReason())
+		}
 		d.Plugin.Debug("pull job disposed, reset pullStarted flag", "streamPath", d.GetStreamPath())
 	})
 }
@@ -300,21 +320,22 @@ func (s *Server) GetPullProxyList(ctx context.Context, req *emptypb.Empty) (res 
 	for _, conf := range pullProxyConfigs {
 		// 获取运行时状态信息（如果需要的话）
 		info := &pb.PullProxyInfo{
-			Name:           conf.Name,
-			CreateTime:     timestamppb.New(conf.CreatedAt),
-			UpdateTime:     timestamppb.New(conf.UpdatedAt),
-			Type:           conf.Type,
-			PullURL:        conf.URL,
-			ParentID:       uint32(conf.ParentID),
-			Status:         uint32(conf.Status),
-			ID:             uint32(conf.ID),
-			PullOnStart:    conf.PullOnStart,
-			StopOnIdle:     conf.StopOnIdle,
-			Audio:          conf.Audio,
-			RecordPath:     conf.Record.FilePath,
-			RecordFragment: durationpb.New(conf.Record.Fragment),
-			Description:    conf.Description,
-			StreamPath:     conf.GetStreamPath(),
+			Name:                conf.Name,
+			CreateTime:          timestamppb.New(conf.CreatedAt),
+			UpdateTime:          timestamppb.New(conf.UpdatedAt),
+			Type:                conf.Type,
+			PullURL:             conf.URL,
+			ParentID:            uint32(conf.ParentID),
+			Status:              uint32(conf.Status),
+			ID:                  uint32(conf.ID),
+			PullOnStart:         conf.PullOnStart,
+			StopOnIdle:          conf.StopOnIdle,
+			Audio:               conf.Audio,
+			RecordPath:          conf.Record.FilePath,
+			RecordFragment:      durationpb.New(conf.Record.Fragment),
+			Description:         conf.Description,
+			StreamPath:          conf.GetStreamPath(),
+			StopRetryOnAuthFail: conf.StopRetryOnAuthFail,
 		}
 		// 如果内存中有对应的设备，获取实时状态
 		if device, ok := s.PullProxies.Get(conf.ID); ok {
@@ -373,6 +394,12 @@ func (s *Server) AddPullProxy(ctx context.Context, req *pb.PullProxyInfo) (res *
 	pullProxyConfig.URL = req.PullURL
 	pullProxyConfig.Audio = req.Audio
 	pullProxyConfig.StopOnIdle = req.StopOnIdle
+	// REQ-RTSP-001：仅 RTSP 生效，其他协议忽略该开关
+	if strings.EqualFold(pullProxyConfig.Type, "rtsp") {
+		pullProxyConfig.StopRetryOnAuthFail = req.StopRetryOnAuthFail
+	} else if req.StopRetryOnAuthFail {
+		s.Debug("ignore stopRetryOnAuthFail for non-rtsp pull proxy", "type", pullProxyConfig.Type)
+	}
 	pullProxyConfig.Record.FilePath = req.RecordPath
 	pullProxyConfig.Record.Fragment = req.RecordFragment.AsDuration()
 	if req.CheckInterval != nil {
@@ -499,6 +526,14 @@ func (s *Server) UpdatePullProxy(ctx context.Context, req *pb.UpdatePullProxyReq
 	if target.CheckInterval == 0 {
 		target.CheckInterval = time.Second * 10
 	}
+	if req.StopRetryOnAuthFail != nil {
+		if strings.EqualFold(target.Type, "rtsp") {
+			target.StopRetryOnAuthFail = *req.StopRetryOnAuthFail
+		} else if *req.StopRetryOnAuthFail {
+			s.Debug("ignore stopRetryOnAuthFail for non-rtsp pull proxy", "type", target.Type, "id", req.ID)
+			target.StopRetryOnAuthFail = false
+		}
+	}
 	// 如果设置状态为非 disable，需要检查是否有相同 streamPath 的其他非 disable 代理
 	if req.Status != nil && *req.Status != uint32(PullProxyStatusDisabled) {
 		var existingCount int64
@@ -546,6 +581,7 @@ func (s *Server) UpdatePullProxy(ctx context.Context, req *pb.UpdatePullProxyReq
 			conf.PullOnStart = target.PullOnStart
 			conf.StopOnIdle = target.StopOnIdle
 			conf.Description = target.Description
+			conf.StopRetryOnAuthFail = target.StopRetryOnAuthFail
 			if conf.PullOnStart && conf.Status == PullProxyStatusOnline {
 				device.Pull()
 			} else if originalStatus == PullProxyStatusPulling {

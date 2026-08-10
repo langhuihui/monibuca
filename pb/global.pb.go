@@ -2989,8 +2989,10 @@ type PullProxyInfo struct {
 	Rtt            uint32                 `protobuf:"varint,15,opt,name=rtt,proto3" json:"rtt,omitempty"`                      // 平均RTT
 	StreamPath     string                 `protobuf:"bytes,16,opt,name=streamPath,proto3" json:"streamPath,omitempty"`         // 流路径
 	CheckInterval  *durationpb.Duration   `protobuf:"bytes,17,opt,name=checkInterval,proto3" json:"checkInterval,omitempty"`   // 检查间隔
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// REQ-RTSP-001: 鉴权失败时停止重连（主要用于 RTSP，默认 false）
+	StopRetryOnAuthFail bool `protobuf:"varint,18,opt,name=stopRetryOnAuthFail,proto3" json:"stopRetryOnAuthFail,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *PullProxyInfo) Reset() {
@@ -3142,6 +3144,13 @@ func (x *PullProxyInfo) GetCheckInterval() *durationpb.Duration {
 	return nil
 }
 
+func (x *PullProxyInfo) GetStopRetryOnAuthFail() bool {
+	if x != nil {
+		return x.StopRetryOnAuthFail
+	}
+	return false
+}
+
 type UpdatePullProxyRequest struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	ID             uint32                 `protobuf:"varint,1,opt,name=ID,proto3" json:"ID,omitempty"`
@@ -3158,8 +3167,10 @@ type UpdatePullProxyRequest struct {
 	RecordFragment *durationpb.Duration   `protobuf:"bytes,12,opt,name=recordFragment,proto3,oneof" json:"recordFragment,omitempty"` // 录制片段长度
 	StreamPath     *string                `protobuf:"bytes,13,opt,name=streamPath,proto3,oneof" json:"streamPath,omitempty"`         // 流路径
 	CheckInterval  *durationpb.Duration   `protobuf:"bytes,14,opt,name=checkInterval,proto3,oneof" json:"checkInterval,omitempty"`   // 检查间隔
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// REQ-RTSP-001: 鉴权失败时停止重连（主要用于 RTSP）
+	StopRetryOnAuthFail *bool `protobuf:"varint,15,opt,name=stopRetryOnAuthFail,proto3,oneof" json:"stopRetryOnAuthFail,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *UpdatePullProxyRequest) Reset() {
@@ -3288,6 +3299,13 @@ func (x *UpdatePullProxyRequest) GetCheckInterval() *durationpb.Duration {
 		return x.CheckInterval
 	}
 	return nil
+}
+
+func (x *UpdatePullProxyRequest) GetStopRetryOnAuthFail() bool {
+	if x != nil && x.StopRetryOnAuthFail != nil {
+		return *x.StopRetryOnAuthFail
+	}
+	return false
 }
 
 type PushProxyInfo struct {
@@ -6152,7 +6170,7 @@ const file_global_proto_rawDesc = "" +
 	"\x15PullProxyListResponse\x12\x12\n" +
 	"\x04code\x18\x01 \x01(\x05R\x04code\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12)\n" +
-	"\x04data\x18\x03 \x03(\v2\x15.global.PullProxyInfoR\x04data\"\xdd\x04\n" +
+	"\x04data\x18\x03 \x03(\v2\x15.global.PullProxyInfoR\x04data\"\x8f\x05\n" +
 	"\rPullProxyInfo\x12\x0e\n" +
 	"\x02ID\x18\x01 \x01(\rR\x02ID\x12:\n" +
 	"\n" +
@@ -6181,7 +6199,8 @@ const file_global_proto_rawDesc = "" +
 	"\n" +
 	"streamPath\x18\x10 \x01(\tR\n" +
 	"streamPath\x12?\n" +
-	"\rcheckInterval\x18\x11 \x01(\v2\x19.google.protobuf.DurationR\rcheckInterval\"\xcf\x05\n" +
+	"\rcheckInterval\x18\x11 \x01(\v2\x19.google.protobuf.DurationR\rcheckInterval\x120\n" +
+	"\x13stopRetryOnAuthFail\x18\x12 \x01(\bR\x13stopRetryOnAuthFail\"\x9e\x06\n" +
 	"\x16UpdatePullProxyRequest\x12\x0e\n" +
 	"\x02ID\x18\x01 \x01(\rR\x02ID\x12\x1f\n" +
 	"\bparentID\x18\x02 \x01(\rH\x00R\bparentID\x88\x01\x01\x12\x17\n" +
@@ -6204,7 +6223,8 @@ const file_global_proto_rawDesc = "" +
 	"\n" +
 	"streamPath\x18\r \x01(\tH\vR\n" +
 	"streamPath\x88\x01\x01\x12D\n" +
-	"\rcheckInterval\x18\x0e \x01(\v2\x19.google.protobuf.DurationH\fR\rcheckInterval\x88\x01\x01B\v\n" +
+	"\rcheckInterval\x18\x0e \x01(\v2\x19.google.protobuf.DurationH\fR\rcheckInterval\x88\x01\x01\x125\n" +
+	"\x13stopRetryOnAuthFail\x18\x0f \x01(\bH\rR\x13stopRetryOnAuthFail\x88\x01\x01B\v\n" +
 	"\t_parentIDB\a\n" +
 	"\x05_nameB\a\n" +
 	"\x05_typeB\t\n" +
@@ -6218,7 +6238,8 @@ const file_global_proto_rawDesc = "" +
 	"\v_recordPathB\x11\n" +
 	"\x0f_recordFragmentB\r\n" +
 	"\v_streamPathB\x10\n" +
-	"\x0e_checkInterval\"\x99\x03\n" +
+	"\x0e_checkIntervalB\x16\n" +
+	"\x14_stopRetryOnAuthFail\"\x99\x03\n" +
 	"\rPushProxyInfo\x12\x0e\n" +
 	"\x02ID\x18\x01 \x01(\rR\x02ID\x12:\n" +
 	"\n" +

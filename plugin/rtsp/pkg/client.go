@@ -1,6 +1,8 @@
 package rtsp
 
 import (
+	"errors"
+
 	task "github.com/langhuihui/gotask"
 	"m7s.live/v5/pkg/config"
 
@@ -80,8 +82,25 @@ func NewPusher() m7s.IPusher {
 	return client
 }
 
+// maybeStopRetryOnAuthFail 在开启 stopRetryOnAuthFail 且错误为鉴权失败时，将 MaxRetry 置 0 以立即停重试。
+// Confirmed via 寸止(REQ-RTSP-001)：不依赖厂商文案，仅识别 ErrInvalidCredentials。
+func (c *Client) maybeStopRetryOnAuthFail(err error) error {
+	if err == nil || c.direction != DIRECTION_PULL {
+		return err
+	}
+	if c.pullCtx.Pull == nil || !c.pullCtx.StopRetryOnAuthFail {
+		return err
+	}
+	if !errors.Is(err, pkg.ErrInvalidCredentials) {
+		return err
+	}
+	c.SetRetry(0, 0)
+	c.Warn("auth failed, stop retry", "streamPath", c.pullCtx.StreamPath, "url", c.pullCtx.RemoteURL, "error", err)
+	return err
+}
+
 func (c *Client) Run() (err error) {
-	if err = c.Options(); err != nil {
+	if err = c.maybeStopRetryOnAuthFail(c.Options()); err != nil {
 		return
 	}
 	if c.direction == DIRECTION_PULL {
@@ -89,7 +108,7 @@ func (c *Client) Run() (err error) {
 
 		var medias []*Media
 		if medias, err = c.Describe(); err != nil {
-			return
+			return c.maybeStopRetryOnAuthFail(err)
 		}
 		receiver := &Receiver{Publisher: c.pullCtx.Publisher, Stream: c.Stream}
 		if err = receiver.SetMedia(medias); err != nil {
