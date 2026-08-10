@@ -9,19 +9,23 @@ import (
 	"m7s.live/v5/pkg/util"
 
 	"m7s.live/v5"
+	"m7s.live/v5/plugin/rtsp/pb"
 	. "m7s.live/v5/plugin/rtsp/pkg"
 )
 
 var _ = m7s.InstallPlugin[RTSPPlugin](m7s.PluginMeta{
 	DefaultYaml: `tcp:
   listenaddr: :554`,
-	NewPuller:    NewPuller,
-	NewPusher:    NewPusher,
-	NewPullProxy: NewPullProxy,
-	NewPushProxy: NewPushProxy,
+	ServiceDesc:         &pb.Api_ServiceDesc,
+	RegisterGRPCHandler: pb.RegisterApiHandler,
+	NewPuller:           NewPuller,
+	NewPusher:           NewPusher,
+	NewPullProxy:        NewPullProxy,
+	NewPushProxy:        NewPushProxy,
 })
 
 type RTSPPlugin struct {
+	pb.UnimplementedApiServer
 	m7s.Plugin
 	UserName string             `desc:"用户名"`
 	Password string             `desc:"密码"`
