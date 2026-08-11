@@ -126,12 +126,18 @@ func (ll *LLMuxer) Run() (err error) {
 				ts := v.Timestamp
 				var au [][]byte
 				if subscriber.VideoReader.Value.IDR {
-					au = append(au, ctx.SPS(), ctx.PPS())
+					// 动态获取最新编码上下文，避免闭包捕获旧 SPS 导致 extractor 崩溃
+					if c := subscriber.Publisher.GetVideoCodecCtx(); c != nil {
+						if hc, ok := c.GetBase().(*codec.H264Ctx); ok {
+							au = append(au, hc.SPS(), hc.PPS())
+						}
+					}
 				}
 				for buffer := range v.Raw.(*pkg.Nalus).RangePoint {
 					au = append(au, buffer.Buffers...)
 				}
-				return ll.Muxer.WriteH264(time.Now().Add(ts-ll.Muxer.SegmentMinDuration), v.GetPTS(), au)
+				// GetPTS() 返回 90kHz tick 数，gohlslib 期望真实时间 Duration，改用 ts+v.CTS
+				return ll.Muxer.WriteH264(time.Now().Add(ts-ll.Muxer.SegmentMinDuration), ts+v.CTS, au)
 			}
 		case *codec.H265Ctx:
 			ll.Muxer.VideoTrack.Codec = &codecs.H265{
@@ -142,12 +148,17 @@ func (ll *LLMuxer) Run() (err error) {
 			videoFunc = func(v *pkg.AVFrame) (err error) {
 				var au [][]byte
 				if subscriber.VideoReader.Value.IDR {
-					au = append(au, ctx.VPS(), ctx.SPS(), ctx.PPS())
+					// 动态获取最新编码上下文
+					if c := subscriber.Publisher.GetVideoCodecCtx(); c != nil {
+						if hc, ok := c.GetBase().(*codec.H265Ctx); ok {
+							au = append(au, hc.VPS(), hc.SPS(), hc.PPS())
+						}
+					}
 				}
 				for buffer := range v.Raw.(*pkg.Nalus).RangePoint {
 					au = append(au, buffer.Buffers...)
 				}
-				return ll.Muxer.WriteH265(time.Now().Add(v.Timestamp-ll.Muxer.SegmentMinDuration), v.GetPTS(), au)
+				return ll.Muxer.WriteH265(time.Now().Add(v.Timestamp-ll.Muxer.SegmentMinDuration), v.Timestamp+v.CTS, au)
 			}
 		}
 	}
