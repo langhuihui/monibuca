@@ -3,6 +3,8 @@ package box
 import (
 	"bytes"
 	"io"
+
+	"m7s.live/v5/pkg/collections"
 )
 
 type (
@@ -21,11 +23,7 @@ type (
 )
 
 func (m *MoovBox) WriteTo(w io.Writer) (n int64, err error) {
-	var boxes []IBox
-	boxes = append(boxes, m.MVHD)
-	for _, track := range m.Tracks {
-		boxes = append(boxes, track)
-	}
+	boxes := append([]IBox{m.MVHD}, collections.Map(m.Tracks, func(t *TrakBox) IBox { return t })...)
 	if m.MVEX != nil {
 		boxes = append(boxes, m.MVEX)
 	}

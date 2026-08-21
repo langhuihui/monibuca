@@ -227,6 +227,8 @@ func (p *PullJob) SetProgressStepsDefs(defs []pkg.StepDef) {
 	if p.Progress == nil {
 		return
 	}
+	// Reset slice length while keeping the backing array to avoid reallocation
+	// when called repeatedly with similar-sized defs.
 	p.Progress.Steps = p.Progress.Steps[:0]
 	for _, d := range defs {
 		p.Progress.Steps = append(p.Progress.Steps, Step{Name: string(d.Name), Description: d.Description})

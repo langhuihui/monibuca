@@ -13,6 +13,7 @@ import (
 
 	m7s "m7s.live/v5"
 	"m7s.live/v5/pkg/codec"
+	"m7s.live/v5/pkg/collections"
 	"m7s.live/v5/pkg/util"
 	flv "m7s.live/v5/plugin/flv/pkg"
 	mp4 "m7s.live/v5/plugin/mp4/pkg"
@@ -152,28 +153,18 @@ func (plugin *FLVPlugin) hasOnlyMp4Records(fileInfoList []*fileInfo) bool {
 
 // filterFlvFiles 过滤FLV文件
 func (plugin *FLVPlugin) filterFlvFiles(fileInfoList []*fileInfo) []*fileInfo {
-	var filteredList []*fileInfo
-
-	for _, info := range fileInfoList {
-		if info.recordType == "flv" {
-			filteredList = append(filteredList, info)
-		}
-	}
-
+	filteredList := collections.Filter(fileInfoList, func(info *fileInfo) bool {
+		return info.recordType == "flv"
+	})
 	plugin.Debug("FLV files filtered", "original", len(fileInfoList), "filtered", len(filteredList))
 	return filteredList
 }
 
 // filterMp4Files 过滤MP4文件
 func (plugin *FLVPlugin) filterMp4Files(fileInfoList []*fileInfo) []*fileInfo {
-	var filteredList []*fileInfo
-
-	for _, info := range fileInfoList {
-		if info.recordType == "mp4" || info.recordType == "fmp4" {
-			filteredList = append(filteredList, info)
-		}
-	}
-
+	filteredList := collections.Filter(fileInfoList, func(info *fileInfo) bool {
+		return info.recordType == "mp4" || info.recordType == "fmp4"
+	})
 	plugin.Debug("MP4 files filtered", "original", len(fileInfoList), "filtered", len(filteredList))
 	return filteredList
 }
@@ -187,15 +178,14 @@ func (plugin *FLVPlugin) processMp4ToFlv(w http.ResponseWriter, r *http.Request,
 	w.Header().Set("Content-Disposition", "attachment")
 
 	// 创建MP4流列表
-	var mp4Streams []m7s.RecordStream
-	for _, info := range fileInfoList {
-		mp4Streams = append(mp4Streams, m7s.RecordStream{
+	mp4Streams := collections.Map(fileInfoList, func(info *fileInfo) m7s.RecordStream {
+		return m7s.RecordStream{
 			FilePath:  info.filePath,
 			StartTime: info.startTime,
 			EndTime:   info.endTime,
 			Type:      info.recordType,
-		})
-	}
+		}
+	})
 
 	// 创建DemuxerConverterRange进行MP4解复用和转换
 	demuxer := &mp4.DemuxerConverterRange[*rtmp.AudioFrame, *rtmp.VideoFrame]{

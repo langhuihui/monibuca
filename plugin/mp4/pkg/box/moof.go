@@ -3,6 +3,8 @@ package box
 import (
 	"bytes"
 	"io"
+
+	"m7s.live/v5/pkg/collections"
 )
 
 // aligned(8) class MovieFragmentBox extends Box('moof'){
@@ -34,10 +36,7 @@ func CreateTrackFragmentBox(tfhd *TrackFragmentHeaderBox, tfdt *TrackFragmentBas
 }
 
 func (box *MovieFragmentBox) WriteTo(w io.Writer) (n int64, err error) {
-	boxes := []IBox{box.MFHD}
-	for _, traf := range box.TRAFs {
-		boxes = append(boxes, traf)
-	}
+	boxes := append([]IBox{box.MFHD}, collections.Map(box.TRAFs, func(t *TrackFragmentBox) IBox { return t })...)
 	return WriteTo(w, boxes...)
 }
 
