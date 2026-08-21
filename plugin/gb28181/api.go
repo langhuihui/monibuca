@@ -18,6 +18,7 @@ import (
 	"github.com/gobwas/ws"
 	"gorm.io/gorm"
 	"m7s.live/v5"
+	"m7s.live/v5/pkg/collections"
 	"m7s.live/v5/pkg/util"
 
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -1157,8 +1158,8 @@ func (gb *GB28181Plugin) ListPlatforms(ctx context.Context, req *pb.ListPlatform
 	}
 
 	// 转换为proto消息
-	for _, p := range pagePlatforms {
-		pbPlatforms = append(pbPlatforms, &pb.Platform{
+	pbPlatforms = collections.Map(pagePlatforms, func(p *Platform) *pb.Platform {
+		return &pb.Platform{
 			Enable:                  p.PlatformModel.Enable,
 			Name:                    p.PlatformModel.Name,
 			ServerGBId:              p.PlatformModel.ServerGBID,
@@ -1200,8 +1201,8 @@ func (gb *GB28181Plugin) ListPlatforms(ctx context.Context, req *pb.ListPlatform
 			RegisterWay:             int32(p.PlatformModel.RegisterWay),
 			Secrecy:                 int32(p.PlatformModel.Secrecy),
 			ReadOnly:                p.PlatformModel.ReadOnly,
-		})
-	}
+		}
+	})
 
 	resp.Data = pbPlatforms
 	resp.Code = 0

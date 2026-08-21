@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/pion/sdp/v3"
+	"m7s.live/v5/pkg/collections"
 )
 
 // Media take best from:
@@ -161,9 +162,9 @@ func UnmarshalMedia(md *sdp.MediaDescription) *Media {
 		}
 	}
 
-	for _, format := range md.MediaName.Formats {
-		m.Codecs = append(m.Codecs, UnmarshalCodec(md, format))
-	}
+	m.Codecs = collections.Map(md.MediaName.Formats, func(format string) *Codec {
+		return UnmarshalCodec(md, format)
+	})
 
 	return m
 }

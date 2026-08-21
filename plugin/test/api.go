@@ -17,6 +17,7 @@ import (
 	task "github.com/langhuihui/gotask"
 	"m7s.live/v5"
 	pb "m7s.live/v5/pb"
+	"m7s.live/v5/pkg/collections"
 	"m7s.live/v5/pkg/config"
 	"m7s.live/v5/pkg/util"
 	flv "m7s.live/v5/plugin/flv/pkg"
@@ -56,15 +57,13 @@ func ToPBTestCase(tc *TestCase) *testpb.TestCase {
 }
 
 func ToPBTestTasks(tasks []TestTaskConfig) []*testpb.TestTask {
-	pbTasks := make([]*testpb.TestTask, 0, len(tasks))
-	for _, task := range tasks {
-		pbTasks = append(pbTasks, &testpb.TestTask{
+	return collections.Map(tasks, func(task TestTaskConfig) *testpb.TestTask {
+		return &testpb.TestTask{
 			Action: task.Action,
 			Delay:  durationpb.New(task.Delay),
 			Format: task.Format,
-		})
-	}
-	return pbTasks
+		}
+	})
 }
 
 // ========== Protobuf Gateway API 实现 ========== //
@@ -79,11 +78,7 @@ func (p *TestPlugin) ListTestCases(ctx context.Context, req *testpb.ListTestCase
 	// 从缓存获取测试用例
 	allCases := p.GetTestCasesFromCache(filter)
 
-	// 转换为 protobuf 格式
-	pbCases := make([]*testpb.TestCase, 0, len(allCases))
-	for _, tc := range allCases {
-		pbCases = append(pbCases, ToPBTestCase(tc))
-	}
+	pbCases := collections.Map(allCases, ToPBTestCase)
 
 	return &testpb.ListTestCasesResponse{
 		Code: 0, Message: "success", Data: pbCases,

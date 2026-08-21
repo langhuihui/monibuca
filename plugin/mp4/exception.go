@@ -10,6 +10,7 @@ import (
 	"github.com/shirou/gopsutil/v4/disk"
 	"gorm.io/gorm"
 	"m7s.live/v5"
+	"m7s.live/v5/pkg/collections"
 	"m7s.live/v5/pkg/storage"
 )
 
@@ -96,10 +97,7 @@ func (p *DeleteRecordTask) deleteOldestFile() {
 	}
 
 	// 将 map 转换为 slice
-	var filePaths []string
-	for path := range pathMap {
-		filePaths = append(filePaths, path)
-	}
+	filePaths := collections.Keys(pathMap)
 	p.Debug("deleteOldestFile", "stage", "after onpub.record", "count", len(filePaths))
 	if p.plugin.EventRecordFilePath != "" {
 		// 同样处理EventRecordFilePath

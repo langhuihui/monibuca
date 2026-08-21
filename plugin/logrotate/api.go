@@ -9,25 +9,24 @@ import (
 
 	"github.com/phsym/console-slog"
 	"google.golang.org/protobuf/types/known/emptypb"
+	"m7s.live/v5/pkg/collections"
 	"m7s.live/v5/pkg/util"
 	"m7s.live/v5/plugin/logrotate/pb"
 )
 
 func (h *LogRotatePlugin) List(context.Context, *emptypb.Empty) (*pb.ResponseFileInfo, error) {
 	dir, err := os.Open(h.Path)
-	if err == nil {
-		var files []os.FileInfo
-		if files, err = dir.Readdir(0); err == nil {
-			var fileInfos []*pb.FileInfo
-			for _, info := range files {
-				fileInfos = append(fileInfos, &pb.FileInfo{
-					Name: info.Name(), Size: info.Size(),
-				})
-			}
-			return &pb.ResponseFileInfo{Data: fileInfos}, nil
-		}
+	if err != nil {
+		return nil, err
 	}
-	return nil, err
+	files, err := dir.Readdir(0)
+	if err != nil {
+		return nil, err
+	}
+	fileInfos := collections.Map(files, func(info os.FileInfo) *pb.FileInfo {
+		return &pb.FileInfo{Name: info.Name(), Size: info.Size()}
+	})
+	return &pb.ResponseFileInfo{Data: fileInfos}, nil
 }
 
 func (h *LogRotatePlugin) Get(_ context.Context, req *pb.RequestFileInfo) (res *pb.ResponseOpen, err error) {

@@ -85,9 +85,18 @@ func (c *Collection[K, T]) Set(item T) (added bool) {
 func (c *Collection[K, T]) Range(f func(T) bool) {
 	if c.L != nil {
 		c.L.RLock()
-		defer c.L.RUnlock()
 	}
-	for _, item := range c.Items {
+	// Take a snapshot under the read lock so the copy is consistent.
+	// The lock is released before calling f so that f may itself call
+	// mutation methods on c (e.g. Remove) without deadlocking. Concurrent
+	// writes from other goroutines during the iteration are safe because
+	// f operates on the local snapshot, not c.Items.
+	items := make([]T, len(c.Items))
+	copy(items, c.Items)
+	if c.L != nil {
+		c.L.RUnlock()
+	}
+	for _, item := range items {
 		if !f(item) {
 			break
 		}

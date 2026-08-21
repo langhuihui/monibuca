@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"google.golang.org/protobuf/types/known/timestamppb"
+	"m7s.live/v5/pkg/collections"
 	cronpb "m7s.live/v5/plugin/crontab/pb"
 	"m7s.live/v5/plugin/crontab/pkg"
 )
@@ -38,17 +39,16 @@ func (ct *CrontabPlugin) List(ctx context.Context, req *cronpb.ReqPlanList) (*cr
 	// 获取当前页的数据
 	pagePlans := plans[start:end]
 
-	data := make([]*cronpb.Plan, 0, len(pagePlans))
-	for _, plan := range pagePlans {
-		data = append(data, &cronpb.Plan{
+	data := collections.Map(pagePlans, func(plan *pkg.RecordPlan) *cronpb.Plan {
+		return &cronpb.Plan{
 			Id:         uint32(plan.ID),
 			Name:       plan.Name,
 			Enable:     plan.Enable,
 			CreateTime: timestamppb.New(plan.CreatedAt),
 			UpdateTime: timestamppb.New(plan.UpdatedAt),
 			Plan:       plan.Plan,
-		})
-	}
+		}
+	})
 
 	return &cronpb.PlanResponseList{
 		Code:       0,
@@ -312,9 +312,8 @@ func (ct *CrontabPlugin) ListRecordPlanStreams(ctx context.Context, req *cronpb.
 		}, nil
 	}
 
-	data := make([]*cronpb.PlanStream, 0, len(streams))
-	for _, stream := range streams {
-		data = append(data, &cronpb.PlanStream{
+	data := collections.Map(streams, func(stream pkg.RecordPlanStream) *cronpb.PlanStream {
+		return &cronpb.PlanStream{
 			PlanId:     uint32(stream.PlanID),
 			StreamPath: stream.StreamPath,
 			Fragment:   stream.Fragment,
@@ -323,8 +322,8 @@ func (ct *CrontabPlugin) ListRecordPlanStreams(ctx context.Context, req *cronpb.
 			UpdatedAt:  timestamppb.New(stream.UpdatedAt),
 			Enable:     stream.Enable,
 			RecordType: stream.RecordType,
-		})
-	}
+		}
+	})
 
 	return &cronpb.RecordPlanStreamResponseList{
 		Code:       0,
