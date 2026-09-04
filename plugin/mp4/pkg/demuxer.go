@@ -63,6 +63,18 @@ func NewDemuxer(r io.ReadSeeker) *Demuxer {
 	}
 }
 
+// findTrackByID 按 TrackId 查找，不能用 Tracks[id-1]：
+// moov 内 trak 顺序来自 map 遍历，与 TrackId 不一定一致（曾导致音视频样本写错轨）。
+// Confirmed via 寸止: BUG 回归自 REQ-MP4-001 / 57541af3
+func (d *Demuxer) findTrackByID(id uint32) *Track {
+	for _, t := range d.Tracks {
+		if t != nil && t.TrackId == id {
+			return t
+		}
+	}
+	return nil
+}
+
 // appendMoofSamples 将 moof/traf/trun 解析为绝对文件偏移的 Sample，追加到对应 Track。
 // Confirmed via 寸止: REQ-MP4-001 方案 B / M2 — 支持完整与进行中的 fmp4 点播
 func (d *Demuxer) appendMoofSamples(moofOffset uint64, moof *MovieFragmentBox) {
@@ -71,10 +83,10 @@ func (d *Demuxer) appendMoofSamples(moofOffset uint64, moof *MovieFragmentBox) {
 			continue
 		}
 		trackID := traf.TFHD.TrackID
-		if trackID == 0 || int(trackID) > len(d.Tracks) {
+		track := d.findTrackByID(trackID)
+		if track == nil {
 			continue
 		}
-		track := d.Tracks[trackID-1]
 		tfFlags := uint32(traf.TFHD.Flags[0])<<16 | uint32(traf.TFHD.Flags[1])<<8 | uint32(traf.TFHD.Flags[2])
 		var baseDataOffset uint64
 		switch {

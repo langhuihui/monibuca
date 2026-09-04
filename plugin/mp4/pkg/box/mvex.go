@@ -77,8 +77,11 @@ func (box *MovieExtendsBox) Unmarshal(buf []byte) (IBox, error) {
 		if err != nil {
 			break
 		}
-		if trex, ok := b.(*TrackExtendsBox); ok {
-			box.Trexs = append(box.Trexs, trex)
+		switch v := b.(type) {
+		case *MovieExtendsHeaderBox:
+			box.Mehd = v
+		case *TrackExtendsBox:
+			box.Trexs = append(box.Trexs, v)
 		}
 	}
 	return box, nil
