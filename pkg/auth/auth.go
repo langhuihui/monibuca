@@ -3,17 +3,46 @@ package auth
 import (
 	"errors"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 )
 
+const (
+	// DefaultSecretKey 代码默认 JWT 签名密钥
+	DefaultSecretKey = "m7s_secret_key"
+	// EnvSecretKey 环境变量名，优先级高于配置文件
+	EnvSecretKey = "M7S_SECRET_KEY"
+)
+
 var (
-	jwtSecret = []byte("m7s_secret_key") // In production, this should be properly configured
+	jwtSecret = []byte(DefaultSecretKey)
 	tokenTTL  = 24 * time.Hour
 	// Add refresh threshold - refresh token if it expires in less than 30 minutes
 	refreshThreshold = 30 * time.Minute
 )
+
+// SetSecretKey 设置 JWT 签名密钥；空字符串忽略
+func SetSecretKey(key string) {
+	if key == "" {
+		return
+	}
+	jwtSecret = []byte(key)
+}
+
+// InitSecretKey 按优先级初始化密钥：环境变量 M7S_SECRET_KEY > 配置值 > 代码默认值
+func InitSecretKey(configKey string) {
+	if env := os.Getenv(EnvSecretKey); env != "" {
+		SetSecretKey(env)
+		return
+	}
+	if configKey != "" {
+		SetSecretKey(configKey)
+		return
+	}
+	SetSecretKey(DefaultSecretKey)
+}
 
 // JWTClaims represents the JWT claims
 type JWTClaims struct {

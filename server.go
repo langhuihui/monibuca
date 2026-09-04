@@ -38,6 +38,7 @@ import (
 	"gorm.io/gorm"
 	"m7s.live/v5/pb"
 	. "m7s.live/v5/pkg"
+	"m7s.live/v5/pkg/auth"
 	"m7s.live/v5/pkg/db"
 	"m7s.live/v5/pkg/util"
 )
@@ -74,7 +75,9 @@ type (
 			EnableLogin    bool   `default:"false" desc:"启用登录机制"` //启用登录机制
 			FilePath       string `default:"admin.zip" desc:"管理员界面文件路径"`
 			HomePage       string `default:"home" desc:"管理员界面首页"`
-			Users          []struct {
+			// SecretKey JWT 签名密钥；也可用环境变量 M7S_SECRET_KEY 覆盖（优先级更高）
+			SecretKey string `default:"m7s_secret_key" desc:"JWT签名密钥,可用环境变量M7S_SECRET_KEY覆盖"`
+			Users     []struct {
 				Username string `desc:"用户名"`
 				Password string `desc:"密码"`
 				Role     string `default:"user" desc:"角色,可选值:admin,user"`
@@ -273,6 +276,8 @@ func (s *Server) Start() (err error) {
 	if cg != nil {
 		s.Config.ParseUserFile(cg["global"])
 	}
+	// JWT 密钥：M7S_SECRET_KEY > global.admin.secretkey > 默认 m7s_secret_key
+	auth.InitSecretKey(s.ServerConfig.Admin.SecretKey)
 	s.LogHandler.SetLevel(ParseLevel(s.config.LogLevel))
 	s.initStorage()
 	err = debug.SetCrashOutput(util.InitFatalLog(s.FatalDir), debug.CrashOptions{})
