@@ -401,6 +401,19 @@
         ext = '.m3u8';
         break;
     }
+    function buildVodQueryString() {
+      return ['start', 'end', 'loop']
+        .filter(function (key) { return query.has(key); })
+        .map(function (key) { return key + '=' + encodeURIComponent(query.get(key)); })
+        .join('&');
+    }
+
+    function appendVodQuery(url) {
+      const vodQuery = buildVodQueryString();
+      if (!vodQuery || !url || url.includes('start=') || url.includes('end=')) return url;
+      return url + (url.includes('?') ? '&' : '?') + vodQuery;
+    }
+
     $playHref.value = (type.startsWith('ws') ? (isHttps ? "wss://" : "ws://") + location.host : location.origin) + location.pathname.replace('preview', pluginName) + ext;
     switch (type) {
       case 'webrtc':
@@ -410,22 +423,78 @@
         $playHref.value = 'wt://' + location.hostname + ':4433' + location.pathname.replace('preview', 'play');
         break;
     }
+    $playHref.value = appendVodQuery($playHref.value);
+
+    function isVodPlaybackUrl(url) {
+      return !!(url && (url.includes('start=') || url.includes('end=')));
+    }
+
+    function isVodSpeedMode() {
+      var speed = parseFloat($playbackSpeed.value) || 1;
+      return isVodPlaybackUrl($playHref.value) && speed !== 1;
+    }
+
+    // 点播倍速：Jessibuca MSE 无法稳定倍速，自动切 WCS
+    function getEffectiveDecoderMode() {
+      if (isVodSpeedMode()) {
+        return { useMSE: false, useWCS: true, useSIMD: false, autoWcsForVodSpeed: true };
+      }
+      return {
+        useMSE: $useMSE.checked === true,
+        useWCS: $useWCS.checked === true,
+        useSIMD: $useSIMD.checked === true,
+        autoWcsForVodSpeed: false
+      };
+    }
+
+    function isPlayerUsingMse() {
+      return !!(jessibuca && jessibuca.player && jessibuca.player._opt && jessibuca.player._opt.useMSE);
+    }
+
+    function getVodSpeedBufferOptions(isVod, playbackSpeed) {
+      var isVodSpeed = isVod && playbackSpeed !== 1;
+      if (!isVodSpeed) {
+        return {
+          videoBuffer: isVod ? Math.max(Number($videoBuffer.value) || 0, 0.5) : Number($videoBuffer.value),
+          videoBufferDelay: Number($videoBufferDelay.value)
+        };
+      }
+      // WCS 点播倍速：加大缓冲减少 dropBuffer 跳帧
+      return {
+        videoBuffer: 2,
+        videoBufferDelay: 30
+      };
+    }
+
     function create() {
-      jessibuca = new JessibucaPro({
+      const playUrl = $playHref.value || '';
+      const isVod = isVodPlaybackUrl(playUrl);
+      const playbackSpeed = parseFloat($playbackSpeed.value) || 1;
+      const decoderMode = getEffectiveDecoderMode();
+      const bufferOpts = getVodSpeedBufferOptions(isVod, playbackSpeed);
+      // Jessibuca 要求 videoBuffer < heartTimeout；不能用 0，否则初始化直接抛错黑屏
+      const isVodSpeed = isVod && playbackSpeed !== 1;
+      const heartTimeout = isVodSpeed
+        ? Math.max(3600, bufferOpts.videoBuffer + 1)
+        : (isVod ? 120 : 10);
+      var playerOptions = {
         container: $container,
-        videoBuffer: Number($videoBuffer.value), // 缓存时长
-        videoBufferDelay: Number($videoBufferDelay.value), // 1000s
+        videoBuffer: bufferOpts.videoBuffer,
+        videoBufferDelay: bufferOpts.videoBufferDelay,
+        playbackForwardMaxRateDecodeIFrame: isVodSpeed
+          ? Math.max(32, Math.ceil(playbackSpeed) + 1)
+          : 32,
         isResize: false,
         text: "",
         loadingText: "加载中",
         debug: true,
         isEmitSEI: true,
         debugLevel: "debug",
-        useMSE: $useMSE.checked === true,
-        useSIMD: $useSIMD.checked === true,
-        useWCS: $useWCS.checked === true,
-        showBandwidth: showOperateBtns, // 显示网速
-        showPerformance: showOperateBtns, // 显示性能
+        useMSE: decoderMode.useMSE,
+        useSIMD: decoderMode.useSIMD,
+        useWCS: decoderMode.useWCS,
+        showBandwidth: showOperateBtns,
+        showPerformance: showOperateBtns,
         operateBtns: {
           fullscreen: showOperateBtns,
           screenshot: showOperateBtns,
@@ -440,10 +509,25 @@
         qualityConfig: ['普清', '高清', '超清', '4K', '8K'],
         forceNoOffscreen: forceNoOffscreen,
         isNotMute: false,
-        heartTimeout: 10,
-        // isFlv: true
-      },);
-
+        // 点播高倍速：heartTimeout 取大值（≥1h）避免 ~1min 误判；须大于 videoBuffer
+        heartTimeout: heartTimeout,
+        heartTimeoutReplay: isVodSpeed ? false : !isVod,
+        loadingTimeout: isVod ? 30 : 10,
+        pageVisibilityHiddenTimeout: isVodSpeed ? 3600 : 300,
+      };
+      if (bufferOpts.mseAutoCleanupSourceBuffer === false) {
+        playerOptions.mseAutoCleanupSourceBuffer = false;
+      }
+      if (bufferOpts.mseAutoCleanupMaxBackwardDuration) {
+        playerOptions.mseAutoCleanupMaxBackwardDuration = bufferOpts.mseAutoCleanupMaxBackwardDuration;
+      }
+      if (bufferOpts.mseAutoCleanupMinBackwardDuration) {
+        playerOptions.mseAutoCleanupMinBackwardDuration = bufferOpts.mseAutoCleanupMinBackwardDuration;
+      }
+      if (bufferOpts.mseCorrectTimeDuration) {
+        playerOptions.mseCorrectTimeDuration = bufferOpts.mseCorrectTimeDuration;
+      }
+      jessibuca = new JessibucaPro(playerOptions);
 
       jessibuca.on('ptz', (arrow) => {
         console.log('ptz', arrow);
@@ -460,13 +544,24 @@
         console.warn(`videoSEI ts is ${value.ts}, data is ${value.data}`);
       });
       jessibuca.on('stats', (stats) => {
-        // console.log('stats', stats);
         $fps.textContent = `FPS: ${stats.fps} DFPS: ${stats.dfps}`;
       });
 
       jessibuca.on(JessibucaPro.EVENTS.crashLog, (log) => {
         console.log('crashLog', log);
       });
+
+      if (JessibucaPro.EVENTS.timeout) {
+        jessibuca.on(JessibucaPro.EVENTS.timeout, () => {
+          console.warn('player timeout, re-apply playback speed');
+          applyCurrentPlaybackSpeed();
+        });
+      }
+      if (JessibucaPro.EVENTS.playing) {
+        jessibuca.on(JessibucaPro.EVENTS.playing, () => {
+          applyCurrentPlaybackSpeed();
+        });
+      }
 
 
       $player.style.display = 'inline-block';
@@ -478,14 +573,102 @@
 
     create();
 
+    function extractStreamPath(url) {
+      if (!url) return '';
+      if (url.startsWith('webrtc://')) {
+        const pathParts = url.replace('webrtc://', '').split('/');
+        pathParts.shift();
+        let streamPath = pathParts.join('/');
+        if (streamPath.includes('/play')) {
+          streamPath = streamPath.replace('/play', '');
+        }
+        return streamPath;
+      }
+      if (url.startsWith('wt://')) {
+        const pathParts = url.replace('wt://', '').split('/');
+        pathParts.shift();
+        let streamPath = pathParts.join('/');
+        if (streamPath.includes('play')) {
+          streamPath = streamPath.replace('play', '');
+        }
+        return streamPath;
+      }
+      try {
+        const parsedUrl = new URL(url);
+        const pathSegments = parsedUrl.pathname.split('/');
+        pathSegments.shift();
+        pathSegments.shift();
+        let streamPath = pathSegments.join('/');
+        const extensionIndex = streamPath.lastIndexOf('.');
+        if (extensionIndex !== -1) {
+          streamPath = streamPath.substring(0, extensionIndex);
+        }
+        return streamPath;
+      } catch (e) {
+        console.error('Failed to parse URL:', e);
+        return '';
+      }
+    }
+
+    function applyServerPlaybackSpeed(speed) {
+      const streamPath = extractStreamPath($playHref.value);
+      if (!streamPath) return Promise.resolve();
+      const apiUrl = `${window.location.origin}/api/stream/speed/${streamPath}`;
+      return fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ speed: speed })
+      }).then(response => {
+        if (!response.ok) throw new Error('Network response was not ok');
+        return response.json();
+      }).then(data => {
+        console.log('Speed change API response:', data);
+      }).catch(error => {
+        console.error('Error calling speed change API:', error);
+      });
+    }
+
+    function setPlayerRateIfSupported(playerPart, rate) {
+      if (playerPart && typeof playerPart.setRate === 'function') {
+        playerPart.setRate(rate);
+      }
+    }
+
+    // 点播倍速自动走 WCS：服务端 N× + video/audio setRate
+    function applyJessibucaDecodeRate(speed, retryCount) {
+      retryCount = retryCount || 0;
+      var rate = Number(speed) || 1;
+      if (!jessibuca) return;
+      if (isPlayerUsingMse()) return;
+      if (!jessibuca.player) {
+        if (retryCount < 20) {
+          setTimeout(function () { applyJessibucaDecodeRate(speed, retryCount + 1); }, 200);
+        }
+        return;
+      }
+      setPlayerRateIfSupported(jessibuca.player.video, rate);
+      setPlayerRateIfSupported(jessibuca.player.audio, rate);
+      if (typeof jessibuca.updatePlaybackForwardMaxRateDecodeIFrame === 'function') {
+        jessibuca.updatePlaybackForwardMaxRateDecodeIFrame(Math.max(32, Math.ceil(rate) + 1));
+      }
+    }
+
+    function applyCurrentPlaybackSpeed() {
+      if (!jessibuca) return;
+      const speed = parseFloat($playbackSpeed.value) || 1;
+      applyServerPlaybackSpeed(speed).then(function () {
+        applyJessibucaDecodeRate(speed);
+      });
+    }
+
     function play() {
       var href = $playHref.value;
-      if (href) {
-        jessibuca.play(href);
-        $player.style.display = 'none';
-        $pause.style.display = 'inline-block';
-        $destroy.style.display = 'inline-block';
-      }
+      if (!href) return;
+      jessibuca.play(href);
+      $player.style.display = 'none';
+      $pause.style.display = 'inline-block';
+      $destroy.style.display = 'inline-block';
+      applyCurrentPlaybackSpeed();
     }
 
 
@@ -556,93 +739,23 @@
     });
 
     $protocol.addEventListener('change', function () {
+      var nextQuery = new URLSearchParams(location.search);
+      nextQuery.set('type', $protocol.value);
+      var qs = nextQuery.toString();
       if ($protocol.value === 'webtransport')
-        location.replace('https://local.monibuca.com:8443' + location.pathname + '?type=' + $protocol.value);
+        location.replace('https://local.monibuca.com:8443' + location.pathname + (qs ? '?' + qs : ''));
       else
-        location.replace(location.origin + location.pathname + '?type=' + $protocol.value);
+        location.replace(location.origin + location.pathname + (qs ? '?' + qs : ''));
     });
 
     $playbackSpeed.addEventListener('change', function () {
-      if (jessibuca) {
-        const speed = parseFloat($playbackSpeed.value);
-        //jessibuca.setPlaybackRate(speed);
-        console.log('Playback speed set to:', speed);
-
-        // Extract streamPath from $playHref.value
-        const url = $playHref.value;
-        let streamPath = '';
-
-        if (url) {
-          // Parse the URL to extract the path
-          let parsedUrl;
-          if (url.startsWith('webrtc://')) {
-            // Handle webrtc URL format
-            const urlWithoutProtocol = url.replace('webrtc://', '');
-            const pathParts = urlWithoutProtocol.split('/');
-            pathParts.shift(); // Remove host part
-            streamPath = pathParts.join('/');
-            if (streamPath.includes('/play')) {
-              streamPath = streamPath.replace('/play', '');
-            }
-          } else if (url.startsWith('wt://')) {
-            // Handle webtransport URL format
-            const urlWithoutProtocol = url.replace('wt://', '');
-            const pathParts = urlWithoutProtocol.split('/');
-            pathParts.shift(); // Remove host part
-            streamPath = pathParts.join('/');
-            if (streamPath.includes('play')) {
-              streamPath = streamPath.replace('play', '');
-            }
-          } else {
-            // Handle standard URL format
-            try {
-              parsedUrl = new URL(url);
-              const pathSegments = parsedUrl.pathname.split('/');
-              // Remove first empty segment and the plugin name (first non-empty segment)
-              pathSegments.shift(); // Remove empty first segment
-              pathSegments.shift(); // Remove plugin name
-
-              // Join the remaining segments to form the streamPath
-              streamPath = pathSegments.join('/');
-
-              // Remove file extension if present
-              const extensionIndex = streamPath.lastIndexOf('.');
-              if (extensionIndex !== -1) {
-                streamPath = streamPath.substring(0, extensionIndex);
-              }
-            } catch (e) {
-              console.error('Failed to parse URL:', e);
-            }
-          }
-
-          if (streamPath) {
-            // Construct API endpoint
-            const currentUrl = window.location.origin;
-            const apiUrl = `${currentUrl}/api/stream/speed/${streamPath}`;
-
-            // Make POST request
-            fetch(apiUrl, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({ speed: speed })
-            })
-              .then(response => {
-                if (!response.ok) {
-                  throw new Error('Network response was not ok');
-                }
-                return response.json();
-              })
-              .then(data => {
-                console.log('Speed change API response:', data);
-              })
-              .catch(error => {
-                console.error('Error calling speed change API:', error);
-              });
-          }
-        }
+      var speed = parseFloat($playbackSpeed.value) || 1;
+      var isVod = isVodPlaybackUrl($playHref.value);
+      if (isVod && speed !== 1) {
+        replay();
+        return;
       }
+      applyCurrentPlaybackSpeed();
     });
   </script>
 
