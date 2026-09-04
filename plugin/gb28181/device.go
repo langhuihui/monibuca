@@ -226,6 +226,40 @@ type catalogHandlerTask struct {
 	msg *gb28181.Message
 }
 
+// clearDeviceChannelsLocked 清空本设备通道：先按 key 从 plugin.channels 删除，再 Clear d.channels。
+// 不会清空其他设备的全局通道。调用方须持有 d.catalogMu。
+func (d *Device) clearDeviceChannelsLocked() {
+	var keys []string
+	d.channels.Range(func(channel *Channel) bool {
+		keys = append(keys, channel.ID)
+		return true
+	})
+	// 兼清全局集合中挂在本设备上、但不在 d.channels 里的残留（历史 Clear 未同步删除导致）
+	if d.plugin != nil {
+		d.plugin.channels.Range(func(ch *Channel) bool {
+			if ch == nil {
+				return true
+			}
+			if ch.Device == d || (ch.Device != nil && ch.Device.DeviceId == d.DeviceId) {
+				keys = append(keys, ch.ID)
+			}
+			return true
+		})
+		seen := make(map[string]struct{}, len(keys))
+		for _, key := range keys {
+			if key == "" {
+				continue
+			}
+			if _, ok := seen[key]; ok {
+				continue
+			}
+			seen[key] = struct{}{}
+			d.plugin.channels.RemoveByKey(key)
+		}
+	}
+	d.channels.Clear()
+}
+
 // finishCatalogLocked 结束一次 Catalog 收尾并落库。调用方必须持有 d.catalogMu。
 func (d *Device) finishCatalogLocked(catalogReq *CatalogRequest, timedOut bool) {
 	if catalogReq == nil || catalogReq.finished {
@@ -369,7 +403,8 @@ func (c *catalogHandlerTask) runLocked() (err error) {
 		d.Warn("AGENT_DEBUG", "sessionId", "1d2dbd", "hypothesisId", "D", "location", "catalogHandlerTask.Run/clear",
 			"msg", "isFirst_clear", "sn", msg.SN, "sumNum", msg.SumNum)
 		// #endregion
-		d.channels.Clear()
+		// Confirmed via 寸止: 方案A — 同步按 key 清理插件全局 channels，避免 channel/list 残留与 list 展开不一致
+		d.clearDeviceChannelsLocked()
 		d.ChannelCount = msg.SumNum
 		d.Debug("清空通道列表，开始接收Catalog响应", "SN", msg.SN, "SumNum", msg.SumNum)
 	}
