@@ -46,6 +46,10 @@ func (c *Client) Start() (err error) {
 			c.pullCtx.Fail(err.Error())
 			return
 		}
+		// {{ AURA-X: Add - 拉流代理 ReadTimeout 传到媒体连接. Confirmed via 寸止 BUG-021 R1. }}
+		if pub := c.pullCtx.Publisher; pub != nil && pub.PullProxyConfig != nil && pub.PullProxyConfig.ReadTimeout > 0 {
+			c.NetConnection.ReadTimeout = pub.PullProxyConfig.ReadTimeout
+		}
 		if err = c.NetConnection.Connect(c.pullCtx.Context, c.pullCtx.RemoteURL); err != nil {
 			c.pullCtx.Fail(err.Error())
 			return

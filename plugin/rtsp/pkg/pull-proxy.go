@@ -60,12 +60,21 @@ func (d *RTSPPullProxy) GetTickInterval() time.Duration {
 	return time.Second * 5
 }
 
+func (d *RTSPPullProxy) applyReadTimeout() {
+	to := d.ReadTimeout
+	if to <= 0 {
+		to = DefaultReadTimeout
+	}
+	d.conn.ReadTimeout = to
+}
+
 func (d *RTSPPullProxy) Tick(any) {
 	// {{ AURA-X: Add - 鉴权失败停重试后不再用错误凭据做 OPTIONS/Connect 探活，避免设备锁定. Confirmed via 寸止. }}
 	if d.StopRetryOnAuthFail && d.GetBase().IsAuthFailed() {
 		return
 	}
 	var err error
+	d.applyReadTimeout()
 	switch d.Status {
 	case m7s.PullProxyStatusOffline:
 		err = d.conn.Connect(d.Context, d.PullProxyConfig.URL)

@@ -179,6 +179,9 @@ type Recorder struct {
 	videoTrack       *Track
 	lastProgressDB   time.Time // fmp4 上次刷新 EndTime 的墙钟，用于节流
 	progressClosedID uint      // 已交给 writeTrailer 定稿的记录 ID，禁止再被进度刷新回退
+	// lastSampleWriteTime：最后成功写入样本的帧墙钟，Dispose 收尾用它写 EndTime，避免断流读超时把区间拖长。
+	// Confirmed via 寸止: BUG-021 方案 B
+	lastSampleWriteTime time.Time
 }
 
 // maybeFlushProgress 节流更新进行中 fmp4 记录的 EndTime/Duration，供 list/点播查询命中。
@@ -243,6 +246,7 @@ func (r *Recorder) createStream(start time.Time) (err error) {
 		r.RecordJob.RecConf.Type = "mp4"
 	}
 	r.lastProgressDB = time.Time{}
+	r.lastSampleWriteTime = time.Time{}
 	t0 := time.Now()
 	err = r.CreateStream(start, CustomFileName)
 	r.Info("createStream step1 CreateStream", "elapsed", time.Since(t0))
@@ -374,7 +378,12 @@ func (r *Recorder) Dispose() {
 		return
 	}
 	if r.muxer != nil {
-		r.writeTailer(time.Now())
+		// {{ AURA-X: Modify - Dispose 用最后一帧 WriteTime 写 EndTime，与 checkFragment 一致；无样本则回退 Now. Confirmed via 寸止 BUG-021 B. }}
+		end := time.Now()
+		if !r.lastSampleWriteTime.IsZero() {
+			end = r.lastSampleWriteTime
+		}
+		r.writeTailer(end)
 		// 关键修复:将 muxer 和 file 置 nil,切断重试 Run() 对旧 muxer/file 的访问。
 		// 文件的关闭由 writeTrailerTask.Run() 负责。若不置 nil,重试 Run() 会向
 		// writeTrailerTask 正在处理的同一 muxer 写入新数据,导致 mdatSize 不匹配→EOF。
@@ -566,6 +575,7 @@ func (r *Recorder) Run() (err error) {
 		if err = r.muxer.WriteSample(r.file, audioTrack, sample); err != nil {
 			return err
 		}
+		r.lastSampleWriteTime = sub.AudioReader.Value.WriteTime
 		// 仅音轨录制时也推进进行中 EndTime
 		if sub.VideoReader == nil {
 			r.maybeFlushProgress(sub.AudioReader.Value.WriteTime, sub.AudioReader.AbsTime)
@@ -734,6 +744,7 @@ func (r *Recorder) Run() (err error) {
 		if err = r.muxer.WriteSample(r.file, videoTrack, sample); err != nil {
 			return err
 		}
+		r.lastSampleWriteTime = sub.VideoReader.Value.WriteTime
 		r.maybeFlushProgress(sub.VideoReader.Value.WriteTime, sub.VideoReader.AbsTime)
 		return nil
 	})
