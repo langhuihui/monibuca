@@ -414,11 +414,6 @@ func (handler *SubscribeHandler[A, V]) Run() (err error) {
 				ar.StopRead()
 				s.AudioReader = nil
 				ar = nil
-				// #region agent log
-				AgentDebugLog("subscriber.go:play", "mute audio reader for high speed", "H17", "post-fix", map[string]any{
-					"speed": s.Publisher.Speed, "sId": s.ID,
-				})
-				// #endregion
 			}
 			handler.audioNotAvailable = true
 		} else if s.Publisher != nil && handler.audioNotAvailable && s.Publisher.Speed < 8 {
@@ -439,23 +434,6 @@ func (handler *SubscribeHandler[A, V]) Run() (err error) {
 						now := time.Now()
 						if now.Sub(s.lastH14SubLog) > 200*time.Millisecond {
 							s.lastH14SubLog = now
-							delay := uint32(0)
-							lastSeq := uint32(0)
-							if vr.Track != nil {
-								lastSeq = vr.Track.LastValue.Sequence
-								delay = lastSeq - vr.Value.Sequence
-							}
-							idrSeq := uint32(0)
-							if vr.Track != nil {
-								if idr := vr.Track.GetIDR(); idr != nil {
-									idrSeq = idr.Value.Sequence
-								}
-							}
-							AgentDebugLog("subscriber.go:play", "sub high-speed lag", "H14", "ffplay-lag", map[string]any{
-								"speed": s.Publisher.Speed, "readerSeq": vr.Value.Sequence, "lastSeq": lastSeq,
-								"delay": delay, "idrSeq": idrSeq, "behindIDR": idrSeq > vr.Value.Sequence,
-								"frameTsMs": vr.Value.Timestamp.Milliseconds(), "absTime": vr.AbsTime,
-							})
 						}
 					}
 					// #endregion

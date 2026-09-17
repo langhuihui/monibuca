@@ -439,11 +439,6 @@ func (p *Publisher) nextVideo() (err error) {
 				now := time.Now()
 				if now.Sub(p.lastHighSpeedDropLog) > 200*time.Millisecond {
 					p.lastHighSpeedDropLog = now
-					AgentDebugLog("publisher.go:nextVideo", "frame dropped with SpeedControl", "H2", "post-fix", map[string]any{
-						"streamPath": p.StreamPath, "speed": p.Speed, "maxFPS": p.MaxFPS,
-						"dropLevel": t.DropFrameLevel, "idr": avFrame.IDR, "lastTsMs": t.LastTs.Milliseconds(),
-						"dropAfterTs": p.dropAfterTs != 0,
-					})
 				}
 			}
 			// #endregion
@@ -464,14 +459,6 @@ func (p *Publisher) nextVideo() (err error) {
 		if p.AudioTrack.Length > 0 {
 			p.AudioTrack.PushIDR()
 		}
-		// #region agent log
-		if p.Speed >= 8 {
-			AgentDebugLog("publisher.go:nextVideo", "high-speed publish IDR", "H6", "post-fix", map[string]any{
-				"streamPath": p.StreamPath, "speed": p.Speed, "lastTsMs": t.LastTs.Milliseconds(),
-				"gop": p.GOP, "seq": avFrame.Sequence, "scale": p.Scale,
-			})
-		}
-		// #endregion
 	}
 	return p.writeAV(t, avFrame, codecCtxChanged, &p.VideoTrack)
 }
@@ -503,19 +490,11 @@ func (p *Publisher) nextAudio() (err error) {
 			// #region agent log
 			if now.Sub(p.lastHighSpeedDropLog) > 1000*time.Millisecond {
 				p.lastHighSpeedDropLog = now
-				AgentDebugLog("publisher.go:nextAudio", "high-speed audio rate-limit skip", "H17", "post-fix", map[string]any{
-					"streamPath": p.StreamPath, "speed": p.Speed, "lastTsMs": t.LastTs.Milliseconds(),
-				})
 			}
 			// #endregion
 			return ErrSkip
 		}
 		p.lastHighSpeedAudioWrite = now
-		// #region agent log
-		AgentDebugLog("publisher.go:nextAudio", "high-speed audio keepalive write", "H17", "post-fix", map[string]any{
-			"streamPath": p.StreamPath, "speed": p.Speed, "lastTsMs": t.LastTs.Milliseconds(),
-		})
-		// #endregion
 	}
 	// 根据丢帧率进行音频帧丢弃
 	if p.dropAfterTs > 0 {
