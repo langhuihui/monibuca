@@ -66,7 +66,10 @@ type (
 		Status                         byte
 		Description                    string
 		CheckInterval                  time.Duration `default:"10s"`
-		RTT                            time.Duration
+		// ReadTimeout：RTSP 等媒体 TCP 读/拨号超时（BufReader.SetTimeout）；0 表示用默认 10s。
+		// Confirmed via 寸止: BUG-021 R1
+		ReadTimeout time.Duration `default:"10s" gorm:"comment:拉流读超时"`
+		RTT         time.Duration
 	}
 	PullProxyFactory = func() IPullProxy
 	PullProxyManager struct {
@@ -344,9 +347,12 @@ func (s *Server) GetPullProxyList(ctx context.Context, req *emptypb.Empty) (res 
 			Audio:               conf.Audio,
 			RecordPath:          conf.Record.FilePath,
 			RecordFragment:      durationpb.New(conf.Record.Fragment),
+			RecordType:          conf.Record.Type,
 			Description:         conf.Description,
 			StreamPath:          conf.GetStreamPath(),
 			StopRetryOnAuthFail: conf.StopRetryOnAuthFail,
+			CheckInterval:       durationpb.New(conf.CheckInterval),
+			ReadTimeout:         durationpb.New(util.Conditional(conf.ReadTimeout > 0, conf.ReadTimeout, time.Second*10)),
 		}
 		// 如果内存中有对应的设备，获取实时状态
 		if device, ok := s.PullProxies.Get(conf.ID); ok {
@@ -413,11 +419,24 @@ func (s *Server) AddPullProxy(ctx context.Context, req *pb.PullProxyInfo) (res *
 	}
 	pullProxyConfig.Record.FilePath = req.RecordPath
 	pullProxyConfig.Record.Fragment = req.RecordFragment.AsDuration()
+	// Confirmed via 寸止: REQ-MP4-002 — 拉流代理录制容器格式
+	if rt, ok := normalizePullRecordType(req.RecordType); !ok {
+		err = fmt.Errorf("unsupported recordType %q, expect mp4 or fmp4", req.RecordType)
+		return
+	} else if rt != "" {
+		pullProxyConfig.Record.Type = rt
+	}
 	if req.CheckInterval != nil {
 		pullProxyConfig.CheckInterval = req.CheckInterval.AsDuration()
 	}
 	if pullProxyConfig.CheckInterval == 0 {
 		pullProxyConfig.CheckInterval = time.Second * 10
+	}
+	if req.ReadTimeout != nil {
+		pullProxyConfig.ReadTimeout = req.ReadTimeout.AsDuration()
+	}
+	if pullProxyConfig.ReadTimeout == 0 {
+		pullProxyConfig.ReadTimeout = time.Second * 10
 	}
 	if s.DB == nil {
 		err = pkg.ErrNoDB
@@ -528,6 +547,14 @@ func (s *Server) UpdatePullProxy(ctx context.Context, req *pb.UpdatePullProxyReq
 	if req.RecordFragment != nil {
 		target.Record.Fragment = req.RecordFragment.AsDuration()
 	}
+	if req.RecordType != nil {
+		if rt, ok := normalizePullRecordType(*req.RecordType); !ok {
+			err = fmt.Errorf("unsupported recordType %q, expect mp4 or fmp4", *req.RecordType)
+			return
+		} else {
+			target.Record.Type = rt
+		}
+	}
 	if req.StreamPath != nil {
 		target.StreamPath = *req.StreamPath
 	}
@@ -536,6 +563,12 @@ func (s *Server) UpdatePullProxy(ctx context.Context, req *pb.UpdatePullProxyReq
 	}
 	if target.CheckInterval == 0 {
 		target.CheckInterval = time.Second * 10
+	}
+	if req.ReadTimeout != nil {
+		target.ReadTimeout = req.ReadTimeout.AsDuration()
+	}
+	if target.ReadTimeout == 0 {
+		target.ReadTimeout = time.Second * 10
 	}
 	if req.StopRetryOnAuthFail != nil {
 		if strings.EqualFold(target.Type, "rtsp") {
@@ -579,7 +612,7 @@ func (s *Server) UpdatePullProxy(ctx context.Context, req *pb.UpdatePullProxyReq
 			return
 		}
 
-		if target.URL != conf.URL || conf.Audio != target.Audio || conf.StreamPath != target.StreamPath || conf.Record.FilePath != target.Record.FilePath || conf.Record.Fragment != target.Record.Fragment {
+		if target.URL != conf.URL || conf.Audio != target.Audio || conf.StreamPath != target.StreamPath || conf.Record.FilePath != target.Record.FilePath || conf.Record.Fragment != target.Record.Fragment || conf.Record.Type != target.Record.Type {
 			device.Stop(task.ErrStopByUser)
 			device.WaitStopped()
 			device, err = s.createPullProxy(target)
