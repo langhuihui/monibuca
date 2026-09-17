@@ -33,10 +33,12 @@ import (
 )
 
 type SipConfig struct {
-	ListenAddr    []string
-	ListenAddrTLS []string
-	CertFile      string `desc:"证书文件"`
-	KeyFile       string `desc:"私钥文件"`
+	ListenAddr         []string
+	ListenAddrTLS      []string
+	CertFile           string        `desc:"证书文件"`
+	KeyFile            string        `desc:"私钥文件"`
+	UDPRecycleInterval time.Duration `desc:"UDP监听定期重绑间隔，缓解sipgo远端地址字符串堆积；默认12h，0表示仅插件退出时关闭"`
+	DisableUDPRecycle  bool          `desc:"关闭UDP监听定期重绑"`
 }
 
 type PositionConfig struct {
@@ -194,6 +196,10 @@ func (gb *GB28181Plugin) Start() (err error) {
 		gb.singlePorts.L = new(sync.RWMutex)
 		gb.clients.L = new(sync.RWMutex)
 		gb.completedDownloads.L = new(sync.RWMutex)
+		// channels 必须在 SIP Listen 之前加锁：checkDeviceExpire 与并发 REGISTER 会同时 Set，
+		// 无锁时 Collection.Items 竞态会 index out of range，Start panic 被 recover 后插件异常，
+		// 现场表现为登录连不上 50051（gRPC Serve 异常/未正常 Accept）。
+		gb.channels.L = new(sync.RWMutex)
 		BroadcastSessions.L = new(sync.RWMutex)
 		gb.server, _ = sipgo.NewServer(gb.ua, sipgo.WithServerLogger(logger)) // Creating server handle for ua
 		gb.server.OnMessage(gb.OnMessage)
@@ -248,7 +254,7 @@ func (gb *GB28181Plugin) Start() (err error) {
 			if port, err := strconv.Atoi(strings.TrimPrefix(addr, ":")); err == nil {
 				gb.sipPorts = append(gb.sipPorts, port)
 			}
-			go gb.server.ListenAndServe(gb, netWork, addr)
+			gb.startSIPListener(netWork, addr)
 		}
 		if len(gb.Sip.ListenAddrTLS) > 0 {
 			if tslConfig, err := config.GetTLSConfig(gb.Sip.CertFile, gb.Sip.KeyFile); err == nil {
@@ -1105,9 +1111,34 @@ func (gb *GB28181Plugin) OnInvite(req *sip.Request, tx sip.ServerTransaction) {
 		targetPort = inviteInfo.Port // UDP模式：我们发送数据到上级平台的端口
 	}
 
+	// 同平台同通道已有转发会话时先结束旧会话，避免上级未 BYE 导致叠罗汉
+	// （广西交投现场同通道最多并存 6 路 ForwardDialog，设备被要求同时推多路）
+	platformGBID := platform.PlatformModel.ServerGBID
+	var staleForwards []*ForwardDialog
+	gb.forwardDialogs.Range(func(fd *ForwardDialog) bool {
+		if fd == nil || fd.channel == nil {
+			return true
+		}
+		samePlatform := fd.platformGBID == platformGBID || fd.platformGBID == ""
+		sameChannel := fd.channel.ID == channel.ID ||
+			(fd.channel.DeviceId == channel.DeviceId && fd.channel.ChannelId == channel.ChannelId)
+		if samePlatform && sameChannel {
+			staleForwards = append(staleForwards, fd)
+		}
+		return true
+	})
+	for _, fd := range staleForwards {
+		gb.Warn("OnInvite", "action", "stop stale ForwardDialog",
+			"oldCallId", fd.platformCallId, "newCallId", req.CallID().Value(),
+			"platformId", platformGBID, "channelId", channel.ChannelId, "ssrc", fd.platformSSRC,
+			"pullJobInited", fd.pullJobInited)
+		fd.abandonOrStop(task.ErrTaskComplete)
+	}
+
 	forwardDialog := &ForwardDialog{
 		gb:             gb,
 		platformCallId: req.CallID().Value(),
+		platformGBID:   platformGBID,
 		platformSSRC:   inviteInfo.SSRC,
 		start:          inviteInfo.StartTime,
 		end:            inviteInfo.StopTime,
@@ -1165,6 +1196,7 @@ func (gb *GB28181Plugin) OnAck(req *sip.Request, tx sip.ServerTransaction) {
 			}
 			// 初始化拉流任务
 			forwardDialog.GetPullJob().Init(forwardDialog, &gb.Plugin, streamPath, pullConf, nil)
+			forwardDialog.pullJobInited = true
 		} else { //不为空表示是个拉流代理相关联的设备，直接推送已有的流
 			// 异步推送PS流到上级平台
 			go gb.sendPSToUpstream(forwardDialog)

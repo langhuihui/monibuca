@@ -27,9 +27,11 @@ type ForwardDialog struct {
 	// 嵌入 ForwardConfig 来管理转发配置
 	ForwardConfig  mrtp.ForwardConfig
 	platformCallId string //上级平台发起invite的callid
+	platformGBID   string // 上级平台国标ID，用于同平台同通道去重
 	platformSSRC   uint32 // 上级平台的SSRC
 	start          int64
 	end            int64
+	pullJobInited  bool // OnAck 里执行过 PullJob.Init 后为 true；未 Init 时禁止 Task.Stop
 }
 
 // GetCallID 获取会话的CallID
@@ -377,8 +379,49 @@ func (d *ForwardDialog) releaseAllocatedSourcePort() {
 	d.Info("ForwardDialog source port release", "sourcePort", sourcePort)
 }
 
+// abandonOrStop 结束同通道旧转发会话。
+// 仅当 OnAck 已执行 PullJob.Init（pullJobInited=true）时才 Stop；
+// 否则只从集合移除并回收 OnInvite 可能占用的 Target 端口。
+func (d *ForwardDialog) abandonOrStop(reason error) {
+	if d == nil || d.gb == nil {
+		return
+	}
+	d.gb.forwardDialogs.Remove(d)
+
+	if d.pullJobInited {
+		d.GetPullJob().Stop(reason)
+		return
+	}
+	d.releaseUnstartedTargetPort()
+}
+
+func (d *ForwardDialog) releaseUnstartedTargetPort() {
+	if d.gb == nil {
+		return
+	}
+	targetMode := d.ForwardConfig.Target.Mode
+	targetPort := d.ForwardConfig.Target.Port
+	channelId := ""
+	if d.channel != nil {
+		channelId = d.channel.ChannelId
+	}
+	if targetMode == mrtp.StreamModeTCPActive && d.gb.tcpPort == 0 && targetPort > 0 {
+		if !d.gb.tcpPB.Release(targetPort) {
+			d.gb.Warn("[PORT_RELEASE_FAILED] 未启动 ForwardDialog 回收 Target TCP 失败",
+				"port", targetPort, "platformCallId", d.platformCallId, "channelId", channelId)
+		} else {
+			d.gb.Info("[PORT_RELEASE_SUCCESS] 未启动 ForwardDialog 回收 Target TCP",
+				"port", targetPort, "platformCallId", d.platformCallId, "channelId", channelId)
+			d.gb.updatePortStats()
+		}
+	}
+}
+
 // Dispose 释放会话资源
 func (d *ForwardDialog) Dispose() {
+	// 与 Dialog.Dispose 一致：立刻从集合移除，避免同通道叠会话时旧实例仍被 Range 到
+	d.gb.forwardDialogs.Remove(d)
+
 	go func() {
 		time.Sleep(time.Second * 90) // 延迟90秒回收端口
 		d.releaseAllocatedSourcePort()
@@ -386,15 +429,19 @@ func (d *ForwardDialog) Dispose() {
 		// 回收 Target 端口（上级平台，如果是在 OnInvite 中分配的）
 		targetMode := d.ForwardConfig.Target.Mode
 		targetPort := d.ForwardConfig.Target.Port
+		channelId := ""
+		if d.channel != nil {
+			channelId = d.channel.ChannelId
+		}
 
 		switch targetMode {
 		case mrtp.StreamModeTCPActive:
 			if d.gb.tcpPort == 0 && targetPort > 0 { // 多端口模式且分配了端口
 				// 回收端口，防止重复回收
 				if !d.gb.tcpPB.Release(targetPort) {
-					d.Warn("[PORT_RELEASE_FAILED] Target TCP端口回收失败 - 端口已被释放或未分配 (ForwardDialog)", "port", targetPort, "platformId", d.platformCallId, "channelId", d.channel.ChannelId, "streamMode", targetMode)
+					d.Warn("[PORT_RELEASE_FAILED] Target TCP端口回收失败 - 端口已被释放或未分配 (ForwardDialog)", "port", targetPort, "platformId", d.platformCallId, "channelId", channelId, "streamMode", targetMode)
 				} else {
-					d.Info("[PORT_RELEASE_SUCCESS] Target TCP端口回收成功 (ForwardDialog)", "port", targetPort, "platformId", d.platformCallId, "channelId", d.channel.ChannelId, "streamMode", targetMode)
+					d.Info("[PORT_RELEASE_SUCCESS] Target TCP端口回收成功 (ForwardDialog)", "port", targetPort, "platformId", d.platformCallId, "channelId", channelId, "streamMode", targetMode)
 					d.gb.updatePortStats()
 				}
 			}
