@@ -26,17 +26,21 @@ func (r *RecordRetryTickTask) GetTickInterval() time.Duration {
 // 1) if outside slot or stopped -> stop self
 // 2) if recording -> keep state
 // 3) query stream info; if recording list has expected item -> mark recording
-// 4) if not recording and not attempted -> attempt once; otherwise skip
+// 4) if not recording -> 周期重试 startRecording（Go 侧用 startAttempted 防热循环）
 func (r *RecordRetryTickTask) Tick(any) {
 	if r.cron == nil {
 		r.Stop(errors.New("record retry task lost cron ref"))
 		return
 	}
+	if r.cron.IsStopped() || r.IsStopped() {
+		r.Stop(errors.New("time slot ended or cron stopped"))
+		return
+	}
 	r.cron.Debug("RecordRetryTickTask", "start tick", "")
 
 	now := time.Now()
-	// 如果主任务已停止或不在有效时间段，结束自身
-	if !r.cron.running || r.cron.currentSlot == nil || now.After(r.cron.currentSlot.End) {
+	// 主任务已停或不在有效时间段，结束自身
+	if r.cron.currentSlot == nil || now.After(r.cron.currentSlot.End) {
 		r.Stop(errors.New("time slot ended or cron stopped"))
 		return
 	}
@@ -46,7 +50,6 @@ func (r *RecordRetryTickTask) Tick(any) {
 		return
 	}
 
-	// 组装查询地址
 	addr := r.cron.ctp.Plugin.GetCommonConf().HTTP.ListenAddr
 	if addr == "" {
 		addr = ":8080"
@@ -56,7 +59,14 @@ func (r *RecordRetryTickTask) Tick(any) {
 	}
 	url := fmt.Sprintf("http://%s/api/stream/info/%s", addr, r.cron.StreamPath)
 
-	resp, err := http.Get(url)
+	ctx, cancel := r.cron.httpContext(10 * time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		r.cron.Warn("crontab", "err", "build record status request failed", "url", url, "detail", err)
+		return
+	}
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		r.cron.Warn("crontab", "err", "query record status failed", "url", url, "detail", err)
 		return
@@ -71,6 +81,9 @@ func (r *RecordRetryTickTask) Tick(any) {
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
 		r.cron.Warn("RecordRetryTickTask", "err", "parse record status failed", "url", url, "detail", err)
+		return
+	}
+	if r.cron.IsStopped() {
 		return
 	}
 	recordingJSON, _ := json.Marshal(info.Data.Recording)
@@ -116,7 +129,6 @@ func (r *RecordRetryTickTask) Tick(any) {
 		}
 
 		if foundMatch {
-			// mark recording success; allow next attempt after stop
 			r.cron.recording = true
 			r.cron.startAttempted = false
 			r.SetDescription("current step", "foundMatch and set recording=true,startAttempted=false")
@@ -124,7 +136,6 @@ func (r *RecordRetryTickTask) Tick(any) {
 			return
 		}
 
-		// recording present but params mismatch -> treat as not matched
 		if r.cron.recording {
 			r.cron.recording = false
 			r.cron.startAttempted = false
@@ -132,24 +143,24 @@ func (r *RecordRetryTickTask) Tick(any) {
 		}
 	}
 
-	// no recording: if previously recording, reset state
 	if r.cron.recording {
 		r.cron.recording = false
-		// Also reset startAttempted so the next tick can immediately retry.
-		// Without this, if foundMatch never ran to reset startAttempted, a
-		// publisher reconnect after video-timeout keeps startAttempted=true
-		// forever and recording never resumes.
 		r.cron.startAttempted = false
 		r.cron.Info("RecordRetryTickTask", "event", "recording stopped", "stream", r.cron.StreamPath)
 	}
 
-	// not recording and not attempted -> try once; otherwise skip to avoid duplicate subscribers
-	if !r.cron.startAttempted {
-		r.cron.Info("RecordRetryTickTask", "event", "no recording, first startRecording", "stream", r.cron.StreamPath)
-		r.SetDescription("current step", "not startAttempted,start recording")
-		r.cron.startRecording()
-	} else {
-		r.cron.Debug("RecordRetryTickTask", "msg", "startRecording already attempted in this slot", "stream", r.cron.StreamPath)
-		r.SetDescription("current step", "has startAttempted,do nothing")
+	// 未在录：按 tick 周期再试一次开始录制
+	// （主循环负责到点先试一次并长睡；这里负责失败后每隔约 10 秒补试）
+	if r.cron.IsStopped() {
+		return
 	}
+	r.cron.Info("RecordRetryTickTask", "event", "no recording, startRecording", "stream", r.cron.StreamPath)
+	r.SetDescription("current step", "retry start recording")
+	// #region agent log
+	debugAgentLog("D", "retry_watcher.go:Tick/retry", "每10秒帮手发现还没在录，再次开始录制", map[string]any{
+		"streamPath":     r.cron.StreamPath,
+		"startAttempted": r.cron.startAttempted,
+	})
+	// #endregion
+	r.cron.startRecording()
 }
