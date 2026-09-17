@@ -107,7 +107,7 @@ message PlanStream {
   string stream_path = 2;
   string fragment = 3;
   string filePath = 4;
-  string record_type = 5; // 录制类型，例如 "mp4", "flv"
+  string record_type = 5; // 录制类型：mp4/fmp4/flv；fmp4 与 mp4 均调用 mp4 插件 API
   google.protobuf.Timestamp created_at = 6;
   google.protobuf.Timestamp updated_at = 7;
   bool enable = 8; // 是否启用该录制流

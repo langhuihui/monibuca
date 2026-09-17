@@ -346,7 +346,7 @@ type PlanStream struct {
 	StreamPath    string                 `protobuf:"bytes,2,opt,name=stream_path,json=streamPath,proto3" json:"stream_path,omitempty"`
 	Fragment      string                 `protobuf:"bytes,3,opt,name=fragment,proto3" json:"fragment,omitempty"`
 	FilePath      string                 `protobuf:"bytes,4,opt,name=filePath,proto3" json:"filePath,omitempty"`
-	RecordType    string                 `protobuf:"bytes,5,opt,name=record_type,json=recordType,proto3" json:"record_type,omitempty"` // 录制类型，例如 "mp4", "flv"
+	RecordType    string                 `protobuf:"bytes,5,opt,name=record_type,json=recordType,proto3" json:"record_type,omitempty"` // 录制类型：mp4/fmp4/flv；fmp4 与 mp4 均调用 mp4 插件 API
 	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	UpdatedAt     *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
 	Enable        bool                   `protobuf:"varint,8,opt,name=enable,proto3" json:"enable,omitempty"` // 是否启用该录制流

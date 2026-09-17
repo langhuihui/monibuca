@@ -30,6 +30,7 @@ type PullProxy struct {
 	Description    string `json:"description"`
 	RecordPath     string `json:"recordPath"`
 	RecordFragment string `json:"recordFragment"`
+	RecordType     string `json:"recordType"` // REQ-MP4-002: 录制容器格式 mp4/fmp4
 	StreamPath     string `json:"streamPath"`
 }
 
@@ -793,6 +794,7 @@ func (cm *ClientManager) addPullProxy(httpAddr string, proxy *PullProxy) error {
 		"description":    proxy.Description,
 		"recordPath":     proxy.RecordPath,
 		"recordFragment": proxy.RecordFragment,
+		"recordType":     proxy.RecordType,
 		"streamPath":     proxy.StreamPath,
 	}
 

@@ -211,8 +211,10 @@ type ReqEventRecord struct {
 	EventDesc      string                 `protobuf:"bytes,6,opt,name=eventDesc,proto3" json:"eventDesc,omitempty"`
 	EventLevel     string                 `protobuf:"bytes,7,opt,name=eventLevel,proto3" json:"eventLevel,omitempty"` //事件级别,0表示重要事件，无法删除且表示无需自动删除,1表示非重要事件,达到自动删除时间后，自动删除
 	Fragment       string                 `protobuf:"bytes,8,opt,name=fragment,proto3" json:"fragment,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// REQ-MP4-002: 容器格式，mp4 或 fmp4，默认 mp4
+	Type          string `protobuf:"bytes,9,opt,name=type,proto3" json:"type,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ReqEventRecord) Reset() {
@@ -301,6 +303,13 @@ func (x *ReqEventRecord) GetFragment() string {
 	return ""
 }
 
+func (x *ReqEventRecord) GetType() string {
+	if x != nil {
+		return x.Type
+	}
+	return ""
+}
+
 type ResponseEventRecord struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Code          int32                  `protobuf:"varint,1,opt,name=code,proto3" json:"code,omitempty"`
@@ -362,10 +371,12 @@ func (x *ResponseEventRecord) GetData() uint32 {
 }
 
 type ReqStartRecord struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	StreamPath    string                 `protobuf:"bytes,1,opt,name=streamPath,proto3" json:"streamPath,omitempty"`
-	Fragment      *durationpb.Duration   `protobuf:"bytes,2,opt,name=fragment,proto3" json:"fragment,omitempty"`
-	FilePath      string                 `protobuf:"bytes,3,opt,name=filePath,proto3" json:"filePath,omitempty"`
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	StreamPath string                 `protobuf:"bytes,1,opt,name=streamPath,proto3" json:"streamPath,omitempty"`
+	Fragment   *durationpb.Duration   `protobuf:"bytes,2,opt,name=fragment,proto3" json:"fragment,omitempty"`
+	FilePath   string                 `protobuf:"bytes,3,opt,name=filePath,proto3" json:"filePath,omitempty"`
+	// REQ-MP4-002: 容器格式，mp4 或 fmp4，默认 mp4
+	Type          string `protobuf:"bytes,4,opt,name=type,proto3" json:"type,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -417,6 +428,13 @@ func (x *ReqStartRecord) GetFragment() *durationpb.Duration {
 func (x *ReqStartRecord) GetFilePath() string {
 	if x != nil {
 		return x.FilePath
+	}
+	return ""
+}
+
+func (x *ReqStartRecord) GetType() string {
+	if x != nil {
+		return x.Type
 	}
 	return ""
 }
@@ -1079,7 +1097,7 @@ const file_mp4_proto_rawDesc = "" +
 	"\x03ids\x18\x02 \x03(\rR\x03ids\x12\x1c\n" +
 	"\tstartTime\x18\x03 \x01(\tR\tstartTime\x12\x18\n" +
 	"\aendTime\x18\x04 \x01(\tR\aendTime\x12\x14\n" +
-	"\x05range\x18\x05 \x01(\tR\x05range\"\x90\x02\n" +
+	"\x05range\x18\x05 \x01(\tR\x05range\"\xa4\x02\n" +
 	"\x0eReqEventRecord\x12\x1e\n" +
 	"\n" +
 	"streamPath\x18\x01 \x01(\tR\n" +
@@ -1092,17 +1110,19 @@ const file_mp4_proto_rawDesc = "" +
 	"\n" +
 	"eventLevel\x18\a \x01(\tR\n" +
 	"eventLevel\x12\x1a\n" +
-	"\bfragment\x18\b \x01(\tR\bfragment\"W\n" +
+	"\bfragment\x18\b \x01(\tR\bfragment\x12\x12\n" +
+	"\x04type\x18\t \x01(\tR\x04type\"W\n" +
 	"\x13ResponseEventRecord\x12\x12\n" +
 	"\x04code\x18\x01 \x01(\x05R\x04code\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12\x12\n" +
-	"\x04data\x18\x03 \x01(\rR\x04data\"\x83\x01\n" +
+	"\x04data\x18\x03 \x01(\rR\x04data\"\x97\x01\n" +
 	"\x0eReqStartRecord\x12\x1e\n" +
 	"\n" +
 	"streamPath\x18\x01 \x01(\tR\n" +
 	"streamPath\x125\n" +
 	"\bfragment\x18\x02 \x01(\v2\x19.google.protobuf.DurationR\bfragment\x12\x1a\n" +
-	"\bfilePath\x18\x03 \x01(\tR\bfilePath\"W\n" +
+	"\bfilePath\x18\x03 \x01(\tR\bfilePath\x12\x12\n" +
+	"\x04type\x18\x04 \x01(\tR\x04type\"W\n" +
 	"\x13ResponseStartRecord\x12\x12\n" +
 	"\x04code\x18\x01 \x01(\x05R\x04code\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12\x12\n" +
