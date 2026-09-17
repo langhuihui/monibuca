@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"net"
 	"net/url"
@@ -21,7 +22,7 @@ import (
 	"m7s.live/v5/pkg/util"
 )
 
-const Timeout = time.Second * 30
+const DefaultReadTimeout = time.Second * 10
 
 func NewNetConnection(conn net.Conn) *NetConnection {
 	c := &NetConnection{
@@ -30,18 +31,20 @@ func NewNetConnection(conn net.Conn) *NetConnection {
 		MemoryAllocator: gomem.NewScalableMemoryAllocator(1 << 22), // 4MB 起始，避免多次 children 扩容
 		UserAgent:       "monibuca" + m7s.Version,
 	}
-	c.BufReader.SetTimeout(Timeout)
+	c.BufReader.SetTimeout(c.EffectiveReadTimeout())
 	return c
 }
 
 type NetConnection struct {
 	task.Job
 	*util.BufReader
-	Backchannel     bool
-	Media           string
-	PacketSize      uint16
-	SessionName     string
-	Timeout         int
+	Backchannel bool
+	Media       string
+	PacketSize  uint16
+	SessionName string
+	Timeout     int
+	// ReadTimeout：媒体 TCP 读/拨号/写 deadline；0 表示 DefaultReadTimeout(10s)。Confirmed via 寸止 BUG-021 R1
+	ReadTimeout     time.Duration
 	Transport       string // custom transport support, ex. RTSP over WebSocket
 	MemoryAllocator *gomem.ScalableMemoryAllocator
 	UserAgent       string
@@ -58,6 +61,14 @@ type NetConnection struct {
 	writing     atomic.Bool
 	SDP         string
 	keepaliveTS time.Time
+}
+
+// EffectiveReadTimeout 返回实际使用的读超时。
+func (c *NetConnection) EffectiveReadTimeout() time.Duration {
+	if c != nil && c.ReadTimeout > 0 {
+		return c.ReadTimeout
+	}
+	return DefaultReadTimeout
 }
 
 func (c *NetConnection) StartWrite() {
@@ -133,7 +144,8 @@ func (c *NetConnection) Connect(ctx context.Context, remoteURL string) (err erro
 		}
 	}
 	var conn net.Conn
-	dialer := &net.Dialer{Timeout: Timeout}
+	readTimeout := c.EffectiveReadTimeout()
+	dialer := &net.Dialer{Timeout: readTimeout}
 	if istls {
 		tlsDialer := &tls.Dialer{
 			NetDialer: dialer,
@@ -148,7 +160,7 @@ func (c *NetConnection) Connect(ctx context.Context, remoteURL string) (err erro
 	}
 	c.Conn = conn
 	c.BufReader = util.NewBufReader(conn)
-	c.BufReader.SetTimeout(Timeout)
+	c.BufReader.SetTimeout(readTimeout)
 	c.UserAgent = "monibuca" + m7s.Version
 	c.Session = ""
 	c.Auth = util.NewAuth(rtspURL.User)
@@ -190,7 +202,7 @@ func (c *NetConnection) WriteRequest(req *util.Request) (err error) {
 		req.Header.Set("Content-Length", val)
 	}
 
-	if err = c.Conn.SetWriteDeadline(time.Now().Add(Timeout)); err != nil {
+	if err = c.Conn.SetWriteDeadline(time.Now().Add(c.EffectiveReadTimeout())); err != nil {
 		return err
 	}
 	reqStr := req.String()
@@ -242,7 +254,7 @@ func (c *NetConnection) WriteResponse(res *util.Response) (err error) {
 		res.Header.Set("Content-Length", val)
 	}
 
-	if err = c.Conn.SetWriteDeadline(time.Now().Add(Timeout)); err != nil {
+	if err = c.Conn.SetWriteDeadline(time.Now().Add(c.EffectiveReadTimeout())); err != nil {
 		return err
 	}
 	resStr := res.String()
@@ -315,64 +327,63 @@ func (c *NetConnection) Receive(sendMode bool, onReceive func(byte, []byte) erro
 				continue
 
 			default:
-				c.Error("wrong input")
-				//c.Fire("RTSP wrong input")
-				//
-				//for i := 0; ; i++ {
-				//	// search next start symbol
-				//	if _, err = c.reader.ReadBytes('$'); err != nil {
-				//		return err
-				//	}
-				//
-				//	if channelID, err = c.reader.ReadByte(); err != nil {
-				//		return err
-				//	}
-				//
-				//	// TODO: better check maximum good channel ID
-				//	if channelID >= 20 {
-				//		continue
-				//	}
-				//
-				//	buf4 = make([]byte, 2)
-				//	if _, err = io.ReadFull(c.reader, buf4); err != nil {
-				//		return err
-				//	}
-				//
-				//	// check if size good for RTP
-				//	size = binary.BigEndian.Uint16(buf4)
-				//	if size <= 1500 {
-				//		break
-				//	}
-				//
-				//	// 10 tries to find good packet
-				//	if i >= 10 {
-				//		return fmt.Errorf("RTSP wrong input")
-				//	}
-				//}
-				for err = c.Skip(1); err == nil; {
-					if magic[0], err = c.ReadByte(); magic[0] == '*' {
-						var channelID byte
-						channelID, err = c.ReadByte()
-						magic[2], err = c.ReadByte()
-						magic[3], err = c.ReadByte()
-						size = int(binary.BigEndian.Uint16(magic[2:]))
-						// 使用 make 而非 SMA Malloc，避免音视频包交错导致 SMA 碎片化
-						buf := make([]byte, size)
-						if err = c.ReadNto(size, buf); err != nil {
+				// wrong-input：按 interleaved 帧头 '$' 重新对齐，校验 channel/size；避免旧逻辑搜 '*' 造假包
+				c.Error("wrong input", "magicHex", hex.EncodeToString(magic))
+				var channelID byte
+				resyncOK := false
+				for i := 0; ; i++ {
+					var b byte
+					for {
+						if b, err = c.ReadByte(); err != nil {
 							return
-						} else if onReceive != nil {
-							if recvErr := onReceive(channelID, buf); recvErr == nil {
-								// 内存被接管，不需要释放
-							} else if errors.Is(recvErr, pkg.ErrDiscard) || errors.Is(recvErr, pkg.ErrMuted) {
-								// 丢弃错误和静音错误，继续循环（make buf 由 GC 回收）
-							} else {
-								// 其他错误，终止循环
-								return recvErr
-							}
 						}
+						if b == '$' {
+							break
+						}
+					}
+					if channelID, err = c.ReadByte(); err != nil {
+						return
+					}
+					if channelID >= 20 {
+						continue
+					}
+					var sizeBuf [2]byte
+					if sizeBuf[0], err = c.ReadByte(); err != nil {
+						return
+					}
+					if sizeBuf[1], err = c.ReadByte(); err != nil {
+						return
+					}
+					size = int(binary.BigEndian.Uint16(sizeBuf[:]))
+					if size > 0 && size <= 1500 {
+						resyncOK = true
+						c.Warn("wrong input resync ok", "channel", channelID, "size", size, "tries", i+1)
 						break
 					}
+					if i >= 10 {
+						c.Error("wrong input resync failed", "tries", i+1)
+						return errors.New("RTSP wrong input")
+					}
 				}
+				if !resyncOK {
+					continue
+				}
+				buf := make([]byte, size)
+				if err = c.ReadNto(size, buf); err != nil {
+					return
+				}
+				if channelID&1 == 0 {
+					if onReceive != nil {
+						if recvErr := onReceive(channelID, buf); recvErr == nil {
+						} else if errors.Is(recvErr, pkg.ErrDiscard) || errors.Is(recvErr, pkg.ErrMuted) {
+						} else {
+							return recvErr
+						}
+					}
+				} else if onRTCP != nil {
+					onRTCP(channelID, buf)
+				}
+				continue
 			}
 		} else {
 			// hope that the odd channels are always RTCP
@@ -419,7 +430,7 @@ func (c *NetConnection) Receive(sendMode bool, onReceive func(byte, []byte) erro
 }
 
 func (c *NetConnection) Write(chunk []byte) (int, error) {
-	if err := c.Conn.SetWriteDeadline(time.Now().Add(Timeout)); err != nil {
+	if err := c.Conn.SetWriteDeadline(time.Now().Add(c.EffectiveReadTimeout())); err != nil {
 		return 0, err
 	}
 	return c.Conn.Write(chunk)

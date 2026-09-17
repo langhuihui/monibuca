@@ -698,7 +698,9 @@ func (r *Receiver) Receive() (err error) {
 				return pkg.ErrDiscard
 			}
 		}
-		return pkg.ErrUnsupportCodec
+		// 未知 interleaved channel：丢弃本包，避免误报 unsupport codec 杀会话
+		r.Warn("discard unknown rtsp channel", "channel", channelID, "audioChannel", r.AudioChannelID, "videoChannel", r.VideoChannelID, "size", len(buf))
+		return pkg.ErrDiscard
 	}, func(channelID byte, buf []byte) error {
 		msg := &RTCP{Channel: channelID}
 		if err = msg.Header.Unmarshal(buf); err != nil {
