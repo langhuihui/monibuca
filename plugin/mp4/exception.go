@@ -267,7 +267,6 @@ func (t *StorageManagementTask) manageFallbackStorage() {
 		// 查询最旧的文件
 		var record m7s.RecordStream
 		err := t.DB.Where("storage_type = ?", "local").
-			Where("type = ?", "mp4").
 			Where("storage_level = ?", 1).
 			Where("record_level != ?", "high").
 			Where("end_time IS NOT NULL").
@@ -276,9 +275,8 @@ func (t *StorageManagementTask) manageFallbackStorage() {
 
 		if err != nil {
 			if err == gorm.ErrRecordNotFound {
-				// 没有非重要录像，查询所有录像
+				// 没有非重要录像，查询所有录像（Confirmed via 寸止: REQ-MP4-002 — 不按 type 过滤，全清）
 				err = t.DB.Where("storage_type = ?", "local").
-					Where("type = ?", "mp4").
 					Where("storage_level = ?", 1).
 					Where("end_time IS NOT NULL").
 					Order("end_time ASC").

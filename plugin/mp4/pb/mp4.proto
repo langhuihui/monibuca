@@ -94,6 +94,8 @@ message ReqEventRecord {
   string eventDesc = 6;
   string eventLevel = 7;//事件级别,0表示重要事件，无法删除且表示无需自动删除,1表示非重要事件,达到自动删除时间后，自动删除
   string fragment = 8;
+  // REQ-MP4-002: 容器格式，mp4 或 fmp4，默认 mp4
+  string type = 9;
 }
 
 message ResponseEventRecord {
@@ -106,6 +108,8 @@ message ReqStartRecord {
   string streamPath = 1;
   google.protobuf.Duration fragment = 2;
   string filePath = 3;
+  // REQ-MP4-002: 容器格式，mp4 或 fmp4，默认 mp4
+  string type = 4;
 }
 
 message ResponseStartRecord {

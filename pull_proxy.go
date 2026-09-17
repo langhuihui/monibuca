@@ -30,6 +30,17 @@ const (
 	PullProxyStatusDisabled
 )
 
+// normalizePullRecordType REQ-MP4-002：空串表示未指定（默认 mp4）；仅允许 mp4/fmp4
+func normalizePullRecordType(t string) (string, bool) {
+	t = strings.ToLower(strings.TrimSpace(t))
+	switch t {
+	case "", "mp4", "fmp4":
+		return t, true
+	default:
+		return "", false
+	}
+}
+
 type (
 	IPullProxy interface {
 		task.ITask

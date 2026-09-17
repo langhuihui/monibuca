@@ -13,6 +13,36 @@ import (
 	"m7s.live/v5/plugin/crontab/pkg"
 )
 
+// validateRecordType REQ-MP4-002 方案 B：允许 mp4/fmp4/flv
+func validateRecordType(recordType string) string {
+	switch recordType {
+	case "mp4", "fmp4", "flv":
+		return ""
+	default:
+		return "record_type must be mp4, fmp4 or flv"
+	}
+}
+
+// pluginAPIName 开录/停录 URL 用的插件段：fmp4 与 mp4 都走 mp4 插件
+func pluginAPIName(recordType string) string {
+	switch strings.ToLower(strings.TrimSpace(recordType)) {
+	case "fmp4", "mp4", "":
+		return "mp4"
+	default:
+		return strings.ToLower(strings.TrimSpace(recordType))
+	}
+}
+
+// conflictingRecordTypes 同流互斥的 record_type 集合（mp4/fmp4 共用 mp4 插件）
+func conflictingRecordTypes(recordType string) []string {
+	switch pluginAPIName(recordType) {
+	case "mp4":
+		return []string{"mp4", "fmp4"}
+	default:
+		return []string{strings.ToLower(strings.TrimSpace(recordType))}
+	}
+}
+
 func (ct *CrontabPlugin) List(ctx context.Context, req *cronpb.ReqPlanList) (*cronpb.PlanResponseList, error) {
 	if req.PageNum < 1 {
 		req.PageNum = 1
@@ -345,6 +375,12 @@ func (ct *CrontabPlugin) AddRecordPlanStream(ctx context.Context, req *cronpb.Pl
 	if req.RecordType != "" {
 		recordType = strings.ToLower(strings.TrimSpace(req.RecordType))
 	}
+	if errMsg := validateRecordType(recordType); errMsg != "" {
+		return &cronpb.Response{
+			Code:    400,
+			Message: errMsg,
+		}, nil
+	}
 	streamPath := strings.TrimSpace(req.StreamPath)
 	if streamPath == "" {
 		return &cronpb.Response{
@@ -362,9 +398,11 @@ func (ct *CrontabPlugin) AddRecordPlanStream(ctx context.Context, req *cronpb.Pl
 		}, nil
 	}
 
-	// 以 stream_path + record_type 为唯一键，检查是否已存在
+	// Confirmed via 寸止: 同流 mp4/fmp4 互斥（共用 mp4 插件）；flv 单独判重
 	var count int64
-	if err := ct.DB.Model(&pkg.RecordPlanStream{}).Where("stream_path = ? AND record_type = ?", streamPath, recordType).Count(&count).Error; err != nil {
+	if err := ct.DB.Model(&pkg.RecordPlanStream{}).
+		Where("stream_path = ? AND record_type IN ?", streamPath, conflictingRecordTypes(recordType)).
+		Count(&count).Error; err != nil {
 		return &cronpb.Response{
 			Code:    500,
 			Message: err.Error(),
@@ -374,7 +412,7 @@ func (ct *CrontabPlugin) AddRecordPlanStream(ctx context.Context, req *cronpb.Pl
 	if count > 0 {
 		return &cronpb.Response{
 			Code:    400,
-			Message: "stream_path+record_type already exists",
+			Message: "stream already has a plan for this record plugin (mp4/fmp4 are mutually exclusive)",
 		}, nil
 	}
 

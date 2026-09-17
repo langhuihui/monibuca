@@ -621,6 +621,10 @@ message UpdatePullProxyRequest {
   optional google.protobuf.Duration checkInterval = 14; // 检查间隔
   // REQ-RTSP-001: 鉴权失败时停止重连（主要用于 RTSP）
   optional bool stopRetryOnAuthFail = 15;
+  // BUG-021: 媒体 TCP 读/拨号超时
+  optional google.protobuf.Duration readTimeout = 16;
+  // REQ-MP4-002: 录制容器格式 mp4/fmp4
+  optional string recordType = 17;
 }
 
 message PushProxyInfo {

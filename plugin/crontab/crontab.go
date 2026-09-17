@@ -2,6 +2,7 @@ package plugin_crontab
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -20,20 +21,20 @@ type TimeSlot struct {
 }
 
 // Crontab scheduler
+// Confirmed via 寸止 / BUG-023 S3：停机统一走 gotask Context/Done()，不再自建 stop channel
 type Crontab struct {
 	task.Work
 	ctp *CrontabPlugin
 	*pkg.RecordPlan
 	*pkg.RecordPlanStream
 
-	stop           chan struct{}
-	running        bool
 	location       *time.Location
 	timer          *time.Timer
 	currentSlot    *TimeSlot // current slot
 	recording      bool      // currently recording
-	startAttempted bool      // startRecording already tried in this slot
+	startAttempted bool      // 本时段已发起过开录（阻止 Go 热循环；周期重试交给 RetryTick）
 	retryTask      *RecordRetryTickTask
+	recordMu       sync.Mutex // 串行化 start/stop，避免与 RetryTick 并发双打
 }
 
 func (cron *Crontab) GetKey() string {
@@ -44,15 +45,9 @@ func (cron *Crontab) GetKey() string {
 func (cron *Crontab) Start() (err error) {
 	cron.Info("crontab", "event", "plugin start")
 
-	// 初始化必要字段
-	if cron.stop == nil {
-		cron.stop = make(chan struct{})
-	}
 	if cron.location == nil {
 		cron.location = time.Local
 	}
-
-	cron.running = true
 
 	cron.SetDescription("streampath", cron.StreamPath)
 	cron.SetDescription("planid", cron.PlanID)
@@ -60,90 +55,96 @@ func (cron *Crontab) Start() (err error) {
 	return nil
 }
 
-// 阻塞运行
-func (cron *Crontab) Go() (err error) {
+// 阻塞运行：所有等待路径均 select cron.Done()，Stop/remove 后调度退出
+func (cron *Crontab) Go() error {
 	cron.Info("crontab", "event", "plugin running")
 	cron.Info("crontab", "event", "scheduler start")
 
 	for {
-		// get current time
+		if cron.IsStopped() {
+			cron.Info("crontab", "event", "scheduler stop")
+			return nil
+		}
+
 		now := time.Now().In(cron.location)
 
-		// immediate actions (e.g., stop)
+		// 时段结束：停录
 		if cron.recording && cron.currentSlot != nil &&
 			(now.Equal(cron.currentSlot.End) || now.After(cron.currentSlot.End)) {
 			cron.stopRecording()
 			continue
 		}
 
-		// determine next event
 		var nextEvent time.Time
 
 		if cron.recording {
-			// when recording, next is end
 			nextEvent = cron.currentSlot.End
 		} else {
-			// when idle, check if current slot is still valid
 			var nextSlot *TimeSlot
 			if cron.currentSlot != nil && now.After(cron.currentSlot.Start) && now.Before(cron.currentSlot.End) {
-				// current slot is still valid, reuse it
 				nextSlot = cron.currentSlot
 				cron.Debug("crontab", "msg", "reuse current slot", "start", nextSlot.Start.Format("2006-01-02 15:04:05"), "end", nextSlot.End.Format("2006-01-02 15:04:05"))
-				// ensure retryTask exists (may have been stopped for some reason)
 				cron.ensureRetryWatcher()
 			} else {
-				// current slot expired or not exists, find next start
 				nextSlot = cron.getNextTimeSlot()
 				if nextSlot == nil {
-					// no plan, wait 1h
-					cron.timer = time.NewTimer(1 * time.Hour)
 					cron.Info("crontab", "event", "no plan", "action", "wait 1h")
-
-					// wait timer or stop
-					select {
-					case <-cron.timer.C:
-						continue
-					case <-cron.stop:
-						// stop scheduler
-						if cron.timer != nil {
-							cron.timer.Stop()
-						}
+					if e := cron.waitDuration(1 * time.Hour); e != nil {
 						cron.Info("crontab", "event", "scheduler stop")
-						return
+						return e
 					}
+					continue
 				}
 
-				// only update slot and restart retryTask when slot actually changed
 				if cron.currentSlot == nil || !nextSlot.Start.Equal(cron.currentSlot.Start) || !nextSlot.End.Equal(cron.currentSlot.End) {
 					cron.Info("crontab", "into cron.currentSlot == nil || !nextSlot.Start.Equal(cron.currentSlot.Start) || !nextSlot.End.Equal(cron.currentSlot.End)", "")
 					cron.currentSlot = nextSlot
-					// reset flags for new slot
 					cron.startAttempted = false
 					if cron.retryTask != nil {
 						cron.retryTask.Stop(errors.New("switch time slot"))
 						cron.retryTask = nil
 					}
-					//cron.ensureRetryWatcher()
 				}
 			}
 
 			nextEvent = nextSlot.Start
 
-			// if start already passed, start now
+			// 已到开录点：首次由 Go 触发；之后交给 RetryTick，主循环等到段末，避免 continue 空转
 			if now.Equal(nextEvent) || now.After(nextEvent) {
 				if !cron.startAttempted {
 					cron.startRecording()
 				} else {
-					cron.Debug("crontab", "msg", "startRecording already attempted in this slot1")
+					cron.Debug("crontab", "msg", "startRecording already attempted in this slot, wait RetryTick")
+				}
+				if cron.IsStopped() {
+					cron.Info("crontab", "event", "scheduler stop")
+					return nil
+				}
+				// 未在录：长睡前必须挂上「每 10 秒再试」的帮手。
+				// 否则开始录制一旦失败（例如重启时流还不存在返回 404），主循环会等到时段结束；
+				// 全天计划的结束时间约等于 100 年后，等于永久不再试。
+				// ensureRetryWatcher 内部有「已有就不重复建」，可安全多调。
+				if !cron.recording && cron.currentSlot != nil {
+					// #region agent log
+					debugAgentLog("B", "crontab.go:Go/beforeWaitUntil", "长睡前确保已挂上每10秒再试帮手", map[string]any{
+						"streamPath":     cron.StreamPath,
+						"recording":      cron.recording,
+						"startAttempted": cron.startAttempted,
+						"hasRetryTask":   cron.retryTask != nil,
+						"slotEnd":        cron.currentSlot.End.Format(time.RFC3339),
+					})
+					// #endregion
+					cron.ensureRetryWatcher()
+					if e := cron.waitUntil(cron.currentSlot.End); e != nil {
+						cron.Info("crontab", "event", "scheduler stop")
+						return e
+					}
 				}
 				continue
 			}
 		}
 
-		// wait duration
 		waitDuration := nextEvent.Sub(now)
-
-		// negative wait => execute now
 		if waitDuration <= 0 {
 			if !cron.recording {
 				if !cron.startAttempted {
@@ -157,9 +158,6 @@ func (cron *Crontab) Go() (err error) {
 			continue
 		}
 
-		// set timer
-		timer := time.NewTimer(waitDuration)
-
 		if !cron.recording {
 			cron.Info("crontab", "next_start", nextEvent, "wait", waitDuration)
 			cron.SetDescription("current step", "wait next start "+nextEvent.Format("2006-01-02 15:04:05"))
@@ -168,48 +166,74 @@ func (cron *Crontab) Go() (err error) {
 			cron.SetDescription("current step", "wait next stop "+nextEvent.Format("2006-01-02 15:04:05"))
 		}
 
-		// wait timer or stop
-		select {
-		case <-timer.C:
-			// execute
-			if !cron.recording {
-				if !cron.startAttempted {
-					cron.startRecording()
-				} else {
-					cron.Debug("crontab", "msg", "startRecording already attempted in this slot3")
-				}
-			} else {
-				cron.stopRecording()
-			}
-
-		case <-cron.stop:
-			// stop scheduler
-			timer.Stop()
+		if e := cron.waitDuration(waitDuration); e != nil {
 			cron.Info("crontab", "event", "scheduler stop")
-			return
+			return e
+		}
+
+		if cron.IsStopped() {
+			cron.Info("crontab", "event", "scheduler stop")
+			return nil
+		}
+		if !cron.recording {
+			if !cron.startAttempted {
+				cron.startRecording()
+			} else {
+				cron.Debug("crontab", "msg", "startRecording already attempted in this slot3")
+			}
+		} else {
+			cron.stopRecording()
 		}
 	}
 }
 
-// 停止
+// waitDuration 可被任务 Stop 打断；返回非 nil 表示已停止
+func (cron *Crontab) waitDuration(d time.Duration) error {
+	if d <= 0 {
+		if cron.IsStopped() {
+			return cron.StopReason()
+		}
+		return nil
+	}
+	timer := time.NewTimer(d)
+	cron.timer = timer
+	defer func() {
+		if !timer.Stop() {
+			select {
+			case <-timer.C:
+			default:
+			}
+		}
+		if cron.timer == timer {
+			cron.timer = nil
+		}
+	}()
+	select {
+	case <-timer.C:
+		return nil
+	case <-cron.Done():
+		return cron.StopReason()
+	}
+}
+
+func (cron *Crontab) waitUntil(deadline time.Time) error {
+	return cron.waitDuration(time.Until(deadline))
+}
+
+// Dispose：Stop 已 cancel Context；此处只做资源收尾
 func (cron *Crontab) Dispose() {
-	//if cron.running {
-	//cron.stop <- struct{}{}
-	close(cron.stop) // 关闭通道会触发 <-cron.stop
-	cron.running = false
 	if cron.timer != nil {
 		cron.timer.Stop()
+		cron.timer = nil
 	}
 	if cron.retryTask != nil {
 		cron.retryTask.Stop(errors.New("crontab disposed"))
 		cron.retryTask = nil
 	}
-
-	// 如果还在录制，停止录制
+	// 若仍在录，尽力通知停止（任务 context 已取消，使用独立短超时）
 	if cron.recording {
 		cron.stopRecording()
 	}
-	//}
 }
 
 // 获取下一个时间段
@@ -335,129 +359,213 @@ func nextSlotRange(plan string, now time.Time, loc *time.Location) (time.Time, t
 	return time.Time{}, time.Time{}, false
 }
 
+// httpContext 调度存活时派生自任务 Context；Dispose 停录时用独立短超时
+func (cron *Crontab) httpContext(timeout time.Duration) (context.Context, context.CancelFunc) {
+	if cron.IsStopped() {
+		return context.WithTimeout(context.Background(), timeout)
+	}
+	return context.WithTimeout(cron, timeout)
+}
+
 // 开始录制
 func (cron *Crontab) startRecording() {
-	cron.Debug("crontab", "startRecording recording", cron.recording)
-	if cron.recording {
-		return // already recording
+	cron.recordMu.Lock()
+	if cron.recording || cron.IsStopped() || cron.currentSlot == nil {
+		cron.recordMu.Unlock()
+		return
 	}
+	// 先标记已尝试，防止 Go 失败热循环；周期重试由 RecordRetryTick 负责
+	cron.startAttempted = true
+	planName := cron.RecordPlan.Name
+	slotEnd := cron.currentSlot.End
+	fragment := cron.Fragment
+	filePath := cron.FilePath
+	recordType := cron.RecordType
+	streamPath := cron.StreamPath
+	cron.recordMu.Unlock()
 
-	// mark attempt in current slot
-
-	cron.startAttempted = false
-	cron.Debug("crontab", "before send record post,set cron.startAttempted", cron.startAttempted)
+	cron.Debug("crontab", "before send record post,set cron.startAttempted", true)
 	now := time.Now().In(cron.location)
-	cron.Info("crontab", "event", "start recording", "plan", cron.RecordPlan.Name, "time", now, "plan_end", cron.currentSlot.End)
+	cron.Info("crontab", "event", "start recording", "plan", planName, "time", now, "plan_end", slotEnd)
 
-	// 构造请求体
 	reqBody := map[string]string{
-		"fragment": cron.Fragment,
-		"filePath": cron.FilePath,
+		"fragment": fragment,
+		"filePath": filePath,
 		"mode":     "auto",
+	}
+	// Confirmed via 寸止: REQ-MP4-002 方案 B — record_type 为 mp4/fmp4 时写入 body.type
+	pluginName := pluginAPIName(recordType)
+	if pluginName == "mp4" {
+		t := strings.ToLower(strings.TrimSpace(recordType))
+		if t == "" {
+			t = "mp4"
+		}
+		reqBody["type"] = t
 	}
 	jsonBody, err := json.Marshal(reqBody)
 	if err != nil {
 		cron.Error("crontab", "err", "build request body failed", "detail", err)
+		// 失败也要挂上每 10 秒再试的帮手，否则主循环长睡后无人再试
+		cron.ensureRetryWatcher()
 		return
 	}
 
-	// resolve HTTP address
 	addr := cron.ctp.Plugin.GetCommonConf().HTTP.ListenAddr
 	if addr == "" {
-		addr = ":8080" // default port
+		addr = ":8080"
 	}
 	if addr[0] == ':' {
 		addr = "localhost" + addr
 	}
-	client := &http.Client{
-		Timeout: 10 * time.Second, // 设置总超时时间
-	}
-	// 发送开始录制请求
-	resp, err := client.Post(fmt.Sprintf("http://%s/%s/api/start/%s", addr, cron.RecordType, cron.StreamPath), "application/json", bytes.NewBuffer(jsonBody))
-	cron.Debug("crontab", "record_request_url", fmt.Sprintf("http://%s/mp4/api/start/%s", addr,
-		cron.StreamPath), "body", string(jsonBody))
+
+	ctx, cancel := cron.httpContext(10 * time.Second)
+	defer cancel()
+
+	startURL := fmt.Sprintf("http://%s/%s/api/start/%s", addr, pluginName, streamPath)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, startURL, bytes.NewBuffer(jsonBody))
 	if err != nil {
-		time.Sleep(time.Second)
+		cron.Error("crontab", "err", "build start request failed", "detail", err)
+		cron.ensureRetryWatcher()
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	cron.Debug("crontab", "record_request_url", startURL, "body", string(jsonBody))
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
 		cron.Error("crontab", "err", "start recording failed", "detail", err)
+		// #region agent log
+		debugAgentLog("A", "crontab.go:startRecording/httpErr", "开始录制请求失败，挂上每10秒再试帮手", map[string]any{
+			"streamPath":     streamPath,
+			"err":            err.Error(),
+			"hasRetryBefore": cron.retryTask != nil,
+		})
+		// #endregion
+		cron.ensureRetryWatcher()
 		return
 	}
 	defer resp.Body.Close()
-	respJSON, _ := json.Marshal(resp.Body)
-	cron.SetDescription("response.Body", string(respJSON))
 	cron.SetDescription("response.StatusCode", resp.StatusCode)
 
 	if resp.StatusCode != http.StatusOK {
-		time.Sleep(time.Second)
 		cron.Error("crontab", "err", "start recording failed", "status", resp.StatusCode)
+		// #region agent log
+		debugAgentLog("A", "crontab.go:startRecording/non200", "开始录制返回非200（含404），挂上每10秒再试帮手", map[string]any{
+			"streamPath":     streamPath,
+			"status":         resp.StatusCode,
+			"hasRetryBefore": cron.retryTask != nil,
+		})
+		// #endregion
+		// 典型场景：服务刚重启，拉流代理还没把流拉起来，接口返回 404。
+		// 以前只有成功才挂帮手，导致 404 后永久不再试。
+		cron.ensureRetryWatcher()
 		return
 	}
-	cron.startAttempted = true
-	cron.Debug("crontab", "set cron.startAttempted", cron.startAttempted)
+
+	cron.recordMu.Lock()
+	defer cron.recordMu.Unlock()
+	if cron.IsStopped() || cron.recording {
+		return
+	}
 	cron.recording = true
 	cron.SetDescription("recording status", cron.recording)
 	cron.SetDescription("startAttempted", cron.startAttempted)
+	// #region agent log
+	debugAgentLog("A", "crontab.go:startRecording/ok", "开始录制成功，挂上每10秒再试帮手", map[string]any{
+		"streamPath": streamPath,
+	})
+	// #endregion
 	cron.ensureRetryWatcher()
 }
 
 // 停止录制
 func (cron *Crontab) stopRecording() {
-	cron.Debug("crontab", "stopRecording", "")
+	cron.recordMu.Lock()
 	if !cron.recording {
-		return // not recording
+		cron.recordMu.Unlock()
+		return
 	}
 
-	// 立即记录当前时间并重置状态，避免重复调用
 	now := time.Now().In(cron.location)
 	cron.Info("crontab", "event", "stop recording", "plan", cron.RecordPlan.Name, "time", now)
 
-	// 先重置状态，避免循环中重复检测到停止条件
 	wasRecording := cron.recording
 	cron.recording = false
 	savedSlot := cron.currentSlot
 	cron.currentSlot = nil
 	cron.startAttempted = false
-	if cron.retryTask != nil {
-		cron.retryTask.Stop(errors.New("stop recording"))
-		cron.retryTask = nil
+	retry := cron.retryTask
+	cron.retryTask = nil
+	recordType := cron.RecordType
+	streamPath := cron.StreamPath
+	cron.recordMu.Unlock()
+
+	if retry != nil {
+		retry.Stop(errors.New("stop recording"))
 	}
 
-	// resolve HTTP address
 	addr := cron.ctp.Plugin.GetCommonConf().HTTP.ListenAddr
 	if addr == "" {
-		addr = ":8080" // default port
+		addr = ":8080"
 	}
 	if addr[0] == ':' {
 		addr = "localhost" + addr
 	}
 
-	// 发送停止录制请求
-	resp, err := http.Post(fmt.Sprintf("http://%s/%s/api/stop/%s", addr, cron.RecordType, cron.StreamPath), "application/json", nil)
+	ctx, cancel := cron.httpContext(10 * time.Second)
+	defer cancel()
+
+	stopURL := fmt.Sprintf("http://%s/%s/api/stop/%s", addr, pluginAPIName(recordType), streamPath)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, stopURL, nil)
 	if err != nil {
-		cron.Error("crontab", "err", "stop recording failed", "detail", err)
-		// 如果请求失败，恢复状态以便下次重试
-		if wasRecording {
+		cron.Error("crontab", "err", "build stop request failed", "detail", err)
+		cron.recordMu.Lock()
+		if wasRecording && !cron.IsStopped() {
 			cron.recording = true
 			cron.currentSlot = savedSlot
 		}
+		cron.recordMu.Unlock()
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		cron.Error("crontab", "err", "stop recording failed", "detail", err)
+		cron.recordMu.Lock()
+		if wasRecording && !cron.IsStopped() {
+			cron.recording = true
+			cron.currentSlot = savedSlot
+		}
+		cron.recordMu.Unlock()
 		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		cron.Error("crontab", "err", "stop recording failed", "status", resp.StatusCode)
-		// 如果请求失败，恢复状态以便下次重试
-		if wasRecording {
+		cron.recordMu.Lock()
+		if wasRecording && !cron.IsStopped() {
 			cron.recording = true
 			cron.currentSlot = savedSlot
 		}
+		cron.recordMu.Unlock()
 	}
 	cron.SetDescription("recording status", cron.recording)
 	cron.SetDescription("startAttempted", cron.startAttempted)
 }
 
-// ensureRetryWatcher ensures retry task started
+// ensureRetryWatcher 确保「每 10 秒检查并补开录」的帮手已启动。
+// 已有帮手或任务已停止时直接返回，因此可以在成功/失败/长睡前多处调用，不会起多个帮手。
 func (cron *Crontab) ensureRetryWatcher() {
-	if cron.retryTask != nil {
+	if cron.retryTask != nil || cron.IsStopped() {
+		// #region agent log
+		debugAgentLog("C", "crontab.go:ensureRetryWatcher/skip", "帮手已存在或任务已停，跳过", map[string]any{
+			"streamPath":   cron.StreamPath,
+			"hasRetryTask": cron.retryTask != nil,
+			"isStopped":    cron.IsStopped(),
+		})
+		// #endregion
 		return
 	}
 	cron.retryTask = &RecordRetryTickTask{
@@ -467,6 +575,11 @@ func (cron *Crontab) ensureRetryWatcher() {
 	cron.retryTask.OnStop(func() {
 		cron.retryTask = nil
 	})
-	// start as sub task of current cron to avoid cross-plugin registration
+	// #region agent log
+	debugAgentLog("C", "crontab.go:ensureRetryWatcher/create", "新建每10秒再试帮手", map[string]any{
+		"streamPath":  cron.StreamPath,
+		"intervalSec": 10,
+	})
+	// #endregion
 	cron.AddTask(cron.retryTask)
 }

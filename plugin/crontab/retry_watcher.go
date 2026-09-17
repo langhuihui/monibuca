@@ -98,6 +98,7 @@ func (r *RecordRetryTickTask) Tick(any) {
 		}
 		expectedPath := r.cron.FilePath
 		expectedRecordType := r.cron.RecordType
+		expectedPlugin := pluginAPIName(expectedRecordType)
 		foundMatch := false
 
 		for _, raw := range info.Data.Recording {
@@ -106,7 +107,8 @@ func (r *RecordRetryTickTask) Tick(any) {
 				continue
 			}
 			pathOK := expectedPath == "" || rec.FilePath == expectedPath
-			recordTypeOK := expectedRecordType == "" || strings.ToLower(rec.PluginName) == strings.ToLower(expectedRecordType)
+			// fmp4 开录走 mp4 插件，按 PluginName==mp4 匹配
+			recordTypeOK := expectedRecordType == "" || strings.ToLower(rec.PluginName) == expectedPlugin
 			if pathOK && recordTypeOK {
 				foundMatch = true
 				break

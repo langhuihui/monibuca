@@ -46,6 +46,19 @@ func (c *ContentPart) Close() error {
 	return c.file.Close()
 }
 
+// normalizeMP4RecordType REQ-MP4-002：校验并规范化容器格式，空值默认 mp4
+func normalizeMP4RecordType(t string) (string, error) {
+	t = strings.ToLower(strings.TrimSpace(t))
+	switch t {
+	case "", "mp4":
+		return "mp4", nil
+	case "fmp4":
+		return "fmp4", nil
+	default:
+		return "", fmt.Errorf("unsupported record type %q, expect mp4 or fmp4", t)
+	}
+}
+
 func (p *MP4Plugin) downloadSingleFile(stream *m7s.RecordStream, flag mp4.Flag, w http.ResponseWriter, r *http.Request) {
 	// 获取文件（本地或远程）
 	var file storage.File
@@ -678,6 +691,10 @@ func (p *MP4Plugin) StartRecord(ctx context.Context, req *mp4pb.ReqStartRecord) 
 	if req.FilePath != "" {
 		filePath = req.FilePath
 	}
+	recordType, err := normalizeMP4RecordType(req.GetType())
+	if err != nil {
+		return nil, err
+	}
 	res = &mp4pb.ResponseStartRecord{}
 	_, recordExists = p.Server.Records.Find(func(job *m7s.RecordJob) bool {
 		return job.StreamPath == req.StreamPath && job.RecConf.FilePath == req.FilePath
@@ -687,10 +704,12 @@ func (p *MP4Plugin) StartRecord(ctx context.Context, req *mp4pb.ReqStartRecord) 
 		return
 	}
 
+	// Confirmed via 寸止: REQ-MP4-002 — api/start 支持 type=mp4|fmp4
 	recordConf := config.Record{
 		Append:   false,
 		Fragment: fragment,
 		FilePath: filePath,
+		Type:     recordType,
 	}
 	var stream *m7s.Publisher
 	var ok bool
@@ -745,6 +764,10 @@ func (p *MP4Plugin) EventStart(ctx context.Context, req *mp4pb.ReqEventRecord) (
 			p.Error("EventStart", "error", err)
 		}
 	}
+	recordType, typeErr := normalizeMP4RecordType(req.GetType())
+	if typeErr != nil {
+		return nil, typeErr
+	}
 	//recorder := p.Meta.Recorder(config.Record{})
 	var tmpJob *m7s.RecordJob
 	tmpJob, _ = p.Server.Records.Find(func(job *m7s.RecordJob) bool {
@@ -752,11 +775,13 @@ func (p *MP4Plugin) EventStart(ctx context.Context, req *mp4pb.ReqEventRecord) (
 	})
 	if tmpJob == nil { //为空表示没有正在进行的录制，也就是没有自动录像，则进行正常的事件录像
 		if stream, ok := p.Server.Streams.SafeGet(req.StreamPath); ok {
+			// Confirmed via 寸止: REQ-MP4-002 — 事件录像支持 type
 			recordConf := config.Record{
 				Append:   false,
 				Fragment: 0,
 				FilePath: filepath.Join(p.EventRecordFilePath, stream.StreamPath, time.Now().Local().Format("2006-01-02-15-04-05")),
 				Mode:     config.RecordModeEvent,
+				Type:     recordType,
 				Event: &config.RecordEvent{
 					EventId:        req.EventId,
 					EventLevel:     req.EventLevel,
@@ -803,7 +828,7 @@ func (p *MP4Plugin) EventStart(ctx context.Context, req *mp4pb.ReqEventRecord) (
 						Duration:   totalDuration,
 						StartTime:  startTime,
 						EndTime:    endTime,
-						Type:       "mp4",
+						Type:       recordType,
 					},
 				})
 			}
