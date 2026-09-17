@@ -459,10 +459,12 @@
           videoBufferDelay: Number($videoBufferDelay.value)
         };
       }
-      // WCS 点播倍速：加大缓冲减少 dropBuffer 跳帧
+      // BUG-022：高倍速（尤其关键帧）若 videoBuffer=2，WCS 会攒满约 2s 才开播 →「卡几秒再跳」
+      // Jessibuca 不允许 0，取较小值尽快出画；≥8× 进一步减小
+      var high = playbackSpeed >= 8;
       return {
-        videoBuffer: 2,
-        videoBufferDelay: 30
+        videoBuffer: high ? 0.2 : 0.5,
+        videoBufferDelay: high ? 2 : 5
       };
     }
 
@@ -472,6 +474,11 @@
       const playbackSpeed = parseFloat($playbackSpeed.value) || 1;
       const decoderMode = getEffectiveDecoderMode();
       const bufferOpts = getVodSpeedBufferOptions(isVod, playbackSpeed);
+      // #region agent log
+      if (isVod && playbackSpeed !== 1) {
+        fetch('http://127.0.0.1:7838/ingest/aebed73b-832b-4cf2-a8bb-42b5feae9ac4',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'7ac453'},body:JSON.stringify({sessionId:'7ac453',runId:'post-fix',hypothesisId:'H15',location:'demo.html:create',message:'vod speed buffer options',data:{speed:playbackSpeed,videoBuffer:bufferOpts.videoBuffer,videoBufferDelay:bufferOpts.videoBufferDelay,useWCS:decoderMode.useWCS},timestamp:Date.now()})}).catch(function(){});
+      }
+      // #endregion
       // Jessibuca 要求 videoBuffer < heartTimeout；不能用 0，否则初始化直接抛错黑屏
       const isVodSpeed = isVod && playbackSpeed !== 1;
       const heartTimeout = isVodSpeed
@@ -545,6 +552,31 @@
       });
       jessibuca.on('stats', (stats) => {
         $fps.textContent = `FPS: ${stats.fps} DFPS: ${stats.dfps}`;
+        // #region agent log
+        var spd = parseFloat($playbackSpeed.value) || 1;
+        if (spd >= 8) {
+          if (!window.__unevenStatsAt) window.__unevenStatsAt = 0;
+          var now = Date.now();
+          if (now - window.__unevenStatsAt > 2000) {
+            window.__unevenStatsAt = now;
+            var videoRate = jessibuca.player && jessibuca.player.video ? jessibuca.player.video.rate : null;
+            fetch('http://127.0.0.1:7838/ingest/aebed73b-832b-4cf2-a8bb-42b5feae9ac4', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '7ac453' },
+              body: JSON.stringify({
+                sessionId: '7ac453', runId: 'uneven-pre', hypothesisId: 'H5',
+                location: 'demo.html:stats', message: 'client high-speed stats',
+                data: {
+                  speed: spd, fps: stats.fps, dfps: stats.dfps, buf: stats.buf,
+                  videoRate: videoRate, ts: stats.ts, videoCurrentTimeDiff: stats.videoCurrentTimeDiff,
+                  useWCS: !!(jessibuca.player && jessibuca.player._opt && jessibuca.player._opt.useWCS)
+                },
+                timestamp: now
+              })
+            }).catch(function () { });
+          }
+        }
+        // #endregion
       });
 
       jessibuca.on(JessibucaPro.EVENTS.crashLog, (log) => {

@@ -38,6 +38,10 @@ type AVRingReader struct {
 	AbsTime      uint32
 	Delay        uint32
 	BPS          uint32 // Bytes per second
+	// #region agent log
+	lastSeenSpeed float64
+	lastH14Log    time.Time
+	// #endregion
 }
 
 func (r *AVRingReader) DecConfChanged() bool {
@@ -78,6 +82,40 @@ func (r *AVRingReader) readFrame(mode int) (err error) {
 }
 
 func (r *AVRingReader) ReadFrame(conf *config.Subscribe) (err error) {
+	// #region agent log
+	// H14：倍速变化时记录环积压；高倍速下定期采样 Delay，验证是否在「消化旧 1× 帧」
+	if r.Track != nil {
+		spd := r.Track.GetSpeed()
+		if r.lastSeenSpeed == 0 {
+			r.lastSeenSpeed = spd
+		} else if spd != r.lastSeenSpeed {
+			idrSeq := uint32(0)
+			if idr := r.Track.GetIDR(); idr != nil {
+				idrSeq = idr.Value.Sequence
+			}
+			AgentDebugLog("av_reader.go:ReadFrame", "reader speed changed", "H14", "ffplay-lag", map[string]any{
+				"fromSpeed": r.lastSeenSpeed, "toSpeed": spd,
+				"readerSeq": r.Value.Sequence, "lastSeq": r.Track.LastValue.Sequence,
+				"delay": r.Track.LastValue.Sequence - r.Value.Sequence, "idrSeq": idrSeq,
+				"behindIDR": idrSeq > r.Value.Sequence, "tsMs": r.Value.Timestamp.Milliseconds(),
+			})
+			r.lastSeenSpeed = spd
+			r.lastH14Log = time.Now()
+		} else if spd >= 8 && time.Since(r.lastH14Log) > 200*time.Millisecond {
+			r.lastH14Log = time.Now()
+			idrSeq := uint32(0)
+			if idr := r.Track.GetIDR(); idr != nil {
+				idrSeq = idr.Value.Sequence
+			}
+			delay := r.Track.LastValue.Sequence - r.Value.Sequence
+			AgentDebugLog("av_reader.go:ReadFrame", "reader high-speed lag sample", "H14", "ffplay-lag", map[string]any{
+				"speed": spd, "readerSeq": r.Value.Sequence, "lastSeq": r.Track.LastValue.Sequence,
+				"delay": delay, "idrSeq": idrSeq, "behindIDR": idrSeq > r.Value.Sequence,
+				"tsMs": r.Value.Timestamp.Milliseconds(),
+			})
+		}
+	}
+	// #endregion
 	switch r.State {
 	case READSTATE_INIT:
 		r.Info("start read", "mode", conf.SubMode)

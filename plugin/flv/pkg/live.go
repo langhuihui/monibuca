@@ -74,9 +74,17 @@ func (task *Live) Run() (err error) {
 		return
 	}
 	err = m7s.PlayBlock(task.Subscriber, func(audio *rtmp.AudioFrame) error {
-		return task.WriteAudioTag(audio, task.Subscriber.AudioReader.AbsTime)
+		absTime := uint32(0)
+		if task.Subscriber.AudioReader != nil {
+			absTime = task.Subscriber.AudioReader.AbsTime
+		}
+		return task.WriteAudioTag(audio, absTime)
 	}, func(video *rtmp.VideoFrame) error {
-		return task.WriteVideoTag(video, task.Subscriber.VideoReader.AbsTime)
+		absTime := uint32(0)
+		if task.Subscriber.VideoReader != nil {
+			absTime = task.Subscriber.VideoReader.AbsTime
+		}
+		return task.WriteVideoTag(video, absTime)
 	})
 	if err != nil {
 		return

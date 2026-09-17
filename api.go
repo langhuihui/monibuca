@@ -530,9 +530,47 @@ func (s *Server) ResumeStream(ctx context.Context, req *pb.StreamSnapRequest) (r
 
 func (s *Server) SetStreamSpeed(ctx context.Context, req *pb.SetStreamSpeedRequest) (res *pb.SuccessResponse, err error) {
 	if s, ok := s.Streams.SafeGet(req.StreamPath); ok {
+		oldSpeed := s.Speed
 		s.Speed = float64(req.Speed)
 		s.Scale = float64(req.Speed)
+		// 同步 Reader 可见倍速；并重置 SpeedController，确保下次 SpeedControl 按新倍速重新 begin
+		if s.HasVideoTrack() {
+			s.VideoTrack.Range(func(track *pkg.AVTrack) bool {
+				track.SetSpeedHint(s.Speed)
+				track.ResetSpeedController()
+				return true
+			})
+			if s.VideoTrack.AVTrack != nil {
+				s.VideoTrack.AVTrack.SetSpeedHint(s.Speed)
+				s.VideoTrack.AVTrack.ResetSpeedController()
+			}
+		}
+		if s.HasAudioTrack() {
+			s.AudioTrack.Range(func(track *pkg.AVTrack) bool {
+				track.SetSpeedHint(s.Speed)
+				track.ResetSpeedController()
+				return true
+			})
+			if s.AudioTrack.AVTrack != nil {
+				s.AudioTrack.AVTrack.SetSpeedHint(s.Speed)
+				s.AudioTrack.AVTrack.ResetSpeedController()
+			}
+		}
 		s.Info("set stream speed", "speed", req.Speed)
+		// #region agent log
+		data := map[string]any{"streamPath": req.StreamPath, "oldSpeed": oldSpeed, "newSpeed": req.Speed, "subCount": s.Subscribers.Length}
+		if s.HasVideoTrack() && s.VideoTrack.AVTrack != nil {
+			vt := s.VideoTrack.AVTrack
+			data["videoLastSeq"] = vt.LastValue.Sequence
+			data["videoTsMs"] = vt.LastTs.Milliseconds()
+			if idr := vt.GetIDR(); idr != nil {
+				data["videoIdrSeq"] = idr.Value.Sequence
+				data["videoIdrTsMs"] = idr.Value.Timestamp.Milliseconds()
+				data["seqBehindIdr"] = vt.LastValue.Sequence - idr.Value.Sequence
+			}
+		}
+		pkg.AgentDebugLog("api.go:SetStreamSpeed", "speed set snapshot", "H14", "ffplay-lag", data)
+		// #endregion
 	}
 	return &pb.SuccessResponse{}, err
 }

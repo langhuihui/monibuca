@@ -98,22 +98,24 @@ func (t *AVTracks) Dispose() {
 type Publisher struct {
 	PubSubBase
 	config.Publish
-	State                  PublisherState
-	Paused                 *util.Promise
-	pauseTime              time.Time
-	AudioTrack, VideoTrack AVTracks
-	audioReady, videoReady *util.Promise
-	TimeoutTimer           *time.Timer
-	DataTrack              *DataTrack
-	Subscribers            SubscriberCollection
-	GOP                    int
-	OnSeek                 func(time.Time)
-	OnGetPosition          func() time.Time
-	PullProxyConfig        *PullProxyConfig
-	dropAfterTs            time.Duration
-	bufferTimeCounts       map[time.Duration]int
-	serverSubCount         int
-	vodSubCount            int
+	State                   PublisherState
+	Paused                  *util.Promise
+	pauseTime               time.Time
+	AudioTrack, VideoTrack  AVTracks
+	audioReady, videoReady  *util.Promise
+	TimeoutTimer            *time.Timer
+	DataTrack               *DataTrack
+	Subscribers             SubscriberCollection
+	GOP                     int
+	OnSeek                  func(time.Time)
+	OnGetPosition           func() time.Time
+	PullProxyConfig         *PullProxyConfig
+	dropAfterTs             time.Duration
+	lastHighSpeedDropLog    time.Time // debug throttle for H2
+	lastHighSpeedAudioWrite time.Time // ≥8× 音频限写，避免停写导致订阅端堵在 RLock
+	bufferTimeCounts        map[time.Duration]int
+	serverSubCount          int
+	vodSubCount             int
 }
 
 type PublishParam struct {
@@ -424,9 +426,27 @@ func (p *Publisher) nextVideo() (err error) {
 	if t.IDRingList.Len() > 0 {
 		idr = t.IDRingList.Back().Value
 		if p.Speed != 1 && t.CheckIfNeedDropFrame(p.MaxFPS, p.Speed) {
-			p.dropAfterTs = t.LastTs
+			// ≥8× 关键帧模式下不置 dropAfterTs：否则音频长期 ErrSkip 不写环，订阅端会堵在 RLock 导致画面假死
+			if p.Speed < 8 {
+				p.dropAfterTs = t.LastTs
+			}
 			t.Trace("FRAME_DROP", "speed", p.Speed, "max_fps", p.MaxFPS,
 				"drop_level", t.DropFrameLevel, "stream_path", p.StreamPath)
+			// BUG-022：丢帧仍按媒体时间戳推进倍速，避免仅 IDR 推进导致不匀速
+			t.SpeedControl(p.Speed)
+			// #region agent log
+			if p.Speed >= 8 {
+				now := time.Now()
+				if now.Sub(p.lastHighSpeedDropLog) > 200*time.Millisecond {
+					p.lastHighSpeedDropLog = now
+					AgentDebugLog("publisher.go:nextVideo", "frame dropped with SpeedControl", "H2", "post-fix", map[string]any{
+						"streamPath": p.StreamPath, "speed": p.Speed, "maxFPS": p.MaxFPS,
+						"dropLevel": t.DropFrameLevel, "idr": avFrame.IDR, "lastTsMs": t.LastTs.Milliseconds(),
+						"dropAfterTs": p.dropAfterTs != 0,
+					})
+				}
+			}
+			// #endregion
 			return ErrSkip
 		} else {
 			p.dropAfterTs = 0
@@ -444,6 +464,14 @@ func (p *Publisher) nextVideo() (err error) {
 		if p.AudioTrack.Length > 0 {
 			p.AudioTrack.PushIDR()
 		}
+		// #region agent log
+		if p.Speed >= 8 {
+			AgentDebugLog("publisher.go:nextVideo", "high-speed publish IDR", "H6", "post-fix", map[string]any{
+				"streamPath": p.StreamPath, "speed": p.Speed, "lastTsMs": t.LastTs.Milliseconds(),
+				"gop": p.GOP, "seq": avFrame.Sequence, "scale": p.Scale,
+			})
+		}
+		// #endregion
 	}
 	return p.writeAV(t, avFrame, codecCtxChanged, &p.VideoTrack)
 }
@@ -465,6 +493,29 @@ func (p *Publisher) nextAudio() (err error) {
 	codecCtxChanged, err = p.checkCodecChange(t)
 	if err != nil {
 		return err
+	}
+	// BUG-022：≥8× 不能完全停写音频（订阅端会堵在下一槽 RLock，画面假死）。
+	// 限频写入保活读环，同时避免全速音频挤爆。
+	if p.Speed >= 8 {
+		t.SpeedControl(p.Speed)
+		now := time.Now()
+		if now.Sub(p.lastHighSpeedAudioWrite) < 100*time.Millisecond {
+			// #region agent log
+			if now.Sub(p.lastHighSpeedDropLog) > 1000*time.Millisecond {
+				p.lastHighSpeedDropLog = now
+				AgentDebugLog("publisher.go:nextAudio", "high-speed audio rate-limit skip", "H17", "post-fix", map[string]any{
+					"streamPath": p.StreamPath, "speed": p.Speed, "lastTsMs": t.LastTs.Milliseconds(),
+				})
+			}
+			// #endregion
+			return ErrSkip
+		}
+		p.lastHighSpeedAudioWrite = now
+		// #region agent log
+		AgentDebugLog("publisher.go:nextAudio", "high-speed audio keepalive write", "H17", "post-fix", map[string]any{
+			"streamPath": p.StreamPath, "speed": p.Speed, "lastTsMs": t.LastTs.Milliseconds(),
+		})
+		// #endregion
 	}
 	// 根据丢帧率进行音频帧丢弃
 	if p.dropAfterTs > 0 {
