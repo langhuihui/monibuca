@@ -89,30 +89,10 @@ func (r *AVRingReader) ReadFrame(conf *config.Subscribe) (err error) {
 		if r.lastSeenSpeed == 0 {
 			r.lastSeenSpeed = spd
 		} else if spd != r.lastSeenSpeed {
-			idrSeq := uint32(0)
-			if idr := r.Track.GetIDR(); idr != nil {
-				idrSeq = idr.Value.Sequence
-			}
-			AgentDebugLog("av_reader.go:ReadFrame", "reader speed changed", "H14", "ffplay-lag", map[string]any{
-				"fromSpeed": r.lastSeenSpeed, "toSpeed": spd,
-				"readerSeq": r.Value.Sequence, "lastSeq": r.Track.LastValue.Sequence,
-				"delay": r.Track.LastValue.Sequence - r.Value.Sequence, "idrSeq": idrSeq,
-				"behindIDR": idrSeq > r.Value.Sequence, "tsMs": r.Value.Timestamp.Milliseconds(),
-			})
 			r.lastSeenSpeed = spd
 			r.lastH14Log = time.Now()
 		} else if spd >= 8 && time.Since(r.lastH14Log) > 200*time.Millisecond {
 			r.lastH14Log = time.Now()
-			idrSeq := uint32(0)
-			if idr := r.Track.GetIDR(); idr != nil {
-				idrSeq = idr.Value.Sequence
-			}
-			delay := r.Track.LastValue.Sequence - r.Value.Sequence
-			AgentDebugLog("av_reader.go:ReadFrame", "reader high-speed lag sample", "H14", "ffplay-lag", map[string]any{
-				"speed": spd, "readerSeq": r.Value.Sequence, "lastSeq": r.Track.LastValue.Sequence,
-				"delay": delay, "idrSeq": idrSeq, "behindIDR": idrSeq > r.Value.Sequence,
-				"tsMs": r.Value.Timestamp.Milliseconds(),
-			})
 		}
 	}
 	// #endregion
