@@ -7,12 +7,37 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
+	"sync"
 	"time"
 
 	task "github.com/langhuihui/gotask"
 	"m7s.live/v5/plugin/crontab/pkg"
 )
+
+// #region agent log
+// debugAgentLog 仅用于本轮排障，验收通过后删除。写入 .cursor/debug-05fb22.log
+func debugAgentLog(hypothesisId, location, message string, data map[string]any) {
+	f, err := os.OpenFile("/Volumes/extend/go/src/m7s/.cursor/debug-05fb22.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	payload := map[string]any{
+		"sessionId":    "05fb22",
+		"runId":        "post-fix",
+		"hypothesisId": hypothesisId,
+		"location":     location,
+		"message":      message,
+		"data":         data,
+		"timestamp":    time.Now().UnixMilli(),
+	}
+	b, _ := json.Marshal(payload)
+	_, _ = f.Write(append(b, '\n'))
+}
+
+// #endregion
 
 // TimeSlot describes a recording window
 type TimeSlot struct {
