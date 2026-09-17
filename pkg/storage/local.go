@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"time"
@@ -110,6 +110,7 @@ type LocalStorage struct {
 	config          *LocalStorageConfig // 存储配置
 	db              *gorm.DB            // 数据库连接（用于查询和更新记录）
 	globalThreshold float64             // 全局磁盘使用率阈值（来自 mp4.autooverwritediskpercent）
+	logger          *slog.Logger        // 日志（由调用方注入，走 slog/LogHandler 才能写入 logs/）
 }
 
 // NewLocalStorage 创建本地存储实例
@@ -323,9 +324,28 @@ func (s *LocalStorage) SetDB(db *gorm.DB) {
 	s.db = db
 }
 
+// SetLogger 设置日志记录器（需注入 slog，才能写入 logrotate 的 logs/）
+func (s *LocalStorage) SetLogger(logger *slog.Logger) {
+	s.logger = logger
+}
+
 // SetGlobalThreshold 设置全局磁盘使用率阈值
 func (s *LocalStorage) SetGlobalThreshold(threshold float64) {
 	s.globalThreshold = threshold
+}
+
+// logInfo 安全输出 Info 日志（logger 未注入时静默跳过）
+func (s *LocalStorage) logInfo(msg string, args ...any) {
+	if s.logger != nil {
+		s.logger.Info(msg, args...)
+	}
+}
+
+// logWarn 安全输出 Warn 日志（logger 未注入时静默跳过）
+func (s *LocalStorage) logWarn(msg string, args ...any) {
+	if s.logger != nil {
+		s.logger.Warn(msg, args...)
+	}
 }
 
 // SetFilePathPattern 设置文件路径模式（用于数据库查询）
@@ -364,77 +384,79 @@ func (s *LocalStorage) CheckAndManageStorage() error {
 	primaryUsage := s.getDiskUsagePercent(s.config.Path)
 
 	// 打印当前存储配置和使用情况
-	log.Printf("[LocalStorage] CheckAndManageStorage - Config: path=%s, backupPath=%s, overwritePercent=%d, backupOverwritePercent=%d, globalThreshold=%.2f",
-		s.config.Path, s.config.BackupPath, s.config.OverwritePercent, s.config.BackupOverwritePercent, s.globalThreshold)
-	log.Printf("[LocalStorage] CheckAndManageStorage - Primary: usage=%.2f%%, threshold=%.2f%%",
-		primaryUsage, primaryThreshold)
+	s.logInfo("CheckAndManageStorage",
+		"path", s.config.Path,
+		"backupPath", s.config.BackupPath,
+		"overwritePercent", s.config.OverwritePercent,
+		"backupOverwritePercent", s.config.BackupOverwritePercent,
+		"globalThreshold", s.globalThreshold)
+	s.logInfo("CheckAndManageStorage", "primaryUsage", primaryUsage, "primaryThreshold", primaryThreshold)
 
 	// 主存储管理：循环处理直到低于阈值
 	if primaryThreshold > 0 {
 		for primaryUsage >= primaryThreshold {
-			log.Printf("[LocalStorage] Primary storage exceeded threshold: %.2f%% >= %.2f%%", primaryUsage, primaryThreshold)
+			s.logInfo("Primary storage exceeded threshold", "usage", primaryUsage, "threshold", primaryThreshold)
 
 			if s.config.BackupPath != "" {
 				// 有备用存储：迁移一个文件
-				log.Printf("[LocalStorage] Action: Migrating one file to backup storage")
+				s.logInfo("Action", "action", "migrating one file to backup storage")
 				if err := s.migrateOneFile(); err != nil {
 					if err.Error() == "query record failed: record not found" {
-						log.Printf("[LocalStorage] No more files to migrate, stopping")
+						s.logInfo("No more files to migrate, stopping")
 						break
 					}
-					log.Printf("[LocalStorage] Migrate file failed: %v, continuing to next file", err)
+					s.logWarn("Migrate file failed, continuing to next file", "err", err)
 					// 继续处理下一个文件（已在 migrateOneFile 中软删除失败的记录）
 				}
 			} else {
 				// 无备用存储：删除一个文件
-				log.Printf("[LocalStorage] Action: Deleting one file from primary storage")
+				s.logInfo("Action", "action", "deleting one file from primary storage")
 				if err := s.deleteOldestFiles(s.config.Path); err != nil {
 					if err.Error() == "query oldest record failed: record not found" {
-						log.Printf("[LocalStorage] No more files to delete, stopping")
+						s.logInfo("No more files to delete, stopping")
 						break
 					}
-					log.Printf("[LocalStorage] Delete file failed: %v, continuing to next file", err)
+					s.logWarn("Delete file failed, continuing to next file", "err", err)
 					// 继续处理下一个文件（已在 deleteOldestFiles 中软删除失败的记录）
 				}
 			}
 
 			// 重新检查磁盘使用率
 			primaryUsage = s.getDiskUsagePercent(s.config.Path)
-			log.Printf("[LocalStorage] Primary storage after operation: %.2f%%", primaryUsage)
+			s.logInfo("Primary storage after operation", "usage", primaryUsage)
 
 			// 避免无限循环
 			time.Sleep(100 * time.Millisecond)
 		}
-		log.Printf("[LocalStorage] Primary storage OK: %.2f%% < %.2f%%", primaryUsage, primaryThreshold)
+		s.logInfo("Primary storage OK", "usage", primaryUsage, "threshold", primaryThreshold)
 	}
 
 	// 备用存储管理：循环处理直到低于阈值
 	if s.config.BackupPath != "" && backupThreshold > 0 {
 		backupUsage := s.getDiskUsagePercent(s.config.BackupPath)
-		log.Printf("[LocalStorage] CheckAndManageStorage - Backup: usage=%.2f%%, threshold=%.2f%%",
-			backupUsage, backupThreshold)
+		s.logInfo("CheckAndManageStorage", "backupUsage", backupUsage, "backupThreshold", backupThreshold)
 
 		for backupUsage >= backupThreshold {
-			log.Printf("[LocalStorage] Backup storage exceeded threshold: %.2f%% >= %.2f%%", backupUsage, backupThreshold)
-			log.Printf("[LocalStorage] Action: Deleting one file from backup storage")
+			s.logInfo("Backup storage exceeded threshold", "usage", backupUsage, "threshold", backupThreshold)
+			s.logInfo("Action", "action", "deleting one file from backup storage")
 
 			if err := s.deleteOldestFiles(s.config.BackupPath); err != nil {
 				if err.Error() == "query oldest record failed: record not found" {
-					log.Printf("[LocalStorage] No more files to delete, stopping")
+					s.logInfo("No more files to delete, stopping")
 					break
 				}
-				log.Printf("[LocalStorage] Delete file failed: %v, continuing to next file", err)
+				s.logWarn("Delete file failed, continuing to next file", "err", err)
 				// 继续处理下一个文件（已在 deleteOldestFiles 中软删除失败的记录）
 			}
 
 			// 重新检查磁盘使用率
 			backupUsage = s.getDiskUsagePercent(s.config.BackupPath)
-			log.Printf("[LocalStorage] Backup storage after operation: %.2f%%", backupUsage)
+			s.logInfo("Backup storage after operation", "usage", backupUsage)
 
 			// 避免无限循环
 			time.Sleep(100 * time.Millisecond)
 		}
-		log.Printf("[LocalStorage] Backup storage OK: %.2f%% < %.2f%%", backupUsage, backupThreshold)
+		s.logInfo("Backup storage OK", "usage", backupUsage, "threshold", backupThreshold)
 	}
 
 	return nil
@@ -450,7 +472,7 @@ func (s *LocalStorage) migrateOneFile() error {
 	var record RecordFile
 	err := s.db.Where("storage_level = ?", 1).
 		Where("storage_type = ?", "local").
-		Where("type = ?", "mp4").
+		//Where("type = ?", "mp4").
 		Where("end_time IS NOT NULL").
 		Order("end_time ASC").
 		First(&record).Error
@@ -463,9 +485,10 @@ func (s *LocalStorage) migrateOneFile() error {
 	err = s.migrateFile(&record)
 	if err != nil {
 		// 迁移失败，软删除数据库记录，避免永远卡在这个文件上
-		log.Printf("[LocalStorage] migrateOneFile - migration failed, soft deleting record: %s (ID=%d), error: %v", record.FilePath, record.ID, err)
+		s.logWarn("migrateOneFile - migration failed, soft deleting record",
+			"filePath", record.FilePath, "id", record.ID, "err", err)
 		if deleteErr := s.db.Delete(&record).Error; deleteErr != nil {
-			log.Printf("[LocalStorage] migrateOneFile - failed to soft delete record: %v", deleteErr)
+			s.logWarn("migrateOneFile - failed to soft delete record", "err", deleteErr)
 		}
 		return err
 	}
@@ -475,13 +498,14 @@ func (s *LocalStorage) migrateOneFile() error {
 
 // migrateFile 迁移单个文件
 func (s *LocalStorage) migrateFile(record *RecordFile) error {
-	log.Printf("[LocalStorage] migrateFile - migrating file: %s (ID=%d, StorageLevel=%d -> 2)", record.FilePath, record.ID, record.StorageLevel)
+	s.logInfo("migrateFile - migrating file",
+		"filePath", record.FilePath, "id", record.ID, "storageLevel", record.StorageLevel, "toLevel", 2)
 
 	// 构建源文件和目标文件的绝对路径
 	var srcPath, destPath string
 	if filepath.IsAbs(record.FilePath) {
 		// 已经是绝对路径（不应该出现这种情况，但做兼容处理）
-		log.Printf("[LocalStorage] migrateFile - WARNING: file_path is absolute, this should not happen")
+		s.logWarn("migrateFile - file_path is absolute, this should not happen")
 		srcPath = record.FilePath
 		// 尝试提取相对路径部分用于目标路径
 		relPath, err := filepath.Rel(s.config.Path, record.FilePath)
@@ -496,7 +520,7 @@ func (s *LocalStorage) migrateFile(record *RecordFile) error {
 	}
 	destDir := filepath.Dir(destPath)
 
-	log.Printf("[LocalStorage] migrateFile - source: %s, destination: %s", srcPath, destPath)
+	s.logInfo("migrateFile - paths", "source", srcPath, "destination", destPath)
 
 	// 确保目标目录存在
 	if err := os.MkdirAll(destDir, 0755); err != nil {
@@ -507,7 +531,7 @@ func (s *LocalStorage) migrateFile(record *RecordFile) error {
 	err := os.Rename(srcPath, destPath)
 	if err != nil {
 		// 跨磁盘移动，需要复制后删除
-		log.Printf("[LocalStorage] migrateFile - cross-disk migration, using copy and remove")
+		s.logInfo("migrateFile - cross-disk migration, using copy and remove")
 		if err := s.copyAndRemove(srcPath, destPath); err != nil {
 			return fmt.Errorf("copy and remove failed: %w", err)
 		}
@@ -523,7 +547,7 @@ func (s *LocalStorage) migrateFile(record *RecordFile) error {
 		return fmt.Errorf("update database failed: %w", err)
 	}
 
-	log.Printf("[LocalStorage] migrateFile - successfully migrated and updated database (ID=%d)", record.ID)
+	s.logInfo("migrateFile - successfully migrated and updated database", "id", record.ID)
 
 	return nil
 }
@@ -570,12 +594,12 @@ func (s *LocalStorage) deleteOldestFiles(path string) error {
 		storageLevel = 2 // 备用存储
 	}
 
-	log.Printf("[LocalStorage] deleteOldestFiles - path=%s, storageLevel=%d", path, storageLevel)
+	s.logInfo("deleteOldestFiles", "path", path, "storageLevel", storageLevel)
 
 	// 查询该存储级别下最旧的文件（record_level != 'high' 表示非重要录像）
 	var record RecordFile
 	err := s.db.Where("storage_type = ?", "local").
-		Where("type = ?", "mp4").
+		//Where("type = ?", "mp4").
 		Where("storage_level = ?", storageLevel).
 		Where("record_level != ?", "high").
 		Where("end_time IS NOT NULL").
@@ -586,14 +610,15 @@ func (s *LocalStorage) deleteOldestFiles(path string) error {
 		return fmt.Errorf("query oldest record failed: %w", err)
 	}
 
-	log.Printf("[LocalStorage] deleteOldestFiles - deleting file: %s (ID=%d, StorageLevel=%d)", record.FilePath, record.ID, record.StorageLevel)
+	s.logInfo("deleteOldestFiles - deleting file",
+		"filePath", record.FilePath, "id", record.ID, "storageLevel", record.StorageLevel)
 
 	// 构建绝对路径
 	var absolutePath string
 	if filepath.IsAbs(record.FilePath) {
 		// 已经是绝对路径，直接使用
 		absolutePath = record.FilePath
-		log.Printf("[LocalStorage] deleteOldestFiles - file_path is absolute, using directly")
+		s.logInfo("deleteOldestFiles - file_path is absolute, using directly")
 	} else {
 		// 相对路径，根据 storageLevel 拼接
 		if storageLevel == 1 {
@@ -603,26 +628,26 @@ func (s *LocalStorage) deleteOldestFiles(path string) error {
 			// 备用存储
 			absolutePath = filepath.Join(s.config.BackupPath, record.FilePath)
 		}
-		log.Printf("[LocalStorage] deleteOldestFiles - file_path is relative, joined with storage path")
+		s.logInfo("deleteOldestFiles - file_path is relative, joined with storage path")
 	}
 
-	log.Printf("[LocalStorage] deleteOldestFiles - absolute path: %s", absolutePath)
+	s.logInfo("deleteOldestFiles - absolute path", "absolutePath", absolutePath)
 
 	// 删除文件
 	fileDeleteErr := os.Remove(absolutePath)
 	if fileDeleteErr != nil && !os.IsNotExist(err) {
 		// 文件删除失败，记录错误日志
-		log.Printf("[LocalStorage] deleteOldestFiles - remove file failed: %v, will soft delete record anyway", fileDeleteErr)
+		s.logWarn("deleteOldestFiles - remove file failed, will soft delete record anyway", "err", fileDeleteErr)
 	}
 
 	// 删除数据库记录（软删除）
 	// 即使文件删除失败，也要删除数据库记录，避免永远卡在这个文件上
 	if err := s.db.Delete(&record).Error; err != nil {
-		log.Printf("[LocalStorage] deleteOldestFiles - soft delete record failed: %v", err)
+		s.logWarn("deleteOldestFiles - soft delete record failed", "err", err)
 		return fmt.Errorf("delete database record failed: %w", err)
 	}
 
-	log.Printf("[LocalStorage] deleteOldestFiles - successfully deleted file and record (ID=%d)", record.ID)
+	s.logInfo("deleteOldestFiles - successfully deleted file and record", "id", record.ID)
 
 	return nil
 }
