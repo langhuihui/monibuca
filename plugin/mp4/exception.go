@@ -210,8 +210,9 @@ func (t *StorageManagementTask) manageLocalStorage() {
 		return
 	}
 
-	// 设置数据库连接和全局阈值
+	// 设置数据库连接、日志和全局阈值
 	localStorage.SetDB(t.DB)
+	localStorage.SetLogger(t.Logger.With("component", "LocalStorage"))
 	localStorage.SetGlobalThreshold(t.OverwritePercent)
 
 	// 执行存储管理
