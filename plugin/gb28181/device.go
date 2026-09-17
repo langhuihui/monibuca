@@ -276,11 +276,6 @@ func (d *Device) finishCatalogLocked(catalogReq *CatalogRequest, timedOut bool) 
 			"SumNum", catalogReq.SumNum,
 			"TotalCount", catalogReq.TotalCount,
 			"已等待", time.Since(catalogReq.CreateTime))
-		// #region agent log
-		d.Warn("AGENT_DEBUG", "sessionId", "1d2dbd", "hypothesisId", "C", "location", "finishCatalogLocked/timeout",
-			"msg", "timeout_branch", "sn", catalogReq.SN, "sumNum", catalogReq.SumNum,
-			"totalCount", catalogReq.TotalCount, "waitMs", time.Since(catalogReq.CreateTime).Milliseconds())
-		// #endregion
 		if !catalogReq.IsComplete() {
 			catalogReq.TotalCount = catalogReq.SumNum
 		}
@@ -290,11 +285,6 @@ func (d *Device) finishCatalogLocked(catalogReq *CatalogRequest, timedOut bool) 
 			"SumNum", catalogReq.SumNum,
 			"TotalCount", catalogReq.TotalCount,
 			"耗时", time.Since(catalogReq.CreateTime))
-		// #region agent log
-		d.Warn("AGENT_DEBUG", "sessionId", "1d2dbd", "hypothesisId", "C", "location", "finishCatalogLocked/complete",
-			"msg", "complete_branch", "sn", catalogReq.SN, "sumNum", catalogReq.SumNum,
-			"totalCount", catalogReq.TotalCount, "elapsedMs", time.Since(catalogReq.CreateTime).Milliseconds())
-		// #endregion
 	}
 	catalogReq.Resolve()
 	d.catalogReqs.RemoveByKey(catalogReq.SN)
@@ -342,17 +332,6 @@ func (c *catalogHandlerTask) runLocked() (err error) {
 	actualChannelCount := len(msg.DeviceList.DeviceChannelList)
 	deviceNum := msg.DeviceList.DeviceNum
 
-	// #region agent log
-	// Confirmed via 寸止: 服务器复现，埋点走现有日志（AGENT_DEBUG），勿写本机路径
-	chID := ""
-	if actualChannelCount > 0 {
-		chID = msg.DeviceList.DeviceChannelList[0].DeviceId
-	}
-	d.Warn("AGENT_DEBUG", "sessionId", "1d2dbd", "hypothesisId", "B", "location", "catalogHandlerTask.Run",
-		"msg", "run_enter", "sn", msg.SN, "sumNum", msg.SumNum,
-		"actualChannelCount", actualChannelCount, "channelId", chID)
-	// #endregion
-
 	// 验证DeviceNum和实际解析的通道数是否一致
 	// 注意：设备可能分多次发送Catalog响应，每次可能只包含部分通道
 	// 所以应该使用实际解析的通道数来累加TotalCount
@@ -399,10 +378,6 @@ func (c *catalogHandlerTask) runLocked() (err error) {
 	// 更新设备信息到数据库
 	// 如果是第一个响应，先清空原有通道，并记录期望的总通道数
 	if isFirst {
-		// #region agent log
-		d.Warn("AGENT_DEBUG", "sessionId", "1d2dbd", "hypothesisId", "D", "location", "catalogHandlerTask.Run/clear",
-			"msg", "isFirst_clear", "sn", msg.SN, "sumNum", msg.SumNum)
-		// #endregion
 		// Confirmed via 寸止: 方案A — 同步按 key 清理插件全局 channels，避免 channel/list 残留与 list 展开不一致
 		d.clearDeviceChannelsLocked()
 		d.ChannelCount = msg.SumNum
@@ -455,22 +430,14 @@ func (d *Device) submitCatalogHandler(msg *gb28181.Message) {
 		d:   d,
 		msg: msg,
 	}
-	// #region agent log
 	sizeBefore := catalogHandlerQueueTask.Size.Load()
 	chID := ""
 	if len(msg.DeviceList.DeviceChannelList) > 0 {
 		chID = msg.DeviceList.DeviceChannelList[0].DeviceId
 	}
-	// #endregion
 	added := catalogHandlerQueueTask.AddTask(catalogHandler)
-	// #region agent log
 	sizeAfter := catalogHandlerQueueTask.Size.Load()
 	droppedHint := sizeAfter <= sizeBefore
-	d.Warn("AGENT_DEBUG", "sessionId", "1d2dbd", "hypothesisId", "A", "location", "onMessage/Catalog/AddTask",
-		"msg", "addtask_result", "sn", msg.SN, "sumNum", msg.SumNum, "channelId", chID,
-		"sizeBefore", sizeBefore, "sizeAfter", sizeAfter, "dropped", droppedHint,
-		"addedNil", added == nil, "deviceListLen", len(msg.DeviceList.DeviceChannelList))
-	// #endregion
 
 	// Size 仅作提示：真正失败时 startup 会立刻 Reject，WaitStarted 立即返回 err。
 	// 若只是 Size 竞态误报，WaitStarted 会阻塞在队列中，短超时后放弃回退，避免重复处理/乱序。
@@ -492,10 +459,6 @@ func (d *Device) submitCatalogHandler(msg *gb28181.Message) {
 			d.Warn("Catalog AddTask 被拒绝，同步 Run 回退",
 				"SN", msg.SN, "err", err, "channelId", chID,
 				"sizeBefore", sizeBefore, "sizeAfter", sizeAfter)
-			// #region agent log
-			d.Warn("AGENT_DEBUG", "sessionId", "1d2dbd", "hypothesisId", "A", "location", "submitCatalogHandler/fallback",
-				"msg", "sync_fallback", "sn", msg.SN, "err", err.Error(), "channelId", chID)
-			// #endregion
 			_ = catalogHandler.Run()
 		}
 	case <-time.After(2 * time.Millisecond):
@@ -948,11 +911,6 @@ func (d *Device) addOrUpdateChannel(c gb28181.DeviceChannel) {
 			Logger:        d.Logger.With("channel", c.ID),
 			DeviceChannel: &c,
 		}
-		// #region agent log
-		// 仅抽样记录新建路径，避免 783 行「无日志」误判；大批量时用 Debug 级避免刷屏
-		d.Debug("AGENT_DEBUG", "sessionId", "1d2dbd", "hypothesisId", "E", "location", "addOrUpdateChannel/create",
-			"msg", "create_new", "channelId", c.ID, "status", string(c.Status))
-		// #endregion
 	}
 	d.channels.Set(resultChannel)
 	d.plugin.channels.Set(resultChannel)
