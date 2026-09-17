@@ -41,6 +41,7 @@ type (
 	}
 	SpeedController struct {
 		speed           float64
+		hintSpeed       float64 // Publisher 同步的倍速提示（供 Reader；勿直接改 speed，以免跳过 SpeedControl 重初始化）
 		pausedTime      time.Duration
 		beginTime       time.Time
 		beginTimestamp  time.Duration // 记录开始播放时的第一个时间戳
@@ -145,25 +146,55 @@ func (t *AVTrack) AcceptFrame() {
 
 func (t *AVTrack) changeDropFrameLevel(newLevel int) {
 	t.Warn("change drop frame level", "from", t.DropFrameLevel, "to", newLevel)
+	// #region agent log
+	AgentDebugLog("track.go:changeDropFrameLevel", "drop level changed", "H2", "uneven-pre", map[string]any{
+		"from": t.DropFrameLevel, "to": newLevel, "acceptFPS": t.accpetFPS, "speed": t.speed,
+	})
+	// #endregion
 	t.DropFrameLevel = newLevel
 	t.LastDropLevelChange = time.Now()
 }
 
 func (t *AVTrack) CheckIfNeedDropFrame(maxFPS int, speed float64) (drop bool) {
+	// BUG-022 方案A：≥8× 固定只发关键帧，避免 MaxFPS/dropLevel 振荡导致忽快忽慢与写环挤爆
+	if speed >= 8 {
+		drop = !t.Value.IDR
+		// #region agent log
+		if drop || t.Value.IDR || t.acceptFrameCount%30 == 0 {
+			AgentDebugLog("track.go:CheckIfNeedDropFrame", "drop decision", "H3", "post-fix", map[string]any{
+				"speed": speed, "maxFPS": maxFPS, "acceptFPS": t.accpetFPS, "drop": drop,
+				"policy": "keyframe_only_ge8", "dropLevel": t.DropFrameLevel, "idr": t.Value.IDR,
+				"acceptFrameCount": t.acceptFrameCount,
+			})
+		}
+		// #endregion
+		return drop
+	}
+
 	drop = maxFPS > 0 && (t.accpetFPS > maxFPS)
+	policy := "base"
 
 	// 根据倍速调整丢帧策略，避免过度丢帧导致播放不均匀
 	if speed > 2 && speed <= 4 {
 		// 4倍速：非常保守，只在极端情况下才丢帧
 		drop = drop && (t.accpetFPS > maxFPS*3)
-	} else if speed > 4 && speed <= 8 {
-		// 5-8倍速：保守策略
+		policy = "conservative_4x"
+	} else if speed > 4 && speed < 8 {
+		// 5–8×（不含 8）：保守策略；≥8 已走关键帧固定策略
 		drop = drop && (t.accpetFPS > maxFPS*2)
-	} else if speed > 16 {
-		// 极高倍速：激进策略
-		drop = drop || (t.accpetFPS > maxFPS/2)
+		policy = "conservative_8x"
 	}
 	// 正常倍速(<=2倍)和慢放(speed<1)保持原有逻辑
+
+	// #region agent log
+	if speed >= 4 && (drop || t.acceptFrameCount%30 == 0) {
+		AgentDebugLog("track.go:CheckIfNeedDropFrame", "drop decision", "H3", "post-fix", map[string]any{
+			"speed": speed, "maxFPS": maxFPS, "acceptFPS": t.accpetFPS, "drop": drop,
+			"policy": policy, "dropLevel": t.DropFrameLevel, "idr": t.Value.IDR,
+			"acceptFrameCount": t.acceptFrameCount,
+		})
+	}
+	// #endregion
 
 	if drop {
 		defer func() {
@@ -269,9 +300,17 @@ func (t *AVTrack) AddPausedTime(d time.Duration) {
 	t.pausedTime += d
 }
 
-// GetSpeed 返回当前的播放倍速
+// GetSpeed 返回当前的播放倍速（优先 Publisher 提示，供 Reader 跳跃阈值）
 func (t *AVTrack) GetSpeed() float64 {
+	if t.hintSpeed != 0 {
+		return t.hintSpeed
+	}
 	return t.speed
+}
+
+// SetSpeedHint 仅更新 Reader 可见倍速，不改 SpeedController.speed，避免跳过倍速切换重初始化
+func (t *AVTrack) SetSpeedHint(speed float64) {
+	t.hintSpeed = speed
 }
 
 // ResetSpeedController 重置倍速控制器的状态，用于避免状态冲突
@@ -379,10 +418,33 @@ func (t *AVTrack) speedControl(speed float64, ts time.Duration) {
 			"current_ts_ms", ts.Milliseconds(), "begin_ts_ms", t.beginTimestamp.Milliseconds(),
 			"delta_ms", t.Delta.Milliseconds(), "sleep_ms", sleepTime.Milliseconds(),
 			"actual_speed_ratio", actualSpeedRatio)
+		// #region agent log
+		if speed >= 8 && t.speedFrameCount%30 == 0 {
+			AgentDebugLog("track.go:speedControl", "high-speed sleep sample", "H1", "uneven-pre", map[string]any{
+				"speed": speed, "deltaMs": t.Delta.Milliseconds(), "sleepMs": sleepTime.Milliseconds(),
+				"maxSleepMs": maxSleep.Milliseconds(), "elapsedMs": elapsed.Milliseconds(),
+				"actualSpeedRatio": actualSpeedRatio, "frameCount": t.speedFrameCount,
+				"tsMs": ts.Milliseconds(), "clamped": sleepTime < t.Delta,
+			})
+		}
+		// #endregion
 		time.Sleep(sleepTime)
 	} else {
 		// 记录所有SpeedControl调用，即使不休眠
 		t.Trace("SPEED_CONTROL_NO_SLEEP", "speed", speed, "elapsed_ms", elapsed.Milliseconds(),
 			"current_ts_ms", ts.Milliseconds(), "delta_ms", t.Delta.Milliseconds(), "threshold_ms", controlThreshold.Milliseconds())
+		// #region agent log
+		if speed >= 8 && t.speedFrameCount%30 == 0 {
+			actualSpeedRatio := float64(0)
+			if elapsed.Milliseconds() > 0 {
+				actualSpeedRatio = float64(ts.Milliseconds()-t.beginTimestamp.Milliseconds()) / float64(elapsed.Milliseconds())
+			}
+			AgentDebugLog("track.go:speedControl", "high-speed no-sleep sample", "H1", "uneven-pre", map[string]any{
+				"speed": speed, "deltaMs": t.Delta.Milliseconds(), "elapsedMs": elapsed.Milliseconds(),
+				"actualSpeedRatio": actualSpeedRatio, "frameCount": t.speedFrameCount,
+				"acceptFPS": t.accpetFPS, "dropLevel": t.DropFrameLevel,
+			})
+		}
+		// #endregion
 	}
 }
