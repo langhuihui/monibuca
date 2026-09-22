@@ -262,8 +262,10 @@ func (rb *RingWriter) Step() (normal bool) {
 		}
 	}
 
-	rb.LastValue = &rb.Value
-	nextSeq := rb.LastValue.Sequence + 1
+	// BUG-024：必须先 Ready 再挂 LastValue。若先 LastValue=&Value，槽上残留的旧 WriteTime
+	//（≈buffertime）会被 CheckTimeout 误判为轨超时并杀流。Step 期间 LastValue 仍指向上一已 Ready 帧。
+	completed := &rb.Value
+	nextSeq := completed.Sequence + 1
 
 	/*
 
@@ -325,23 +327,24 @@ func (rb *RingWriter) Step() (normal bool) {
 		rb.Value.Sequence = nextSeq
 		switch rb.status.Add(-1) {
 		case 0:
-			// Normal completion: no Dispose raced. Make LastValue readable.
-			rb.LastValue.Ready()
+			// Normal completion: no Dispose raced. Ready 后再发布 LastValue。
+			completed.Ready()
+			rb.LastValue = completed
 		case -1:
 			// Exactly ONE Dispose() raced during Step:
 			//   Dispose saw status 1→0 (result=0), so it did NOT call Value.Unlock().
 			//   Step's Add(-1) now sees 0→-1.
 			// We must release BOTH write locks:
-			//   LastValue: previously-written slot (write lock held from prior Step).
+			//   completed: previously-written slot (write lock held from prior Step).
 			//   Value:     newly-claimed slot (write lock held by StartWrite above).
 			// Without releasing Value, readers blocked on RLock(Value) deadlock forever.
-			rb.LastValue.Unlock()
+			completed.Unlock()
 			rb.Value.Unlock()
 		default:
 			// TWO or more Dispose() calls raced during Step.
 			// The 2nd Dispose saw status 0→-1 (result=-1) and already called Value.Unlock().
-			// Only release LastValue here to avoid a double-unlock panic on Value.
-			rb.LastValue.Unlock()
+			// Only release completed here to avoid a double-unlock panic on Value.
+			completed.Unlock()
 		}
 	}
 	return
